@@ -138,9 +138,7 @@ namespace ignite
 
         // Sampler
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-        desc.addItem(nvrhi::BindingSetItem::Sampler(1, shadowMap 
-            ? shadowMap->GetSampler() 
-            : sampler));
+        desc.addItem(nvrhi::BindingSetItem::Sampler(1, shadowMap ? shadowMap->GetSampler() : sampler));
 
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");

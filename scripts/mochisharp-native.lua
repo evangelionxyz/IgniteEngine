@@ -47,7 +47,7 @@ project "MochiSharp.Native"
         -- (linked from the dotnet-sdk-10.0 install path)
         links { "nethost" }
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         optimize "off"
         symbols "on"
@@ -56,7 +56,7 @@ project "MochiSharp.Native"
             "MOCHI_DEBUG"
         }
 
-    filter "configurations:Release"
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling" }
         runtime "Release"
         optimize "on"
         symbols "off"

@@ -474,7 +474,7 @@ namespace ignite::UI
 
 			ImGui::SameLine();
 
-			ImGui::DragFloat("##X", &values.x, speed);
+			ImGui::DragFloat("##X", &values.x, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 
 			ImGui::PopItemWidth();
@@ -499,7 +499,7 @@ namespace ignite::UI
 			State::Check(state);
 
 			ImGui::SameLine();
-			ImGui::DragFloat("##Y", &values.y, speed);
+			ImGui::DragFloat("##Y", &values.y, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 
 			ImGui::PopItemWidth();
@@ -525,7 +525,7 @@ namespace ignite::UI
 			State::Check(state);
 
 			ImGui::SameLine();
-			ImGui::DragFloat("##Z", &values.z, speed);
+			ImGui::DragFloat("##Z", &values.z, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 
 			ImGui::PopItemWidth();
@@ -551,7 +551,7 @@ namespace ignite::UI
 			State::Check(state);
 
 			ImGui::SameLine();
-			ImGui::DragFloat("##W", &values.w, speed);
+			ImGui::DragFloat("##W", &values.w, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 
 			ImGui::PopItemWidth();
@@ -598,7 +598,7 @@ namespace ignite::UI
 
 			ImGui::SameLine();
 
-			ImGui::DragFloat("##X", &values.x, speed);
+			ImGui::DragFloat("##X", &values.x, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 
 
@@ -623,7 +623,7 @@ namespace ignite::UI
 			}
 			State::Check(state);
 			ImGui::SameLine();
-			ImGui::DragFloat("##Y", &values.y, speed);
+			ImGui::DragFloat("##Y", &values.y, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 
 			ImGui::PopItemWidth();
@@ -649,7 +649,7 @@ namespace ignite::UI
 			State::Check(state);
 
 			ImGui::SameLine();
-			ImGui::DragFloat("##Z", &values.z, speed);
+			ImGui::DragFloat("##Z", &values.z, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 			ImGui::PopItemWidth();
 		}
@@ -696,7 +696,7 @@ namespace ignite::UI
 
 			ImGui::SameLine();
 
-			ImGui::DragFloat("##X", &values.x, speed);
+			ImGui::DragFloat("##X", &values.x, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 
 			ImGui::PopItemWidth();
@@ -720,7 +720,7 @@ namespace ignite::UI
 			}
 			State::Check(state);
 			ImGui::SameLine();
-			ImGui::DragFloat("##Y", &values.y, speed);
+			ImGui::DragFloat("##Y", &values.y, speed, 0.0f, 0.0f, "%f");
 			State::Check(state);
 			ImGui::PopItemWidth();
 		}
@@ -762,7 +762,7 @@ namespace ignite::UI
 			}
 			State::Check(state);
 			ImGui::SameLine();
-			ImGui::DragFloat("##V", value, speed, minValue, maxValue);
+			ImGui::DragFloat("##V", value, speed, minValue, maxValue, "%f");
 			State::Check(state);
 			ImGui::PopItemWidth();
 		}

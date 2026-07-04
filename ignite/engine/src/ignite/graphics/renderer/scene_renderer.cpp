@@ -41,12 +41,12 @@
 
 namespace ignite
 {
-    static const GPUSkeletonBuffer s_IdentitySkeleton = []()
+    static const std::array<glm::mat4, MAX_BONES> s_IdentitySkeleton = []()
     {
-        GPUSkeletonBuffer buf;
+        std::array<glm::mat4, MAX_BONES> buf;
         for (int i = 0; i < MAX_BONES; ++i)
         {
-            buf.bones[i] = glm::mat4(1.0f);
+            buf[i] = glm::mat4(1.0f);
         }
         return buf;
     }();
@@ -56,77 +56,26 @@ namespace ignite
     // ===============================
     SceneRenderer::SceneRenderer()
     {
-        m_Device = DeviceManager::GetInstance()->GetDevice();
-
         auto compositeSamplerDesc = nvrhi::SamplerDesc();
         compositeSamplerDesc.setAllFilters(false);
         compositeSamplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
         m_CompositeSampler = m_Device->createSampler(compositeSamplerDesc);
 
-        static constexpr std::array vertices
-        {
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-        };
-
-        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
-
         m_Renderer2D = Renderer2D::Create();
         m_EdgeDetection = EdgeDetection::Create();
         m_EdgeDetection->CreatePipeline();
         m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
-        m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
 
         {
-            m_EditorBloom = CreateRef<Bloom>(1280, 720);
-            m_EditorSSAO = CreateRef<SSAO>(1280, 720);
+            constexpr uint32_t ssaoResolution = 1920;
+            m_EditorBloom = CreateRef<Bloom>(ssaoResolution, ssaoResolution);
+            m_EditorSSAO = CreateRef<SSAO>(ssaoResolution, ssaoResolution);
 
-            m_GameplayBloom = CreateRef<Bloom>(1280, 720);
-            m_GameplaySSAO = CreateRef<SSAO>(1280, 720);
+            m_GameplayBloom = CreateRef<Bloom>(ssaoResolution, ssaoResolution);
+            m_GameplaySSAO = CreateRef<SSAO>(ssaoResolution, ssaoResolution);
         }
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
-
-        // =========================================
-        // Create Render Targets
-        RenderTargetCreateInfo sceneRTCreateInfo = {};
-        sceneRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
-        };
-
-        m_SceneRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Scene RT");
-        m_GameplaySceneRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Gameplay Scene RT");
-
-        // Widget RT
-        RenderTargetCreateInfo widgetRTCreateInfo = {};
-        widgetRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
-        };
-
-        m_WidgetRT = RenderTarget::Create(widgetRTCreateInfo, "[SceneRenderer] Widget RT");
-        m_GameplayWidgetRT = RenderTarget::Create(widgetRTCreateInfo, "[SceneRenderer] Gameplay Widget RT");
-
-        RenderTargetCreateInfo compositeRTCreateInfo = {};
-        compositeRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
-        };
-
-        m_CompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Composite RT");
-        m_GameplayCompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Gameplay Composite RT");
-
-        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
-
     }
 
     SceneRenderer::~SceneRenderer()
@@ -143,6 +92,7 @@ namespace ignite
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
         m_CSMBindingSetCache.clear();
+        m_RenderTargets.clear();
 
         m_ResolvedAssetsCache.clear();
     }
@@ -198,17 +148,23 @@ namespace ignite
     void SceneRenderer::BeginFrame()
     {
         m_Has2DPreRenderCache = false;
-        m_SkeletonBuffersUploadedThisFrame = false;
         if (m_Renderer2D)
         {
             m_Renderer2D->InvalidatePreRenderCache();
         }
     }
 
-    void SceneRenderer::RenderEditorTo(ICamera *camera)
+    void SceneRenderer::Render(ICamera *camera, bool drawDebug)
     {
-        IGN_PROFILE_FUNCTION();
-        IGN_PROFILE_FRAME_NAMED("Editor Frame");
+		IGN_PROFILE_FUNCTION();
+		IGN_PROFILE_FRAME_NAMED("Editor Frame");
+
+        if (!camera)
+            return;
+
+        Ref<CameraRenderTarget> target = GetOrCreateRenderTarget(camera);
+        if (!target)
+            return;
 
         EnsureSceneEnvironmentMap();
 
@@ -217,11 +173,8 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
             cmd->open();
-            // Upload the shared fullscreen quad vertex buffer used by Bloom, SSAO, and CompositePass.
-            // Must happen before any of those passes execute — not just inside CompositePass.
-            EnsureCompositeVertexBufferUploaded(cmd);
+            
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
-            UploadSkeletonBuffers(cmd);
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
             {
@@ -234,10 +187,12 @@ namespace ignite
 
             // Scene post processing
             PostProcessing postProcessing = camera->postProcessing;
+            CameraLens cameraLens = camera->lens;
             if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
             {
                 const auto &cc = primaryCamera.GetComponent<CameraComponent>();
                 postProcessing = cc.camera.postProcessing;
+                cameraLens = cc.camera.lens;
             }
 
             // Camera constants
@@ -247,55 +202,61 @@ namespace ignite
             // Clear Render Targets
             // far depth = 1.0f == LessOrEqual
             {
-                m_WidgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
-                m_WidgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
-                m_SceneRT->ClearColorAttachmentFloat(cmd, 0);
-                m_SceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
-                m_SceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                target->sceneRT->ClearColorAttachmentFloat(cmd, 0);
+                target->sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                target->sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
-                m_CompositeRT->ClearColorAttachmentFloat(cmd, 0);
-                m_CompositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                target->compositeRT->ClearColorAttachmentFloat(cmd, 0);
+                target->compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
+
+                target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
             }
 
-            nvrhi::IFramebuffer *framebuffer = m_SceneRT->GetFramebuffer();
+            nvrhi::IFramebuffer *sceneFramebuffer = target->sceneRT->GetFramebuffer();
 
             ShadowPass(cmd, camera);
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
-                const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                m_WorldEnvironment->environment->Draw(cmd, framebuffer, envPSO);
+                const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(sceneFramebuffer, m_FillMode);
+                m_WorldEnvironment->environment->Draw(cmd, sceneFramebuffer, envPSO);
             }
 
-			ColorPass(cmd, camera, framebuffer);
+			ColorPass(cmd, camera, sceneFramebuffer);
 
-			UIPass(cmd, m_WidgetRT->GetFramebuffer());
+			UIPass(cmd, target->widgetRT->GetFramebuffer());
 
-            if (camera->projectionType == ProjectionType::Orthographic)
+            if (drawDebug)
             {
-                DrawDebugGrid(cmd, framebuffer, debugSettings.worldGrid2D, true);
-            }
-            else
-            {
-                DrawDebugGrid(cmd, framebuffer, debugSettings.worldGrid3D, false);
-            }
+				nvrhi::IFramebuffer *debugFramebuffer = target->debugRT->GetFramebuffer().Get();
+				if (camera->projectionType == ProjectionType::Orthographic)
+				{
+					DrawDebugGrid(cmd, debugFramebuffer, sceneRenderSettings.worldGrid2D, true);
+				}
+				else
+				{
+					DrawDebugGrid(cmd, debugFramebuffer, sceneRenderSettings.worldGrid3D, false);
+				}
 
-            DrawDebug2D(cmd, framebuffer);
-			DrawDebug3D(cmd, framebuffer);
+				DrawDebug2D(cmd, debugFramebuffer);
+				DrawDebug3D(cmd, debugFramebuffer);
+            }
+            
+			const uint32_t width = target->sceneRT->GetWidth();
+			const uint32_t height = target->sceneRT->GetHeight();
 
             Ref<Texture> edgeTexture = nullptr;
             if (m_EdgeDetection && !m_SelectedEntities.empty())
             {
-                const uint32_t width = m_SceneRT->GetWidth();
-                const uint32_t height = m_SceneRT->GetHeight();
-
                 if (!m_EdgeDetection->GetOutputTexture() || m_EdgeDetection->GetOutputTexture()->GetWidth() != static_cast<int>(width) || m_EdgeDetection->GetOutputTexture()->GetHeight() != static_cast<int>(height))
                 {
                     m_EdgeDetection->CreateOutputTexture(width, height);
                 }
 
-                m_EdgeDetection->UpdateBindingSet(m_SceneRT->GetColorAttachment(0), m_SceneRT->GetColorAttachment(1), m_SceneRT->GetDepthAttachment());
+                m_EdgeDetection->UpdateBindingSet(target->sceneRT->GetColorAttachment(0), target->sceneRT->GetColorAttachment(1), target->sceneRT->GetDepthAttachment());
 
                 constexpr uint32_t kMaxSelectedIDs = 100;
                 const uint32_t selectedCount = static_cast<uint32_t>(std::min(m_SelectedEntities.size(), static_cast<size_t>(kMaxSelectedIDs)));
@@ -318,7 +279,7 @@ namespace ignite
             }
 
             Ref<Texture> bloomTexture = nullptr;
-            if (m_EditorBloom && camera && postProcessing.enableBloom)
+            if (postProcessing.enableBloom)
             {
                 m_EditorBloom->settings.intensity = postProcessing.bloomIntensity;
                 m_EditorBloom->settings.knee = postProcessing.bloomKnee;
@@ -327,25 +288,23 @@ namespace ignite
                 m_EditorBloom->settings.iterations = postProcessing.bloomIterations;
 
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
-                m_EditorBloom->Resize(m_SceneRT->GetWidth(), m_SceneRT->GetHeight());
-                m_EditorBloom->Build(cmd, m_SceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+                m_EditorBloom->Resize(width, height);
+                m_EditorBloom->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
                 bloomTexture = m_EditorBloom->GetBloomTexture();
             }
 
             Ref<Texture> ssaoTexture = nullptr;
-            if (m_EditorSSAO && camera && postProcessing.enableSSAO)
+            if (postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
-                m_EditorSSAO->Resize(m_SceneRT->GetWidth(), m_SceneRT->GetHeight());
-                m_EditorSSAO->Build(cmd, m_SceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
+                m_EditorSSAO->Resize(width, height);
+                m_EditorSSAO->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
                 ssaoTexture = m_EditorSSAO->GetAOTexture();
             }
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, postProcessing,
-                    m_CompositeRT->GetFramebuffer(), m_SceneRT->GetColorAttachment(0), m_WidgetRT->GetColorAttachment(0),
-                    edgeTexture, bloomTexture, ssaoTexture);
+                CompositePass(cmd, camera, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture);
             }
 
             cmd->close();
@@ -357,6 +316,7 @@ namespace ignite
         }
     }
 
+#if 0
     void SceneRenderer::RenderGameplayTo(ICamera *camera)
     {
         IGN_PROFILE_FUNCTION();
@@ -369,11 +329,8 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
             cmd->open();
-            // Upload the shared fullscreen quad vertex buffer used by Bloom, SSAO, and CompositePass.
-            // Must happen before any of those passes execute — not just inside CompositePass.
-            EnsureCompositeVertexBufferUploaded(cmd);
+
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
-            UploadSkeletonBuffers(cmd);
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
             {
@@ -452,10 +409,11 @@ namespace ignite
             m_Device->executeCommandList(cmd);
         }
     }
+#endif
 
-    void SceneRenderer::ResizeFramebuffer(uint32_t width, uint32_t height)
+    void SceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
     {
-        ISceneRenderer::ResizeFramebuffer(width, height);
+        ISceneRenderer::ResizeFramebuffer(camera, width, height);
 
         if (m_EditorBloom)
             m_EditorBloom->Resize(width, height);
@@ -467,28 +425,18 @@ namespace ignite
         m_DebugGridBindingSetCache.clear();
         m_CSMBindingSetCache.clear();
 
-        m_SceneRT->Resize(width, height);
-        m_WidgetRT->Resize(width, height);
-        m_CompositeRT->Resize(width, height);
-    }
+        auto it = m_RenderTargets.find(camera);
+        if (it != m_RenderTargets.end())
+        {
+            auto target = it->second;
 
-    void SceneRenderer::ResizeGameplayFramebuffer(uint32_t width, uint32_t height)
-    {
-        ISceneRenderer::ResizeFramebuffer(width, height);
+			target->sceneRT->Resize(width, height);
+			target->widgetRT->Resize(width, height);
+			target->compositeRT->Resize(width, height);
 
-        if (m_GameplayBloom)
-            m_GameplayBloom->Resize(width, height);
-
-        if (m_GameplaySSAO)
-            m_GameplaySSAO->Resize(width, height);
-
-        m_CompositeBindingSetCache.clear();
-        m_DebugGridBindingSetCache.clear();
-        m_CSMBindingSetCache.clear();
-
-        m_GameplaySceneRT->Resize(width, height);
-        m_GameplayWidgetRT->Resize(width, height);
-        m_GameplayCompositeRT->Resize(width, height);
+			target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+			target->debugRT->Resize(width, height);
+        }
     }
 
     void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)
@@ -532,6 +480,7 @@ namespace ignite
             glm::cos(m_SceneGPUData.sungAngles.y) * glm::cos(m_SceneGPUData.sungAngles.x)
         };
 
+        float shadowDist = 200.0f; // default if no directional light found
         auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
         for (entt::entity e : lightView)
         {
@@ -545,9 +494,9 @@ namespace ignite
             csmData.minBias = light.shadowMinBias;
             csmData.maxBias = light.shadowMaxBias;
             csmData.pcfRadius = light.pcfRadius;
+            shadowDist = light.shadowDistance;
 
-            const int qualityIndex = std::clamp(light.shadowResolution, 0, 3);
-            auto quality = static_cast<ShadowMapQuality>(qualityIndex);
+            const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
             if (m_CascadedShadowMap->GetQuality() != quality)
             {
                 m_CascadedShadowMap->Resize(quality);
@@ -565,7 +514,7 @@ namespace ignite
             break;
         }
 
-        m_CascadedShadowMap->ComputeMatrices(camera, sunDirection);
+        m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
 
         // Share cascade data with the main scene pass (cascadeIndex is unused there)
         CascadedShadowMapBufferData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
@@ -619,22 +568,18 @@ namespace ignite
 
                     // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
                     const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-                    if (!smc.skeletonGpuBuffer && !boneTransforms.empty())
+                    glm::mat4 bones[MAX_BONES];
+                    if (!boneTransforms.empty())
                     {
-                        smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
-                        LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}", static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                        GPUSkeletonBuffer skeletonGPUData;
                         const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
                         if (boneCount > 0)
                         {
-                            std::memcpy(skeletonGPUData.bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
+                            std::memcpy(bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
                         }
                         if (boneCount < MAX_BONES)
                         {
-                            std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
+                            std::memcpy(&bones[boneCount], &s_IdentitySkeleton[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
                         }
-                        smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
                     }
 
                     const auto &instances = sm->GetMeshInstances();
@@ -653,13 +598,8 @@ namespace ignite
                             continue;
                         }
 
-                        // Use m_CSMPerCascadeBuffers[i] (b4) so the depth shader gets cascadeIndex=i
-                        // and samples lightViewProjection[i] — the correct light-space matrix for
-                        // this cascade. Using m_CascadedShadowMapBuffer here (cascadeIndex=-1)
-                        // causes the shader to always use lightViewProjection[0], making cascades
-                        // 1-3 incorrect. This specifically breaks the gameplay camera whose visible
-                        // depth range may not fall into cascade 0 at all.
-                        meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i], smc.skeletonGpuBuffer);
+                        if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i]))
+                            continue;
 
                         SkinnedMeshBufferData gpuData;
                         if (idx < smc.cachedInstanceTransforms.size())
@@ -685,6 +625,7 @@ namespace ignite
                         }
 
                         meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+                        meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
                         nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
 
@@ -739,7 +680,8 @@ namespace ignite
                                         continue;
                                     }
 
-                                    meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i], nullptr);
+                                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i]))
+                                        continue;
 
                                     SkinnedMeshBufferData gpuData;
                                     gpuData.transformation = socketWorld * meshInstance->global;
@@ -747,6 +689,7 @@ namespace ignite
                                     gpuData.normal = normalMatrix;
 
                                     meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+                                    meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
                                     nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
                                     if (meshBindingSet)
@@ -820,33 +763,28 @@ namespace ignite
                 AABB worldAABB = mesh->aabb.Transform(tr.world.GetMatrix());
                 if (!frustum.IsAABBVisible(worldAABB.min, worldAABB.max))
                     continue;
-
-                // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
                 const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-                if (!smc.skeletonGpuBuffer && !boneTransforms.empty())
-                {
-                    smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
-                    LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}", static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                    GPUSkeletonBuffer skeletonGPUData;
-                    const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-                    if (boneCount > 0)
-                    {
-                        std::memcpy(skeletonGPUData.bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
-                    }
-                    if (boneCount < MAX_BONES)
-                    {
-                        std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
-                    }
-
-                    smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
-                }
+                glm::mat4 bones[MAX_BONES];
+				if (!boneTransforms.empty())
+				{
+					const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+					if (boneCount > 0)
+					{
+						std::memcpy(bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
+					}
+					if (boneCount < MAX_BONES)
+					{
+						std::memcpy(&bones[boneCount], &s_IdentitySkeleton[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
+					}
+				}
 
                 const auto &instances = mesh->GetMeshInstances();
                 for (size_t idx = 0; idx < instances.size(); ++idx)
                 {
                     auto &meshInstance = instances[idx];
-                    meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, smc.skeletonGpuBuffer);
+
+                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
+                        continue;
 
                     SkinnedMeshBufferData gpuData;
                     if (idx < smc.cachedInstanceTransforms.size())
@@ -871,6 +809,7 @@ namespace ignite
                     }
 
                     meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+                    meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
                     auto &primitive = meshInstance->GetPrimitive();
                     if (!primitive->vertexBuffer || !primitive->indexBuffer)
@@ -966,8 +905,8 @@ namespace ignite
                                 if (!primitive->vertexBuffer || !primitive->indexBuffer)
                                     continue;
 
-                                // Sockets are drawn as static submeshes attached to bones (skeletonGpuBuffer = nullptr)
-                                meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, nullptr);
+								if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
+									continue;
 
                                 SkinnedMeshBufferData gpuData;
                                 gpuData.transformation = socketWorld * meshInstance->global;
@@ -975,6 +914,7 @@ namespace ignite
                                 gpuData.normal = normalMatrix;
 
                                 meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+								meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
                                 Ref<Material> material = ResolveAsset<Material>(meshInstance->GetMaterialHandle());
                                 if (!material)
@@ -1222,33 +1162,33 @@ namespace ignite
             m_WidgetRenderer->Resize(width, height);
         }
 
-        const bool isGameplayFramebuffer = framebuffer == m_GameplayWidgetRT->GetFramebuffer();
-        const bool useMouseOverride = isGameplayFramebuffer ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
-        const bool isHovered = isGameplayFramebuffer ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
-        const uint32_t mouseX = isGameplayFramebuffer ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
-        const uint32_t mouseY = isGameplayFramebuffer ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
-        const glm::ivec2 mousePos = InputSystem::GetMousePosition();
+        // const bool isGameplayFramebuffer = framebuffer == m_GameplayWidgetRT->GetFramebuffer();
+        // const bool useMouseOverride = isGameplayFramebuffer ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
+        // const bool isHovered = isGameplayFramebuffer ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
+        // const uint32_t mouseX = isGameplayFramebuffer ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
+        // const uint32_t mouseY = isGameplayFramebuffer ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
+        // const glm::ivec2 mousePos = InputSystem::GetMousePosition();
 
-        if (useMouseOverride)
-        {
-            if (isHovered)
-            {
-                m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
-            }
-            else
-            {
-                const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
-                m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
-            }
-        }
-        else
-        {
-            m_WidgetRenderer->SetMousePosition(
-                static_cast<uint32_t>(std::max(mousePos.x, 0)),
-                static_cast<uint32_t>(std::max(mousePos.y, 0)));
-        }
-        m_WidgetRenderer->Update(0.0f);
-        m_WidgetRenderer->Render(cmd, framebuffer);
+        // if (useMouseOverride)
+        // {
+        //     if (isHovered)
+        //     {
+        //         m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
+        //     }
+        //     else
+        //     {
+        //         const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+        //         m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
+        //     }
+        // }
+        // else
+        // {
+        //     m_WidgetRenderer->SetMousePosition(
+        //         static_cast<uint32_t>(std::max(mousePos.x, 0)),
+        //         static_cast<uint32_t>(std::max(mousePos.y, 0)));
+        // }
+        // m_WidgetRenderer->Update(0.0f);
+        // m_WidgetRenderer->Render(cmd, framebuffer);
     }
 
     void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
@@ -1322,7 +1262,7 @@ namespace ignite
         constexpr int kCircleDebugSegments = 24;
         constexpr float kTwoPi = 6.28318530718f;
 
-        if (debugSettings.showPhysicsCollider)
+        if (sceneRenderSettings.showPhysicsCollider)
         {
             auto boxCollider2DView = m_Scene->registry->view<TransformComponent, BoxCollider2DComponent>();
             for (entt::entity e : boxCollider2DView)
@@ -1415,7 +1355,7 @@ namespace ignite
             }
         };
 
-        if (debugSettings.showBoundingBox)
+        if (sceneRenderSettings.showBoundingBox)
         {
             auto aabbView = m_Scene->registry->view<TransformComponent, MeshComponent>();
             for (entt::entity e : aabbView)
@@ -1429,7 +1369,7 @@ namespace ignite
             }
         }
 
-        if (debugSettings.showPhysicsCollider)
+        if (sceneRenderSettings.showPhysicsCollider)
         {
             auto boxCollider = m_Scene->registry->view<TransformComponent, BoxColliderComponent>();
             for (entt::entity e : boxCollider)
@@ -1578,19 +1518,21 @@ namespace ignite
         m_Renderer2D->End();
     }
 
+    Ref<CameraRenderTarget> SceneRenderer::GetRenderTarget(ICamera *camera)
+    {
+        auto it = m_RenderTargets.find(camera);
+        if (it != m_RenderTargets.end())
+            return it->second;
+        return nullptr;
+    }
 
-	void SceneRenderer::DrawMesh(const MeshComponent &smc)
-	{
 
-	}
-
-	void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
-        Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
+    void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
     {
         IGN_PROFILE_FUNCTION();
-        
-        EnsureCompositeVertexBufferUploaded(cmd);
 
+        auto compositeFramebuffer = target->compositeRT->GetFramebuffer();
+        
         CompositePostProcess_GPUData postProcessData;
         if (camera)
         {
@@ -1610,23 +1552,50 @@ namespace ignite
             postProcessData.chromAbParams.z = postProcessing.aoIntensity;
             
             postProcessData.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
+
+            postProcessData.projectionInv = glm::inverse(camera->GetProjection());
+
+            postProcessData.enableDOF = lens.enabledDOF ? 1 : 0;
+            postProcessData.focalLength = lens.focalLength;
+            postProcessData.focalDistance = lens.focalDistance;
+            postProcessData.fStop = lens.fStop;
+            postProcessData.focusRange = lens.focusRange;
+            postProcessData.blurAmount = lens.blurAmount;
+
+            if (m_WorldEnvironment)
+            {
+                postProcessData.tonemapMode = static_cast<int>(m_WorldEnvironment->tonemapMode);
+                postProcessData.exposure = m_WorldEnvironment->exposure;
+                postProcessData.gamma = m_WorldEnvironment->gamma;
+
+                postProcessData.fogColor = m_WorldEnvironment->fogColor;
+                postProcessData.fogDensity = m_WorldEnvironment->fogDensity;
+                postProcessData.fogStart = m_WorldEnvironment->fogStart;
+                postProcessData.fogEnd = m_WorldEnvironment->fogEnd;
+            }
+            else
+            {
+                postProcessData.tonemapMode = 0; // Reinhard
+                postProcessData.exposure = 1.1f;
+                postProcessData.gamma = 2.2f;
+                postProcessData.fogDensity = 0.0f;
+            }
         }
 
         m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
         cmd->setBufferState(m_CompositePostProcessBuffer->GetHandle(), nvrhi::ResourceStates::ConstantBuffer);
 
-        Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(framebuffer, nvrhi::RasterFillMode::Solid);
-        nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0),
-            sceneTexture, uiTexture, edgeTexture, bloomTexture, ssaoTexture,
-            m_CompositePostProcessBuffer, m_CompositeSampler.Get());
+        Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
+        nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), target, 
+            edgeTexture, bloomTexture, ssaoTexture, m_CompositePostProcessBuffer, m_CompositeSampler.Get());
 
         cmd->setBufferState(m_CompositeVertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
 
         auto graphicsState = nvrhi::GraphicsState();
         graphicsState.pipeline = compositePipeline->GetHandle();
-        graphicsState.framebuffer = framebuffer;
+        graphicsState.framebuffer = compositeFramebuffer;
         graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding { m_CompositeVertexBuffer->GetHandle(), 0, 0 } };
-        graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+        graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(compositeFramebuffer->getFramebufferInfo().getViewport());
         graphicsState.bindings = { bindingSet };
         cmd->setGraphicsState(graphicsState);
 
@@ -1901,6 +1870,8 @@ namespace ignite
 		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
 		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
 		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
 		layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
 		layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
 		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
@@ -1932,21 +1903,24 @@ namespace ignite
 		return gp;
 	}
 
-	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout,
-		Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture,
-		Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler)
+	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler)
 	{
 		Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
 		Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
 		Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
+		Ref<Texture> depth = target->sceneRT->GetDepthAttachment() ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
+		Ref<Texture> debug = target->debugRT->GetColorAttachment(0) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
+
 		CompositeBindingKey key
 		{
 			bindingLayout,
-			sceneTexture->GetHandle(),
-			uiTexture->GetHandle(),
+			target->sceneRT->GetColorAttachment(0)->GetHandle(),
+            target->widgetRT->GetColorAttachment(0)->GetHandle(),
 			edge->GetHandle(),
 			bloom->GetHandle(),
 			ssao->GetHandle(),
+			depth->GetHandle(),
+			debug->GetHandle(),
 			postProcessBuffer->GetHandle(),
 			sampler
 		};
@@ -1961,11 +1935,13 @@ namespace ignite
 
 		// Composite Binding set
 		auto bindingSetDesc = nvrhi::BindingSetDesc();
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, uiTexture->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, target->sceneRT->GetColorAttachment(0)->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, target->widgetRT->GetColorAttachment(0)->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, edge->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, bloom->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, ssao->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, depth->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, debug->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
 
@@ -1976,8 +1952,6 @@ namespace ignite
 
 		return bindingSet;
 	}
-
-
 
 	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
 	{
@@ -2004,82 +1978,57 @@ namespace ignite
 		return bindingSet;
 	}
 
-	void SceneRenderer::UploadSkeletonBuffers(nvrhi::ICommandList *cmd)
+	Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
 	{
-		IGN_PROFILE_FUNCTION();
-		if (m_SkeletonBuffersUploadedThisFrame)
+        auto it = m_RenderTargets.find(camera);
+        if (it != m_RenderTargets.end())
+            return it->second;
+
+        Ref<CameraRenderTarget> target = CreateRef<CameraRenderTarget>();
+
+		// =========================================
+		// Create Render Targets
+		RenderTargetCreateInfo sceneRTCreateInfo = {};
+		sceneRTCreateInfo.attachments =
 		{
-			return;
-		}
+			FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
+			FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
+			FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
+		};
 
-		if (!m_Scene || !m_Scene->registry)
+		target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
+
+		// Widget RT
+		RenderTargetCreateInfo widgetRTCreateInfo = {};
+		widgetRTCreateInfo.attachments =
 		{
-			return;
-		}
+			FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
+			FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
+		};
+		target->widgetRT = RenderTarget::Create(widgetRTCreateInfo, "[Scene Renderer] Widget RT");
 
-		m_SkeletonBuffersUploadedThisFrame = true;
-
-		auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
-		for (entt::entity e : skelMeshView)
+		RenderTargetCreateInfo compositeRTCreateInfo = {};
+		compositeRTCreateInfo.attachments =
 		{
-			TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-			if (!tr.visible)
-				continue;
+			FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
+		};
 
-			MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
-			if (smc.handle == AssetHandle(0))
-				continue;
+		target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
 
-			const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-			if (boneTransforms.empty())
-				continue;
+		m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
 
-			if (!smc.skeletonGpuBuffer)
-			{
-				smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
-				LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}",
-					static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-			}
+		RenderTargetCreateInfo debugRTCreateInfo = {};
+		debugRTCreateInfo.attachments =
+		{
+			FramebufferAttachments{ "[Scene DebugAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget },
+			FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }
+		};
 
-			GPUSkeletonBuffer skeletonGPUData;
-			const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-			if (boneCount > 0)
-			{
-				std::memcpy(skeletonGPUData.bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
-			}
-			if (boneCount < MAX_BONES)
-			{
-				std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
-			}
-			smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
+		debugRTCreateInfo.depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+		target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
 
-			Ref<Mesh> sm = ResolveAsset<Mesh>(smc.handle);
-			if (sm)
-			{
-				const auto &instances = sm->GetMeshInstances();
-				smc.cachedInstanceTransforms.resize(instances.size());
-				for (size_t idx = 0; idx < instances.size(); ++idx)
-				{
-					auto &meshInstance = instances[idx];
-					SkinnedMeshBufferData &gpuData = smc.cachedInstanceTransforms[idx];
-
-					// For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
-					glm::mat4 meshTransform = meshInstance->global;
-					if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
-					{
-						const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
-						if (ji < boneTransforms.size())
-						{
-							meshTransform = boneTransforms[ji] * meshTransform;
-						}
-					}
-
-					gpuData.transformation = tr.world.GetMatrix() * meshTransform;
-					gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-					gpuData.normal = smc.normalMatrix;
-				}
-			}
-		}
+        m_RenderTargets.emplace(camera, target);
+        return target;
 	}
 
 	void SceneRenderer::AddAssetPin(AssetHandle handle)

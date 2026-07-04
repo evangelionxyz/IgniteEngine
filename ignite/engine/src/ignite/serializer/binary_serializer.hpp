@@ -562,10 +562,7 @@ namespace ignite
                 ReadRaw(inFile, &verticesCount);
                 ReadRaw(inFile, &indicesCount);
 
-                Ref<MeshInstance> meshInstance = CreateRef<MeshInstance>();
-                auto &name = meshInstance->GetName();
-                auto &primitive = meshInstance->GetPrimitive();
-
+                Ref<MeshPrimitive> primitive = CreateRef<MeshPrimitive>();
                 primitive->vertices.reserve(verticesCount);
                 for (uint32_t vertexIndex = 0; vertexIndex < verticesCount; ++vertexIndex)
                 {
@@ -586,7 +583,9 @@ namespace ignite
 
                 uint32_t nameSize = 0;
                 ReadRaw(inFile, &nameSize);
-                name = ReadString(inFile, nameSize);
+                std::string name = ReadString(inFile, nameSize);
+
+				Ref<MeshInstance> meshInstance = MeshInstance::Create(name, primitive);
 
                 for (int j = 0; j < 4; ++j)
                 {

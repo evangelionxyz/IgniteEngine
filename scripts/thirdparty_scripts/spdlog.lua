@@ -42,11 +42,16 @@ project "SPDLOG"
             "/utf-8", "/interface"
         }
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         runtime "debug"
         symbols "on"
 
-    filter "configurations:Release"
+    filter { "configurations:Release or Release-Profiling" }
+        runtime "release"
+        symbols "off"
+        optimize "on"
+
+    filter { "configurations:Shipping or Shipping-Profiling" }
         runtime "release"
         symbols "off"
         optimize "on"

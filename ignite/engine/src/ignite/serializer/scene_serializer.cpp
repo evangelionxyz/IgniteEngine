@@ -107,6 +107,7 @@ namespace ignite
                         sr.AddKeyValue("ShadowMinBias", comp.shadowMinBias);
                         sr.AddKeyValue("ShadowMaxBias", comp.shadowMaxBias);
                         sr.AddKeyValue("PCFRadius", comp.pcfRadius);
+                        sr.AddKeyValue("ShadowDistance", comp.shadowDistance);
                         sr.AddKeyValue("ShadowResolution", comp.shadowResolution);
                         sr.AddKeyValue("CascadeShadow", comp.cascadeShadow);
                     }
@@ -128,6 +129,17 @@ namespace ignite
                         sr.AddKeyValue("FarClip", comp.camera.farPlane);
                         sr.AddKeyValue("Fov", comp.camera.fov);
                         sr.AddKeyValue("Primary", comp.primary);
+
+                        sr.BeginMap("Lens");
+                        {
+                            sr.AddKeyValue("EnabledDOF", comp.camera.lens.enabledDOF);
+                            sr.AddKeyValue("FocalLength", comp.camera.lens.focalLength);
+                            sr.AddKeyValue("FocalDistance", comp.camera.lens.focalDistance);
+                            sr.AddKeyValue("FStop", comp.camera.lens.fStop);
+                            sr.AddKeyValue("FocusRange", comp.camera.lens.focusRange);
+                            sr.AddKeyValue("BlurAmount", comp.camera.lens.blurAmount);
+                        }
+                        sr.EndMap();
 
                         sr.BeginMap("PostProcessing");
                         {
@@ -469,7 +481,6 @@ namespace ignite
                     sr.EndMap();
                 }
 
-                // World Environment
                 if (entity.HasComponent<WorldEnvironment>())
                 {
                     const WorldEnvironment &comp = entity.GetComponent<WorldEnvironment>();
@@ -479,6 +490,13 @@ namespace ignite
                         sr.AddKeyValue("Exposure", comp.exposure);
                         sr.AddKeyValue("Gamma", comp.gamma);
                         sr.AddKeyValue("Ambient", comp.ambient);
+
+                        sr.AddKeyValue("TonemapMode", static_cast<int>(comp.tonemapMode));
+                        
+                        sr.AddKeyValue("FogDensity", comp.fogDensity);
+                        sr.AddKeyValue("FogColor", comp.fogColor);
+                        sr.AddKeyValue("FogStart", comp.fogStart);
+                        sr.AddKeyValue("FogEnd", comp.fogEnd);
                     }
                     sr.EndMap();
                 }
@@ -697,6 +715,16 @@ namespace ignite
                 if (auto n = node["Fov"]) comp.camera.fov = n.as<float>();
                 if (auto n = node["Primary"]) comp.primary = n.as<bool>();
 
+                if (YAML::Node lensNode = node["Lens"])
+                {
+                    if (auto n = lensNode["EnabledDOF"]) comp.camera.lens.enabledDOF = n.as<bool>();
+                    if (auto n = lensNode["FocalLength"]) comp.camera.lens.focalLength = n.as<float>();
+                    if (auto n = lensNode["FocalDistance"]) comp.camera.lens.focalDistance = n.as<float>();
+                    if (auto n = lensNode["FStop"]) comp.camera.lens.fStop = n.as<float>();
+                    if (auto n = lensNode["FocusRange"]) comp.camera.lens.focusRange = n.as<float>();
+                    if (auto n = lensNode["BlurAmount"]) comp.camera.lens.blurAmount = n.as<float>();
+                }
+
                 if (YAML::Node ppNode = node["PostProcessing"])
                 {
                     auto &pp = comp.camera.postProcessing;
@@ -909,6 +937,7 @@ namespace ignite
                 if (auto n = node["ShadowMinBias"]) comp.shadowMinBias = n.as<float>();
                 if (auto n = node["ShadowMaxBias"]) comp.shadowMaxBias = n.as<float>();
                 if (auto n = node["PCFRadius"]) comp.pcfRadius = n.as<float>();
+                if (auto n = node["ShadowDistance"]) comp.shadowDistance = n.as<float>();
                 if (auto n = node["ShadowResolution"]) comp.shadowResolution = n.as<int>();
                 if (auto n = node["CascadeShadow"]) comp.cascadeShadow = n.as<bool>();
             }
@@ -994,6 +1023,26 @@ namespace ignite
                 if (node["Ambient"])
                 {
                     world.ambient = node["Ambient"].as<float>();
+                }
+                if (node["TonemapMode"])
+                {
+                    world.tonemapMode = static_cast<TonemapMode>(node["TonemapMode"].as<int>());
+                }
+                if (node["FogDensity"])
+                {
+                    world.fogDensity = node["FogDensity"].as<float>();
+                }
+                if (node["FogColor"])
+                {
+                    world.fogColor = node["FogColor"].as<glm::vec4>();
+                }
+                if (node["FogStart"])
+                {
+                    world.fogStart = node["FogStart"].as<float>();
+                }
+                if (node["FogEnd"])
+                {
+                    world.fogEnd = node["FogEnd"].as<float>();
                 }
             }
 

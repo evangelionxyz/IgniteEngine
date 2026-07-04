@@ -32,9 +32,11 @@ namespace ignite
         aoLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // params
         m_AOLayout = device->createBindingLayout(aoLayout);
 
+        // Blur layout now includes the depth texture for bilateral filtering.
         nvrhi::BindingLayoutDesc blurLayout;
         blurLayout.visibility = nvrhi::ShaderType::Compute;
-        blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // raw AO
+        blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // raw AO (or previous pass)
+        blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // depth texture for bilateral
         blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_UAV(0)); // Target UAV
         blurLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // clamp sampler
         blurLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // blur params
@@ -194,7 +196,9 @@ namespace ignite
         IGN_PROFILE_SCOPE_COLOR("SSAO::Build", 0x404040FF);
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-        // 1. Raw SSAO Compute Pass
+        // ===================================================================
+        // Pass 1: Raw SSAO Compute
+        // ===================================================================
         SSAOParams params;
         params.projection = camera->GetProjection();
         params.projectionInv = glm::inverse(camera->GetProjection());
@@ -224,31 +228,69 @@ namespace ignite
             cmd->dispatch((m_Width + 7) / 8, (m_Height + 7) / 8, 1);
         }
 
-        // 2. Blur SSAO Pass
-        BlurParams blurParams;
-        blurParams.horizontal = 1.0f;
-        m_BlurParamsBuffer->SetData(cmd, Buffer(&blurParams, sizeof(blurParams)));
-
-        cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
-        cmd->setTextureState(m_BlurTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
-        cmd->commitBarriers();
-
-        auto blurDesc = nvrhi::BindingSetDesc();
-        blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_AOTex->GetHandle()));
-        blurDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(0, m_BlurTex->GetHandle()));
-        blurDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_ClampSampler));
-        blurDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_BlurParamsBuffer->GetHandle()));
-        nvrhi::BindingSetHandle blurBindingSet = device->createBindingSet(blurDesc, m_BlurLayout);
-
+        // ===================================================================
+        // Pass 2: Bilateral Blur — Horizontal (m_AOTex → m_BlurTex)
+        // ===================================================================
         {
+            BlurParams blurParams;
+            blurParams.horizontal = 1.0f;
+            blurParams.nearPlane = camera->nearPlane;
+            blurParams.farPlane = camera->farPlane;
+            blurParams.depthSharpness = 10.0f; // bilateral edge sharpness
+            m_BlurParamsBuffer->SetData(cmd, Buffer(&blurParams, sizeof(blurParams)));
+
+            cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(m_BlurTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
+            cmd->commitBarriers();
+
+            auto blurDesc = nvrhi::BindingSetDesc();
+            blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_AOTex->GetHandle()));
+            blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, depthTexture->GetHandle()));
+            blurDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(0, m_BlurTex->GetHandle()));
+            blurDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_ClampSampler));
+            blurDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_BlurParamsBuffer->GetHandle()));
+            nvrhi::BindingSetHandle blurBindingSetH = device->createBindingSet(blurDesc, m_BlurLayout);
+
             nvrhi::ComputeState state;
             state.pipeline = m_BlurComputePipeline;
-            state.bindings = { blurBindingSet };
+            state.bindings = { blurBindingSetH };
             cmd->setComputeState(state);
             cmd->dispatch((m_Width + 7) / 8, (m_Height + 7) / 8, 1);
         }
 
-        cmd->setTextureState(m_BlurTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
+        // ===================================================================
+        // Pass 3: Bilateral Blur — Vertical (m_BlurTex → m_AOTex)
+        // The final blurred AO result ends up in m_AOTex.
+        // ===================================================================
+        {
+            BlurParams blurParams;
+            blurParams.horizontal = 0.0f;
+            blurParams.nearPlane = camera->nearPlane;
+            blurParams.farPlane = camera->farPlane;
+            blurParams.depthSharpness = 10.0f;
+            m_BlurParamsBuffer->SetData(cmd, Buffer(&blurParams, sizeof(blurParams)));
+
+            cmd->setTextureState(m_BlurTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
+            cmd->commitBarriers();
+
+            auto blurDesc = nvrhi::BindingSetDesc();
+            blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_BlurTex->GetHandle()));
+            blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, depthTexture->GetHandle()));
+            blurDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(0, m_AOTex->GetHandle()));
+            blurDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_ClampSampler));
+            blurDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_BlurParamsBuffer->GetHandle()));
+            nvrhi::BindingSetHandle blurBindingSetV = device->createBindingSet(blurDesc, m_BlurLayout);
+
+            nvrhi::ComputeState state;
+            state.pipeline = m_BlurComputePipeline;
+            state.bindings = { blurBindingSetV };
+            cmd->setComputeState(state);
+            cmd->dispatch((m_Width + 7) / 8, (m_Height + 7) / 8, 1);
+        }
+
+        // Final result is in m_AOTex — transition to SRV for composite pass
+        cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
         cmd->commitBarriers();
     }
 
@@ -261,6 +303,8 @@ namespace ignite
 
     Ref<Texture> SSAO::GetAOTexture() const
     {
-        return m_BlurTex;
+        // After the two-pass blur (H→m_BlurTex, V→m_AOTex), the final
+        // blurred AO result lives in m_AOTex.
+        return m_AOTex;
     }
 }

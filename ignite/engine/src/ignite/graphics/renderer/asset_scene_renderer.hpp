@@ -63,7 +63,6 @@ namespace ignite
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_CompositePipelineCache;
 
         std::vector<glm::mat4> m_BoneTransforms;
-        Ref<ConstantBuffer> m_SkeletonGpuBuffer;
         uint32_t m_PreviewMouseX = 0;
         uint32_t m_PreviewMouseY = 0;
         bool m_PreviewMouseHovered = false;

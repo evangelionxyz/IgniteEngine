@@ -32,14 +32,18 @@ namespace ignite {
 
     void Frustum::Update(const glm::mat4 &view_projection)
     {
-        // Extract frustum planes from the view-projection matrix
+        m_ViewProjection = view_projection;
+
+        // Extract frustum planes from the view-projection matrix.
+        // The near plane uses the depth-zero-to-one convention that the engine
+        // uses for both perspective and orthographic projections.
         for (int i = 0; i < 4; ++i)
         {
             m_Planes[(int)Plane::Left][i] = view_projection[i][3] + view_projection[i][0];
             m_Planes[(int)Plane::Right][i] = view_projection[i][3] - view_projection[i][0];
             m_Planes[(int)Plane::Bottom][i] = view_projection[i][3] + view_projection[i][1];
             m_Planes[(int)Plane::Top][i] = view_projection[i][3] - view_projection[i][1];
-            m_Planes[(int)Plane::Near][i] = view_projection[i][3] + view_projection[i][2];
+            m_Planes[(int)Plane::Near][i] = view_projection[i][2];
             m_Planes[(int)Plane::Far][i] = view_projection[i][3] - view_projection[i][2];
         }
 
@@ -98,19 +102,42 @@ namespace ignite {
 
     bool Frustum::IsAABBVisible(const glm::vec3 &min, const glm::vec3 &max) const
     {
-        for (const auto &plane : m_Planes)
+        const glm::vec3 corners[8] =
         {
-            glm::vec3 p = min;
-            if (plane.x >= 0) p.x = max.x;
-            if (plane.y >= 0) p.y = max.y;
-            if (plane.z >= 0) p.z = max.z;
+            { min.x, min.y, min.z },
+            { max.x, min.y, min.z },
+            { min.x, max.y, min.z },
+            { max.x, max.y, min.z },
+            { min.x, min.y, max.z },
+            { max.x, min.y, max.z },
+            { min.x, max.y, max.z },
+            { max.x, max.y, max.z }
+        };
 
-            if (glm::dot(glm::vec3(plane), p) + plane.w < 0)
-            {
-                return false;
-            }
+        // Test directly against the homogeneous clip volume instead of the
+        // extracted world-space planes. This keeps CPU culling aligned with the
+        // actual GPU projection rules and avoids backend-specific plane-sign
+        // issues when switching between Vulkan and D3D12.
+        bool outsideLeft   = true;
+        bool outsideRight  = true;
+        bool outsideBottom = true;
+        bool outsideTop    = true;
+        bool outsideNear   = true;
+        bool outsideFar    = true;
+
+        for (const glm::vec3 &corner : corners)
+        {
+            const glm::vec4 clip = m_ViewProjection * glm::vec4(corner, 1.0f);
+
+            outsideLeft   &= (clip.x < -clip.w);
+            outsideRight  &= (clip.x >  clip.w);
+            outsideBottom &= (clip.y < -clip.w);
+            outsideTop    &= (clip.y >  clip.w);
+            outsideNear   &= (clip.z <  0.0f);
+            outsideFar    &= (clip.z >  clip.w);
         }
-        return true;
+
+        return !(outsideLeft || outsideRight || outsideBottom || outsideTop || outsideNear || outsideFar);
     }
 
     std::vector<std::pair<glm::vec3, glm::vec3>> Frustum::GetEdges() const

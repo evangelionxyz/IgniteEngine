@@ -39,8 +39,10 @@ namespace ignite
 
         struct BlurParams
         {
-            float horizontal;
-            float _padding[3];
+            float horizontal;      // 1.0 = horizontal pass, 0.0 = vertical pass
+            float nearPlane;        // camera near plane for depth linearization
+            float farPlane;         // camera far plane for depth linearization
+            float depthSharpness;   // bilateral weight sharpness (higher = more edge-preserving)
         };
 
         void CreateTextures(uint32_t width, uint32_t height);

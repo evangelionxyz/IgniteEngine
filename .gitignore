@@ -1,6 +1,7 @@
 .idea
 .vs
 .docs
+.scratchfiles
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
@@ -10,12 +11,10 @@
 *.ninja
 *.sln
 *.slnx
-*cmake_install.cmake
 *.aps
-
-imgui.ini
-
 .agent
+*cmake_install.cmake
+imgui.ini
 Makefile
 CMakeFiles
 CMakeCache.txt
@@ -24,12 +23,11 @@ out
 lib
 cmake
 bin-cmake
-
 scripts/premake
 scripts/downloads
 scriptengine/obj
 scriptengine/bin
 scripts/bin
 scripts/obj
-__pycache__
 openspec
+__pycache__

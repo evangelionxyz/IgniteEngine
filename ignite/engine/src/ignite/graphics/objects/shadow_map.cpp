@@ -27,10 +27,10 @@ namespace ignite
         m_ModelGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapModelBufferData), true, 256, "Cascadded Model ShadowMap");
 
 		// Initialize shadow parameters with reasonable defaults
-		m_GPUData.shadowStrength = 0.8f;  // 80% shadow visibility
-		m_GPUData.minBias = 0.0001f;       // Minimum depth bias to prevent acne
-		m_GPUData.maxBias = 0.005f;        // Maximum depth bias for steep angles
-		m_GPUData.pcfRadius = 0.3f;        // PCF filter radius in texels
+		m_GPUData.shadowStrength = 0.8f;   // 80% shadow visibility
+		m_GPUData.minBias = 0.0002f;        // bias for surfaces facing light directly
+		m_GPUData.maxBias = 0.002f;         // bias for steep/grazing-angle surfaces
+		m_GPUData.pcfRadius = 0.3f;         // PCF filter radius in texels for cascade 0
 		
 		Resize(quality);
 	}
@@ -50,22 +50,26 @@ namespace ignite
 		m_Resolution = ShadowMapQuality::LOW == quality ? 512 :
 					   ShadowMapQuality::MEDIUM == quality ? 1024 :
 					   ShadowMapQuality::HIGH == quality ? 2048 :
-					   ShadowMapQuality::ULTRA == quality ? 4096 : 1024;
+					   ShadowMapQuality::ULTRA == quality ? 4096 :
+					   ShadowMapQuality::ULTIMATE == quality ? 8192 : 1024;
 		
 		m_Quality = quality;
 
-		// Configure depth texture sampler settings
+		// Linear clamp sampler for shadow map PCF — used with SampleLevel in the shader.
+		// Linear filtering provides smooth interpolation between depth texels across Poisson taps.
 		nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
 
 		nvrhi::SamplerDesc samplerDesc;
 		samplerDesc.addressU = nvrhi::SamplerAddressMode::ClampToEdge;
 		samplerDesc.addressV = nvrhi::SamplerAddressMode::ClampToEdge;
 		samplerDesc.addressW = nvrhi::SamplerAddressMode::ClampToEdge;
-		samplerDesc.borderColor = nvrhi::Color(1.0f, 1.0f, 1.0f, 1.0f); // White border = lit
-		samplerDesc.setAllFilters(true);
+		samplerDesc.borderColor = nvrhi::Color(1.0f, 1.0f, 1.0f, 1.0f);
+		samplerDesc.minFilter = true;
+		samplerDesc.magFilter = true;
+		samplerDesc.mipFilter = false;
 
 		m_DepthSampler = device->createSampler(samplerDesc);
-		LOG_ASSERT(m_DepthSampler, "Failed to create depth sampler");
+		LOG_ASSERT(m_DepthSampler, "Failed to create depth comparison sampler");
 
 		CreateCascadeFramebuffers();
 		CreatePipeline(m_CascadeFramebuffers[0]);
@@ -88,7 +92,7 @@ namespace ignite
 		return m_DepthTexture;
 	}
 
-	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition)
+	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance)
 	{
 		IGN_PROFILE_FUNCTION();
 
@@ -102,25 +106,37 @@ namespace ignite
 			lightDir = -glm::normalize(lightDir);
 		}
 
-		constexpr float splitLambda = 0.7f;
+		// Practical split scheme (Engel 2006).
+		// λ=0.85 biases heavily toward logarithmic splits so the near cascade
+		// gets the highest texel density (crispest shadows close to the camera).
+		constexpr float splitLambda = 0.85f;
 
-		const float nearPlane = glm::max(camera->nearPlane, 0.001f);
-		const float farPlane = glm::max(camera->farPlane, nearPlane + 1.0f);
-		const float clipRange = farPlane - nearPlane;
+		// The CSM near plane must be large enough for the log/uniform ratio to
+		// produce meaningful splits. With nearPlane=0.1 and farPlane=1000, the
+		// ratio is 10000 and the log term becomes negligible — the splits
+		// degenerate to nearly uniform, wasting resolution. Clamping to ≥0.5
+		// keeps the ratio reasonable (≤400 for shadowDistance=200).
+		const float csmNear = glm::max(camera->nearPlane, 0.5f);
 
-		const float minZ = nearPlane;
-		const float maxZ = nearPlane + clipRange;
-		const float range = maxZ - minZ;
-		const float ratio = maxZ / minZ;
+		// Use shadowDistance instead of camera->farPlane for CSM coverage.
+		// The camera needs a large far plane (1000) to render distant geometry,
+		// but shadows only need to extend ~150–300 units from the camera.
+		// Using the full far plane spreads the shadow budget over too much
+		// depth, making every cascade blurry.
+		m_ShadowDistance = glm::max(shadowDistance, csmNear + 1.0f);
+		const float csmFar = m_ShadowDistance;
+
+		const float range = csmFar - csmNear;
+		const float ratio = csmFar / csmNear;
 
 		std::array<float, NUM_CASCADES> cascadeSplits{};
 		for (int i = 0; i < NUM_CASCADES; ++i)
 		{
-			const float p = (i + 1) / static_cast<float>(NUM_CASCADES);
-			const float logSplit = minZ * std::pow(ratio, p);
-			const float uniformSplit = minZ + range * p;
-			const float dist = splitLambda * (logSplit - uniformSplit) + uniformSplit;
-			cascadeSplits[i] = dist;
+			const float p            = (i + 1) / static_cast<float>(NUM_CASCADES);
+			const float logSplit     = csmNear * std::pow(ratio, p);
+			const float uniformSplit = csmNear + range * p;
+			const float dist         = splitLambda * (logSplit - uniformSplit) + uniformSplit;
+			cascadeSplits[i]           = dist;
 			m_GPUData.cascadeSplits[i] = dist;
 		}
 
@@ -135,7 +151,7 @@ namespace ignite
 		if (std::abs(glm::dot(upDir, lightDir)) > 0.95f)
 			upDir = glm::vec3(0.0f, 0.0f, 1.0f);
 
-		float lastSplitDist = nearPlane;
+		float lastSplitDist = csmNear;
 
 		for (int cascadeIdx = 0; cascadeIdx < NUM_CASCADES; ++cascadeIdx)
 		{
@@ -171,6 +187,8 @@ namespace ignite
 				frustumCenter += corner;
 			frustumCenter /= static_cast<float>(frustumCornersWS.size());
 
+			// Bounding sphere around the frustum slice — rotation-invariant so
+			// the ortho extent doesn't flicker when the camera rotates.
 			float radius = 0.0f;
 			for (const auto &corner : frustumCornersWS)
 				radius = glm::max(radius, glm::length(corner - frustumCenter));
@@ -188,52 +206,65 @@ namespace ignite
 					}
 				};
 
+			// -----------------------------------------------------------------------
+			// Step 1 – Build an initial light-view from the raw frustum center so we
+			// can measure the sub-texel offset of that center.
+			// -----------------------------------------------------------------------
+			const float extent = radius; // symmetric ortho half-extent
+			const float texelsPerUnit = static_cast<float>(m_Resolution) / (2.0f * extent);
+
 			glm::vec3 cascadeCenter = frustumCenter;
 			glm::vec3 lightPos = cascadeCenter - lightDir * radius * 2.0f;
 			glm::mat4 lightView = glm::lookAt(lightPos, cascadeCenter, upDir);
 
+			// -----------------------------------------------------------------------
+			// Step 3 – Snap the light-eye position so the frustum center lands exactly
+			// on a texel boundary. We move the camera rather than patching the
+			// projection matrix — this avoids the NDC-scale-factor bug and is how
+			// Unreal Engine 4/5 and Unity HDRP implement stable CSM.
+			// -----------------------------------------------------------------------
+			{
+				// Project frustum center into light-view space.
+				glm::vec3 centerLS = glm::vec3(lightView * glm::vec4(cascadeCenter, 1.0f));
+
+				// Express in texel-space and find the fractional (sub-texel) part.
+				glm::vec2 centerTex  = glm::vec2(centerLS.x, centerLS.y) * texelsPerUnit;
+				glm::vec2 snapOffset = (glm::round(centerTex) - centerTex) / texelsPerUnit;
+
+				// Shift the light position along the light's local X/Y axes.
+				// Extracting the axes from the view matrix rows avoids an extra inverse.
+				glm::vec3 lightRight = glm::vec3(lightView[0][0], lightView[1][0], lightView[2][0]);
+				glm::vec3 lightUp    = glm::vec3(lightView[0][1], lightView[1][1], lightView[2][1]);
+				lightPos += lightRight * snapOffset.x + lightUp * snapOffset.y;
+
+				// Rebuild the view matrix with the snapped position.
+				lightView = glm::lookAt(lightPos, lightPos + lightDir, upDir);
+			}
+
+			// -----------------------------------------------------------------------
+			// Step 4 – Build symmetric ortho and depth bounds.
+			// -----------------------------------------------------------------------
 			glm::vec3 cascadeMin, cascadeMax;
 			computeCascadeBounds(lightView, cascadeMin, cascadeMax);
 
-			float extent = glm::max(cascadeMax.x - cascadeMin.x, cascadeMax.y - cascadeMin.y) * 0.5f;
-			extent = glm::max(extent, radius);
-
 			cascadeMin.x = -extent;
-			cascadeMax.x = extent;
+			cascadeMax.x =  extent;
 			cascadeMin.y = -extent;
-			cascadeMax.y = extent;
+			cascadeMax.y =  extent;
 
-			const float zPadding = 100.0f;
+			// Extra Z padding so tall casters (trees, buildings) behind the camera
+			// sub-frustum are not clipped out of the shadow depth pass.
+			const float zPadding = 150.0f;
 			cascadeMin.z -= zPadding;
 			cascadeMax.z += zPadding;
 
-			float nearPlaneLS = glm::max(0.001f, -cascadeMax.z);
-			float farPlaneLS = glm::max(nearPlaneLS + 1.0f, -cascadeMin.z);
+			const float nearPlaneLS = glm::max(0.001f, -cascadeMax.z);
+			const float farPlaneLS  = glm::max(nearPlaneLS + 1.0f, -cascadeMin.z);
 
+			// NOTE: The light-eye position was already snapped to a texel boundary
+			// in Step 3 above. Do NOT apply a second snap here on lightProj — that
+			// would fight the first snap and re-introduce sub-texel jitter.
 			glm::mat4 lightProj = glm::orthoZO(cascadeMin.x, cascadeMax.x, cascadeMin.y, cascadeMax.y, nearPlaneLS, farPlaneLS);
-
-			// Texel-snapping: align the projection's translation to whole shadow-map texels so
-			// the shadow map doesn't shimmer as the camera moves.
-			// Strategy: project any fixed world-space point through the current lightViewProj,
-			// measure the sub-texel offset of that point, then shift the ortho projection to
-			// cancel the offset. Using the frustum center in light space as the reference point
-			// keeps the snap stable and independent of the camera position.
-			{
-				const float texelsPerUnit = static_cast<float>(m_Resolution) / (2.0f * extent);
-				// Project frustum center into light view space (w=1, so just multiply).
-				glm::vec3 centerLS = glm::vec3(lightView * glm::vec4(cascadeCenter, 1.0f));
-
-				// Map to texel space.
-				glm::vec2 centerTex = glm::vec2(centerLS.x, centerLS.y) * texelsPerUnit;
-
-				// Round to nearest texel.
-				glm::vec2 roundedTex = glm::round(centerTex);
-
-				// Convert the sub-texel offset back to world units and shift the ortho projection.
-				glm::vec2 snapOffset = (roundedTex - centerTex) / texelsPerUnit;
-				lightProj[3][0] += snapOffset.x * (2.0f / (cascadeMax.x - cascadeMin.x));
-				lightProj[3][1] += snapOffset.y * (2.0f / (cascadeMax.y - cascadeMin.y));
-			}
 
 			m_GPUData.lightViewProj[cascadeIdx] = lightProj * lightView;
 
@@ -254,8 +285,7 @@ namespace ignite
 		params.depthFunc = nvrhi::ComparisonFunc::Less;
 		params.cullMode = nvrhi::RasterCullMode::Front;
 		params.fillMode = nvrhi::RasterFillMode::Solid;
-
-       m_BindingLayout = Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM);
+       	m_BindingLayout = Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM);
 
 		m_Pipeline = GraphicsPipeline::Create();
 		m_Pipeline->SetShaders({ m_VS, m_PS }).AddBindingLayout(m_BindingLayout).Build(framebuffer, params);
@@ -274,7 +304,7 @@ namespace ignite
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-	    nvrhi::Format depthFormat = nvrhi::Format::D32;
+	    constexpr nvrhi::Format depthFormat = nvrhi::Format::D32;
 
 	    TextureCreateInfo depthCI;
 	    // depthCI.debugName = "Cascaded Shadow Map Depth";

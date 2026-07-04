@@ -33,16 +33,16 @@ project "ZLIB"
     filter { "system:windows", "toolset:msc*" }
         disablewarnings { "4005", "4244" }
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         symbols "on"
 
-    filter "configurations:Release"
+    filter { "configurations:Release or Release-Profiling" }
         runtime "Release"
+        optimize "on"
         symbols "on"
-        optimize "on"
 
-    filter "configurations:Shipping"
-        runtime "Release"
-        symbols "off"
+    filter { "configurations:Shipping or Shipping-Profiling" }
+        runtime "release"
         optimize "on"
+        symbols "off"

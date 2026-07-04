@@ -40,6 +40,13 @@ namespace ignite {
     {
         m_ClearDepth = { std::numeric_limits<float>::max(), std::numeric_limits<uint32_t>::max() };
 
+        if (m_CreateInfo.depthAttachmentOverride != nullptr)
+        {
+            m_DepthAttachment = m_CreateInfo.depthAttachmentOverride;
+        }
+
+        size_t overrideColorIdx = 0;
+
         for (auto &attachment : m_CreateInfo.attachments)
         {
             // Depth attachment flag
@@ -84,38 +91,45 @@ namespace ignite {
             // create a color attachment if color attachments are empty
             if (isColorAttachment)
             {
-                // create color attachment texture
-                TextureCreateInfo createInfo = {};
-                createInfo.width = m_CreateInfo.width;
-                createInfo.height = m_CreateInfo.height;
-                createInfo.depth = 1;
-                createInfo.isRenderTarget = isRenderTarget;
-                createInfo.format = attachment.format;
-                // createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
-                createInfo.isUAV = false;
-				createInfo.initialState = attachment.state != nvrhi::ResourceStates::Unknown
-					? attachment.state
-					: nvrhi::ResourceStates::RenderTarget;
-            	createInfo.keepInitialState = true;
-				createInfo.sampleCount = m_CreateInfo.sampleCount;
-				createInfo.sampleQuality = m_CreateInfo.sampleQuality;
-
-                createInfo.isNativeObject = attachment.isNativeObject;
-                createInfo.nativeObjectPtr = attachment.nativeObjectPtr;
-                createInfo.nativeObjectType = attachment.nativeObjectType;
-
-                // Set dimension and array size based on attachment configuration
-                if (attachment.arrayLayers > 1)
+                if (overrideColorIdx < m_CreateInfo.colorAttachmentOverrides.size())
                 {
-                    createInfo.dimension = nvrhi::TextureDimension::Texture2DArray;
-                    createInfo.arraySize = attachment.arrayLayers;
+                    m_ColorAttachments.push_back(m_CreateInfo.colorAttachmentOverrides[overrideColorIdx++]);
                 }
                 else
                 {
-                    createInfo.dimension = nvrhi::TextureDimension::Texture2D;
-                }
+                    // create color attachment texture
+                    TextureCreateInfo createInfo = {};
+                    createInfo.width = m_CreateInfo.width;
+                    createInfo.height = m_CreateInfo.height;
+                    createInfo.depth = 1;
+                    createInfo.isRenderTarget = isRenderTarget;
+                    createInfo.format = attachment.format;
+                    // createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
+                    createInfo.isUAV = false;
+					createInfo.initialState = attachment.state != nvrhi::ResourceStates::Unknown
+						? attachment.state
+						: nvrhi::ResourceStates::RenderTarget;
+            		createInfo.keepInitialState = true;
+					createInfo.sampleCount = m_CreateInfo.sampleCount;
+					createInfo.sampleQuality = m_CreateInfo.sampleQuality;
 
-                m_ColorAttachments.emplace_back(Texture::Create(createInfo));
+                    createInfo.isNativeObject = attachment.isNativeObject;
+                    createInfo.nativeObjectPtr = attachment.nativeObjectPtr;
+                    createInfo.nativeObjectType = attachment.nativeObjectType;
+
+                    // Set dimension and array size based on attachment configuration
+                    if (attachment.arrayLayers > 1)
+                    {
+                        createInfo.dimension = nvrhi::TextureDimension::Texture2DArray;
+                        createInfo.arraySize = attachment.arrayLayers;
+                    }
+                    else
+                    {
+                        createInfo.dimension = nvrhi::TextureDimension::Texture2D;
+                    }
+
+                    m_ColorAttachments.emplace_back(Texture::Create(createInfo));
+                }
             }
         }
 
@@ -184,35 +198,43 @@ namespace ignite {
         // recreate depth attachment
         if (m_DepthAttachment)
         {
-            // copy description
-            auto createInfo = m_DepthAttachment->GetCreateInfo();
-            createInfo.width = width;
-            createInfo.height = height;
-            
-            m_DepthAttachment = nullptr;
+            if (m_CreateInfo.depthAttachmentOverride != nullptr)
+            {
+                m_DepthAttachment = m_CreateInfo.depthAttachmentOverride;
+            }
+            else
+            {
+                // copy description
+                auto createInfo = m_DepthAttachment->GetCreateInfo();
+                createInfo.width = width;
+                createInfo.height = height;
+                
+                m_DepthAttachment = nullptr;
 
-            m_DepthAttachment = Texture::Create(createInfo);
-            LOG_ASSERT(m_DepthAttachment, "Failed to create render target depth attachment");
+                m_DepthAttachment = Texture::Create(createInfo);
+                LOG_ASSERT(m_DepthAttachment, "Failed to create render target depth attachment");
+            }
         }
 
         // recreate color attachments
-        std::vector<TextureCreateInfo> colorCIs;
-        // copy color descriptions
-        for (auto &colorAttachment : m_ColorAttachments)
-        {
-            auto colorDesc = colorAttachment->GetCreateInfo();
-            colorDesc.width = width;
-            colorDesc.height = height;
+        std::vector<Ref<Texture>> newColorAttachments;
+        size_t overrideColorIdx = 0;
 
-            colorCIs.push_back(colorDesc);
-        }
-
-        // create color attachments
-        m_ColorAttachments.clear();
-        for (auto &colorDesc : colorCIs)
+        for (size_t i = 0; i < m_ColorAttachments.size(); ++i)
         {
-            m_ColorAttachments.push_back(Texture::Create(colorDesc));
+            if (overrideColorIdx < m_CreateInfo.colorAttachmentOverrides.size())
+            {
+                newColorAttachments.push_back(m_CreateInfo.colorAttachmentOverrides[overrideColorIdx++]);
+            }
+            else
+            {
+                auto colorDesc = m_ColorAttachments[i]->GetCreateInfo();
+                colorDesc.width = width;
+                colorDesc.height = height;
+                newColorAttachments.push_back(Texture::Create(colorDesc));
+            }
         }
+        m_ColorAttachments = std::move(newColorAttachments);
 
         CreateFramebuffer();
     }

@@ -203,7 +203,17 @@ project "Ignite.Engine"
                 "_DEBUG"
             }
 
-        filter { "system:windows", "configurations:Debug" }
+        filter "configurations:Debug-Profiling"
+            runtime "Debug"
+            symbols "on" -- with debug info
+            defines {
+                "IGN_ENABLE_TRACY",
+                "IGN_DEBUG_BUILD",
+                "DEBUG",
+                "_DEBUG"
+            }
+
+        filter { "system:windows", "configurations:Debug or Debug-Profiling" }
             links {
                 "%{Library.ShaderC_Debug}",
                 "%{Library.SPIRV_Cross_Core_Debug}",
@@ -234,7 +244,8 @@ project "Ignite.Engine"
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
             }
 
-        filter { "system:linux", "configurations:Debug" }
+
+        filter { "system:linux", "configurations:Debug or Debug-Profiling" }
             libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
             links { "fmodL", "fbxsdk" }
             postbuildcommands {
@@ -243,6 +254,7 @@ project "Ignite.Engine"
                 '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14" "%{cfg.targetdir}"',
                 '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13" "%{cfg.targetdir}"'
             }
+
 
         filter "configurations:Release"
             runtime "release"
@@ -253,7 +265,17 @@ project "Ignite.Engine"
                 "NDEBUG"
             }
 
-        filter { "system:windows", "configurations:Release" }
+        filter "configurations:Release-Profiling"
+            runtime "release"
+            optimize "on"
+            symbols "on" -- with debug info
+            defines {
+                "IGN_ENABLE_TRACY",
+                "IGN_RELEASE_BUILD",
+                "NDEBUG"
+            }
+
+        filter { "system:windows", "configurations:Release or Release-Profiling" }
             links {
                 "%{Library.ShaderC}",
                 "%{Library.SPIRV_Cross_Core}",
@@ -283,8 +305,9 @@ project "Ignite.Engine"
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
             }
+            
 
-        filter { "system:linux", "configurations:Release" }
+        filter { "system:linux", "configurations:Release or Release-Profiling" }
             libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
             links { "fmod", "fbxsdk" }
             postbuildcommands {
@@ -299,8 +322,17 @@ project "Ignite.Engine"
                 "IGN_SHIPPING_BUILD",
                 "NDEBUG"
             }
+        filter "configurations:Shipping-Profiling"
+            runtime "release"
+            optimize "speed"
+            symbols "off" -- without debug info
+            defines {
+                "IGN_ENABLE_TRACY",
+                "IGN_SHIPPING_BUILD",
+                "NDEBUG"
+            }
 
-        filter { "system:windows", "configurations:Shipping" }
+        filter { "system:windows", "configurations:Shipping or Shipping-Profiling" }
             links {
                 "%{Library.ShaderC}",
                 "%{Library.SPIRV_Cross_Core}",
@@ -329,7 +361,7 @@ project "Ignite.Engine"
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
             }
 
-        filter { "system:linux", "configurations:Shipping" }
+        filter { "system:linux", "configurations:Shipping or Shipping-Profiling" }
             libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
             links { "fmod", "fbxsdk" }
             postbuildcommands {

@@ -48,7 +48,7 @@ namespace ignite
         glm::vec4 zAxisColor = glm::vec4(0.29f, 0.52f, 0.96f, 1.0f);
     };
 
-    struct DebugSettings
+    struct SceneRenderSettings
     {
         DebugGridStyle worldGrid3D;
         DebugGridStyle worldGrid2D;
@@ -56,7 +56,7 @@ namespace ignite
         bool showBoundingBox = false;
         bool showPhysicsCollider = true;
 
-        DebugSettings()
+        SceneRenderSettings()
         {
             worldGrid2D.enableZAxis = false;
             worldGrid2D.gridSize = 100.0f;
@@ -76,10 +76,31 @@ namespace ignite
 
     struct CompositePostProcess_GPUData
     {
-        glm::vec4 flags = glm::vec4(0.0f); // x=enableBloom y=bloomIntensity z=enableVignette w=enableChromAb
-        glm::vec4 vignetteParams = glm::vec4(0.0f); // x=radius y=softness z=intensity w=chromAbAmount
-        glm::vec4 chromAbParams = glm::vec4(0.0f); // x=chromAbRadial
+        glm::vec4 flags = glm::vec4(0.0f); // x=enableBloom, y=bloomIntensity, z=enableVignette, w=enableChromAb
+        glm::vec4 vignetteParams = glm::vec4(0.0f); // x=radius, y=softness, z=intensity, w=chromAbAmount
+        glm::vec4 chromAbParams = glm::vec4(0.0f); // x=chromAbRadial, y=enableSSAO, z=ssaoIntensity
         glm::vec4 vignetteColor = glm::vec4(0.0f);
+        
+        int tonemapMode = 0;
+        float exposure = 1.1f;
+        float gamma = 2.2f;
+        int enableDOF = 0;
+
+        float focalLength = 120.0f;
+        float focalDistance = 5.5f;
+        float fStop = 1.4f;
+        float focusRange = 5.0f;
+
+        float blurAmount = 1.0f;
+        float padding_dof[3] = { 0.0f, 0.0f, 0.0f };
+
+        glm::vec4 fogColor = glm::vec4(0.5f, 0.6f, 0.7f, 1.0f);
+        float fogDensity = 0.0f;
+        float fogStart = 10.0f;
+        float fogEnd = 100.0f;
+        float padding_fog = 0.0f;
+
+        glm::mat4 projectionInv = glm::mat4(1.0f);
     };
 
     class IGN_API ISceneRenderer
@@ -88,7 +109,13 @@ namespace ignite
         ISceneRenderer();
         virtual ~ISceneRenderer();
 
-        virtual void ResizeFramebuffer(uint32_t width, uint32_t height);
+        virtual void ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height);
+
+        int GetRenderMode() const { return m_SceneGPUData.renderMode; }
+        void SetRenderMode(int renderMode) { m_SceneGPUData.renderMode = renderMode; }
+
+        int GetDebugShadowMode() const { return m_SceneGPUData.debugShadow; }
+        void SetDebugShadowMode(int debugShadow) { m_SceneGPUData.debugShadow = debugShadow; }
 
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
@@ -113,10 +140,9 @@ namespace ignite
 			return asset;
 		}
 
-		DebugSettings debugSettings;
+		SceneRenderSettings sceneRenderSettings;
 
     protected:
-        void EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd);
 		void EnsureSceneEnvironmentMap();
 
         virtual void AddAssetPin(AssetHandle handle) = 0;

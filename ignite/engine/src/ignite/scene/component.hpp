@@ -272,6 +272,7 @@ namespace ignite
         float shadowMinBias = 0.05f;
         float shadowMaxBias = 0.001f;
         float pcfRadius = 0.3f;
+        float shadowDistance = 200.0f; // max distance (world units) from camera at which shadows are rendered
         int shadowResolution = 2; // 0=Low, 1=Medium, 2=High, 3=Ultra
         bool cascadeShadow = true;
 
@@ -287,6 +288,15 @@ namespace ignite
         float exposure = 1.1f;
         float gamma = 2.2f;
         float ambient = 0.5f;
+
+        // Tonemap
+        TonemapMode tonemapMode = TonemapMode::Reinhard;
+
+        // Fog
+        float fogDensity = 0.0f;
+        glm::vec4 fogColor = glm::vec4(0.5f, 0.6f, 0.7f, 1.0f);
+        float fogStart = 10.0f;
+        float fogEnd = 100.0f;
 
         bool gpuInitialized = false;
         bool dirtyEnvironment = true;
@@ -379,7 +389,6 @@ namespace ignite
         AssetHandle runtimeAnimatorHandle = AssetHandle(0);
         std::vector<AnimParam> runtimeParams;
         Ref<AnimatorController> runtimeAnimatorInstance = nullptr; // runtime-only for unique animator mode
-        Ref<ConstantBuffer> skeletonGpuBuffer = nullptr;
         std::vector<glm::mat4> finalBoneTransforms; // per-entity GPU-ready bone transforms
         std::vector<SkinnedMeshBufferData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
 

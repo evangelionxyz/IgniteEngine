@@ -57,6 +57,7 @@ namespace ignite
     private:
         std::array<glm::vec4, 6> m_Planes;
         std::array<glm::vec3, 8> m_Corners;
-        glm::mat4 m_ViewProjectionInverse;
+        glm::mat4 m_ViewProjection = glm::mat4(1.0f);
+        glm::mat4 m_ViewProjectionInverse = glm::mat4(1.0f);
     };
 }

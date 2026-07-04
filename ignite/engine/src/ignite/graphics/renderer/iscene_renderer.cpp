@@ -27,28 +27,30 @@ namespace ignite
         {
             m_CSMPerCascadeBuffers[i] = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), false, 1, "[SceneRenderer] CSM Per-Cascade Buffer " + std::to_string(i));
         }
-    }
 
-    void ISceneRenderer::EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd)
-    {
-        if (!m_CompositeVertexBufferUploadPending || !cmd || !m_CompositeVertexBuffer)
-        {
-            return;
-        }
+		static constexpr std::array screenVertices
+		{
+			VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+			VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+			VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
 
-        static constexpr std::array screenVertices
-        {
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+			VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+			VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+			VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+		};
 
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-        };
+		m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(screenVertices));
+		m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
 
-        m_CompositeVertexBuffer->SetData(cmd, Buffer((void *)screenVertices.data(), sizeof(screenVertices)));
-        m_CompositeVertexBufferUploadPending = false;
+        m_Device = DeviceManager::GetInstance()->GetDevice();
+        auto cmd = m_Device->createCommandList();
+        cmd->open();
+		m_CompositeVertexBuffer->SetData(cmd, Buffer((void *)screenVertices.data(), sizeof(screenVertices)));
+		m_CompositeVertexBufferUploadPending = false;
+        cmd->close();
+
+		std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+        m_Device->executeCommandList(cmd);
     }
 
 	void ISceneRenderer::EnsureSceneEnvironmentMap()
@@ -136,7 +138,7 @@ namespace ignite
         LOG_ASSERT(m_PinnedAssetHandles.empty(), "[Scene Renderer] Please release all the Pinned asset!");
     }
 
-    void ISceneRenderer::ResizeFramebuffer(uint32_t width, uint32_t height)
+    void ISceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
     {
         if (width == 0 || height == 0)
         {

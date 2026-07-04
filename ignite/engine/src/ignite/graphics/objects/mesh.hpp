@@ -115,15 +115,17 @@ namespace ignite
 
         static Ref<MeshInstance> Create(const MeshNode &node, const Ref<MeshPrimitive> &mesh);
         static Ref<MeshInstance> Create(const std::string &name, const Ref<MeshPrimitive> &mesh);
-        static void ReleaseGlobalResources();
 
         Ref<MeshPrimitive> &GetPrimitive() { return m_Primitive; }
 
         void SetData(nvrhi::ICommandList *cmd, void *data, size_t size);
-        void EnsureBuffer(nvrhi::ICommandList *cmd, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, const Ref<ConstantBuffer> &skeletonBuffer);
+        void SetSkeletonData(nvrhi::ICommandList *cmd, void *data, size_t size);
+
+        bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer);
 
         nvrhi::BindingSetHandle GetBindingSet() const { return m_MeshBindingSet; }
         Ref<ConstantBuffer> GetConstantBuffer() { return m_MeshConstantBuffer; }
+        Ref<ConstantBuffer> GetSkeletonBuffer() { return m_SkeletonBuffer; }
 
     private:
         struct BindingSetCacheKey
@@ -157,7 +159,9 @@ namespace ignite
             }
         };
 
-        Ref<ConstantBuffer> m_MeshConstantBuffer; // SkinnedMesh_GPUData
+        Ref<ConstantBuffer> m_MeshConstantBuffer;
+        Ref<ConstantBuffer> m_SkeletonBuffer;
+
         nvrhi::BindingSetHandle m_MeshBindingSet;
         std::unordered_map<BindingSetCacheKey, nvrhi::BindingSetHandle, BindingSetCacheKeyHash> m_MeshBindingSetCache;
         std::string m_Name;
