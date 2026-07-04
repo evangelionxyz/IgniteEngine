@@ -51,6 +51,9 @@ namespace ignite
 		uint32_t sampleQuality = 0;
         uint32_t width = 1280;
         uint32_t height = 720;
+
+        Ref<Texture> depthAttachmentOverride = nullptr;
+        std::vector<Ref<Texture>> colorAttachmentOverrides;
     };
 
     class IGN_API RenderTarget
@@ -81,6 +84,8 @@ namespace ignite
         void ClearColorAttachmentFloat(nvrhi::ICommandList *commandList, uint32_t attachmentIndex = 0, const glm::vec4 &clearColor = glm::vec4(0.0f)) const;
         void ClearColorAttachmentUint(nvrhi::ICommandList *commandList, uint32_t attachmentIndex = 0, uint32_t clearColor = 0) const;
         void ClearDepthAttachment(nvrhi::ICommandList *commandList, float depth, uint32_t stencil) const;
+
+        RenderTargetCreateInfo& GetCreateInfo() { return m_CreateInfo; }
 
         static Ref<RenderTarget> Create(const RenderTargetCreateInfo &createInfo, const std::string& debugName = "[RenderTarget]");
 

@@ -506,60 +506,70 @@ namespace ignite
         if (editCamera)
         {
             // Resize Edit Viewport Framebuffer
-            const glm::uvec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
-            const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
-            const bool framebufferNeedsResize = (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y);
-            const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
-
-            if (isFramebufferSizeValid)
+            auto target = m_SceneRenderer->GetRenderTarget(editCamera);
+            if (target)
             {
-				// Resize camera
-				if (framebufferNeedsResize)
-				{
-					m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
-					m_State.editorResizing = true;
-				}
+				const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
+				const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
+				const bool framebufferNeedsResize = (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y);
+				const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
-				// Resize framebuffer when in stable frame
-				if (m_State.editorResizing)
+				if (isFramebufferSizeValid)
 				{
-					if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+					// Resize camera
+					if (framebufferNeedsResize)
 					{
-						m_SceneRenderer->ResizeFramebuffer(desiredSize.x, desiredSize.y);
-						m_State.editorResizing = false;
-						m_State.editorResizingFrame = 0;
+						m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
+						m_State.editorResizing = true;
+					}
+
+					// Resize framebuffer when in stable frame
+					if (m_State.editorResizing)
+					{
+						if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+						{
+							m_SceneRenderer->ResizeFramebuffer(editCamera, desiredSize.x, desiredSize.y);
+							m_State.editorResizing = false;
+							m_State.editorResizingFrame = 0;
+						}
 					}
 				}
             }
+            
         }
 
-        // Resizing gameplay camera
+        // Resizing game-play camera
         if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
         {
             auto &cc = primaryCam.GetComponent<CameraComponent>();
             ICamera *gameCamera = &cc.camera;
             {
-                // Resize Game Viewport Framebuffer
-                const glm::uvec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
-                const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
-                const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-				const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
-
-                if (isFramebufferSizeValid)
+				auto target = m_SceneRenderer->GetRenderTarget(editCamera);
+                
+                if (target)
                 {
-					if (framebufferNeedsResize)
-					{
-						gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
-						m_State.gameplayResizing = true;
-					}
+					// Resize Game Viewport Framebuffer
+                    const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
+					const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
+					const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+					const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
-					if (m_State.gameplayResizing)
+					if (isFramebufferSizeValid)
 					{
-						if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+						if (framebufferNeedsResize)
 						{
-							m_SceneRenderer->ResizeGameplayFramebuffer(desiredSize.x, desiredSize.y);
-							m_State.gameplayResizing = false;
-							m_State.gameplayResizingFrame = 0;
+							gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
+							m_State.gameplayResizing = true;
+						}
+
+						if (m_State.gameplayResizing)
+						{
+							if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+							{
+								m_SceneRenderer->ResizeFramebuffer(gameCamera, desiredSize.x, desiredSize.y);
+								m_State.gameplayResizing = false;
+								m_State.gameplayResizingFrame = 0;
+							}
 						}
 					}
                 }
@@ -571,17 +581,25 @@ namespace ignite
         {
             switch (m_State.sceneState)
             {
+                case ESceneState::Play:
+                //{
+				//	if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+				//	{
+				//		auto &cc = primaryCam.GetComponent<CameraComponent>();
+				//		ICamera *gameCamera = &cc.camera;
+				//		{
+				//			IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
+				//			m_SceneRenderer->Render(gameCamera);
+				//		}
+                //        break;
+				//	}
+                //}
                 case ESceneState::Simulate:
                 case ESceneState::Stop:
-                case ESceneState::Play:
                 {
-                    ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
-                    if (editCamera)
-                    {
-                        IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
-                        m_SceneRenderer->RenderEditorTo(editCamera);
-                    }
-                    break;
+					IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+					m_SceneRenderer->Render(editCamera, true); // enable draw debug
+					break;
                 }
             }
         }
@@ -595,68 +613,71 @@ namespace ignite
                 ICamera *gameCamera = &cc.camera;
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
-                    m_SceneRenderer->RenderGameplayTo(gameCamera);
+                    m_SceneRenderer->Render(gameCamera, false); // disable draw debug
                 }
             }
         }
 
         if (m_State.takeScreenshot)
         {
-            auto sceneTexture = m_SceneRenderer->GetCompositeRT()->GetColorAttachment(0)->GetHandle();
-            nvrhi::TextureDesc stagingDesc = sceneTexture->getDesc();
-            stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-            auto screenShotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            
-            nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-            cmd->open();
-            cmd->copyTexture(screenShotStagingTexture, nvrhi::TextureSlice(), sceneTexture, nvrhi::TextureSlice());
-            cmd->close();
+            auto target = m_SceneRenderer->GetRenderTarget(editCamera);
+            if (target)
+            {
+				auto sceneTexture = target->compositeRT->GetColorAttachment(0)->GetHandle();
+				nvrhi::TextureDesc stagingDesc = sceneTexture->getDesc();
+				stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+				auto screenShotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
 
-            m_Device->executeCommandList(cmd);
+				nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+				cmd->open();
+				cmd->copyTexture(screenShotStagingTexture, nvrhi::TextureSlice(), sceneTexture, nvrhi::TextureSlice());
+				cmd->close();
 
-			if (!screenShotStagingTexture)
-			{
-				m_State.takeScreenshot = false;
-			}            
-            else
-			{
-				// Map and read the pixel data
-				size_t rowPitch = 0;
-				if (void *mappedData = m_Device->mapStagingTexture(screenShotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
+				m_Device->executeCommandList(cmd);
+
+				if (!screenShotStagingTexture)
 				{
-                    static ImageData image;
-					image.width = screenShotStagingTexture->getDesc().width;
-                    image.height = screenShotStagingTexture->getDesc().height;
-
-					const uint32_t packedStride = image.width * 4u;
-					
-                    image.pixels.resize(image.height * packedStride);
-					const auto src = static_cast<const uint8_t *>(mappedData);
-					uint8_t *dst = image.pixels.data();
-
-					for (uint32_t y = 0u; y < image.height; ++y)
+					m_State.takeScreenshot = false;
+				}
+				else
+				{
+					// Map and read the pixel data
+					size_t rowPitch = 0;
+					if (void *mappedData = m_Device->mapStagingTexture(screenShotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
 					{
-						memcpy(dst + y * packedStride, src + y * rowPitch, packedStride);
+						static ImageData image;
+						image.width = screenShotStagingTexture->getDesc().width;
+						image.height = screenShotStagingTexture->getDesc().height;
+
+						const uint32_t packedStride = image.width * 4u;
+
+						image.pixels.resize(image.height * packedStride);
+						const auto src = static_cast<const uint8_t *>(mappedData);
+						uint8_t *dst = image.pixels.data();
+
+						for (uint32_t y = 0u; y < image.height; ++y)
+						{
+							memcpy(dst + y * packedStride, src + y * rowPitch, packedStride);
+						}
+
+						m_Device->unmapStagingTexture(screenShotStagingTexture);
+
+						const std::tm local_tm = Timestep::GetLocalTime();
+
+						std::ostringstream oss;
+						oss << std::put_time(&local_tm, "igite_ss %D-%H-%M-%S");
+						std::string filename = oss.str();
+						stringutils::ReplaceWith(filename, "/", "-");
+
+						SDL_ShowSaveFileDialog(OnScreenshotSaveFileSelected, &image,
+							Application::GetInstance()->GetWindow()->GetWindowHandle(),
+							kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
+							filename.c_str());
 					}
 
-					m_Device->unmapStagingTexture(screenShotStagingTexture);
-
-                    const std::tm local_tm = Timestep::GetLocalTime();
-
-                    std::ostringstream oss;
-                    oss << std::put_time(&local_tm, "igite_ss %D-%H-%M-%S");
-                    std::string filename = oss.str();
-                    stringutils::ReplaceWith(filename, "/", "-");
-
-					SDL_ShowSaveFileDialog(OnScreenshotSaveFileSelected, &image,
-						Application::GetInstance()->GetWindow()->GetWindowHandle(),
-						kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
-						filename.c_str());
+					m_State.takeScreenshot = false;
 				}
-
-				m_State.takeScreenshot = false;
-			}
-
+            }
         }
     }
 
@@ -2184,42 +2205,6 @@ namespace ignite
     {
         ImGui::Begin("Scene Renderer");
 
-        static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
-        static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
-
-        int renderMode = m_SceneRenderer->GetRenderMode();
-        int debugShadow = m_SceneRenderer->GetDebugShadowMode();
-
-        if (ImGui::BeginCombo("Render Mode", renderModeLabels[glm::clamp(renderMode, 0, 4)]))
-        {
-            for (int i = 0; i < IM_ARRAYSIZE(renderModeLabels); ++i)
-            {
-                const bool selected = renderMode == i;
-                if (ImGui::Selectable(renderModeLabels[i], selected))
-                {
-                    m_SceneRenderer->SetRenderMode(i);
-                }
-                if (selected)
-                    ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-
-        if (ImGui::BeginCombo("CSM Debug", debugShadowLabels[glm::clamp(debugShadow, 0, 2)]))
-        {
-            for (int i = 0; i < IM_ARRAYSIZE(debugShadowLabels); ++i)
-            {
-                const bool selected = debugShadow == i;
-                if (ImGui::Selectable(debugShadowLabels[i], selected))
-                {
-                    m_SceneRenderer->SetDebugShadowMode(i);
-                }
-                if (selected)
-                    ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-
         // Shaders
         if (ImGui::TreeNodeEx("Shaders", ImGuiTreeNodeFlags_Framed))
         {
@@ -2241,8 +2226,8 @@ namespace ignite
         if (ImGui::TreeNodeEx("Settings Render", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::SeparatorText("Visibility");
-            UI::DrawCheckbox("Bounding Box", &m_SceneRenderer->debugSettings.showBoundingBox);
-            UI::DrawCheckbox("Physics Collider", &m_SceneRenderer->debugSettings.showPhysicsCollider);
+            UI::DrawCheckbox("Bounding Box", &m_SceneRenderer->sceneRenderSettings.showBoundingBox);
+            UI::DrawCheckbox("Physics Collider", &m_SceneRenderer->sceneRenderSettings.showPhysicsCollider);
 
             ImGui::SeparatorText("Scene Render");
             static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };

@@ -534,6 +534,8 @@ namespace ignite
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2));
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3));
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4));
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5));
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6));
             layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
@@ -565,6 +567,8 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, Renderer::GetWhiteTexture()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, Renderer::GetBlackTexture()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_CompositePostProcessBuffer->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_CompositeSampler));
 

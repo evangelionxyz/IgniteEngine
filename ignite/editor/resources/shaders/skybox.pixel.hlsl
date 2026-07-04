@@ -34,7 +34,7 @@ PSOutput main(PSInput input)
     float3 dir = normalize(input.UVW);
     float3 color = SampleSphericalMap(texture0, sampler0, dir);
 
-    result.color = float4(FilmicTonemap(color, scene.exposure, scene.gamma), 1.0f);
+    result.color = float4(color, 1.0f);
 
     return result;
 }

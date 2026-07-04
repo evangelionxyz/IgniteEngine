@@ -138,7 +138,7 @@ namespace ignite
         LOG_ASSERT(m_PinnedAssetHandles.empty(), "[Scene Renderer] Please release all the Pinned asset!");
     }
 
-    void ISceneRenderer::ResizeFramebuffer(uint32_t width, uint32_t height)
+    void ISceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
     {
         if (width == 0 || height == 0)
         {

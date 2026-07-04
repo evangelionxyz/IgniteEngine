@@ -42,8 +42,6 @@ namespace ignite
 
     struct PostProcessing
     {
-        TonemapMode tonemapMode = TonemapMode::Reinhard;
-
         // Toggles
         bool enableVignette = false;
         bool enableChromAb = false;
@@ -86,6 +84,7 @@ namespace ignite
         float gamma = 1.1f;
         bool enabledDOF = true;
     };
+
 
     class IGN_API ICamera
     {

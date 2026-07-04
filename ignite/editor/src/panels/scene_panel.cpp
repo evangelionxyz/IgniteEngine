@@ -605,6 +605,26 @@ namespace ignite
                 UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 0.0f, FLT_MAX);
                 UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
 
+                {
+                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
+                    int tonemapIndex = static_cast<int>(c.tonemapMode);
+                    if (UI::DrawComboBox("Tonemap", tonemapLabels, IM_ARRAYSIZE(tonemapLabels), &tonemapIndex))
+                    {
+                        c.tonemapMode = static_cast<TonemapMode>(tonemapIndex);
+                    }
+                }
+
+
+
+                // Fog
+                UI::DrawFloatControl("Fog Density", &c.fogDensity, 0.001f, 0.0f, FLT_MAX);
+                if (c.fogDensity > 0.0f)
+                {
+                    UI::DrawColorVec4("Fog Color", c.fogColor);
+                    UI::DrawFloatControl("Fog Start", &c.fogStart, 0.1f, 0.0f, FLT_MAX);
+                    UI::DrawFloatControl("Fog End", &c.fogEnd, 0.1f, 0.0f, FLT_MAX);
+                }
+
                 const bool hasHDR = c.hdrHandle != AssetHandle(0);
                 std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, this, &hasHDR]()
@@ -1365,68 +1385,67 @@ namespace ignite
                     }
                 }
 
+                ImGui::SeparatorText("Post Processing");
+                auto &pp = c.camera.postProcessing;
+
+                // Depth of Field
+                c.dirty |= UI::DrawCheckbox("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
+                if (c.camera.lens.enabledDOF)
                 {
-                    ImGui::SeparatorText("Post Processing");
-                    auto &pp = c.camera.postProcessing;
-
-                    {
-                        static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
-                        int tonemapIndex = static_cast<int>(pp.tonemapMode);
-                        if (UI::DrawComboBox("Tonemap", tonemapLabels, IM_ARRAYSIZE(tonemapLabels), &tonemapIndex))
-                        {
-                            pp.tonemapMode = static_cast<TonemapMode>(tonemapIndex);
-                            c.dirty = true;
-                        }
-                    }
-
-                    // Bloom
-                    c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
-                    if (pp.enableBloom)
-                    {
-                        c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("Bloom Knee", &pp.bloomKnee, 0.01f, 0.0f, 10.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
-                        c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
-                    }
-
-                    // Vignette
-                    c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
-                    if (pp.enableVignette)
-                    {
-                        c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
-                    }
-
-                    // Chromatic Aberration
-                    c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
-                    if (pp.enableChromAb)
-                    {
-                        c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
-                    }
-
-                    // SSAO
-                    c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
-                    if (pp.enableSSAO)
-                    {
-                        c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 0.5f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
-                    }
+                    c.dirty |= UI::DrawFloatControl("Focal Length", &c.camera.lens.focalLength, 0.1f, 0.0f, FLT_MAX).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Focal Distance", &c.camera.lens.focalDistance, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("fStop", &c.camera.lens.fStop, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Focus Range", &c.camera.lens.focusRange, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Blur Amount", &c.camera.lens.blurAmount, 0.05f, 0.0f, FLT_MAX).isItemEdited;
                 }
 
-                if (c.dirty && m_Data.sceneViewportGameplayVisible)
+                // Bloom
+                c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
+                if (pp.enableBloom)
                 {
-                    c.camera.UpdateView();
-                    c.camera.UpdateProjection(
-                        static_cast<uint32_t>(globals::GEditor::GameViewport.max.x), 
+                    c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Bloom Knee", &pp.bloomKnee, 0.01f, 0.0f, 10.0f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
+                    c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
+                }
+
+                // Vignette
+                c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
+                if (pp.enableVignette)
+                {
+                    c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
+                }
+
+                // Chromatic Aberration
+                c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
+                if (pp.enableChromAb)
+                {
+                    c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
+                }
+
+                // SSAO
+                c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
+                if (pp.enableSSAO)
+                {
+                    c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 0.5f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
+                    c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
+                }
+
+				if (c.dirty && m_Data.sceneViewportGameplayVisible)
+				{
+					c.camera.UpdateView();
+					c.camera.UpdateProjection(
+						static_cast<uint32_t>(globals::GEditor::GameViewport.max.x),
 						static_cast<uint32_t>(globals::GEditor::GameViewport.max.y));
-                    c.dirty = false;
-                }
+					c.dirty = false;
+				}
             });
 
             RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
@@ -2534,6 +2553,7 @@ namespace ignite
             if (m_Scene)
             {
                 activeSceneRenderer = m_Scene->GetSceneRenderer();
+                auto target = activeSceneRenderer->GetRenderTarget((ICamera *)&m_EditorCamera);
 
 				const ImGuiWindow *window = ImGui::GetCurrentWindow();
 
@@ -2552,7 +2572,7 @@ namespace ignite
 				m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
 				// Render scene texture to imgui
-				ImTextureID editorViewImage = (ImTextureID)activeSceneRenderer->GetCompositeRT()->GetColorAttachment(0)->GetHandle().Get();
+				ImTextureID editorViewImage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
 				ImGui::Image(editorViewImage, canvasSize);
 
 				const bool imageHovered = ImGui::IsItemHovered();
@@ -2716,7 +2736,7 @@ namespace ignite
 						}
 						else
 						{
-							Ref<Texture> objectIdTexture = activeSceneRenderer->GetSceneRT()->GetColorAttachment(1);
+							Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
 							if (objectIdTexture && objectIdTexture->GetHandle())
 							{
 								const int texWidth = objectIdTexture->GetWidth();
@@ -3053,6 +3073,7 @@ namespace ignite
                 // Preview camera
                 if (m_Scene)
                 {
+					auto activeSceneRenderer = m_Scene->GetSceneRenderer();
                     ImGui::TextUnformatted("Zoom");
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(120.0f);
@@ -3119,48 +3140,52 @@ namespace ignite
                         const bool imageHovered = cursor.x >= imagePos.x && cursor.x <= imagePos.x + imageSize.x  // X Bounds
                                                && cursor.y >= imagePos.y && cursor.y <= imagePos.y + imageSize.y; // Y Bounds
 
-                        auto activeSceneRenderer = m_Scene->GetSceneRenderer();
-                        if (activeSceneRenderer)
+						ImDrawList *drawList = ImGui::GetWindowDrawList();
+						auto target = activeSceneRenderer->GetRenderTarget(camera);
+
+                        if (target)
                         {
-                            uint32_t localMouseX = 0;
-                            uint32_t localMouseY = 0;
+							{
+								uint32_t localMouseX = 0;
+								uint32_t localMouseY = 0;
 
-                            // We need to store the Game-play Mouse Position if only the Image is hovered
-                            if (imageHovered)
-                            {
-                                const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
-                                const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
-                                localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(activeSceneRenderer->GetGameplayWidgetRT()->GetWidth(), 1u)));
-                                localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(activeSceneRenderer->GetGameplayWidgetRT()->GetHeight(), 1u)));
+								// We need to store the Game-play Mouse Position if only the Image is hovered
+								if (imageHovered)
+								{
+									const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
+									const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
+									localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(target->widgetRT->GetWidth(), 1u)));
+									localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(target->widgetRT->GetHeight(), 1u)));
 
-                                float rx = u * baseImageSize.x;
-                                float ry = v * baseImageSize.y;
-                                InputSystem::SetGameplayMousePosition(rx, ry, true);
-                            }
-                            else
-                            {
-                                // Otherwise set it to Zero and and Disable it
-                                InputSystem::SetGameplayMousePosition(0.0f, 0.0f, false);
-                            }
+									float rx = u * baseImageSize.x;
+									float ry = v * baseImageSize.y;
+									InputSystem::SetGameplayMousePosition(rx, ry, true);
+								}
+								else
+								{
+									// Otherwise set it to Zero and and Disable it
+									InputSystem::SetGameplayMousePosition(0.0f, 0.0f, false);
+								}
 
-                            // Set the Widget Mouse Position
-                            activeSceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+								// Set the Widget Mouse Position
+								activeSceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+							}
+
+							if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+							{
+								const ImVec2 delta = ImGui::GetIO().MouseDelta;
+								m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
+							}
+
+							globals::GEditor::GameViewport.min = { baseImagePos.x, baseImagePos.y };
+							globals::GEditor::GameViewport.max = { baseImageSize.x, baseImageSize.y };
+
+							ImTextureID gameplayViewImaage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
+							drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
+							drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
+							drawList->PopClipRect();
                         }
-
-                        if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
-                        {
-                            const ImVec2 delta = ImGui::GetIO().MouseDelta;
-                            m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
-                        }
-
-                        globals::GEditor::GameViewport.min = { baseImagePos.x, baseImagePos.y };
-                        globals::GEditor::GameViewport.max = { baseImageSize.x, baseImageSize.y };
                         
-                        ImTextureID gameplayViewImaage = (ImTextureID)activeSceneRenderer->GetGameplayCompositeRT()->GetColorAttachment(0)->GetHandle().Get();
-                        ImDrawList *drawList = ImGui::GetWindowDrawList();
-                        drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
-                        drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
-                        drawList->PopClipRect();
 
                         {
                             const float padding = 18.0f;

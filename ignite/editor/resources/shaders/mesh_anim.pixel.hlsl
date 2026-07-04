@@ -354,7 +354,7 @@ PSOutput main(PSInput input)
 
         // Output alpha: 1.0 for opaque, actual alpha for transparent
         float outputAlpha = (material.blendMode == 1) ? finalAlpha : 1.0f;
-        result.color = float4(Reinhard2Tonemap(finalColor, scene.exposure, scene.gamma), outputAlpha);
+        result.color = float4(finalColor, outputAlpha);
     }
     else if (scene.renderMode == RENDER_MODE_DIFFUSE)
     {
