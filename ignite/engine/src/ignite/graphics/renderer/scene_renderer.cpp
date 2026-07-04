@@ -187,10 +187,12 @@ namespace ignite
 
             // Scene post processing
             PostProcessing postProcessing = camera->postProcessing;
+            CameraLens cameraLens = camera->lens;
             if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
             {
                 const auto &cc = primaryCamera.GetComponent<CameraComponent>();
                 postProcessing = cc.camera.postProcessing;
+                cameraLens = cc.camera.lens;
             }
 
             // Camera constants
@@ -277,7 +279,7 @@ namespace ignite
             }
 
             Ref<Texture> bloomTexture = nullptr;
-            if (m_EditorBloom && camera && postProcessing.enableBloom)
+            if (postProcessing.enableBloom)
             {
                 m_EditorBloom->settings.intensity = postProcessing.bloomIntensity;
                 m_EditorBloom->settings.knee = postProcessing.bloomKnee;
@@ -292,7 +294,7 @@ namespace ignite
             }
 
             Ref<Texture> ssaoTexture = nullptr;
-            if (m_EditorSSAO && camera && postProcessing.enableSSAO)
+            if (postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
                 m_EditorSSAO->Resize(width, height);
@@ -302,7 +304,7 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, target, postProcessing, edgeTexture, bloomTexture, ssaoTexture);
+                CompositePass(cmd, camera, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture);
             }
 
             cmd->close();
@@ -1525,7 +1527,7 @@ namespace ignite
     }
 
 
-    void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, Ref<CameraRenderTarget> target, const PostProcessing &postProcessing, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
+    void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -1553,12 +1555,12 @@ namespace ignite
 
             postProcessData.projectionInv = glm::inverse(camera->GetProjection());
 
-            postProcessData.enableDOF = camera->lens.enabledDOF ? 1 : 0;
-            postProcessData.focalLength = camera->lens.focalLength;
-            postProcessData.focalDistance = camera->lens.focalDistance;
-            postProcessData.fStop = camera->lens.fStop;
-            postProcessData.focusRange = camera->lens.focusRange;
-            postProcessData.blurAmount = camera->lens.blurAmount;
+            postProcessData.enableDOF = lens.enabledDOF ? 1 : 0;
+            postProcessData.focalLength = lens.focalLength;
+            postProcessData.focalDistance = lens.focalDistance;
+            postProcessData.fStop = lens.fStop;
+            postProcessData.focusRange = lens.focusRange;
+            postProcessData.blurAmount = lens.blurAmount;
 
             if (m_WorldEnvironment)
             {

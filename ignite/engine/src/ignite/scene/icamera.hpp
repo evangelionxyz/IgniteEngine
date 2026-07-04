@@ -82,7 +82,7 @@ namespace ignite
         float blurAmount = 1.0f;
         float exposure = 1.1f;
         float gamma = 1.1f;
-        bool enabledDOF = true;
+        bool enabledDOF = false;
     };
 
 
