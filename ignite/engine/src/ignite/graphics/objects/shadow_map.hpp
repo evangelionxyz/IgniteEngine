@@ -33,12 +33,15 @@
 namespace ignite
 {
 	class ICamera;
-	enum class ShadowMapQuality : uint32_t
+	enum class ShadowMapQuality : uint8_t
 	{
 		LOW = 0,
 		MEDIUM = 1,
 		HIGH = 2,
-		ULTRA = 3
+		ULTRA = 3,
+		ULTIMATE = 4,
+
+		COUNT
 	};
 
 	class CascadedShadowMap
@@ -63,7 +66,7 @@ namespace ignite
 
 	    const ShadowMapQuality &GetQuality() const { return m_Quality; }
 
-		void ComputeMatrices(ICamera *camera, const glm::vec3& lightPosition);
+		void ComputeMatrices(ICamera *camera, const glm::vec3& lightPosition, float shadowDistance = 200.0f);
 	private:
 		void CreatePipeline(nvrhi::IFramebuffer *framebuffer);
 		void CreateCascadeFramebuffers();
@@ -87,6 +90,7 @@ namespace ignite
 
 		uint32_t m_DepthArray = 0;
 		int m_Resolution = 0;
+		float m_ShadowDistance = 200.0f;
 		ShadowMapQuality m_Quality;
 		CascadedShadowMapBufferData m_GPUData{};
 		nvrhi::SamplerHandle m_DepthSampler;

@@ -67,11 +67,12 @@ namespace ignite
         m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
 
         {
-            m_EditorBloom = CreateRef<Bloom>(1280, 720);
-            m_EditorSSAO = CreateRef<SSAO>(1280, 720);
+            constexpr uint32_t ssaoResolution = 1920;
+            m_EditorBloom = CreateRef<Bloom>(ssaoResolution, ssaoResolution);
+            m_EditorSSAO = CreateRef<SSAO>(ssaoResolution, ssaoResolution);
 
-            m_GameplayBloom = CreateRef<Bloom>(1280, 720);
-            m_GameplaySSAO = CreateRef<SSAO>(1280, 720);
+            m_GameplayBloom = CreateRef<Bloom>(ssaoResolution, ssaoResolution);
+            m_GameplaySSAO = CreateRef<SSAO>(ssaoResolution, ssaoResolution);
         }
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
@@ -509,6 +510,7 @@ namespace ignite
             glm::cos(m_SceneGPUData.sungAngles.y) * glm::cos(m_SceneGPUData.sungAngles.x)
         };
 
+        float shadowDist = 200.0f; // default if no directional light found
         auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
         for (entt::entity e : lightView)
         {
@@ -522,9 +524,9 @@ namespace ignite
             csmData.minBias = light.shadowMinBias;
             csmData.maxBias = light.shadowMaxBias;
             csmData.pcfRadius = light.pcfRadius;
+            shadowDist = light.shadowDistance;
 
-            const int qualityIndex = std::clamp(light.shadowResolution, 0, 3);
-            auto quality = static_cast<ShadowMapQuality>(qualityIndex);
+            const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
             if (m_CascadedShadowMap->GetQuality() != quality)
             {
                 m_CascadedShadowMap->Resize(quality);
@@ -542,7 +544,7 @@ namespace ignite
             break;
         }
 
-        m_CascadedShadowMap->ComputeMatrices(camera, sunDirection);
+        m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
 
         // Share cascade data with the main scene pass (cascadeIndex is unused there)
         CascadedShadowMapBufferData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
@@ -1564,6 +1566,7 @@ namespace ignite
             postProcessData.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
             postProcessData.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
             postProcessData.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
+            postProcessData.tonemapMode = static_cast<int>(postProcessing.tonemapMode);
 
             postProcessData.vignetteParams = glm::vec4(
                 postProcessing.vignetteRadius,
@@ -1942,8 +1945,6 @@ namespace ignite
 
 		return bindingSet;
 	}
-
-
 
 	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
 	{

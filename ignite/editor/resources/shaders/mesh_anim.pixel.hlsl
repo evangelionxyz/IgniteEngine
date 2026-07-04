@@ -181,8 +181,10 @@ float SampleShadow(float3 worldPos, float3 normal, float3 lightDirection, float2
     float4 lightSpace = mul(csm.lightViewProjection[cascadeIdx], float4(worldPos, 1.0f));
     float3 ndc = lightSpace.xyz / lightSpace.w;
     float2 shadowUV = ndc.xy * 0.5f + 0.5f;
-    float shadowDepth = ndc.z; // orthoZO already outputs z in [0, 1] for both D3D12 and Vulkan
-    shadowUV.y = 1.0f - shadowUV.y; // Vulkan NDC Y is flipped relative to texture UV
+    float shadowDepth = ndc.z; // orthoZO outputs z in [0,1] for both D3D12 and Vulkan
+    // Vulkan texture UV origin is top-left while NDC Y+ is upward, so we must
+    // flip Y to convert from NDC-space to texture-space correctly.
+    shadowUV.y = 1.0f - shadowUV.y;
 
     if (shadowUV.x < 0.0f || shadowUV.x > 1.0f ||
         shadowUV.y < 0.0f || shadowUV.y > 1.0f)
@@ -191,8 +193,12 @@ float SampleShadow(float3 worldPos, float3 normal, float3 lightDirection, float2
     }
 
     // Slope-scaled bias: steep surfaces get more bias to avoid acne.
+    // Per-cascade scale: far cascades have lower depth precision so they need
+    // proportionally more bias. cascade 0 = 1x, cascade 1 = 1.5x, ...
     float cosTheta = saturate(dot(normal, -lightDirection));
-    float bias = lerp(csm.maxBias, csm.minBias, cosTheta);
+    float baseBias = lerp(csm.maxBias, csm.minBias, cosTheta);
+    float cascadeBiasScale = 1.0f + float(cascadeIdx) * 0.5f;
+    float bias = baseBias * cascadeBiasScale;
     float compareDepth = shadowDepth - bias;
 
     // Texel size in UV space.
@@ -348,7 +354,7 @@ PSOutput main(PSInput input)
 
         // Output alpha: 1.0 for opaque, actual alpha for transparent
         float outputAlpha = (material.blendMode == 1) ? finalAlpha : 1.0f;
-        result.color = float4(FilmicTonemap(finalColor, scene.exposure, scene.gamma), outputAlpha);
+        result.color = float4(Reinhard2Tonemap(finalColor, scene.exposure, scene.gamma), outputAlpha);
     }
     else if (scene.renderMode == RENDER_MODE_DIFFUSE)
     {

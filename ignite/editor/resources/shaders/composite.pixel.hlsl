@@ -1,3 +1,5 @@
+#include "include/helpers.hlsli"
+
 struct VSOutput
 {
     float4 position : SV_Position;
@@ -18,6 +20,7 @@ cbuffer CompositePostProcess : register(b0)
     float4 vignetteParams; // x=radius y=softness z=intensity w=chromAbAmount
     float4 chromAbParams; // x=chromAbRadial, y=enableSSAO, z=ssaoIntensity
     float4 vignetteColor;
+    int tonemapMode;
 }
 
 float3 SampleSceneWithChromAb(float2 uv)

@@ -91,6 +91,12 @@ namespace ignite
         void UnselectEntity(const Entity& entity);
         void ClearSelectedEntities();
 
+        int GetRenderMode() const { return m_SceneGPUData.renderMode; }
+        void SetRenderMode(int renderMode) { m_SceneGPUData.renderMode = renderMode; }
+
+        int GetDebugShadowMode() const { return m_SceneGPUData.debugShadow; }
+        void SetDebugShadowMode(int debugShadow) { m_SceneGPUData.debugShadow = debugShadow; }
+
 		virtual Ref<Texture> GetEnvironmentMapColorTexture() const override;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const override;
 

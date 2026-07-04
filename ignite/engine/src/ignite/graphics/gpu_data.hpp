@@ -58,9 +58,12 @@ namespace ignite
 		glm::mat4 lightViewProj[NUM_CASCADES];
 		float cascadeSplits[NUM_CASCADES]; // view-space distances to end of each cascade
 		float shadowStrength;
-		float minBias = 0.001f;
-		float maxBias = 0.05f;
-		float pcfRadius = 0.3f; // in texels (multiplier)
+		// Slope-scaled bias bounds. The shader interpolates between these based on
+		// surface angle (cosTheta) and then multiplies by a per-cascade scale.
+		// Adjust via the Scene panel; these are sane defaults for ortho [0,1] depth.
+		float minBias = 0.0002f;  // bias for surfaces facing the light directly
+		float maxBias = 0.002f;   // bias for steep/grazing-angle surfaces
+		float pcfRadius = 0.3f;   // PCF filter radius in texels for cascade 0
 
 		int cascadeIndex;
 		float padding[3];

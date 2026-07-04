@@ -60,6 +60,21 @@ float3 FilmicTonemap(float3 color, float exposure, float gamma)
     return gammaCorrected.rgb;
 }
 
+float3 ApplyTonemap(float3 color, int tonemapMode, float exposure, float gamma)
+{
+    if (tonemapMode == 1)
+    {
+        return Uncharted2Tonemap(color, exposure, gamma);
+    }
+
+    if (tonemapMode == 2)
+    {
+        return FilmicTonemap(color, exposure, gamma);
+    }
+
+    return Reinhard2Tonemap(color, exposure, gamma);
+}
+
 float3 SRGBToLinear(float3 srgb)
 {
     float3 lt = step(float3(0.04045, 0.04045, 0.04045), srgb);

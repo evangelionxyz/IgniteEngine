@@ -272,6 +272,7 @@ namespace ignite
         float shadowMinBias = 0.05f;
         float shadowMaxBias = 0.001f;
         float pcfRadius = 0.3f;
+        float shadowDistance = 200.0f; // max distance (world units) from camera at which shadows are rendered
         int shadowResolution = 2; // 0=Low, 1=Medium, 2=High, 3=Ultra
         bool cascadeShadow = true;
 

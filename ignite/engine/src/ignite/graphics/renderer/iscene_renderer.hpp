@@ -78,8 +78,10 @@ namespace ignite
     {
         glm::vec4 flags = glm::vec4(0.0f); // x=enableBloom y=bloomIntensity z=enableVignette w=enableChromAb
         glm::vec4 vignetteParams = glm::vec4(0.0f); // x=radius y=softness z=intensity w=chromAbAmount
-        glm::vec4 chromAbParams = glm::vec4(0.0f); // x=chromAbRadial
+        glm::vec4 chromAbParams = glm::vec4(0.0f); // x=chromAbRadial y=enableSSAO z=ssaoIntensity
         glm::vec4 vignetteColor = glm::vec4(0.0f);
+        int tonemapMode = 0;
+        float padding[3] = { 0.0f, 0.0f, 0.0f };
     };
 
     class IGN_API ISceneRenderer
@@ -89,6 +91,12 @@ namespace ignite
         virtual ~ISceneRenderer();
 
         virtual void ResizeFramebuffer(uint32_t width, uint32_t height);
+
+        int GetRenderMode() const { return m_SceneGPUData.renderMode; }
+        void SetRenderMode(int renderMode) { m_SceneGPUData.renderMode = renderMode; }
+
+        int GetDebugShadowMode() const { return m_SceneGPUData.debugShadow; }
+        void SetDebugShadowMode(int debugShadow) { m_SceneGPUData.debugShadow = debugShadow; }
 
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;

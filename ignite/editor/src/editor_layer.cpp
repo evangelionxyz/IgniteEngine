@@ -2184,6 +2184,42 @@ namespace ignite
     {
         ImGui::Begin("Scene Renderer");
 
+        static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
+        static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
+
+        int renderMode = m_SceneRenderer->GetRenderMode();
+        int debugShadow = m_SceneRenderer->GetDebugShadowMode();
+
+        if (ImGui::BeginCombo("Render Mode", renderModeLabels[glm::clamp(renderMode, 0, 4)]))
+        {
+            for (int i = 0; i < IM_ARRAYSIZE(renderModeLabels); ++i)
+            {
+                const bool selected = renderMode == i;
+                if (ImGui::Selectable(renderModeLabels[i], selected))
+                {
+                    m_SceneRenderer->SetRenderMode(i);
+                }
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
+        if (ImGui::BeginCombo("CSM Debug", debugShadowLabels[glm::clamp(debugShadow, 0, 2)]))
+        {
+            for (int i = 0; i < IM_ARRAYSIZE(debugShadowLabels); ++i)
+            {
+                const bool selected = debugShadow == i;
+                if (ImGui::Selectable(debugShadowLabels[i], selected))
+                {
+                    m_SceneRenderer->SetDebugShadowMode(i);
+                }
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
         // Shaders
         if (ImGui::TreeNodeEx("Shaders", ImGuiTreeNodeFlags_Framed))
         {
@@ -2207,6 +2243,23 @@ namespace ignite
             ImGui::SeparatorText("Visibility");
             UI::DrawCheckbox("Bounding Box", &m_SceneRenderer->debugSettings.showBoundingBox);
             UI::DrawCheckbox("Physics Collider", &m_SceneRenderer->debugSettings.showPhysicsCollider);
+
+            ImGui::SeparatorText("Scene Render");
+            static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
+            static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
+            static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
+
+            int renderMode = m_SceneRenderer->GetRenderMode();
+            if (UI::DrawComboBox("Render Mode", renderModeLabels, IM_ARRAYSIZE(renderModeLabels), &renderMode))
+            {
+                m_SceneRenderer->SetRenderMode(renderMode);
+            }
+
+            int debugShadow = m_SceneRenderer->GetDebugShadowMode();
+            if (UI::DrawComboBox("CSM Debug", debugShadowLabels, IM_ARRAYSIZE(debugShadowLabels), &debugShadow))
+            {
+                m_SceneRenderer->SetDebugShadowMode(debugShadow);
+            }
             
             ImGui::TreePop();
         }

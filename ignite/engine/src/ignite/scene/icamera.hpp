@@ -16,6 +16,13 @@ namespace ignite
         Orthographic = 0, Perspective = 1
     };
 
+    enum class TonemapMode
+    {
+        Reinhard = 0,
+        Uncharted2 = 1,
+        Filmic = 2,
+    };
+
     struct CameraBufferData
     {
         glm::mat4 viewProjection;
@@ -35,6 +42,8 @@ namespace ignite
 
     struct PostProcessing
     {
+        TonemapMode tonemapMode = TonemapMode::Reinhard;
+
         // Toggles
         bool enableVignette = false;
         bool enableChromAb = false;
@@ -60,10 +69,10 @@ namespace ignite
         float chromAbRadial = 0.1f;
 
         // SSAO params
-        float aoRadius = 0.09f;
-        float aoBias = 0.1f;
-        float aoIntensity = 1.5f; // blend strength when applied in post
-        float aoPower = 1.0f;     // curve/power for contrast
+        float aoRadius = 0.25f;     // view-space hemisphere radius in world units
+        float aoBias = 0.015f;      // depth bias to prevent self-occlusion (~5% of radius)
+        float aoIntensity = 1.0f;   // blend strength when applied in post (1.0 = natural)
+        float aoPower = 1.5f;       // curve/power for contrast
     };
 
     struct CameraLens
@@ -102,7 +111,7 @@ namespace ignite
 
         float fov = 45.0f; // for perspective
         float nearPlane = 0.1f;
-        float farPlane = 1000.0f;
+        float farPlane = 500.0f;
         float orthoSize = 10.0f;
 
         glm::vec3 position;

@@ -107,6 +107,7 @@ namespace ignite
                         sr.AddKeyValue("ShadowMinBias", comp.shadowMinBias);
                         sr.AddKeyValue("ShadowMaxBias", comp.shadowMaxBias);
                         sr.AddKeyValue("PCFRadius", comp.pcfRadius);
+                        sr.AddKeyValue("ShadowDistance", comp.shadowDistance);
                         sr.AddKeyValue("ShadowResolution", comp.shadowResolution);
                         sr.AddKeyValue("CascadeShadow", comp.cascadeShadow);
                     }
@@ -132,6 +133,7 @@ namespace ignite
                         sr.BeginMap("PostProcessing");
                         {
                             const PostProcessing &pp = comp.camera.postProcessing;
+                            sr.AddKeyValue("TonemapMode", static_cast<int>(pp.tonemapMode));
                             sr.AddKeyValue("EnableVignette", pp.enableVignette);
                             sr.AddKeyValue("EnableChromAb", pp.enableChromAb);
                             sr.AddKeyValue("EnableBloom", pp.enableBloom);
@@ -700,6 +702,7 @@ namespace ignite
                 if (YAML::Node ppNode = node["PostProcessing"])
                 {
                     auto &pp = comp.camera.postProcessing;
+                    if (auto n = ppNode["TonemapMode"]) pp.tonemapMode = static_cast<TonemapMode>(n.as<int>());
                     if (auto n = ppNode["EnableVignette"]) pp.enableVignette = n.as<bool>();
                     if (auto n = ppNode["EnableChromAb"]) pp.enableChromAb = n.as<bool>();
                     if (auto n = ppNode["EnableBloom"]) pp.enableBloom = n.as<bool>();
@@ -909,6 +912,7 @@ namespace ignite
                 if (auto n = node["ShadowMinBias"]) comp.shadowMinBias = n.as<float>();
                 if (auto n = node["ShadowMaxBias"]) comp.shadowMaxBias = n.as<float>();
                 if (auto n = node["PCFRadius"]) comp.pcfRadius = n.as<float>();
+                if (auto n = node["ShadowDistance"]) comp.shadowDistance = n.as<float>();
                 if (auto n = node["ShadowResolution"]) comp.shadowResolution = n.as<int>();
                 if (auto n = node["CascadeShadow"]) comp.cascadeShadow = n.as<bool>();
             }

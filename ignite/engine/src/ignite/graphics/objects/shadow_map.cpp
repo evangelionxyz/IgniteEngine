@@ -27,10 +27,10 @@ namespace ignite
         m_ModelGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapModelBufferData), true, 256, "Cascadded Model ShadowMap");
 
 		// Initialize shadow parameters with reasonable defaults
-		m_GPUData.shadowStrength = 0.8f;  // 80% shadow visibility
-		m_GPUData.minBias = 0.0001f;       // Minimum depth bias to prevent acne
-		m_GPUData.maxBias = 0.005f;        // Maximum depth bias for steep angles
-		m_GPUData.pcfRadius = 0.3f;        // PCF filter radius in texels
+		m_GPUData.shadowStrength = 0.8f;   // 80% shadow visibility
+		m_GPUData.minBias = 0.0002f;        // bias for surfaces facing light directly
+		m_GPUData.maxBias = 0.002f;         // bias for steep/grazing-angle surfaces
+		m_GPUData.pcfRadius = 0.3f;         // PCF filter radius in texels for cascade 0
 		
 		Resize(quality);
 	}
@@ -50,7 +50,8 @@ namespace ignite
 		m_Resolution = ShadowMapQuality::LOW == quality ? 512 :
 					   ShadowMapQuality::MEDIUM == quality ? 1024 :
 					   ShadowMapQuality::HIGH == quality ? 2048 :
-					   ShadowMapQuality::ULTRA == quality ? 4096 : 1024;
+					   ShadowMapQuality::ULTRA == quality ? 4096 :
+					   ShadowMapQuality::ULTIMATE == quality ? 8192 : 1024;
 		
 		m_Quality = quality;
 
@@ -66,10 +67,6 @@ namespace ignite
 		samplerDesc.minFilter = true;
 		samplerDesc.magFilter = true;
 		samplerDesc.mipFilter = false;
-		// Standard sampler: depth comparison is done manually in the shader.
-		// NVRHI binds this as the texture's sampler via Texture::GetSampler(), so
-		// this m_DepthSampler is kept for reference but the binding uses the
-		// depth texture's own internal sampler created in Texture::Create().
 
 		m_DepthSampler = device->createSampler(samplerDesc);
 		LOG_ASSERT(m_DepthSampler, "Failed to create depth comparison sampler");
@@ -95,7 +92,7 @@ namespace ignite
 		return m_DepthTexture;
 	}
 
-	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition)
+	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance)
 	{
 		IGN_PROFILE_FUNCTION();
 
@@ -109,25 +106,37 @@ namespace ignite
 			lightDir = -glm::normalize(lightDir);
 		}
 
-		constexpr float splitLambda = 0.7f;
+		// Practical split scheme (Engel 2006).
+		// λ=0.85 biases heavily toward logarithmic splits so the near cascade
+		// gets the highest texel density (crispest shadows close to the camera).
+		constexpr float splitLambda = 0.85f;
 
-		const float nearPlane = glm::max(camera->nearPlane, 0.001f);
-		const float farPlane = glm::max(camera->farPlane, nearPlane + 1.0f);
-		const float clipRange = farPlane - nearPlane;
+		// The CSM near plane must be large enough for the log/uniform ratio to
+		// produce meaningful splits. With nearPlane=0.1 and farPlane=1000, the
+		// ratio is 10000 and the log term becomes negligible — the splits
+		// degenerate to nearly uniform, wasting resolution. Clamping to ≥0.5
+		// keeps the ratio reasonable (≤400 for shadowDistance=200).
+		const float csmNear = glm::max(camera->nearPlane, 0.5f);
 
-		const float minZ = nearPlane;
-		const float maxZ = nearPlane + clipRange;
-		const float range = maxZ - minZ;
-		const float ratio = maxZ / minZ;
+		// Use shadowDistance instead of camera->farPlane for CSM coverage.
+		// The camera needs a large far plane (1000) to render distant geometry,
+		// but shadows only need to extend ~150–300 units from the camera.
+		// Using the full far plane spreads the shadow budget over too much
+		// depth, making every cascade blurry.
+		m_ShadowDistance = glm::max(shadowDistance, csmNear + 1.0f);
+		const float csmFar = m_ShadowDistance;
+
+		const float range = csmFar - csmNear;
+		const float ratio = csmFar / csmNear;
 
 		std::array<float, NUM_CASCADES> cascadeSplits{};
 		for (int i = 0; i < NUM_CASCADES; ++i)
 		{
-			const float p = (i + 1) / static_cast<float>(NUM_CASCADES);
-			const float logSplit = minZ * std::pow(ratio, p);
-			const float uniformSplit = minZ + range * p;
-			const float dist = splitLambda * (logSplit - uniformSplit) + uniformSplit;
-			cascadeSplits[i] = dist;
+			const float p            = (i + 1) / static_cast<float>(NUM_CASCADES);
+			const float logSplit     = csmNear * std::pow(ratio, p);
+			const float uniformSplit = csmNear + range * p;
+			const float dist         = splitLambda * (logSplit - uniformSplit) + uniformSplit;
+			cascadeSplits[i]           = dist;
 			m_GPUData.cascadeSplits[i] = dist;
 		}
 
@@ -142,7 +151,7 @@ namespace ignite
 		if (std::abs(glm::dot(upDir, lightDir)) > 0.95f)
 			upDir = glm::vec3(0.0f, 0.0f, 1.0f);
 
-		float lastSplitDist = nearPlane;
+		float lastSplitDist = csmNear;
 
 		for (int cascadeIdx = 0; cascadeIdx < NUM_CASCADES; ++cascadeIdx)
 		{
@@ -178,6 +187,8 @@ namespace ignite
 				frustumCenter += corner;
 			frustumCenter /= static_cast<float>(frustumCornersWS.size());
 
+			// Bounding sphere around the frustum slice — rotation-invariant so
+			// the ortho extent doesn't flicker when the camera rotates.
 			float radius = 0.0f;
 			for (const auto &corner : frustumCornersWS)
 				radius = glm::max(radius, glm::length(corner - frustumCenter));
@@ -196,15 +207,7 @@ namespace ignite
 				};
 
 			// -----------------------------------------------------------------------
-			// Step 1 – Snap the bounding sphere radius to a whole-texel multiple.
-			// This prevents the ortho extent from changing sub-texel as the camera
-			// rotates, which is the primary cause of shadow-map shimmering.
-			// -----------------------------------------------------------------------
-			const float texelWorldSize = (2.0f * radius) / static_cast<float>(m_Resolution);
-			radius = std::ceil(radius / texelWorldSize) * texelWorldSize;
-
-			// -----------------------------------------------------------------------
-			// Step 2 – Build an initial light-view from the raw frustum center so we
+			// Step 1 – Build an initial light-view from the raw frustum center so we
 			// can measure the sub-texel offset of that center.
 			// -----------------------------------------------------------------------
 			const float extent = radius; // symmetric ortho half-extent
@@ -249,17 +252,19 @@ namespace ignite
 			cascadeMin.y = -extent;
 			cascadeMax.y =  extent;
 
-			const float zPadding = 100.0f;
+			// Extra Z padding so tall casters (trees, buildings) behind the camera
+			// sub-frustum are not clipped out of the shadow depth pass.
+			const float zPadding = 150.0f;
 			cascadeMin.z -= zPadding;
 			cascadeMax.z += zPadding;
 
 			const float nearPlaneLS = glm::max(0.001f, -cascadeMax.z);
 			const float farPlaneLS  = glm::max(nearPlaneLS + 1.0f, -cascadeMin.z);
 
-			const glm::mat4 lightProj = glm::orthoZO(
-				cascadeMin.x, cascadeMax.x,
-				cascadeMin.y, cascadeMax.y,
-				nearPlaneLS,  farPlaneLS);
+			// NOTE: The light-eye position was already snapped to a texel boundary
+			// in Step 3 above. Do NOT apply a second snap here on lightProj — that
+			// would fight the first snap and re-introduce sub-texel jitter.
+			glm::mat4 lightProj = glm::orthoZO(cascadeMin.x, cascadeMax.x, cascadeMin.y, cascadeMax.y, nearPlaneLS, farPlaneLS);
 
 			m_GPUData.lightViewProj[cascadeIdx] = lightProj * lightView;
 
@@ -280,7 +285,7 @@ namespace ignite
 		params.depthFunc = nvrhi::ComparisonFunc::Less;
 		params.cullMode = nvrhi::RasterCullMode::Front;
 		params.fillMode = nvrhi::RasterFillMode::Solid;
-       m_BindingLayout = Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM);
+       	m_BindingLayout = Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM);
 
 		m_Pipeline = GraphicsPipeline::Create();
 		m_Pipeline->SetShaders({ m_VS, m_PS }).AddBindingLayout(m_BindingLayout).Build(framebuffer, params);
@@ -299,7 +304,7 @@ namespace ignite
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-	    nvrhi::Format depthFormat = nvrhi::Format::D32;
+	    constexpr nvrhi::Format depthFormat = nvrhi::Format::D32;
 
 	    TextureCreateInfo depthCI;
 	    // depthCI.debugName = "Cascaded Shadow Map Depth";

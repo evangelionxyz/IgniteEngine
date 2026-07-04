@@ -86,6 +86,7 @@ namespace ignite
         m_EditorCamera.SetDistance(5.5f);
         m_EditorCamera.yaw = glm::radians(90.0f);
         m_EditorCamera.pitch = 0.0f;
+        m_EditorCamera.farPlane = 1000.0f;
 
         m_EditorCamera.UpdateSphericalPosition();
         m_EditorCamera.UpdateView();
@@ -656,16 +657,35 @@ namespace ignite
 
                 ImGui::SeparatorText("Shadow");
                 UI::DrawCheckbox("Cascade Shadow", &c.cascadeShadow);
-                UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
-                UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
-                UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
-                UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
 
-                static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
-                int resolution = std::clamp(c.shadowResolution, 0, 3);
-                if (UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &resolution))
+                if (c.cascadeShadow)
                 {
-                    c.shadowResolution = resolution;
+					UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+					UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
+					UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
+					UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
+					UI::DrawFloatControl("Shadow Distance", &c.shadowDistance, 1.0f, 10.0f, 2000.0f);
+
+					static const char *resolutionLabels[] = 
+                    { 
+                        "Low - 512px", 
+                        "Medium - 1024px", 
+                        "High - 2048px", 
+                        "Ultra - 4096px",
+                        "Ultimate - 8192px" 
+                    };
+
+                    UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &c.shadowResolution);
+
+                    if (auto sceneRenderer = m_Scene->GetSceneRenderer())
+                    {
+                        auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
+                        if (shadowMap)
+                        {
+                            ImTextureID texId = (ImTextureID)shadowMap->GetHandle().Get();
+                            ImGui::Image(texId, { 256, 256 });
+                        }
+                    }
                 }
             });
 
@@ -1349,6 +1369,16 @@ namespace ignite
                     ImGui::SeparatorText("Post Processing");
                     auto &pp = c.camera.postProcessing;
 
+                    {
+                        static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
+                        int tonemapIndex = static_cast<int>(pp.tonemapMode);
+                        if (UI::DrawComboBox("Tonemap", tonemapLabels, IM_ARRAYSIZE(tonemapLabels), &tonemapIndex))
+                        {
+                            pp.tonemapMode = static_cast<TonemapMode>(tonemapIndex);
+                            c.dirty = true;
+                        }
+                    }
+
                     // Bloom
                     c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
                     if (pp.enableBloom)
@@ -1382,10 +1412,10 @@ namespace ignite
                     c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
                     if (pp.enableSSAO)
                     {
-                        c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.001f, 0.0f, 10.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 10.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
-                        c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 0.5f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
                     }
                 }
 
