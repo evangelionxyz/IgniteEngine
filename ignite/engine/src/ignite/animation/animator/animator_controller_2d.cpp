@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "animator_controller_2d.hpp"
 #include "ignite/core/logger.hpp"
@@ -10,8 +10,6 @@
 #include <yaml-cpp/yaml.h>
 #pragma warning(pop)
 
-#include <fstream>
-#include <algorithm>
 
 namespace ignite
 {

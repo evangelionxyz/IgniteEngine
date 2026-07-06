@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "ignite/graphics/gpu_data.hpp"
 
@@ -14,17 +14,12 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/common.hpp>
 
-#include <array>
-#include <algorithm>
-#include <cmath>
-#include <limits>
-
 namespace ignite
 {
 	CascadedShadowMap::CascadedShadowMap(ShadowMapQuality quality)
 	{
-        m_GPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), true, 256, "Cascadded ShadowMap");
-        m_ModelGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapModelBufferData), true, 256, "Cascadded Model ShadowMap");
+        m_GPUDataBuffer = ConstantBuffer::Create(sizeof(CSM_GPUData), true, 256, "Cascadded ShadowMap");
+        m_ModelGPUDataBuffer = ConstantBuffer::Create(sizeof(CSMModel_GPUData), true, 256, "Cascadded Model ShadowMap");
 
 		// Initialize shadow parameters with reasonable defaults
 		m_GPUData.shadowStrength = 0.8f;   // 80% shadow visibility
@@ -72,7 +67,6 @@ namespace ignite
 		LOG_ASSERT(m_DepthSampler, "Failed to create depth comparison sampler");
 
 		CreateCascadeFramebuffers();
-		CreatePipeline(m_CascadeFramebuffers[0]);
 	}
 
 	void CascadedShadowMap::BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex)
@@ -270,25 +264,6 @@ namespace ignite
 
 			lastSplitDist = splitDist;
 		}
-	}
-
-	void CascadedShadowMap::CreatePipeline(nvrhi::IFramebuffer *framebuffer)
-	{
-		IGN_PROFILE_FUNCTION();
-
-        if (!m_VS) m_VS = Shader::Create("resources/shaders/cascaded_shadow_depth.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-		if (!m_PS) m_PS = Shader::Create("resources/shaders/cascaded_shadow_depth.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
-
-		GraphicsPipelineParams params;
-		params.enableDepthWrite = true;
-		params.enableDepthTest = true;
-		params.depthFunc = nvrhi::ComparisonFunc::Less;
-		params.cullMode = nvrhi::RasterCullMode::Front;
-		params.fillMode = nvrhi::RasterFillMode::Solid;
-       	m_BindingLayout = Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM);
-
-		m_Pipeline = GraphicsPipeline::Create();
-		m_Pipeline->SetShaders({ m_VS, m_PS }).AddBindingLayout(m_BindingLayout).Build(framebuffer, params);
 	}
 
 	nvrhi::IFramebuffer *CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex) const

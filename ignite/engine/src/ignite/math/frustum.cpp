@@ -1,27 +1,9 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#include "ignite_pch.hpp"
 
 #include "frustum.hpp"
+#include "ignite/scene/icamera.hpp"
 
 namespace ignite {
 
@@ -30,7 +12,12 @@ namespace ignite {
         Update(view_projection);
     }
 
-    void Frustum::Update(const glm::mat4 &view_projection)
+	Frustum::Frustum(ICamera *camera)
+	{
+		Update(camera->GetProjection() * camera->GetView());
+	}
+
+	void Frustum::Update(const glm::mat4 &view_projection)
     {
         m_ViewProjection = view_projection;
 
@@ -140,7 +127,12 @@ namespace ignite {
         return !(outsideLeft || outsideRight || outsideBottom || outsideTop || outsideNear || outsideFar);
     }
 
-    std::vector<std::pair<glm::vec3, glm::vec3>> Frustum::GetEdges() const
+	bool Frustum::IsAABBVisible(const AABB &aabb) const
+	{
+		return IsAABBVisible(aabb.min, aabb.max);
+	}
+
+	std::vector<std::pair<glm::vec3, glm::vec3>> Frustum::GetEdges() const
     {
         return
         {

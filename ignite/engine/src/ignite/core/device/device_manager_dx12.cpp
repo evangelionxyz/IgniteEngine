@@ -21,10 +21,7 @@
 * SOFTWARE.
 */
 
-#include <string>
-#include <algorithm>
-#include <vector>
-
+#include "ignite_pch.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/texture.hpp"
 

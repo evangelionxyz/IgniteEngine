@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
 
 #include "graphics_pipeline.hpp"
 #include "ignite/core/device/device_manager.hpp"

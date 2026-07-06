@@ -17,7 +17,7 @@
 // Subscribe:  SignalBus::Subscribe<AssetChangeSignal>([this](const auto& s){…});
 // -------------------------------------------------------------------------
 
-#include "ignite/asset/asset.hpp"
+#include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/path.hpp"
 
 #include <vector>
@@ -29,23 +29,22 @@ namespace ignite
     struct AssetChangeSignal
     {
         AssetHandle handle;
-        AssetType   type = AssetType::Invalid;
+        AssetType type = AssetType::Invalid;
     };
 
     // Fired when the user drops files or triggers an import action that should
     // open the AssetImporter panel UI.
     struct AssetImportSignal
     {
-        std::vector<ignite::Path> filepaths;
-        AssetType                 assetType = AssetType::Invalid;
-        ignite::Path              targetDirectory;
+        std::vector<FileImportPayload> payloads;
+		ignite::Path targetDirectory;
     };
 
     // Fired when the user double-clicks an asset in the content browser to
     // open it inside the AssetEditor panel.
     struct AssetEditorOpenSignal
     {
-        AssetHandle   handle;
+        AssetHandle handle;
         AssetMetaData metadata;
     };
 
@@ -53,7 +52,7 @@ namespace ignite
     // inside the AssetEditor panel.
     struct AssetEditorCreateSignal
     {
-        AssetType    type = AssetType::Invalid;
+        AssetType type = AssetType::Invalid;
         ignite::Path targetDirectory;
     };
 }

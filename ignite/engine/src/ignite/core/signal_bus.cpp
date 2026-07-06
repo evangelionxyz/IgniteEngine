@@ -1,11 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
+
 #include "signal_bus.hpp"
-#include <map>
-#include <mutex>
-#include <atomic>
-#include <algorithm>
 
 namespace ignite
 {

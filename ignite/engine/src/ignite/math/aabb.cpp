@@ -1,44 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
-
+#include "ignite_pch.hpp"
 #include "aabb.hpp"
-
-#include "ignite/graphics/objects/mesh.hpp"
 
 namespace ignite
 {
-    AABB AABB::CalculateMeshAABB(const std::vector<Ref<MeshInstance>> &meshInstances)
-    {
-        AABB bounds;
-
-        for (const Ref<MeshInstance> &mesh : meshInstances)
-        {
-            if (!mesh)
-                continue;
-
-            auto &prim = mesh->GetPrimitive();
-            if (!prim || prim->vertices.empty())
-            {
-                continue;
-            }
-
-            AABB meshBounds;
-            // Vertices are already transformed when the mesh is loaded, so
-            // use vertex positions directly and do not apply the mesh local transform.
-            for (const VertexMesh_Anim &vertex : prim->vertices)
-            {
-                meshBounds.min = glm::min(meshBounds.min, vertex.position);
-                meshBounds.max = glm::max(meshBounds.max, vertex.position);
-            }
-
-            bounds.min = glm::min(bounds.min, meshBounds.min);
-            bounds.max = glm::max(bounds.max, meshBounds.max);
-        }
-
-        return bounds;
-    }
-
     bool AABB::IntersectRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, float &outT) const
     {
         // Slab method

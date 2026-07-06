@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "environment.hpp"
 #include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
@@ -97,7 +99,7 @@ namespace ignite
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_Sampler));
 
-        m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT));
+        m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT));
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
 
 		// Notify dependents (e.g. AssetManager) that this environment has changed.

@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "script_host.hpp"
 #include "ignite/core/logger.hpp"
 #include "glue/component_script_glue.hpp"
@@ -12,10 +14,6 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/scripting/script_instances/script_instance.hpp"
-
-#include <algorithm>
-#include <array>
-#include <cstring>
 
 namespace ignite
 {

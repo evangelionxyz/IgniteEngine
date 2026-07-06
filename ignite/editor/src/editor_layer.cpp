@@ -354,43 +354,29 @@ namespace ignite
                     glm::vec3 focusCenter = tr.world.translation;
                     glm::vec3 halfExtents = glm::abs(tr.world.scale) * 0.5f;
 
-                    auto tryFocusFromAABB = [&](const AABB &meshAABB)
+					if (entity.HasComponent<StaticMeshComponent>())
+					{
+						const auto &smc = entity.GetComponent<StaticMeshComponent>();
+						if (smc.handle != AssetHandle(0))
+						{
+							if (auto mesh = m_ActiveProject->GetAsset<StaticMesh>(smc.handle))
+							{
+								const auto &aabb = mesh->GetWorldAABB();
+								focusCenter = (aabb.min + aabb.max) * 0.5f;
+								halfExtents = glm::abs(aabb.max - aabb.min);
+							}
+						}
+					}
+                    else if (entity.HasComponent<SkeletalMeshComponent>())
                     {
-                        const glm::vec3 corners[8] =
-                        {
-                            { meshAABB.min.x, meshAABB.min.y, meshAABB.min.z },
-                            { meshAABB.max.x, meshAABB.min.y, meshAABB.min.z },
-                            { meshAABB.min.x, meshAABB.max.y, meshAABB.min.z },
-                            { meshAABB.max.x, meshAABB.max.y, meshAABB.min.z },
-                            { meshAABB.min.x, meshAABB.min.y, meshAABB.max.z },
-                            { meshAABB.max.x, meshAABB.min.y, meshAABB.max.z },
-                            { meshAABB.min.x, meshAABB.max.y, meshAABB.max.z },
-                            { meshAABB.max.x, meshAABB.max.y, meshAABB.max.z },
-                        };
-
-                        const glm::mat4 worldTransform = tr.world.GetMatrix();
-                        glm::vec3 worldMin(std::numeric_limits<float>::max());
-                        glm::vec3 worldMax(std::numeric_limits<float>::lowest());
-
-                        for (const glm::vec3 &corner : corners)
-                        {
-                            const glm::vec4 worldPos = worldTransform * glm::vec4(corner, 1.0f);
-                            worldMin = glm::min(worldMin, glm::vec3(worldPos));
-                            worldMax = glm::max(worldMax, glm::vec3(worldPos));
-                        }
-
-                        focusCenter = (worldMin + worldMax) * 0.5f;
-                        halfExtents = glm::abs(worldMax - worldMin);
-                    };
-
-                    if (entity.HasComponent<MeshComponent>())
-                    {
-                        const auto &smc = entity.GetComponent<MeshComponent>();
+                        const auto &smc = entity.GetComponent<SkeletalMeshComponent>();
                         if (smc.handle != AssetHandle(0))
                         {
-                            if (Ref<Mesh> mesh = m_ActiveProject->GetAsset<Mesh>(smc.handle))
+                            if (auto mesh = m_ActiveProject->GetAsset<SkeletalMesh>(smc.handle))
                             {
-                                tryFocusFromAABB(mesh->aabb);
+                                const auto &aabb = mesh->GetWorldAABB();
+                                focusCenter = (aabb.min + aabb.max) * 0.5f;
+                                halfExtents = glm::abs(aabb.max - aabb.min);
                             }
                         }
                     }
@@ -1349,7 +1335,12 @@ namespace ignite
 			Application::SubmitToMainThread([editor, file = filepath, userData]()
 			{
 				SignalBus::Emit<FileImportPayload>(
-					FileImportPayload{ ImportType::Save, FileStatus::Success, AssetMetaData(file, AssetType::Scene), userData }
+					FileImportPayload{ 
+                        .type = ImportType::Save, 
+                        .status = FileStatus::Success, 
+                        .metadata = AssetMetaData(file, AssetType::Scene),
+                        .userData = userData
+                    }
 				);
 			});
         }
@@ -1377,10 +1368,16 @@ namespace ignite
         std::string filepath = filelist[0];
         if (!filepath.empty())
         {
+            
 			Application::SubmitToMainThread([editor, file = filepath, userData]()
 			{
 				SignalBus::Emit<FileImportPayload>(
-					FileImportPayload{ ImportType::Open, FileStatus::Success, AssetMetaData(file, AssetType::Scene), userData }
+					FileImportPayload{ 
+                        .type = ImportType::Open,
+                        .status = FileStatus::Success, 
+                        .metadata = AssetMetaData(file, AssetType::Scene), 
+                        .userData = userData 
+                    }
 				);
 			});
         }
@@ -1417,7 +1414,12 @@ namespace ignite
 			Application::SubmitToMainThread([editor, file = filepath, userData]()
 			{
 				SignalBus::Emit<FileImportPayload>(
-					FileImportPayload{ ImportType::Save, FileStatus::Success, AssetMetaData(file, AssetType::Project), userData }
+					FileImportPayload{ 
+                        .type = ImportType::Save, 
+                        .status = FileStatus::Success, 
+                        .metadata = AssetMetaData(file, AssetType::Project), 
+                        .userData = userData
+                    }
 				);
 			});
         }
@@ -1447,7 +1449,12 @@ namespace ignite
             Application::SubmitToMainThread([editor, file = filepath, userData]()
             {
                 SignalBus::Emit<FileImportPayload>(
-                    FileImportPayload{ImportType::Open, FileStatus::Success, AssetMetaData(file, AssetType::Project), userData }
+                    FileImportPayload{
+                        .type = ImportType::Open, 
+                        .status = FileStatus::Success, 
+                        .metadata = AssetMetaData(file, AssetType::Project), 
+                        .userData = userData
+                    }
                 );
             });
         }

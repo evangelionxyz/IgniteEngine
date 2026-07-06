@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "iscene_renderer.hpp"
 #include "renderer_2d.hpp"
@@ -8,24 +8,24 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
+#include "ignite/graphics/texture.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/scene/scene.hpp"
+#include "ignite/project/project.hpp"
 
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/scene/component.hpp"
-
-#include <array>
 
 namespace ignite
 {
     ISceneRenderer::ISceneRenderer()
     {
-        m_SceneBuffer = ConstantBuffer::Create(sizeof(SceneBufferData), false, 1, "[SceneRenderer] Scene Buffer");
+        m_SceneBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "[SceneRenderer] Scene Buffer");
         m_CameraBuffer = ConstantBuffer::Create(sizeof(CameraBufferData), false, 1, "[SceneRenderer] Camera buffer");
-        m_CascadedShadowMapBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), false, 1, "[SceneRenderer] CSM Buffer");
+        m_CascadedShadowMapBuffer = ConstantBuffer::Create(sizeof(CSM_GPUData), false, 1, "[SceneRenderer] CSM Buffer");
         for (int i = 0; i < NUM_CASCADES; ++i)
         {
-            m_CSMPerCascadeBuffers[i] = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), false, 1, "[SceneRenderer] CSM Per-Cascade Buffer " + std::to_string(i));
+            m_CSMPerCascadeBuffers[i] = ConstantBuffer::Create(sizeof(CSM_GPUData), false, 1, "[SceneRenderer] CSM Per-Cascade Buffer " + std::to_string(i));
         }
 
         m_PointLightBuffer = ConstantBuffer::Create(sizeof(PointLightBufferData), false, 1, "[SceneRenderer] Point Light Buffer");
@@ -109,6 +109,53 @@ namespace ignite
 		}
 		m_PinnedAssetHandles.clear();
 	}
+
+    void ISceneRenderer::FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms)
+    {
+        const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+        if (boneCount > 0)
+        {
+            std::memcpy(out, boneTransforms.data(), boneCount * sizeof(glm::mat4));
+        }
+        for (size_t i = boneCount; i < MAX_BONES; ++i)
+        {
+            out[i] = glm::mat4(1.0f);
+        }
+    }
+
+    Ref<Material> ISceneRenderer::ResolveMeshMaterial(
+        int instanceIndex,
+        const std::unordered_map<int, AssetHandle> &overrideMaterials,
+        AssetHandle defaultMaterialHandle)
+    {
+        Ref<Material> material = nullptr;
+
+        auto overrideIt = overrideMaterials.find(instanceIndex);
+        if (overrideIt != overrideMaterials.end() && overrideIt->second != AssetHandle(0))
+        {
+            material = ResolveAsset<Material>(overrideIt->second);
+        }
+
+        if (!material && defaultMaterialHandle != AssetHandle(0))
+        {
+            material = ResolveAsset<Material>(defaultMaterialHandle);
+        }
+
+        if (!material)
+        {
+            material = Renderer::GetDefaultMaterial();
+        }
+
+        if (material)
+        {
+            if (!material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
+            {
+                return nullptr;
+            }
+        }
+
+        return material;
+    }
 
 	ISceneRenderer::~ISceneRenderer()
     {

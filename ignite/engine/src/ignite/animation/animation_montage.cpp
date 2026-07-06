@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "animation_montage.hpp"
 
@@ -10,8 +10,6 @@
 #pragma warning(disable : 4275 4251)
 #include <yaml-cpp/yaml.h>
 #pragma warning(pop)
-
-#include <fstream>
 
 namespace ignite
 {

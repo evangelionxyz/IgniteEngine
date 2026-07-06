@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "script_instance.hpp"
 #include "ignite/scripting/script_engine.hpp"

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "font.hpp"
 
@@ -15,18 +15,11 @@
 #include "FontGeometry.h"
 #include "BitmapAtlasStorage.h"
 
-#include <algorithm>
-#include <limits>
-#include <chrono>
-#include <functional>
-#include <thread>
-#include <type_traits>
-
 namespace ignite
 {
-#define DEFAULT_ANGLE_THRESHOLD 3.0
-#define LCG_MULTIPLIER 6364136223846793005ull
-#define LCG_INCREMENT 1442695040888963407ull
+    static constexpr auto DEFAULT_ANGLE_THRESHOLD = 3.0;
+    static constexpr auto LCG_MULTIPLIER = 6364136223846793005ull;
+    static constexpr auto LCG_INCREMENT = 1442695040888963407ull;
 
     template<typename T, typename S, int N, msdf_atlas::GeneratorFunction<S, N> GenFunc>
     static Ref<Texture> CreateAndCacheAtlas(const std::vector<msdf_atlas::GlyphGeometry> &glyphs, uint32_t width, uint32_t height, std::function<void(const Ref<Texture> &)> onReady = nullptr)

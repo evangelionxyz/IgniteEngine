@@ -95,7 +95,8 @@ namespace ignite
         void UISpriteSheet2DEditor(AssetEditorData &assetData);
         void UIAnimation2DEditor(AssetEditorData &assetData);
         void UIAnimatorController2DEditor(AssetEditorData &assetData);
-        void UIMeshEditor(AssetEditorData &assetData);
+        void UIStaticMeshEditor(AssetEditorData &assetData);
+        void UISkeletalMeshEditor(AssetEditorData &assetData);
         void UISkeletonEditor(AssetEditorData &assetData);
         void UISkeletalAnimationEditor(AssetEditorData &assetData);
         void UIAnimatorControllerEditor(AssetEditorData &assetData);

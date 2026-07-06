@@ -21,11 +21,7 @@
 * SOFTWARE.
 */
 
-#include <cstdio>
-#include <iomanip>
-#include <thread>
-#include <sstream>
-
+#include "ignite_pch.hpp"
 #include "ignite/graphics/window.hpp"
 
 #include <nvrhi/utils.h>

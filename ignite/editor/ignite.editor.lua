@@ -29,7 +29,7 @@ project "Ignite.Editor"
         "Ignite.Engine",
         "JOLT",
         "ZLIB",
-        "YAMLCPP",
+        "yaml-cpp",
         "UmbraShaderCompiler",
         "IMGUI",
         "BOX2D",

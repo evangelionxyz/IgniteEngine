@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "widget_renderer.hpp"
 
@@ -15,7 +15,7 @@
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/shader.hpp"
-#include "ignite/graphics/framebuffer_key.hpp"
+#include "ignite/graphics/hash_keys.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/font.hpp"
 #include "ignite/scene/component.hpp"
@@ -23,9 +23,6 @@
 #include "ignite/scene/scene.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
-#include <algorithm>
-#include <unordered_set>
-#include <limits>
 
 namespace ignite
 {
@@ -212,28 +209,6 @@ namespace ignite
 
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_WidgetQuadPSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_WidgetTextPSOCache;
-
-    struct CameraBindingKey
-    {
-        nvrhi::IBindingLayout *layout = nullptr;
-        nvrhi::IBuffer *cameraBuffer = nullptr;
-
-        bool operator==(const CameraBindingKey &other) const noexcept
-        {
-            return layout == other.layout && cameraBuffer == other.cameraBuffer;
-        }
-    };
-
-    struct CameraBindingKeyHash
-    {
-        size_t operator()(const CameraBindingKey &k) const noexcept
-        {
-            size_t h = std::hash<const void *> {}(k.layout);
-            h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            return h;
-        }
-    };
-
     static std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> s_WidgetBindingSetCache;
 
     static Ref<GraphicsPipeline> GetWidgetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer)

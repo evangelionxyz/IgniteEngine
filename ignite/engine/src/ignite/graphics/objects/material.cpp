@@ -1,36 +1,17 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
-#include "ignite/asset/asset_manager.hpp"
-#include "ignite/project/project.hpp"
-#include "ignite/serializer/serializer.hpp"
+#include "ignite_pch.hpp"
 
 #include "material.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/project/project.hpp"
+#include "ignite/core/application.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/iscene_renderer.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/serializer/serializer.hpp"
 
 #include <stb_image.h>
 
@@ -140,7 +121,7 @@ namespace ignite
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
         desc.addItem(nvrhi::BindingSetItem::Sampler(1, shadowMap ? shadowMap->GetSampler() : sampler));
 
-        auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
+        auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(EBindingLayout::MATERIAL));
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");
 
         // All created
@@ -161,7 +142,7 @@ namespace ignite
         EnsureGpuResources();
         // Sync blend mode from material type so the shader always has the correct value
         gpuData.blendMode = static_cast<int>(m_Type);
-        m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(MaterialBufferData)));
+        m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(Material_GPUData)));
     }
 
     void Material::SetSamplerDesc(const nvrhi::SamplerDesc &desc)
@@ -297,7 +278,7 @@ namespace ignite
 
         if (!m_GPUDataBuffer)
         {
-            m_GPUDataBuffer = ConstantBuffer::Create(sizeof(MaterialBufferData), false, 1, "Material Constant Buffer");
+            m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
         }
     }
 }

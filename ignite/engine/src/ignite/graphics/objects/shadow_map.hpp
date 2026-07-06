@@ -56,12 +56,10 @@ namespace ignite
 		nvrhi::IFramebuffer* GetCascadeFramebuffer(int cascadeIndex) const;
 		Ref<ConstantBuffer> GetGPUDataBuffer() const { return m_GPUDataBuffer; }
 		Ref<ConstantBuffer> GetModelGPUDataBuffer() const { return m_ModelGPUDataBuffer; }
-		nvrhi::BindingLayoutHandle GetBindingLayout() const { return m_BindingLayout;  }
 
 		Ref<Texture> GetDepthTexture() const;
 
-		Ref<GraphicsPipeline> GetPipeline() const { return m_Pipeline; }
-		CascadedShadowMapBufferData& GetGPUData() { return m_GPUData; }
+		CSM_GPUData& GetGPUData() { return m_GPUData; }
 		nvrhi::SamplerHandle GetDepthSampler() { return m_DepthSampler; }
 
 	    const ShadowMapQuality &GetQuality() const { return m_Quality; }
@@ -76,23 +74,17 @@ namespace ignite
 
 		Ref<ConstantBuffer> m_GPUDataBuffer;
 		Ref<ConstantBuffer> m_ModelGPUDataBuffer;
-		Ref<GraphicsPipeline> m_Pipeline;
 
 		// NEW: Compute pipeline for depth visualization
 		nvrhi::ComputePipelineHandle m_DepthVisualizationPipeline;
 		nvrhi::BindingLayoutHandle m_DepthVisualizationLayout;
 		Ref<Shader> m_DepthVisualizationShader;
 
-		nvrhi::BindingLayoutHandle m_BindingLayout;
-
-		Ref<Shader> m_VS;
-		Ref<Shader> m_PS;
-
 		uint32_t m_DepthArray = 0;
 		int m_Resolution = 0;
 		float m_ShadowDistance = 200.0f;
 		ShadowMapQuality m_Quality;
-		CascadedShadowMapBufferData m_GPUData{};
+		CSM_GPUData m_GPUData{};
 		nvrhi::SamplerHandle m_DepthSampler;
 	};
 }

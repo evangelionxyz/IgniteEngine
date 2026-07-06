@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "scene_graph.hpp"
 #include "ignite/core/logger.hpp"
 

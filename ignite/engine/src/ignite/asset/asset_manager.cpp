@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "asset_manager.hpp"
 #include "ignite/core/application.hpp"
@@ -11,8 +11,7 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
-#include <cstdint>
-#include <filesystem>
+
 #include <fbxsdk.h>
 
 namespace ignite
@@ -682,6 +681,8 @@ namespace ignite
 
             case AssetType::Audio:
             case AssetType::Mesh:
+            case AssetType::StaticMesh:
+            case AssetType::SkeletalMesh:
             case AssetType::Font:
             case AssetType::Material:
             case AssetType::Material2D:

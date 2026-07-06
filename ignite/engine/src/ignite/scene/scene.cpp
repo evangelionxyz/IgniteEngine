@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "scene.hpp"
 #include <entt/entt.hpp>
@@ -30,11 +30,6 @@
 
 #include "ignite/core/profiler/profiler.hpp"
 
-#include <ranges>
-#include <cmath>
-#include <algorithm>
-#include <unordered_set>
-
 namespace ignite
 {
     namespace
@@ -59,7 +54,7 @@ namespace ignite
             return it != params.end() ? &(*it) : nullptr;
         }
 
-        void SyncMeshAnimatorParams(MeshComponent &meshComp, const AnimatorController &controller)
+        void SyncMeshAnimatorParams(SkeletalMeshComponent &meshComp, const AnimatorController &controller)
         {
             std::erase_if(meshComp.runtimeParams, [&controller](const AnimParam &param)
             {
@@ -82,7 +77,7 @@ namespace ignite
             }
         }
 
-        void ApplyMeshRuntimeParamsToController(const MeshComponent &meshComp, AnimatorController &controller)
+        void ApplyMeshRuntimeParamsToController(const SkeletalMeshComponent &meshComp, AnimatorController &controller)
         {
             for (AnimParam &controllerParam : controller.params)
             {
@@ -97,14 +92,14 @@ namespace ignite
             }
         }
 
-        void ResetMeshAnimatorRuntime(MeshComponent &meshComp)
+        void ResetMeshAnimatorRuntime(SkeletalMeshComponent &meshComp)
         {
             meshComp.currentStateName.clear();
             meshComp.stateElapsed = 0.0f;
             meshComp.stateNormalized = 0.0f;
         }
 
-        AssetHandle ResolveMeshAnimatorSourceHandle(const MeshComponent &meshComp, const Ref<Mesh> &mesh)
+        AssetHandle ResolveMeshAnimatorSourceHandle(const SkeletalMeshComponent &meshComp, const Ref<SkeletalMesh> &mesh)
         {
             if (meshComp.runtimeAnimatorHandle != AssetHandle(0))
                 return meshComp.runtimeAnimatorHandle;
@@ -194,28 +189,25 @@ namespace ignite
         }
     }
 
+	// ===============================================
+	// Scene Class
+	// ===============================================
     Scene::Scene() = default;
 
     Scene::Scene(Project *project, const std::string &_name)
-		: m_Project(project), name(_name)
+		: m_Project(project), name(_name), m_SceneRenderer(nullptr)
         , m_ViewportWidth(1280), m_ViewportHeight(720)
     {
-        LOG_TRACE("Scene::Scene() - Creating scene: {0}", name);
-
         registry = new entt::registry();
+
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
-
 		ScriptEngine::GetInstance()->SetSceneContext(this);
-
         m_AssetManager = m_Project->GetAssetManager();
     }
 
     Scene::~Scene()
     {
-        m_AssetManager = nullptr;
-        m_Project = nullptr;
-
 		// Stop physics simulations first
 		if (physics2D)
 		{
@@ -237,28 +229,22 @@ namespace ignite
 		// Clear entity map
 		entities.clear();
 
+		m_AssetManager = nullptr;
+		m_Project = nullptr;
+
 		// Release physics systems
 		physics2D.reset();
 		physics.reset();
-
     }
 
     void Scene::OnStart()
     {
-        m_State = ESceneState::Play;
+		m_State = ESceneState::Play;
 
 		ScriptEngine::GetInstance()->SetSceneContext(this);
 
         // reset time
         timeInSeconds = 0.0f;
-
-        // resize
-        auto camView = registry->view<CameraComponent>();
-        for (entt::entity entity : camView)
-        {
-            CameraComponent &cc = camView.get<CameraComponent>(entity);
-            cc.camera.UpdateProjection(m_ViewportWidth, m_ViewportHeight);
-        }
 
         // play on start audio
         auto audioView = registry->view<AudioSourceComponent>();
@@ -293,7 +279,7 @@ namespace ignite
             script.runtimeScriptInstance = ScriptEngine::GetInstance()->OnCreateEntityInstance(instanceID, script.className);
         });
 
-        registry->view<MeshComponent>().each([](entt::entity, MeshComponent &meshComp)
+        registry->view<SkeletalMeshComponent>().each([](entt::entity, SkeletalMeshComponent &meshComp)
         {
             ResetMeshAnimatorRuntime(meshComp);
         });
@@ -351,21 +337,33 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         UpdateAnimations(deltaTime);
 
-        auto view = registry->view<IDComponent, TransformComponent>();
-        for (auto ent : view)
+        registry->view<IDComponent, TransformComponent>().each([this](entt::entity e, const auto &id, const auto &tr)
         {
-            const auto &[id, transform] = view.get<IDComponent, TransformComponent>(ent);
-            if (id.parent == 0)
-            {
-                UpdateTransformRecursive(Entity { ent, this }, glm::mat4(1.0f));
-            }
+			if (id.parent == 0)
+			{
+				UpdateTransformRecursive(Entity{ e, this }, glm::mat4(1.0f));
+			}
+        });
+
+		auto staticMeshView = registry->view<TransformComponent, StaticMeshComponent>();
+        for (entt::entity e : staticMeshView)
+        {
+			const auto &[tr, smc] = staticMeshView.get<TransformComponent, StaticMeshComponent>(e);
+			if (!tr.visible || smc.handle == AssetHandle(0))
+				continue;
+
+			if (auto mesh = m_AssetManager->GetAsset<StaticMesh>(smc.handle))
+			{
+				const auto worldMatrix = tr.world.GetMatrix();
+				smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+				mesh->CalculateWorldAABB(worldMatrix);
+			}
         }
 
         auto cameraView = registry->view<TransformComponent, CameraComponent>();
         for (auto entity : cameraView)
         {
-            auto &tr = cameraView.get<TransformComponent>(entity);
-            auto &cc = cameraView.get<CameraComponent>(entity);
+            const auto &[tr, cc] = cameraView.get<TransformComponent, CameraComponent>(entity);
             cc.camera.SetTransform(tr.world.GetMatrix());
         }
     }
@@ -419,7 +417,7 @@ namespace ignite
             if (widgetComp.widgetHandle == AssetHandle(0))
                 continue;
 
-            return m_Project->GetAsset<WidgetCanvas>(widgetComp.widgetHandle);
+            return m_AssetManager->GetAsset<WidgetCanvas>(widgetComp.widgetHandle);
         }
 
         return nullptr;
@@ -589,7 +587,7 @@ namespace ignite
             addHandle(widget.widgetHandle);
         });
 
-        registry->view<MeshComponent>().each([&](entt::entity, const MeshComponent &mesh)
+        registry->view<SkeletalMeshComponent>().each([&](entt::entity, const SkeletalMeshComponent &mesh)
         {
             addHandle(mesh.handle);
             addHandle(mesh.runtimeAnimatorHandle);
@@ -610,47 +608,21 @@ namespace ignite
 
 	void Scene::UpdateAnimations(float deltaTime)
     {
-        auto skeletalMeshView = registry->view<TransformComponent, MeshComponent>();
+        auto skeletalMeshView = registry->view<TransformComponent, SkeletalMeshComponent>();
         std::unordered_set<AssetHandle> updatedSharedHandles;
         for (auto ent : skeletalMeshView)
         {
-            TransformComponent &tr = skeletalMeshView.get<TransformComponent>(ent);
-            MeshComponent &smc = skeletalMeshView.get<MeshComponent>(ent);
+            const auto &[tr, smc] = skeletalMeshView.get<TransformComponent, SkeletalMeshComponent>(ent);
+
             if (!tr.visible || smc.handle == AssetHandle(0))
                 continue;
 
-            Ref<Mesh> mesh = m_AssetManager->GetAsset<Mesh>(smc.handle);
-            if (!mesh)
-                continue;
-
-            const auto worldMatrix = tr.world.GetMatrix();
-            smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-
-            if (mesh)
+			auto mesh = m_AssetManager->GetAsset<SkeletalMesh>(smc.handle);
+			if (mesh)
             {
-                // Transform the mesh AABB by the entity's world matrix so it reflects runtime transforms
-                const AABB &localAabb = mesh->aabb;
-                const glm::vec3 corners[8] =
-                {
-                    { localAabb.min.x, localAabb.min.y, localAabb.min.z },
-                    { localAabb.max.x, localAabb.min.y, localAabb.min.z },
-                    { localAabb.min.x, localAabb.max.y, localAabb.min.z },
-                    { localAabb.max.x, localAabb.max.y, localAabb.min.z },
-                    { localAabb.min.x, localAabb.min.y, localAabb.max.z },
-                    { localAabb.max.x, localAabb.min.y, localAabb.max.z },
-                    { localAabb.min.x, localAabb.max.y, localAabb.max.z },
-                    { localAabb.max.x, localAabb.max.y, localAabb.max.z },
-                };
-
-                smc.worldAABB.min = glm::vec3(std::numeric_limits<float>::max());
-                smc.worldAABB.max = glm::vec3(std::numeric_limits<float>::lowest());
-
-                for (const glm::vec3 &corner : corners)
-                {
-                    const glm::vec4 wc = worldMatrix * glm::vec4(corner, 1.0f);
-                    smc.worldAABB.min = glm::min(smc.worldAABB.min, glm::vec3(wc));
-                    smc.worldAABB.max = glm::max(smc.worldAABB.max, glm::vec3(wc));
-                }
+				const auto worldMatrix = tr.world.GetMatrix();
+				smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+				mesh->CalculateWorldAABB(worldMatrix);
             }
 
             AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(smc, mesh);
@@ -957,8 +929,13 @@ namespace ignite
     {
     }
 
+	template<>
+	IGN_API void Scene::OnComponentAdded<StaticMeshComponent>(Entity entity, StaticMeshComponent &comp)
+	{
+	}
+
     template<>
-    IGN_API void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent &comp)
+    IGN_API void Scene::OnComponentAdded<SkeletalMeshComponent>(Entity entity, SkeletalMeshComponent &comp)
     {
     }
 

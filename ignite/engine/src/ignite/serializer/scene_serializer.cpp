@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "scene_serializer.hpp"
 #include "ignite/scene/component.hpp"
@@ -15,12 +15,10 @@
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/animation/skeleton.hpp"
+#include "ignite/core/application.hpp"
 
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/scene_manager.hpp"
-
-#include <ranges>
-#include <algorithm>
 
 namespace ignite
 {
@@ -318,11 +316,33 @@ namespace ignite
                     sr.EndMap();
                 }
 
-                // Mesh
-                if (entity.HasComponent<MeshComponent>())
+                // Static Mesh
+				if (entity.HasComponent<StaticMeshComponent>())
+				{
+					const auto &comp = entity.GetComponent<StaticMeshComponent>();
+					sr.BeginMap("StaticMesh");
+					{
+						sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+
+						// Serialize vertices
+						sr.BeginSequence("OverrideMaterials");
+						for (const auto &[meshIndex, materialHandle] : comp.overrideMaterials)
+						{
+							sr.BeginMap();
+							sr.AddKeyValue("Mesh", meshIndex);
+							sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(materialHandle));
+							sr.EndMap();
+						}
+						sr.EndSequence();
+					}
+					sr.EndMap();
+				}
+
+                // Skeletal Mesh
+                if (entity.HasComponent<SkeletalMeshComponent>())
                 {
-                    const auto &comp = entity.GetComponent<MeshComponent>();
-                    sr.BeginMap("Mesh");
+                    const auto &comp = entity.GetComponent<SkeletalMeshComponent>();
+                    sr.BeginMap("SkeletalMesh");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
                         sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.runtimeAnimatorHandle));
@@ -1153,9 +1173,34 @@ namespace ignite
                 }
             }
 
-            if (YAML::Node node = entityNode["Mesh"])
+            // Static Mesh
+			if (YAML::Node node = entityNode["StaticMesh"])
+			{
+				auto &comp = desEntity.AddComponent<StaticMeshComponent>();
+				if (auto n = node["Handle"])
+				{
+					comp.handle = AssetHandle(n.as<uint64_t>());
+				}
+
+				if (auto overrideMaterialsNode = node["OverrideMaterials"])
+				{
+					for (auto materials : overrideMaterialsNode)
+					{
+						int meshIndex = -1;
+						AssetHandle materialHandle = AssetHandle(0);
+
+						if (auto n = materials["Mesh"]) meshIndex = n.as<int>();
+						if (auto n = materials["MaterialHandle"]) materialHandle = AssetHandle(n.as<uint64_t>());
+
+						if (meshIndex != -1 || materialHandle != AssetHandle(0))
+							comp.overrideMaterials[meshIndex] = materialHandle;
+					}
+				}
+			}
+
+            if (YAML::Node node = entityNode["SkeletalMesh"])
             {
-                auto &comp = desEntity.AddComponent<MeshComponent>();
+                auto &comp = desEntity.AddComponent<SkeletalMeshComponent>();
                 if (auto n = node["Handle"])
                 {
                     comp.handle = AssetHandle(n.as<uint64_t>());

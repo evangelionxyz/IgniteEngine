@@ -3,16 +3,19 @@
 #ifndef IGN_BUFFER_HPP
 #define IGN_BUFFER_HPP
 
+#include "base.hpp"
+
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
+#include <span>
 #include <cstring>
 
 #include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
-    class IBuffer
+    class IGN_API IBuffer
     {
     public:
         IBuffer() = default;
@@ -115,7 +118,7 @@ namespace ignite
         std::vector<uint8_t> m_Data;
     };
 
-    class Buffer : public IBuffer
+    class IGN_API Buffer : public IBuffer
     {
     public:
         Buffer() = default;
@@ -125,14 +128,23 @@ namespace ignite
             Allocate(size);
         }
 
-        Buffer(const std::vector<uint8_t> &inData)
-        {
-            if (!inData.empty())
-            {
-                Allocate(inData.size());
-                std::memcpy(m_Data.data(), inData.data(), inData.size());
-            }
-        }
+		Buffer(const std::span<uint8_t> &inData)
+		{
+			if (!inData.empty())
+			{
+				Allocate(inData.size());
+				std::memcpy(m_Data.data(), inData.data(), inData.size());
+			}
+		}
+
+		Buffer(const std::vector<uint8_t> &inData)
+		{
+			if (!inData.empty())
+			{
+				Allocate(inData.size());
+				std::memcpy(m_Data.data(), inData.data(), inData.size());
+			}
+		}
 
         Buffer(void *data, size_t size)
         {
@@ -152,7 +164,7 @@ namespace ignite
             return { data, size };
         }
 
-        static Buffer Copy(const std::vector<uint8_t> &data)
+        static Buffer Copy(const std::span<uint8_t> &data)
         {
             if (data.empty())
                 return { };
@@ -170,7 +182,7 @@ namespace ignite
         }
     };
 
-    class ScopedBuffer
+    class IGN_API ScopedBuffer
     {
     public:
         ScopedBuffer(Buffer buffer)

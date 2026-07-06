@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
 
 #include "renderer.hpp"
 #include "renderer/renderer_2d.hpp"
@@ -11,10 +12,7 @@
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/core/device/device_manager.hpp"
-
 #include "ignite/serializer/binary_serializer.hpp"
-
-#include <ranges>
 #include "ignite/core/path.hpp"
 
 namespace ignite
@@ -34,9 +32,10 @@ namespace ignite
         Shader::InitShaderData();
 
 		// Create binding layouts
-		m_BindingLayouts[GLayoutMap::MESH_ANIM] = m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
-		m_BindingLayouts[GLayoutMap::ENVIRONMENT] = m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
-		m_BindingLayouts[GLayoutMap::MATERIAL] = m_Device->createBindingLayout(Material::GetBindingLayoutDesc());
+		m_BindingLayouts[EBindingLayout::MESH_STATIC] = m_Device->createBindingLayout(VertexMeshStatic::GetBindingLayoutDesc());
+		m_BindingLayouts[EBindingLayout::MESH_ANIM] = m_Device->createBindingLayout(VertexMeshAnim::GetBindingLayoutDesc());
+		m_BindingLayouts[EBindingLayout::ENVIRONMENT] = m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
+		m_BindingLayouts[EBindingLayout::MATERIAL] = m_Device->createBindingLayout(Material::GetBindingLayoutDesc());
 
 
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
@@ -74,14 +73,9 @@ namespace ignite
             m_Device->executeCommandList(cmd);
         }
 
-		// Default material
+		// Default materials
 		{
-			cmd->open();
 			m_DefaultMaterial = CreateRef<Material>();
-			m_DefaultMaterial->UpdateBindingSet();
-			m_DefaultMaterial->UploadToGpu(cmd);
-			cmd->close();
-			m_Device->executeCommandList(cmd);
 		}
 
     }
@@ -117,7 +111,7 @@ namespace ignite
         return s_RendererInstance->m_GraphicsAPI;
     }
 
-    nvrhi::BindingLayoutHandle Renderer::GetBindingLayout(GLayoutMap type)
+    nvrhi::BindingLayoutHandle Renderer::GetBindingLayout(EBindingLayout type)
     {
         if (s_RendererInstance->m_BindingLayouts.contains(type))
             return s_RendererInstance->m_BindingLayouts[type];
@@ -145,13 +139,13 @@ namespace ignite
         return s_RendererInstance->m_DefaultMaterial;
 	}
 
-	Ref<Mesh> Renderer::GetDefaultMesh(MeshType type)
+	Ref<StaticMesh> Renderer::GetDefaultMesh(EMeshType type)
 	{
 		auto it = s_RendererInstance->m_DefaultMeshes.find(type);
         if (it != s_RendererInstance->m_DefaultMeshes.end())
             return s_RendererInstance->m_DefaultMeshes[type];
 
-        s_RendererInstance->m_DefaultMeshes[type] = BinarySerializer::DeserializeMesh("resources/staticmeshes/uvsphere.mesh");
+        s_RendererInstance->m_DefaultMeshes[type] = StaticMesh::Deserialize("resources/staticmeshes/uvsphere.mesh");
         return s_RendererInstance->m_DefaultMeshes[type];
 	}
 

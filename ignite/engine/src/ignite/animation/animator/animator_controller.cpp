@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "animator_controller.hpp"
 
@@ -13,10 +13,6 @@
 #pragma warning(disable : 4275 4251)
 #include <yaml-cpp/yaml.h>
 #pragma warning(pop)
-
-#include <fstream>
-#include <algorithm>
-#include <cmath>
 
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>

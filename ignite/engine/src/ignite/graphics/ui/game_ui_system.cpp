@@ -1,4 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
+
+#include "ignite_pch.hpp"
+
 #include "game_ui_system.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/subsystem.hpp"

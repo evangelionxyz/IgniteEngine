@@ -70,7 +70,7 @@ project "Ignite.Engine"
         "TINYGLTF",
         "NVRHI",
         "ZLIB",
-        "YAMLCPP",
+        "yaml-cpp",
         "msdf-atlas-gen",
         "msdfgen",
         "freetype",

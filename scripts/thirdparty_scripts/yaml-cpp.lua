@@ -1,4 +1,4 @@
-project "YAMLCPP"
+project "yaml-cpp"
     location (THIRDPARTY_DIR)
     kind "SharedLib"
     language "C++"
@@ -16,8 +16,8 @@ project "YAMLCPP"
     }
 
     defines {
-        "YAML_BUILD_SHARED_LIBS",
-        "yaml_cpp_EXPORTS"
+         "YAML_BUILD_SHARED_LIBS",
+         "yaml_cpp_EXPORTS"
     }
 
     includedirs {

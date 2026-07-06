@@ -1,26 +1,6 @@
-/* MIT License
-*
-* Copyright (c) 2026 Evangelion Manuhutu
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef IGN_GPU_DATA_HPP
 #define IGN_GPU_DATA_HPP
 
@@ -34,7 +14,7 @@ namespace ignite
 	static constexpr int MAX_POINT_LIGHTS = 16;
 	static constexpr int MAX_SPOT_LIGHTS = 16;
 
-	struct SkinnedMeshBufferData
+	struct Mesh_GPUData
 	{
 		glm::mat4 transformation;
 		glm::mat4 normal;
@@ -42,7 +22,7 @@ namespace ignite
 		glm::vec3 _padding = glm::vec3(0.0f);
 	};
 
-	struct SceneBufferData
+	struct Scene_GPUData
 	{
 		glm::vec4 sunColor = glm::vec4(0.87f, 0.87f, 0.87f, 1.1f); // w = light intensity
 		glm::vec2 sungAngles = glm::vec2(0.0f, 1.0f);
@@ -59,7 +39,7 @@ namespace ignite
 		float _pad[3] = { 0.0f, 0.0f, 0.0f };
 	};
 
-	struct CascadedShadowMapBufferData
+	struct CSM_GPUData
 	{
 		glm::mat4 lightViewProj[NUM_CASCADES];
 		float cascadeSplits[NUM_CASCADES]; // view-space distances to end of each cascade
@@ -75,13 +55,13 @@ namespace ignite
 		float padding[3];
 	};
 
-	struct CascadedShadowMapModelBufferData
+	struct CSMModel_GPUData
 	{
 		glm::mat4 transformation;
 		glm::mat4 boneTransforms[MAX_BONES];
 	};
 
-	struct MaterialBufferData
+	struct Material_GPUData
 	{
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
 		glm::vec4 emissiveFactor = glm::vec4(1.0f);

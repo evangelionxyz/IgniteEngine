@@ -22,20 +22,20 @@ namespace ignite
 
     class DeviceManager;
     class Texture;
-    class Mesh;
+    class StaticMesh;
     class Material;
     class Shader;
 	class ConstantBuffer;
 
-    enum class GLayoutMap
+    enum class EBindingLayout
     {
-        MESH,
+        MESH_STATIC = 1,
         MESH_ANIM, 
         MATERIAL,
         ENVIRONMENT,
     };
 
-	enum class MeshType
+	enum class EMeshType
 	{
 		UV_SPHERE = 0,
 	};
@@ -74,18 +74,18 @@ namespace ignite
 
         static Ref<Material> GetDefaultMaterial();
 
-        static Ref<Mesh> GetDefaultMesh(MeshType type);
+        static Ref<StaticMesh> GetDefaultMesh(EMeshType type);
 
         static nvrhi::GraphicsAPI GetGraphicsAPI();
-        static nvrhi::BindingLayoutHandle GetBindingLayout(GLayoutMap type);
+        static nvrhi::BindingLayoutHandle GetBindingLayout(EBindingLayout type);
 
         static RendererStats Stats;
 
     private:
         nvrhi::GraphicsAPI m_GraphicsAPI;
 
-        std::unordered_map<GLayoutMap, nvrhi::BindingLayoutHandle> m_BindingLayouts;
-		std::unordered_map<MeshType, Ref<Mesh>> m_DefaultMeshes;
+        std::unordered_map<EBindingLayout, nvrhi::BindingLayoutHandle> m_BindingLayouts;
+		std::unordered_map<EMeshType, Ref<StaticMesh>> m_DefaultMeshes;
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;

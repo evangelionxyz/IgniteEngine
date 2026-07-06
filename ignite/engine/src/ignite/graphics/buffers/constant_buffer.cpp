@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#include "ignite_pch.hpp"
+
 #include "constant_buffer.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"

@@ -1,35 +1,18 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef IGN_FRUSTUM_HPP
+#define IGN_FRUSTUM_HPP
 
 #include "ignite/core/base.hpp"
-
+#include "aabb.hpp"
 #include <glm/glm.hpp>
 #include <array>
 
 namespace ignite
 {
+	class ICamera;
+
     class IGN_API Frustum
     {
     public:
@@ -44,11 +27,13 @@ namespace ignite
         };
 
         Frustum() = default;
-        Frustum(const glm::mat4 &view_projection);
+		Frustum(ICamera *camera);
+        Frustum(const glm::mat4 &viewProjection);
 
-        void Update(const glm::mat4 &view_projection);
+        void Update(const glm::mat4 &viewProjection);
         bool IsPointVisible(const glm::vec3 &point) const;
         bool IsSphereVisible(const glm::vec3 &center, float radius) const;
+        bool IsAABBVisible(const AABB &aabb) const;
         bool IsAABBVisible(const glm::vec3 &min, const glm::vec3 &max) const;
         const std::array<glm::vec3, 8> &GetCorners() const { return m_Corners; }
         const std::array<glm::vec4, 6> &GetPlanes() const { return m_Planes; }
@@ -61,3 +46,5 @@ namespace ignite
         glm::mat4 m_ViewProjectionInverse = glm::mat4(1.0f);
     };
 }
+
+#endif

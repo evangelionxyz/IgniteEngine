@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "bloom.hpp"
 
@@ -10,8 +10,6 @@
 #include "renderer.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
-
-#include <algorithm>
 
 namespace ignite
 {

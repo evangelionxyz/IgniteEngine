@@ -2,7 +2,6 @@
 
 #include "ignite_pch.hpp"
 
-
 #include "fmod_dsp.hpp"
 
 namespace ignite {

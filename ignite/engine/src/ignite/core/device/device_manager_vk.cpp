@@ -21,13 +21,14 @@
 * SOFTWARE.
 */
 
+#include "ignite_pch.hpp"
+
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
-#include <string>
 
 #include <SDL3/SDL_vulkan.h>
 

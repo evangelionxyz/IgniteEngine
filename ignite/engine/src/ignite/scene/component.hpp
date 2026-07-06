@@ -32,8 +32,6 @@ namespace JPH
 
 namespace ignite
 {
-    struct MeshPrimitive;
-    class MeshInstance;
     class Texture;
     class Skeleton;
     class AnimatorController;
@@ -52,7 +50,9 @@ namespace ignite
         { "Circle 2D", CompType_Circle2D },
         { "Point Light 2D", CompType_PointLight2D },
         { "Text", CompType_Text },
-        { "Mesh", CompType_Mesh },
+        { "SkeletalMesh", CompType_SkeletalMesh },
+        { "StaticMesh", CompType_StaticMesh },
+        { "StaticMesh", CompType_StaticMesh },
         { "Rigid Body", CompType_Rigidbody },
         { "Box Collider", CompType_BoxCollider },
         { "Widget", CompType_Widget },
@@ -165,7 +165,8 @@ namespace ignite
             case CompType_Sprite2D: return "CompType_Sprite2D";
             case CompType_Circle2D: return "CompType_Circle2D";
             case CompType_PointLight2D: return "CompType_PointLight2D";
-            case CompType_Mesh: return "CompType_Mesh";
+            case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
+            case CompType_StaticMesh: return "CompType_StaticMesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
             case CompType_PlaneCollider: return "CompType_PlaneCollider";
             case CompType_BoxCollider: return "CompType_BoxCollider";
@@ -414,17 +415,27 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_Widget)
     };
 
-	class MeshComponent : public IComponent
+    class StaticMeshComponent : public IComponent
+    {
+    public:
+		AssetHandle handle = AssetHandle(0);                    // class Mesh in mesh.hpp
+		std::unordered_map<int, AssetHandle> overrideMaterials; // Mesh index, Material Handle
+		glm::mat4 normalMatrix = glm::mat4(1.0f);
+
+        // ==== RUNTIME DATA ====
+		std::vector<Mesh_GPUData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
+
+		StaticMeshComponent() = default;
+		COMPONENT_CLASS_TYPE(CompType_StaticMesh)
+    };
+
+	class SkeletalMeshComponent : public IComponent
 	{
 	public:
-        AssetHandle handle = AssetHandle(0);         // class SkeletalMesh in mesh.hpp
-
-        // Mesh index, Material Handle
-        std::unordered_map<int, AssetHandle> overrideMaterials;
+        AssetHandle handle = AssetHandle(0);                    // class SkeletalMesh in mesh.hpp
+        std::unordered_map<int, AssetHandle> overrideMaterials; // Mesh index, Material Handle
 
         glm::mat4 normalMatrix = glm::mat4(1.0f);
-
-        AABB worldAABB;
 
         // ==== RUNTIME DATA ====
         std::string currentStateName;
@@ -434,7 +445,7 @@ namespace ignite
         std::vector<AnimParam> runtimeParams;
         Ref<AnimatorController> runtimeAnimatorInstance = nullptr; // runtime-only for unique animator mode
         std::vector<glm::mat4> finalBoneTransforms; // per-entity GPU-ready bone transforms
-        std::vector<SkinnedMeshBufferData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
+        std::vector<Mesh_GPUData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
 
         // ==== Socket System ====
         // Cache of animated joint transforms in model space (before inverse bind pose multiplication)
@@ -474,8 +485,8 @@ namespace ignite
             return meshWorldMatrix * socketLocal;
         }
 
-        MeshComponent() = default;
-		COMPONENT_CLASS_TYPE(CompType_Mesh)
+        SkeletalMeshComponent() = default;
+		COMPONENT_CLASS_TYPE(CompType_SkeletalMesh)
 	};
 
     class RigidbodyComponent : public IComponent

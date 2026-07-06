@@ -44,8 +44,9 @@ namespace ignite
         Environment,
         Anim2D,
         Skeleton,
-        Mesh,
-        MeshInstance,
+        Mesh, // .mesh (.fbx, .gltf, .glb)
+        StaticMesh, // .mesh - engine specific
+        SkeletalMesh, // .skmesh - engine specific
         Scene,
         Widget,
         AnimatorController, // .ac    - animator state machine
@@ -76,7 +77,8 @@ namespace ignite
             case ignite::AssetType::SpriteSheet: return "SpriteSheet";
             case ignite::AssetType::Anim2D: return "Anim2D";
 			case ignite::AssetType::Mesh: return "Mesh";
-			case ignite::AssetType::MeshInstance: return "MeshInstance";
+			case ignite::AssetType::StaticMesh: return "StaticMesh";
+			case ignite::AssetType::SkeletalMesh: return "SkeletalMesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
             case ignite::AssetType::BlendSpace: return "BlendSpace";
@@ -107,7 +109,8 @@ namespace ignite
         if (typeStr == "SpriteSheet") return AssetType::SpriteSheet;
         if (typeStr == "Anim2D")  return AssetType::Anim2D;
         if (typeStr == "Mesh")  return AssetType::Mesh;
-        if (typeStr == "MeshInstance")  return AssetType::MeshInstance;
+        if (typeStr == "StaticMesh")  return AssetType::StaticMesh;
+        if (typeStr == "SkeletalMesh")  return AssetType::SkeletalMesh;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
@@ -151,11 +154,11 @@ namespace ignite
         { ".wav", AssetType::Audio },
 
         // Meshes
-        { ".mesh", AssetType::Mesh },
-        { ".meshinstance", AssetType::MeshInstance },
         { ".fbx", AssetType::Mesh },
         { ".gltf", AssetType::Mesh },
         { ".glb", AssetType::Mesh },
+        { ".mesh", AssetType::StaticMesh },
+        { ".skmesh", AssetType::SkeletalMesh },
 
         // Animations
         { ".ixanim", AssetType::SkeletalAnimation},
@@ -181,9 +184,9 @@ namespace ignite
         case AssetType::Shader: return ".hlsl";
         case AssetType::AnimationMontage: return ".mtg";
         case AssetType::Widget: return ".wdgt";
-        case AssetType::Mesh: return ".mesh";
+        case AssetType::StaticMesh: return ".mesh";
+        case AssetType::SkeletalMesh: return ".skmesh";
         case AssetType::ScriptableObject: return ".ixso";
-        case AssetType::MeshInstance: return ".meshinstance";
         case AssetType::Skeleton: return ".ixskel";
         case AssetType::SkeletalAnimation: return ".ixanim";
         case AssetType::BlendSpace: return ".bsp";
@@ -238,7 +241,8 @@ namespace ignite
         AssetMetaData() = default;
         AssetMetaData(const ignite::Path &filepath, const AssetType type)
             : filepath(filepath), type(type)
-        { }
+        {
+        }
 
         ignite::Path filepath;
         AssetType type = AssetType::Invalid;

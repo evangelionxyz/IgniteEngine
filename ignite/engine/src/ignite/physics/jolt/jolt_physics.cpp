@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "jolt_physics.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/profiler/profiler.hpp"
