@@ -372,7 +372,7 @@ namespace ignite
 	// ===================================
 	MeshInstance::~MeshInstance()
 	{
-		AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("material.{}.{}", m_Name, (uint64_t)m_MaterialHandle));
+		AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
 
 		// Wait for GPU to ensure resources are not in use
 		if (auto *device = DeviceManager::GetInstance()->GetDevice())
@@ -386,7 +386,7 @@ namespace ignite
 	void MeshInstance::SetMaterial(const AssetHandle &assetHandle)
 	{
 		m_MaterialHandle = assetHandle;
-		AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("material.{}.{}", m_Name, (uint64_t)m_MaterialHandle));
+		AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
 	}
 
 	void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
@@ -676,7 +676,19 @@ namespace ignite
         return CreateRef<SkeletalMesh>();
     }
 
-    bool SkeletalMesh::Serialize(const ignite::Path &filepath)
+	void SkeletalMesh::SetSkeleton(AssetHandle skeletonHandle)
+	{
+        m_SkeletonHandle = handle;
+        AssetManager::GetInstance()->AddAssetPin(skeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)skeletonHandle));
+	}
+
+	void SkeletalMesh::SetAnimator(AssetHandle animatorHandle)
+	{
+        m_AnimatorHandle = handle;
+		AssetManager::GetInstance()->AddAssetPin(animatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)animatorHandle));
+	}
+
+	bool SkeletalMesh::Serialize(const ignite::Path &filepath)
     {
         BinarySerializer::SerializeMesh<SkeletalMesh, VertexMeshAnim>(this, filepath);
         SetDirtyFlag(false);
@@ -719,6 +731,8 @@ namespace ignite
 
 	SkeletalMesh::~SkeletalMesh()
     {
+		AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)m_SkeletonHandle));
+		AssetManager::GetInstance()->RemoveAssetPin(m_AnimatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)m_AnimatorHandle));
         m_MeshInstances.clear();
     }
 
