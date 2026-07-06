@@ -1,3 +1,4 @@
+
 //Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #include "pch.hpp"
@@ -2028,13 +2029,9 @@ namespace ignite
 
     void ContentBrowserPanel::UIShowAssetAddContext()
     {
-        static AssetImporterPayload importPayload;
-
         if (ImGui::MenuItem("Import to this current directory"))
         {
-            importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Auto };
-
-            SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
+            SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
                 Application::GetInstance()->GetWindow()->GetWindowHandle(),
                 kExtFilters, IM_ARRAYSIZE(kExtFilters),
                 nullptr, true
@@ -2316,8 +2313,8 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        AssetImporterPayload *payload = (AssetImporterPayload *)userData;
-        if (!payload)
+        ContentBrowserPanel *data = (ContentBrowserPanel *)userData;
+        if (!data)
         {
             LOG_ERROR("Import Asset Dialog: Content browser data");
             return;
@@ -2330,15 +2327,23 @@ namespace ignite
             return;
         }
 
-        std::vector<ignite::Path> filepaths;
+        std::vector<FileImportPayload> filePayloads;
         for (const char *const *file = filelist; *file != nullptr; file++)
         {
-            filepaths.push_back(std::string(*file));
+            FileImportPayload payload;
+            payload.status = FileStatus::Pending;
+            payload.type = ImportType::Import;
+            payload.metadata.filepath = std::string(*file);
+			payload.metadata.type = GetAssetTypeFromExtension(ignite::Path(*file).extension().string());
+            filePayloads.emplace_back(payload);
         }
 
-        Application::SubmitToMainThread([filepaths, payload]()
+        Application::SubmitToMainThread([filePayloads, data]()
         {
-            SignalBus::Emit(AssetImportSignal{ std::move(filepaths), payload->assetType, payload->targetDirectory });
+            SignalBus::Emit(AssetImportSignal{ 
+                .payloads = std::move(filePayloads), 
+                .targetDirectory = data->m_CurrentDirectory }
+            );
         });
     }
 
@@ -2436,6 +2441,8 @@ namespace ignite
             case AssetType::Font: return s_SharedIcons["font"];
             case AssetType::Skeleton: return s_SharedIcons["skeleton"];
             case AssetType::Mesh: return s_SharedIcons["mesh"];
+            case AssetType::SkeletalMesh: return s_SharedIcons["mesh"];
+            case AssetType::StaticMesh: return s_SharedIcons["mesh"];
             case AssetType::Animation2D: return s_SharedIcons["anim_2d"];
             case AssetType::AnimatorController: return s_SharedIcons["anim_ctrl"];
             case AssetType::AnimatorController2D: return s_SharedIcons["anim_ctrl_2d"];

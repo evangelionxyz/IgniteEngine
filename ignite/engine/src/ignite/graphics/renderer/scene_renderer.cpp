@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "scene_renderer.hpp"
 
@@ -30,14 +30,6 @@
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/texture.hpp"
-
-#include <ranges>
-#include <cstdlib>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <limits>
-#include <unordered_set>
 
 namespace ignite
 {
@@ -80,18 +72,17 @@ namespace ignite
 
     SceneRenderer::~SceneRenderer()
     {
-		ClearPinnedAssets();
+        ClearPinnedAssets();
 
         m_WidgetRenderer = nullptr;
         m_WorldEnvironment = nullptr;
 
-        m_GeometryPSOCache.clear();
+        m_AnimatedPSOCache.clear();
         m_EnvironmentPSOCache.clear();
         m_CompositePSOCache.clear();
         m_DebugGridPSOCache.clear();
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
-        m_CSMBindingSetCache.clear();
         m_RenderTargets.clear();
 
         m_ResolvedAssetsCache.clear();
@@ -118,7 +109,7 @@ namespace ignite
             m_WorldEnvironment = nullptr;
         }
 
-		ClearPinnedAssets();
+        ClearPinnedAssets();
 
         m_SelectedEntities.clear();
         m_Has2DPreRenderCache = false;
@@ -126,13 +117,12 @@ namespace ignite
         m_ResolvedAssetsCache.clear();
 
         m_Scene = scene;
-        m_GeometryPSOCache.clear();
+        m_AnimatedPSOCache.clear();
         m_EnvironmentPSOCache.clear();
         m_CompositePSOCache.clear();
         m_DebugGridPSOCache.clear();
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
-        m_CSMBindingSetCache.clear();
 
         if (m_Renderer2D)
         {
@@ -156,8 +146,8 @@ namespace ignite
 
     void SceneRenderer::Render(ICamera *camera, bool drawDebug)
     {
-		IGN_PROFILE_FUNCTION();
-		IGN_PROFILE_FRAME_NAMED("Editor Frame");
+        IGN_PROFILE_FUNCTION();
+        IGN_PROFILE_FRAME_NAMED("Editor Frame");
 
         if (!camera)
             return;
@@ -221,32 +211,21 @@ namespace ignite
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
-                const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(sceneFramebuffer, m_FillMode);
+                const Ref<GraphicsPipeline> envPSO = GetEnvironmentPSO(sceneFramebuffer, m_FillMode);
                 m_WorldEnvironment->environment->Draw(cmd, sceneFramebuffer, envPSO);
             }
 
-			ColorPass(cmd, camera, sceneFramebuffer);
-
-			UIPass(cmd, target->widgetRT->GetFramebuffer());
+            ColorPass(cmd, camera, sceneFramebuffer);
+            UIPass(cmd, target->widgetRT->GetFramebuffer());
 
             if (drawDebug)
             {
-				nvrhi::IFramebuffer *debugFramebuffer = target->debugRT->GetFramebuffer().Get();
-				if (camera->projectionType == ProjectionType::Orthographic)
-				{
-					DrawDebugGrid(cmd, debugFramebuffer, sceneRenderSettings.worldGrid2D, true);
-				}
-				else
-				{
-					DrawDebugGrid(cmd, debugFramebuffer, sceneRenderSettings.worldGrid3D, false);
-				}
-
-				DrawDebug2D(cmd, debugFramebuffer);
-				DrawDebug3D(cmd, debugFramebuffer);
+                nvrhi::IFramebuffer *debugFramebuffer = target->debugRT->GetFramebuffer().Get();
+				DebugPass(cmd, camera, debugFramebuffer);
             }
             
-			const uint32_t width = target->sceneRT->GetWidth();
-			const uint32_t height = target->sceneRT->GetHeight();
+            const uint32_t width = target->sceneRT->GetWidth();
+            const uint32_t height = target->sceneRT->GetHeight();
 
             Ref<Texture> edgeTexture = nullptr;
             if (m_EdgeDetection && !m_SelectedEntities.empty())
@@ -316,101 +295,6 @@ namespace ignite
         }
     }
 
-#if 0
-    void SceneRenderer::RenderGameplayTo(ICamera *camera)
-    {
-        IGN_PROFILE_FUNCTION();
-        IGN_PROFILE_FRAME_NAMED("Gameplay Frame");
-
-        EnsureSceneEnvironmentMap();
-
-        // Create fresh command list for this frame
-        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-        {
-            IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
-            cmd->open();
-
-            m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
-
-            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
-            {
-                m_WorldEnvironment->environment->WriteBuffer(cmd);
-                m_WorldEnvironment->gpuInitialized = true;
-
-                // Update env & materials if already  get the HDR texture
-                m_WorldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
-            }
-
-            // setup camera constants
-            CameraBufferData cameraBufferData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-            m_CameraBuffer->SetData(cmd, Buffer(&cameraBufferData, sizeof(CameraBufferData)));
-
-            // Clear Render Targets
-            // far depth = 1.0f == LessOrEqual
-            {
-                m_GameplayWidgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
-                m_GameplayWidgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
-
-                m_GameplaySceneRT->ClearColorAttachmentFloat(cmd, 0);
-                m_GameplaySceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
-                m_GameplaySceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
-
-                m_GameplayCompositeRT->ClearColorAttachmentFloat(cmd, 0);
-                m_GameplayCompositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
-            }
-
-            nvrhi::IFramebuffer *framebuffer = m_GameplaySceneRT->GetFramebuffer();
-			
-            ShadowPass(cmd, camera);
-
-            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
-            {
-                const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                m_WorldEnvironment->environment->Draw(cmd, framebuffer, envPSO);
-            }
-
-			ColorPass(cmd, camera, framebuffer);
-
-			UIPass(cmd, m_GameplayWidgetRT->GetFramebuffer());
-
-            Ref<Texture> bloomTexture = nullptr;
-            if (m_GameplayBloom && camera && camera->postProcessing.enableBloom)
-            {
-                m_GameplayBloom->settings.intensity = camera->postProcessing.bloomIntensity;
-                m_GameplayBloom->settings.knee = camera->postProcessing.bloomKnee;
-                m_GameplayBloom->settings.radius = camera->postProcessing.bloomRadius;
-                m_GameplayBloom->settings.threshold = camera->postProcessing.bloomThreshold;
-                m_GameplayBloom->settings.iterations = camera->postProcessing.bloomIterations;
-
-                IGN_PROFILE_SCOPE_COLOR("SceneRenderer::BloomPass", 0xFA0010FF);
-                m_GameplayBloom->Resize(m_GameplaySceneRT->GetWidth(), m_GameplaySceneRT->GetHeight());
-                m_GameplayBloom->Build(cmd, m_GameplaySceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
-                bloomTexture = m_GameplayBloom->GetBloomTexture();
-            }
-
-            Ref<Texture> ssaoTexture = nullptr;
-            if (m_GameplaySSAO && camera && camera->postProcessing.enableSSAO)
-            {
-                IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
-                m_GameplaySSAO->Resize(m_GameplaySceneRT->GetWidth(), m_GameplaySceneRT->GetHeight());
-                m_GameplaySSAO->Build(cmd, m_GameplaySceneRT->GetDepthAttachment(), camera, camera->postProcessing, m_CompositeVertexBuffer);
-                ssaoTexture = m_GameplaySSAO->GetAOTexture();
-            }
-
-			CompositePass(cmd, camera, camera->postProcessing, m_GameplayCompositeRT->GetFramebuffer(),
-                m_GameplaySceneRT->GetColorAttachment(0), m_GameplayWidgetRT->GetColorAttachment(0), nullptr, 
-                bloomTexture, ssaoTexture);
-
-            cmd->close();
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
-            m_Device->executeCommandList(cmd);
-        }
-    }
-#endif
-
     void SceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
     {
         ISceneRenderer::ResizeFramebuffer(camera, width, height);
@@ -423,19 +307,18 @@ namespace ignite
 
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
-        m_CSMBindingSetCache.clear();
 
         auto it = m_RenderTargets.find(camera);
         if (it != m_RenderTargets.end())
         {
             auto target = it->second;
 
-			target->sceneRT->Resize(width, height);
-			target->widgetRT->Resize(width, height);
-			target->compositeRT->Resize(width, height);
+            target->sceneRT->Resize(width, height);
+            target->widgetRT->Resize(width, height);
+            target->compositeRT->Resize(width, height);
 
-			target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
-			target->debugRT->Resize(width, height);
+            target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+            target->debugRT->Resize(width, height);
         }
     }
 
@@ -443,9 +326,11 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
-        Ref<GraphicsPipeline> csmPipeline = m_CascadedShadowMap->GetPipeline();
-        csmState.pipeline = csmPipeline->GetHandle();
+        // Static
+		Ref<GraphicsPipeline> staticCSMPSO = GetStaticCSMPSO();
+
+        // Animated
+		Ref<GraphicsPipeline> animatedCSMPSO = GetAnimatedCSMPSO();
 
         auto dirLightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
         for (entt::entity e : dirLightView)
@@ -471,6 +356,66 @@ namespace ignite
             m_SceneGPUData.gamma = world.gamma;
             m_SceneGPUData.ambient = world.ambient;
             break;
+        }
+
+        // Collect point lights
+        {
+            PointLightBufferData pointLightData = {};
+            int pointLightCount = 0;
+
+            auto pointLightView = m_Scene->registry->view<TransformComponent, PointLightComponent>();
+            for (entt::entity e : pointLightView)
+            {
+                if (pointLightCount >= MAX_POINT_LIGHTS)
+                    break;
+
+                const TransformComponent &tr = pointLightView.get<TransformComponent>(e);
+                const PointLightComponent &light = pointLightView.get<PointLightComponent>(e);
+
+                if (!tr.visible || !light.enabled)
+                    continue;
+
+                PointLight_GPUData &gpu = pointLightData.lights[pointLightCount];
+                gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
+                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation, 0.0f);
+                ++pointLightCount;
+            }
+
+            m_SceneGPUData.numPointLights = pointLightCount;
+            m_PointLightBuffer->SetData(cmd, Buffer(&pointLightData, sizeof(pointLightData)));
+        }
+
+        // Collect spot lights
+        {
+            SpotLightBufferData spotLightData = {};
+            int spotLightCount = 0;
+
+            auto spotLightView = m_Scene->registry->view<TransformComponent, SpotLightComponent>();
+            for (entt::entity e : spotLightView)
+            {
+                if (spotLightCount >= MAX_SPOT_LIGHTS)
+                    break;
+
+                const TransformComponent &tr = spotLightView.get<TransformComponent>(e);
+                const SpotLightComponent &light = spotLightView.get<SpotLightComponent>(e);
+
+                if (!tr.visible || !light.enabled)
+                    continue;
+
+                const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+
+                SpotLight_GPUData &gpu = spotLightData.lights[spotLightCount];
+                gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
+                gpu.directionAndAngle = glm::vec4(forward, glm::cos(glm::radians(light.outerConeAngle)));
+                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation, 
+                    glm::cos(glm::radians(light.innerConeAngle)));
+                ++spotLightCount;
+            }
+
+            m_SceneGPUData.numSpotLights = spotLightCount;
+            m_SpotLightBuffer->SetData(cmd, Buffer(&spotLightData, sizeof(spotLightData)));
         }
 
         glm::vec3 sunDirection =
@@ -500,15 +445,11 @@ namespace ignite
             if (m_CascadedShadowMap->GetQuality() != quality)
             {
                 m_CascadedShadowMap->Resize(quality);
-                csmPipeline = m_CascadedShadowMap->GetPipeline();
-                csmState.pipeline = csmPipeline->GetHandle();
 
-                m_CSMBindingSetCache.clear();
-
-				Application::SubmitToMainThread([]()
-				{
-					SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment });
-				});
+                Application::SubmitToMainThread([]()
+                {
+                    SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment });
+                });
             }
 
             break;
@@ -517,19 +458,15 @@ namespace ignite
         m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
 
         // Share cascade data with the main scene pass (cascadeIndex is unused there)
-        CascadedShadowMapBufferData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
+        CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
         sceneCascadeData.cascadeIndex = -1;
         m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
 
-        // Pre-fetch the per-cascade GPU data buffer so the depth shader gets the correct
-        // cascadeIndex (and therefore the correct lightViewProjection column).
-        // m_CascadedShadowMapBuffer has cascadeIndex=-1 (sentinel for ColorPass);
-        // the depth shader needs the per-cascade buffer that has cascadeIndex=i.
         for (int i = 0; i < NUM_CASCADES; ++i)
         {
-			IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
+            IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
 
-            CascadedShadowMapBufferData cascadeGpuData = sceneCascadeData;
+            CSM_GPUData cascadeGpuData = sceneCascadeData;
             cascadeGpuData.cascadeIndex = i;
             m_CSMPerCascadeBuffers[i]->SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
 
@@ -539,113 +476,71 @@ namespace ignite
             nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i);
             nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
 
-            csmState.framebuffer = csmFramebuffer;
-            csmState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
-
             Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
 
+			nvrhi::GraphicsState staticState = nvrhi::GraphicsState();
+            staticState.framebuffer = csmFramebuffer;
+            staticState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+			staticState.pipeline = staticCSMPSO->GetHandle();
+
+            // Static Mesh
+			{
+				IGN_PROFILE_SCOPE("SceneRenderer::StaticMesh");
+				auto skelMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+				for (entt::entity e : skelMeshView)
+				{
+					TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+					if (!tr.visible)
+						continue;
+
+					StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
+					if (smc.handle == AssetHandle(0))
+						continue;
+
+					auto sm = ResolveAsset<StaticMesh>(smc.handle);
+					if (!sm)
+						continue;
+
+					// Perform cascade frustum culling
+					if (!cascadeFrustum.IsAABBVisible(sm->GetWorldAABB()))
+						continue;
+
+					const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+					DrawMeshShadow(cmd, sm, tr.world.GetMatrix(), smc.normalMatrix, objectID, std::vector<glm::mat4>(), 
+                        smc.cachedInstanceTransforms, staticState, m_CSMPerCascadeBuffers[i]);
+				}
+			}
+
+			nvrhi::GraphicsState animatedState = nvrhi::GraphicsState();
+            animatedState.framebuffer = csmFramebuffer;
+            animatedState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+            animatedState.pipeline = animatedCSMPSO->GetHandle();
+
+            // Skeletal Mesh
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::MeshesShadow");
-                auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
+                auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
                 for (entt::entity e : skelMeshView)
                 {
                     TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
                     if (!tr.visible)
                         continue;
 
-                    MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
+                    SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
                     if (smc.handle == AssetHandle(0))
                         continue;
 
-                    Ref<Mesh> sm = ResolveAsset<Mesh>(smc.handle);
+                    auto sm = ResolveAsset<SkeletalMesh>(smc.handle);
                     if (!sm)
                         continue;
 
                     // Perform cascade frustum culling
-                    AABB worldAABB = sm->aabb.Transform(tr.world.GetMatrix());
-                    if (!cascadeFrustum.IsAABBVisible(worldAABB.min, worldAABB.max))
+                    if (!cascadeFrustum.IsAABBVisible(sm->GetWorldAABB()))
                         continue;
 
-                    // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
-                    const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-                    glm::mat4 bones[MAX_BONES];
-                    if (!boneTransforms.empty())
-                    {
-                        const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-                        if (boneCount > 0)
-                        {
-                            std::memcpy(bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
-                        }
-                        if (boneCount < MAX_BONES)
-                        {
-                            std::memcpy(&bones[boneCount], &s_IdentitySkeleton[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
-                        }
-                    }
-
-                    const auto &instances = sm->GetMeshInstances();
-                    for (size_t idx = 0; idx < instances.size(); ++idx)
-                    {
-                        auto &meshInstance = instances[idx];
-                        // Write vertex/index buffer
-                        auto &primitive = meshInstance->GetPrimitive();
-                        const bool buffersCreated = primitive->vertexBuffer && primitive->indexBuffer;
-                        if (!buffersCreated)
-                        {
-                            primitive->WriteBuffer(cmd);
-                        }
-                        if (!buffersCreated)
-                        {
-                            continue;
-                        }
-
-                        if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i]))
-                            continue;
-
-                        SkinnedMeshBufferData gpuData;
-                        if (idx < smc.cachedInstanceTransforms.size())
-                        {
-                            gpuData = smc.cachedInstanceTransforms[idx];
-                        }
-                        else
-                        {
-                            // For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
-                            glm::mat4 meshTransform = meshInstance->global;
-                            if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
-                            {
-                                const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
-                                if (ji < boneTransforms.size())
-                                {
-                                    meshTransform = boneTransforms[ji] * meshTransform;
-                                }
-                            }
-
-                            gpuData.transformation = tr.world.GetMatrix() * meshTransform;
-                            gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                            gpuData.normal = smc.normalMatrix;
-                        }
-
-                        meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
-                        meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
-
-                        nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
-
-                        if (meshBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
-                        {
-							IGN_PROFILE_SCOPE("Draw Shadow");
-
-                            csmState.bindings = { meshBindingSet };
-                            csmState.vertexBuffers.resize(0);
-                            csmState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-                            csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-
-                            cmd->setGraphicsState(csmState);
-
-                            nvrhi::DrawArguments args;
-                            args.setVertexCount(primitive->indexBuffer->GetCount());
-                            args.instanceCount = 1;
-                            cmd->drawIndexed(args);
-                        }
-                    }
+                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                    DrawMeshShadow(cmd, sm, tr.world.GetMatrix(), smc.normalMatrix, objectID, smc.finalBoneTransforms, smc.cachedInstanceTransforms,
+                        animatedState, m_CSMPerCascadeBuffers[i]);
 
                     // --- SOCKET SYSTEM: Render attached meshes for Shadows ---
                     if (sm && sm->GetSkeletonHandle() != AssetHandle(0))
@@ -658,54 +553,24 @@ namespace ignite
                                 if (attachedMeshHandle == AssetHandle(0))
                                     continue;
 
-                                Ref<Mesh> attachedMesh = ResolveAsset<Mesh>(attachedMeshHandle);
-                                if (!attachedMesh)
+                                auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
+                                if (!attachedMeshAsset)
                                     continue;
 
                                 glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
                                 glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
 
-                                const auto &attInstances = attachedMesh->GetMeshInstances();
-                                for (size_t idx = 0; idx < attInstances.size(); ++idx)
+                                if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
                                 {
-                                    auto &meshInstance = attInstances[idx];
-                                    auto &primitive = meshInstance->GetPrimitive();
-                                    const bool buffersCreated = primitive->vertexBuffer && primitive->indexBuffer;
-                                    if (!buffersCreated)
-                                    {
-                                        primitive->WriteBuffer(cmd);
-                                    }
-                                    if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                                    {
-                                        continue;
-                                    }
-
-                                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i]))
-                                        continue;
-
-                                    SkinnedMeshBufferData gpuData;
-                                    gpuData.transformation = socketWorld * meshInstance->global;
-                                    gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                                    gpuData.normal = normalMatrix;
-
-                                    meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
-                                    meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
-
-                                    nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
-                                    if (meshBindingSet)
-                                    {
-                                        csmState.bindings = { meshBindingSet };
-                                        csmState.vertexBuffers.resize(0);
-                                        csmState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-                                        csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-
-                                        cmd->setGraphicsState(csmState);
-
-                                        nvrhi::DrawArguments args;
-                                        args.setVertexCount(primitive->indexBuffer->GetCount());
-                                        args.instanceCount = 1;
-                                        cmd->drawIndexed(args);
-                                    }
+                                    auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
+                                    DrawMeshShadow(cmd, attachedMesh, socketWorld, normalMatrix, objectID, 
+                                        smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, m_CSMPerCascadeBuffers[i]);
+                                }
+                                else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
+                                {
+                                    auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
+                                    DrawMeshShadow(cmd, attachedMesh, socketWorld, normalMatrix, objectID, 
+                                        std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, m_CSMPerCascadeBuffers[i]);
                                 }
                             }
                         }
@@ -719,161 +584,64 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        Frustum frustum(camera->GetProjection() * camera->GetView());
+        Frustum frustum(camera);
 
         std::unordered_set<Material *> uploadedMaterialsThisPass;
-        Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
-        Ref<GraphicsPipeline> transparentPSO = GetTransparentGeomPipelineForFB(framebuffer, m_FillMode);
+        
+        // Static
+		auto staticPSO = GetStaticPSO(framebuffer, m_FillMode);
+		auto staticTransparentPSO = GetStaticTransparentPSO(framebuffer, m_FillMode);
 
-        nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
-        geomGState.pipeline = geomPSO->GetHandle();
-        geomGState.framebuffer = framebuffer;
-        geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+        // Animated
+        auto animatedPSO = GetAnimatedPSO(framebuffer, m_FillMode);
+        auto animatedTransparentPSO = GetAnimatedTransparentPSO(framebuffer, m_FillMode);
 
-        // Deferred draw call info for transparent meshes (sorted back-to-front)
-        struct TransparentDrawCall
-        {
-            nvrhi::BindingSetHandle meshBindingSet;
-            nvrhi::BindingSetHandle materialBindingSet;
-            nvrhi::BufferHandle vertexBuffer;
-            nvrhi::BufferHandle indexBuffer;
-            uint32_t indexCount;
-            float distanceToCamera;
-        };
         std::vector<TransparentDrawCall> transparentDrawCalls;
 
+        // Static Meshes
         {
-            IGN_PROFILE_SCOPE("SceneRenderer::Meshes");
-            auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
-            for (entt::entity e : skelMeshView)
+            auto staticMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+            for (entt::entity e : staticMeshView)
             {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                if (!tr.visible)
+                const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, StaticMeshComponent>(e);
+                if (!tr.visible || smc.handle == AssetHandle(0))
                     continue;
 
-                MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
-                if (smc.handle == AssetHandle(0))
-                    continue;
-
-                Ref<Mesh> mesh = ResolveAsset<Mesh>(smc.handle);
+                auto mesh = ResolveAsset<StaticMesh>(smc.handle);
                 if (!mesh)
                     continue;
 
-                // Perform Frustum Culling
-                AABB worldAABB = mesh->aabb.Transform(tr.world.GetMatrix());
-                if (!frustum.IsAABBVisible(worldAABB.min, worldAABB.max))
+                if (!frustum.IsAABBVisible(mesh->GetWorldAABB()))
                     continue;
-                const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-                glm::mat4 bones[MAX_BONES];
-				if (!boneTransforms.empty())
-				{
-					const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-					if (boneCount > 0)
-					{
-						std::memcpy(bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
-					}
-					if (boneCount < MAX_BONES)
-					{
-						std::memcpy(&bones[boneCount], &s_IdentitySkeleton[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
-					}
-				}
 
-                const auto &instances = mesh->GetMeshInstances();
-                for (size_t idx = 0; idx < instances.size(); ++idx)
-                {
-                    auto &meshInstance = instances[idx];
+                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                DrawMesh(cmd, framebuffer, mesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, 
+                    smc.overrideMaterials, std::vector<glm::mat4>(), smc.cachedInstanceTransforms, 
+                    camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass);
+            }
+        }
 
-                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
-                        continue;
+        // Skeletal Meshes
+        {
+            IGN_PROFILE_SCOPE("SceneRenderer::Meshes");
+            auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+            for (entt::entity e : skelMeshView)
+            {
+                const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, SkeletalMeshComponent>(e);
+                if (!tr.visible || smc.handle == AssetHandle(0))
+                    continue;
 
-                    SkinnedMeshBufferData gpuData;
-                    if (idx < smc.cachedInstanceTransforms.size())
-                    {
-                        gpuData = smc.cachedInstanceTransforms[idx];
-                    }
-                    else
-                    {
-                        // For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
-                        glm::mat4 meshTransform = meshInstance->global;
-                        if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
-                        {
-                            const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
-                            if (ji < boneTransforms.size())
-                            {
-                                meshTransform = boneTransforms[ji] * meshTransform;
-                            }
-                        }
-                        gpuData.transformation = tr.world.GetMatrix() * meshTransform;
-                        gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                        gpuData.normal = smc.normalMatrix;
-                    }
+                auto mesh = ResolveAsset<SkeletalMesh>(smc.handle);
+                if (!mesh)
+                    continue;
 
-                    meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
-                    meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
+                if (!frustum.IsAABBVisible(mesh->GetWorldAABB()))
+                    continue;
 
-                    auto &primitive = meshInstance->GetPrimitive();
-                    if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                    {
-                        primitive->WriteBuffer(cmd);
-                    }
-
-                    Ref<Material> material = nullptr;
-                    auto overrideIt = smc.overrideMaterials.find(static_cast<int>(idx));
-
-                    if (overrideIt != smc.overrideMaterials.end() && overrideIt->second != AssetHandle(0))
-                        material = ResolveAsset<Material>(overrideIt->second);
-                    if (!material)
-                        material = ResolveAsset<Material>(meshInstance->GetMaterialHandle());
-
-                    if (!material)
-                        continue;
-
-                    if (!material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
-                        continue;
-
-					const nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
-                    const nvrhi::BindingSetHandle materialBindingSet = material ? material->GetBindingSet() : nullptr;
-
-                    if (meshBindingSet && materialBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
-                    {
-						if (uploadedMaterialsThisPass.insert(material.get()).second)
-						{
-							material->UploadToGpu(cmd);
-						}
-
-                        // Transparent materials are deferred to the transparent sub-pass
-                        if (material->GetType() == MaterialType::Transparent)
-                        {
-                            TransparentDrawCall dc;
-                            dc.meshBindingSet = meshBindingSet;
-                            dc.materialBindingSet = materialBindingSet;
-                            dc.vertexBuffer = primitive->vertexBuffer->GetHandle();
-                            dc.indexBuffer = primitive->indexBuffer->GetHandle();
-                            dc.indexCount = primitive->indexBuffer->GetCount();
-
-                            // Compute distance from camera for back-to-front sorting
-                            glm::vec3 meshWorldPos = glm::vec3(gpuData.transformation[3]);
-                            dc.distanceToCamera = glm::length(camera->position - meshWorldPos);
-                            transparentDrawCalls.push_back(dc);
-                        }
-                        else
-                        {
-                            // Opaque: draw immediately
-                            geomGState.bindings = { meshBindingSet, materialBindingSet };
-                            geomGState.vertexBuffers.resize(0);
-                            geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-                            geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-
-                            cmd->setGraphicsState(geomGState);
-
-                            nvrhi::DrawArguments args;
-                            args.setVertexCount(primitive->indexBuffer->GetCount());
-                            args.instanceCount = 1;
-
-                            cmd->drawIndexed(args);
-                        }
-                    }
-                }
+                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                DrawMesh(cmd, framebuffer, mesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, 
+                    smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms, 
+                    camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass);
 
                 // --- SOCKET SYSTEM: Render attached meshes ---
                 if (mesh && mesh->GetSkeletonHandle() != AssetHandle(0))
@@ -886,80 +654,26 @@ namespace ignite
                             if (attachedMeshHandle == AssetHandle(0))
                                 continue;
 
-                            Ref<Mesh> attachedMesh = ResolveAsset<Mesh>(attachedMeshHandle);
-                            if (!attachedMesh)
+                            auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
+                            if (!attachedMeshAsset)
                                 continue;
 
                             glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
                             glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
 
-                            const auto &attInstances = attachedMesh->GetMeshInstances();
-                            for (size_t idx = 0; idx < attInstances.size(); ++idx)
+                            if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
                             {
-                                auto &meshInstance = attInstances[idx];
-                                auto &primitive = meshInstance->GetPrimitive();
-                                const bool buffersCreated = primitive->vertexBuffer && primitive->indexBuffer;
-                                if (!buffersCreated)
-                                    primitive->WriteBuffer(cmd);
-
-                                if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                                    continue;
-
-								if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
-									continue;
-
-                                SkinnedMeshBufferData gpuData;
-                                gpuData.transformation = socketWorld * meshInstance->global;
-                                gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                                gpuData.normal = normalMatrix;
-
-                                meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
-								meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
-
-                                Ref<Material> material = ResolveAsset<Material>(meshInstance->GetMaterialHandle());
-                                if (!material)
-                                    continue;
-
-                                if (!material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
-                                    continue;
-
-                                const nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
-                                const nvrhi::BindingSetHandle materialBindingSet = material->GetBindingSet();
-
-                                if (meshBindingSet && materialBindingSet)
-                                {
-                                    if (uploadedMaterialsThisPass.insert(material.get()).second)
-                                    {
-                                        material->UploadToGpu(cmd);
-                                    }
-
-                                    if (material->GetType() == MaterialType::Transparent)
-                                    {
-                                        TransparentDrawCall dc;
-                                        dc.meshBindingSet = meshBindingSet;
-                                        dc.materialBindingSet = materialBindingSet;
-                                        dc.vertexBuffer = primitive->vertexBuffer->GetHandle();
-                                        dc.indexBuffer = primitive->indexBuffer->GetHandle();
-                                        dc.indexCount = primitive->indexBuffer->GetCount();
-                                        dc.distanceToCamera = glm::length(camera->position - glm::vec3(gpuData.transformation[3]));
-                                        transparentDrawCalls.push_back(dc);
-                                    }
-                                    else
-                                    {
-                                        geomGState.bindings = { meshBindingSet, materialBindingSet };
-                                        geomGState.vertexBuffers.resize(0);
-                                        geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-                                        geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-
-                                        cmd->setGraphicsState(geomGState);
-
-                                        nvrhi::DrawArguments args;
-                                        args.setVertexCount(primitive->indexBuffer->GetCount());
-                                        args.instanceCount = 1;
-
-                                        cmd->drawIndexed(args);
-                                    }
-                                }
+                                auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
+                                DrawMesh(cmd, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID, 
+                                    std::unordered_map<int, AssetHandle>(), smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), 
+                                    camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass);
+                            }
+                            else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
+                            {
+                                auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
+                                DrawMesh(cmd, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID, 
+                                    std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), 
+                                    camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass);
                             }
                         }
                     }
@@ -973,19 +687,17 @@ namespace ignite
             IGN_PROFILE_SCOPE("SceneRenderer::TransparentMeshes");
 
             // Sort back-to-front (farthest first)
-            std::sort(transparentDrawCalls.begin(), transparentDrawCalls.end(),
-            [](const TransparentDrawCall &a, const TransparentDrawCall &b)
-            {
-                return a.distanceToCamera > b.distanceToCamera;
-            });
+            std::ranges::sort(transparentDrawCalls, [](const TransparentDrawCall &a, const TransparentDrawCall &b) { return a.distanceToCamera > b.distanceToCamera; });
 
             nvrhi::GraphicsState transparentGState = nvrhi::GraphicsState();
-            transparentGState.pipeline = transparentPSO->GetHandle();
             transparentGState.framebuffer = framebuffer;
             transparentGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
             for (const auto &dc : transparentDrawCalls)
             {
+                auto &pipeline = dc.isSkeletal ? animatedTransparentPSO : staticTransparentPSO;
+                transparentGState.pipeline = pipeline->GetHandle();
+
                 transparentGState.bindings = { dc.meshBindingSet, dc.materialBindingSet };
                 transparentGState.vertexBuffers.resize(0);
                 transparentGState.vertexBuffers.push_back({ dc.vertexBuffer, 0, 0 });
@@ -1010,12 +722,9 @@ namespace ignite
                 auto pointLight2DView = m_Scene->registry->view<TransformComponent, PointLight2DComponent>();
                 for (entt::entity e : pointLight2DView)
                 {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                    if (!tr.visible)
-                        continue;
+                    const auto &[tr, light] = m_Scene->registry->get<TransformComponent, PointLight2DComponent>(e);
 
-                    PointLight2DComponent &light = m_Scene->registry->get<PointLight2DComponent>(e);
-                    if (!light.enabled)
+                    if (!tr.visible || !light.enabled)
                         continue;
 
                     PointLight2D_GPUData gpuLight;
@@ -1035,16 +744,13 @@ namespace ignite
                 auto circle2DView = m_Scene->registry->view<TransformComponent, Circle2DComponent>();
                 for (entt::entity e : circle2DView)
                 {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                    const auto &[tr, circle] = m_Scene->registry->get<TransformComponent, Circle2DComponent>(e);
+                    
                     if (!tr.visible)
                         continue;
 
-                    if (m_Scene->registry->all_of<Circle2DComponent>(e))
-                    {
-                        Circle2DComponent &circle = m_Scene->registry->get<Circle2DComponent>(e);
-                        const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                        m_Renderer2D->DrawCircle(tr.world.GetMatrix(), circle.color, circle.thickness, circle.fade, objectID);
-                    }
+					const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+					m_Renderer2D->DrawCircle(tr.world.GetMatrix(), circle.color, circle.thickness, circle.fade, objectID);
                 }
             }
             {
@@ -1053,11 +759,11 @@ namespace ignite
                 auto quad2DView = m_Scene->registry->view<TransformComponent, Sprite2DComponent>();
                 for (entt::entity e : quad2DView)
                 {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                    const auto &[tr, sprite] = m_Scene->registry->get<TransformComponent, Sprite2DComponent>(e);
+                    
                     if (!tr.visible)
                         continue;
 
-                    Sprite2DComponent &sprite = m_Scene->registry->get<Sprite2DComponent>(e);
                     const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
                     // Copy UV
@@ -1101,17 +807,13 @@ namespace ignite
                 auto textView = m_Scene->registry->view<TransformComponent, TextComponent>();
                 for (entt::entity e : textView)
                 {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                    if (!tr.visible)
+                    const auto &[tr, text] = m_Scene->registry->get<TransformComponent, TextComponent>(e);
+                    if (!tr.visible || text.fontHandle == AssetHandle(0) || text.text.empty())
                         continue;
 
                     const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
-                    TextComponent &text = m_Scene->registry->get<TextComponent>(e);
-                    if (text.fontHandle == AssetHandle(0) || text.text.empty())
-                        continue;
-
-                    Ref<Font> font = m_Scene->GetProject()->GetAsset<Font>(text.fontHandle);
+                    auto font = ResolveAsset<Font>(text.fontHandle);
                     if (!font)
                         continue;
 
@@ -1122,14 +824,13 @@ namespace ignite
                     glm::vec4 textColor = text.color;
                     if (text.material2dHandle != AssetHandle(0))
                     {
-                        if (Ref<Material2D> material = m_Scene->GetProject()->GetAsset<Material2D>(text.material2dHandle))
+                        if (auto material2d = ResolveAsset<Material2D>(text.material2dHandle))
                         {
-                            textColor = text.color + material->data.baseColor;
+                            textColor = text.color + material2d->data.baseColor;
                         }
                     }
 
-                    m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(),
-                        text.kerning, text.lineSpacing, objectID);
+                    m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(), text.kerning, text.lineSpacing, objectID);
                 }
             }
 
@@ -1143,9 +844,6 @@ namespace ignite
     void SceneRenderer::UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
         IGN_PROFILE_FUNCTION();
-
-        if (!m_WidgetRenderer || !m_Scene || !m_Scene->registry || !framebuffer)
-            return;
 
         // Set root widget
         auto rootWidget = m_Scene->GetRootWidget();
@@ -1191,7 +889,15 @@ namespace ignite
         // m_WidgetRenderer->Render(cmd, framebuffer);
     }
 
-    void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
+	void SceneRenderer::DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
+	{
+		const auto is2D = camera->projectionType == ProjectionType::Orthographic;
+		DrawDebugGrid(cmd, framebuffer, is2D ? sceneRenderSettings.worldGrid2D : sceneRenderSettings.worldGrid3D, is2D);
+        DrawDebug2D(cmd, framebuffer);
+        DrawDebug3D(cmd, framebuffer);
+	}
+
+	void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
     {
         m_EditorWidgetMouseX = mouseX;
         m_EditorWidgetMouseY = mouseY;
@@ -1216,7 +922,7 @@ namespace ignite
             return;
         }
 
-        Ref<GraphicsPipeline> gridPipeline = GetDebugGridPipelineForFB(framebuffer);
+        Ref<GraphicsPipeline> gridPipeline = GetDebugGridPSO(framebuffer);
         nvrhi::BindingSetHandle bindingSet = GetOrCreateDebugGridBindingSet(gridPipeline->GetBindingLayout(0), m_CameraBuffer, m_DebugGridBuffer);
 
         DebugGrid_GPUData gpuData;
@@ -1225,15 +931,8 @@ namespace ignite
         gpuData.xAxisColor = style.xAxisColor;
         gpuData.yAxisColor = style.yAxisColor;
         gpuData.zAxisColor = style.zAxisColor;
-        gpuData.settings0 = glm::vec4(
-            glm::max(style.cellSize, 0.0001f),
-            glm::max(style.minPixelsBetweenCells, 0.1f),
-            glm::max(style.gridSize, 1.0f),
-            glm::max(style.majorLineScale, 1.0f));
-        gpuData.settings1 = glm::vec4(is2D ? 1.0f : 0.0f,
-            style.enableXAxis ? 1.0f : 0.0f,
-            style.enableYAxis ? 1.0f : 0.0f,
-            style.enableZAxis ? 1.0f : 0.0f);
+        gpuData.settings0 = glm::vec4(glm::max(style.cellSize, 0.0001f), glm::max(style.minPixelsBetweenCells, 0.1f), glm::max(style.gridSize, 1.0f), glm::max(style.majorLineScale, 1.0f));
+        gpuData.settings1 = glm::vec4(is2D ? 1.0f : 0.0f, style.enableXAxis ? 1.0f : 0.0f, style.enableYAxis ? 1.0f : 0.0f, style.enableZAxis ? 1.0f : 0.0f);
 
         m_DebugGridBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
@@ -1267,11 +966,11 @@ namespace ignite
             auto boxCollider2DView = m_Scene->registry->view<TransformComponent, BoxCollider2DComponent>();
             for (entt::entity e : boxCollider2DView)
             {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                const auto &[tr, box] = m_Scene->registry->get<TransformComponent, BoxCollider2DComponent>(e);
+                
                 if (!tr.visible)
                     continue;
 
-                const BoxCollider2DComponent &box = m_Scene->registry->get<BoxCollider2DComponent>(e);
                 const glm::mat4 world = tr.world.GetMatrix();
 
                 const glm::vec2 halfExtents = box.size;
@@ -1291,11 +990,11 @@ namespace ignite
             auto circleCollider2DView = m_Scene->registry->view<TransformComponent, CircleCollider2DComponent>();
             for (entt::entity e : circleCollider2DView)
             {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                const auto &[tr, circle] = m_Scene->registry->get<TransformComponent, CircleCollider2DComponent>(e);
+                
                 if (!tr.visible)
                     continue;
 
-                const CircleCollider2DComponent &circle = m_Scene->registry->get<CircleCollider2DComponent>(e);
                 const glm::mat4 world = tr.world.GetMatrix();
                 const glm::vec3 centerWorld = glm::vec3(world * glm::vec4(circle.center, 0.0f, 1.0f));
 
@@ -1329,7 +1028,7 @@ namespace ignite
         constexpr float kTwoPi = 6.28318530718f;
         constexpr float kPi = 3.14159265359f;
 
-        auto drawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+        static auto drawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
         {
             for (int i = 0; i < segments; ++i)
             {
@@ -1342,7 +1041,7 @@ namespace ignite
             }
         };
 
-        auto drawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+        static auto drawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
         {
             for (int i = 0; i < segments; ++i)
             {
@@ -1357,15 +1056,34 @@ namespace ignite
 
         if (sceneRenderSettings.showBoundingBox)
         {
-            auto aabbView = m_Scene->registry->view<TransformComponent, MeshComponent>();
-            for (entt::entity e : aabbView)
+			auto staticAabbView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+			for (entt::entity e : staticAabbView)
+			{
+				const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, StaticMeshComponent>(e);
+				
+                if (!tr.visible)
+					continue;
+
+				auto sm = ResolveAsset<StaticMesh>(smc.handle);
+				if (!sm)
+                    continue;
+
+				m_Renderer2D->DrawAABB(sm->GetWorldAABB());
+			}
+
+            auto skeletalAabbView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+            for (entt::entity e : skeletalAabbView)
             {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, SkeletalMeshComponent>(e);
+                
                 if (!tr.visible)
                     continue;
 
-                auto &mc = m_Scene->registry->get<MeshComponent>(e);
-                m_Renderer2D->DrawAABB(mc.worldAABB);
+				auto sm = ResolveAsset<SkeletalMesh>(smc.handle);
+				if (!sm)
+					continue;
+
+				m_Renderer2D->DrawAABB(sm->GetWorldAABB());
             }
         }
 
@@ -1374,11 +1092,11 @@ namespace ignite
             auto boxCollider = m_Scene->registry->view<TransformComponent, BoxColliderComponent>();
             for (entt::entity e : boxCollider)
             {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                const auto &[tr, box] = m_Scene->registry->get<TransformComponent, BoxColliderComponent>(e);
+                
                 if (!tr.visible)
                     continue;
 
-                const auto &box = m_Scene->registry->get<BoxColliderComponent>(e);
                 const glm::mat4 world = tr.world.GetMatrix();
 
                 const glm::vec3 c = box.center;
@@ -1411,11 +1129,11 @@ namespace ignite
             auto sphereCollider = m_Scene->registry->view<TransformComponent, SphereColliderComponent>();
             for (entt::entity e : sphereCollider)
             {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                const auto &[tr, sphere] = m_Scene->registry->get<TransformComponent, SphereColliderComponent>(e);
+                
                 if (!tr.visible)
                     continue;
 
-                const auto &sphere = m_Scene->registry->get<SphereColliderComponent>(e);
                 const glm::mat4 world = tr.world.GetMatrix();
 
                 const float maxAxis = glm::compMax(tr.world.scale);
@@ -1435,11 +1153,11 @@ namespace ignite
             auto capsuleCollider = m_Scene->registry->view<TransformComponent, CapsuleColliderComponent>();
             for (entt::entity e : capsuleCollider)
             {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                const auto &[tr, capsule] = m_Scene->registry->get<TransformComponent, CapsuleColliderComponent>(e);
+
                 if (!tr.visible)
                     continue;
 
-                const auto &capsule = m_Scene->registry->get<CapsuleColliderComponent>(e);
                 const glm::mat4 world = tr.world.GetMatrix();
                 const float maxAxis = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
                 const float scaledRadius = capsule.radius * maxAxis;
@@ -1472,12 +1190,9 @@ namespace ignite
             auto meshCollider = m_Scene->registry->view<TransformComponent, MeshColliderComponent>();
             for (entt::entity e : meshCollider)
             {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                if (!tr.visible)
-                    continue;
+                const auto &[tr, mesh] = m_Scene->registry->get<TransformComponent, MeshColliderComponent>(e);
 
-                const auto &mesh = m_Scene->registry->get<MeshColliderComponent>(e);
-                if (mesh.vertices.empty())
+                if (!tr.visible || mesh.vertices.empty())
                     continue;
 
                 const glm::mat4 world = tr.world.GetMatrix();
@@ -1540,7 +1255,6 @@ namespace ignite
             postProcessData.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
             postProcessData.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
             postProcessData.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
-
             postProcessData.vignetteParams = glm::vec4(
                 postProcessing.vignetteRadius,
                 glm::max(postProcessing.vignetteSoftness, 0.001f),
@@ -1550,11 +1264,8 @@ namespace ignite
             postProcessData.chromAbParams.x = postProcessing.chromAbRadial;
             postProcessData.chromAbParams.y = (postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
             postProcessData.chromAbParams.z = postProcessing.aoIntensity;
-            
             postProcessData.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
-
             postProcessData.projectionInv = glm::inverse(camera->GetProjection());
-
             postProcessData.enableDOF = lens.enabledDOF ? 1 : 0;
             postProcessData.focalLength = lens.focalLength;
             postProcessData.focalDistance = lens.focalDistance;
@@ -1585,7 +1296,7 @@ namespace ignite
         m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
         cmd->setBufferState(m_CompositePostProcessBuffer->GetHandle(), nvrhi::ResourceStates::ConstantBuffer);
 
-        Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
+        Ref<GraphicsPipeline> compositePipeline = GetCompositePSO(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
         nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), target, 
             edgeTexture, bloomTexture, ssaoTexture, m_CompositePostProcessBuffer, m_CompositeSampler.Get());
 
@@ -1615,18 +1326,21 @@ namespace ignite
         return m_CascadedShadowMap;
     }
 
-	Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
-	{
-		return (m_WorldEnvironment && m_WorldEnvironment->environment) 
+    Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
+    {
+        return (m_WorldEnvironment && m_WorldEnvironment->environment) 
             ? m_WorldEnvironment->environment->GetHDRTexture() : nullptr;
-	}
+    }
 
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode)
     {
         m_FillMode = mode;
 
         // Recreate pipelines
-        m_GeometryPSOCache.clear();
+        m_AnimatedPSOCache.clear();
+        m_StaticPSOCache.clear();
+		m_TransparentAnimatedPSOCache.clear();
+		m_TransparentStaticPSOCache.clear();
         m_EnvironmentPSOCache.clear();
         m_CompositePSOCache.clear();
         m_DebugGridPSOCache.clear();
@@ -1665,382 +1379,633 @@ namespace ignite
         m_SelectedEntities.clear();
     }
 
-	// Helper to build a debug-grid pipeline per framebuffer (once)
-	Ref<GraphicsPipeline> SceneRenderer::GetDebugGridPipelineForFB(nvrhi::IFramebuffer *framebuffer)
+    // Helper to build a debug-grid pipeline per framebuffer (once)
+    Ref<GraphicsPipeline> SceneRenderer::GetDebugGridPSO(nvrhi::IFramebuffer *framebuffer)
+    {
+        auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
+        auto it = m_DebugGridPSOCache.find(key);
+        if (it != m_DebugGridPSOCache.end())
+        {
+            return it->second;
+        }
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+        GraphicsPipelineParams params;
+        params.enableBlend = true;
+        params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+        params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+        params.srcBlendAlpha = nvrhi::BlendFactor::One;
+        params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = hasDepthAttachment;
+        params.enableDepthStencil = false;
+        params.fillMode = nvrhi::RasterFillMode::Solid;
+        params.cullMode = nvrhi::RasterCullMode::None;
+        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+        nvrhi::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setRegisterSpace(0);
+        bindingLayoutDesc.setRegisterSpaceIsDescriptorSet(true);
+        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1));
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/infinite_grid.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/infinite_grid.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+
+        auto gp = GraphicsPipeline::Create();
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .Build(framebuffer, params);
+
+        m_DebugGridPSOCache.clear();
+        m_DebugGridPSOCache.emplace(key, gp);
+        return gp;
+    }
+
+    nvrhi::BindingSetHandle SceneRenderer::GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &gridBuffer)
+    {
+        DebugGridBindingKey key{ bindingLayout, gridBuffer ? gridBuffer->GetHandle() : nullptr };
+        auto it = m_DebugGridBindingSetCache.find(key);
+        if (it != m_DebugGridBindingSetCache.end())
+        {
+            return it->second;
+        }
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto bindingSetDesc = nvrhi::BindingSetDesc();
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, gridBuffer->GetHandle()));
+
+        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+        LOG_ASSERT(bindingSet, "[Debug Grid] Failed to create binding set");
+        if (bindingSet)
+        {
+            m_DebugGridBindingSetCache.emplace(key, bindingSet);
+        }
+
+        return bindingSet;
+    }
+
+    Ref<GraphicsPipeline> SceneRenderer::GetOrCreateMeshPSO(
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
+        nvrhi::IFramebuffer *framebuffer,
+        nvrhi::RasterFillMode fillMode,
+        const char *vertexShaderPath,
+        const char *pixelShaderPath,
+        EBindingLayout meshLayout,
+        bool transparent)
+    {
+        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto it = cache.find(key);
+        if (it != cache.end())
+        {
+            return it->second;
+        }
+
+        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+        GraphicsPipelineParams params;
+        params.enableBlend = true;
+        params.enableDepthTest = hasDepthAttachment;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+        if (transparent)
+        {
+            params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+            params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+            params.srcBlendAlpha = nvrhi::BlendFactor::One;
+            params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+            params.enableDepthWrite = false;
+            params.cullMode = nvrhi::RasterCullMode::None;
+        }
+        else
+        {
+            params.enableDepthWrite = hasDepthAttachment;
+            params.cullMode = nvrhi::RasterCullMode::Front;
+        }
+
+        Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, true);
+
+        auto gp = GraphicsPipeline::Create();
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
+            .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
+            .Build(framebuffer, params);
+
+        cache.clear();
+        cache.emplace(key, gp);
+        return gp;
+    }
+
+	Ref<GraphicsPipeline> SceneRenderer::GetOrCreateCMSPSO(
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
+        nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath, const char *pixelShaderPath, 
+        EBindingLayout meshLayout)
 	{
 		auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
-		auto it = m_DebugGridPSOCache.find(key);
-		if (it != m_DebugGridPSOCache.end())
+		auto it = cache.find(key);
+		if (it != cache.end())
 		{
 			return it->second;
 		}
-
-		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
 
 		GraphicsPipelineParams params;
-		params.enableBlend = true;
-		params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
-		params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
-		params.srcBlendAlpha = nvrhi::BlendFactor::One;
-		params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
-		params.enableDepthWrite = false;
-		params.enableDepthTest = hasDepthAttachment;
-		params.enableDepthStencil = false;
+		params.enableDepthWrite = true;
+		params.enableDepthTest = true;
+		params.depthFunc = nvrhi::ComparisonFunc::Less;
+		params.cullMode = nvrhi::RasterCullMode::Front;
 		params.fillMode = nvrhi::RasterFillMode::Solid;
-		params.cullMode = nvrhi::RasterCullMode::None;
-		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-		nvrhi::BindingLayoutDesc bindingLayoutDesc;
-		bindingLayoutDesc.setRegisterSpace(0);
-		bindingLayoutDesc.setRegisterSpaceIsDescriptorSet(true);
-		bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
-		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
-		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1));
-		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+		Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
+		Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
 
-		Ref<Shader> vertexShader = Shader::Create("resources/shaders/infinite_grid.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-		Ref<Shader> pixelShader = Shader::Create("resources/shaders/infinite_grid.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
-
-		auto gp = GraphicsPipeline::Create();
-		gp->SetShaders({ vertexShader, pixelShader })
-			.AddBindingLayout(bindingLayout)
+		Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create();
+		pipeline->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
 			.Build(framebuffer, params);
 
-		m_DebugGridPSOCache.clear();
-		m_DebugGridPSOCache.emplace(key, gp);
-		return gp;
-	}
-
-
-	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &gridBuffer)
-	{
-		DebugGridBindingKey key{ bindingLayout, gridBuffer ? gridBuffer->GetHandle() : nullptr };
-		auto it = m_DebugGridBindingSetCache.find(key);
-		if (it != m_DebugGridBindingSetCache.end())
-		{
-			return it->second;
-		}
-
-		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-		auto bindingSetDesc = nvrhi::BindingSetDesc();
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, gridBuffer->GetHandle()));
-
-		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-		LOG_ASSERT(bindingSet, "[Debug Grid] Failed to create binding set");
-		if (bindingSet)
-		{
-			m_DebugGridBindingSetCache.emplace(key, bindingSet);
-		}
-
-		return bindingSet;
+		cache.clear();
+		cache.emplace(key, pipeline);
+		return pipeline;
 	}
 
 	// Helper to build a geometry pipeline for a framebuffer (once) and cache it.
-	Ref<GraphicsPipeline> SceneRenderer::GetGeomPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        return GetOrCreateMeshPSO(m_AnimatedPSOCache, framebuffer, fillMode,
+            "resources/shaders/mesh_anim.vertex.hlsl", "resources/shaders/mesh_anim.pixel.hlsl",
+            EBindingLayout::MESH_ANIM, false);
+    }
+
+	Ref<GraphicsPipeline> SceneRenderer::GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
 	{
-		auto key = MakeFramebufferKey(framebuffer, fillMode);
-		auto it = m_GeometryPSOCache.find(key);
-		if (it != m_GeometryPSOCache.end())
-		{
-			return it->second;
-		}
-
-		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-		GraphicsPipelineParams params;
-		params.enableBlend = true;
-		params.enableDepthWrite = hasDepthAttachment;
-		params.enableDepthTest = hasDepthAttachment;
-		params.enableDepthStencil = false;
-		params.fillMode = fillMode;
-		params.cullMode = nvrhi::RasterCullMode::Front;
-		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
-
-		Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-		Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
-
-		auto gp = GraphicsPipeline::Create();
-		gp->SetShaders({ vertexShader, pixelShader })
-			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
-			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-			.Build(framebuffer, params);
-
-		m_GeometryPSOCache.clear();
-		m_GeometryPSOCache.emplace(key, gp);
-		return gp;
+        return GetOrCreateMeshPSO(m_TransparentAnimatedPSOCache, framebuffer, fillMode,
+            "resources/shaders/mesh_anim.vertex.hlsl", "resources/shaders/mesh_anim.pixel.hlsl",
+            EBindingLayout::MESH_ANIM, true);
 	}
 
-	// Helper to build a transparent geometry pipeline per framebuffer (once)
-	Ref<GraphicsPipeline> SceneRenderer::GetTransparentGeomPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	Ref<GraphicsPipeline> SceneRenderer::GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
 	{
-		auto key = MakeFramebufferKey(framebuffer, fillMode);
-		auto it = m_TransparentGeometryPSOCache.find(key);
-		if (it != m_TransparentGeometryPSOCache.end())
-		{
-			return it->second;
-		}
+        return GetOrCreateMeshPSO(m_StaticPSOCache, framebuffer, fillMode,
+            "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
+            EBindingLayout::MESH_STATIC, false);
+	}
 
-		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+	Ref<GraphicsPipeline> SceneRenderer::GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+        return GetOrCreateMeshPSO(m_TransparentStaticPSOCache, framebuffer, fillMode,
+            "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
+            EBindingLayout::MESH_STATIC, true);
+	}
 
-		GraphicsPipelineParams params;
-		params.enableBlend = true;
-		params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
-		params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
-		params.srcBlendAlpha = nvrhi::BlendFactor::One;
-		params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
-		params.enableDepthWrite = false; // Transparent objects should not write to depth
-		params.enableDepthTest = hasDepthAttachment;
-		params.enableDepthStencil = false;
-		params.fillMode = fillMode;
-		params.cullMode = nvrhi::RasterCullMode::None; // Render both sides for transparent
-		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-		Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-		Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+	Ref<GraphicsPipeline> SceneRenderer::GetAnimatedCSMPSO()
+	{
+        nvrhi::IFramebuffer *framebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(0);
+        return GetOrCreateCMSPSO(m_AnimatedCSMPSOCache, framebuffer,
+            "resources/shaders/csm_anim.vertex.hlsl", "resources/shaders/csm.pixel.hlsl",
+            EBindingLayout::MESH_ANIM);
+	}
 
-		auto gp = GraphicsPipeline::Create();
-		gp->SetShaders({ vertexShader, pixelShader })
-			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
-			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-			.Build(framebuffer, params);
-
-		m_TransparentGeometryPSOCache.clear();
-		m_TransparentGeometryPSOCache.emplace(key, gp);
-		return gp;
+	Ref<GraphicsPipeline> SceneRenderer::GetStaticCSMPSO()
+	{
+		nvrhi::IFramebuffer *framebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(0);
+		return GetOrCreateCMSPSO(m_StaticCSMPSOCache, framebuffer,
+			"resources/shaders/csm_static.vertex.hlsl", "resources/shaders/csm.pixel.hlsl",
+			EBindingLayout::MESH_STATIC);
 	}
 
 	// Helper to build an environment pipeline per framebuffer (once)
-	Ref<GraphicsPipeline> SceneRenderer::GetEnvPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
-	{
-		auto key = MakeFramebufferKey(framebuffer, fillMode);
-		auto it = m_EnvironmentPSOCache.find(key);
-		if (it != m_EnvironmentPSOCache.end())
-		{
-			return it->second;
-		}
+    Ref<GraphicsPipeline> SceneRenderer::GetEnvironmentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto it = m_EnvironmentPSOCache.find(key);
+        if (it != m_EnvironmentPSOCache.end())
+        {
+            return it->second;
+        }
 
-		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
 
-		GraphicsPipelineParams params;
-		params.enableBlend = true;
-		params.enableDepthWrite = hasDepthAttachment;
-		params.enableDepthTest = hasDepthAttachment;
-		params.enableDepthStencil = false;
-		params.fillMode = fillMode;
-		params.cullMode = nvrhi::RasterCullMode::Front;
-		params.depthFunc = nvrhi::ComparisonFunc::Always;
+        GraphicsPipelineParams params;
+        params.enableBlend = true;
+        params.enableDepthWrite = hasDepthAttachment;
+        params.enableDepthTest = hasDepthAttachment;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::Front;
+        params.depthFunc = nvrhi::ComparisonFunc::Always;
 
-		Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-		Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
-		auto gp = GraphicsPipeline::Create();
-		gp->SetShaders({ vertexShader, pixelShader })
-			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
-			.Build(framebuffer, params);
+        auto gp = GraphicsPipeline::Create();
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT))
+            .Build(framebuffer, params);
 
-		m_EnvironmentPSOCache.clear();
-		m_EnvironmentPSOCache.emplace(key, gp);
-		return gp;
-	}
+        m_EnvironmentPSOCache.clear();
+        m_EnvironmentPSOCache.emplace(key, gp);
+        return gp;
+    }
 
-	// Helper to build a composite pipeline per framebuffer (once)
-	Ref<GraphicsPipeline> SceneRenderer::GetCompositePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
-	{
-		auto key = MakeFramebufferKey(framebuffer, fillMode);
-		auto it = m_CompositePSOCache.find(key);
+    // Helper to build a composite pipeline per framebuffer (once)
+    Ref<GraphicsPipeline> SceneRenderer::GetCompositePSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto it = m_CompositePSOCache.find(key);
 
-		if (it != m_CompositePSOCache.end())
-		{
-			return it->second;
-		}
+        if (it != m_CompositePSOCache.end())
+        {
+            return it->second;
+        }
 
-		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-		// Binding layout
-		nvrhi::BindingLayoutDesc layoutDesc = {};
-		layoutDesc.visibility = nvrhi::ShaderType::All;
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
-		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
+        // Binding layout
+        nvrhi::BindingLayoutDesc layoutDesc = {};
+        layoutDesc.visibility = nvrhi::ShaderType::All;
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
 
-		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
 
-		GraphicsPipelineParams params;
-		params.enableBlend = true;
-		params.enableDepthWrite = hasDepthAttachment;
-		params.enableDepthTest = hasDepthAttachment;
-		params.enableDepthStencil = false;
-		params.fillMode = fillMode;
-		params.cullMode = nvrhi::RasterCullMode::None;
+        GraphicsPipelineParams params;
+        params.enableBlend = true;
+        params.enableDepthWrite = hasDepthAttachment;
+        params.enableDepthTest = hasDepthAttachment;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::None;
 
-		// Create pipeline
-		Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-		Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+        // Create pipeline
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
-		auto gp = GraphicsPipeline::Create();
-		gp->SetShaders({ vertexShader, pixelShader })
-			.AddBindingLayout(bindingLayout)
-			.Build(framebuffer, params);
+        auto gp = GraphicsPipeline::Create();
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .Build(framebuffer, params);
 
-		LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
+        LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
 
-		m_CompositePSOCache.emplace(key, gp);
+        m_CompositePSOCache.emplace(key, gp);
 
-		return gp;
-	}
+        return gp;
+    }
 
-	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler)
-	{
-		Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
-		Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
-		Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
-		Ref<Texture> depth = target->sceneRT->GetDepthAttachment() ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
-		Ref<Texture> debug = target->debugRT->GetColorAttachment(0) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
+    nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler)
+    {
+        Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
+        Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
+        Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
+        Ref<Texture> depth = target->sceneRT->GetDepthAttachment() ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
+        Ref<Texture> debug = target->debugRT->GetColorAttachment(0) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
 
-		CompositeBindingKey key
-		{
-			bindingLayout,
-			target->sceneRT->GetColorAttachment(0)->GetHandle(),
+        CompositeBindingKey key
+        {
+            bindingLayout,
+            target->sceneRT->GetColorAttachment(0)->GetHandle(),
             target->widgetRT->GetColorAttachment(0)->GetHandle(),
-			edge->GetHandle(),
-			bloom->GetHandle(),
-			ssao->GetHandle(),
-			depth->GetHandle(),
-			debug->GetHandle(),
-			postProcessBuffer->GetHandle(),
-			sampler
-		};
+            edge->GetHandle(),
+            bloom->GetHandle(),
+            ssao->GetHandle(),
+            depth->GetHandle(),
+            debug->GetHandle(),
+            postProcessBuffer->GetHandle(),
+            sampler
+        };
 
-		auto it = m_CompositeBindingSetCache.find(key);
-		if (it != m_CompositeBindingSetCache.end())
-		{
-			return it->second;
-		}
+        auto it = m_CompositeBindingSetCache.find(key);
+        if (it != m_CompositeBindingSetCache.end())
+        {
+            return it->second;
+        }
 
-		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-		// Composite Binding set
-		auto bindingSetDesc = nvrhi::BindingSetDesc();
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, target->sceneRT->GetColorAttachment(0)->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, target->widgetRT->GetColorAttachment(0)->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, edge->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, bloom->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, ssao->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, depth->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, debug->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+        // Composite Binding set
+        auto bindingSetDesc = nvrhi::BindingSetDesc();
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, target->sceneRT->GetColorAttachment(0)->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, target->widgetRT->GetColorAttachment(0)->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, edge->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, bloom->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, ssao->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, depth->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, debug->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
 
-		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-		LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
+        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+        LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
 
-		m_CompositeBindingSetCache.emplace(key, bindingSet);
+        m_CompositeBindingSetCache.emplace(key, bindingSet);
 
-		return bindingSet;
-	}
+        return bindingSet;
+    }
 
-	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
-	{
-		auto it = m_CSMBindingSetCache.find(bindingLayout);
-		if (it != m_CSMBindingSetCache.end())
-		{
-			return it->second;
-		}
-
-		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-		// Composite Binding set
-		auto bindingSetDesc = nvrhi::BindingSetDesc();
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, skinnedMeshGPUDataBuffer->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, csmGPUDataBuffer->GetHandle()));
-
-		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-		LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
-		if (bindingSet)
-		{
-			m_CSMBindingSetCache.emplace(bindingLayout, bindingSet);
-		}
-
-		return bindingSet;
-	}
-
-	Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
-	{
+    Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
+    {
         auto it = m_RenderTargets.find(camera);
         if (it != m_RenderTargets.end())
             return it->second;
 
         Ref<CameraRenderTarget> target = CreateRef<CameraRenderTarget>();
 
-		// =========================================
-		// Create Render Targets
-		RenderTargetCreateInfo sceneRTCreateInfo = {};
-		sceneRTCreateInfo.attachments =
-		{
-			FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-			FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
-			FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
-		};
+        // =========================================
+        // Create Render Targets
+        RenderTargetCreateInfo sceneRTCreateInfo = {};
+        sceneRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
+            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
+        };
 
-		target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
+        target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
 
-		// Widget RT
-		RenderTargetCreateInfo widgetRTCreateInfo = {};
-		widgetRTCreateInfo.attachments =
-		{
-			FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-			FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
-		};
-		target->widgetRT = RenderTarget::Create(widgetRTCreateInfo, "[Scene Renderer] Widget RT");
+        // Widget RT
+        RenderTargetCreateInfo widgetRTCreateInfo = {};
+        widgetRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
+        };
+        target->widgetRT = RenderTarget::Create(widgetRTCreateInfo, "[Scene Renderer] Widget RT");
 
-		RenderTargetCreateInfo compositeRTCreateInfo = {};
-		compositeRTCreateInfo.attachments =
-		{
-			FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
-		};
+        RenderTargetCreateInfo compositeRTCreateInfo = {};
+        compositeRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
+        };
 
-		target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
+        target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
 
-		m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
+        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
 
-		RenderTargetCreateInfo debugRTCreateInfo = {};
-		debugRTCreateInfo.attachments =
-		{
-			FramebufferAttachments{ "[Scene DebugAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget },
-			FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }
-		};
+        RenderTargetCreateInfo debugRTCreateInfo = {};
+        debugRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Scene DebugAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget },
+            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }
+        };
 
-		debugRTCreateInfo.depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
-		target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
+        debugRTCreateInfo.depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+        target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
 
         m_RenderTargets.emplace(camera, target);
         return target;
-	}
+    }
 
-	void SceneRenderer::AddAssetPin(AssetHandle handle)
-	{
-		m_PinnedAssetHandles.push_back(handle);
+    void SceneRenderer::AddAssetPin(AssetHandle handle)
+    {
+        m_PinnedAssetHandles.push_back(handle);
 
-		const auto assetPinName = BuildAssetPinName(handle);
-		AssetManager::GetInstance()->AddAssetPin(handle, assetPinName);
-	}
+        const auto assetPinName = BuildAssetPinName(handle);
+        AssetManager::GetInstance()->AddAssetPin(handle, assetPinName);
+    }
 
-	std::string_view SceneRenderer::BuildAssetPinName(AssetHandle handle)
-	{
-		return std::format("scene_renderer_", (uint64_t)handle);
-	}
+    std::string_view SceneRenderer::BuildAssetPinName(AssetHandle handle)
+    {
+        return std::format("scene_renderer.", (uint64_t)handle);
+    }
+
+    template<typename MeshT>
+    void SceneRenderer::DrawMesh(
+        nvrhi::ICommandList *cmd,
+        nvrhi::IFramebuffer *framebuffer,
+        const Ref<MeshT> &mesh,
+        const glm::mat4 &parentTransform,
+        const glm::mat4 &normalMatrix,
+        uint32_t objectID,
+        const std::unordered_map<int, AssetHandle> &overrideMaterials,
+        const std::vector<glm::mat4> &boneTransforms,
+        const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
+        ICamera *camera,
+        Ref<GraphicsPipeline> opaquePSO,
+        std::vector<TransparentDrawCall> &transparentDrawCalls,
+        std::unordered_set<Material *> &uploadedMaterialsThisPass)
+    {
+        constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
+
+        glm::mat4 bones[MAX_BONES];
+        if constexpr (isSkeletal)
+        {
+            FillBoneArray(bones, boneTransforms);
+        }
+
+        auto graphicsState = nvrhi::GraphicsState();
+        graphicsState.pipeline = opaquePSO->GetHandle();
+        graphicsState.framebuffer = framebuffer;
+        graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+
+        const auto &instances = mesh->GetMeshInstances();
+        for (size_t idx = 0; idx < instances.size(); ++idx)
+        {
+            auto &meshInstance = instances[idx];
+
+            if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_PointLightBuffer, m_SpotLightBuffer))
+                continue;
+
+            Mesh_GPUData gpuData;
+            if (idx < cachedInstanceTransforms.size())
+            {
+                gpuData = cachedInstanceTransforms[idx];
+            }
+            else
+            {
+                glm::mat4 meshTransform = meshInstance->global;
+                if constexpr (isSkeletal)
+                {
+                    if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
+                    {
+                        const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                        if (ji < boneTransforms.size())
+                        {
+                            meshTransform = boneTransforms[ji] * meshTransform;
+                        }
+                    }
+                }
+                gpuData.transformation = parentTransform * meshTransform;
+                gpuData.objectID = objectID;
+                gpuData.normal = normalMatrix;
+            }
+
+            meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+            if constexpr (isSkeletal)
+            {
+                meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
+            }
+
+            auto &primitive = meshInstance->GetPrimitive();
+            if (!primitive->vertexBuffer || !primitive->indexBuffer)
+            {
+                primitive->WriteBuffer(cmd);
+            }
+
+            Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), overrideMaterials, meshInstance->GetMaterialAssetHandle());
+
+            const nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+            const nvrhi::BindingSetHandle materialBindingSet = material ? material->GetBindingSet() : nullptr;
+
+            if (meshBindingSet && materialBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
+            {
+                if (uploadedMaterialsThisPass.insert(material.get()).second)
+                {
+                    material->UploadToGpu(cmd);
+                }
+
+                if (material->GetType() == MaterialType::Transparent)
+                {
+                    TransparentDrawCall dc;
+                    dc.meshBindingSet = meshBindingSet;
+                    dc.materialBindingSet = materialBindingSet;
+                    dc.vertexBuffer = primitive->vertexBuffer->GetHandle();
+                    dc.indexBuffer = primitive->indexBuffer->GetHandle();
+                    dc.indexCount = primitive->indexBuffer->GetCount();
+                    dc.distanceToCamera = glm::length(camera->position - glm::vec3(gpuData.transformation[3]));
+                    dc.isSkeletal = isSkeletal;
+                    transparentDrawCalls.push_back(dc);
+                }
+                else
+                {
+                    graphicsState.bindings = { meshBindingSet, materialBindingSet };
+                    graphicsState.vertexBuffers.resize(0);
+                    graphicsState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+                    graphicsState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+                    cmd->setGraphicsState(graphicsState);
+
+                    nvrhi::DrawArguments args;
+                    args.setVertexCount(primitive->indexBuffer->GetCount());
+                    args.instanceCount = 1;
+                    cmd->drawIndexed(args);
+                }
+            }
+        }
+    }
+
+    template<typename MeshT>
+    void SceneRenderer::DrawMeshShadow(
+        nvrhi::ICommandList *cmd,
+        const Ref<MeshT> &mesh,
+        const glm::mat4 &parentTransform,
+        const glm::mat4 &normalMatrix,
+        uint32_t objectID,
+        const std::vector<glm::mat4> &boneTransforms,
+        const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
+        nvrhi::GraphicsState &csmState,
+        const Ref<ConstantBuffer> &csmBuffer)
+    {
+        constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
+
+        glm::mat4 bones[MAX_BONES];
+        if constexpr (isSkeletal)
+        {
+            FillBoneArray(bones, boneTransforms);
+        }
+
+        const auto &instances = mesh->GetMeshInstances();
+        for (size_t idx = 0; idx < instances.size(); ++idx)
+        {
+            auto &meshInstance = instances[idx];
+            auto &primitive = meshInstance->GetPrimitive();
+            const bool buffersCreated = primitive->vertexBuffer && primitive->indexBuffer;
+            if (!buffersCreated)
+            {
+                primitive->WriteBuffer(cmd);
+            }
+            if (!primitive->vertexBuffer || !primitive->indexBuffer)
+            {
+                continue;
+            }
+
+            if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, csmBuffer, m_PointLightBuffer, m_SpotLightBuffer))
+                continue;
+
+            Mesh_GPUData gpuData;
+            if (idx < cachedInstanceTransforms.size())
+            {
+                gpuData = cachedInstanceTransforms[idx];
+            }
+            else
+            {
+                glm::mat4 meshTransform = meshInstance->global;
+                if constexpr (isSkeletal)
+                {
+                    if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
+                    {
+                        const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                        if (ji < boneTransforms.size())
+                        {
+                            meshTransform = boneTransforms[ji] * meshTransform;
+                        }
+                    }
+                }
+                gpuData.transformation = parentTransform * meshTransform;
+                gpuData.objectID = objectID;
+                gpuData.normal = normalMatrix;
+            }
+
+            meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+            if constexpr (isSkeletal)
+            {
+                meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
+            }
+
+            nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+            if (meshBindingSet)
+            {
+                csmState.bindings = { meshBindingSet };
+                csmState.vertexBuffers.resize(0);
+                csmState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+                csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+                cmd->setGraphicsState(csmState);
+
+                nvrhi::DrawArguments args;
+                args.setVertexCount(primitive->indexBuffer->GetCount());
+                args.instanceCount = 1;
+                cmd->drawIndexed(args);
+            }
+        }
+    }
+
+    // Explicit template instantiations
+    template void SceneRenderer::DrawMesh<StaticMesh>(
+        nvrhi::ICommandList *, nvrhi::IFramebuffer *, const Ref<StaticMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
+        const std::unordered_map<int, AssetHandle> &, const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
+        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &);
+
+    template void SceneRenderer::DrawMesh<SkeletalMesh>(
+        nvrhi::ICommandList *, nvrhi::IFramebuffer *, const Ref<SkeletalMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
+        const std::unordered_map<int, AssetHandle> &, const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
+        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &);
+
+    template void SceneRenderer::DrawMeshShadow<StaticMesh>(
+        nvrhi::ICommandList *, const Ref<StaticMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
+        const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &, nvrhi::GraphicsState &, const Ref<ConstantBuffer> &);
+
+    template void SceneRenderer::DrawMeshShadow<SkeletalMesh>(
+        nvrhi::ICommandList *, const Ref<SkeletalMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
+        const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &, nvrhi::GraphicsState &, const Ref<ConstantBuffer> &);
 }

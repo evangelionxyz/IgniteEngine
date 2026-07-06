@@ -150,10 +150,6 @@ namespace ignite
             
         nvrhi::IDevice *m_Device = nullptr;
 
-        int m_SelectedMesh = 0;
-        void *m_MeshInstanceData = nullptr;
-        std::optional<MeshScene> m_LoadedMeshScene;
-
         AssetHandle m_CurrentSceneHandle = AssetHandle(0);
 
         uint32_t m_PendingContentBrowserPanelsToAdd = 0;

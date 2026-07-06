@@ -1,13 +1,11 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "serializer.hpp"
 
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scene/scene.hpp"
-
-#include <fstream>
 
 namespace ignite
 {    

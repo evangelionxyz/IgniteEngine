@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "imgui_layer.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/graphics/window.hpp"
@@ -24,11 +26,8 @@
 
 #include "ignite/graphics/renderer.hpp"
 
-#include <fstream>
-
 namespace ignite
 {
-
     GuiFont::GuiFont()
         : m_IsDefault(false)
         , m_IsCompressed(false)

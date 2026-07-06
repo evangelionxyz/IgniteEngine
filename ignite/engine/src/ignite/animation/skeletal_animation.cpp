@@ -1,12 +1,11 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "skeletal_animation.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
-#include <ranges>
 
 namespace ignite
 {

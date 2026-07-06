@@ -1,27 +1,8 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef IGN_ENTITY_HPP
+#define IGN_ENTITY_HPP
 
 #include "ignite/core/base.hpp"
 #include "component.hpp"
@@ -93,12 +74,12 @@ namespace ignite
             return m_Scene->registry->valid(m_Handle);
         }
 
-        operator entt::entity() const { return m_Handle; }
-        operator i32() const { return static_cast<i32>(m_Handle); }
-        operator u32() const { return static_cast<u32>(m_Handle); }
-        operator u64() const { return static_cast<u64>(m_Handle); }
-
         operator bool() const { return IsValid(); }
+
+        operator entt::entity() const { return m_Handle; }
+        operator int32_t() const { return static_cast<int32_t>(m_Handle); }
+        operator uint32_t() const { return static_cast<uint32_t>(m_Handle); }
+        operator uint64_t() const { return static_cast<uint64_t>(m_Handle); }
 
         bool operator==(const Entity &other) const { return other.m_Handle == m_Handle && other.m_Scene == m_Scene; }
         bool operator!=(const Entity &other) const { return !(*this == other); }
@@ -117,3 +98,5 @@ namespace ignite
         Scene *m_Scene;
     };
 }
+
+#endif

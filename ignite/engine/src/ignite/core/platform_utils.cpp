@@ -1,23 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "platform_utils.hpp"
 #include "application.hpp"
 #include "ignite/graphics/window.hpp"
-
-#ifdef PLATFORM_WINDOWS
-#include <Windows.h>
-#include <ShObjIdl.h>
-#include <commdlg.h>
-#include <objbase.h> // for CoCreateGuid
-#elif PLATFORM_LINUX
-#include <iostream>
-#include <memory>
-#include <stdexcept>
-#include <array>
-#include <unistd.h>
-#endif
-
-#include <filesystem>
 
 namespace ignite
 {

@@ -1,12 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "widget_container.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/core/logger.hpp"
-
-#include <algorithm>
 
 namespace ignite
 {

@@ -9,16 +9,10 @@
 #include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/graphics/shader.hpp"
 #include "ignite/math/math.hpp"
-
 #include "ignite/math/aabb.hpp"
-
-#include "ignite/graphics/buffers/vertex_buffer.hpp"
-#include "ignite/graphics/buffers/index_buffer.hpp"
-#include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
-#include "ignite/graphics/framebuffer_key.hpp"
+#include "ignite/graphics/hash_keys.hpp"
 
 #include <array>
 #include <unordered_map>
@@ -26,6 +20,15 @@
 namespace ignite
 {
     constexpr uint32_t MAX_POINT_LIGHTS_2D = 32;
+
+	class GraphicsPipeline;
+	class DeviceManager;
+	class ConstantBuffer;
+	class Texture;
+	class RenderTarget;
+	class Font;
+	class Project;
+	class Sprite2DComponent;
 
     struct PointLight2D_GPUData
     {
@@ -42,59 +45,6 @@ namespace ignite
         glm::vec3 _padding = glm::vec3(0.0f);
         std::array<PointLight2D_GPUData, MAX_POINT_LIGHTS_2D> pointLights;
     };
-
-	struct CameraBindingKey
-	{
-		nvrhi::IBindingLayout *layout = nullptr;
-		nvrhi::IBuffer *cameraBuffer = nullptr;
-
-		bool operator==(const CameraBindingKey &other) const noexcept
-		{
-			return layout == other.layout && cameraBuffer == other.cameraBuffer;
-		}
-	};
-
-	struct CameraBindingKeyHash
-	{
-		size_t operator()(const CameraBindingKey &k) const noexcept
-		{
-			size_t h = std::hash<const void *>{}(k.layout);
-			h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-			return h;
-		}
-	};
-
-	struct CameraLightingBindingKey
-	{
-		nvrhi::IBindingLayout *layout = nullptr;
-		nvrhi::IBuffer *cameraBuffer = nullptr;
-		nvrhi::IBuffer *lightingBuffer = nullptr;
-
-		bool operator==(const CameraLightingBindingKey &other) const noexcept
-		{
-			return layout == other.layout && cameraBuffer == other.cameraBuffer && lightingBuffer == other.lightingBuffer;
-		}
-	};
-
-	struct CameraLightingBindingKeyHash
-	{
-		size_t operator()(const CameraLightingBindingKey &k) const noexcept
-		{
-			size_t h = std::hash<const void *>{}(k.layout);
-			h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-			h ^= (std::hash<const void *>{}(k.lightingBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-			return h;
-		}
-	};
-
-    class GraphicsPipeline;
-    class DeviceManager;
-    class Texture;
-    class RenderTarget;
-    class Font;
-    class Project;
-
-    class Sprite2DComponent;
 
     class IGN_API Renderer2D
     {

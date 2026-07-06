@@ -36,13 +36,13 @@ namespace ignite
 
     enum class ESceneState : uint8_t
     {
-        None = 0,
-        Stop = 1 << 0, // 0001
-        Play = 1 << 1, // 0010
-		Simulate = 1 << 2, // 0100
-		Paused = 1 << 3, // 1000
+        None = BIT(0),
+        Stop = BIT(1),
+        Play = BIT(2),
+		Simulate = BIT(3),
+		Paused = BIT(4),
 
-        Focus = 1 << 4, // 1 0000
+        Focus = BIT(5),
     };
 
     inline IGN_API ESceneState operator|(ESceneState lhs, ESceneState rhs)

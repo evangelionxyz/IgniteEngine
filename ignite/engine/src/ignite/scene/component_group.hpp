@@ -43,7 +43,8 @@ namespace ignite
         Rigidbody2DComponent,
         BoxCollider2DComponent,
         CircleCollider2DComponent,
-        MeshComponent,
+        StaticMeshComponent,
+        SkeletalMeshComponent,
         RigidbodyComponent,
         BoxColliderComponent,
         SphereColliderComponent,
@@ -54,6 +55,8 @@ namespace ignite
         TextComponent,
         WorldEnvironment,
         DirectionalLightComponent,
+        PointLightComponent,
+        SpotLightComponent,
         Animator2DComponent
     >; 
 }

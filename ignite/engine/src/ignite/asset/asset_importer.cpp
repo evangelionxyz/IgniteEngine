@@ -1,6 +1,11 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#include "ignite_pch.hpp"
+
 #include "asset_importer.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/application.hpp"
 
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/audio/fmod_sound.hpp"
@@ -32,20 +37,21 @@
 #include "ignite/graphics/font.hpp"
 #include "ignite/scripting/scriptable_object.hpp"
 
-#include <mutex>
-#include <condition_variable>
-#include <chrono>
-#include <limits>
-#include <filesystem>
-
 namespace ignite
 {
     static std::unordered_map<AssetType, std::function<Ref<Asset>(AssetHandle, const AssetMetaData &, AssetManager *)>> s_ImportFunctions =
     {
-        { AssetType::Scene, AssetImporter::ImportScene },
-        { AssetType::Texture, [](AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager) { return AssetImporter::ImportTexture(handle, metadata, assetManager); } },
         { AssetType::Audio, AssetImporter::ImportAudio },
-        { AssetType::Mesh, [](AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager) { return AssetImporter::ImportMesh(handle, metadata, assetManager); } },
+        { AssetType::Scene, AssetImporter::ImportScene },
+        { AssetType::Texture, [](AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager) { 
+                    return AssetImporter::ImportTexture(handle, metadata, assetManager); 
+                }},
+        { AssetType::StaticMesh, [](AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager) { 
+                    return AssetImporter::ImportStaticMesh(handle, metadata, assetManager); 
+                }},
+        { AssetType::SkeletalMesh, [](AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager) { 
+                    return AssetImporter::ImportSkeletalMesh(handle, metadata, assetManager); 
+                }},
         { AssetType::Material, AssetImporter::ImportMaterial },
         { AssetType::Material2D, AssetImporter::ImportMaterial2D },
         { AssetType::SpriteSheet, AssetImporter::ImportSpriteSheet },
@@ -197,7 +203,7 @@ namespace ignite
         return asset;
     }
 
-    Ref<Mesh> AssetImporter::ImportMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const MeshImportOptions &options)
+    Ref<SkeletalMesh> AssetImporter::ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const SkeletalMeshImportPayload &payload)
     {
         if (!ignite::Path::exists(metadata.filepath))
         {
@@ -205,29 +211,28 @@ namespace ignite
             return nullptr;
         }
 
-        const auto skeletalMeshBinExt = GetAssetExtensionFromType(AssetType::Mesh);
+        const auto skeletalMeshBinExt = GetAssetExtensionFromType(AssetType::SkeletalMesh);
         const auto skeletonBinExt = GetAssetExtensionFromType(AssetType::Skeleton);
         const auto animationBinExt = GetAssetExtensionFromType(AssetType::SkeletalAnimation);
         const auto materialBinExt = GetAssetExtensionFromType(AssetType::Material);
 
         const ignite::Path projectAssetPath = assetManager->GetProject()->GetAssetDirectory();
-        const ignite::Path outputRootDirectory = options.targetDirectory.empty() ? projectAssetPath : options.targetDirectory;
+        const ignite::Path outputRootDirectory = payload.targetDirectory.empty() ? projectAssetPath : payload.targetDirectory;
         const ignite::Path filename = metadata.filepath.stem();
         const ignite::Path meshBinaryPath = outputRootDirectory / (filename.string() + skeletalMeshBinExt);
         const ignite::Path skeletonPath = outputRootDirectory / (filename.string() + skeletonBinExt);
+		const ignite::Path meshRelativePath = assetManager->GetProject()->GetProjectFilepath(meshBinaryPath);
 
-        Ref<Mesh> asset;
+        Ref<SkeletalMesh> asset;
 
-        auto prepareMeshGpuAndMaterials = [assetManager](const Ref<Mesh> &mesh)
+        auto prepareMeshGpuAndMaterials = [assetManager](const Ref<SkeletalMesh> &mesh)
         {
             if (!mesh)
-            {
                 return;
-            }
 
-            for (auto &mesh : mesh->GetMeshInstances())
+            for (const auto &mesh : mesh->GetMeshInstances())
             {
-                AssetHandle materialHandle = mesh->GetMaterialHandle();
+                AssetHandle materialHandle = mesh->GetMaterialAssetHandle();
                 AssetMetaData materialMetadata = assetManager->GetMetaData(materialHandle);
                 if (materialMetadata.type == AssetType::Material)
                 {
@@ -240,20 +245,20 @@ namespace ignite
 
         if (metadata.filepath.extension() == skeletalMeshBinExt)
         {
-            asset = Mesh::Deserialize(metadata.filepath);
+            asset = SkeletalMesh::Deserialize(metadata.filepath);
             if (asset)
             {
                 asset->handle = handle;
                 prepareMeshGpuAndMaterials(asset);
-                asset->aabb = AABB::CalculateMeshAABB(asset->GetMeshInstances());
             }
+			asset->CalculateLocalAABB();
             return asset;
         }
 
         // Fast path: use cached binaries generated in dedicated folders.
-        if (!options.forceRebuild && ignite::Path::exists(meshBinaryPath) && ignite::Path::exists(skeletonPath))
+        if (!payload.forceRebuild && ignite::Path::exists(meshBinaryPath) && ignite::Path::exists(skeletonPath))
         {
-            asset = Mesh::Deserialize(meshBinaryPath);
+            asset = SkeletalMesh::Deserialize(meshBinaryPath);
             if (!asset)
             {
                 return nullptr;
@@ -320,11 +325,12 @@ namespace ignite
 
             asset->handle = handle;
             prepareMeshGpuAndMaterials(asset);
+			asset->CalculateLocalAABB();
             return asset;
         }
 
         // Load from .FBX
-        MeshScene meshScene;
+        MeshScene<VertexMeshAnim> meshScene;
         MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene, assetManager);
 
         if (!ignite::Path::exists(outputRootDirectory)) ignite::Path::create_directory(outputRootDirectory);
@@ -332,7 +338,7 @@ namespace ignite
         // Import textures and materials from the same FBX parse used for skeleton/animation,
         // so bone IDs and skeleton mapping stay consistent.
         std::vector<std::array<AssetHandle, 5>> materialTextureHandles;
-        if (options.importMaterials)
+        if (payload.importMaterials)
         {
             materialTextureHandles.resize(meshScene.materials.size());
 
@@ -415,15 +421,15 @@ namespace ignite
             }
         }
 
-        asset = Mesh::Create();
-        if (options.importMesh)
+        asset = SkeletalMesh::Create();
+        if (payload.importMesh)
         {
             for (size_t meshIdx = 0; meshIdx < meshScene.flatMeshes.size(); ++meshIdx)
             {
-                Ref<MeshInstance> m = meshScene.flatMeshes[meshIdx];
+                Ref<SkeletalMeshInstance> m = meshScene.flatMeshes[meshIdx];
                 m->global = glm::mat4(1.0f);
 
-                if (options.importMaterials)
+                if (payload.importMaterials)
                 {
                     const int matIdx = meshScene.materialMap[(int)meshIdx];
                     Ref<Material> mat = meshScene.materials[matIdx];
@@ -431,11 +437,10 @@ namespace ignite
                 }
                 asset->AddMeshInstance(m);
             }
-            asset->aabb = meshScene.aabb;
         }
 
         // Skeleton
-        if (options.importSkeleton && meshScene.skeleton)
+        if (payload.importSkeleton && meshScene.skeleton)
         {
             // Serialize skeleton
             meshScene.skeleton->Serialize(skeletonPath);
@@ -454,7 +459,7 @@ namespace ignite
         }
 
         // Animations
-        if (options.importAnimations)
+        if (payload.importAnimations)
         {
             for (size_t i = 0; i < meshScene.animations.size(); ++i)
             {
@@ -481,20 +486,203 @@ namespace ignite
             }
         }
 
-        if (options.importMesh)
+		asset->handle = handle;
+
+        if (payload.importMesh)
         {
+			prepareMeshGpuAndMaterials(asset);
             asset->Serialize(meshBinaryPath);
+			asset->CalculateLocalAABB();
+
+			assetManager->AssignAsset(handle, asset);
+			assetManager->AssignMetaData(handle, { meshRelativePath, AssetType::SkeletalMesh });
         }
 
-        asset->handle = handle;
-        if (options.importMesh)
-        {
-            prepareMeshGpuAndMaterials(asset);
-        }
         return asset;
     }
 
-    Ref<Skeleton> AssetImporter::ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+	Ref<StaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const StaticMeshImportPayload &payload)
+	{
+		if (!ignite::Path::exists(metadata.filepath))
+		{
+			LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+			return nullptr;
+		}
+
+		const auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
+		const auto materialBinExt = GetAssetExtensionFromType(AssetType::Material);
+
+		const ignite::Path projectAssetPath = assetManager->GetProject()->GetAssetDirectory();
+		const ignite::Path outputRootDirectory = payload.targetDirectory.empty() ? projectAssetPath : payload.targetDirectory;
+		const ignite::Path filename = metadata.filepath.stem();
+		const ignite::Path meshBinaryPath = outputRootDirectory / (filename.string() + staticMeshBinExt);
+		const ignite::Path meshRelativePath = assetManager->GetProject()->GetProjectFilepath(meshBinaryPath);
+
+		Ref<StaticMesh> asset;
+
+		auto prepareMeshGpuAndMaterials = [assetManager](const Ref<StaticMesh> &mesh)
+		{
+			if (!mesh)
+				return;
+
+			for (const auto &mesh : mesh->GetMeshInstances())
+			{
+				AssetHandle materialHandle = mesh->GetMaterialAssetHandle();
+				AssetMetaData materialMetadata = assetManager->GetMetaData(materialHandle);
+				if (materialMetadata.type == AssetType::Material)
+				{
+					const auto &materialFilepath = assetManager->GetProject()->GetProjectFilepath(materialMetadata.filepath);
+					Ref<Material> material = Material::Deserialize(materialFilepath);
+					assetManager->AssignAsset(materialHandle, material);
+				}
+			}
+		};
+
+		if (metadata.filepath.extension() == staticMeshBinExt)
+		{
+			asset = StaticMesh::Deserialize(metadata.filepath);
+			if (asset)
+			{
+				asset->handle = handle;
+				prepareMeshGpuAndMaterials(asset);
+			}
+			asset->CalculateLocalAABB();
+			return asset;
+		}
+
+		// Fast path: use cached binaries generated in dedicated folders.
+		if (!payload.forceRebuild && ignite::Path::exists(meshBinaryPath))
+		{
+			asset = StaticMesh::Deserialize(meshBinaryPath);
+			if (!asset)
+			{
+				return nullptr;
+			}
+
+			asset->handle = handle;
+			prepareMeshGpuAndMaterials(asset);
+			asset->CalculateLocalAABB();
+			return asset;
+		}
+
+		// Load from .fbx/.gltf/.glb
+		MeshScene<VertexMeshStatic> meshScene;
+		MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene, assetManager);
+
+		if (!ignite::Path::exists(outputRootDirectory)) ignite::Path::create_directory(outputRootDirectory);
+
+		// Import textures and materials from the same FBX parse used for skeleton/animation,
+		// so bone IDs and skeleton mapping stay consistent.
+		std::vector<std::array<AssetHandle, 5>> materialTextureHandles;
+		if (payload.importMaterials)
+		{
+			materialTextureHandles.resize(meshScene.materials.size());
+
+			for (size_t i = 0; i < meshScene.materialTextureMap.size(); ++i)
+			{
+				auto &textureHandles = materialTextureHandles[i];
+				std::fill(textureHandles.begin(), textureHandles.end(), AssetHandle(0));
+
+				for (size_t j = 0; j < meshScene.materialTextureMap[i].size(); ++j)
+				{
+					auto &[idx, name, texture] = meshScene.materialTextureMap[i][j];
+					if (idx < 0 || !texture)
+					{
+						continue;
+					}
+
+					const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
+					const std::string textureExtension = writeEXR ? ".exr" : ".png";
+					const ignite::Path textureOutputFullPath = outputRootDirectory / (name + textureExtension);
+
+					if (writeEXR)
+					{
+						BinarySerializer::SerializeTextureToEXR(texture, textureOutputFullPath);
+					}
+					else
+					{
+						BinarySerializer::SerializeTextureToPNG(texture, textureOutputFullPath);
+					}
+
+					const auto relativeTexturePath = assetManager->GetProject()->GetProjectFilepath(textureOutputFullPath);
+
+					AssetHandle textureHandle = assetManager->GetAssetHandle(relativeTexturePath);
+					if (textureHandle == AssetHandle(0))
+					{
+						textureHandle = AssetHandle();
+					}
+					texture->handle = textureHandle;
+
+					AssetMetaData textureMD;
+					textureMD.filepath = relativeTexturePath;
+					textureMD.type = AssetType::Texture;
+
+					assetManager->AssignAsset(textureHandle, texture);
+					assetManager->AssignMetaData(textureHandle, textureMD);
+					textureHandles[j] = textureHandle;
+				}
+			}
+
+			for (size_t i = 0; i < meshScene.materials.size(); ++i)
+			{
+				Ref<Material> &mat = meshScene.materials[i];
+				mat->baseColorTextureHandle = materialTextureHandles[i][0];
+				mat->emissiveTextureHandle = materialTextureHandles[i][1];
+				mat->metallicTextureHandle = materialTextureHandles[i][2];
+				mat->roughnessTextureHandle = materialTextureHandles[i][2];
+				mat->normalTextureHandle = materialTextureHandles[i][3];
+				mat->occlusionTextureHandle = materialTextureHandles[i][4];
+
+				const std::string materialFilename = mat->name + materialBinExt;
+				const ignite::Path materialBinFullPath = outputRootDirectory / materialFilename;
+
+				// Serialize Material
+				mat->Serialize(materialBinFullPath);
+
+				const auto relativeMaterialPath = assetManager->GetProject()->GetProjectFilepath(materialBinFullPath);
+
+				AssetHandle materialHandle = assetManager->GetAssetHandle(relativeMaterialPath);
+				if (materialHandle == AssetHandle(0))
+				{
+					materialHandle = AssetHandle();
+				}
+				mat->handle = materialHandle;
+
+				AssetMetaData materialMD;
+				materialMD.filepath = relativeMaterialPath;
+				materialMD.type = AssetType::Material;
+
+				assetManager->AssignAsset(materialHandle, mat);
+				assetManager->AssignMetaData(materialHandle, materialMD);
+			}
+		}
+
+		asset = StaticMesh::Create();
+		for (size_t meshIdx = 0; meshIdx < meshScene.flatMeshes.size(); ++meshIdx)
+		{
+			Ref<StaticMeshInstance> m = meshScene.flatMeshes[meshIdx];
+			m->global = glm::mat4(1.0f);
+
+			if (payload.importMaterials)
+			{
+				const int matIdx = meshScene.materialMap[(int)meshIdx];
+				Ref<Material> mat = meshScene.materials[matIdx];
+				m->SetMaterial(mat->handle);
+			}
+			asset->AddMeshInstance(m);
+		}
+
+		prepareMeshGpuAndMaterials(asset);
+		asset->Serialize(meshBinaryPath);
+		asset->CalculateLocalAABB();
+
+		assetManager->AssignAsset(handle, asset);
+		assetManager->AssignMetaData(handle, { meshRelativePath, AssetType::StaticMesh });
+
+		return asset;
+	}
+
+	Ref<Skeleton> AssetImporter::ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
         Ref<Skeleton> asset = Skeleton::Deserialize(metadata.filepath);
         if (asset)

@@ -1,11 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
+
 #include "gpu_upload_sync.hpp"
 #include "ignite/core/application.hpp"
-
-#include <mutex>
-#include <condition_variable>
 
 namespace ignite
 {

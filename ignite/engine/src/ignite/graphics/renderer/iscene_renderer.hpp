@@ -14,9 +14,10 @@
 
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material.hpp"
-#include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/texture.hpp"
+
+#include "ignite/asset/asset_manager.hpp"
 
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
@@ -143,6 +144,13 @@ namespace ignite
 		SceneRenderSettings sceneRenderSettings;
 
     protected:
+        static void FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms);
+
+        Ref<Material> ResolveMeshMaterial(
+            int instanceIndex,
+            const std::unordered_map<int, AssetHandle> &overrideMaterials,
+            AssetHandle defaultMaterialHandle);
+
 		void EnsureSceneEnvironmentMap();
 
         virtual void AddAssetPin(AssetHandle handle) = 0;
@@ -163,13 +171,15 @@ namespace ignite
         Ref<ConstantBuffer> m_CameraBuffer;
         Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
         Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];
+        Ref<ConstantBuffer> m_PointLightBuffer;
+        Ref<ConstantBuffer> m_SpotLightBuffer;
 
 		std::unordered_map<AssetResolveKey, Ref<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
 
 		WorldEnvironment *m_WorldEnvironment = nullptr;
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
-        SceneBufferData m_SceneGPUData;
+        Scene_GPUData m_SceneGPUData;
 
         std::vector<AssetHandle> m_PinnedAssetHandles;
 

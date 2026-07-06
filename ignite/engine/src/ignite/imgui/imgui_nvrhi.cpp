@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "imgui_nvrhi.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"

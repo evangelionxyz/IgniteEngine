@@ -1,12 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "locomotion.hpp"
 
 #include "ignite/core/logger.hpp"
-
-#include <fstream>
 
 #pragma warning(push)
 #pragma warning(disable : 4275 4251)

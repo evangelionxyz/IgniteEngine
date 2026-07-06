@@ -22,7 +22,8 @@ namespace ignite
         CompType_Circle2D,
         CompType_PointLight2D,
         CompType_Text,
-        CompType_Mesh,
+        CompType_SkeletalMesh,
+        CompType_StaticMesh,
         CompType_DirectionalLight,
         CompType_BoxCollider2D,
         CompType_CircleCollider2D,
@@ -37,6 +38,8 @@ namespace ignite
         CompType_Script,
         CompType_WorldEnvironment,
         CompType_Animator2D,
+        CompType_PointLight,
+        CompType_SpotLight,
         CompType_LAST
     };
 

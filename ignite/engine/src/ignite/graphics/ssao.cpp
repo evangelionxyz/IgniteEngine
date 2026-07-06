@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "ssao.hpp"
 
@@ -11,9 +11,6 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/icamera.hpp"
-
-#include <random>
-#include <algorithm>
 
 namespace ignite
 {

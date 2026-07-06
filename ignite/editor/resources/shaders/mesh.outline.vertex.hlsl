@@ -1,31 +1,9 @@
 #include "include/binding_helpers.hlsli"
+#include "include/scene.hlsli"
 
-#define VERTEX_MAX_BONES 4 // bone influences
-#define MAX_BONES 200
-
-struct Camera
-{
-    float4x4 projection;
-    float4x4 view;
-    float4 position;
-};
-
-struct Object
-{
-    float4x4 transformMatrix;
-    float4x4 normalMatrix;
-    float4x4 boneTransforms[MAX_BONES];
-};
-
-cbuffer CameraBuffer : register(b0)
-{
-    Camera camera;
-}
-
-cbuffer ObjectBuffer : register(b1)
-{
-    Object object;
-}
+cbuffer CameraBuffer : register(b0) { Camera camera; }
+cbuffer ObjectBuffer : register(b1) { Object object; }
+cbuffer SkeletonBuffer : register(b2) { Skeleton skeleton; }
 
 struct VSInput
 {
@@ -51,7 +29,7 @@ PSInput main(VSInput input)
         if (weight > 0.0f)
         {
             uint boneId = input.boneIDs[i];
-            float4x4 transform = object.boneTransforms[boneId];
+            float4x4 transform = skeleton.boneTransforms[boneId];
             posL += weight * mul(transform, float4(input.position, 1.0));
         }
     }

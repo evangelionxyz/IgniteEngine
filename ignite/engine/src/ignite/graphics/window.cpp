@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "window.hpp"
 #include "stb_image.h"
 #include "ignite/core/logger.hpp"
@@ -11,7 +13,7 @@
 
 #include <SDL3/SDL_video.h>
 
-#ifdef _WIN32
+#ifdef PLATFORM_WINDOWS
     #include <dwmapi.h>
     #include <ShellScalingApi.h>
     #pragma comment(lib, "Dwmapi.lib") // Link to DWM API

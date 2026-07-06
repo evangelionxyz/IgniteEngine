@@ -1,15 +1,11 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "shader.hpp"
-
 #include "renderer.hpp"
-
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
-
-#include <fstream>
-#include <iterator>
-#include <string>
 
 namespace ignite
 {

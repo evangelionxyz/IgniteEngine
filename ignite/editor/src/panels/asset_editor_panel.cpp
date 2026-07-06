@@ -114,7 +114,7 @@ namespace ignite
         {
             AssetHandle previewMeshHandle = AssetHandle(0);
             AssetHandle previewAnimationHandle = AssetHandle(0);
-            Ref<Mesh> cachedPreviewMesh;
+            Ref<SkeletalMesh> cachedPreviewMesh;
             std::vector<glm::mat4> previewGlobalTransforms;
             std::vector<glm::mat4> previewFinalTransforms;
             float timeSeconds = 0.0f;
@@ -358,10 +358,10 @@ namespace ignite
 
             for (const auto &[meshHandle, metadata] : assetManager->GetAssetAssetRegistry())
             {
-                if (metadata.type != AssetType::Mesh)
+                if (metadata.type != AssetType::SkeletalMesh)
                     continue;
 
-                Ref<Mesh> mesh = assetManager->GetAsset<Mesh>(meshHandle);
+                auto mesh = assetManager->GetAsset<SkeletalMesh>(meshHandle);
                 if (mesh && mesh->GetSkeletonHandle() == skeletonHandle)
                     return meshHandle;
             }
@@ -431,21 +431,30 @@ namespace ignite
                         {
                             if (sceneRenderer)
                             {
-                                assetData.sceneData.sceneRenderer->SetPreviewMesh(Renderer::GetDefaultMesh(MeshType::UV_SPHERE));
+                                sceneRenderer->SetPreviewStaticMesh(Renderer::GetDefaultMesh(EMeshType::UV_SPHERE));
                                 sceneRenderer->SetPreviewMaterial(loaded->As<Material>());
                                 assetData.asset = loaded;
                             }
                             break;
                         }
-                        case AssetType::Mesh:
+                        case AssetType::StaticMesh:
                         {
                             if (sceneRenderer)
                             {
-                                sceneRenderer->SetPreviewMesh(loaded->As<Mesh>());
+                                sceneRenderer->SetPreviewStaticMesh(loaded->As<StaticMesh>());
                                 assetData.asset = loaded;
                             }
                             break;
                         }
+						case AssetType::SkeletalMesh:
+						{
+							if (sceneRenderer)
+							{
+								sceneRenderer->SetPreviewSkeletalMesh(loaded->As<SkeletalMesh>());
+								assetData.asset = loaded;
+							}
+							break;
+						}
                         case AssetType::Skeleton:
                         {
                             if (sceneRenderer)
@@ -470,6 +479,24 @@ namespace ignite
                             break;
                         }
                     }
+
+                    if (assetData.metadata.type == AssetType::Mesh 
+                        || assetData.metadata.type == AssetType::StaticMesh 
+                        || assetData.metadata.type == AssetType::SkeletalMesh)
+                    {
+                        auto mesh = loaded->As<Mesh>();
+                        if (mesh)
+                        {
+                            mesh->CalculateWorldAABB(glm::mat4(1.0f));
+							const auto &aabb = mesh->GetWorldAABB();
+							glm::vec3 focusCenter = (aabb.min + aabb.max) * 0.5f;
+							glm::vec3 halfExtents = glm::abs(aabb.max - aabb.min);
+							const float radius = glm::max(halfExtents.x, glm::max(halfExtents.y, halfExtents.z));
+							const float fov = glm::radians(assetData.sceneData.camera.fov);
+							const float distance = radius / std::tan(fov * 0.5f);
+							assetData.sceneData.camera.FocusTarget(focusCenter, distance);
+                        }
+                    }
                 }
             }
         }
@@ -484,7 +511,7 @@ namespace ignite
                 continue;
             }
 
-            if (assetData.metadata.type != AssetType::Skeleton && assetData.metadata.type != AssetType::Mesh)
+            if (assetData.metadata.type != AssetType::Skeleton && assetData.metadata.type != AssetType::SkeletalMesh)
             {
                 continue;
             }
@@ -496,7 +523,7 @@ namespace ignite
             }
             else
             {
-                Ref<Mesh> mesh = assetData.asset->As<Mesh>();
+                auto mesh = assetData.asset->As<SkeletalMesh>();
                 if (!mesh)
                 {
                     continue;
@@ -532,21 +559,21 @@ namespace ignite
                 {
                     if (!previewState.cachedPreviewMesh || previewState.cachedPreviewMesh->handle != previewState.previewMeshHandle)
                     {
-                        previewState.cachedPreviewMesh = assetManager->GetAsset<Mesh>(previewState.previewMeshHandle);
+                        previewState.cachedPreviewMesh = assetManager->GetAsset<SkeletalMesh>(previewState.previewMeshHandle);
                     }
 
                     if (previewState.cachedPreviewMesh && previewState.cachedPreviewMesh->IsReady())
                     {
-                        assetData.sceneData.sceneRenderer->SetPreviewMesh(previewState.cachedPreviewMesh);
+                        assetData.sceneData.sceneRenderer->SetPreviewSkeletalMesh(previewState.cachedPreviewMesh);
                     }
                     else
                     {
-                        assetData.sceneData.sceneRenderer->SetPreviewMesh(nullptr);
+                        assetData.sceneData.sceneRenderer->SetPreviewSkeletalMesh(nullptr);
                     }
                 }
                 else
                 {
-                    assetData.sceneData.sceneRenderer->SetPreviewMesh(nullptr);
+                    assetData.sceneData.sceneRenderer->SetPreviewSkeletalMesh(nullptr);
                 }
             }
 
@@ -634,8 +661,12 @@ namespace ignite
         for (auto &assetData : m_Assets)
         {
             if (!assetData.sceneData.viewportVisible || !assetData.isOpen
-                || (assetData.metadata.type != AssetType::Material && assetData.metadata.type != AssetType::Mesh
-                    && assetData.metadata.type != AssetType::Skeleton && assetData.metadata.type != AssetType::Widget))
+                || (assetData.metadata.type != AssetType::Material 
+                    && assetData.metadata.type != AssetType::Mesh 
+                    && assetData.metadata.type != AssetType::SkeletalMesh 
+                    && assetData.metadata.type != AssetType::StaticMesh
+                    && assetData.metadata.type != AssetType::Skeleton 
+                    && assetData.metadata.type != AssetType::Widget))
             {
                 continue;
             }
@@ -693,11 +724,16 @@ namespace ignite
                     UIMaterial2DEditor(assetData);
                     break;
                 }
-                case AssetType::Mesh:
+                case AssetType::SkeletalMesh:
                 {
-                    UIMeshEditor(assetData);
+                    UISkeletalMeshEditor(assetData);
                     break;
                 }
+				case AssetType::StaticMesh:
+				{
+					UIStaticMeshEditor(assetData);
+					break;
+				}
                 case AssetType::SkeletalAnimation:
                 {
                     UISkeletalAnimationEditor(assetData);
@@ -2732,7 +2768,6 @@ namespace ignite
         assetData.isOpen = isOpen;
         assetData.requestFocus = false;
     }
-
 #pragma endregion !2D_STUFF
 
 
@@ -2748,11 +2783,11 @@ namespace ignite
                 {
                     if (Ref<Material> material = assetData.asset->As<Material>())
                     {
-                        const uint64_t stateKey = static_cast<uint64_t>(assetData.handle);
+                        const auto stateKey = static_cast<uint64_t>(assetData.handle);
                         MaterialPreviewEditorState &previewState = s_MaterialPreviewEditorState[stateKey];
                         if (!previewState.initialized)
                         {
-                            previewState.selectedMeshType = static_cast<int>(MeshType::UV_SPHERE);
+                            previewState.selectedMeshType = static_cast<int>(EMeshType::UV_SPHERE);
                             previewState.initialized = true;
                         }
 
@@ -2819,7 +2854,7 @@ namespace ignite
                         if (ImGui::Combo("Preview Mesh", &meshSelection, meshNames, IM_ARRAYSIZE(meshNames)))
                         {
                             previewState.selectedMeshType = meshSelection;
-                            assetData.sceneData.sceneRenderer->SetPreviewMesh(Renderer::GetDefaultMesh((MeshType)meshSelection));
+                            assetData.sceneData.sceneRenderer->SetPreviewStaticMesh(Renderer::GetDefaultMesh((EMeshType)meshSelection));
                         }
 
                         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", assetData.previewEnvTexHandle, [&]()
@@ -3245,8 +3280,205 @@ namespace ignite
         assetData.requestFocus = false;
     }
 
+	void AssetEditorPanel::UIStaticMeshEditor(AssetEditorData &assetData)
+	{
+		bool isOpen = assetData.isOpen;
+		if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(900.0f, 680.0f), ImVec2(420.0f, 560.0f), 0))
+		{
+			if (DrawAssetEditorHeader(assetData))
+			{
+				if (assetData.asset && assetData.asset->IsReady())
+				{
+					if (Ref<StaticMesh> mesh = assetData.asset->As<StaticMesh>())
+					{
+						auto project = m_EditorLayer->GetActiveProject().get();
+						auto assetManager = project->GetAssetManager();
 
-    void AssetEditorPanel::UIMeshEditor(AssetEditorData &assetData)
+						const auto meshKey = static_cast<uint64_t>(mesh->handle);
+						MeshEditorState &meshEditorState = s_MeshEditorState[meshKey];
+
+						const float totalWidth = ImGui::GetContentRegionAvail().x;
+						const float spacing = ImGui::GetStyle().ItemSpacing.x;
+						const float listWidth = std::max(260.0f, totalWidth * 0.28f);
+						const float detailsWidth = std::max(320.0f, totalWidth * 0.30f);
+						const float viewportWidth = std::max(220.0f, totalWidth - listWidth - detailsWidth - spacing * 2.0f);
+
+						if (ImGui::BeginChild("##left_details_panel", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar))
+						{
+							ImGui::BeginTabBar("##tab_bar_left_details");
+
+							// Asset details
+							if (ImGui::BeginTabItem("Asset Details"))
+							{
+								ImGui::BeginChild("##asset_details", { 0.0f, 0.0f }, ImGuiChildFlags_None);
+								{
+									ImGui::SeparatorText("Material Slots");
+									const auto &meshInstances = mesh->GetMeshInstances();
+									for (size_t i = 0; i < meshInstances.size(); ++i)
+									{
+										Ref<StaticMeshInstance> instance = meshInstances[i];
+										if (!instance)
+										{
+											continue;
+										}
+
+										ImGui::PushID(static_cast<int>(i));
+										std::string slotLabel = std::format("Slot {}", i);
+										std::string materialButtonLabel = "Drop Material Here";
+
+										const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
+										if (materialHandle != AssetHandle(0))
+										{
+											materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
+										}
+
+										ImGui::TextUnformatted(slotLabel.c_str());
+										ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
+										if (ImGui::BeginDragDropTarget())
+										{
+											if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+											{
+												if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+												{
+													const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+													const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
+													if (metadata.type == AssetType::Material)
+													{
+														instance->SetMaterial(droppedHandle);
+														mesh->SetDirtyFlag(true);
+													}
+												}
+											}
+											ImGui::EndDragDropTarget();
+										}
+
+										if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
+										{
+											instance->SetMaterial(AssetHandle(0));
+											mesh->SetDirtyFlag(true);
+										}
+
+										ImGui::Separator();
+										ImGui::PopID();
+									}
+								}
+								ImGui::EndChild();
+
+								ImGui::EndTabItem();
+							}
+
+							ImGui::EndTabBar();
+
+							ImGui::Separator();
+
+
+						}
+						ImGui::EndChild(); // !left details panel
+						ImGui::SameLine();
+
+						// Mesh preview panel
+						if (ImGui::BeginChild("##mesh_preview", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+						{
+							ImGui::TextUnformatted("Mesh + Skeleton Preview");
+							ImGui::Separator();
+
+							const float splitterThickness = 6.0f;
+							const float minViewportHeight = 120.0f;
+							const float minTimelineHeight = 120.0f;
+							const ImVec2 previewRegion = ImGui::GetContentRegionAvail();
+							float maxTimelineHeight = minTimelineHeight;
+							float meshScenePreviewHeight = previewRegion.y;
+
+							// scene viewport child
+							if (ImGui::BeginChild("##mesh_scene_preview", { 0.0f, meshScenePreviewHeight }, ImGuiChildFlags_None))
+							{
+								const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+								assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
+								assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+								UpdateSceneCamera(assetData.sceneData, ImGui::GetIO().DeltaTime);
+
+								Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
+								if (previewTexture && previewTexture->GetHandle())
+								{
+									const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+									ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+									assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+
+									ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
+									ImGui::TextDisabled(
+										"RTTex=%p | RT=%p | %ux%u",
+										reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
+										assetData.sceneData.compositeRT.get(),
+										assetData.sceneData.viewportWidth,
+										assetData.sceneData.viewportHeight);
+
+									const glm::mat4 viewProjection = assetData.sceneData.camera.GetProjection() * assetData.sceneData.camera.GetView();
+									const Rect viewportRect{ viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
+								}
+								else
+								{
+									ImGui::Dummy(viewportSize);
+									assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+								}
+							}
+							ImGui::EndChild(); // !scene viewport child
+						}
+						ImGui::EndChild(); // !Mesh preview panel
+						ImGui::SameLine();
+
+						// right details panel
+						if (ImGui::BeginChild("##right_details_panel", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+						{
+							ImGui::BeginTabBar("##tab_bar_right_details");
+
+							if (ImGui::BeginTabItem("Scene Preview"))
+							{
+								// Scene details preview child
+								if (ImGui::BeginChild("##scene_details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
+								{
+									DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", assetData.previewEnvTexHandle, [&]()
+										{
+											if (assetData.sceneData.sceneRenderer)
+											{
+												if (assetData.previewEnvTexHandle == AssetHandle(0))
+												{
+													assetData.sceneData.sceneRenderer->SetEnvironmentTexture(AssetHandle(0));
+												}
+												else
+												{
+													assetData.sceneData.sceneRenderer->SetEnvironmentTexture(assetData.previewEnvTexHandle);
+												}
+											}
+										});
+								}
+								ImGui::EndChild(); // !scene details preview child
+
+								ImGui::EndTabItem();
+							}
+
+							ImGui::EndTabBar();
+						}
+						ImGui::EndChild(); // !right details panel
+					}
+					else
+					{
+						ImGui::Text("Invalid asset!");
+					}
+				}
+				else
+				{
+					ImGui::Text("Loading asset...");
+				}
+			}
+		}
+
+		UIAssetEditorClosePopup(assetData, isOpen);
+		ImGui::End();
+		assetData.isOpen = isOpen;
+		assetData.requestFocus = false;
+	}
+
+    void AssetEditorPanel::UISkeletalMeshEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
         if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(900.0f, 680.0f), ImVec2(420.0f, 560.0f), 0))
@@ -3255,12 +3487,12 @@ namespace ignite
             {
                 if (assetData.asset && assetData.asset->IsReady())
                 {
-                    if (Ref<Mesh> mesh = assetData.asset->As<Mesh>())
+                    if (Ref<SkeletalMesh> mesh = assetData.asset->As<SkeletalMesh>())
                     {
                         auto project = m_EditorLayer->GetActiveProject().get();
                         auto assetManager = project->GetAssetManager();
 
-                        const uint64_t meshKey = static_cast<uint64_t>(mesh->handle);
+                        const auto meshKey = static_cast<uint64_t>(mesh->handle);
                         MeshEditorState &meshEditorState = s_MeshEditorState[meshKey];
                         AssetHandle skeletonHandle = mesh->GetSkeletonHandle();
                         if (meshEditorState.skeletonHandle != skeletonHandle)
@@ -3407,7 +3639,7 @@ namespace ignite
 
                                     for (size_t i = 0; i < meshInstances.size(); ++i)
                                     {
-                                        Ref<MeshInstance> instance = meshInstances[i];
+                                        Ref<SkeletalMeshInstance> instance = meshInstances[i];
                                         if (!instance)
                                         {
                                             continue;
@@ -3417,7 +3649,7 @@ namespace ignite
                                         std::string slotLabel = std::format("Slot {}", i);
                                         std::string materialButtonLabel = "Drop Material Here";
 
-                                        const AssetHandle materialHandle = instance->GetMaterialHandle();
+                                        const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
                                         if (materialHandle != AssetHandle(0))
                                         {
                                             materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
@@ -4400,7 +4632,7 @@ namespace ignite
                                     {
                                         const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
                                         const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
-                                        if (md.type == AssetType::Mesh)
+                                        if (md.type == AssetType::Mesh || md.type == AssetType::SkeletalMesh)
                                         {
                                             previewState.previewMeshHandle = droppedHandle;
                                             previewState.cachedPreviewMesh.reset();
@@ -4756,9 +4988,20 @@ namespace ignite
                 return saveDefaultMeta();
             }
 
-            case AssetType::Mesh:
+			case AssetType::StaticMesh:
+			{
+				Ref<StaticMesh> asset = assetData.asset->As<StaticMesh>();
+				if (!asset)
+					return false;
+				if (!asset->Serialize(savePath))
+					return false;
+				asset->NotifyChange();
+				return saveDefaultMeta();
+			}
+
+            case AssetType::SkeletalMesh:
             {
-                Ref<Mesh> asset = assetData.asset->As<Mesh>();
+                Ref<SkeletalMesh> asset = assetData.asset->As<SkeletalMesh>();
                 if (!asset)
                     return false;
                 if (!asset->Serialize(savePath))
@@ -4849,8 +5092,11 @@ namespace ignite
     {
         // Only some asset type can use scene renderer
         const AssetType assetType = assetData.metadata.type;
-        if (assetType != AssetType::Material && assetType != AssetType::Mesh && assetType != AssetType::Skeleton && assetType != AssetType::Widget)
+        if (assetType != AssetType::Material && assetType != AssetType::Mesh && assetType != AssetType::StaticMesh
+            && assetType != AssetType::SkeletalMesh && assetType != AssetType::Skeleton && assetType != AssetType::Widget)
+        {
             return;
+        }
 
         const uint32_t width = assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280;
         const uint32_t height = assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720;
@@ -4866,24 +5112,29 @@ namespace ignite
 
         auto assetManager = AssetManager::GetInstance();
 
-        Ref<Mesh> meshResult = Renderer::GetDefaultMesh(MeshType::UV_SPHERE);
+        Ref<Mesh> meshResult;
+        Ref<Material> material;
+
         AssetHandle handle = assetData.handle;
 
-        Ref<Material> material;
         if (assetType == AssetType::Material)
         {
             material = assetManager->GetAsset<Material>(handle);
         }
-        else if (assetType == AssetType::Mesh)
+        else if (assetType == AssetType::SkeletalMesh)
         {
-            meshResult = assetManager->GetAsset<Mesh>(handle);
+            meshResult = assetManager->GetAsset<SkeletalMesh>(handle);
         }
+		else if (assetType == AssetType::StaticMesh)
+		{
+			meshResult = assetManager->GetAsset<StaticMesh>(handle);
+		}
         else if (assetType == AssetType::Skeleton)
         {
             const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(assetData.handle);
             if (matchedMeshHandle != AssetHandle(0))
             {
-                Ref<Mesh> matchedMesh = assetManager->GetAsset<Mesh>(matchedMeshHandle);
+                auto matchedMesh = assetManager->GetAsset<SkeletalMesh>(matchedMeshHandle);
                 if (matchedMesh)
                 {
                     meshResult = matchedMesh;
@@ -4894,7 +5145,7 @@ namespace ignite
             }
         }
 
-        Application::SubmitToRenderThread([this, handle, width, height, meshResult, assetType, material]()
+        Application::SubmitToRenderThread([this, handle, width, height, assetType, material, assetData]() mutable
         {
             RenderTargetCreateInfo rtCreateInfo = {};
             rtCreateInfo.width = width;

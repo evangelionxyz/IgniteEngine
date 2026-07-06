@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "project.hpp"
 #include "ignite/core/string_utils.hpp"
@@ -9,19 +9,9 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/scriptable_object.hpp"
 #include "ignite/core/platform_utils.hpp"
+#include "ignite/core/application.hpp"
 
 #include "ignite/serializer/serializer.hpp"
-
-#include <array>
-#include <sstream>
-#include <iomanip>
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <format>
-#include <chrono>
-#include <thread>
-#include <ranges>
 
 namespace ignite
 {

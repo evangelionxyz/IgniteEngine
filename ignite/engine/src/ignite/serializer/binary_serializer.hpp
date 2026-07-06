@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 #ifndef IGN_BINARY_SERIALIZER_HPP
@@ -29,9 +8,11 @@
 #include <stb_image_write.h>
 #include <openexr.h>
 #include <openexr_errors.h>
+
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 
 #include "ignite/core/path.hpp"
@@ -474,24 +455,26 @@ namespace ignite
             return mat;
         }
 
-        static std::vector<std::byte> SerializeMesh(const Mesh *mesh, const ignite::Path &filepath)
+        template<typename MeshType_T, MeshVertex VertexType_T>
+	    requires std::is_base_of<Mesh, MeshType_T>::value
+        static std::vector<std::byte> SerializeMesh(const MeshType_T *mesh, const ignite::Path &filepath)
         {
             std::vector<std::byte> buffer;
 
-            const std::vector<Ref<MeshInstance>> &meshInstances = mesh->GetMeshInstances();
+            const auto &meshInstances = mesh->GetMeshInstances();
             uint32_t meshCount = static_cast<uint32_t>(meshInstances.size());
             AppendRaw(buffer, meshCount);
 
-            for (auto &m : meshInstances)
+            for (const auto &m : meshInstances)
             {
-                auto &primitive = m->GetPrimitive();
+                const auto &primitive = m->GetPrimitive();
 
                 uint32_t verticesCount = static_cast<uint32_t>(primitive->vertices.size());
                 uint32_t indicesCount = static_cast<uint32_t>(primitive->indices.size());
                 AppendRaw(buffer, verticesCount);
                 AppendRaw(buffer, indicesCount);
 
-                for (VertexMesh_Anim &vertex : primitive->vertices)
+                for (const VertexType_T &vertex : primitive->vertices)
                 {
                     AppendRaw(buffer, vertex.position);
                     AppendRaw(buffer, vertex.normal);
@@ -499,8 +482,12 @@ namespace ignite
                     AppendRaw(buffer, vertex.bitangent);
                     AppendRaw(buffer, vertex.uv);
                     AppendRaw(buffer, vertex.color);
-                    AppendRaw(buffer, vertex.boneIDs);
-                    AppendRaw(buffer, vertex.weights);
+
+                    if constexpr (SkeletalMeshVertex<VertexType_T>)
+					{
+						AppendRaw(buffer, vertex.boneIDs);
+						AppendRaw(buffer, vertex.weights);
+					}
                 }
 
                 AppendBytes(buffer, primitive->indices.data(), indicesCount * sizeof(uint32_t));
@@ -526,15 +513,18 @@ namespace ignite
 
                 AppendRaw(buffer, m->linkedJointIndex);
 
-                uint64_t materialHandle = m->GetMaterialHandle();
+                uint64_t materialHandle = m->GetMaterialAssetHandle();
                 AppendRaw(buffer, materialHandle);
             }
 
-            const uint64_t skeletonHandle = static_cast<uint64_t>(mesh->GetSkeletonHandle());
-            AppendRaw(buffer, skeletonHandle);
+            if constexpr (SkeletalMeshVertex<VertexType_T>)
+			{
+				const uint64_t skeletonHandle = static_cast<uint64_t>(mesh->GetSkeletonHandle());
+				AppendRaw(buffer, skeletonHandle);
 
-            const uint64_t animatorHandle = static_cast<uint64_t>(mesh->GetAnimatorHandle());
-            AppendRaw(buffer, animatorHandle);
+				const uint64_t animatorHandle = static_cast<uint64_t>(mesh->GetAnimatorHandle());
+				AppendRaw(buffer, animatorHandle);
+			}
 
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
@@ -543,15 +533,17 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<Mesh> DeserializeMesh(const ignite::Path &filepath)
+		template<typename MeshType_T, MeshVertex VertexType_T>
+        requires std::is_base_of<Mesh, MeshType_T>::value
+        static Ref<MeshType_T> DeserializeMesh(const ignite::Path &filepath)
         {
-            Ref<Mesh> skeletalMesh = Mesh::Create();
-
             std::ifstream inFile(filepath, std::ios::binary);
             if (!inFile)
             {
                 return nullptr;
             }
+
+            Ref<MeshType_T> mesh = MeshType_T::Create();
 
             uint32_t meshCount = 0;
             ReadRaw(inFile, &meshCount);
@@ -562,19 +554,24 @@ namespace ignite
                 ReadRaw(inFile, &verticesCount);
                 ReadRaw(inFile, &indicesCount);
 
-                Ref<MeshPrimitive> primitive = CreateRef<MeshPrimitive>();
+                Ref<MeshPrimitive<VertexType_T>> primitive = CreateRef<MeshPrimitive<VertexType_T>>();
                 primitive->vertices.reserve(verticesCount);
                 for (uint32_t vertexIndex = 0; vertexIndex < verticesCount; ++vertexIndex)
                 {
-                    VertexMesh_Anim vertex;
+                    VertexType_T vertex;
                     ReadRaw(inFile, &vertex.position);
                     ReadRaw(inFile, &vertex.normal);
                     ReadRaw(inFile, &vertex.tangent);
                     ReadRaw(inFile, &vertex.bitangent);
                     ReadRaw(inFile, &vertex.uv);
                     ReadRaw(inFile, &vertex.color);
-                    ReadRaw(inFile, &vertex.boneIDs);
-                    ReadRaw(inFile, &vertex.weights);
+					
+                    if constexpr (SkeletalMeshVertex<VertexType_T>)
+					{
+						ReadRaw(inFile, &vertex.boneIDs);
+						ReadRaw(inFile, &vertex.weights);
+					}
+
                     primitive->vertices.push_back(vertex);
                 }
 
@@ -585,7 +582,7 @@ namespace ignite
                 ReadRaw(inFile, &nameSize);
                 std::string name = ReadString(inFile, nameSize);
 
-				Ref<MeshInstance> meshInstance = MeshInstance::Create(name, primitive);
+                auto meshInstance = MeshInstanceFor<VertexType_T>::Create(name, primitive);
 
                 for (int j = 0; j < 4; ++j)
                 {
@@ -612,23 +609,28 @@ namespace ignite
                     meshInstance->SetMaterial(AssetHandle(materialHandle));
                 }
 
-                skeletalMesh->AddMeshInstance(meshInstance);
+                mesh->AddMeshInstance(meshInstance);
             }
 
-            uint64_t skeletonHandle = 0;
-            if (ReadRaw(inFile, &skeletonHandle) && skeletonHandle != 0)
+            if constexpr (SkeletalMeshVertex<VertexType_T>)
             {
-                skeletalMesh->SetSkeleton(AssetHandle(skeletonHandle));
+				uint64_t skeletonHandle = 0;
+				if (ReadRaw(inFile, &skeletonHandle) && skeletonHandle != 0)
+				{
+					mesh->SetSkeleton(AssetHandle(skeletonHandle));
+				}
+
+				uint64_t animatorHandle = 0;
+				if (ReadRaw(inFile, &animatorHandle) && animatorHandle != 0)
+				{
+					mesh->SetAnimator(AssetHandle(animatorHandle));
+				}
             }
 
-            uint64_t animatorHandle = 0;
-            if (ReadRaw(inFile, &animatorHandle) && animatorHandle != 0)
-            {
-                skeletalMesh->SetAnimator(AssetHandle(animatorHandle));
-            }
+            mesh->CalculateLocalAABB();
 
             inFile.close();
-            return skeletalMesh;
+            return mesh;
         }
 
         static std::vector<std::byte> SerializeSkeletalAnimation(SkeletalAnimation *anim, const ignite::Path &filepath)

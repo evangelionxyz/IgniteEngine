@@ -1,15 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "asset_worker.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"
-
-#include <mutex>
-#include <thread>
-#include <queue>
-#include <condition_variable>
 
 namespace ignite
 {

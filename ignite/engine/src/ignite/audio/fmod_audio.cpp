@@ -5,8 +5,6 @@
 #include "fmod_audio.hpp"
 #include "fmod_sound.hpp"
 
-#include <ranges>
-
 namespace ignite {
 
     static FMOD_RESULT result;

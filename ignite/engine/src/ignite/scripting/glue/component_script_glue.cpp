@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "component_script_glue.hpp"
 #include "ignite/core/input/input_system.hpp"
@@ -26,17 +26,6 @@
 #include "ignite/physics/2d/physics_2d.hpp"
 
 #include <glm/gtx/quaternion.hpp>
-#include <algorithm>
-#include <cctype>
-#include <functional>
-#include <string>
-#include <string_view>
-#include <typeinfo>
-#include <unordered_map>
-#include <vector>
-#include <cstring>
-#include <limits>
-#include <objbase.h>
 
 namespace ignite
 {
@@ -97,21 +86,22 @@ namespace ignite
             uint64_t resultID = 0;
 
             // --- 3D Meshes ---
-            auto meshView = scene->registry->view<MeshComponent, TransformComponent>();
-            for (auto entityID : meshView)
+            auto meshView = scene->registry->view<SkeletalMeshComponent, TransformComponent>();
+            for (entt::entity e : meshView)
             {
-                Entity entity(entityID, scene);
-                auto &transform = entity.GetComponent<TransformComponent>();
-                if (!transform.visible) continue;
+				const auto &[tr, smc] = scene->registry->get<TransformComponent, SkeletalMeshComponent>(e);
+                
+                if (!tr.visible || smc.handle == AssetHandle(0))
+                    continue;
 
-                auto &mesh = entity.GetComponent<MeshComponent>();
+				auto mesh = AssetManager::GetInstance()->GetAsset<SkeletalMesh>(smc.handle);
                 float t;
-                if (mesh.worldAABB.IntersectRay(*origin, *direction, t))
+                if (mesh->GetWorldAABB().IntersectRay(*origin, *direction, t))
                 {
                     if (t < minDistance)
                     {
                         minDistance = t;
-                        resultID = (uint64_t)entity.GetUUID();
+                        resultID = (uint64_t)Entity{ e, scene }.GetUUID();
                     }
                 }
             }

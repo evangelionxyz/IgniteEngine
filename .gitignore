@@ -13,7 +13,8 @@
 *.slnx
 *.aps
 .agent
-*cmake_install.cmake
+.agents
+cmake_install.cmake
 imgui.ini
 Makefile
 CMakeFiles

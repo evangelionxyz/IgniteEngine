@@ -1,14 +1,17 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "renderer_2d.hpp"
-#include "ignite/graphics/render_target.hpp"
 #include "ignite/scene/component.hpp"
-#include "ignite/graphics/buffers/constant_buffer.hpp"
-
 #include "ignite/core/logger.hpp"
 #include "ignite/core/device/device_manager.hpp"
+
+#include "ignite/graphics/render_target.hpp"
+#include "ignite/graphics/buffers/vertex_buffer.hpp"
+#include "ignite/graphics/buffers/index_buffer.hpp"
+#include "ignite/graphics/buffers/constant_buffer.hpp"
+
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
@@ -17,8 +20,6 @@
 #include "ignite/project/project.hpp"
 
 #include <stb_image.h>
-#include <algorithm>
-#include <unordered_map>
 
 namespace ignite
 {

@@ -1,35 +1,12 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef IGN_MATERIAL_HPP
 #define IGN_MATERIAL_HPP
 
 #include "ignite/core/base.hpp"
 #include "ignite/asset/asset.hpp"
-
-#include "ignite/core/application.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
-#include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 
 #include <glm/glm.hpp>
@@ -38,9 +15,7 @@
 
 namespace ignite
 {
-    class ISceneRenderer;
-    class AssetManager;
-    class Project;
+    class Texture;
 
     enum class MaterialType
     {
@@ -79,13 +54,12 @@ namespace ignite
         nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
         Ref<ConstantBuffer> GetGPUDataBuffer() { return m_GPUDataBuffer; }
         MaterialType GetType() const { return m_Type; }
-		MaterialBufferData gpuData;
+		Material_GPUData gpuData;
 
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 
 		static AssetType GetStaticType() { return AssetType::Material; }
 		virtual AssetType GetAssetType() override { return GetStaticType(); }
-
 
         virtual bool Serialize(const ignite::Path &filepath) override;
         static Ref<Material> Deserialize(const ignite::Path &filepath);

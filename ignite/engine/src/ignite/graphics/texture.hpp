@@ -26,16 +26,14 @@
 
 #include "ignite/core/base.hpp"
 #include "ignite/core/logger.hpp"
-#include "ignite/project/project.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/buffer.hpp"
+#include "ignite/core/path.hpp"
 #include "mip_generator.hpp"
 
 #include <openexr.h>
 #include <openexr_errors.h>
-
-#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -107,18 +105,6 @@ namespace ignite
                 }
             }
             return -1;
-        }
-
-        static ignite::Path BuildMetaPath(Project *project, const AssetMetaData &metadata, const char *extension)
-        {
-            if (!project)
-            {
-                return {};
-            }
-
-            ignite::Path assetPath = project->GetProjectFilepath(metadata.filepath);
-            assetPath += extension;
-            return assetPath;
         }
 
         static bool ConfigureExrChannel(exr_decode_pipeline_t &decode, int channelIndex, std::vector<float> &plane, uint32_t width, uint32_t height)

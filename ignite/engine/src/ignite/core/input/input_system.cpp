@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "input_system.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
 #include "ignite/graphics/window.hpp"

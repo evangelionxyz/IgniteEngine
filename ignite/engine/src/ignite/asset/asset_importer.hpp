@@ -46,38 +46,32 @@ namespace ignite
         None = 0,
         Open,
         Save,
-        ImportAssets,
+        Import,
     };
 
     struct FileImportPayload
     {
         ImportType type = ImportType::None;
-        FileStatus loadStatus = FileStatus::Unknown;
+        FileStatus status = FileStatus::Unknown;
         AssetMetaData metadata;
+        ignite::Path targetDirectory;
         void *userData = nullptr;
     };
 
-    struct AssetImporterPayload
+    struct StaticMeshImportPayload : public FileImportPayload
     {
-        ignite::Path targetDirectory;
-        AssetType assetType = AssetType::Invalid;
+		bool importMaterials = true;
+		bool forceRebuild = false;
     };
 
-    struct MeshImportOptions
+	struct SkeletalMeshImportPayload : public StaticMeshImportPayload
     {
         bool importMesh = true;
         bool importSkeleton = true;
         bool importAnimations = true;
-        bool importMaterials = true;
-        bool forceRebuild = false;
-        ignite::Path targetDirectory;
         bool useExistingSkeletonForAnimations = false;
-        AssetHandle existingSkeletonHandle = AssetHandle(0);
-    };
 
-    struct StaticMeshImportOptions
-    {
-        ignite::Path targetDirectory;
+        AssetHandle existingSkeletonHandle = AssetHandle(0);
     };
 
     class IGN_API AssetImporter
@@ -86,7 +80,9 @@ namespace ignite
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, std::function<void(Ref<Asset>, AssetHandle)> callback);
 
-        static Ref<Mesh> ImportMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const MeshImportOptions &options = MeshImportOptions());
+		static Ref<SkeletalMesh> ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const SkeletalMeshImportPayload &payload = SkeletalMeshImportPayload());
+		static Ref<StaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const StaticMeshImportPayload &payload = StaticMeshImportPayload());
+
         static Ref<Material> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Material2D> ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<SpriteSheet> ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);

@@ -1,4 +1,6 @@
-float4 Uncharted2Tonemap(float4 color)
+// Copyright (c) 2026 Evangelion Manuhutu
+
+static float4 Uncharted2Tonemap(float4 color)
 {
     float A = 0.15;
     float B = 0.50;
@@ -11,7 +13,7 @@ float4 Uncharted2Tonemap(float4 color)
     return ((color * (A * color + C * B) + D * E) / (color * (A * color + B)+ D * F))-E/F;
 }
 
-float3 Uncharted2Tonemap(float3 color, float exposure, float gamma)
+static float3 Uncharted2Tonemap(float3 color, float exposure, float gamma)
 {
     float4 mappedColor = Uncharted2Tonemap(float4(color, 1.0f) * exposure);
 
@@ -24,13 +26,13 @@ float3 Uncharted2Tonemap(float3 color, float exposure, float gamma)
     return gammaCorrected.rgb;
 }
 
-float3 Reinhard2Tonemap(float3 color)
+static float3 Reinhard2Tonemap(float3 color)
 {
   const float L_white = 4.0;
   return (color * (1.0 + color / (L_white * L_white))) / (1.0 + color);
 }
 
-float3 Reinhard2Tonemap(float3 color, float exposure, float gamma) {
+static float3 Reinhard2Tonemap(float3 color, float exposure, float gamma) {
     float3 mappedColor = Reinhard2Tonemap(color * exposure);
     
     float3 whiteScale = 1.0f / Reinhard2Tonemap(float3(11.2f, 11.2f, 11.2f));
@@ -41,14 +43,14 @@ float3 Reinhard2Tonemap(float3 color, float exposure, float gamma) {
     return gammaCorrected.rgb;
 }
 
-float3 FilmicTonemap(float3 color)
+static float3 FilmicTonemap(float3 color)
 {
     float3 X = max(float3(0.0f, 0.0f, 0.0f), color - 0.004);
     float3 result = (X * (6.2 * X + 0.5)) / (X * (6.2 * X + 1.7) + 0.06);
     return pow(result, float3(2.2f, 2.2f, 2.2f));
 }
 
-float3 FilmicTonemap(float3 color, float exposure, float gamma)
+static float3 FilmicTonemap(float3 color, float exposure, float gamma)
 {
     float3 mappedColor = FilmicTonemap(color * exposure);
     
@@ -60,7 +62,7 @@ float3 FilmicTonemap(float3 color, float exposure, float gamma)
     return gammaCorrected.rgb;
 }
 
-float3 ApplyTonemap(float3 color, int tonemapMode, float exposure, float gamma)
+static float3 ApplyTonemap(float3 color, int tonemapMode, float exposure, float gamma)
 {
     if (tonemapMode == 1)
     {
@@ -75,13 +77,13 @@ float3 ApplyTonemap(float3 color, int tonemapMode, float exposure, float gamma)
     return Reinhard2Tonemap(color, exposure, gamma);
 }
 
-float3 SRGBToLinear(float3 srgb)
+static float3 SRGBToLinear(float3 srgb)
 {
     float3 lt = step(float3(0.04045, 0.04045, 0.04045), srgb);
     return lerp(srgb / 12.92, pow((srgb + 0.055) / 1.055, 2.4), lt);
 }
 
-float3 SampleSphericalMap(Texture2D tex, SamplerState samp, float3 dir)
+static float3 SampleSphericalMap(Texture2D tex, SamplerState samp, float3 dir)
 {
     dir = normalize(dir);
     float2 uv;
@@ -91,7 +93,7 @@ float3 SampleSphericalMap(Texture2D tex, SamplerState samp, float3 dir)
 }
 
 // Convert RGB to Luminance 
-float Luminance(float3 color)
+static float Luminance(float3 color)
 {
     return dot(color, float3(0.299, 0.587, 0.114));
 }
@@ -119,7 +121,7 @@ static const float2 offsets[9] =
 
 
 // Sobel edge detection on color/luminance
-float2 SobelColor(float2 uv, float2 texelSize, Texture2D <float4>tex, SamplerState s)
+static float2 SobelColor(float2 uv, float2 texelSize, Texture2D <float4>tex, SamplerState s)
 {
     float sobelXResult = 0.0f;
     float sobelYResult = 0.0f;
@@ -138,7 +140,7 @@ float2 SobelColor(float2 uv, float2 texelSize, Texture2D <float4>tex, SamplerSta
     return float2(sobelXResult, sobelYResult);
 }
 
-float2 SobelDepth(float2 uv, float2 texelSize, Texture2D <float>depthTex, SamplerState s)
+static float2 SobelDepth(float2 uv, float2 texelSize, Texture2D <float>depthTex, SamplerState s)
 {
     float sobelXResult = 0;
     float sobelYResult = 0;

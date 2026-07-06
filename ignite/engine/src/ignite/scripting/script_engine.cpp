@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "pch.hpp"
+#include "ignite_pch.hpp"
 
 #include "script_engine.hpp"
 #include "glue/component_script_glue.hpp"
@@ -17,13 +17,6 @@
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/core/signals/signals.hpp"
-
-#include <cstdlib>
-#include <format>
-#include <fstream>
-#include <thread>
-#include <chrono>
-#include <ranges>
 
 namespace ignite
 {

@@ -292,20 +292,44 @@ namespace ignite
 
         if (ImGui::BeginMenu("3D"))
         {
-            if (ImGui::MenuItem("Mesh"))
+            if (ImGui::MenuItem("Skeletal Mesh"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Mesh"));
-                if (entity.IsValid() && !entity.HasComponent<MeshComponent>())
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Skeletal Mesh"));
+                if (entity.IsValid() && !entity.HasComponent<SkeletalMeshComponent>())
                 {
-                    entity.AddComponent<MeshComponent>();
+                    entity.AddComponent<SkeletalMeshComponent>();
                 }
             }
+			if (ImGui::MenuItem("Static Mesh"))
+			{
+				entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Static Mesh"));
+				if (entity.IsValid() && !entity.HasComponent<StaticMeshComponent>())
+				{
+					entity.AddComponent<StaticMeshComponent>();
+				}
+			}
             if (ImGui::MenuItem("Directional Light"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
                 if (entity.IsValid() && !entity.HasComponent<DirectionalLightComponent>())
                 {
                     entity.AddComponent<DirectionalLightComponent>();
+                }
+            }
+            if (ImGui::MenuItem("Point Light"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Point Light"));
+                if (entity.IsValid() && !entity.HasComponent<PointLightComponent>())
+                {
+                    entity.AddComponent<PointLightComponent>();
+                }
+            }
+            if (ImGui::MenuItem("Spot Light"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Spot Light"));
+                if (entity.IsValid() && !entity.HasComponent<SpotLightComponent>())
+                {
+                    entity.AddComponent<SpotLightComponent>();
                 }
             }
             if (ImGui::MenuItem("World Environment"))
@@ -709,6 +733,40 @@ namespace ignite
                 }
             });
 
+            RenderComponent<PointLightComponent>("Point Light", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<PointLightComponent>();
+
+                UI::DrawCheckbox("Enabled", &c.enabled);
+                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
+                UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
+
+                ImGui::SeparatorText("Attenuation");
+                UI::DrawFloatControl("Constant", &c.constantAttenuation, 0.01f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Linear", &c.linearAttenuation, 0.001f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Quadratic", &c.quadraticAttenuation, 0.0001f, 0.0f, 10.0f);
+            });
+
+            RenderComponent<SpotLightComponent>("Spot Light", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<SpotLightComponent>();
+
+                UI::DrawCheckbox("Enabled", &c.enabled);
+                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
+                UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
+
+                ImGui::SeparatorText("Attenuation");
+                UI::DrawFloatControl("Constant", &c.constantAttenuation, 0.01f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Linear", &c.linearAttenuation, 0.001f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Quadratic", &c.quadraticAttenuation, 0.0001f, 0.0f, 10.0f);
+
+                ImGui::SeparatorText("Cone angles");
+                UI::DrawFloatControl("Inner Angle", &c.innerConeAngle, 0.1f, 0.0f, 90.0f);
+                UI::DrawFloatControl("Outer Angle", &c.outerConeAngle, 0.1f, 0.0f, 90.0f);
+            });
+
             RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<Sprite2DComponent>();
@@ -917,14 +975,123 @@ namespace ignite
                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
             });
 
-            RenderComponent<MeshComponent>("Mesh", selectedEntity, [&]()
+			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
+			{
+				auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
+
+				bool isMeshLoaded = c.handle != AssetHandle(0);
+
+				std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
+				UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
+				{
+					if (ImGui::BeginDragDropTarget())
+					{
+						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+						{
+							LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+							AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+							auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+							AssetMetaData metadata = assetManager->GetMetaData(handle);
+
+							if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
+							{
+								metadata.type = AssetType::StaticMesh;
+								assetManager->AssignMetaData(handle, metadata);
+								assetManager->UnloadAsset(handle);
+								c.handle = handle;
+							}
+						}
+						ImGui::EndDragDropTarget();
+					}
+
+					if (isMeshLoaded)
+					{
+						ImGui::SameLine();
+						if (ImGui::Button("X"))
+						{
+							c.handle = AssetHandle(0); // reset the mesh
+						}
+					}
+				});
+
+				if (isMeshLoaded)
+				{
+					Ref<StaticMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<StaticMesh>(c.handle);
+					if (sm)
+					{
+						// Override Materials
+						if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
+						{
+							const auto &instances = sm->GetMeshInstances();
+							for (size_t i = 0; i < instances.size(); ++i)
+							{
+								const auto &instance = instances[i];
+								std::string submeshName = instance->GetName();
+								if (submeshName.empty())
+								{
+									submeshName = "Submesh " + std::to_string(i);
+								}
+								else
+								{
+									submeshName = std::format("{} (Submesh {})", submeshName, i);
+								}
+
+								AssetHandle overrideMaterialHandle = AssetHandle(0);
+								auto it = c.overrideMaterials.find(static_cast<int>(i));
+								if (it != c.overrideMaterials.end())
+								{
+									overrideMaterialHandle = it->second;
+								}
+
+								bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
+								std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
+
+								UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [this, &c, i, isOverrideLoaded, &selectedEntity]()
+								{
+									if (ImGui::BeginDragDropTarget())
+									{
+										if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+										{
+											LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+											AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+											auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+											AssetMetaData metadata = assetManager->GetMetaData(handle);
+
+											if (metadata.type == AssetType::Material)
+											{
+												StaticMeshComponent before = c;
+												c.overrideMaterials[static_cast<int>(i)] = handle;
+												CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+											}
+										}
+										ImGui::EndDragDropTarget();
+									}
+
+									if (isOverrideLoaded)
+									{
+										ImGui::SameLine();
+										if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
+										{
+                                            StaticMeshComponent before = c;
+											c.overrideMaterials.erase(static_cast<int>(i));
+											CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+										}
+									}
+								});
+							}
+						}
+					}
+				}
+			});
+
+            RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
             {
-                auto &c = selectedEntity.GetComponent<MeshComponent>();
+                auto &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
 
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
                 std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
+                UI::DrawButtonWithColumn("Skeletal Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -935,9 +1102,9 @@ namespace ignite
                             auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
                             AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-                            if (metadata.type == AssetType::Mesh)
+                            if (metadata.type == AssetType::Mesh || metadata.type == AssetType::SkeletalMesh)
                             {
-                                metadata.type = AssetType::Mesh;
+                                metadata.type = AssetType::SkeletalMesh;
                                 assetManager->AssignMetaData(handle, metadata);
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
@@ -959,7 +1126,7 @@ namespace ignite
 
                 if (isMeshLoaded)
                 {
-                    Ref<Mesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<Mesh>(c.handle);
+                    Ref<SkeletalMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<SkeletalMesh>(c.handle);
                     if (sm)
                     {
                         // Override Materials
@@ -1002,9 +1169,9 @@ namespace ignite
 
                                             if (metadata.type == AssetType::Material)
                                             {
-                                                MeshComponent before = c;
+                                                SkeletalMeshComponent before = c;
                                                 c.overrideMaterials[static_cast<int>(i)] = handle;
-                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<MeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                                             }
                                         }
                                         ImGui::EndDragDropTarget();
@@ -1015,9 +1182,9 @@ namespace ignite
                                         ImGui::SameLine();
                                         if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
                                         {
-                                            MeshComponent before = c;
+                                            SkeletalMeshComponent before = c;
                                             c.overrideMaterials.erase(static_cast<int>(i));
-                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<MeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                                         }
                                     }
                                 });
@@ -1285,9 +1452,9 @@ namespace ignite
 
 														if (metadata.type == AssetType::Mesh)
 														{
-															MeshComponent before = c;
+															SkeletalMeshComponent before = c;
 															c.socketAttachments[socketName] = handle;
-															CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<MeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+															CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
 														}
 													}
 													ImGui::EndDragDropTarget();
@@ -1298,9 +1465,9 @@ namespace ignite
 													ImGui::SameLine();
 													if (ImGui::Button((std::string("X##socket_") + socketName).c_str()))
 													{
-														MeshComponent before = c;
+														SkeletalMeshComponent before = c;
 														c.socketAttachments.erase(socketName);
-														CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<MeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+														CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
 													}
 												}
 											});
@@ -2463,6 +2630,12 @@ namespace ignite
                     case CompType_DirectionalLight:
                         entity.AddComponent<DirectionalLightComponent>();
                         break;
+                    case CompType_PointLight:
+                        entity.AddComponent<PointLightComponent>();
+                        break;
+                    case CompType_SpotLight:
+                        entity.AddComponent<SpotLightComponent>();
+                        break;
                     case CompType_Text:
                         entity.AddComponent<TextComponent>();
                         break;
@@ -2478,9 +2651,12 @@ namespace ignite
                     case CompType_CircleCollider2D:
                         entity.AddComponent<CircleCollider2DComponent>();
                         break;
-                    case CompType_Mesh:
-                        entity.AddComponent<MeshComponent>();
+                    case CompType_SkeletalMesh:
+                        entity.AddComponent<SkeletalMeshComponent>();
                         break;
+					case CompType_StaticMesh:
+						entity.AddComponent<StaticMeshComponent>();
+						break;
                     case CompType_Rigidbody:
                         entity.AddComponent<RigidbodyComponent>();
                         break;
@@ -2571,9 +2747,12 @@ namespace ignite
 				const ImVec2 &mousePos = ImGui::GetMousePos();
 				m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
-				// Render scene texture to imgui
-				ImTextureID editorViewImage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
-				ImGui::Image(editorViewImage, canvasSize);
+                if (target)
+                {
+					// Render scene texture to imgui
+					ImTextureID editorViewImage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
+					ImGui::Image(editorViewImage, canvasSize);
+                }
 
 				const bool imageHovered = ImGui::IsItemHovered();
 				const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);

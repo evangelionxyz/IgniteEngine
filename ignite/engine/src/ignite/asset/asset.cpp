@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "pch.hpp"
+
+#include "ignite_pch.hpp"
 
 #include "asset.hpp"
 #include "ignite/core/input/asset_signal.hpp"

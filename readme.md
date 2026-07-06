@@ -2,6 +2,9 @@
 
 Work in progress C++ Game Engine
 
+[![Build Windows](https://github.com/evangelionxyz/ignite/actions/workflows/ci.yml/badge.svg)](https://github.com/evangelionxyz/ignite/actions/workflows/ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/evangelionxyz/ignite?style=flat&label=stars)](https://github.com/evangelionxyz/ignite/stargazers)
+
 ## Installation
 
 ### Clone Repository Recursively

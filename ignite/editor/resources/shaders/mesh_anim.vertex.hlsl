@@ -1,69 +1,13 @@
 #include "include/binding_helpers.hlsli"
+#include "include/scene.hlsli"
 
-#define VERTEX_MAX_BONES 4 // bone influences
-#define MAX_BONES 100
+cbuffer CameraBuffer : register(b0, space0) { Camera camera; }
+cbuffer ObjectBuffer : register(b1, space0) { Object object; }
+cbuffer SkeletonBuffer : register(b2, space0) { Skeleton skeleton; }
 
-struct Camera
+PixelVertexInput main(VertexMeshAnim input)
 {
-    float4x4 projection;
-    float4x4 view;
-    float4 position;
-};
-
-struct Object
-{
-    float4x4 transformMatrix;
-    float4x4 normalMatrix;
-    uint objectID;
-    float3 _padding;
-};
-
-struct Skeleton
-{
-    float4x4 boneTransforms[MAX_BONES];
-};
-
-cbuffer CameraBuffer : register(b0, space0)
-{
-    Camera camera; 
-}
-
-cbuffer ObjectBuffer : register(b1, space0)
-{ 
-    Object object;
-}
-
-cbuffer SkeletonBuffer : register(b2, space0)
-{
-    Skeleton skeleton;
-}
-
-struct VSInput
-{
-    float3 position     : POSITION;
-    float3 normal       : NORMAL;
-    float3 tangent      : TANGENT;
-    float3 bitangent    : BITANGENT;
-    float2 uv           : TEXCOORD;
-    float4 color        : COLOR;
-    uint4 boneIDs       : BONEIDS;
-    float4 weights      : WEIGHTS;
-};
-
-struct PSInput
-{
-    float4 position     : SV_POSITION;
-    float3 normal       : NORMAL;
-    float3 tangent      : TANGENT;
-    float3 bitangent    : BITANGENT;
-    float3 worldPos     : WORLDPOS;
-    float2 uv           : TEXCOORD;
-    float4 color        : COLOR;
-};
-
-PSInput main(VSInput input)
-{
-    PSInput output;
+    PixelVertexInput pixelInput;
 
     // Initialize with zero
     float4 posL = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -99,14 +43,14 @@ PSInput main(VSInput input)
 
     float4 worldPos    = mul(object.transformMatrix, posL);
 
-    output.position     = mul(mul(camera.projection, camera.view), worldPos);
+    pixelInput.position     = mul(mul(camera.projection, camera.view), worldPos);
     // Use normal matrix for correct inverse-transpose transform of direction vectors
     float3x3 N = (float3x3)object.normalMatrix;
-    output.normal       = normalize(mul(N, normalL));
-    output.tangent      = normalize(mul(N, tangentL));
-    output.bitangent    = normalize(mul(N, bitangentL));
-    output.worldPos     = worldPos.xyz;
-    output.uv           = input.uv;
-    output.color        = input.color;
-    return output;
+    pixelInput.normal       = normalize(mul(N, normalL));
+    pixelInput.tangent      = normalize(mul(N, tangentL));
+    pixelInput.bitangent    = normalize(mul(N, bitangentL));
+    pixelInput.worldPos     = worldPos.xyz;
+    pixelInput.uv           = input.uv;
+    pixelInput.color        = input.color;
+    return pixelInput;
 }

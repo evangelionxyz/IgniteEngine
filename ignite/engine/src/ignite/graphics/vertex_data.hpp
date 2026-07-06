@@ -1,46 +1,70 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef IGN_VERTEX_DATA_HPP
+#define IGN_VERTEX_DATA_HPP
 
-#include <nvrhi/nvrhi.h>
-#include <glm/glm.hpp>
 #include "ignite/scene/icamera.hpp"
 #include "ignite/core/types.hpp"
+#include "gpu_data.hpp"
+#include <nvrhi/nvrhi.h>
+#include <glm/glm.hpp>
+
+#include <array>
+#include <concepts>
+#include <type_traits>
 
 namespace ignite
 {
-    struct VertexMesh
+    template<typename T>
+	concept MeshVertex = requires(T v)
+	{
+		{ v.position } -> std::convertible_to<glm::vec3>;
+		{ v.normal } -> std::convertible_to<glm::vec3>;
+		{ v.tangent } -> std::convertible_to<glm::vec3>;
+		{ v.bitangent } -> std::convertible_to<glm::vec3>;
+		{ v.uv } -> std::convertible_to<glm::vec2>;
+		{ v.color } -> std::convertible_to<glm::vec4>;
+	};
+
+	template<typename T>
+	concept AnimatedVertex = requires(T v)
+	{
+        { v.boneIDs } -> std::same_as<std::array<uint32_t, 4>>;
+        { v.weights } -> std::same_as<std::array<float, 4>>;
+	};
+
+    template<typename T>
+    concept StaticMeshVertex = MeshVertex<T> && (!AnimatedVertex<T>);
+
+    template<typename T>
+    concept SkeletalMeshVertex = MeshVertex<T> && AnimatedVertex<T>;
+
+    struct VertexMeshStatic
     {
-        glm::vec3 position;
-        glm::vec3 normal;
-        glm::vec3 tangent;
-        glm::vec3 bitangent;
-        glm::vec2 uv;
-        glm::vec4 color = glm::vec4(1.0f);
+		glm::vec3 position;
+		glm::vec3 normal;
+		glm::vec3 tangent;
+		glm::vec3 bitangent;
+		glm::vec2 uv;
+		glm::vec4 color = glm::vec4(1.0f);
+
+		static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
+		{
+			return nvrhi::BindingLayoutDesc()
+				.setRegisterSpace(0) // set 0
+				.setRegisterSpaceIsDescriptorSet(true)
+				.setVisibility(nvrhi::ShaderType::All)
+				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))  // Camera
+				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1))  // Object
+				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2))  // Scene
+				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3))  // CSM
+				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4))  // PointLight
+				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(5)); // SpotLight
+		}
     };
 
-    struct VertexMesh_Anim
+    struct VertexMeshAnim
     {
         glm::vec3 position;
         glm::vec3 normal;
@@ -48,8 +72,8 @@ namespace ignite
         glm::vec3 bitangent;
         glm::vec2 uv;
         glm::vec4 color = glm::vec4(1.0f);
-        uint32_t boneIDs[4] = { 0 };
-        float weights[4] = { 0.0f };
+        std::array<uint32_t, VERTEX_MAX_BONES> boneIDs = { 0 };
+        std::array<float, VERTEX_MAX_BONES> weights = { 0.0f };
 
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
         {
@@ -57,11 +81,13 @@ namespace ignite
                 .setRegisterSpace(0) // set 0
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))                 // Camera
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))         // Object
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(2))         // Skeleton
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3))                 // Scene
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4));                // CSM
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))  // Camera
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1))  // Object
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2))  // Skeleton
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3))  // Scene
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4))  // CSM
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(5))  // PointLight
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(6)); // SpotLight
         }
     };
 
@@ -123,3 +149,5 @@ namespace ignite
         uint32_t texIndex;
     };
 }
+
+#endif
