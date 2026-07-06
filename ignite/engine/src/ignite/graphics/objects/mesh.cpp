@@ -1898,7 +1898,7 @@ namespace ignite
 
                 if (total <= 0.000001f)
                 {
-                    return;
+                    continue;
                 }
 
                 const float inv = 1.0f / total;
