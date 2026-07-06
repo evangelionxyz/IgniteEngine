@@ -30,8 +30,8 @@ namespace ignite
 	template<typename T>
 	concept AnimatedVertex = requires(T v)
 	{
-        { v.boneIDs } -> std::same_as<std::array<uint32_t, 4>>;
-        { v.weights } -> std::same_as<std::array<float, 4>>;
+        { v.boneIDs } -> std::convertible_to<std::array<uint32_t, 4>>;
+        { v.weights } -> std::convertible_to<std::array<float, 4>>;
 	};
 
     template<typename T>

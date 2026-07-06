@@ -16,29 +16,30 @@ PixelVertexInput main(VertexMeshAnim input)
     float3 bitangentL = float3(0.0f, 0.0f, 0.0f);
 
     // Calculate skinned position and normal
-    for (int i = 0; i < VERTEX_MAX_BONES; ++i)
+    const float totalWeight = dot(input.weights, 1.0f);
+    if (totalWeight <= 0.0001f)
     {
-        float weight = input.weights[i];
-        if (weight > 0.0f)
-        {
-            uint boneId = min(input.boneIDs[i], (uint)(MAX_BONES - 1));
-            float4x4 transform = skeleton.boneTransforms[boneId];
-
-            posL += weight * mul(transform, float4(input.position, 1.0));
-            normalL += weight * mul((float3x3)transform, input.normal);
-            tangentL += weight * mul((float3x3)transform, input.tangent);
-            bitangentL += weight * mul((float3x3)transform, input.bitangent);
-        }
-    }
-
-    // Ensure we have a valid position
-    if (length(posL) < 0.00001f)
-    {
-        // Fallback to no skinning if weights don't sum to a significant value
         posL = float4(input.position, 1.0f);
         normalL = input.normal;
         tangentL = input.tangent;
         bitangentL = input.bitangent;
+    }
+    else
+    {
+        for (int i = 0; i < VERTEX_MAX_BONES; ++i)
+        {
+            float weight = input.weights[i];
+            if (weight > 0.0f)
+            {
+                uint boneId = min(input.boneIDs[i], (uint)(MAX_BONES - 1));
+                float4x4 transform = skeleton.boneTransforms[boneId];
+
+                posL += weight * mul(transform, float4(input.position, 1.0));
+                normalL += weight * mul((float3x3)transform, input.normal);
+                tangentL += weight * mul((float3x3)transform, input.tangent);
+                bitangentL += weight * mul((float3x3)transform, input.bitangent);
+            }
+        }
     }
 
     float4 worldPos    = mul(object.transformMatrix, posL);
