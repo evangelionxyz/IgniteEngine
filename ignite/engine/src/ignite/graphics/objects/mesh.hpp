@@ -189,6 +189,7 @@ namespace ignite
 		Ref<ConstantBuffer> m_MeshConstantBuffer;
 		nvrhi::BindingSetHandle m_MeshBindingSet;
 
+		UUID m_UUID;
         std::string m_Name;
 		AssetHandle m_MaterialHandle = AssetHandle(0);
     };
@@ -313,7 +314,7 @@ namespace ignite
 		Ref<MeshPrimitive<VertexMeshAnim>> m_Primitive;
     };
 
-    class IGN_API Mesh
+    class IGN_API Mesh : public Asset
     {
     public:
 		virtual ~Mesh() = default;
@@ -326,13 +327,16 @@ namespace ignite
 			worldAABB = localAABB.Transform(worldMatrix);
         }
 
+		static AssetType GetStaticType() { return AssetType::Mesh; }
+		virtual AssetType GetAssetType() override { return GetStaticType(); }
+
 		AABB localAABB;
 
     private:
 		AABB worldAABB;
     };
 
-	class IGN_API StaticMesh : public Mesh, public Asset
+	class IGN_API StaticMesh : public Mesh
 	{
 	public:
         StaticMesh() = default;
@@ -354,7 +358,7 @@ namespace ignite
 		std::vector<Ref<StaticMeshInstance>> m_MeshInstances;
 	};
 
-    class IGN_API SkeletalMesh : public Mesh, public Asset
+    class IGN_API SkeletalMesh : public Mesh 
     {
     public:
         SkeletalMesh() = default;
@@ -368,10 +372,10 @@ namespace ignite
         void SetMeshInstances(const std::vector<Ref<SkeletalMeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }
         void AddMeshInstance(const Ref<SkeletalMeshInstance> &meshInstance) { m_MeshInstances.push_back(meshInstance); }
 
-        void SetSkeleton(AssetHandle handle) { m_SkeletonHandle = handle; }
+        void SetSkeleton(AssetHandle skeletonHandle);
         AssetHandle GetSkeletonHandle() const { return m_SkeletonHandle; }
 
-        void SetAnimator(AssetHandle handle) { m_AnimatorHandle = handle; }
+        void SetAnimator(AssetHandle animatorHandle);
         AssetHandle GetAnimatorHandle() const { return m_AnimatorHandle; }
 
         virtual bool Serialize(const ignite::Path &filepath) override;
