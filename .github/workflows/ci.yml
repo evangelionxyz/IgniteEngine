@@ -2,7 +2,7 @@ name: CI-Pipeline
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
   
   pull_request:
     branches: [master]
@@ -70,6 +70,20 @@ jobs:
         shell: pwsh
         run: msbuild $env:SOLUTION_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /v:n
 
+      - name: Build C# Script Engine
+        shell: pwsh
+        run: dotnet build $env:PROJECT_FILE_SCRIPTENGINE -c ${{ matrix.configuration }} /p:SolutionDir="$pwd/"
+
       - name: Build Solution - Visual Studio
         shell: pwsh
         run: msbuild $env:SOLUTION_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /v:m
+
+      - name: Run Unit Tests
+        shell: pwsh
+        run: |
+          cd Bin/${{ matrix.configuration }}
+          ./Ignite.Test.exe
+          if ($LastExitCode -ne 0) {
+              Write-Error "Unit tests failed with exit code $LastExitCode"
+              exit $LastExitCode
+          }
