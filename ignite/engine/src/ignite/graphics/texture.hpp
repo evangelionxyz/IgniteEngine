@@ -21,6 +21,7 @@
 * SOFTWARE.
 */
 
+#pragma once
 #ifndef IGN_TEXTURE_HPP
 #define IGN_TEXTURE_HPP
 
@@ -61,6 +62,7 @@ namespace ignite
         bool isShadingRateSurface = false;
         bool keepCpuData = false;
         bool deferGpuCreate = false;
+		bool bindless = true;
 
         bool keepInitialState = false;
         bool isNativeObject = false;
@@ -210,6 +212,7 @@ namespace ignite
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
         nvrhi::SamplerHandle GetSampler() const { return m_Sampler; }
+        uint32_t GetBindlessIndex() const { return m_BindlessIndex; }
 
         static void *GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device);
 
@@ -239,6 +242,7 @@ namespace ignite
         nvrhi::TextureHandle m_Handle;
         nvrhi::SamplerHandle m_Sampler;
         std::string m_DebugName;
+        uint32_t m_BindlessIndex = 0xFFFFFFFF;
         bool m_TracyAllocationTracked = false;
         bool m_UploadDataPrepared = false;
         std::vector<MipLevelData> m_PreparedMipChain;

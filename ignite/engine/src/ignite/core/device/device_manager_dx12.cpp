@@ -28,6 +28,7 @@
 #include "device_manager.hpp"
 #include "device_manager_dx12.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/graphics/bindless_system.hpp"
 
 #include <Windows.h>
 
@@ -338,6 +339,8 @@ namespace ignite
             m_NvrhiDevice = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
         }
 
+        BindlessSystem::Initialize(GetDevice());
+
         return true;
     }
 
@@ -552,6 +555,8 @@ namespace ignite
 
     bool DeviceManager_DX12::BeginFrame()
     {
+        BindlessSystem::FlushPendingWrites();
+
         DXGI_SWAP_CHAIN_DESC1 newSwapChainDesc;
         DXGI_SWAP_CHAIN_FULLSCREEN_DESC newFullScreenDesc;
 

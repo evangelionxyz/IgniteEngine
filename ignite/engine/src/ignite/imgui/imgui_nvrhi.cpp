@@ -11,6 +11,7 @@
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/graphics/bindless_system.hpp"
 
 #include <algorithm>
 #include <cstdint>

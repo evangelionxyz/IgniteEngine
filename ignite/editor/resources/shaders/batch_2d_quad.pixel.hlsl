@@ -1,7 +1,7 @@
+/* Copyright (c) 2026 Evangelion Manuhutu */
+
 #include "include/binding_helpers.hlsli"
-#include "include/materials/mat2d.hlsli"
-#include "include/materials/mat2d_unlit.pixel.hlsli"
-#include "include/materials/mat2d_lit.pixel.hlsli"
+#include "include/mat2d.hlsli"
 
 struct PSInput
 {
@@ -11,9 +11,9 @@ struct PSInput
     float2 tilingFactor : TILINGFACTOR;
     float4 color        : COLOR;
     float4 additiveColor: ADDITIVECOLOR;
-    uint texIndex       : TEXINDEX;
-    uint materialType   : MATTYPE;
-    uint objectID       : OBJECTID;
+    nointerpolation uint texIndex       : TEXINDEX;
+    nointerpolation uint materialType   : MATTYPE;
+    nointerpolation uint objectID       : OBJECTID;
 };
 
 cbuffer Material2DLightingBuffer : register(b1, space0)
@@ -21,7 +21,6 @@ cbuffer Material2DLightingBuffer : register(b1, space0)
     Material2DLighting material2DLighting;
 }
 
-Texture2D textures[]    : register(t0);
 SamplerState samplerState : register(s0);
 
 struct PSOutput
@@ -32,7 +31,8 @@ struct PSOutput
 
 PSOutput main(PSInput input)
 {
-    float4 texColor = textures[input.texIndex].Sample(samplerState, input.texCoord * input.tilingFactor);
+    Texture2D tex = ResourceDescriptorHeap[input.texIndex];
+    float4 texColor = tex.Sample(samplerState, input.texCoord * input.tilingFactor);
     Material2D material;
     material.baseColor = input.color;
     material.additiveColor = input.additiveColor;

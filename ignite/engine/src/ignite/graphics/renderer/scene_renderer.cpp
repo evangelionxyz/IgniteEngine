@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "scene_renderer.hpp"
+#include "ignite/graphics/bindless_system.hpp"
 
 #include "renderer_2d.hpp"
 #include "ignite/scene/scene.hpp"
@@ -698,7 +699,7 @@ namespace ignite
                 auto &pipeline = dc.isSkeletal ? animatedTransparentPSO : staticTransparentPSO;
                 transparentGState.pipeline = pipeline->GetHandle();
 
-                transparentGState.bindings = { dc.meshBindingSet, dc.materialBindingSet };
+                transparentGState.bindings = { dc.meshBindingSet, dc.materialBindingSet, BindlessSystem::GetDescriptorTable() };
                 transparentGState.vertexBuffers.resize(0);
                 transparentGState.vertexBuffers.push_back({ dc.vertexBuffer, 0, 0 });
                 transparentGState.setIndexBuffer({ dc.indexBuffer, nvrhi::Format::R32_UINT });
@@ -1499,6 +1500,7 @@ namespace ignite
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
             .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
+            .AddBindingLayout(BindlessSystem::GetBindingLayout())
             .Build(framebuffer, params);
 
         cache.clear();
@@ -1888,7 +1890,7 @@ namespace ignite
                 }
                 else
                 {
-                    graphicsState.bindings = { meshBindingSet, materialBindingSet };
+                    graphicsState.bindings = { meshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
                     graphicsState.vertexBuffers.resize(0);
                     graphicsState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
                     graphicsState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
 #include "include/binding_helpers.hlsli"
 
 struct PSInput
@@ -10,7 +12,6 @@ struct PSOutput
 {
     float4 color : SV_TARGET0;
 };
-
 
 PSOutput main(PSInput input)
 {

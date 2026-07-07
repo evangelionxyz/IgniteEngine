@@ -1,10 +1,13 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
 #include "include/binding_helpers.hlsli" 
+
 struct PSInput 
 { 
     float4 position : SV_POSITION; 
     float2 localPosition : TEXCOORD; 
     float4 color : COLOR; 
-    uint objectID : OBJECTID;
+    nointerpolation uint objectID : OBJECTID;
 }; 
 
 struct PSOutput 

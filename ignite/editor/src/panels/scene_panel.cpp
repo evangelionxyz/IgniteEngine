@@ -108,6 +108,7 @@ namespace ignite
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
         createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         createInfo.keepInitialState = true;
+        createInfo.bindless = false;
 
         m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo, cmd);
 

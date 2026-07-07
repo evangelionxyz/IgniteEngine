@@ -28,7 +28,7 @@ struct PSInput
     float2 texCoord     : TEXCOORD;
     float2 tilingFactor : TILINGFACTOR;
     float4 color        : COLOR;
-    uint texIndex       : TEXINDEX;
+    nointerpolation uint texIndex       : TEXINDEX;
 };
 
 PSInput main(VSInput input)

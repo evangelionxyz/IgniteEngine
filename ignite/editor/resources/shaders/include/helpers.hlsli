@@ -1,5 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
+#ifndef IGN_HELPERS_HLSLI
+#define IGN_HELPERS_HLSLI
+
 static float4 Uncharted2Tonemap(float4 color)
 {
     float A = 0.15;
@@ -157,3 +161,5 @@ static float2 SobelDepth(float2 uv, float2 texelSize, Texture2D <float>depthTex,
 
     return float2(sobelXResult, sobelYResult);
 }
+
+#endif

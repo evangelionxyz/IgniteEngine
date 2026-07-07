@@ -15,6 +15,7 @@
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/bindless_system.hpp"
 
 #include <type_traits>
 
@@ -443,6 +444,7 @@ namespace ignite
             geopPipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(Renderer::GetBindingLayout(meshBindingLayout))
                 .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
+                .AddBindingLayout(BindlessSystem::GetBindingLayout())
                 .Build(framebuffer, params);
 
             pipelineCache.clear();
@@ -542,7 +544,7 @@ namespace ignite
 
             if (meshBindingSet && materialBindingSet)
             {
-                state.bindings      = { meshBindingSet, materialBindingSet };
+                state.bindings      = { meshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
                 state.vertexBuffers = { nvrhi::VertexBufferBinding{ primitive->vertexBuffer->GetHandle(), 0, 0 } };
                 state.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
                 cmd->setGraphicsState(state);

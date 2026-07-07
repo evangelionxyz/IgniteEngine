@@ -99,12 +99,6 @@ namespace ignite
 
         nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));
-		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, baseColor->GetHandle()));
-		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, emissive->GetHandle()));
-		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, metallic->GetHandle()));
-		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, roughness->GetHandle()));
-		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, normal->GetHandle()));
-		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, occlusion->GetHandle()));
 
         Ref<Texture> environmentTexture = envMap;
         if (!environmentTexture)
@@ -114,8 +108,8 @@ namespace ignite
         if (!shadowTexture)
             shadowTexture = Renderer::GetWhiteTexture();
 
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, environmentTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, shadowTexture->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, environmentTexture->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, shadowTexture->GetHandle()));
 
         // Sampler
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
@@ -142,6 +136,27 @@ namespace ignite
         EnsureGpuResources();
         // Sync blend mode from material type so the shader always has the correct value
         gpuData.blendMode = static_cast<int>(m_Type);
+
+        auto getBindlessIndex = [](AssetHandle handle, uint32_t fallbackIndex) -> uint32_t
+        {
+            if (handle == AssetHandle(0))
+                return fallbackIndex;
+            auto tex = AssetManager::GetInstance()->GetAsset<Texture>(handle);
+            if (tex && tex->IsReady())
+                return tex->GetBindlessIndex();
+            return fallbackIndex;
+        };
+
+        uint32_t whiteIdx = Renderer::GetWhiteTexture() ? Renderer::GetWhiteTexture()->GetBindlessIndex() : 0;
+        uint32_t blackIdx = Renderer::GetBlackTexture() ? Renderer::GetBlackTexture()->GetBindlessIndex() : 0;
+
+        gpuData.baseColorTextureIndex = getBindlessIndex(baseColorTextureHandle, whiteIdx);
+        gpuData.emissiveTextureIndex = getBindlessIndex(emissiveTextureHandle, blackIdx);
+        gpuData.metallicTextureIndex = getBindlessIndex(metallicTextureHandle, blackIdx);
+        gpuData.roughnessTextureIndex = getBindlessIndex(roughnessTextureHandle, blackIdx);
+        gpuData.normalTextureIndex = getBindlessIndex(normalTextureHandle, whiteIdx);
+        gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);
+
         m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(Material_GPUData)));
     }
 
@@ -247,16 +262,10 @@ namespace ignite
             .setRegisterSpaceIsDescriptorSet(true)
             .setVisibility(nvrhi::ShaderType::All)
             .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // material
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // baseColorTexture
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)) // emissiveTexture
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)) // metallicTexture
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)) // roughnessTexture
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)) // normalMapTexture
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)) // occlusionTexture
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)) // environmentMapTexture
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(7)) // csm
-            .addItem(nvrhi::BindingLayoutItem::Sampler(0)) // sampler
-            .addItem(nvrhi::BindingLayoutItem::Sampler(1)); // csm sampler
+            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0))    // environmentMapTexture
+            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(1))    // csm shadowMap
+            .addItem(nvrhi::BindingLayoutItem::Sampler(0))        // sampler
+            .addItem(nvrhi::BindingLayoutItem::Sampler(1));       // csm sampler
         return bindingLayoutDesc;
     }
 

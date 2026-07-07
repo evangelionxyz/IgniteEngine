@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "texture.hpp"
+#include "bindless_system.hpp"
 #include "ignite/core/base.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
@@ -310,6 +311,12 @@ namespace ignite
             ImGui_NVRHI::InvalidateTextureCache(m_Handle.Get());
         }
 
+        if (m_BindlessIndex != 0xFFFFFFFF)
+        {
+            BindlessSystem::UnregisterTexture(m_BindlessIndex);
+            m_BindlessIndex = 0xFFFFFFFF;
+        }
+
         if (m_Handle && m_TracyAllocationTracked)
         {
             IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Texture");
@@ -472,6 +479,10 @@ namespace ignite
         {
             IGN_PROFILE_ALLOC_N(m_Handle.Get(), GetApproxSizeBytes(), "GPU Texture");
             m_TracyAllocationTracked = true;
+            if (m_CreateInfo.bindless && !m_CreateInfo.isRenderTarget && !m_CreateInfo.isNativeObject)
+            {
+                m_BindlessIndex = BindlessSystem::RegisterTexture(m_Handle.Get());
+            }
         }
 
         nvrhi::SamplerDesc samplerDesc;

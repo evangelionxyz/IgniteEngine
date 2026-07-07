@@ -1,5 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
+#ifndef IGN_SCENE_HLSLI
+#define IGN_SCENE_HLSLI
+
 #define VERTEX_MAX_BONES 4
 #define MAX_BONES 100
 #define MAX_POINT_LIGHTS 16
@@ -52,6 +56,13 @@ struct Material
     int roughnessChannel;
     int blendMode; // 0 = Opaque, 1 = Transparent
     float2 tilingFactor;
+    int baseColorTextureIndex;
+    int emissiveTextureIndex;
+    int metallicTextureIndex;
+    int roughnessTextureIndex;
+    int normalTextureIndex;
+    int occlusionTextureIndex;
+    float2 _pad;
 };
 
 struct Skeleton
@@ -109,3 +120,5 @@ struct SpotLight
     float4 color; // rgb = color, a = intensity
     float4 attenuation; // x = constant, y = linear, z = quadratic, w = cos(innerConeAngle)
 };
+
+#endif

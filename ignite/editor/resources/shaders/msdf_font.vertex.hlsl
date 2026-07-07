@@ -26,8 +26,8 @@ struct PSInput
     float4 position     : SV_POSITION;
     float4 color        : COLOR;
     float2 texCoord     : TEXCOORD;
-    uint texIndex       : TEXINDEX;
-    uint objectID       : OBJECTID;
+    nointerpolation uint texIndex       : TEXINDEX;
+    nointerpolation uint objectID       : OBJECTID;
 };
 
 PSInput main(VSInput input)

@@ -133,7 +133,7 @@ namespace ignite
         options.filepath = filepath.generic_string();
         options.outputFilepath = (filepath.parent_path() / "bin").generic_string();
         options.shaderDesc.entryPoint = entryName;
-        options.shaderDesc.shaderModel = "6_5";
+        options.shaderDesc.shaderModel = "6_6";
         options.shaderDesc.vulkanVersion = "1.3";
         options.shaderDesc.shaderType = shaderType;
         options.shaderDesc.optLevel = UMBRA_OPT_LEVEL_3;
@@ -146,6 +146,9 @@ namespace ignite
         if (api == nvrhi::GraphicsAPI::VULKAN)
         {
             options.defines = { "SPIRV", "TARGET_VULKAN" };
+            options.AddCompilerOptions("-fvk-bind-resource-heap");
+            options.AddCompilerOptions("0"); // binding index
+            options.AddCompilerOptions("2"); // set index (space2)
         }
 
         std::vector<uint8_t> shaderCode;

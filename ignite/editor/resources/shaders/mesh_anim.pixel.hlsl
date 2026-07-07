@@ -20,14 +20,8 @@ cbuffer SpotLightBuffer   : register(b6, space0) { SpotLight spotLights[MAX_SPOT
 // ==============================
 cbuffer MaterialBuffer    : register(b0, space1) { Material material; }
 
-Texture2D baseColorTexture         : register(t0, space1);
-Texture2D emissiveTexture          : register(t1, space1);
-Texture2D metallicTexture          : register(t2, space1);
-Texture2D roughnessTexture         : register(t3, space1);
-Texture2D normalMapTexture         : register(t4, space1);
-Texture2D occlusionTexture         : register(t5, space1);
-Texture2D environmentMapTexture    : register(t6, space1);
-Texture2DArray shadowMap           : register(t7, space1);
+Texture2D environmentMapTexture    : register(t0, space1);
+Texture2DArray shadowMap           : register(t1, space1);
 SamplerState sampler0              : register(s0, space1);
 SamplerState shadowSampler         : register(s1, space1); // linear sampler for shadow map PCF
 
@@ -40,7 +34,8 @@ struct PSOutput
 float3 GenNormalFromMap(float3x3 TBN, float2 uv)
 {
     float2 tiledUV = uv * material.tilingFactor;
-    float3 normalMap = normalMapTexture.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
+    Texture2D normalMapTex = ResourceDescriptorHeap[material.normalTextureIndex];
+    float3 normalMap = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
     return normalize(mul(TBN, normalMap));
 }
 
@@ -72,16 +67,22 @@ PSOutput main(PixelVertexInput input)
 
     float3 lightDirection = normalize(sunDirection);
 
-    float3 emissiveColor = emissiveTexture.Sample(sampler0, tiledUV).rgb * material.emissiveFactor.rgb;
-    float4 metallicColor = metallicTexture.Sample(sampler0, tiledUV);
-    float4 roughnessColor = roughnessTexture.Sample(sampler0, tiledUV);
-    float3 normalMap = normalMapTexture.Sample(sampler0, tiledUV).rgb;
+    Texture2D baseColorTex = ResourceDescriptorHeap[material.baseColorTextureIndex];
+    Texture2D normalMapTex = ResourceDescriptorHeap[material.normalTextureIndex];
+    Texture2D emissiveTex = ResourceDescriptorHeap[material.emissiveTextureIndex];
+    Texture2D metallicTex = ResourceDescriptorHeap[material.metallicTextureIndex];
+    Texture2D roughnessTex = ResourceDescriptorHeap[material.roughnessTextureIndex];
+
+    float3 emissiveColor = emissiveTex.Sample(sampler0, tiledUV).rgb * material.emissiveFactor.rgb;
+    float4 metallicColor = metallicTex.Sample(sampler0, tiledUV);
+    float4 roughnessColor = roughnessTex.Sample(sampler0, tiledUV);
+    float3 normalMap = normalMapTex.Sample(sampler0, tiledUV).rgb;
 
     float metallic = clamp(SelectChannel(metallicColor, material.metallicChannel) * material.metallicFactor, 0.0f, 1.0f);
     float roughness = clamp(SelectChannel(roughnessColor, material.roughnessChannel) * material.roughnessFactor, 0.0f, 1.0f);
 
     // Sample base color with alpha for transparency support
-    float4 baseColorSample = baseColorTexture.Sample(sampler0, tiledUV) * input.color;
+    float4 baseColorSample = baseColorTex.Sample(sampler0, tiledUV) * input.color;
     float finalAlpha = baseColorSample.a * material.baseColorFactor.a;
 
     // Discard nearly transparent fragments in transparent mode
@@ -238,7 +239,7 @@ PSOutput main(PixelVertexInput input)
     }
     else if (scene.renderMode == RENDER_MODE_DIFFUSE)
     {
-        float3 diffuse = baseColorTexture.Sample(sampler0, tiledUV).rgb;
+        float3 diffuse = baseColorTex.Sample(sampler0, tiledUV).rgb;
         result.color = float4(diffuse, 1.0f);
     }
     else if (scene.renderMode == RENDER_MODE_NORMALS)
