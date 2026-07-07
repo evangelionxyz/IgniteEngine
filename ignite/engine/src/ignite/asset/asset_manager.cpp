@@ -90,7 +90,6 @@ namespace ignite
 
     AssetManager::~AssetManager()
     {
-
         SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
         m_AssetChangeToken = kInvalidSignalToken;
 
@@ -477,12 +476,16 @@ namespace ignite
             GPUUploadSync::DeviceWaitIdle(device);
         }
         
+        // Prevent dead lock
+		// - Swap the loaded assets map with an empty one, then clear the old map outside the lock
+        
+        decltype(m_LoadedAssets) oldAssets;
         {
             std::unique_lock lock(m_AssetMutex);
-            m_LoadedAssets.clear();
+            oldAssets.swap(m_LoadedAssets);
         }
-        
-        // LOG_DEBUG("[Asset Manager] All loaded assets cleared");
+
+        oldAssets.clear();
     }
 
     void AssetManager::UnloadAsset(AssetHandle handle)

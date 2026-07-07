@@ -149,6 +149,8 @@ R"(<Project>
 
     Project::~Project()
     {
+        m_ActiveScene = nullptr;
+
         m_CoreDependencyWatchers.clear();
         if (m_ScriptEngine)
             delete m_ScriptEngine;

@@ -19,19 +19,27 @@
 
 namespace ignite
 {
+    AnimState::~AnimState()
+    {
+		AssetManager::GetInstance()->RemoveAssetPin(m_AnimHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
+    }
+
+	void AnimState::SetAnimationHandle(const AssetHandle &animationHandle)
+	{
+        m_AnimHandle = animationHandle;
+        AssetManager::GetInstance()->AddAssetPin(m_AnimHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
+	}
 
 	AnimatorController::~AnimatorController()
 	{
-        auto assetManager = AssetManager::GetInstance();
-        if (!assetManager)
-            return;
-
-        for (auto &state : states)
-        {
-            assetManager->RemoveAssetPin(state.animHandle, std::format("animator.controller.{}", (uint64_t)state.animHandle));
-        }
-
         states.clear();
+		AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("animatorcontroller.{}.{}", (uint64_t)handle, (uint64_t)m_SkeletonHandle));
+	}
+
+	void AnimatorController::SetSkeletonHandle(const AssetHandle &skeletonHandle)
+	{
+		m_SkeletonHandle = skeletonHandle;
+		AssetManager::GetInstance()->AddAssetPin(m_SkeletonHandle, std::format("animatorcontroller.{}.{}", (uint64_t)handle, (uint64_t)m_SkeletonHandle));
 	}
 
 	std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
@@ -100,14 +108,14 @@ namespace ignite
         out << YAML::BeginMap;
         out << YAML::Key << "AnimatorController" << YAML::Value << YAML::BeginMap;
         out << YAML::Key << "DefaultState" << YAML::Value << defaultState;
-        out << YAML::Key << "SkeletonHandle" << YAML::Value << static_cast<uint64_t>(skeletonHandle);
+        out << YAML::Key << "SkeletonHandle" << YAML::Value << static_cast<uint64_t>(GetSkeletonHandle());
 
         out << YAML::Key << "States" << YAML::Value << YAML::BeginSeq;
         for (const auto &s : states)
         {
             out << YAML::BeginMap;
             out << YAML::Key << "Name" << YAML::Value << s.name;
-            out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.animHandle);
+            out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.GetAnimationAssetHandle());
             out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << s.editorPos.x << s.editorPos.y << YAML::EndSeq;
             out << YAML::EndMap;
         }
@@ -213,22 +221,17 @@ namespace ignite
 
         auto ctrl = CreateRef<AnimatorController>();
         if (auto n = node["DefaultState"]) ctrl->defaultState = n.as<std::string>();
-        if (auto n = node["SkeletonHandle"]) ctrl->skeletonHandle = AssetHandle(n.as<uint64_t>());
+        if (auto n = node["SkeletonHandle"]) ctrl->SetSkeletonHandle(AssetHandle(n.as<uint64_t>()));
 
         if (YAML::Node statesNode = node["States"]; statesNode && statesNode.IsSequence())
         {
             for (const auto &sn : statesNode)
             {
-                AnimState s;
+                AnimState &s = ctrl->states.emplace_back();
                 if (auto n = sn["Name"]) s.name = n.as<std::string>();
-                if (auto n = sn["AnimHandle"]) s.animHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = sn["AnimHandle"]) s.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
                 if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
                     s.editorPos = { n[0].as<float>(), n[1].as<float>() };
-
-                // Don't forget to Add asset pin
-				assetManager->AddAssetPin(s.animHandle, std::format("animator.controller.{}", (uint64_t)s.animHandle));
-
-                ctrl->states.push_back(s);
             }
         }
 
@@ -314,10 +317,10 @@ namespace ignite
 
     bool AnimatorController::UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager)
     {
-        if (!assetManager || skeletonHandle == AssetHandle(0))
+        if (!assetManager || GetSkeletonHandle() == AssetHandle(0))
             return false;
 
-        Ref<Skeleton> skeleton = assetManager->GetAsset<Skeleton>(skeletonHandle);
+        Ref<Skeleton> skeleton = assetManager->GetAsset<Skeleton>(GetSkeletonHandle());
         if (!skeleton)
             return false;
 
@@ -337,10 +340,11 @@ namespace ignite
             runtime.stateNormalized = 0.0f;
         }
 
-        if (!state || state->animHandle == AssetHandle(0))
+		const AssetHandle animHandle = state ? state->GetAnimationAssetHandle() : AssetHandle(0);
+        if (!state || animHandle == AssetHandle(0))
             return false;
 
-        Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(state->animHandle);
+        Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(animHandle);
 
         if (!animation || animation->duration <= 0.0f)
             return false;
@@ -359,14 +363,14 @@ namespace ignite
         const std::string nextStateName = EvaluateTransitions(runtime.currentStateName, runtime.stateNormalized);
         if (!nextStateName.empty() && nextStateName != runtime.currentStateName)
         {
-            if (const AnimState *nextState = FindState(nextStateName); nextState && nextState->animHandle != AssetHandle(0))
+            if (const AnimState *nextState = FindState(nextStateName); nextState && nextState->GetAnimationAssetHandle() != AssetHandle(0))
             {
                 runtime.currentStateName = nextStateName;
                 runtime.stateElapsed = 0.0f;
                 runtime.stateNormalized = 0.0f;
 
                 state = nextState;
-                animation = assetManager->GetAsset<SkeletalAnimation>(state->animHandle);
+                animation = assetManager->GetAsset<SkeletalAnimation>(animHandle);
                 
                 if (!animation || animation->duration <= 0.0f)
                     return false;
@@ -424,5 +428,4 @@ namespace ignite
 
         return true;
     }
-
 }

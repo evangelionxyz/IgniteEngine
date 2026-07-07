@@ -2,6 +2,7 @@
 
 #include "ignite_pch.hpp"
 
+#include "ignite/asset/asset_manager.hpp"
 #include "animator_controller_2d.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -13,6 +14,17 @@
 
 namespace ignite
 {
+	void AnimState2D::SetAnimationHandle(const AssetHandle &animationHandle)
+	{
+		m_AnimHandle = animationHandle;
+		AssetManager::GetInstance()->AddAssetPin(m_AnimHandle, std::format("animstate2d.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
+	}
+
+    AnimState2D::~AnimState2D()
+    {
+		AssetManager::GetInstance()->RemoveAssetPin(m_AnimHandle, std::format("animstate2d.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
+    }
+
     std::string AnimatorController2D::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
     {
         for (const auto &tr : transitions)
@@ -73,7 +85,7 @@ namespace ignite
         {
             out << YAML::BeginMap;
             out << YAML::Key << "Name"       << YAML::Value << s.name;
-            out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.animHandle);
+            out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.GetAnimationAssetHandle());
             out << YAML::Key << "EditorPos"  << YAML::Value << YAML::Flow << YAML::BeginSeq << s.editorPos.x << s.editorPos.y << YAML::EndSeq;
             out << YAML::EndMap;
         }
@@ -191,12 +203,11 @@ namespace ignite
         {
             for (const auto &sn : statesNode)
             {
-                AnimState2D s;
+                AnimState2D &s = ctrl->states.emplace_back();
                 if (auto n = sn["Name"])       s.name       = n.as<std::string>();
-                if (auto n = sn["AnimHandle"]) s.animHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = sn["AnimHandle"]) s.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
                 if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
                     s.editorPos = { n[0].as<float>(), n[1].as<float>() };
-                ctrl->states.push_back(s);
             }
         }
 

@@ -54,7 +54,7 @@ namespace ignite
 
             AnimState state;
             state.name = BuildUniqueStateName(animator, metadata.filepath.stem().string());
-            state.animHandle = animationHandle;
+            state.SetAnimationHandle(animationHandle);
             state.editorPos = glm::vec2(worldPos.x, worldPos.y);
             animator->states.push_back(state);
             ui.selectedState = static_cast<int>(animator->states.size()) - 1;
@@ -67,12 +67,12 @@ namespace ignite
                 animator->defaultState = state.name;
             }
 
-            if (animator->skeletonHandle == AssetHandle(0))
+            if (animator->GetSkeletonHandle() == AssetHandle(0))
             {
                 Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(animationHandle);
                 if (animation)
                 {
-                    animator->skeletonHandle = AssetHandle(animation->GetSkeletonHandle());
+                    animator->SetSkeletonHandle(animation->GetSkeletonHandle());
                 }
             }
 
@@ -224,7 +224,7 @@ namespace ignite
             animator->SetDirtyFlag(true);
         }
 
-        std::string skeletonLabel = animator->skeletonHandle == AssetHandle(0) ? "Drop Skeleton Here" : assetManager->GetAssetDisplayName(animator->skeletonHandle);
+        std::string skeletonLabel = animator->GetSkeletonHandle()== AssetHandle(0) ? "Drop Skeleton Here" : assetManager->GetAssetDisplayName(animator->GetSkeletonHandle());
         ImGui::Button(skeletonLabel.c_str(), ImVec2(-1.0f, 0.0f));
         if (ImGui::BeginDragDropTarget())
         {
@@ -235,7 +235,7 @@ namespace ignite
                     const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
                     if (assetManager->GetMetaData(handle).type == AssetType::Skeleton)
                     {
-                        animator->skeletonHandle = handle;
+                        animator->SetSkeletonHandle(handle);
                         animator->SetDirtyFlag(true);
                     }
                 }
@@ -243,9 +243,9 @@ namespace ignite
             ImGui::EndDragDropTarget();
         }
 
-        if (animator->skeletonHandle != AssetHandle(0) && ImGui::Button("Clear Skeleton##ac_clear_skel", ImVec2(-1.0f, 0.0f)))
+        if (animator->GetSkeletonHandle() != AssetHandle(0) && ImGui::Button("Clear Skeleton##ac_clear_skel", ImVec2(-1.0f, 0.0f)))
         {
-            animator->skeletonHandle = AssetHandle(0);
+            animator->SetSkeletonHandle(AssetHandle(0));
             animator->SetDirtyFlag(true);
         }
 
@@ -287,7 +287,7 @@ namespace ignite
                 ui.anyStateSelected = false;
             }
 
-            ImGui::TextDisabled("%s", assetManager->GetAssetDisplayName(state.animHandle).c_str());
+            ImGui::TextDisabled("%s", assetManager->GetAssetDisplayName(state.GetAnimationAssetHandle()).c_str());
             ImGui::Separator();
         }
         ImGui::EndChild();
@@ -500,7 +500,7 @@ namespace ignite
 
             const std::string title = state.name.empty() ? std::format("State {}", i + 1) : state.name;
             canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 12.0f * ui.graphState.zoom), IM_COL32(235, 239, 245, 255), title.c_str());
-            canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 34.0f * ui.graphState.zoom), IM_COL32(167, 176, 190, 255), assetManager->GetAssetDisplayName(state.animHandle).c_str());
+            canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 34.0f * ui.graphState.zoom), IM_COL32(167, 176, 190, 255), assetManager->GetAssetDisplayName(state.GetAnimationAssetHandle()).c_str());
             if (isDefault)
             {
                 canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 52.0f * ui.graphState.zoom), IM_COL32(255, 196, 92, 255), "Default");
@@ -670,7 +670,7 @@ namespace ignite
                 animator->SetDirtyFlag(true);
             }
 
-            std::string animationLabel = state.animHandle == AssetHandle(0) ? "Drop Skeletal Animation" : assetManager->GetAssetDisplayName(state.animHandle);
+            std::string animationLabel = state.GetAnimationAssetHandle() == AssetHandle(0) ? "Drop Skeletal Animation" : assetManager->GetAssetDisplayName(state.GetAnimationAssetHandle());
             ImGui::Button(animationLabel.c_str(), ImVec2(-1.0f, 0.0f));
             if (ImGui::BeginDragDropTarget())
             {
@@ -681,7 +681,7 @@ namespace ignite
                         const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
                         if (assetManager->GetMetaData(handle).type == AssetType::SkeletalAnimation)
                         {
-                            state.animHandle = handle;
+                            state.SetAnimationHandle(handle);
                             animator->SetDirtyFlag(true);
                         }
                     }
@@ -689,9 +689,9 @@ namespace ignite
                 ImGui::EndDragDropTarget();
             }
 
-            if (state.animHandle != AssetHandle(0) && ImGui::Button("Clear Animation##ac_clear_anim", ImVec2(-1.0f, 0.0f)))
+            if (state.GetAnimationAssetHandle() != AssetHandle(0) && ImGui::Button("Clear Animation##ac_clear_anim", ImVec2(-1.0f, 0.0f)))
             {
-                state.animHandle = AssetHandle(0);
+                state.SetAnimationHandle(AssetHandle(0));
                 animator->SetDirtyFlag(true);
             }
             if (ImGui::Button("Make Default##ac_make_default", ImVec2(-1.0f, 0.0f)))

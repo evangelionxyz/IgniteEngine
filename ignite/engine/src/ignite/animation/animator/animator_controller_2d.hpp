@@ -18,8 +18,16 @@ namespace ignite
     struct IGN_API AnimState2D
     {
         std::string name;
-        AssetHandle animHandle = AssetHandle(0); // Anim 2D
         glm::vec2 editorPos = glm::vec2(100.0f, 100.0f);
+
+		void SetAnimationHandle(const AssetHandle &animationHandle);
+		const AssetHandle &GetAnimationAssetHandle() const { return m_AnimHandle; }
+
+        ~AnimState2D();
+
+    private:
+        UUID m_UUID;
+        AssetHandle m_AnimHandle = AssetHandle(0); // Anim 2D
     };
 
     class IGN_API AnimatorController2D : public Animator, public Asset

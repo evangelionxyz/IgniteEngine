@@ -134,6 +134,23 @@ namespace ignite
     {
         Layer::OnDetach();
 
+        // Close project
+		if (m_ActiveProject)
+		{
+			SaveProject();
+			OnSceneStop();
+
+			m_EditorScene.reset();
+			m_ActiveScene.reset();
+
+			m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
+
+			// Reset everything
+			m_CurrentProjectFilepath.clear();
+			m_CurrentSceneFilePath.clear();
+			m_CurrentSceneHandle = AssetHandle(0);
+		}
+
         // Unsubscribe signals
 		SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
 		SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
@@ -145,8 +162,8 @@ namespace ignite
         m_ContentBrowserPanel = nullptr;
         ContentBrowserPanel::ReleaseSharedResources();
 
-        m_SceneRenderer.reset();
-        m_ActiveProject.reset();
+        m_SceneRenderer = nullptr;
+		m_ActiveProject = nullptr;
     }
 
     void EditorLayer::AddContentBrowserPanel()

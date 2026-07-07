@@ -770,10 +770,10 @@ namespace ignite
             }
 
             const AnimState2D *state = ctrl->FindState(animComp.currentStateName);
-            if (!state || state->animHandle == AssetHandle(0))
+            if (!state || state->GetAnimationAssetHandle() == AssetHandle(0))
                 continue;
 
-            Ref<Animation2D> anim = m_AssetManager->GetAsset<Animation2D>(state->animHandle);
+            Ref<Animation2D> anim = m_AssetManager->GetAsset<Animation2D>(state->GetAnimationAssetHandle());
             if (!anim || anim->frames.empty())
             {
                 continue;

@@ -2477,7 +2477,7 @@ namespace ignite
                                 ImGui::SameLine();
 
                                 // Animation2D drag-drop
-                                ImGui::Text("Anim: %llu", static_cast<uint64_t>(state.animHandle));
+                                ImGui::Text("Anim: %llu", static_cast<uint64_t>(state.GetAnimationAssetHandle()));
                                 ImGui::SameLine();
                                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.2f, 0.35f, 1.0f));
                                 ImGui::Button("Drop Anim2D##s_drop", ImVec2(90, 20));
@@ -2490,7 +2490,7 @@ namespace ignite
                                         const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
                                         if (md.type == AssetType::Animation2D)
                                         {
-                                            state.animHandle = handle;
+                                            state.SetAnimationHandle(handle);
                                             ctrl->SetDirtyFlag(true);
                                         }
                                     }
