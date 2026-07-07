@@ -152,6 +152,8 @@ namespace ignite
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
+            metadata.filepath = filepath;
+            metadata.type = GetAssetTypeFromExtension(filepath.extension().generic_string());
             AssignMetaData(handle, metadata);
             GetAsset(handle);
         }
@@ -188,6 +190,8 @@ namespace ignite
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
+            metadata.filepath = filepath;
+            metadata.type = GetAssetTypeFromExtension(filepath.extension().generic_string());
             AssignMetaData(handle, metadata);
             GetAssetImmediate(handle);
         }

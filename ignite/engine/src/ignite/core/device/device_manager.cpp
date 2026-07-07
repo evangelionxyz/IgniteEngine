@@ -157,6 +157,9 @@ namespace ignite
 
     void DeviceManager::CreateBackBuffers()
     {
+        if (m_DeviceParameters.headlessDevice)
+            return;
+
         const uint32_t backBufferCount = GetBackBufferCount();
         m_SwapChainFramebuffers.resize(backBufferCount);
         for (uint32_t index = 0; index < backBufferCount; ++index)

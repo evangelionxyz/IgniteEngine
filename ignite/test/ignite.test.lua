@@ -6,8 +6,8 @@ project "Ignite.Test"
     language "c++"
     cppdialect "c++23"
 
-    targetdir (OUTPUT_DIR .. "/test")
-    objdir (INTOUTPUT_DIR .. "/test")
+    targetdir (OUTPUT_DIR)
+    objdir (INTOUTPUT_DIR)
 
     files {
         "src/**.cpp",
@@ -82,9 +82,9 @@ project "Ignite.Test"
         "JPH_OBJECT_STREAM",
     }
 
-    -- postbuildcommands {
-        -- '{COPYDIR} "%{prj.location}/resources" "%{cfg.targetdir}/resources"',
-    -- }
+    postbuildcommands {
+        -- '{COPYDIR} "%{prj.location}/test-resources" "%{cfg.targetdir}/test-resources"',
+    }
 
     --linux
     filter "system:linux"

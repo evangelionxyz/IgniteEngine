@@ -272,6 +272,9 @@ namespace ignite
 
     bool DeviceManager_VK::CreateSwapChain()
     {
+        if (m_DeviceParameters.headlessDevice)
+            return true;
+
        CHECK(CreateVkSwapChain())
 
        m_PresentSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
@@ -383,6 +386,9 @@ namespace ignite
 
     bool DeviceManager_VK::BeginFrame()
     {
+        if (m_DeviceParameters.headlessDevice)
+            return true;
+
         BindlessSystem::FlushPendingWrites();
 
         const auto &semaphore = m_AcquireSemaphores[m_AcquireSemaphoreIndex];
@@ -429,6 +435,9 @@ namespace ignite
 
     bool DeviceManager_VK::Present()
     {
+        if (m_DeviceParameters.headlessDevice)
+            return true;
+
         IGN_PROFILE_FUNCTION();
         const auto &semaphore = m_PresentSemaphores[m_PresentSemaphoreIndex];
 
@@ -921,7 +930,7 @@ namespace ignite
                 }
             }
 
-            if (m_PresentQueueFamily == -1)
+            if (m_PresentQueueFamily == -1 && !m_DeviceParameters.headlessDevice)
             {
                 if (queueFamily.queueCount > 0 && SDL_Vulkan_GetPresentationSupport(m_VulkanInstance, physicalDevice, i))
                 {

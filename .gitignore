@@ -32,3 +32,4 @@ scripts/bin
 scripts/obj
 openspec
 __pycache__
+ignite/test/test-resources/temp
