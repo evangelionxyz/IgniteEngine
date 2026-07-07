@@ -83,9 +83,9 @@ namespace ignite
         m_EditorCamera = EditorCamera("ScenePanel-Editor Camera");
 
         m_EditorCamera.SetTarget(glm::vec3(0.0f));
-        m_EditorCamera.SetDistance(5.5f);
-        m_EditorCamera.yaw = glm::radians(90.0f);
-        m_EditorCamera.pitch = 0.0f;
+        m_EditorCamera.SetDistance(12.0f);
+        m_EditorCamera.yaw = glm::radians(45.0f);
+        m_EditorCamera.pitch = glm::radians(25.0f);
         m_EditorCamera.farPlane = 1000.0f;
 
         m_EditorCamera.UpdateSphericalPosition();
