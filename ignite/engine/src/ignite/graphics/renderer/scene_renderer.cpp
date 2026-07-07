@@ -225,8 +225,18 @@ namespace ignite
 				DebugPass(cmd, camera, debugFramebuffer);
             }
             
-            const uint32_t width = target->sceneRT->GetWidth();
-            const uint32_t height = target->sceneRT->GetHeight();
+            // Transition color and depth attachments to ShaderResource before they are read by post-processing
+            cmd->setTextureState(target->sceneRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(target->sceneRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+			cmd->setTextureState(target->sceneRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+
+			cmd->setTextureState(target->widgetRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+			cmd->setTextureState(target->debugRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+
+            cmd->commitBarriers();
+
+			const auto width = target->sceneRT->GetWidth();
+			const auto height = target->sceneRT->GetHeight();
 
             Ref<Texture> edgeTexture = nullptr;
             if (m_EdgeDetection && !m_SelectedEntities.empty())
@@ -266,8 +276,9 @@ namespace ignite
                 m_EditorBloom->settings.radius = postProcessing.bloomRadius;
                 m_EditorBloom->settings.threshold = postProcessing.bloomThreshold;
                 m_EditorBloom->settings.iterations = postProcessing.bloomIterations;
-
+                
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
+
                 m_EditorBloom->Resize(width, height);
                 m_EditorBloom->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
                 bloomTexture = m_EditorBloom->GetBloomTexture();
@@ -579,6 +590,8 @@ namespace ignite
                 }
             }
         }
+        cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+        cmd->commitBarriers();
     }
 
     void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
@@ -1847,12 +1860,14 @@ namespace ignite
                         }
                     }
                 }
-                gpuData.transformation = parentTransform * meshTransform;
-                gpuData.objectID = objectID;
-                gpuData.normal = normalMatrix;
-            }
 
-            meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+				gpuData.transformation = parentTransform * meshTransform;
+				gpuData.normal = normalMatrix;
+            }
+            
+			gpuData.objectID = objectID;
+			meshInstance->SetData(cmd, &gpuData, sizeof(Mesh_GPUData));
+
             if constexpr (isSkeletal)
             {
                 meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));

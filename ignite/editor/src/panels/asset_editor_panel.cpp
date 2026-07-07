@@ -402,6 +402,8 @@ namespace ignite
 
         s_SkeletonPreviewMaterial.reset();
         s_SkeletonPreviewEditorState.clear();
+
+        m_Assets.clear();
     }
 
     void AssetEditorPanel::OnUpdate(float deltaTime)

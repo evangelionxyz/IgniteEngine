@@ -70,6 +70,7 @@ namespace ignite
         deviceParams.enablePerMonitorDPI = true;
         deviceParams.enableGPUValidation = true;
         deviceParams.supportExplicitDisplayScaling = true;
+        deviceParams.enableHeapDirectlyIndexed = true;
 
         m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceParams, m_CreateInfo.graphicsApi );
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));

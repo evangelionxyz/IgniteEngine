@@ -239,8 +239,19 @@ namespace ignite
         sceneRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
         sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
-
+        
         compositeRT->ClearColorAttachmentFloat(cmd, 0);
+
+		// Transition the scene and UI textures to shader resource state for sampling in the composite pass
+		cmd->setTextureState(sceneRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+		cmd->setTextureState(sceneRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+		cmd->setTextureState(sceneRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+		
+        cmd->setTextureState(uiRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+        cmd->setTextureState(uiRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+        cmd->setTextureState(uiRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+
+		cmd->commitBarriers();
 
         if (m_Environment && m_UseEnvironment)
         {
@@ -609,14 +620,14 @@ namespace ignite
         {
             nvrhi::BindingLayoutDesc layoutDesc = {};
             layoutDesc.visibility = nvrhi::ShaderType::All;
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
             m_CompositeBindingLayout = m_Device->createBindingLayout(layoutDesc);
