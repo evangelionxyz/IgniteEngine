@@ -4,6 +4,8 @@
 #ifndef IGN_INPUT_SYSTEM_HPP
 #define IGN_INPUT_SYSTEM_HPP
 
+#include "ignite/core/types.hpp"
+
 #include <glm/vec2.hpp>
 #include <unordered_map>
 #include "input_layer.hpp"
@@ -38,6 +40,9 @@ namespace ignite
 		static bool IsMouseButtonPressed(MouseCode button);
 		static glm::ivec2 GetMousePosition();
 
+		static bool IsActionPressed(const std::string &actionName);
+		static void SetInputMapping(Ref<class InputMapping> mapping);
+
 		static glm::vec2 GetGameplayMousePosition();
 		static void SetGameplayMousePosition(float x, float y, bool enabled);
 		static bool IsGameplayMousePositionEnabled();
@@ -57,20 +62,32 @@ namespace ignite
 		bool IsMouseButtonPressedImpl(MouseCode button) const;
 		glm::ivec2 GetMousePositionImpl() const { return m_MousePosition; }
 
+		bool IsActionPressedImpl(const std::string &actionName) const;
+		void SetInputMappingImpl(Ref<class InputMapping> mapping);
+
 		void SetKey(SDL_Keycode key, bool pressed);
 		void SetModifier(SDL_Keymod mod, bool pressed);
 		void SetMouseButton(MouseCode button, bool pressed);
+		void SetJoystickButton(uint8_t button, bool pressed);
 		void SetMousePosition(int x, int y);
 
 		CursorMode GetCursorMode() const { return m_CursorMode; }
 		void SetCursorModeImpl(CursorMode mode);
 
 	protected:
+		void UpdateActionStateOnKey(KeyCode key, bool pressed);
+		void UpdateActionStateOnMouseButton(MouseCode button, bool pressed);
+		void UpdateActionStateOnJoystickButton(uint8_t button, bool pressed);
+
 		std::unordered_map<KeyCode, bool> m_KeyState;
 		std::unordered_map<KeyModCode, bool> m_ModifierState;
 		std::unordered_map<MouseCode, bool> m_MouseButtonState;
+		std::unordered_map<uint8_t, bool> m_JoystickButtonState;
 		glm::ivec2 m_MousePosition{ 0 };
 		CursorMode m_CursorMode = CursorMode::Normal;
+
+		Ref<class InputMapping> m_InputMapping;
+		std::unordered_map<std::string, int> m_ActionPressCounts;
 
 	private:
 		static InputSystem* s_ActiveSystem;

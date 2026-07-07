@@ -107,6 +107,11 @@ namespace ignite
             return GameUISystem::IsMouseOverUI(mousePos.x, mousePos.y);
         }
 
+        static bool Input_IsActionPressed(const char *actionName)
+        {
+            return InputSystem::IsActionPressed(actionName ? actionName : "");
+        }
+
         static bool AssetManager_IsAssetHandleValid(uint64_t handle)
         {
             if (Scene *scene = GetSceneContext())
@@ -261,6 +266,7 @@ namespace ignite
             &Input_SetMouseToCenter,
             &Input_SetCursorMode,
             &Input_IsMouseOverUI,
+            &Input_IsActionPressed,
 
             &AssetManager_IsAssetHandleValid,
             &AssetManager_IsAssetLoaded,

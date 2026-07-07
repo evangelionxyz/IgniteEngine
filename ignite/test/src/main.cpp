@@ -2,6 +2,7 @@
 
 #include "ignite/core/types.hpp"
 #include "ignite/project/input_mapping.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/project/project.hpp"
@@ -37,9 +38,9 @@ TEST(InputSerializer, SerializeDeserialize)
 	Ref<InputMapping> inputSystem = CreateRef<InputMapping>();
 	
 	// Add some input mappings
-	inputSystem->AddInputMapping("Jump", "Space");
-	inputSystem->AddInputMapping("MoveForward", "W");
-	inputSystem->AddInputMapping("MoveBackward", "S");
+	inputSystem->MapKey(Key::Space, "Jump");
+	inputSystem->MapKey(Key::W, "MoveForward");
+	inputSystem->MapKey(Key::S, "MoveBackward");
 	
 	// Serialize the InputMapping to a file
 	ASSERT_TRUE(inputSystem->Serialize(filepath));
@@ -49,12 +50,12 @@ TEST(InputSerializer, SerializeDeserialize)
 	ASSERT_NE(deserializedInputMapping, nullptr);
 	
 	// Check that the deserialized input mappings match the original
-	EXPECT_EQ(deserializedInputMapping->m_InputMappings.size(), inputSystem->m_InputMappings.size());
-	for (const auto &[action, input] : inputSystem->m_InputMappings)
+	EXPECT_EQ(deserializedInputMapping->m_KeyMappings.size(), inputSystem->m_KeyMappings.size());
+	for (const auto &[key, action] : inputSystem->m_KeyMappings)
 	{
-		auto it = deserializedInputMapping->m_InputMappings.find(action);
-		ASSERT_NE(it, deserializedInputMapping->m_InputMappings.end());
-		EXPECT_EQ(it->second, input);
+		auto it = deserializedInputMapping->m_KeyMappings.find(key);
+		ASSERT_NE(it, deserializedInputMapping->m_KeyMappings.end());
+		EXPECT_EQ(it->second, action);
 	}
 }
 
@@ -241,6 +242,102 @@ TEST(EngineTests, CSharpScripting)
 	}
 
 	EXPECT_TRUE(scriptEngine->IsReady());
+}
+
+// -------------------------------------------------
+// Input System & Action Mapping Test
+// -------------------------------------------------
+TEST(EngineTests, ActionInputSystem)
+{
+	ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+	ignite::Path projectDir = testResourcesRoot / "temp/ActionInputProject";
+
+	if (ignite::Path::exists(projectDir))
+	{
+		std::filesystem::remove_all(projectDir.string());
+	}
+	ignite::Path::create_directories(projectDir);
+
+	ProjectInfo info;
+	info.name = "ActionInputProject";
+	info.filepath = projectDir / "ActionInputProject.ixproj";
+	info.rootDirectory = projectDir;
+	info.assetDirectory = "Assets";
+	info.scriptsDirectory = "Scripts";
+	info.assetRegistryFilepath = "AssetRegistry.ixreg";
+	info.configuration = ProjectConfiguration::Debug;
+
+	Ref<Project> project = Project::Create(info);
+	ASSERT_NE(project, nullptr);
+
+	// Initialize the C# script engine
+	project->InitScriptEngine();
+
+	// Create a new C# script ActionTest.cs
+	ignite::Path scriptFilepath = project->GetScriptsDirectory() / "ActionTest.cs";
+	{
+		std::ofstream out(scriptFilepath.generic_string());
+		out << R"(using Ignite;
+using System;
+
+namespace ActionInputProject;
+
+public class ActionTest : Entity
+{
+    public override void OnCreate()
+    {
+        bool isJumpPressed = Input.IsActionPressed("Jump");
+        bool isFirePressed = Input.IsActionPressed("Fire");
+        Debug.Log("ActionTest C# OnCreate triggered");
+        Debug.Log("Jump pressed: " + isJumpPressed);
+        Debug.Log("Fire pressed: " + isFirePressed);
+    }
+}
+)";
+		out.close();
+		project->RegenerateCSharpProject();
+	}
+
+	// Wait for compilation & script engine loading assembly
+	auto scriptEngine = project->GetScriptEngine();
+	ASSERT_NE(scriptEngine, nullptr);
+
+	auto startTime = std::chrono::steady_clock::now();
+	while (!scriptEngine->IsReady())
+	{
+		Application::GetInstance()->ProcessMainThreadSubmissions();
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		if (std::chrono::steady_clock::now() - startTime > std::chrono::seconds(30))
+		{
+			break;
+		}
+	}
+	ASSERT_TRUE(scriptEngine->IsReady());
+
+	// Create and register an InputMapping
+	Ref<InputMapping> mapping = CreateRef<InputMapping>();
+	mapping->MapKey(Key::Space, "Jump");
+	mapping->MapKey(Key::F, "Fire");
+	
+	InputSystem::SetInputMapping(mapping);
+
+	// Verify initial C++ side mapping state
+	EXPECT_FALSE(InputSystem::IsActionPressed("Jump"));
+	EXPECT_FALSE(InputSystem::IsActionPressed("Fire"));
+
+	// Simulate Key Press
+	InputSystem::GetActiveSystem()->SetKey(Key::Space, true);
+	EXPECT_TRUE(InputSystem::IsActionPressed("Jump"));
+	EXPECT_FALSE(InputSystem::IsActionPressed("Fire"));
+
+	// Run C# side invocation
+	auto scriptInstance = scriptEngine->OnCreateEntityInstance(101, "ActionInputProject.ActionTest");
+	ASSERT_NE(scriptInstance, nullptr);
+	scriptInstance->InvokeOnCreate();
+
+	// Release Key
+	InputSystem::GetActiveSystem()->SetKey(Key::Space, false);
+	EXPECT_FALSE(InputSystem::IsActionPressed("Jump"));
 }
 
 int main(int argc, char **argv)

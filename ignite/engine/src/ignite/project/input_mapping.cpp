@@ -9,17 +9,34 @@
 namespace ignite
 {
 
-	void InputMapping::AddInputMapping(const std::string &action, const std::string &input)
+	void InputMapping::MapKey(KeyCode key, const std::string &action)
 	{
-		m_InputMappings[action] = input;
+		m_KeyMappings[key] = action;
 	}
 
-	void InputMapping::RemoveInputMapping(const std::string &action)
+	void InputMapping::MapMouseButton(MouseCode button, const std::string &action)
 	{
-		if (m_InputMappings.contains(action))
-		{
-			m_InputMappings.erase(action);
-		}
+		m_MouseMappings[button] = action;
+	}
+
+	void InputMapping::MapJoystickButton(uint8_t button, const std::string &action)
+	{
+		m_JoystickMappings[button] = action;
+	}
+
+	void InputMapping::UnmapKey(KeyCode key)
+	{
+		m_KeyMappings.erase(key);
+	}
+
+	void InputMapping::UnmapMouseButton(MouseCode button)
+	{
+		m_MouseMappings.erase(button);
+	}
+
+	void InputMapping::UnmapJoystickButton(uint8_t button)
+	{
+		m_JoystickMappings.erase(button);
 	}
 
 	bool InputMapping::Serialize(const ignite::Path &filepath)
@@ -28,11 +45,31 @@ namespace ignite
 		j["Version"] = 1;
 		j["AssetType"] = static_cast<int>(GetAssetType());
 		j["AssetHandle"] = static_cast<uint64_t>(handle);
-		j["InputMappings"] = m_InputMappings;
 
-		std::string serailized = j.dump(4);
+		nlohmann::json keysJson = nlohmann::json::object();
+		for (const auto &[key, action] : m_KeyMappings)
+		{
+			keysJson[std::to_string(key)] = action;
+		}
+		j["KeyMappings"] = keysJson;
+
+		nlohmann::json mouseJson = nlohmann::json::object();
+		for (const auto &[button, action] : m_MouseMappings)
+		{
+			mouseJson[std::to_string(button)] = action;
+		}
+		j["MouseMappings"] = mouseJson;
+
+		nlohmann::json joyJson = nlohmann::json::object();
+		for (const auto &[button, action] : m_JoystickMappings)
+		{
+			joyJson[std::to_string(button)] = action;
+		}
+		j["JoystickMappings"] = joyJson;
+
+		std::string serialized = j.dump(4);
 		std::ofstream file(filepath.generic_string(), std::ios::out | std::ios::trunc);
-		file << serailized;
+		file << serialized;
 		file.close();
 
 		return true;
@@ -41,17 +78,63 @@ namespace ignite
 	Ref<InputMapping> InputMapping::Deserialize(const ignite::Path &filepath)
 	{
 		std::ifstream file(filepath.generic_string(), std::ios::in);
-		nlohmann::json::error_handler_t errorHandler = nlohmann::json::error_handler_t::strict;
+		if (!file.is_open())
+		{
+			return nullptr;
+		}
+		
 		nlohmann::json j = nlohmann::json::parse(file, nullptr, false);
+		if (j.is_discarded())
+		{
+			return nullptr;
+		}
 
-		Ref<InputMapping> inputSystem = CreateRef<InputMapping>();
-		int engineVersion;
+		Ref<InputMapping> mapping = CreateRef<InputMapping>();
+		int engineVersion = 0;
 
-		j["Version"].get_to(engineVersion);
-		j["AssetHandle"].get_to((uint64_t&)inputSystem->handle);
-		j["InputMappings"].get_to(inputSystem->m_InputMappings);
+		if (j.contains("Version")) j["Version"].get_to(engineVersion);
+		if (j.contains("AssetHandle")) j["AssetHandle"].get_to((uint64_t&)mapping->handle);
 
-		return inputSystem;
+		if (j.contains("KeyMappings") && j["KeyMappings"].is_object())
+		{
+			for (auto &[keyStr, actionVal] : j["KeyMappings"].items())
+			{
+				try
+				{
+					KeyCode key = static_cast<KeyCode>(std::stoul(keyStr));
+					mapping->m_KeyMappings[key] = actionVal.get<std::string>();
+				}
+				catch (...) {}
+			}
+		}
+
+		if (j.contains("MouseMappings") && j["MouseMappings"].is_object())
+		{
+			for (auto &[buttonStr, actionVal] : j["MouseMappings"].items())
+			{
+				try
+				{
+					MouseCode button = static_cast<MouseCode>(std::stoul(buttonStr));
+					mapping->m_MouseMappings[button] = actionVal.get<std::string>();
+				}
+				catch (...) {}
+			}
+		}
+
+		if (j.contains("JoystickMappings") && j["JoystickMappings"].is_object())
+		{
+			for (auto &[buttonStr, actionVal] : j["JoystickMappings"].items())
+			{
+				try
+				{
+					uint8_t button = static_cast<uint8_t>(std::stoul(buttonStr));
+					mapping->m_JoystickMappings[button] = actionVal.get<std::string>();
+				}
+				catch (...) {}
+			}
+		}
+
+		return mapping;
 	}
 
 }

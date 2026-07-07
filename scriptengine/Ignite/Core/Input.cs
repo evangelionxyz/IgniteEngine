@@ -9,6 +9,7 @@ public static class Input
 {
     public static bool IsKeyPressed(KeyCode keyCode) => CoreInternalCalls.Input_IsKeyPressed((uint)keyCode);
     public static bool IsKeyPressed(uint keyCode) => CoreInternalCalls.Input_IsKeyPressed(keyCode);
+    public static bool IsActionPressed(string actionName) => CoreInternalCalls.Input_IsActionPressed(actionName);
 
     public static bool IsModifierPressed(ushort modCode) => CoreInternalCalls.Input_IsModifierPressed(modCode);
 

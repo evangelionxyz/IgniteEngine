@@ -8,6 +8,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/logger.hpp"
 #include <SDL3/SDL.h>
+#include "ignite/project/input_mapping.hpp"
 
 namespace ignite
 {
@@ -64,6 +65,23 @@ namespace ignite
 			return s_ActiveSystem->GetMousePositionImpl();
 		}
 		return glm::ivec2(0);
+	}
+
+	bool InputSystem::IsActionPressed(const std::string &actionName)
+	{
+		if (s_ActiveSystem)
+		{
+			return s_ActiveSystem->IsActionPressedImpl(actionName);
+		}
+		return false;
+	}
+
+	void InputSystem::SetInputMapping(Ref<InputMapping> mapping)
+	{
+		if (s_ActiveSystem)
+		{
+			s_ActiveSystem->SetInputMappingImpl(mapping);
+		}
 	}
 
 	glm::vec2 InputSystem::GetGameplayMousePosition()
@@ -154,9 +172,119 @@ namespace ignite
 		return false;
 	}
 
+	bool InputSystem::IsActionPressedImpl(const std::string &actionName) const
+	{
+		auto it = m_ActionPressCounts.find(actionName);
+		if (it != m_ActionPressCounts.end())
+		{
+			return it->second > 0;
+		}
+		return false;
+	}
+
+	void InputSystem::SetInputMappingImpl(Ref<InputMapping> mapping)
+	{
+		m_InputMapping = mapping;
+		m_ActionPressCounts.clear();
+		if (m_InputMapping)
+		{
+			for (const auto &[key, action] : m_InputMapping->m_KeyMappings)
+			{
+				if (IsKeyPressedImpl(key))
+				{
+					m_ActionPressCounts[action]++;
+				}
+			}
+			for (const auto &[button, action] : m_InputMapping->m_MouseMappings)
+			{
+				if (IsMouseButtonPressedImpl(button))
+				{
+					m_ActionPressCounts[action]++;
+				}
+			}
+			for (const auto &[button, action] : m_InputMapping->m_JoystickMappings)
+			{
+				auto it = m_JoystickButtonState.find(button);
+				if (it != m_JoystickButtonState.end() && it->second)
+				{
+					m_ActionPressCounts[action]++;
+				}
+			}
+		}
+	}
+
+	void InputSystem::UpdateActionStateOnKey(KeyCode key, bool pressed)
+	{
+		if (!m_InputMapping) return;
+		auto it = m_InputMapping->m_KeyMappings.find(key);
+		if (it != m_InputMapping->m_KeyMappings.end())
+		{
+			const std::string &action = it->second;
+			if (pressed)
+			{
+				m_ActionPressCounts[action]++;
+			}
+			else
+			{
+				m_ActionPressCounts[action] = std::max(0, m_ActionPressCounts[action] - 1);
+			}
+		}
+	}
+
+	void InputSystem::UpdateActionStateOnMouseButton(MouseCode button, bool pressed)
+	{
+		if (!m_InputMapping) return;
+		auto it = m_InputMapping->m_MouseMappings.find(button);
+		if (it != m_InputMapping->m_MouseMappings.end())
+		{
+			const std::string &action = it->second;
+			if (pressed)
+			{
+				m_ActionPressCounts[action]++;
+			}
+			else
+			{
+				m_ActionPressCounts[action] = std::max(0, m_ActionPressCounts[action] - 1);
+			}
+		}
+	}
+
+	void InputSystem::UpdateActionStateOnJoystickButton(uint8_t button, bool pressed)
+	{
+		if (!m_InputMapping) return;
+		auto it = m_InputMapping->m_JoystickMappings.find(button);
+		if (it != m_InputMapping->m_JoystickMappings.end())
+		{
+			const std::string &action = it->second;
+			if (pressed)
+			{
+				m_ActionPressCounts[action]++;
+			}
+			else
+			{
+				m_ActionPressCounts[action] = std::max(0, m_ActionPressCounts[action] - 1);
+			}
+		}
+	}
+
+	void InputSystem::SetJoystickButton(uint8_t button, bool pressed)
+	{
+		bool wasPressed = m_JoystickButtonState[button];
+		if (wasPressed != pressed)
+		{
+			m_JoystickButtonState[button] = pressed;
+			UpdateActionStateOnJoystickButton(button, pressed);
+		}
+	}
+
 	void InputSystem::SetKey(SDL_Keycode key, bool pressed)
 	{
-		m_KeyState[key] = pressed;
+		bool wasPressed = m_KeyState[key];
+		if (wasPressed != pressed)
+		{
+			m_KeyState[key] = pressed;
+			UpdateActionStateOnKey(static_cast<KeyCode>(key), pressed);
+		}
 	}
 
 	void InputSystem::SetModifier(SDL_Keymod mod, bool pressed)
@@ -166,7 +294,12 @@ namespace ignite
 
 	void InputSystem::SetMouseButton(MouseCode button, bool pressed)
 	{
-		m_MouseButtonState[button] = pressed;
+		bool wasPressed = m_MouseButtonState[button];
+		if (wasPressed != pressed)
+		{
+			m_MouseButtonState[button] = pressed;
+			UpdateActionStateOnMouseButton(button, pressed);
+		}
 	}
 
 	void InputSystem::SetMousePosition(int x, int y)
@@ -250,6 +383,12 @@ namespace ignite
 		case SDL_EVENT_MOUSE_MOTION:
 			SetMousePosition((int)event->motion.x, (int)event->motion.y);
 			break;
+		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+			SetJoystickButton(event->gbutton.button, true);
+			break;
+		case SDL_EVENT_GAMEPAD_BUTTON_UP:
+			SetJoystickButton(event->gbutton.button, false);
+			break;
 		}
 	}
 
@@ -287,6 +426,12 @@ namespace ignite
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
 			SetMousePosition((int)event->motion.x, (int)event->motion.y);
+			break;
+		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+			SetJoystickButton(event->gbutton.button, true);
+			break;
+		case SDL_EVENT_GAMEPAD_BUTTON_UP:
+			SetJoystickButton(event->gbutton.button, false);
 			break;
 		}
 

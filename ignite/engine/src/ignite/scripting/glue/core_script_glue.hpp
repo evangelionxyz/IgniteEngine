@@ -19,6 +19,7 @@ namespace ignite
         void (*Input_SetMouseToCenter)();
         void (*Input_SetCursorMode)(int32_t mode);
         bool (*Input_IsMouseOverUI)();
+        bool (*Input_IsActionPressed)(const char *actionName);
 
         bool (*AssetManager_IsAssetHandleValid)(uint64_t handle);
         bool (*AssetManager_IsAssetLoaded)(uint64_t handle);

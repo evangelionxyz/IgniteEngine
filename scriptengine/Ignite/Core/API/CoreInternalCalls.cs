@@ -19,6 +19,7 @@ public static class CoreInternalCalls
     private static CoreNativeAPI.Funcs.InputSetMouseToCenterFn? s_InputSetMouseToCenter;
     private static CoreNativeAPI.Funcs.InputSetCursorModeFn? s_InputSetCursorMode;
     private static CoreNativeAPI.Funcs.InputIsMouseOverUIFn? s_InputIsMouseOverUI;
+    private static CoreNativeAPI.Funcs.InputIsActionPressedFn? s_InputIsActionPressed;
 
     private static CoreNativeAPI.Funcs.AssetManagerQueryFn? s_AssetManagerIsAssetHandleValid;
 
@@ -43,6 +44,7 @@ public static class CoreInternalCalls
         s_InputSetMouseToCenter = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputSetMouseToCenterFn>(api.Input_SetMouseToCenter);
         s_InputSetCursorMode = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputSetCursorModeFn>(api.Input_SetCursorMode);
         s_InputIsMouseOverUI = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputIsMouseOverUIFn>(api.Input_IsMouseOverUI);
+        s_InputIsActionPressed = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputIsActionPressedFn>(api.Input_IsActionPressed);
         
         s_AssetManagerIsAssetHandleValid = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerQueryFn>(api.AssetManager_IsAssetHandleValid);
 
@@ -114,6 +116,14 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         return s_InputIsMouseOverUI!();
+    }
+
+    internal static bool Input_IsActionPressed(string actionName)
+    {
+        EnsureInitialized();
+        IntPtr ptr = NativeObject.StringToUtf8(actionName);
+        try { return s_InputIsActionPressed!(ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
     // Asset manager
