@@ -386,7 +386,9 @@ def install_fbx_sdk_linux(target_directory):
     #   - First positional arg: destination directory
     #   - ReadMe prompt answered with "n", license prompt answered with "yes"
     cmd = f'printf "n\\nyes\\n" | "{installer}" "{install_base}"'
-    result = subprocess.run(cmd, shell=True, check=False)
+    env = os.environ.copy()
+    env["PAGER"] = "cat"
+    result = subprocess.run(cmd, shell=True, env=env, check=False)
     print(f"FBX SDK installer exited with code {result.returncode}")
 
     # ---------- verify ----------

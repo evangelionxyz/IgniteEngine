@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -e
+export DEBIAN_FRONTEND=noninteractive
+export PAGER=cat
 
 echo "Updating package lists..."
 sudo apt-get update
@@ -77,4 +79,4 @@ git submodule update --init --recursive
 
 # Run the python setup script to download dependencies & generate project makefiles
 echo "Running project setup script..."
-python3 scripts/setup.py
+PAGER=cat python3 scripts/setup.py
