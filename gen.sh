@@ -9,6 +9,7 @@ sudo apt-get update
 echo "Installing required dependencies..."
 sudo apt-get install -y \
     build-essential \
+    g++-14 \
     clang \
     lld \
     cmake \
