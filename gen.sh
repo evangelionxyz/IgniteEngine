@@ -61,7 +61,6 @@ sudo apt-get install -y \
     libgmock-dev \
     zenity \
     dotnet-sdk-10.0 \
-    libsdl3-dev \
     libshaderc-dev \
     spirv-tools \
     spirv-cross \

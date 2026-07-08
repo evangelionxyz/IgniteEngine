@@ -107,13 +107,13 @@ project "Ignite.Editor"
         libdirs {
             "/usr/lib",
             "/usr/local/lib",
-            "%{LibraryDir.FMOD_LINUX}"
+            "%{LibraryDir.FMOD_LINUX}",
+            "%{LibraryDir.SDL3_LINUX}"
         }
         includedirs {
             "/usr/include",
             "%{IncludeDir.OPENEXR_LINUX}",
-            "%{IncludeDir.IMATH_LINUX}",
-            "%{IncludeDir.SDL3_LINUX}"
+            "%{IncludeDir.IMATH_LINUX}"
         }
         links {
             "vulkan",

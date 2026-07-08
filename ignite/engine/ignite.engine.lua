@@ -101,13 +101,13 @@ project "Ignite.Engine"
             "/usr/local/lib",
             "%{LibraryDir.FBX_SDK}/release",
             "%{LibraryDir.FMOD_LINUX}",
-            "%{LibraryDir.VULKAN_SDK}"
+            "%{LibraryDir.VULKAN_SDK}",
+            "%{LibraryDir.SDL3_LINUX}"
         }
         includedirs {
             "/usr/include",
             "%{IncludeDir.OPENEXR_LINUX}",
-            "%{IncludeDir.IMATH_LINUX}",
-            "%{IncludeDir.SDL3_LINUX}"
+            "%{IncludeDir.IMATH_LINUX}"
         }
         links {
             "vulkan",
@@ -192,7 +192,7 @@ project "Ignite.Engine"
 
             '{COPYFILE} "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll" "%{cfg.targetdir}"',
 
             -- Copying dotnet libraries
             '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',

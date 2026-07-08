@@ -46,3 +46,6 @@
 [submodule "thirdparty/DirectX-Headers"]
 	path = thirdparty/DirectX-Headers
 	url = https://github.com/microsoft/DirectX-Headers.git
+[submodule "thirdparty/SDL3"]
+	path = thirdparty/SDL3
+	url = https://github.com/libsdl-org/SDL.git
