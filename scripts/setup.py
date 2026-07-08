@@ -74,7 +74,7 @@ def run():
     print("\nGenerating project files...")
     generate_project_files(premake_binary)
 
-    if os.environ.get("GITHUB_ACTIONS") != "true":
+    if platform.system() == "Windows" and os.environ.get("GITHUB_ACTIONS") != "true":
         input("Press any key to continue")
 
 

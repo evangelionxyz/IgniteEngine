@@ -53,7 +53,6 @@ sudo apt-get install -y \
     libusb-1.0-0-dev \
     zlib1g-dev \
     libfmt-dev \
-    libxml2 \
     libxml2-dev \
     libopenexr-dev \
     libimath-dev \

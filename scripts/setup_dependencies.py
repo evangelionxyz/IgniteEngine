@@ -385,11 +385,31 @@ def install_fbx_sdk_linux(target_directory):
     # The FBX SDK makeself installer expects:
     #   - First positional arg: destination directory
     #   - ReadMe prompt answered with "n", license prompt answered with "yes"
-    cmd = f'printf "n\\nyes\\n" | "{installer}" "{install_base}"'
-    env = os.environ.copy()
-    env["PAGER"] = "cat"
-    result = subprocess.run(cmd, shell=True, env=env, check=False)
+    expect_script_path = target_directory / "fbxsdk_install.exp"
+    expect_content = r"""#!/usr/bin/expect -f
+set timeout 300
+set installer [lindex $argv 0]
+set dest [lindex $argv 1]
+
+spawn $installer $dest
+
+expect {
+    -re {\[y/n\]} { send "n\r"; exp_continue }
+    -re {(?i)(agree|yes/no)} { send "yes\r"; exp_continue }
+    eof
+}
+"""
+    with open(expect_script_path, "w") as f:
+        f.write(expect_content)
+
+    cmd = f'expect "{expect_script_path}" "{installer}" "{install_base}"'
+    result = subprocess.run(cmd, shell=True, check=False)
     print(f"FBX SDK installer exited with code {result.returncode}")
+
+    try:
+        expect_script_path.unlink()
+    except Exception:
+        pass
 
     # ---------- verify ----------
 
