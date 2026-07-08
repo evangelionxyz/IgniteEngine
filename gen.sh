@@ -19,7 +19,6 @@ sudo apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
-    python3-requests \
     libvulkan-dev \
     vulkan-tools \
     mesa-vulkan-drivers \
@@ -72,7 +71,6 @@ if [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ] && [ -f /usr/lib/x86_64-linux
     echo "Creating symlink for libxml2.so.2 (needed by Autodesk FBX SDK)..."
     sudo ln -sf /usr/lib/x86_64-linux-gnu/libxml2.so /usr/lib/x86_64-linux-gnu/libxml2.so.2
 fi
-
 # Ensure git submodules are updated recursively
 echo "Updating git submodules..."
 git submodule update --init --recursive

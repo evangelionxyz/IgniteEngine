@@ -1,6 +1,6 @@
 import os
-import requests
-import urllib
+import urllib.request
+import urllib.error
 import tarfile
 from zipfile import ZipFile
 import platform
@@ -129,10 +129,6 @@ def download_file(url, filepath):
                 print(f"HTTP Error  encountered: {e.code}. Proceeding with backup...\n\n")
                 if os.path.exists(filepath):
                     os.remove(filepath)
-            except requests.exceptions.RequestException as e:
-                print(f"Request error encountered: {e}. Proceeding with backup...\n\n")
-                if os.path.exists(filepath):
-                    os.remove(filepath)
             except Exception:
                 print(f"Something went wrong. Proceeding with backup...\n\n")
                 if os.path.exists(filepath):
@@ -142,20 +138,22 @@ def download_file(url, filepath):
     if (not(type(url) is str)):
         raise ValueError(f"Argument 'url' must be type of list or string")
     
+    headers = {'User-Agent': "Mozilla/5.0 (Macintosh Intel Mac Os X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"}
+    req = urllib.request.Request(url, headers=headers)
+    
     with open(filepath, 'wb') as f:
-        headers = {'User-Agent': "Mozilla/5.0 (Macintosh Intel Mac Os X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"}
-        with requests.get(url, headers=headers, stream=True) as response:
-            response.raise_for_status()
-            total = response.headers.get('content-length')
+        with urllib.request.urlopen(req) as response:
+            total = response.headers.get('Content-Length')
             total_bytes = int(total) if total is not None else None
             chunk_size = max(int(total_bytes / 1000), 1024 * 1024) if total_bytes else 1024 * 1024
             downloaded = 0
             start_time = time.time()
             has_output = False
 
-            for data in response.iter_content(chunk_size=chunk_size):
+            while True:
+                data = response.read(chunk_size)
                 if not data:
-                    continue
+                    break
 
                 f.write(data)
                 downloaded += len(data)
