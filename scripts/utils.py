@@ -20,8 +20,12 @@ def set_env_variable(variable_name, directory_path):
             
     elif platform.system() == "Linux":
         os.environ[variable_name] = directory_path
-        with open('/etc/environment', 'a') as file:
-            file.write(f'\n{variable_name}="{directory_path}"\n')
+        try:
+            with open('/etc/environment', 'a') as file:
+                file.write(f'\n{variable_name}="{directory_path}"\n')
+        except IOError as e:
+            print(f"Warning: Could not write to /etc/environment: {e}")
+            print(f"Please manually export {variable_name}=\"{directory_path}\" in your shell config (e.g. ~/.bashrc)")
 
     # Persist for GitHub Actions
     if "GITHUB_ENV" in os.environ:
@@ -54,6 +58,8 @@ def get_env_variable(name):
                     if line.startswith(f'{name}='):
                         return line.split('=', 1)[1].strip().strip('"')
         except FileNotFoundError:
+            return None
+        except IOError:
             return None
     return None
 
@@ -91,8 +97,12 @@ def set_system_path_variable(new_path):
         if new_path not in current_path.split(':'):
             updated_path = f'{current_path}:{new_path}'
             os.environ['PATH'] = updated_path
-            with open('/etc/environment', 'a') as file:
-                file.write(f'\nPATH="{updated_path}"\n')
+            try:
+                with open('/etc/environment', 'a') as file:
+                    file.write(f'\nPATH="{updated_path}"\n')
+            except IOError as e:
+                print(f"Warning: Could not write to /etc/environment: {e}")
+                print(f"Please manually append {new_path} to your PATH in your shell config (e.g. ~/.bashrc)")
             
             # Persist for GitHub Actions
             if "GITHUB_PATH" in os.environ:

@@ -16,13 +16,6 @@ project "Ignite.Editor"
         "src/**.cpp",
         "src/**.hpp",
         "src/**.h",
-
-        -- Resource
-        "resource.h",
-        "Ignite.Editor.aps",
-        "Ignite.Editor.rc",
-        "ignite-icon256px.ico",
-        "ignite-icon256px.png",
     }
 
     links {
@@ -94,6 +87,16 @@ project "Ignite.Editor"
         '{COPYDIR} "%{prj.location}/resources" "%{cfg.targetdir}/resources"',
     }
 
+    filter "system:windows"
+        files {
+            -- Resource
+            "resource.h",
+            "Ignite.Editor.aps",
+            "Ignite.Editor.rc",
+            "ignite-icon256px.ico",
+            "ignite-icon256px.png",
+        }
+
     --linux
     filter "system:linux"
         pic "on"
@@ -114,15 +117,17 @@ project "Ignite.Editor"
         }
         links {
             "vulkan",
-            "shaderc_shared",
+            "shaderc",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",
             "nethost",
             "SDL3",
+            "OpenEXRUtil",
             "OpenEXR",
-            "Iex",
+            "OpenEXRCore",
             "IlmThread",
+            "Iex",
             "Imath",
             "xml2",
             "pthread",
@@ -135,11 +140,13 @@ project "Ignite.Editor"
 
     filter { "system:linux", "configurations:Debug" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
-        links { "fmodL", "fbxsdk" }
+        links { "fmodL" }
+        linkoptions { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}/libfbxsdk.a" }
 
     filter { "system:linux", "configurations:Release or Shipping" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-        links { "fmod", "fbxsdk" }
+        links { "fmod" }
+        linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
 
     --windows
     filter { "system:windows", "toolset:msc*"}

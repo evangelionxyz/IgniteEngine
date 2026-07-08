@@ -106,15 +106,17 @@ project "Ignite.Test"
         }
         links {
             "vulkan",
-            "shaderc_shared",
+            "shaderc",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",
             "nethost",
             "SDL3",
+            "OpenEXRUtil",
             "OpenEXR",
-            "Iex",
+            "OpenEXRCore",
             "IlmThread",
+            "Iex",
             "Imath",
             "xml2",
             "pthread",
@@ -127,11 +129,13 @@ project "Ignite.Test"
 
     filter { "system:linux", "configurations:Debug or Debug-Profiling" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
-        links { "fmodL", "fbxsdk" }
+        links { "fmodL" }
+        linkoptions { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}/libfbxsdk.a" }
 
     filter { "system:linux", "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-        links { "fmod", "fbxsdk" }
+        links { "fmod" }
+        linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
 
     --windows
     filter { "system:windows", "toolset:msc*"}

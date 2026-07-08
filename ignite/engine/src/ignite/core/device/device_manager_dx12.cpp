@@ -22,6 +22,8 @@
 */
 
 #include "ignite_pch.hpp"
+
+#ifdef PLATFORM_WINDOWS
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/texture.hpp"
 
@@ -657,3 +659,5 @@ namespace ignite
         return *s_D3D12DeviceInstance;
     }
 }
+
+#endif // PLATFORM_WINDOWS

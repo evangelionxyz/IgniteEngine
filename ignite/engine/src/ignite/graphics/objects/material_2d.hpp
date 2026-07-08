@@ -37,7 +37,7 @@ namespace ignite
 		static Ref<Material2D> Deserialize(const ignite::Path &filepath);
 
 		static AssetType GetStaticAssetType() { return AssetType::Material2D; }
-		virtual AssetType GetAssetType() { return GetStaticAssetType(); }
+		virtual AssetType GetAssetType() override { return GetStaticAssetType(); }
 	};
 }
 

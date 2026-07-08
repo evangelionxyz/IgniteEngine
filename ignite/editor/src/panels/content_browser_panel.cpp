@@ -653,8 +653,8 @@ namespace ignite
                                             {
                                                 m_PendingScriptableObjectClassName = entry.className;
                                                 m_PendingScriptableObjectFileName  = entry.fileName;
-                                                strncpy_s(m_PopupInputBuffer, sizeof(m_PopupInputBuffer),
-                                                          entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                                strncpy(m_PopupInputBuffer, entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                                // strncpy_s(m_PopupInputBuffer, sizeof(m_PopupInputBuffer), entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
                                                 m_ShowCreateScriptableObjectModal = true;
                                             }
                                         }

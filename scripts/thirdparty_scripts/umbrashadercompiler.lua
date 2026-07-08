@@ -21,10 +21,13 @@ project("UmbraShaderCompiler")
     -- Linux Default
     filter "system:linux"
         systemversion "latest"
-        includedirs { "usr/" }
+        includedirs { "usr/", "%{IncludeDir.VULKAN_SDK}" }
+        libdirs { "%{LibraryDir.VULKAN_SDK}" }
         links {
             "vulkan",
-            "shaderc_shared",
+            "dxcompiler",
+            "shaderc",
+            "shaderc_util",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",

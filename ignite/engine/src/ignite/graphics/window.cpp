@@ -491,6 +491,7 @@ namespace ignite
         return { width, height };
     }
 
+#ifdef PLATFORM_WINDOWS
     HWND Window::GetNativeWindow() const
     {
         if (!m_Window)
@@ -500,6 +501,7 @@ namespace ignite
         HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
         return hwnd;
     }
+#endif
 
     void Window::SetEventCallback(const std::function<void(Event &)> &callback)
     {

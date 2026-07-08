@@ -23,6 +23,9 @@ project "msdfgen"
         "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/freetype/include"
     }
 
+    filter "system:linux"
+        pic "On"
+
     defines { "MSDF_USE_CPP11" }
 
     filter { "configurations:Debug or Debug-Profiling" }

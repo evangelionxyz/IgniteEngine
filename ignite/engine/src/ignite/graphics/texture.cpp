@@ -704,7 +704,20 @@ namespace ignite
             {
                 int32_t tileCountX = 0;
                 int32_t tileCountY = 0;
-                if (exr_get_tile_counts(ctx, 0, 0, 0, &tileCountX, &tileCountY) != EXR_ERR_SUCCESS || tileCountX <= 0 || tileCountY <= 0)
+                int32_t levelWidth = 0;
+                int32_t levelHeight = 0;
+                int32_t tileWidth = 0;
+                int32_t tileHeight = 0;
+                if (exr_get_level_sizes(ctx, 0, 0, 0, &levelWidth, &levelHeight) != EXR_ERR_SUCCESS ||
+                    exr_get_tile_sizes(ctx, 0, 0, 0, &tileWidth, &tileHeight) != EXR_ERR_SUCCESS ||
+                    tileWidth <= 0 || tileHeight <= 0)
+                {
+                    LOG_ERROR("[Texture] Failed to query EXR level/tile sizes for '{}'", filepath.generic_string());
+                    break;
+                }
+                tileCountX = (levelWidth + tileWidth - 1) / tileWidth;
+                tileCountY = (levelHeight + tileHeight - 1) / tileHeight;
+                if (tileCountX <= 0 || tileCountY <= 0)
                 {
                     LOG_ERROR("[Texture] Invalid EXR tile counts '{}': {}x{}", filepath.generic_string(), tileCountX, tileCountY);
                     break;

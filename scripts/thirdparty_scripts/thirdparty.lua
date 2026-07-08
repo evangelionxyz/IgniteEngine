@@ -2,7 +2,17 @@
 VULKAN_SDK_PATH = os.getenv("VULKAN_SDK")
 if not VULKAN_SDK_PATH or VULKAN_SDK_PATH == "" then
     -- Try a default path if not set
-    VULKAN_SDK_PATH = "C:/VulkanSDK/1.4.341.1"
+    if os.target() == "linux" then
+        VULKAN_SDK_PATH = "scripts/downloads/vulkansdk/1.4.341.1/x86_64"
+    else
+        VULKAN_SDK_PATH = "C:/VulkanSDK/1.4.341.1"
+    end
+end
+
+-- Convert Windows path (e.g. C:/...) to WSL path (/mnt/c/...) if on Linux
+if os.target() == "linux" and VULKAN_SDK_PATH:match("^%a:") then
+    local drive = VULKAN_SDK_PATH:sub(1, 1):lower()
+    VULKAN_SDK_PATH = "/mnt/" .. drive .. VULKAN_SDK_PATH:sub(3)
 end
 
 -- Detect correct include folder casing
@@ -46,7 +56,7 @@ IncludeDir["GLFW"]                  = "%{THIRDPARTY_DIR}/GLFW/include"
 IncludeDir["BOX2D"]                 = "%{THIRDPARTY_DIR}/BOX2D/include"
 IncludeDir["ENTT"]                  = "%{THIRDPARTY_DIR}/entt/"
 IncludeDir["GLM"]                   = "%{THIRDPARTY_DIR}/GLM/"
-IncludeDir["IMGUI"]                 = "%{THIRDPARTY_DIR}/IMGUI/"
+IncludeDir["IMGUI"]                 = "%{THIRDPARTY_DIR}/ImGui/"
 IncludeDir["IMGUIZMO"]              = "%{THIRDPARTY_DIR}/IMGUIZMO/"
 IncludeDir["IMGUI_NODE"]            = "%{THIRDPARTY_DIR}/imgui_node_editor/"
 IncludeDir["NVRHI"]                 = "%{THIRDPARTY_DIR}/NVRHI/include"
@@ -151,8 +161,8 @@ LibraryDir["FMOD_LINUX"]            = "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64"
 
 -- FBX SDK Linux (GCC tarball layout: lib/gcc/x64/{debug,release}/libfbxsdk.so)
 -- FBX_SDK_PATH is set via FBX_SDK env var, same as Windows.
-LibraryDir["FBX_SDK_LINUX_DEBUG"]   = "%{FBX_SDK_PATH}/lib/gcc/x64/debug"
-LibraryDir["FBX_SDK_LINUX_RELEASE"] = "%{FBX_SDK_PATH}/lib/gcc/x64/release"
+LibraryDir["FBX_SDK_LINUX_DEBUG"]   = "%{FBX_SDK_PATH}/lib/debug"
+LibraryDir["FBX_SDK_LINUX_RELEASE"] = "%{FBX_SDK_PATH}/lib/release"
 
 -- include lua files
 group "Third Party"

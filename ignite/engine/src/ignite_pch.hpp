@@ -41,7 +41,6 @@
 #include <random>
 #include <limits>
 #include <typeinfo>
-#include <objbase.h>
 
 #ifdef PLATFORM_WINDOWS
 #include <Windows.h>

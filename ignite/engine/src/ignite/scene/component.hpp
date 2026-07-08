@@ -4,6 +4,10 @@
 #ifndef IGN_COMPONENT_HPP
 #define IGN_COMPONENT_HPP
 
+#ifdef uuid
+#undef uuid
+#endif
+
 #include "icomponent.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
@@ -186,6 +190,9 @@ namespace ignite
         }
     }
 
+#ifdef uuid
+#undef uuid
+#endif
     class IDComponent final : public IComponent
     {
     public:

@@ -759,6 +759,7 @@ R"(<Project>
             // Create visual studio .slnx
             {
                 std::string slnx = s_SlnxTemplate;
+                std::string guidStr = "{00000000-0000-0000-0000-000000000000}";
 #ifdef PLATFORM_WINDOWS
                 GUID gidReference;
                 HRESULT hCreateGuid = CoCreateGuid(&gidReference);
@@ -773,14 +774,10 @@ R"(<Project>
                         << std::setw(2) << static_cast<unsigned short>(gidReference.Data4[1]) << "-";
                     for (int i = 2; i < 8; ++i)
                         guidStream << std::setw(2) << static_cast<unsigned short>(gidReference.Data4[i]);
+                    guidStr = guidStream.str();
                 }
-                std::string guidStr = guidStream.str();
-                if (guidStr.empty())
-                    guidStr = "{00000000-0000-0000-0000-000000000000}";
-                stringutils::ReplaceWith(slnx, "{GENERATED_GUID}", guidStr);
-#else
-                stringutils::ReplaceWith(slnx, "{GENERATED_GUID}", "{00000000-0000-0000-0000-000000000000}");
 #endif
+                stringutils::ReplaceWith(slnx, "{GENERATED_GUID}", guidStr);
                 stringutils::ReplaceWith(slnx, "{PROJECT_NAME}", m_Info.name);
                 std::ofstream slnOut(solutionFilepath, std::ios::out);
                 slnOut << slnx;
