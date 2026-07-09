@@ -1173,32 +1173,34 @@ namespace ignite
                     continue;
 
                 const glm::mat4 world = tr.world.GetMatrix();
-                const float maxAxis = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
+                const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
                 const float scaledRadius = capsule.radius * maxAxis;
-                const float scaledHalfHeight = glm::max(capsule.height - capsule.radius, 0.0f) * maxAxis;
+                const float scaledHalfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxAxis;
 
                 const glm::vec3 center = glm::vec3(world * glm::vec4(capsule.center, 1.0f));
                 const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
-                const glm::vec3 up = glm::normalize(glm::vec3(world[1])) * scaledRadius;
-                const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledHalfHeight;
+                const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
+                const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
+				const glm::vec3 upRadius = glm::normalize(glm::vec3(world[1])) * scaledRadius;
 
-                const glm::vec3 heightOffset = forward;
-                const glm::vec3 topCenter = center + heightOffset;
-                const glm::vec3 bottomCenter = center - heightOffset;
+                const glm::vec3 topCenter = center + upHeight;
+                const glm::vec3 bottomCenter = center - upHeight;
 
-                drawCircleRing(topCenter, right, up, kCircleSegments, kPhysicsDebugColor);
-                drawCircleRing(bottomCenter, right, up, kCircleSegments, kPhysicsDebugColor);
+				// Draw capsule as two circle rings and connecting lines
+                drawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                drawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
 
+				// Draw connecting lines between the top and bottom circles
+                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
                 m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
                 m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(topCenter + up, bottomCenter + up, kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(topCenter - up, bottomCenter - up, kPhysicsDebugColor);
 
-                const glm::vec3 axisRadius = forward;
-                drawArc(topCenter, right, axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(topCenter, up, axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(bottomCenter, right, -axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(bottomCenter, up, -axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				// Draw arcs to represent the rounded ends of the capsule
+                drawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
             }
 
             auto meshCollider = m_Scene->registry->view<TransformComponent, MeshColliderComponent>();

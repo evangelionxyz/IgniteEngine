@@ -440,6 +440,8 @@ def build_sdl3():
         "-B", str(build_dir),
         "-DSDL_SHARED=ON",
         "-DSDL_STATIC=OFF",
+        "-DSDL_TESTS=OFF",
+        "-DSDL_TEST_LIBRARY=OFF",
         "-DCMAKE_BUILD_TYPE=Release"
     ]
     

@@ -540,42 +540,30 @@ namespace ignite
             return;
         }
 
-        // Create a horizontal capsule by rotating the default vertical capsule 90 degrees around X.
-        const float maxScale = glm::compMax(tr.world.scale);
-        const float halfHeight = col.height * 0.5f * maxScale;
-        const float radius = col.radius * maxScale;
+        const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+		const float radius = col.radius * maxScale;
 
-        if (halfHeight <= 0.0f || radius <= 0.0f)
+		// Jolt needs half of the cylinder height (excluding the hemispherical ends) for the capsule shape.
+        // The total height of the capsule is col.height, so we subtract the radius from half of that to get the cylinder half-height.
+        const float cylinderHalfHeight = glm::max(col.height * 0.5f - col.radius, 0.0f) * maxScale;
+
+		JPH::CapsuleShapeSettings capsuleShapeSettings(cylinderHalfHeight, radius);
+        if (!capsuleShapeSettings.IsValid())
         {
-            LOG_WARN("[Jolt Physics] Capsule collider for entity {} has non-positive dimensions halfHeight={}, radius={} - skipping",
-                (uint64_t)entity.GetUUID(), halfHeight, radius);
-            return;
+			LOG_WARN("[Jolt Physics] Capsule collider for entity {} has non-positive dimensions halfHeight={}, radius={} - skipping",
+				(uint64_t)entity.GetUUID(), cylinderHalfHeight, radius);
+			return;
         }
 
-        JPH::CapsuleShapeSettings capsuleShapeSettings(halfHeight, radius);
-
-        JPH::ShapeSettings::ShapeResult capsuleShapeResult = capsuleShapeSettings.Create();
-        if (!capsuleShapeResult.IsValid() || capsuleShapeResult.HasError())
-        {
-            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", capsuleShapeResult.GetError());
-            return;
-        }
-
-        JPH::ShapeRefC capsuleShape = capsuleShapeResult.Get();
-
-        const glm::quat horizontalRotation = glm::angleAxis(1.57079632679f, glm::vec3(1.0f, 0.0f, 0.0f));
-        JPH::RotatedTranslatedShapeSettings shapeSettings(GlmToJoltVec3(col.center * maxScale), GlmToJoltQuat(horizontalRotation), capsuleShape.GetPtr());
-
-        JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+        JPH::ShapeSettings::ShapeResult shapeResult = capsuleShapeSettings.Create();
         if (!shapeResult.IsValid() || shapeResult.HasError())
         {
             LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", shapeResult.GetError());
             return;
         }
 
-        JPH::ShapeRefC shape = shapeResult.Get();
-
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tr.world.translation, tr.world.rotation);
+        JPH::ShapeRefC capsuleShape = shapeResult.Get();
+        JPH::BodyCreationSettings bodySettings = CreateBody(capsuleShape, rb, tr.world.translation, tr.world.rotation);
 
         if (rb.body)
         {
@@ -599,7 +587,7 @@ namespace ignite
             rb.body = body;
         }
 
-        col.shape = (void *)shape.GetPtr();
+        col.shape = (void *)capsuleShape.GetPtr();
     }
 
     void JoltScene::CreateSphereCollider(Entity entity)
