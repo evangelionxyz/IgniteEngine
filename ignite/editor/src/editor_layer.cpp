@@ -546,13 +546,13 @@ namespace ignite
             
         }
 
-        // Resizing game-play camera
+        // Resizing game-play camera (Game Viewport)
         if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
         {
             auto &cc = primaryCam.GetComponent<CameraComponent>();
             ICamera *gameCamera = &cc.camera;
             {
-				auto target = m_SceneRenderer->GetRenderTarget(editCamera);
+				auto target = m_SceneRenderer->GetRenderTarget(gameCamera);
                 
                 if (target)
                 {
@@ -584,24 +584,76 @@ namespace ignite
             }
         }
 
+        // Resize the EditorPlayCamera (mirror camera for Play mode → Editor Viewport).
+        // It gets its own independent render target sized to the Editor Viewport,
+        // so resizing the editor panel never affects the Game Viewport's projection.
+        if (m_State.sceneState == ESceneState::Play)
+        {
+            if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+            {
+                auto &cc = primaryCam.GetComponent<CameraComponent>();
+
+                // Sync camera properties (fov, near/far, projection type) from the game camera
+                m_EditorPlayCamera.fov           = cc.camera.fov;
+                m_EditorPlayCamera.nearPlane     = cc.camera.nearPlane;
+                m_EditorPlayCamera.farPlane      = cc.camera.farPlane;
+                m_EditorPlayCamera.orthoSize     = cc.camera.orthoSize;
+                m_EditorPlayCamera.projectionType = cc.camera.projectionType;
+                m_EditorPlayCamera.postProcessing = cc.camera.postProcessing;
+                m_EditorPlayCamera.lens          = cc.camera.lens;
+            }
+
+            // Resize EditorPlayCamera framebuffer to match the Editor Viewport size
+            auto editorPlayTarget = m_SceneRenderer->GetRenderTarget(&m_EditorPlayCamera);
+            if (editorPlayTarget)
+            {
+                const glm::uvec2 framebufferSize = editorPlayTarget->compositeRT->GetSize();
+                const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
+                const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+                const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
+
+                if (isFramebufferSizeValid)
+                {
+                    if (framebufferNeedsResize)
+                    {
+                        m_EditorPlayCamera.UpdateProjection(desiredSize.x, desiredSize.y);
+                        m_State.editorPlayResizing = true;
+                    }
+
+                    if (m_State.editorPlayResizing)
+                    {
+                        if (m_State.editorPlayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+                        {
+                            m_SceneRenderer->ResizeFramebuffer(&m_EditorPlayCamera, desiredSize.x, desiredSize.y);
+                            m_State.editorPlayResizing = false;
+                            m_State.editorPlayResizingFrame = 0;
+                        }
+                    }
+                }
+            }
+        }
+
         // Render to Edit Viewport
         if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
             switch (m_State.sceneState)
             {
                 case ESceneState::Play:
-                //{
-				//	if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
-				//	{
-				//		auto &cc = primaryCam.GetComponent<CameraComponent>();
-				//		ICamera *gameCamera = &cc.camera;
-				//		{
-				//			IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
-				//			m_SceneRenderer->Render(gameCamera);
-				//		}
-                //        break;
-				//	}
-                //}
+                {
+					if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+					{
+						auto &cc = primaryCam.GetComponent<CameraComponent>();
+						// Copy the live view matrix from the game camera into our editor-side mirror camera.
+						// The projection is already sized to the Editor Viewport, so both viewports are independent.
+						m_EditorPlayCamera.SetView(cc.camera.GetView());
+						m_EditorPlayCamera.position = cc.camera.position;
+						{
+							IGN_PROFILE_SCOPE("SceneRenderer::RenderPlayToEditorViewport");
+							m_SceneRenderer->Render(&m_EditorPlayCamera, false);
+						}
+                        break;
+					}
+                }
                 case ESceneState::Simulate:
                 case ESceneState::Stop:
                 {
@@ -1312,7 +1364,7 @@ namespace ignite
 		SetActiveScene(m_EditorScene);
     }
 
-    void  EditorLayer::OnSceneSimulate()
+    void EditorLayer::OnSceneSimulate()
     {
 		if (m_State.sceneState != ESceneState::Stop)
 			OnSceneStop();

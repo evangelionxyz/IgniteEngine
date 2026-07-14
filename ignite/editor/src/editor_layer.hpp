@@ -7,6 +7,7 @@
 #include <nvrhi/nvrhi.h>
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/layer.hpp"
+#include "ignite/scene/icamera.hpp"
 #include "ignite/ignite.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/serializer/serializer.hpp"
@@ -48,8 +49,10 @@ namespace ignite
 
             int editorResizingFrame = 0;
             int gameplayResizingFrame = 0;
+            int editorPlayResizingFrame = 0;
             bool editorResizing = false;
             bool gameplayResizing = false;
+            bool editorPlayResizing = false;
 
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
             ProjectInfo projectCreateInfo;
@@ -97,6 +100,7 @@ namespace ignite
         Ref<Project> GetActiveProject() const { return m_ActiveProject; }
 
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
+        ICamera *GetEditorPlayCamera() { return &m_EditorPlayCamera; }
         uint32_t GetActiveDockspaceID() const { return m_ActiveEditorDockspaceId; }
 
         EditorState &GetState() { return m_State; }
@@ -139,6 +143,11 @@ namespace ignite
         Ref<Scene> m_EditorScene;
         Ref<Project> m_ActiveProject;
         EditorState m_State;
+
+        // Mirror camera used when rendering game camera view into the Editor Viewport during Play mode.
+        // Shares the game camera's view matrix but has its own projection sized to the Editor Viewport,
+        // so resizing the Editor Viewport and Game Viewport remain fully independent.
+        ICamera m_EditorPlayCamera;
 
         ignite::Path m_CurrentSceneFilePath;
     	ignite::Path m_CurrentProjectFilepath;

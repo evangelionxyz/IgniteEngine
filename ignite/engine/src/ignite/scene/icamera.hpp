@@ -94,6 +94,9 @@ namespace ignite
 
         virtual void UpdateView();
         virtual void UpdateProjection(uint32_t width, uint32_t height);
+
+        // Directly set the view matrix (used for mirror/proxy cameras that copy another camera's view)
+        void SetView(const glm::mat4 &view) { m_View = view; }
        
         virtual glm::vec3 GetUpDirection() const;
         virtual glm::vec3 GetRightDirection() const;

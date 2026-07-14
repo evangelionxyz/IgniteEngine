@@ -2728,7 +2728,21 @@ namespace ignite
             if (m_Scene)
             {
                 activeSceneRenderer = m_Scene->GetSceneRenderer();
-                auto target = activeSceneRenderer->GetRenderTarget((ICamera *)&m_EditorCamera);
+
+				// During Play, render to the Editor Viewport using the EditorPlayCamera (mirror of game camera
+				// with an editor-viewport-sized projection). During Stop/Simulate, use the editor camera as usual.
+				ICamera *editorViewCamera = nullptr;
+				const ESceneState sceneState = m_EditorLayer->GetState().sceneState;
+				if (sceneState == ESceneState::Play)
+				{
+					editorViewCamera = m_EditorLayer->GetEditorPlayCamera();
+				}
+				else
+				{
+					editorViewCamera = (ICamera *)&m_EditorCamera;
+				}
+
+                auto target = activeSceneRenderer->GetRenderTarget(editorViewCamera);
 
 				const ImGuiWindow *window = ImGui::GetCurrentWindow();
 
@@ -2762,9 +2776,9 @@ namespace ignite
 				Entity clickedIconEntity = {};
 
 				// Draw editor icons (cameras, directional lights, etc.)
-				{
-					ICamera &camera = GetViewportCamera();
-					glm::mat4 viewProjection = camera.GetProjection() * camera.GetView();
+				if (m_EditorLayer->GetState().sceneState != ESceneState::Play)
+                {
+					glm::mat4 viewProjection = editorViewCamera->GetProjection() * editorViewCamera->GetView();
 					Rect viewportRect = { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max };
 
 					// Camera icons & frustum outlines
@@ -2879,7 +2893,7 @@ namespace ignite
 					const float padding = 18.0f;
 					float yPosition = 6.0f;
 					const float fps = ImGui::GetIO().Framerate;
-					std::string statusStr = std::format("FPS {:.5}", fps);
+					std::string statusStr = std::format("FPS {:.5} {:.3}ms", fps, 1000.0f / fps);
 					drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
 					yPosition += padding;
@@ -2888,6 +2902,7 @@ namespace ignite
 				}
 
 				// Mouse picking from viewport object-id attachment (on mouse down only)
+				if (m_EditorLayer->GetState().sceneState != ESceneState::Play)
 				{
 					if (activeSceneRenderer)
 					{
@@ -2989,246 +3004,246 @@ namespace ignite
 							}
 						}
 					}
-				}
 
-				if (ImGui::BeginDragDropTarget())
-				{
-					if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+					if (ImGui::BeginDragDropTarget())
 					{
-						if (payload->DataSize == sizeof(AssetHandle))
+						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
 						{
-							auto *handle = static_cast<AssetHandle *>(payload->Data);
-							if (handle && *handle != AssetHandle(0))
+							if (payload->DataSize == sizeof(AssetHandle))
 							{
-								AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
-								if (metadata.type == AssetType::Scene)
+								auto *handle = static_cast<AssetHandle *>(payload->Data);
+								if (handle && *handle != AssetHandle(0))
 								{
-									const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
-									m_EditorLayer->OpenScene(filepath);
+									AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
+									if (metadata.type == AssetType::Scene)
+									{
+										const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
+										m_EditorLayer->OpenScene(filepath);
+									}
 								}
 							}
 						}
+
+						ImGui::EndDragDropTarget();
 					}
 
-					ImGui::EndDragDropTarget();
-				}
+                    auto view = m_EditorCamera.GetView();
+                    auto &projection = m_EditorCamera.GetProjection();
 
-				auto view = m_EditorCamera.GetView();
-				auto &projection = m_EditorCamera.GetProjection();
+                    if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
+                    {
+                        constexpr float orientationSize = 80.0f;
+                        ImGuiOrientation::internal::config.mSize = orientationSize;
 
-				if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
-				{
-					constexpr float orientationSize = 80.0f;
-					ImGuiOrientation::internal::config.mSize = orientationSize;
+                        constexpr float orientationPadding = 25.0f;
+                        ImGuiOrientation::config.axisLengthScale = 0.25f;
+                        ImGuiOrientation::SetRect
+                        (
+                            globals::GEditor::EditorViewport.max.x + globals::GEditor::EditorViewport.min.x - orientationSize - orientationPadding,
+                            globals::GEditor::EditorViewport.min.y + orientationPadding
+                        );
 
-					constexpr float orientationPadding = 25.0f;
-					ImGuiOrientation::config.axisLengthScale = 0.25f;
-					ImGuiOrientation::SetRect
-					(
-						globals::GEditor::EditorViewport.max.x + globals::GEditor::EditorViewport.min.x - orientationSize - orientationPadding,
-						globals::GEditor::EditorViewport.min.y + orientationPadding
-					);
+                        if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
+                        {
+                            glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
+                            m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
+                            m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
+                        }
+                    }
 
-					if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
-					{
-						glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
-						m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
-						m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
-					}
-				}
+                    GizmoInfo gizmoInfo;
+                    gizmoInfo.cameraView = view;
+                    gizmoInfo.cameraProjection = projection;
+                    gizmoInfo.cameraType = m_EditorCamera.projectionType;
+                    gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
+                    switch (m_Gizmo.GetOperation())
+                    {
+                    default:
+                    case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
+                    case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
+                    case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
+                    }
 
-				GizmoInfo gizmoInfo;
-				gizmoInfo.cameraView = view;
-				gizmoInfo.cameraProjection = projection;
-				gizmoInfo.cameraType = m_EditorCamera.projectionType;
-				gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
-				switch (m_Gizmo.GetOperation())
-				{
-				default:
-				case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
-                case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
-                case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
-				}
+                    m_Gizmo.SetInfo(gizmoInfo);
 
-				m_Gizmo.SetInfo(gizmoInfo);
+                    Render2DBoundsSizing();
 
-				Render2DBoundsSizing();
+                    // Start manipulation: Fired only on the first frame of interaction
+                    const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
+                    bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
 
-				// Start manipulation: Fired only on the first frame of interaction
-				const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
-				bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
+                    static std::unordered_map<UUID, TransformComponent> initialTransforms;
 
-				static std::unordered_map<UUID, TransformComponent> initialTransforms;
+                    if (isManipulatingNow && !m_Data.isGizmoManipulating)
+                    {
+                        initialTransforms.clear();
+                        for (const auto &[uuid, entity] : m_SelectedEntities)
+                        {
+                            // Store the original transform of each selected entity
+                            initialTransforms[uuid] = entity.GetTransform();
+                        }
+                    }
+                    // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
+                    bool wasManipulating = m_Data.isGizmoManipulating;
+                    m_Data.isGizmoManipulating = isManipulatingNow;
+                    m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered() || m_Data.is2DBoundsHovered || m_Data.is2DBoundsSizing;
 
-				if (isManipulatingNow && !m_Data.isGizmoManipulating)
-				{
-					initialTransforms.clear();
-					for (const auto &[uuid, entity] : m_SelectedEntities)
-					{
-						// Store the original transform of each selected entity
-						initialTransforms[uuid] = entity.GetTransform();
-					}
-				}
-				// Capture PREVIOUS frame value before overwriting — needed for the release-commit below
-				bool wasManipulating = m_Data.isGizmoManipulating;
-				m_Data.isGizmoManipulating = isManipulatingNow;
-				m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered() || m_Data.is2DBoundsHovered || m_Data.is2DBoundsSizing;
+                    if (allowGizmoManipulation && m_SelectedEntities.size() > 1)
+                    {
+                        // Step 1: Compute shared pivot (center of all selected entities)
+                        glm::vec3 pivot(0.0f);
+                        for (Entity entity : m_SelectedEntities | std::views::values)
+                        {
+                            pivot += entity.GetTransform().world.translation;
+                        }
+                        pivot /= static_cast<float>(m_SelectedEntities.size());
 
-				if (allowGizmoManipulation && m_SelectedEntities.size() > 1)
-				{
-					// Step 1: Compute shared pivot (center of all selected entities)
-					glm::vec3 pivot(0.0f);
-					for (Entity entity : m_SelectedEntities | std::views::values)
-					{
-						pivot += entity.GetTransform().world.translation;
-					}
-					pivot /= static_cast<float>(m_SelectedEntities.size());
+                        // Step 2: create a transform matrix for the gizmo at the pivot point
+                        glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
+                        glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
 
-					// Step 2: create a transform matrix for the gizmo at the pivot point
-					glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
-					glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
+                        // Step 3: Manipulate the matrix
+                        m_Gizmo.Manipulate(manipulatedTransform);
 
-					// Step 3: Manipulate the matrix
-					m_Gizmo.Manipulate(manipulatedTransform);
+                        if (m_Data.isGizmoManipulating)
+                        {
+                            // THis delta is now the TOTAL change from the moment of manipulation began
+                            glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
 
-					if (m_Data.isGizmoManipulating)
-					{
-						// THis delta is now the TOTAL change from the moment of manipulation began
-						glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
+                            // Decompose the total delta
+                            glm::vec3 deltaTranslation, deltaScale, deltaRotation;
+                            Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
 
-						// Decompose the total delta
-						glm::vec3 deltaTranslation, deltaScale, deltaRotation;
-						Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
+                            for (auto &[uuid, entity] : m_SelectedEntities)
+                            {
+                                // Get the live transform component to apply changes to it
+                                auto &tr = entity.GetTransform();
 
-						for (auto &[uuid, entity] : m_SelectedEntities)
-						{
-							// Get the live transform component to apply changes to it
-							auto &tr = entity.GetTransform();
+                                // Get the ORIGINAL transform we stored at the beginning of the manipulation
+                                const auto &initialTransform = initialTransforms.at(uuid);
+                                glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
 
-							// Get the ORIGINAL transform we stored at the beginning of the manipulation
-							const auto &initialTransform = initialTransforms.at(uuid);
-							glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
+                                // Apply Translation and Rotation around the shared pivot
+                                glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
+                                glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), pivot);
+                                glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
 
-							// Apply Translation and Rotation around the shared pivot
-							glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
-							glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), pivot);
-							glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
+                                // Apply the total delta to the ORIGINAL world matrix
+                                glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
+                                glm::vec3 newTranslation, newRotationEuler, newScale;
+                                Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
 
-							// Apply the total delta to the ORIGINAL world matrix
-							glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
-							glm::vec3 newTranslation, newRotationEuler, newScale;
-							Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
+                                // ----- Apply Scale and Update Local Transform -----
+                                if (entity.GetParentUUID() != UUID(0))
+                                {
+                                    Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+                                    const auto &parentTr = parent.GetTransform();
+                                    glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                                    glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
-							// ----- Apply Scale and Update Local Transform -----
-							if (entity.GetParentUUID() != UUID(0))
-							{
-								Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-								const auto &parentTr = parent.GetTransform();
-								glm::mat4 parentWorld = parentTr.world.GetMatrix();
-								glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
+                                    glm::vec3 localTranslation, localEuler, localScale;
+                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                    tr.local.translation = localTranslation;
+                                    tr.local.rotation = glm::quat(localEuler);
 
-								glm::vec3 localTranslation, localEuler, localScale;
-								Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-								tr.local.translation = localTranslation;
-								tr.local.rotation = glm::quat(localEuler);
+                                    // Apply the total scale delta to the ORIGINAL local scale
+                                    tr.local.scale = initialTransform.local.scale * deltaScale;
+                                }
+                                else
+                                {
+                                    tr.local.translation = newTranslation;
+                                    tr.local.rotation = glm::quat(newRotationEuler);
 
-								// Apply the total scale delta to the ORIGINAL local scale
-								tr.local.scale = initialTransform.local.scale * deltaScale;
-							}
-							else
-							{
-								tr.local.translation = newTranslation;
-								tr.local.rotation = glm::quat(newRotationEuler);
+                                    // Apply the total scale delta to the ORIGINAL local scale
+                                    tr.local.scale = initialTransform.local.scale * deltaScale;
+                                }
+                                tr.dirty = true;
+                            }
+                        }
 
-								// Apply the total scale delta to the ORIGINAL local scale
-								tr.local.scale = initialTransform.local.scale * deltaScale;
-							}
-							tr.dirty = true;
-						}
-					}
+                        // Commit commands when the multi-entity gizmo is released
+                        if (!isManipulatingNow && wasManipulating)
+                        {
+                            std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
+                            for (auto &[uuid, entity] : m_SelectedEntities)
+                            {
+                                if (auto it = initialTransforms.find(uuid); it != initialTransforms.end())
+                                {
+                                    entries.push_back({ uuid, it->second, entity.GetTransform() });
+                                }
+                            }
 
-					// Commit commands when the multi-entity gizmo is released
-					if (!isManipulatingNow && wasManipulating)
-					{
-						std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
-						for (auto &[uuid, entity] : m_SelectedEntities)
-						{
-							if (auto it = initialTransforms.find(uuid); it != initialTransforms.end())
-							{
-								entries.push_back({ uuid, it->second, entity.GetTransform() });
-							}
-						}
+                            if (!entries.empty())
+                            {
+                                CommandManager::AddCommand(CreateScope<ComponentPropertyBatchCommand<TransformComponent>>(m_Scene.get(), std::move(entries)));
+                            }
+                        }
+                    }
+                    else if (Entity entity = GetSelectedEntity())
+                    {
+                        if (allowGizmoManipulation)
+                        {
+                            auto &tr = entity.GetTransform();
+                            glm::mat4 transformMatrix = tr.world.GetMatrix();
 
-						if (!entries.empty())
-						{
-							CommandManager::AddCommand(CreateScope<ComponentPropertyBatchCommand<TransformComponent>>(m_Scene.get(), std::move(entries)));
-						}
-					}
-				}
-				else if (Entity entity = GetSelectedEntity())
-				{
-					if (allowGizmoManipulation)
-					{
-						auto &tr = entity.GetTransform();
-						glm::mat4 transformMatrix = tr.world.GetMatrix();
+                            m_Gizmo.Manipulate(transformMatrix);
 
-						m_Gizmo.Manipulate(transformMatrix);
+                            if (m_Gizmo.IsManipulating())
+                            {
+                                const glm::vec3 preservedLocalScale = tr.local.scale;
+                                glm::vec3 translation, rotation, scale;
+                                Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
+                                const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
 
-						if (m_Gizmo.IsManipulating())
-						{
-							const glm::vec3 preservedLocalScale = tr.local.scale;
-							glm::vec3 translation, rotation, scale;
-							Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
-							const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
+                                if (entity.GetParentUUID() != UUID(0))
+                                {
+                                    Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+                                    const auto &parentTr = parent.GetTransform();
+                                    const glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
 
-							if (entity.GetParentUUID() != UUID(0))
-							{
-								Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-								const auto &parentTr = parent.GetTransform();
-								const glm::mat4 parentWorld = parentTr.world.GetMatrix();
-								const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
+                                    glm::vec3 localTranslation, localEuler, localScale;
+                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                    tr.local.translation = localTranslation;
+                                    tr.local.rotation = glm::quat(localEuler);
 
-								glm::vec3 localTranslation, localEuler, localScale;
-								Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-								tr.local.translation = localTranslation;
-								tr.local.rotation = glm::quat(localEuler);
+                                    if (op == ImGuizmo::SCALE)
+                                    {
+                                        tr.local.scale = localScale;
+                                    }
+                                    else
+                                    {
+                                        tr.local.scale = preservedLocalScale;
+                                    }
+                                }
+                                else
+                                {
+                                    tr.local.translation = translation;
+                                    tr.local.rotation = glm::quat(rotation);
 
-								if (op == ImGuizmo::SCALE)
-								{
-									tr.local.scale = localScale;
-								}
-								else
-								{
-									tr.local.scale = preservedLocalScale;
-								}
-							}
-							else
-							{
-								tr.local.translation = translation;
-								tr.local.rotation = glm::quat(rotation);
+                                    if (op == ImGuizmo::SCALE)
+                                    {
+                                        tr.local.scale = scale;
+                                    }
+                                    else
+                                    {
+                                        tr.local.scale = preservedLocalScale;
+                                    }
+                                }
+                                tr.dirty = true;
+                            }
 
-								if (op == ImGuizmo::SCALE)
-								{
-									tr.local.scale = scale;
-								}
-								else
-								{
-									tr.local.scale = preservedLocalScale;
-								}
-							}
-							tr.dirty = true;
-						}
-
-						// Commit a single command when the gizmo is released (single entity)
-						if (!isManipulatingNow && wasManipulating)
-						{
-							if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
-							{
-								CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
-							}
-						}
-					}
-				}
+                            // Commit a single command when the gizmo is released (single entity)
+                            if (!isManipulatingNow && wasManipulating)
+                            {
+                                if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
+                                {
+                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
+                                }
+                            }
+                        }
+                    }
+                }
             }
             else
             {
