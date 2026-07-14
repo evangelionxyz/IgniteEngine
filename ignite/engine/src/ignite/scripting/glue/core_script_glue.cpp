@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "core_script_glue.hpp"
+#include "ignite/scene/scene_manager.hpp"
 #include "ignite/core/input/input_system.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
 #include "ignite/core/logger.hpp"
@@ -255,6 +256,11 @@ namespace ignite
             return "";
         }
 
+        static void Scene_TransitionTo(uint64_t sceneAssetHandle)
+        {
+            SceneManager::TransitionTo(AssetHandle(sceneAssetHandle));
+        }
+
         static const CoreScriptGlueAPI s_CoreScriptGlueAPI =
         {
             &Debug_Log,
@@ -283,6 +289,8 @@ namespace ignite
             &ScriptableObject_GetFieldValueBool,
             &ScriptableObject_GetFieldValueString,
             &ScriptableObject_GetClassName,
+
+            &Scene_TransitionTo,
         };
     }
 

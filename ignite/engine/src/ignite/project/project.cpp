@@ -11,6 +11,8 @@
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/application.hpp"
 
+#include "ignite/physics/3d/jolt/jolt_physics.hpp"
+
 #include "ignite/serializer/serializer.hpp"
 
 namespace ignite
@@ -123,14 +125,14 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 </Project>
 )";
 
-	static std::string s_BuildProps = 
+    static std::string s_BuildProps = 
 R"(<Project>
-	<PropertyGroup>
-		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-		<BaseOutputPath>$(MSBuildProjectDirectory)\Bin\</BaseOutputPath>
-		<IntermediateOutputPath>$(MSBuildProjectDirectory)\Bin\Objs\$(MSBuildProjectName)\</IntermediateOutputPath>
-		<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
-	</PropertyGroup>
+    <PropertyGroup>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <BaseOutputPath>$(MSBuildProjectDirectory)\Bin\</BaseOutputPath>
+        <IntermediateOutputPath>$(MSBuildProjectDirectory)\Bin\Objs\$(MSBuildProjectName)\</IntermediateOutputPath>
+        <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    </PropertyGroup>
 </Project>
 )";
 
@@ -140,6 +142,20 @@ R"(<Project>
         GenerateProject();
 
         m_AssetManager = new AssetManager(this);
+
+        m_Physics2D = CreateScope<Physics2D>();
+
+        switch (m_Info.physics3DType)
+        {
+        case Physics3DType::Jolt:
+            m_Physics3D = CreateScope<JoltPhysics>();
+            break;
+        default:
+            LOG_ERROR("[Project] Unknown physics 3D type: {}", static_cast<int>(m_Info.physics3DType));
+            break;
+        }
+
+        m_Physics3D->Init();
     }
 
     void Project::InitScriptEngine()
@@ -149,7 +165,12 @@ R"(<Project>
 
     Project::~Project()
     {
-        m_ActiveScene = nullptr;
+		if (m_ActiveScene)
+		{
+            m_ActiveScene = nullptr;
+		}
+
+        m_Physics3D->Shutdown();
 
         m_CoreDependencyWatchers.clear();
         if (m_ScriptEngine)
@@ -239,146 +260,146 @@ R"(<Project>
     }
 
     bool Project::Serialize(const ignite::Path &filepath)
-	{
-		Serializer projectSr(filepath);
+    {
+        Serializer projectSr(filepath);
 
-		projectSr.BeginMap(); // START
+        projectSr.BeginMap(); // START
 
-		{
-			projectSr.BeginMap("Project");
+        {
+            projectSr.BeginMap("Project");
 
-			projectSr.AddKeyValue("Version", Application::GetVersion());
-			projectSr.AddKeyValue("Name", m_Info.name);
-			projectSr.AddKeyValue("AssetPath", m_Info.assetDirectory.generic_string());
-			projectSr.AddKeyValue("AssetRegistry", m_Info.assetRegistryFilepath.generic_string());
-			projectSr.AddKeyValue("DefaultSceneHandle", m_Info.defaultSceneHandle);
+            projectSr.AddKeyValue("Version", Application::GetVersion());
+            projectSr.AddKeyValue("Name", m_Info.name);
+            projectSr.AddKeyValue("AssetPath", m_Info.assetDirectory.generic_string());
+            projectSr.AddKeyValue("AssetRegistry", m_Info.assetRegistryFilepath.generic_string());
+            projectSr.AddKeyValue("DefaultSceneHandle", m_Info.defaultSceneHandle);
 
-			std::string configStr = "Debug";
-			if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
-			else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
-			projectSr.AddKeyValue("Configuration", configStr);
+            std::string configStr = "Debug";
+            if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
+            else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
+            projectSr.AddKeyValue("Configuration", configStr);
 
-			projectSr.EndMap();
-		}
+            projectSr.EndMap();
+        }
 
-		projectSr.EndMap(); // END
-		projectSr.Serialize();
-		// set dirty flags
-		this->SetDirtyFlag(false);
+        projectSr.EndMap(); // END
+        projectSr.Serialize();
+        // set dirty flags
+        this->SetDirtyFlag(false);
 
-		// Serialize asset manager
-		auto &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
+        // Serialize asset manager
+        auto &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
 
-		{
-			const ignite::Path assetRegFilepath = m_Info.rootDirectory / m_Info.assetRegistryFilepath;
-			Serializer assetSr(assetRegFilepath);
+        {
+            const ignite::Path assetRegFilepath = m_Info.rootDirectory / m_Info.assetRegistryFilepath;
+            Serializer assetSr(assetRegFilepath);
 
-			assetSr.BeginMap(); // Start
+            assetSr.BeginMap(); // Start
 
-			assetSr.BeginMap("AssetRegistry");
+            assetSr.BeginMap("AssetRegistry");
 
-			assetSr.BeginSequence("Assets"); // Asset sequence
-			for (auto &[handle, metadata] : assetRegistry)
-			{
+            assetSr.BeginSequence("Assets"); // Asset sequence
+            for (auto &[handle, metadata] : assetRegistry)
+            {
                 if (metadata.type == AssetType::Invalid)
                     continue;
 
-				assetSr.BeginMap(); // Begin Metadata
+                assetSr.BeginMap(); // Begin Metadata
 
                 const auto assetRelativePath = GetProjectRelativeFilepath(metadata.filepath);
 
-				assetSr.AddKeyValue("Handle", static_cast<uint64_t>(handle));
-				assetSr.AddKeyValue("Type", AssetTypeToString(metadata.type));
-				assetSr.AddKeyValue("Filepath", assetRelativePath.generic_string());
+                assetSr.AddKeyValue("Handle", static_cast<uint64_t>(handle));
+                assetSr.AddKeyValue("Type", AssetTypeToString(metadata.type));
+                assetSr.AddKeyValue("Filepath", assetRelativePath.generic_string());
 
-				assetSr.EndMap();
-			}
+                assetSr.EndMap();
+            }
 
-			assetSr.EndSequence(); // Asset sequence
+            assetSr.EndSequence(); // Asset sequence
 
-			assetSr.EndMap(); // End
+            assetSr.EndMap(); // End
 
-			assetSr.Serialize();
-		}
+            assetSr.Serialize();
+        }
 
-		// Save dirty assets
-		auto &loadedAssets = m_AssetManager->GetLoadedAssets();
-		for (auto &[handle, metadata] : assetRegistry)
-		{
-			auto it = loadedAssets.find(handle);
+        // Save dirty assets
+        auto &loadedAssets = m_AssetManager->GetLoadedAssets();
+        for (auto &[handle, metadata] : assetRegistry)
+        {
+            auto it = loadedAssets.find(handle);
             if (it != loadedAssets.end())
             {
-			    if (it->second && it->second->IsDirty())
-			    {
+                if (it->second && it->second->IsDirty())
+                {
                     it->second->Serialize(metadata.filepath);
                     it->second->SetDirtyFlag(false);
-			    }
+                }
             }
-		}
+        }
 
         return true;
-	}
+    }
 
-	Ref<Project> Project::Deserialize(const ignite::Path &filepath)
-	{
-		bool exists = ignite::Path::exists(filepath);
-		LOG_ASSERT(exists, "[Project Serializer] File does not exists {}", filepath.string());
-		if (!exists)
-		{
-			return nullptr;
-		}
+    Ref<Project> Project::Deserialize(const ignite::Path &filepath)
+    {
+        bool exists = ignite::Path::exists(filepath);
+        LOG_ASSERT(exists, "[Project Serializer] File does not exists {}", filepath.string());
+        if (!exists)
+        {
+            return nullptr;
+        }
 
-		YAML::Node projectFileNode = Serializer::Deserialize(filepath);
-		YAML::Node projectNode = projectFileNode["Project"];
+        YAML::Node projectFileNode = Serializer::Deserialize(filepath);
+        YAML::Node projectNode = projectFileNode["Project"];
 
-		ProjectInfo info;
-		info.name = projectNode["Name"].as<std::string>();
-		info.filepath = filepath;
+        ProjectInfo info;
+        info.name = projectNode["Name"].as<std::string>();
+        info.filepath = filepath;
         info.rootDirectory = filepath.parent_path();
-		info.assetDirectory = projectNode["AssetPath"].as<std::string>();
-		info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
-		info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
+        info.assetDirectory = projectNode["AssetPath"].as<std::string>();
+        info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
+        info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
 
-		if (projectNode["Configuration"])
-		{
-			std::string configStr = projectNode["Configuration"].as<std::string>();
-			if (configStr == "Debug") info.configuration = ProjectConfiguration::Debug;
-			else if (configStr == "Release") info.configuration = ProjectConfiguration::Release;
-			else if (configStr == "Shipping") info.configuration = ProjectConfiguration::Shipping;
-		}
-		else
-		{
-			info.configuration = ProjectConfiguration::Debug;
-		}
+        if (projectNode["Configuration"])
+        {
+            std::string configStr = projectNode["Configuration"].as<std::string>();
+            if (configStr == "Debug") info.configuration = ProjectConfiguration::Debug;
+            else if (configStr == "Release") info.configuration = ProjectConfiguration::Release;
+            else if (configStr == "Shipping") info.configuration = ProjectConfiguration::Shipping;
+        }
+        else
+        {
+            info.configuration = ProjectConfiguration::Debug;
+        }
 
-		Ref<Project> project = Project::Create(info);
+        Ref<Project> project = Project::Create(info);
 
-		auto assetManager = project->GetAssetManager();
+        auto assetManager = project->GetAssetManager();
 
-		// import registry
-		if (!info.assetRegistryFilepath.empty())
-		{
-			// project filepath / asset filename (.ixreg)
-			ignite::Path assetRegFilepath = info.rootDirectory / info.assetRegistryFilepath;
-			YAML::Node assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
-			YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
+        // import registry
+        if (!info.assetRegistryFilepath.empty())
+        {
+            // project filepath / asset filename (.ixreg)
+            ignite::Path assetRegFilepath = info.rootDirectory / info.assetRegistryFilepath;
+            YAML::Node assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
+            YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
 
-			for (YAML::Node assetNode : assetRegNode["Assets"])
-			{
-				AssetHandle handle = AssetHandle(assetNode["Handle"].as<uint64_t>());
-				AssetMetaData metadata;
-				metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
-				metadata.filepath = assetNode["Filepath"].as<std::string>();
+            for (YAML::Node assetNode : assetRegNode["Assets"])
+            {
+                AssetHandle handle = AssetHandle(assetNode["Handle"].as<uint64_t>());
+                AssetMetaData metadata;
+                metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
+                metadata.filepath = assetNode["Filepath"].as<std::string>();
 
                 if (metadata.type == AssetType::Invalid)
                     continue;
 
-				assetManager->AssignMetaData(handle, metadata);
-			}
-		}
+                assetManager->AssignMetaData(handle, metadata);
+            }
+        }
 
-		return project;
-	}
+        return project;
+    }
 
     Ref<Project> Project::Create(const ProjectInfo &info)
     {
@@ -540,8 +561,8 @@ R"(<Project>
             // Check every deps update
             if (checkPendingDeps())
             {
-				LOG_TRACE("[Project] Dependencies are up to date.");
-				BuildSolution(true);
+                LOG_TRACE("[Project] Dependencies are up to date.");
+                BuildSolution(true);
             }
         });
     }
@@ -688,33 +709,33 @@ R"(<Project>
         out.close();
     }
 
-	void Project::CreateDirectories() const
-	{
-		// Create root directory
-		if (!ignite::Path::exists(m_Info.rootDirectory))
-			ignite::Path::create_directory(m_Info.rootDirectory);
+    void Project::CreateDirectories() const
+    {
+        // Create root directory
+        if (!ignite::Path::exists(m_Info.rootDirectory))
+            ignite::Path::create_directory(m_Info.rootDirectory);
 
         // Create script bin
         ignite::Path projectBinDir = GetScriptBinDirectory();
         if (!ignite::Path::exists(projectBinDir))
             ignite::Path::create_directory(projectBinDir);
 
-		// Create asset directory
-		ignite::Path assetDirectory = GetAssetDirectory();
-		if (!ignite::Path::exists(assetDirectory))
-			ignite::Path::create_directories(assetDirectory);
+        // Create asset directory
+        ignite::Path assetDirectory = GetAssetDirectory();
+        if (!ignite::Path::exists(assetDirectory))
+            ignite::Path::create_directories(assetDirectory);
 
-		// Create script directory
-		ignite::Path scriptDirectory = GetScriptsDirectory();
-		if (!ignite::Path::exists(scriptDirectory))
-			ignite::Path::create_directories(scriptDirectory);
-	}
+        // Create script directory
+        ignite::Path scriptDirectory = GetScriptsDirectory();
+        if (!ignite::Path::exists(scriptDirectory))
+            ignite::Path::create_directories(scriptDirectory);
+    }
 
-	void Project::CopyCoreDependencies()
-	{
-		const ignite::Path projectBinDir = GetScriptBinDirectory();
+    void Project::CopyCoreDependencies()
+    {
+        const ignite::Path projectBinDir = GetScriptBinDirectory();
 
-		// copy Ignite.ScriptEngine.dll to project dir
+        // copy Ignite.ScriptEngine.dll to project dir
         // Candidate source directories to search for dependencies. Prefer the executable directory.
         const ignite::Path exeDir = vfs::GetExecutableDirectory();
 
@@ -746,9 +767,9 @@ R"(<Project>
         }
 
         LOG_ASSERT(depAvailable, "[Project] Failed to copy script dependencies");
-	}
+    }
 
-	void Project::GenerateProject()
+    void Project::GenerateProject()
     {
         CreateDirectories();
 
@@ -783,7 +804,7 @@ R"(<Project>
                 slnOut << slnx;
                 slnOut.close();
 
-				LOG_TRACE("[Project] Generate C# Project GUID {}", guidStr);
+                LOG_TRACE("[Project] Generate C# Project GUID {}", guidStr);
             }
 
             // Create .csproj
@@ -842,10 +863,10 @@ R"(<Project>
                 out << csproj;
                 out.close();
 
-				// Build props
-				out = std::ofstream(GetDirectory() / "Directory.Build.props", std::ios::out);
-				out << s_BuildProps;
-				out.close();
+                // Build props
+                out = std::ofstream(GetDirectory() / "Directory.Build.props", std::ios::out);
+                out << s_BuildProps;
+                out.close();
             }
 
             // Create dummy c# script when there is no scripts (new project)

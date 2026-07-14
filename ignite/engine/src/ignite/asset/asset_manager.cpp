@@ -413,15 +413,18 @@ namespace ignite
         if (!activeScene)
             return;
 
+		auto activeSceneRenderer = activeScene->GetSceneRenderer();
+		if (!activeSceneRenderer)
+			return;
+
         switch (signal.type)
         {
         case AssetType::Texture:
         case AssetType::Environment:
         {
-            auto onChangeFunc = [this, scene = activeScene, signal]() -> bool
+            auto onChangeFunc = [this, sceneRenderer = activeSceneRenderer, scene = activeScene, signal]() -> bool
             {
                 // Checking environment map
-                auto sceneRenderer = scene->GetSceneRenderer();
                 auto envMap = sceneRenderer->GetEnvironmentMapColorTexture();
                 auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
 

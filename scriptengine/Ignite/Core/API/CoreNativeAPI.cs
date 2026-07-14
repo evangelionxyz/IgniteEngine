@@ -34,6 +34,7 @@ public static class CoreNativeAPI
         public IntPtr ScriptableObject_GetFieldValueBool;
         public IntPtr ScriptableObject_GetFieldValueString;
         public IntPtr ScriptableObject_GetClassName;
+        public IntPtr Scene_TransitionTo;
     }
 
     public struct Funcs
@@ -151,5 +152,8 @@ public static class CoreNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate IntPtr ScriptableObjectGetClassNameFn(ulong handle);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void SceneTransitionToFn(ulong sceneAssetHandle);
     }
 }

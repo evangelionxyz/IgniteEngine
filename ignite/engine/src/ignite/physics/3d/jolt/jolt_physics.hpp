@@ -4,7 +4,7 @@
 #ifndef IGN_JOLT_PHYSICS_HPP
 #define IGN_JOLT_PHYSICS_HPP
 
-#include "ignite/core/subsystem.hpp"
+#include "ignite/physics/3d/iphysics_3d.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
@@ -63,7 +63,6 @@ namespace ignite
         JPH::Vec3 contactNormal { 0.f, 1.f, 0.f };
     };
 
-    
     enum class JoltActivationEventType : uint8_t
     {
         Activated = 0,
@@ -72,7 +71,7 @@ namespace ignite
 
     struct JoltBodyActivationEvent
     {
-        UUID entityId = UUID(0);
+		JoltActivationEventType type;
         JPH::BodyID bodyId;
     };
 
@@ -281,16 +280,37 @@ namespace ignite
     public:
         virtual void OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override
         {
-            LOG_INFO("[Jolt] Body {} activated", inBodyID.GetIndex());
+			JoltBodyActivationEvent ev;
+			std::lock_guard<std::mutex> lock(m_EventMutex);
+			ev.type = JoltActivationEventType::Activated;
+			ev.bodyId = inBodyID;
+			m_PendingEvents.push_back(ev);
         }
 
         virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override
         {
-            LOG_INFO("[Jolt] Body {} deactivated", inBodyID.GetIndex());
+			JoltBodyActivationEvent ev;
+            std::lock_guard<std::mutex> lock(m_EventMutex);
+            ev.type = JoltActivationEventType::Deactivated;
+			ev.bodyId = inBodyID;
+			m_PendingEvents.push_back(ev);
         }
+
+		// Drain all accumulated events (called once per frame by the scene)
+		std::vector<JoltBodyActivationEvent> DrainEvents()
+		{
+			std::lock_guard<std::mutex> lock(m_EventMutex);
+			std::vector<JoltBodyActivationEvent> result;
+			result.swap(m_PendingEvents);
+			return result;
+		}
+
+    private:
+		std::mutex m_EventMutex;
+		std::vector<JoltBodyActivationEvent> m_PendingEvents;
     };
 
-    class IGN_API JoltPhysics : public Subsystem
+    class IGN_API JoltPhysics : public IPhysics3D
     {
     public:
         virtual void Init() override;
@@ -313,10 +333,10 @@ namespace ignite
     class IGN_API JoltScene
     {
     public:
-        JoltScene(Scene *scene);
+        JoltScene() = default;
         ~JoltScene();
 
-        void SimulationStart();
+        void SimulationStart(Scene *scene);
         void SimulationStop();
 
         void Simulate(float deltaTime);
@@ -337,6 +357,8 @@ namespace ignite
 
         // Drain collision events accumulated this frame
         std::vector<JoltCollisionEvent> DrainCollisionEvents();
+
+		std::vector<JoltBodyActivationEvent> DrainActivationEvents();
 
         JPH::uint64 GetUserData(const JPH::BodyID &bodyId);
 

@@ -9,6 +9,8 @@
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/asset/material_manager.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/physics/2d/physics_2d.hpp"
+#include "ignite/physics/3d/iphysics_3d.hpp"
 
 #include <atomic>
 #include <string>
@@ -39,6 +41,7 @@ namespace ignite
         ignite::Path scriptsDirectory = "Scripts";
         ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
 
+		Physics3DType physics3DType = Physics3DType::Jolt;
         ProjectConfiguration configuration = ProjectConfiguration::Debug;
     };
 
@@ -114,6 +117,9 @@ namespace ignite
         ProjectInfo &GetInfo() { return m_Info; }
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
 
+		IPhysics3D *GetPhysics3D() { return m_Physics3D.get(); }
+		Physics2D *GetPhysics2D() { return m_Physics2D.get(); }
+
         ProjectConfiguration GetConfiguration() const { return m_Info.configuration; }
 
         static Ref<Project> Create(const ProjectInfo &info);
@@ -136,6 +142,9 @@ namespace ignite
         MaterialManager m_MaterialManager;
         AssetManager *m_AssetManager = nullptr;
 		ScriptEngine *m_ScriptEngine = nullptr;
+
+        Scope<Physics2D> m_Physics2D;
+        Scope<IPhysics3D> m_Physics3D;
 
         std::map<std::string, bool> m_CoreDependencies;
         std::map<std::string, bool> m_CoreDependenciesPending;

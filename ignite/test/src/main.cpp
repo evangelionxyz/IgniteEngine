@@ -11,6 +11,9 @@
 #include "ignite/core/vfs/vfs.hpp"
 #include "ignite/core/signals/signals.hpp"
 #include "ignite/core/signal_bus.hpp"
+#include "ignite/scene/scene.hpp"
+#include "ignite/scene/scene_manager.hpp"
+#include "ignite/scene/component.hpp"
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -340,6 +343,242 @@ public class ActionTest : Entity
     EXPECT_FALSE(InputSystem::IsActionPressed("Jump"));
 }
 
+// -------------------------------------------------
+// Scene Transition Test Suite
+// -------------------------------------------------
+TEST(SceneTransition, BasicTransition)
+{
+    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    ignite::Path projectDir = testResourcesRoot / "temp/SceneTransitionBasic";
+
+    if (ignite::Path::exists(projectDir))
+    {
+        std::filesystem::remove_all(projectDir.string());
+    }
+    ignite::Path::create_directories(projectDir);
+
+    ProjectInfo info;
+    info.name = "SceneTransitionBasicProject";
+    info.filepath = projectDir / "SceneTransitionBasicProject.ixproj";
+    info.rootDirectory = projectDir;
+    info.assetDirectory = "Assets";
+    info.scriptsDirectory = "Scripts";
+    info.assetRegistryFilepath = "AssetRegistry.ixreg";
+    info.configuration = ProjectConfiguration::Debug;
+
+    Ref<Project> project = Project::Create(info);
+    ASSERT_NE(project, nullptr);
+
+    project->InitScriptEngine();
+    auto scriptEngine = project->GetScriptEngine();
+    ASSERT_NE(scriptEngine, nullptr);
+    auto startTime = std::chrono::steady_clock::now();
+    while (!scriptEngine->IsReady())
+    {
+        Application::GetInstance()->ProcessMainThreadSubmissions();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (std::chrono::steady_clock::now() - startTime > std::chrono::seconds(30))
+        {
+            break;
+        }
+    }
+    ASSERT_TRUE(scriptEngine->IsReady());
+
+    AssetManager *assetManager = project->GetAssetManager();
+    ASSERT_NE(assetManager, nullptr);
+
+    Ref<Scene> sceneA = Scene::Create(project.get(), "SceneA");
+    Ref<Scene> sceneB = Scene::Create(project.get(), "SceneB");
+
+    AssetHandle sceneAHandle(101);
+    AssetHandle sceneBHandle(102);
+
+    sceneA->handle = sceneAHandle;
+    sceneB->handle = sceneBHandle;
+
+    AssetMetaData metaA;
+    metaA.type = AssetType::Scene;
+    metaA.filepath = "Assets/SceneA.ixscene";
+    assetManager->AssignMetaData(sceneAHandle, metaA);
+    assetManager->AssignAsset(sceneAHandle, sceneA);
+
+    AssetMetaData metaB;
+    metaB.type = AssetType::Scene;
+    metaB.filepath = "Assets/SceneB.ixscene";
+    assetManager->AssignMetaData(sceneBHandle, metaB);
+    assetManager->AssignAsset(sceneBHandle, sceneB);
+
+    project->SetActiveScene(sceneA);
+    sceneA->OnStart();
+
+    LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void*)project->GetActiveScene().get(), (int)sceneA->GetStateFlag());
+
+    EXPECT_EQ(project->GetActiveScene(), sceneA);
+
+    SceneManager::TransitionTo(sceneBHandle);
+    LOG_INFO("DEBUG basic: calling ExecutePendingTransition");
+    SceneManager::ExecutePendingTransition();
+
+    Ref<Scene> activeScene = project->GetActiveScene();
+    LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void*)activeScene.get(), (int)sceneA->GetStateFlag(), (int)activeScene->GetStateFlag());
+
+    EXPECT_NE(activeScene, sceneA);
+    EXPECT_EQ(activeScene->name, "SceneB");
+    EXPECT_TRUE(activeScene->IsRunning());
+    EXPECT_FALSE(sceneA->IsRunning());
+}
+
+TEST(SceneTransition, SharedAssetPinned)
+{
+    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    ignite::Path projectDir = testResourcesRoot / "temp/SceneTransitionShared";
+
+    if (ignite::Path::exists(projectDir))
+    {
+        std::filesystem::remove_all(projectDir.string());
+    }
+    ignite::Path::create_directories(projectDir);
+
+    ProjectInfo info;
+    info.name = "SceneTransitionSharedProject";
+    info.filepath = projectDir / "SceneTransitionSharedProject.ixproj";
+    info.rootDirectory = projectDir;
+    info.assetDirectory = "Assets";
+    info.scriptsDirectory = "Scripts";
+    info.assetRegistryFilepath = "AssetRegistry.ixreg";
+    info.configuration = ProjectConfiguration::Debug;
+
+    Ref<Project> project = Project::Create(info);
+    ASSERT_NE(project, nullptr);
+
+    project->InitScriptEngine();
+    auto scriptEngine = project->GetScriptEngine();
+    ASSERT_NE(scriptEngine, nullptr);
+    auto startTime = std::chrono::steady_clock::now();
+    while (!scriptEngine->IsReady())
+    {
+        Application::GetInstance()->ProcessMainThreadSubmissions();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (std::chrono::steady_clock::now() - startTime > std::chrono::seconds(30))
+        {
+            break;
+        }
+    }
+    ASSERT_TRUE(scriptEngine->IsReady());
+
+    AssetManager *assetManager = project->GetAssetManager();
+    ASSERT_NE(assetManager, nullptr);
+
+    Ref<Scene> sceneA = Scene::Create(project.get(), "SceneA");
+    Ref<Scene> sceneB = Scene::Create(project.get(), "SceneB");
+
+    AssetHandle sceneAHandle(201);
+    AssetHandle sceneBHandle(202);
+
+    sceneA->handle = sceneAHandle;
+    sceneB->handle = sceneBHandle;
+
+    AssetMetaData metaA;
+    metaA.type = AssetType::Scene;
+    metaA.filepath = "Assets/SceneA.ixscene";
+    assetManager->AssignMetaData(sceneAHandle, metaA);
+    assetManager->AssignAsset(sceneAHandle, sceneA);
+
+    AssetMetaData metaB;
+    metaB.type = AssetType::Scene;
+    metaB.filepath = "Assets/SceneB.ixscene";
+    assetManager->AssignMetaData(sceneBHandle, metaB);
+    assetManager->AssignAsset(sceneBHandle, sceneB);
+
+    AssetHandle sharedTextureHandle(301);
+    AssetMetaData textureMeta;
+    textureMeta.type = AssetType::Texture;
+    textureMeta.filepath = "Assets/SharedTexture.png";
+    assetManager->AssignMetaData(sharedTextureHandle, textureMeta);
+    
+    Ref<Asset> dummyTexture = CreateRef<Asset>();
+    dummyTexture->SetReadyFlag(true);
+    assetManager->AssignAsset(sharedTextureHandle, dummyTexture);
+
+    auto entityB = sceneB->registry->create();
+    Sprite2DComponent sprite;
+    sprite.handle = sharedTextureHandle;
+    sceneB->registry->emplace<Sprite2DComponent>(entityB, sprite);
+
+    project->SetActiveScene(sceneA);
+    sceneA->OnStart();
+
+    EXPECT_TRUE(assetManager->IsAssetLoaded(sharedTextureHandle));
+
+    SceneManager::TransitionTo(sceneBHandle);
+    SceneManager::ExecutePendingTransition();
+
+    assetManager->UnloadUnusedAssets();
+
+    EXPECT_TRUE(assetManager->IsAssetLoaded(sharedTextureHandle));
+}
+
+TEST(SceneTransition, InvalidHandleRejected)
+{
+    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    ignite::Path projectDir = testResourcesRoot / "temp/SceneTransitionInvalid";
+
+    if (ignite::Path::exists(projectDir))
+    {
+        std::filesystem::remove_all(projectDir.string());
+    }
+    ignite::Path::create_directories(projectDir);
+
+    ProjectInfo info;
+    info.name = "SceneTransitionInvalidProject";
+    info.filepath = projectDir / "SceneTransitionInvalidProject.ixproj";
+    info.rootDirectory = projectDir;
+    info.assetDirectory = "Assets";
+    info.scriptsDirectory = "Scripts";
+    info.assetRegistryFilepath = "AssetRegistry.ixreg";
+    info.configuration = ProjectConfiguration::Debug;
+
+    Ref<Project> project = Project::Create(info);
+    ASSERT_NE(project, nullptr);
+
+    project->InitScriptEngine();
+    auto scriptEngine = project->GetScriptEngine();
+    ASSERT_NE(scriptEngine, nullptr);
+    auto startTime = std::chrono::steady_clock::now();
+    while (!scriptEngine->IsReady())
+    {
+        Application::GetInstance()->ProcessMainThreadSubmissions();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (std::chrono::steady_clock::now() - startTime > std::chrono::seconds(30))
+        {
+            break;
+        }
+    }
+    ASSERT_TRUE(scriptEngine->IsReady());
+
+    LOG_INFO("DEBUG: Creating sceneA");
+    Ref<Scene> sceneA = Scene::Create(project.get(), "SceneA");
+    LOG_INFO("DEBUG: Setting active scene to A");
+    project->SetActiveScene(sceneA);
+
+    LOG_INFO("DEBUG: TransitionTo 0");
+    SceneManager::TransitionTo(AssetHandle(0));
+    LOG_INFO("DEBUG: ExecutePendingTransition 0");
+    SceneManager::ExecutePendingTransition();
+
+    LOG_INFO("DEBUG: Checking active scene is still A");
+    EXPECT_EQ(project->GetActiveScene(), sceneA);
+
+    LOG_INFO("DEBUG: TransitionTo 9999");
+    SceneManager::TransitionTo(AssetHandle(9999));
+    LOG_INFO("DEBUG: ExecutePendingTransition 9999");
+    SceneManager::ExecutePendingTransition();
+
+    LOG_INFO("DEBUG: Checking active scene is still A (final)");
+    EXPECT_EQ(project->GetActiveScene(), sceneA);
+    LOG_INFO("DEBUG: Reached end of test body");
+}
+
 int main(int argc, char **argv)
 {
     ignite::Logger::Init();
@@ -348,7 +587,7 @@ int main(int argc, char **argv)
     createInfo.cmdLineArgs = { argc, argv };
     createInfo.name = "Ignite Test Headless";
     createInfo.useGui = false;
-    createInfo.usePhysics = false;
+    createInfo.usePhysics = true;
     createInfo.useAudio = false;
     createInfo.graphicsApi = nvrhi::GraphicsAPI::VULKAN;
     createInfo.headless = true;

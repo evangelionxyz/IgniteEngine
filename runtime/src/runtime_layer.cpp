@@ -109,6 +109,12 @@ namespace ignite
 
         Renderer::OnUpdate();
 
+        if (m_ActiveProject && m_ActiveProject->GetActiveScene() != m_ActiveScene)
+        {
+            m_ActiveScene = m_ActiveProject->GetActiveScene();
+            m_SceneRenderer.SetActiveScene(m_ActiveScene);
+        }
+
         if (m_ActiveScene)
         {
             IGN_PROFILE_SCOPE("RuntimeLayer::SceneUpdate");

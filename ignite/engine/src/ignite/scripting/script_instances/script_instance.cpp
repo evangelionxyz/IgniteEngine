@@ -84,6 +84,10 @@ namespace ignite
         m_OnCollisionStayMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionStayNative");
         m_OnCollisionExitMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionExitNative");
 
+		// Bind internal body activation callback
+		m_OnBodyActivatedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnBodyActivatedNative");
+		m_OnBodyDeactivatedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnBodyDeactivatedNative");
+
         // Set Entity ID on managed instance if available
         const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID");
         if (setIdMethod)
@@ -371,4 +375,31 @@ namespace ignite
             }
         }
     }
+
+	void ScriptInstance::InvokeOnBodyActivated()
+	{
+		IGN_PROFILE_FUNCTION();
+		if (m_OnBodyActivatedMethodId)
+		{
+			if (!m_ScriptHost->Invoke(m_OnBodyActivatedMethodId, nullptr, 0, nullptr))
+			{
+				LOG_ERROR("[Script Instance] OnBodyActivated invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+				m_OnBodyActivatedMethodId = 0;
+			}
+		}
+	}
+
+	void ScriptInstance::InvokeOnBodyDeactivated()
+	{
+		IGN_PROFILE_FUNCTION();
+		if (m_OnBodyDeactivatedMethodId)
+		{
+			if (!m_ScriptHost->Invoke(m_OnBodyDeactivatedMethodId, nullptr, 0, nullptr))
+			{
+				LOG_ERROR("[Script Instance] OnBodyDeactivated invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+				m_OnBodyDeactivatedMethodId = 0;
+			}
+		}
+	}
+
 }

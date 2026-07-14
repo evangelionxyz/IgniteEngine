@@ -12,7 +12,7 @@
 #include "ignite/graphics/renderer/renderer_2d.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
-#include "ignite/physics/jolt/jolt_physics.hpp"
+#include "ignite/physics/3d/jolt/jolt_physics.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/math/transform.hpp"
 #include "scene_manager.hpp"
@@ -189,59 +189,68 @@ namespace ignite
         }
     }
 
-	// ===============================================
-	// Scene Class
-	// ===============================================
-    Scene::Scene() = default;
+    // ===============================================
+    // Scene Class
+    // ===============================================
+    Scene::Scene()
+        : registry(nullptr)
+        , m_SceneRenderer(nullptr)
+        , m_Project(nullptr)
+        , m_AssetManager(nullptr)
+        , m_ViewportWidth(0)
+        , m_ViewportHeight(0)
+    {
+    }
 
     Scene::Scene(Project *project, const std::string &_name)
-		: m_Project(project), name(_name), m_SceneRenderer(nullptr)
+        : m_Project(project), name(_name), m_SceneRenderer(nullptr)
         , m_ViewportWidth(1280), m_ViewportHeight(720)
     {
         registry = new entt::registry();
 
-        physics2D = CreateScope<Physics2D>(this);
-        physics = CreateScope<JoltScene>(this);
-		ScriptEngine::GetInstance()->SetSceneContext(this);
+        m_Physics2D = project->GetPhysics2D();
+        m_JoltScene = new JoltScene();
+
         m_AssetManager = m_Project->GetAssetManager();
     }
 
     Scene::~Scene()
     {
-		// Stop physics simulations first
-		if (physics2D)
-		{
-			physics2D->SimulationStop();
-		}
-		if (physics)
-		{
-			physics->SimulationStop();
-		}
-
-		// Clear all entities from registry before deletion
-        if (registry)
+        // Stop physics simulations first
+        if (m_Physics2D)
         {
-			registry->clear();
-            delete registry;
-			registry = nullptr;
+			m_Physics2D = nullptr;
         }
 
-		// Clear entity map
-		entities.clear();
+        if (m_JoltScene)
+        {
+            delete m_JoltScene;
+			m_JoltScene = nullptr;
+        }
 
-		m_AssetManager = nullptr;
-		m_Project = nullptr;
+        // Clear all entities from registry before deletion
+        if (registry)
+        {
+            registry->clear();
+            delete registry;
+            registry = nullptr;
+        }
 
-		// Release physics systems
-		physics2D.reset();
-		physics.reset();
+        // Clear entity map
+        entities.clear();
+
+        m_AssetManager = nullptr;
+        m_Project = nullptr;
     }
 
     void Scene::OnStart()
     {
-		m_State = ESceneState::Play;
+        m_State = ESceneState::Play;
 
-		ScriptEngine::GetInstance()->SetSceneContext(this);
+        if (auto *scriptEngine = ScriptEngine::GetInstance())
+        {
+            scriptEngine->SetSceneContext(this);
+        }
 
         // reset time
         timeInSeconds = 0.0f;
@@ -269,8 +278,8 @@ namespace ignite
             }
         }
 
-        physics2D->SimulationStart();
-        physics->SimulationStart();
+        m_Physics2D->SimulationStart(this);
+        m_JoltScene->SimulationStart(this);
 
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
@@ -311,53 +320,59 @@ namespace ignite
             Entity entity { e, this };
             script.runtimeScriptInstance = nullptr;
             const ScriptInstanceID instanceID = entity.GetUUID();
-            ScriptEngine::GetInstance()->OnDestroyEntityInstance(instanceID);
+            if (auto *scriptEngine = ScriptEngine::GetInstance())
+            {
+                scriptEngine->OnDestroyEntityInstance(instanceID);
+            }
         });
 
-        ScriptEngine::GetInstance()->ClearSceneContext();
+        if (auto *scriptEngine = ScriptEngine::GetInstance())
+        {
+            scriptEngine->ClearSceneContext();
+        }
 
         m_SharedAnimatorRuntime.clear();
         
-        physics2D->SimulationStop();
-        physics->SimulationStop();
+        m_Physics2D->SimulationStop();
+        m_JoltScene->SimulationStop();
     }
 
-	void Scene::Pause()
-	{
+    void Scene::Pause()
+    {
         m_State = ESceneState::Paused;
-	}
+    }
 
-	void Scene::Step(int frame)
-	{
+    void Scene::Step(int frame)
+    {
         m_StepFrame = frame;
-	}
+    }
 
-	void Scene::UpdateTransforms(float deltaTime)
+    void Scene::UpdateTransforms(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
         UpdateAnimations(deltaTime);
 
         registry->view<IDComponent, TransformComponent>().each([this](entt::entity e, const auto &id, const auto &tr)
         {
-			if (id.parent == 0)
-			{
-				UpdateTransformRecursive(Entity{ e, this }, glm::mat4(1.0f));
-			}
+            if (id.parent == 0)
+            {
+                UpdateTransformRecursive(Entity{ e, this }, glm::mat4(1.0f));
+            }
         });
 
-		auto staticMeshView = registry->view<TransformComponent, StaticMeshComponent>();
+        auto staticMeshView = registry->view<TransformComponent, StaticMeshComponent>();
         for (entt::entity e : staticMeshView)
         {
-			const auto &[tr, smc] = staticMeshView.get<TransformComponent, StaticMeshComponent>(e);
-			if (!tr.visible || smc.handle == AssetHandle(0))
-				continue;
+            const auto &[tr, smc] = staticMeshView.get<TransformComponent, StaticMeshComponent>(e);
+            if (!tr.visible || smc.handle == AssetHandle(0))
+                continue;
 
-			if (auto mesh = m_AssetManager->GetAsset<StaticMesh>(smc.handle))
-			{
-				const auto worldMatrix = tr.world.GetMatrix();
-				smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-				mesh->CalculateWorldAABB(worldMatrix);
-			}
+            if (auto mesh = m_AssetManager->GetAsset<StaticMesh>(smc.handle))
+            {
+                const auto worldMatrix = tr.world.GetMatrix();
+                smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+                mesh->CalculateWorldAABB(worldMatrix);
+            }
         }
 
         auto cameraView = registry->view<TransformComponent, CameraComponent>();
@@ -444,57 +459,77 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("Scene::Physics2D");
-                physics2D->Simulate(deltaTime);
+                m_Physics2D->Simulate(deltaTime);
             }
 
             {
                 IGN_PROFILE_SCOPE("Scene::Physics3D");
-                physics->Simulate(deltaTime);
+                m_JoltScene->Simulate(deltaTime);
             }
 
             // Dispatch Jolt collision events to C# scripts
             {
                 IGN_PROFILE_SCOPE("Scene::CollisionEvents");
 
-                auto events = physics->DrainCollisionEvents();
+				// Helper: try to find a script instance for an entity
+				// Uses the ScriptComponent view to avoid error-logging for entities without scripts
+				auto getScriptInstance = [&](uint64_t entityId) -> Ref<ScriptInstance>
+				{
+					auto it = entities.find(UUID(entityId));
+					if (it == entities.end())
+						return nullptr;
 
-                for (const auto &ev : events)
+					Entity ent{ it->second, this };
+					if (!ent.HasComponent<ScriptComponent>())
+						return nullptr;
+
+					return ent.GetComponent<ScriptComponent>().runtimeScriptInstance;
+				};
+
+                auto colEvents = m_JoltScene->DrainCollisionEvents();
+
+                for (const auto &ev : colEvents)
                 {
                     // UserData must be returns entity UUID
-                    const uint64_t entityIDA = physics->GetUserData(ev.bodyA);
-                    const uint64_t entityIDB = physics->GetUserData(ev.bodyB);
+                    const uint64_t entityIDA = m_JoltScene->GetUserData(ev.bodyA);
+                    const uint64_t entityIDB = m_JoltScene->GetUserData(ev.bodyB);
                     
                     if (entityIDA == 0 || entityIDB == 0)
                         continue;
-
-                    // Helper: try to find a script instance for an entity
-                    // Uses the ScriptComponent view to avoid error-logging for entities without scripts
-                    auto getScriptInst = [&](uint64_t entityId) -> Ref<ScriptInstance>
+                   
+					auto dispatch = [&ev](Ref<ScriptInstance> scriptInstance, uint64_t otherId)
                     {
-                        auto it = entities.find(UUID(entityId));
-                        if (it == entities.end())
-                            return nullptr;
+                        if (!scriptInstance)
+                            return;
 
-                        Entity ent { it->second, this };
-                        if (!ent.HasComponent<ScriptComponent>())
-                            return nullptr;
-
-                        return ent.GetComponent<ScriptComponent>().runtimeScriptInstance;
-                    };
-
-                    auto dispatch = [&ev](Ref<ScriptInstance> inst, uint64_t otherId)
-                    {
-                        if (!inst) return;
                         switch (ev.type)
                         {
-                            case JoltCollisionEventType::Enter: inst->InvokeOnCollisionEnter(otherId); break;
-                            case JoltCollisionEventType::Stay:  inst->InvokeOnCollisionStay(otherId);  break;
-                            case JoltCollisionEventType::Exit:  inst->InvokeOnCollisionExit(otherId);  break;
+                            case JoltCollisionEventType::Enter: scriptInstance->InvokeOnCollisionEnter(otherId); break;
+                            case JoltCollisionEventType::Stay:  scriptInstance->InvokeOnCollisionStay(otherId);  break;
+                            case JoltCollisionEventType::Exit:  scriptInstance->InvokeOnCollisionExit(otherId);  break;
                         }
                     };
 
-                    dispatch(getScriptInst(entityIDA), entityIDB);
-                    dispatch(getScriptInst(entityIDB), entityIDA);
+                    dispatch(getScriptInstance(entityIDA), entityIDB);
+                    dispatch(getScriptInstance(entityIDB), entityIDA);
+                }
+
+				auto activationEvents = m_JoltScene->DrainActivationEvents();
+                for (const auto &ev : activationEvents)
+                {
+					const uint64_t entityID = m_JoltScene->GetUserData(ev.bodyId);
+					if (entityID == 0)
+						continue;
+					
+					auto scriptInstance = getScriptInstance(entityID);
+                    if (!scriptInstance)
+                        continue;
+
+					switch (ev.type)
+					{
+					    case JoltActivationEventType::Activated:   scriptInstance->InvokeOnBodyActivated();   break;
+					    case JoltActivationEventType::Deactivated: scriptInstance->InvokeOnBodyDeactivated(); break;
+					}
                 }
             }
         }
@@ -508,7 +543,7 @@ namespace ignite
 
     void Scene::Unfocus()
     {
-		m_State &= ESceneState::Focus;
+        m_State &= ESceneState::Focus;
         // TODO
     }
 
@@ -533,21 +568,21 @@ namespace ignite
         return fallback ? fallback->environment.get() : nullptr;
     }
 
-	WorldEnvironment *Scene::GetActiveWorldEnvironment()
-	{
-		auto view = registry->view<WorldEnvironment>();
-		WorldEnvironment *fallback = nullptr;
-		for (entt::entity e : view)
-		{
-			WorldEnvironment &world = view.get<WorldEnvironment>(e);
-			if (!fallback)
-			{
-				fallback = &world;
-			}
-		}
+    WorldEnvironment *Scene::GetActiveWorldEnvironment()
+    {
+        auto view = registry->view<WorldEnvironment>();
+        WorldEnvironment *fallback = nullptr;
+        for (entt::entity e : view)
+        {
+            WorldEnvironment &world = view.get<WorldEnvironment>(e);
+            if (!fallback)
+            {
+                fallback = &world;
+            }
+        }
 
-		return fallback;
-	}
+        return fallback;
+    }
 
     std::unordered_set<AssetHandle> Scene::CollectReferencedAssetHandles() const
     {
@@ -591,6 +626,19 @@ namespace ignite
         {
             addHandle(mesh.handle);
             addHandle(mesh.runtimeAnimatorHandle);
+            for (auto &materialHandle : mesh.overrideMaterials | std::views::values)
+            {
+                addHandle(materialHandle);
+            }
+        });
+
+        registry->view<StaticMeshComponent>().each([&](entt::entity, const StaticMeshComponent &mesh)
+        {
+            addHandle(mesh.handle);
+            for (auto &materialHandle : mesh.overrideMaterials | std::views::values)
+            {
+                addHandle(materialHandle);
+            }
         });
 
         registry->view<AudioSourceComponent>().each([&](entt::entity, const AudioSourceComponent &audio)
@@ -606,7 +654,7 @@ namespace ignite
         return handles;
     }
 
-	void Scene::UpdateAnimations(float deltaTime)
+    void Scene::UpdateAnimations(float deltaTime)
     {
         auto skeletalMeshView = registry->view<TransformComponent, SkeletalMeshComponent>();
         std::unordered_set<AssetHandle> updatedSharedHandles;
@@ -617,12 +665,12 @@ namespace ignite
             if (!tr.visible || smc.handle == AssetHandle(0))
                 continue;
 
-			auto mesh = m_AssetManager->GetAsset<SkeletalMesh>(smc.handle);
-			if (mesh)
+            auto mesh = m_AssetManager->GetAsset<SkeletalMesh>(smc.handle);
+            if (mesh)
             {
-				const auto worldMatrix = tr.world.GetMatrix();
-				smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-				mesh->CalculateWorldAABB(worldMatrix);
+                const auto worldMatrix = tr.world.GetMatrix();
+                smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+                mesh->CalculateWorldAABB(worldMatrix);
             }
 
             AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(smc, mesh);
@@ -707,12 +755,12 @@ namespace ignite
                 {
                     smc.finalBoneTransforms = sharedRuntime->finalTransforms;
                     
-					// ==== Socket system: Cache global joint transforms ====
-					smc.globalJointTransforms.resize(sharedRuntime->globalPoses.size());
-					for (size_t i = 0; i < sharedRuntime->globalPoses.size(); ++i)
-					{
-						smc.globalJointTransforms[i] = sharedRuntime->globalPoses[i].GetMatrix();
-					}
+                    // ==== Socket system: Cache global joint transforms ====
+                    smc.globalJointTransforms.resize(sharedRuntime->globalPoses.size());
+                    for (size_t i = 0; i < sharedRuntime->globalPoses.size(); ++i)
+                    {
+                        smc.globalJointTransforms[i] = sharedRuntime->globalPoses[i].GetMatrix();
+                    }
 
                     smc.currentStateName = sharedRuntime->currentStateName;
                     smc.stateElapsed = sharedRuntime->stateElapsed;
@@ -730,12 +778,12 @@ namespace ignite
                 {
                     smc.finalBoneTransforms = std::move(runtime.finalTransforms);
 
-					// ==== Socket system: Cache global joint transforms ====
+                    // ==== Socket system: Cache global joint transforms ====
                     smc.globalJointTransforms.resize(runtime.globalPoses.size());
                     for (size_t i = 0; i < runtime.globalPoses.size(); ++i)
-					{
-						smc.globalJointTransforms[i] = runtime.globalPoses[i].GetMatrix();
-					}
+                    {
+                        smc.globalJointTransforms[i] = runtime.globalPoses[i].GetMatrix();
+                    }
 
                     smc.currentStateName = runtime.currentStateName;
                     smc.stateElapsed = runtime.stateElapsed;
@@ -849,10 +897,10 @@ namespace ignite
     {
     }
 
-	template<>
-	IGN_API void Scene::OnComponentAdded<Circle2DComponent>(Entity entity, Circle2DComponent &comp)
-	{
-	}
+    template<>
+    IGN_API void Scene::OnComponentAdded<Circle2DComponent>(Entity entity, Circle2DComponent &comp)
+    {
+    }
 
     template<>
     IGN_API void Scene::OnComponentAdded<PointLight2DComponent>(Entity entity, PointLight2DComponent &comp)
@@ -884,10 +932,10 @@ namespace ignite
     {
     }
 
-	template<>
-	IGN_API void Scene::OnComponentAdded<CircleCollider2DComponent>(Entity entity, CircleCollider2DComponent &comp)
-	{
-	}
+    template<>
+    IGN_API void Scene::OnComponentAdded<CircleCollider2DComponent>(Entity entity, CircleCollider2DComponent &comp)
+    {
+    }
 
     template<>
     IGN_API void Scene::OnComponentAdded<RigidbodyComponent>(Entity entity, RigidbodyComponent &comp)
@@ -919,20 +967,20 @@ namespace ignite
     {
     }
 
-	template<>
-	IGN_API void Scene::OnComponentAdded<TextComponent>(Entity entity, TextComponent &comp)
-	{
-	}
+    template<>
+    IGN_API void Scene::OnComponentAdded<TextComponent>(Entity entity, TextComponent &comp)
+    {
+    }
 
     template<>
     IGN_API void Scene::OnComponentAdded<WidgetComponent>(Entity entity, WidgetComponent&comp)
     {
     }
 
-	template<>
-	IGN_API void Scene::OnComponentAdded<StaticMeshComponent>(Entity entity, StaticMeshComponent &comp)
-	{
-	}
+    template<>
+    IGN_API void Scene::OnComponentAdded<StaticMeshComponent>(Entity entity, StaticMeshComponent &comp)
+    {
+    }
 
     template<>
     IGN_API void Scene::OnComponentAdded<SkeletalMeshComponent>(Entity entity, SkeletalMeshComponent &comp)

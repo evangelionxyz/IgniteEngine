@@ -34,7 +34,6 @@ namespace ignite
         JPH::Factory::sInstance = new JPH::Factory();
         
         JPH::RegisterTypes();
-
         
         s_JoltInstance->tempAllocator = CreateScope<JPH::TempAllocatorImpl>(cAllocatorSize);
         s_JoltInstance->jobSystem = CreateScope<JPH::JobSystemThreadPool>(cMaxPhysicsJobs, 8,
@@ -56,6 +55,7 @@ namespace ignite
         if (s_JoltInstance)
         {
            delete s_JoltInstance;
+		   s_JoltInstance = nullptr;
         }
 
         LOG_WARN("[Jolt Physics] Shutdown");
@@ -66,19 +66,16 @@ namespace ignite
         return s_JoltInstance;
     }
 
-    JoltScene::JoltScene(Scene *scene)
-        : m_Scene(scene)
-    {
-    }
-
     JoltScene::~JoltScene()
     {
         SimulationStop();
     }
 
-    void JoltScene::SimulationStart()
+    void JoltScene::SimulationStart(Scene *scene)
     {
         IGN_PROFILE_FUNCTION();
+        m_Scene = scene;
+
         m_PhysicsSystem.Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints,
             s_JoltInstance->broadPhaseLayer,
             s_JoltInstance->objectVsBroadPhaseLayerFilter,
@@ -100,7 +97,8 @@ namespace ignite
     void JoltScene::SimulationStop()
     {
         IGN_PROFILE_FUNCTION();
-        if (!m_BodyInterface)
+
+        if (!m_BodyInterface || !m_Scene)
         {
             return;
         }
@@ -111,6 +109,7 @@ namespace ignite
         }
 
         m_BodyInterface = nullptr;
+        m_Scene = nullptr;
     }
 
     void JoltScene::Simulate(float deltaTime)
@@ -965,7 +964,16 @@ namespace ignite
         return {};
     }
 
-    JPH::uint64 JoltScene::GetUserData(const JPH::BodyID &bodyId)
+	std::vector<JoltBodyActivationEvent> JoltScene::DrainActivationEvents()
+	{
+		if (auto *listener = dynamic_cast<JoltBodyActivationListener *>(s_JoltInstance->bodyActivationListener.get()))
+		{
+			return listener->DrainEvents();
+		}
+		return {};
+	}
+
+	JPH::uint64 JoltScene::GetUserData(const JPH::BodyID &bodyId)
     {
         return m_BodyInterface->GetUserData(bodyId);
     }

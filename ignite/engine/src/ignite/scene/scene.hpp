@@ -36,11 +36,11 @@ namespace ignite
 
     enum class ESceneState : uint8_t
     {
-        None = BIT(0),
+        None = 0,
         Stop = BIT(1),
         Play = BIT(2),
-		Simulate = BIT(3),
-		Paused = BIT(4),
+        Simulate = BIT(3),
+        Paused = BIT(4),
 
         Focus = BIT(5),
     };
@@ -50,7 +50,7 @@ namespace ignite
         using UnderlyingType = std::underlying_type_t<ESceneState>;
         return static_cast<ESceneState>(static_cast<UnderlyingType>(lhs) | static_cast<UnderlyingType>(rhs));
     }
-	inline IGN_API ESceneState operator&(ESceneState lhs, ESceneState rhs)
+    inline IGN_API ESceneState operator&(ESceneState lhs, ESceneState rhs)
     {
         using UnderlyingType = std::underlying_type_t<ESceneState>;
         return static_cast<ESceneState>(static_cast<UnderlyingType>(lhs) & static_cast<UnderlyingType>(rhs));
@@ -66,10 +66,15 @@ namespace ignite
         return lhs;
     }
     inline IGN_API ESceneState &operator&=(ESceneState &lhs, ESceneState rhs)
-	{
-		lhs = lhs & rhs;
-		return lhs;
-	}
+    {
+        lhs = lhs & rhs;
+        return lhs;
+    }
+    inline IGN_API bool operator==(ESceneState lhs, uint8_t rhs)
+    {
+        using UnderlyingType = std::underlying_type_t<ESceneState>;
+        return static_cast<UnderlyingType>(lhs) == rhs;
+    }
 
     class IGN_API Scene final : public Asset
     {
@@ -107,11 +112,9 @@ namespace ignite
 
         std::string name;
         entt::registry *registry;
-        Scope<Physics2D> physics2D;
-        Scope<JoltScene> physics;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
         
-		inline bool IsPaused() const { return IsInState(ESceneState::Paused); }
+        inline bool IsPaused() const { return IsInState(ESceneState::Paused); }
         inline bool IsRunning() const { return IsInState(ESceneState::Play); }
         inline bool IsFocus() const { return IsInState(ESceneState::Focus); }
 
@@ -123,6 +126,8 @@ namespace ignite
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
         Environment *GetEnvironment();
         WorldEnvironment *GetActiveWorldEnvironment();
+		Physics2D *GetPhysics2D() { return m_Physics2D; }
+		JoltScene *GetJoltScene() { return m_JoltScene; }
 
         std::unordered_set<AssetHandle> CollectReferencedAssetHandles() const;
 
@@ -140,9 +145,12 @@ namespace ignite
 
         Project *m_Project;
         AssetManager *m_AssetManager;
+        Physics2D *m_Physics2D;
+        JoltScene *m_JoltScene;
+
         uint32_t m_ViewportWidth;
         uint32_t m_ViewportHeight;
-		uint64_t m_StepFrame = 0;
+        uint64_t m_StepFrame = 0;
         ESceneState m_State = ESceneState::Stop;
         
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;

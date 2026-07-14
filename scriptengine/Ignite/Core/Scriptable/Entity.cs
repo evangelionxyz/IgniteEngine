@@ -153,9 +153,17 @@ public class Entity : IgniteObject
     public virtual void OnCollisionStay(Collision collision) { }
     public virtual void OnCollisionExit(Collision collision) { }
 
+    public virtual void OnBodyActivated() { }
+    public virtual void OnBodyDeactivated() { }
+
     // Internal entry-points called by ScriptInstance::InvokeOnCollision*
     // Named distinctly to avoid overload ambiguity with the public virtual methods.
     internal void Internal_OnCollisionEnterNative(ulong otherID) => OnCollisionEnter(new Collision(new Entity(otherID)));
     internal void Internal_OnCollisionStayNative (ulong otherID) => OnCollisionStay (new Collision(new Entity(otherID)));
     internal void Internal_OnCollisionExitNative (ulong otherID) => OnCollisionExit (new Collision(new Entity(otherID)));
+
+    // Internal entry-points called by ScriptInstance::InvokeOnBodyActivated/Deactivated
+    // Named distinctly to avoid overload ambiguity with the public virtual methods.
+    internal void Internal_OnBodyActivatedNative() => OnBodyActivated();
+    internal void Internal_OnBodyDeactivatedNative() => OnBodyDeactivated();
 }

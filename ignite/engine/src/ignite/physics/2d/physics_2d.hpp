@@ -17,11 +17,10 @@ namespace ignite
     class IGN_API Physics2D
     {
     public:
-        Physics2D() = default;
-        explicit Physics2D(Scene *scene);
+        Physics2D();
         ~Physics2D();
 
-        void SimulationStart();
+        void SimulationStart(Scene *scene);
         void SimulationStop();
 
         void InstantiateEntity(Entity entity);

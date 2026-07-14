@@ -22,7 +22,7 @@
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/core/application.hpp"
 
-#include "ignite/physics/jolt/jolt_physics.hpp"
+#include "ignite/physics/3d/jolt/jolt_physics.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
 
 #include <glm/gtx/quaternion.hpp>
@@ -164,10 +164,10 @@ namespace ignite
             if (outHitNormal) *outHitNormal = glm::vec3(0.f, 1.f, 0.f);
 
             Scene *scene = GetSceneContext();
-            if (!scene || !scene->physics || !origin || !direction)
+            if (!scene || !scene->GetJoltScene() || !origin || !direction)
                 return 0;
 
-            JoltRaycastHit hit = scene->physics->Raycast(*origin, *direction, maxDistance);
+            JoltRaycastHit hit = scene->GetJoltScene()->Raycast(*origin, *direction, maxDistance);
             if (!hit.hit)
                 return 0;
 
@@ -178,7 +178,7 @@ namespace ignite
                 *outHitNormal = hit.hitNormal;
 
             // Resolve body ID to entity UUID directly from the Jolt body user data.
-            const uint64_t entityID = static_cast<uint64_t>(scene->physics->GetUserData(hit.bodyId));
+            const uint64_t entityID = static_cast<uint64_t>(scene->GetJoltScene()->GetUserData(hit.bodyId));
             return entityID;
         }
 
@@ -749,27 +749,7 @@ namespace ignite
             if (!copyEntity.IsValid())
                 return 0;
 
-            // If physics is running, ensure we set transform before physics instantiation happens.
-            // DuplicateEntity will call scene->physics->InstantiateEntity() when scene->IsRunning().
-            // Move the entity to the requested world position and clear any existing runtime physics body
-            // on the copied entity before returning.
             copyEntity.GetComponent<TransformComponent>().world.translation = *value;
-
-            // If duplicated entity has a RigidbodyComponent, ensure no stale body pointer is present
-            // if (copyEntity.HasComponent<RigidbodyComponent>())
-            // {
-            //     auto &rb = copyEntity.GetComponent<RigidbodyComponent>();
-            //     if (rb.body)
-            //     {
-            //         // Remove and destroy any stale body attached to this component to avoid duplicates
-            //         if (scene->physics && scene->physics->GetBodyInterface())
-            //         {
-            //             scene->physics->GetBodyInterface()->RemoveBody(rb.body->GetID());
-            //             scene->physics->GetBodyInterface()->DestroyBody(rb.body->GetID());
-            //         }
-            //         rb.body = nullptr;
-            //     }
-            // }
 
             if (scene->IsRunning())
             {
@@ -2534,12 +2514,12 @@ namespace ignite
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.bodyType = static_cast<RigidbodyComponent::EBodyType>(value);
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
                 JPH::EMotionType motionType = JPH::EMotionType::Static;
                 if (rb.bodyType == RigidbodyComponent::EBodyType::Kinematic) motionType = JPH::EMotionType::Kinematic;
                 else if (rb.bodyType == RigidbodyComponent::EBodyType::Dynamic) motionType = JPH::EMotionType::Dynamic;
-                scene->physics->GetBodyInterface()->SetMotionType(rb.body->GetID(), motionType, JPH::EActivation::Activate);
+                scene->GetJoltScene()->GetBodyInterface()->SetMotionType(rb.body->GetID(), motionType, JPH::EActivation::Activate);
             }
         }
 
@@ -2571,9 +2551,9 @@ namespace ignite
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.useGravity = value;
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->SetGravityFactor(*rb.body, rb.useGravity ? rb.gravityFactor : 0.0f);
+                scene->GetJoltScene()->SetGravityFactor(*rb.body, rb.useGravity ? rb.gravityFactor : 0.0f);
             }
         }
 
@@ -2605,9 +2585,9 @@ namespace ignite
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.gravityFactor = value;
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->SetGravityFactor(*rb.body, rb.useGravity ? rb.gravityFactor : 0.0f);
+                scene->GetJoltScene()->SetGravityFactor(*rb.body, rb.useGravity ? rb.gravityFactor : 0.0f);
             }
         }
 
@@ -2620,9 +2600,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                *result = scene->physics->GetLinearVelocity(*rb.body);
+                *result = scene->GetJoltScene()->GetLinearVelocity(*rb.body);
             }
         }
 
@@ -2634,9 +2614,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->SetLinearVelocity(*rb.body, *value);
+                scene->GetJoltScene()->SetLinearVelocity(*rb.body, *value);
             }
         }
 
@@ -2649,9 +2629,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                *result = scene->physics->GetPosition(*rb.body);
+                *result = scene->GetJoltScene()->GetPosition(*rb.body);
             }
         }
 
@@ -2663,9 +2643,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->SetPosition(*rb.body, *value, true);
+                scene->GetJoltScene()->SetPosition(*rb.body, *value, true);
             }
         }
 
@@ -2678,9 +2658,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                *result = scene->physics->GetRotation(*rb.body);
+                *result = scene->GetJoltScene()->GetRotation(*rb.body);
             }
         }
 
@@ -2692,9 +2672,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->SetRotation(*rb.body, *value, true);
+                scene->GetJoltScene()->SetRotation(*rb.body, *value, true);
             }
         }
 
@@ -2707,9 +2687,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                *result = JoltToGlmVec3(scene->physics->GetBodyInterface()->GetAngularVelocity(rb.body->GetID()));
+                *result = JoltToGlmVec3(scene->GetJoltScene()->GetBodyInterface()->GetAngularVelocity(rb.body->GetID()));
             }
         }
 
@@ -2722,9 +2702,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                *result = scene->physics->GetCenterOfMassPosition(*rb.body);
+                *result = scene->GetJoltScene()->GetCenterOfMassPosition(*rb.body);
             }
         }
 
@@ -2737,9 +2717,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                *result = scene->physics->IsActive(*rb.body);
+                *result = scene->GetJoltScene()->IsActive(*rb.body);
             }
         }
 
@@ -2751,9 +2731,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->GetBodyInterface()->AddForce(rb.body->GetID(), GlmToJoltVec3(*force), GlmToJoltVec3(*point));
+                scene->GetJoltScene()->GetBodyInterface()->AddForce(rb.body->GetID(), GlmToJoltVec3(*force), GlmToJoltVec3(*point));
             }
         }
 
@@ -2765,9 +2745,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->AddForce(*rb.body, *force);
+                scene->GetJoltScene()->AddForce(*rb.body, *force);
             }
         }
 
@@ -2779,9 +2759,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->AddTorque(*rb.body, *torque);
+                scene->GetJoltScene()->AddTorque(*rb.body, *torque);
             }
         }
 
@@ -2793,9 +2773,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->GetBodyInterface()->AddImpulse(rb.body->GetID(), GlmToJoltVec3(*impulse), GlmToJoltVec3(*point));
+                scene->GetJoltScene()->GetBodyInterface()->AddImpulse(rb.body->GetID(), GlmToJoltVec3(*impulse), GlmToJoltVec3(*point));
             }
         }
 
@@ -2807,9 +2787,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->AddImpulse(*rb.body, *impulse);
+                scene->GetJoltScene()->AddImpulse(*rb.body, *impulse);
             }
         }
 
@@ -2821,9 +2801,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->AddAngularImpulse(*rb.body, *impulse);
+                scene->GetJoltScene()->AddAngularImpulse(*rb.body, *impulse);
             }
         }
 
@@ -2834,9 +2814,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->ActivateBody(*rb.body);
+                scene->GetJoltScene()->ActivateBody(*rb.body);
             }
         }
 
@@ -2847,9 +2827,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->DeactivateBody(*rb.body);
+                scene->GetJoltScene()->DeactivateBody(*rb.body);
             }
         }
 
@@ -2861,9 +2841,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             Scene *scene = GetSceneContext();
-            if (scene && scene->physics && rb.body)
+            if (scene && scene->GetJoltScene() && rb.body)
             {
-                scene->physics->MoveKinematic(*rb.body, *targetPosition, *targetRotation, deltaTime);
+                scene->GetJoltScene()->MoveKinematic(*rb.body, *targetPosition, *targetRotation, deltaTime);
             }
         }
 
@@ -2923,11 +2903,11 @@ namespace ignite
                 auto &col = entity.GetComponent<BoxColliderComponent>();
                 col.friction = value;
                 Scene *scene = GetSceneContext();
-                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
                 {
                     auto &rb = entity.GetComponent<RigidbodyComponent>();
                     if (rb.body)
-                        scene->physics->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
+                        scene->GetJoltScene()->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
                 }
             }
         }
@@ -2949,11 +2929,11 @@ namespace ignite
                 auto &col = entity.GetComponent<BoxColliderComponent>();
                 col.restitution = value;
                 Scene *scene = GetSceneContext();
-                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
                 {
                     auto &rb = entity.GetComponent<RigidbodyComponent>();
                     if (rb.body)
-                        scene->physics->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
+                        scene->GetJoltScene()->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
                 }
             }
         }
@@ -3031,11 +3011,11 @@ namespace ignite
                 auto &col = entity.GetComponent<SphereColliderComponent>();
                 col.friction = value;
                 Scene *scene = GetSceneContext();
-                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
                 {
                     auto &rb = entity.GetComponent<RigidbodyComponent>();
                     if (rb.body)
-                        scene->physics->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
+                        scene->GetJoltScene()->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
                 }
             }
         }
@@ -3057,11 +3037,11 @@ namespace ignite
                 auto &col = entity.GetComponent<SphereColliderComponent>();
                 col.restitution = value;
                 Scene *scene = GetSceneContext();
-                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
                 {
                     auto &rb = entity.GetComponent<RigidbodyComponent>();
                     if (rb.body)
-                        scene->physics->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
+                        scene->GetJoltScene()->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
                 }
             }
         }
@@ -3157,11 +3137,11 @@ namespace ignite
                 auto &col = entity.GetComponent<CapsuleColliderComponent>();
                 col.friction = value;
                 Scene *scene = GetSceneContext();
-                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
                 {
                     auto &rb = entity.GetComponent<RigidbodyComponent>();
                     if (rb.body)
-                        scene->physics->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
+                        scene->GetJoltScene()->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
                 }
             }
         }
@@ -3183,11 +3163,11 @@ namespace ignite
                 auto &col = entity.GetComponent<CapsuleColliderComponent>();
                 col.restitution = value;
                 Scene *scene = GetSceneContext();
-                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
                 {
                     auto &rb = entity.GetComponent<RigidbodyComponent>();
                     if (rb.body)
-                        scene->physics->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
+                        scene->GetJoltScene()->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
                 }
             }
         }

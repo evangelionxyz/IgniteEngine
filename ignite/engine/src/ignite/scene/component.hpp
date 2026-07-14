@@ -385,15 +385,15 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_PointLight2D)
     };
 
-	class Circle2DComponent : public IComponent
-	{
-	public:
-		glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    class Circle2DComponent : public IComponent
+    {
+    public:
+        glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
         float thickness = 1.0f;
         float fade = 0.005f;
 
-		COMPONENT_CLASS_TYPE(CompType_Circle2D)
-	};
+        COMPONENT_CLASS_TYPE(CompType_Circle2D)
+    };
 
     class TextComponent : public IComponent
     {
@@ -410,7 +410,7 @@ namespace ignite
 
         TextComponent() = default;
 
-		COMPONENT_CLASS_TYPE(CompType_Text)
+        COMPONENT_CLASS_TYPE(CompType_Text)
     };
 
     class WidgetComponent : public IComponent
@@ -425,20 +425,20 @@ namespace ignite
     class StaticMeshComponent : public IComponent
     {
     public:
-		AssetHandle handle = AssetHandle(0);                    // class Mesh in mesh.hpp
-		std::unordered_map<int, AssetHandle> overrideMaterials; // Mesh index, Material Handle
-		glm::mat4 normalMatrix = glm::mat4(1.0f);
+        AssetHandle handle = AssetHandle(0);                    // class Mesh in mesh.hpp
+        std::unordered_map<int, AssetHandle> overrideMaterials; // Mesh index, Material Handle
+        glm::mat4 normalMatrix = glm::mat4(1.0f);
 
         // ==== RUNTIME DATA ====
-		std::vector<Mesh_GPUData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
+        std::vector<Mesh_GPUData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
 
-		StaticMeshComponent() = default;
-		COMPONENT_CLASS_TYPE(CompType_StaticMesh)
+        StaticMeshComponent() = default;
+        COMPONENT_CLASS_TYPE(CompType_StaticMesh)
     };
 
-	class SkeletalMeshComponent : public IComponent
-	{
-	public:
+    class SkeletalMeshComponent : public IComponent
+    {
+    public:
         AssetHandle handle = AssetHandle(0);                    // class SkeletalMesh in mesh.hpp
         std::unordered_map<int, AssetHandle> overrideMaterials; // Mesh index, Material Handle
 
@@ -493,8 +493,8 @@ namespace ignite
         }
 
         SkeletalMeshComponent() = default;
-		COMPONENT_CLASS_TYPE(CompType_SkeletalMesh)
-	};
+        COMPONENT_CLASS_TYPE(CompType_SkeletalMesh)
+    };
 
     class RigidbodyComponent : public IComponent
     {
@@ -580,7 +580,7 @@ namespace ignite
     public:
         glm::vec3 center = { 0.0f, 0.0f, 0.0f };
         float radius = 0.5f;
-		float height = 2.0f;
+        float height = 2.0f;
 
         CapsuleColliderComponent() = default;
 

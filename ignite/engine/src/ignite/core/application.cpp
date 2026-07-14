@@ -9,10 +9,10 @@
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/audio/fmod_audio.hpp"
-#include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
+#include "ignite/scene/scene_manager.hpp"
 #include "input/input_system.hpp"
 #include "command.hpp"
 #include <nvrhi/utils.h>
@@ -124,8 +124,6 @@ namespace ignite
 
         if (m_CreateInfo.useAudio)
             AddSubsystem(new FmodAudio());
-        if (m_CreateInfo.usePhysics)
-            AddSubsystem(new JoltPhysics());
     }
 
     Application *Application::GetInstance()
@@ -459,6 +457,8 @@ namespace ignite
 
                 for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
                     (*layer)->OnUpdate(m_DeltaTime);
+
+                SceneManager::ExecutePendingTransition();
 
                 if (!m_CreateInfo.headless && m_FrameIndex > 0)
                 {

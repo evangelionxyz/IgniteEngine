@@ -293,6 +293,11 @@ namespace ignite
             m_ActiveProject->GetAssetManager()->OnUpdate(deltaTime);
         }
 
+        if (m_ActiveProject && m_ActiveProject->GetActiveScene() != m_ActiveScene)
+        {
+            SetActiveScene(m_ActiveProject->GetActiveScene());
+        }
+
         // update panels
         if (m_ActiveScene)
         {

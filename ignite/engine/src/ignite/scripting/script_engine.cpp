@@ -243,6 +243,7 @@ namespace ignite
 
     ScriptEngine::~ScriptEngine()
     {
+        scriptEngine = nullptr;
         ShutdownHostFxr();
 
         if (!scriptEngineData)
