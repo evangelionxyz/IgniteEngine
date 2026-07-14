@@ -263,12 +263,12 @@ namespace ignite
                 else
                 {
                     auto texture = (nvrhi::ITexture *)pCmd->TexRef.GetTexID();
+					// Please check your ImGui texture somewhere in ImGui::Image stuff
+                    // If it is null, it can binds wrong texture in wrong place
+                    LOG_ASSERT(texture, "[ImGui NVRHI] ImGui::Image should takes a valid texture, not null");
+
                     if (texture != lastTexture)
                     {
-                        // Please check your ImGui texture somewhere in ImGui::Image stuff
-                        // If it is null, it can binds wrong texture in wrong place
-                        LOG_ASSERT(texture, "[ImGui NVRHI] ImGui::Image should takes a valid texture, not null");
-                        
                         lastTexture = texture;
                         lastBindingSet = GetBindingSet(texture, bindingLayout);
                     }
@@ -455,8 +455,7 @@ namespace ignite
         }
 
         if (!ReallocateBuffer(indexBuffer, drawData->TotalIdxCount * sizeof(ImDrawIdx),
-            (drawData->TotalIdxCount + 5000) * sizeof(ImDrawIdx),
-            true))
+            (drawData->TotalIdxCount + 5000) * sizeof(ImDrawIdx), true))
         {
             return false;
         }

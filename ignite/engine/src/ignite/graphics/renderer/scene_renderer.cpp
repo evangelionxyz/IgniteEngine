@@ -1264,52 +1264,52 @@ namespace ignite
 
         auto compositeFramebuffer = target->compositeRT->GetFramebuffer();
         
-        CompositePostProcess_GPUData postProcessData;
+		// Setup Post Processing settings
         if (camera)
         {
-            postProcessData.flags.x = (postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
-            postProcessData.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
-            postProcessData.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
-            postProcessData.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
-            postProcessData.vignetteParams = glm::vec4(
+            m_PostProcessingSettings.flags.x = (postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
+            m_PostProcessingSettings.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
+            m_PostProcessingSettings.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
+            m_PostProcessingSettings.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
+            m_PostProcessingSettings.vignetteParams = glm::vec4(
                 postProcessing.vignetteRadius,
                 glm::max(postProcessing.vignetteSoftness, 0.001f),
                 postProcessing.vignetteIntensity,
                 postProcessing.chromAbAmount
             );
-            postProcessData.chromAbParams.x = postProcessing.chromAbRadial;
-            postProcessData.chromAbParams.y = (postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
-            postProcessData.chromAbParams.z = postProcessing.aoIntensity;
-            postProcessData.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
-            postProcessData.projectionInv = glm::inverse(camera->GetProjection());
-            postProcessData.enableDOF = lens.enabledDOF ? 1 : 0;
-            postProcessData.focalLength = lens.focalLength;
-            postProcessData.focalDistance = lens.focalDistance;
-            postProcessData.fStop = lens.fStop;
-            postProcessData.focusRange = lens.focusRange;
-            postProcessData.blurAmount = lens.blurAmount;
+            m_PostProcessingSettings.chromAbParams.x = postProcessing.chromAbRadial;
+            m_PostProcessingSettings.chromAbParams.y = (postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
+            m_PostProcessingSettings.chromAbParams.z = postProcessing.aoIntensity;
+            m_PostProcessingSettings.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
+            m_PostProcessingSettings.projectionInv = glm::inverse(camera->GetProjection());
+            m_PostProcessingSettings.enableDOF = lens.enabledDOF ? 1 : 0;
+            m_PostProcessingSettings.focalLength = lens.focalLength;
+            m_PostProcessingSettings.focalDistance = lens.focalDistance;
+            m_PostProcessingSettings.fStop = lens.fStop;
+            m_PostProcessingSettings.focusRange = lens.focusRange;
+            m_PostProcessingSettings.blurAmount = lens.blurAmount;
 
             if (m_WorldEnvironment)
             {
-                postProcessData.tonemapMode = static_cast<int>(m_WorldEnvironment->tonemapMode);
-                postProcessData.exposure = m_WorldEnvironment->exposure;
-                postProcessData.gamma = m_WorldEnvironment->gamma;
+                m_PostProcessingSettings.tonemapMode = static_cast<int>(m_WorldEnvironment->tonemapMode);
+                m_PostProcessingSettings.exposure = m_WorldEnvironment->exposure;
+                m_PostProcessingSettings.gamma = m_WorldEnvironment->gamma;
 
-                postProcessData.fogColor = m_WorldEnvironment->fogColor;
-                postProcessData.fogDensity = m_WorldEnvironment->fogDensity;
-                postProcessData.fogStart = m_WorldEnvironment->fogStart;
-                postProcessData.fogEnd = m_WorldEnvironment->fogEnd;
+                m_PostProcessingSettings.fogColor = m_WorldEnvironment->fogColor;
+                m_PostProcessingSettings.fogDensity = m_WorldEnvironment->fogDensity;
+                m_PostProcessingSettings.fogStart = m_WorldEnvironment->fogStart;
+                m_PostProcessingSettings.fogEnd = m_WorldEnvironment->fogEnd;
             }
             else
             {
-                postProcessData.tonemapMode = 0; // Reinhard
-                postProcessData.exposure = 1.1f;
-                postProcessData.gamma = 2.2f;
-                postProcessData.fogDensity = 0.0f;
+                m_PostProcessingSettings.tonemapMode = 0; // Reinhard
+                m_PostProcessingSettings.exposure = 1.1f;
+                m_PostProcessingSettings.gamma = 2.2f;
+                m_PostProcessingSettings.fogDensity = 0.0f;
             }
         }
 
-        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
+        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&m_PostProcessingSettings, sizeof(m_PostProcessingSettings)));
         cmd->setBufferState(m_CompositePostProcessBuffer->GetHandle(), nvrhi::ResourceStates::ConstantBuffer);
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePSO(compositeFramebuffer, nvrhi::RasterFillMode::Solid);

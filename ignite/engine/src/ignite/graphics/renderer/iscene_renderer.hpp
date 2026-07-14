@@ -118,6 +118,8 @@ namespace ignite
         int GetDebugShadowMode() const { return m_SceneGPUData.debugShadow; }
         void SetDebugShadowMode(int debugShadow) { m_SceneGPUData.debugShadow = debugShadow; }
 
+		CompositePostProcess_GPUData &GetPostProcessingSettings() { return m_PostProcessingSettings; }
+
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap();
@@ -177,6 +179,7 @@ namespace ignite
 		std::unordered_map<AssetResolveKey, Ref<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
 
 		WorldEnvironment *m_WorldEnvironment = nullptr;
+		CompositePostProcess_GPUData m_PostProcessingSettings;
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         Scene_GPUData m_SceneGPUData;

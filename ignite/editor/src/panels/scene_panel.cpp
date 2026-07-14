@@ -532,8 +532,6 @@ namespace ignite
                 ImGui::OpenPopup("##add_component_context");
             }
 
-            static float componentColumnWidth = 100.0f;
-
             // transform component
             RenderComponent<TransformComponent>("Transform", selectedEntity, [&]()
             {
@@ -544,7 +542,7 @@ namespace ignite
                 // so it must be checked AFTER the widget call, unconditionally.
                 static TransformComponent s_TransformBefore;
 
-                UI::State translationState = UI::DrawVec3Control("Translation", comp.local.translation, 0.025f, 0.0f, componentColumnWidth);
+                UI::State translationState = UI::DrawVec3Control("Translation", comp.local.translation, 0.025f, 0.0f);
                 if (translationState.isItemActivated)            s_TransformBefore = comp;
                 if (translationState.isItemEdited)               comp.dirty = true;
                 if (translationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
@@ -565,13 +563,13 @@ namespace ignite
                     s_RotationEditEuler = eulerAngles(comp.local.rotation);
                 }
 
-                UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f, 0.0f, componentColumnWidth);
+                UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f, 0.0f);
                 if (rotationState.isItemActivated)            s_TransformBefore = comp;
                 if (rotationState.isItemActivated)            s_RotationEditing = true;
                 if (rotationState.isItemEdited)               { comp.local.rotation = glm::quat(s_RotationEditEuler); comp.dirty = true; }
                 if (rotationState.isItemDeactivatedAfterEdit) { CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp)); s_RotationEditing = false; }
 
-                UI::State scaleState = UI::DrawVec3Control("Scale", comp.local.scale, 0.025f, 1.0f, componentColumnWidth);
+                UI::State scaleState = UI::DrawVec3Control("Scale", comp.local.scale, 0.025f, 1.0f);
                 if (scaleState.isItemActivated)            s_TransformBefore = comp;
                 if (scaleState.isItemEdited)               comp.dirty = true;
                 if (scaleState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
@@ -689,7 +687,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<DirectionalLightComponent>();
                 auto &tr = selectedEntity.GetComponent<TransformComponent>();
 
-                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Angular Radius", &c.angularRadius, 0.01f, 0.0f, 45.0f);
 
@@ -739,7 +737,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<PointLightComponent>();
 
                 UI::DrawCheckbox("Enabled", &c.enabled);
-                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
 
@@ -754,7 +752,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<SpotLightComponent>();
 
                 UI::DrawCheckbox("Enabled", &c.enabled);
-                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
 
@@ -1657,8 +1655,8 @@ namespace ignite
             RenderComponent<CircleCollider2DComponent>("Circle Collider 2D", selectedEntity, [&]()
                 {
                     auto &cc = selectedEntity.GetComponent<CircleCollider2DComponent>();
-                    cc.dirty = UI::DrawFloatControl("Radius", &cc.radius, 0.025f, 0.0f, FLT_MAX);
-                    cc.dirty |= UI::DrawVec2Control("Center", cc.center, 0.025f);
+                    cc.dirty = UI::DrawVec2Control("Center", cc.center, 0.025f);
+                    cc.dirty |= UI::DrawFloatControl("Radius", &cc.radius, 0.025f, 0.0f, FLT_MAX);
                     cc.dirty |= UI::DrawFloatControl("Restitution", &cc.restitution, 0.025f, 0.0f, FLT_MAX);
                     cc.dirty |= UI::DrawFloatControl("Friction", &cc.friction, 0.025f, 0.0f, FLT_MAX);
                     cc.dirty |= UI::DrawFloatControl("Density", &cc.density, 0.025f);
@@ -1681,8 +1679,8 @@ namespace ignite
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<BoxColliderComponent>();
-                c.dirty = UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
-                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
@@ -1694,8 +1692,8 @@ namespace ignite
             RenderComponent<SphereColliderComponent>("Sphere Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<SphereColliderComponent>();
-                c.dirty = UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
-                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
@@ -1707,8 +1705,8 @@ namespace ignite
             RenderComponent<CapsuleColliderComponent>("Capsule Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<CapsuleColliderComponent>();
-                c.dirty = UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
-                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Height", &c.height, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);

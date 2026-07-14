@@ -608,8 +608,8 @@ namespace ignite
     // ---------------------------------------------------------------------------
     void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
     {
-        CompositePostProcess_GPUData postProcessData;
-        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
+		// Set the post-processing parameters based on the current settings on asset editor panel
+        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&this->m_PostProcessingSettings, sizeof(this->m_PostProcessingSettings)));
 
         Ref<GraphicsPipeline> pipeline;
         if (auto it = m_CompositePipelineCache.find(framebuffer); it != m_CompositePipelineCache.end())

@@ -199,7 +199,7 @@ namespace ignite::UI
 		std::vector<std::pair<EColorStyle, glm::vec4>> m_Styles{};
 	};
 
-	static float defColWidth = 100.0f;
+	static float defColWidth = 128.0f;
 
 	static State DrawButton(const char *text, bool *value = nullptr)
 	{
@@ -750,9 +750,9 @@ namespace ignite::UI
 		
 		{
 			ScopedColorStyle buttonStyle({
-				{ EColorStyle::Button,          { 0.5f, 0.5f, 0.5f, 1.0f } },
-				{ EColorStyle::ButtonHovered,   { 0.9f, 0.9f, 0.9f, 1.0f } },
-				{ EColorStyle::ButtonActive,    { 0.5f, 0.5f, 0.5f, 1.0f } }
+				{ EColorStyle::Button,          { 0.2f, 0.2f, 0.2f, 1.0f } },
+				{ EColorStyle::ButtonHovered,   { 0.7f, 0.7f, 0.7f, 1.0f } },
+				{ EColorStyle::ButtonActive,    { 0.4f, 0.4f, 0.5f, 1.0f } }
 				});
 			if (ImGui::Button("V", buttonSize))
 			{
@@ -791,11 +791,10 @@ namespace ignite::UI
 		ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x - (buttonSize.x- GImGui->Style.ItemSpacing.x) );
 
 		{
-			ScopedColorStyle buttonStyle(
-				{
-				{ EColorStyle::Button,          { 0.5f, 0.5f, 0.5f, 1.0f } },
-				{ EColorStyle::ButtonHovered,   { 0.9f, 0.9f, 0.9f, 1.0f } },
-				{ EColorStyle::ButtonActive,    { 0.5f, 0.5f, 0.5f, 1.0f } }
+			ScopedColorStyle buttonStyle({
+				{ EColorStyle::Button,          { 0.2f, 0.2f, 0.2f, 1.0f } },
+				{ EColorStyle::ButtonHovered,   { 0.7f, 0.7f, 0.7f, 1.0f } },
+				{ EColorStyle::ButtonActive,    { 0.4f, 0.4f, 0.5f, 1.0f } }
 				});
 
 			if (ImGui::Button("V", buttonSize))
