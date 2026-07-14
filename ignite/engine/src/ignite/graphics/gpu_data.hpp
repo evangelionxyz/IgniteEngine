@@ -72,6 +72,13 @@ namespace ignite
 		int roughnessChannel = 1;
 		int blendMode = 0; // 0 = Opaque, 1 = Transparent
 		glm::vec2 tilingFactor = glm::vec2(1.0f, 1.0f);
+		int baseColorTextureIndex = 0;
+		int emissiveTextureIndex = 0;
+		int metallicTextureIndex = 0;
+		int roughnessTextureIndex = 0;
+		int normalTextureIndex = 0;
+		int occlusionTextureIndex = 0;
+		glm::vec2 _pad = glm::vec2(0.0f); // 16-byte alignment pad
 	};
 
 	// GPU-side point light data (16-byte aligned for HLSL constant buffers)

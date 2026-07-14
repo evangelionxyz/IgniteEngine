@@ -126,6 +126,7 @@ namespace ignite
         info.samplerAddressV = nvrhi::SamplerAddressMode::Repeat;
         info.samplerLinearFiltering = false;
         info.keepInitialState = true;
+        info.bindless = false;
 
         m_NoiseTexture = Texture::Create(pixelData, info, pool, "SSAO Noise");
         
@@ -139,17 +140,18 @@ namespace ignite
         m_Width = std::max(width / 2, 1u); // Half resolution optimization
         m_Height = std::max(height / 2, 1u);
 
-        TextureCreateInfo texInfo;
-        texInfo.width = m_Width;
-        texInfo.height = m_Height;
-        texInfo.format = nvrhi::Format::R8_UNORM;
-        texInfo.isUAV = true;
-        texInfo.isRenderTarget = false;
-        texInfo.initialState = nvrhi::ResourceStates::UnorderedAccess;
-        texInfo.keepInitialState = true;
+        TextureCreateInfo info;
+        info.width = m_Width;
+        info.height = m_Height;
+        info.format = nvrhi::Format::R8_UNORM;
+        info.isUAV = true;
+        info.isRenderTarget = false;
+        info.initialState = nvrhi::ResourceStates::UnorderedAccess;
+        info.keepInitialState = true;
+        info.bindless = false;
 
-        m_AOTex = Texture::Create(texInfo, "[SSAO Raw UAV]");
-        m_BlurTex = Texture::Create(texInfo, "[SSAO Blur UAV]");
+        m_AOTex = Texture::Create(info, "[SSAO Raw UAV]");
+        m_BlurTex = Texture::Create(info, "[SSAO Blur UAV]");
 
         InvalidatePipelines();
     }

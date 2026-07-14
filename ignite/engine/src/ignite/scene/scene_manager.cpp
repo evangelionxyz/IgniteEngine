@@ -3,12 +3,15 @@
 #include "ignite_pch.hpp"
 #include "scene_manager.hpp"
 #include "scene.hpp"
+#include "ignite/core/application.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/project/project.hpp"
 #include "entity.hpp"
 #include "entity_command_manager.hpp"
 #include "entity_destroy_command.hpp"
 
 #include "ignite/physics/2d/physics_2d.hpp"
-#include "ignite/physics/jolt/jolt_physics.hpp"
+#include "ignite/physics/3d/jolt/jolt_physics.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/uuid.hpp"
@@ -353,8 +356,8 @@ namespace ignite
         if (!scene || !scene->registry->valid(entity))
             return;
 
-		scene->physics->DestroyEntity(entity);
-		scene->physics2D->DestroyEntity(entity);
+		scene->GetJoltScene()->DestroyEntity(entity);
+		scene->GetPhysics2D()->DestroyEntity(entity);
 
         IDComponent idComp = entity.GetComponent<IDComponent>();
 
@@ -434,8 +437,8 @@ namespace ignite
                 rb.body = nullptr;
             }
 
-		    scene->physics->InstantiateEntity(newEntity);
-		    scene->physics2D->InstantiateEntity(newEntity);
+		    scene->GetJoltScene()->InstantiateEntity(newEntity);
+		    scene->GetPhysics2D()->InstantiateEntity(newEntity);
         }
 
         if (!scene->IsRunning())
@@ -597,8 +600,112 @@ namespace ignite
             mr.mesh->WriteVertexBuffer(static_cast<uint32_t>(e));
         }*/
 
-        DeviceManager::GetInstance()->WaitForIdle();
+        if (auto* deviceManager = DeviceManager::GetInstance())
+        {
+            if (deviceManager->GetDevice())
+            {
+                deviceManager->WaitForIdle();
+            }
+        }
 
         return newScene;
+    }
+
+    bool SceneManager::s_TransitionPending = false;
+    AssetHandle SceneManager::s_PendingSceneHandle = AssetHandle(0);
+
+    void SceneManager::TransitionTo(AssetHandle nextSceneHandle)
+    {
+        if (s_TransitionPending)
+        {
+            LOG_WARN("[Scene Manager] A transition is already pending! Ignoring request.");
+            return;
+        }
+
+        if (nextSceneHandle == AssetHandle(0))
+        {
+            LOG_ERROR("[Scene Manager] Cannot transition to a null/invalid scene handle!");
+            return;
+        }
+
+        auto* assetManager = AssetManager::GetInstance();
+        if (!assetManager)
+        {
+            LOG_ERROR("[Scene Manager] No active AssetManager found during transition request.");
+            return;
+        }
+
+        if (!assetManager->IsAssetHandleValid(nextSceneHandle))
+        {
+            LOG_ERROR("[Scene Manager] Scene handle {} is invalid!", static_cast<uint64_t>(nextSceneHandle));
+            return;
+        }
+
+        Application::SubmitToMainThread([nextSceneHandle, assetManager]()
+        {
+			// Load incoming scene immediate so we can collect its referenced assets
+			Ref<Scene> nextScene = assetManager->GetAssetImmediate<Scene>(nextSceneHandle);
+			if (!nextScene)
+			{
+				LOG_ERROR("[Scene Manager] Failed to load pending scene asset {}", static_cast<uint64_t>(nextSceneHandle));
+				return;
+			}
+
+			std::unordered_set<AssetHandle> referencedAssets = nextScene->CollectReferencedAssetHandles();
+			referencedAssets.insert(nextSceneHandle);
+
+			assetManager->ReplaceAssetPins("scene_transition", referencedAssets);
+
+			s_TransitionPending = true;
+			s_PendingSceneHandle = nextSceneHandle;
+        });
+    }
+
+    void SceneManager::ExecutePendingTransition()
+    {
+        if (!s_TransitionPending)
+            return;
+
+        s_TransitionPending = false;
+        AssetHandle nextSceneHandle = s_PendingSceneHandle;
+        s_PendingSceneHandle = AssetHandle(0);
+
+        auto* assetManager = AssetManager::GetInstance();
+        if (!assetManager)
+            return;
+
+        Project* project = assetManager->GetProject();
+        if (!project)
+            return;
+
+        Ref<Scene> currentScene = project->GetActiveScene();
+        if (currentScene)
+        {
+            currentScene->OnStop();
+        }
+
+        // Load the new scene
+        Ref<Scene> loadedScene = assetManager->GetAssetImmediate<Scene>(nextSceneHandle);
+        if (!loadedScene)
+        {
+            LOG_ERROR("[Scene Manager] Failed to load transition target scene!");
+            assetManager->ClearAssetPins("scene_transition");
+            return;
+        }
+
+        Ref<Scene> transitionScene = SceneManager::Copy(loadedScene);
+        if (!transitionScene)
+        {
+            LOG_ERROR("[Scene Manager] Failed to copy transition scene!");
+            assetManager->ClearAssetPins("scene_transition");
+            return;
+        }
+
+        project->SetActiveScene(transitionScene);
+        transitionScene->OnStart();
+
+        assetManager->ClearAssetPins("scene_transition");
+
+        LOG_INFO("[Scene Manager] Successfully transitioned to scene {}", project->GetAssetDisplayName(nextSceneHandle));
     }
 } // namespace ignite

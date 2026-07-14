@@ -17,6 +17,9 @@ project "STB"
         "%{THIRDPARTY_DIR}/STB/include"
     }
 
+    filter "system:linux"
+        pic "On"
+
     filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         symbols "on"

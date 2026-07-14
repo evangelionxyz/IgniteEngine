@@ -103,7 +103,7 @@ namespace ignite
             bool    playing = false;
         };
 
-        struct MaterialPreviewEditorState
+        struct MaterialEditorState
         {
             float previewColumnWidth = 0.0f;
             int selectedMeshType = 0;
@@ -128,9 +128,10 @@ namespace ignite
         {
             AssetHandle skeletonHandle = AssetHandle(0);
             Ref<Skeleton> cachedSkeleton;
+			float previewColumnWidth = 0.0f;
         };
 
-        static std::unordered_map<uint64_t, MaterialPreviewEditorState> s_MaterialPreviewEditorState;
+        static std::unordered_map<uint64_t, MaterialEditorState> s_MaterialEditorState;
         static std::unordered_map<uint64_t, SkeletonPreviewEditorState> s_SkeletonPreviewEditorState;
         static std::unordered_map<uint64_t, AnimatorControllerEditorState> s_AnimatorControllerEditorState;
 
@@ -255,97 +256,214 @@ namespace ignite
         }
 
         template<typename TOnChanged>
-        static void DrawTexturePreviewDropTarget(Project *project, const char *label, AssetHandle &textureHandle, TOnChanged &&onChanged)
+        static void DrawTexturePreviewDropTarget(const char *label, AssetHandle &textureHandle, TOnChanged &&onChanged)
         {
-            if (!project)
-            {
-                return;
-            }
-
             auto assetManager = AssetManager::GetInstance();
 
             ImGui::PushID(label);
             ImGui::TextUnformatted(label);
 
-            const ImVec2 previewSize(96.0f, 96.0f);
-            const ImVec2 previewMin = ImGui::GetCursorScreenPos();
-            const ImVec2 previewMax = ImVec2(previewMin.x + previewSize.x, previewMin.y + previewSize.y);
-
-            ImGui::InvisibleButton("##texture_preview", previewSize);
-
-            ImDrawList *drawList = ImGui::GetWindowDrawList();
-            const ImU32 dark = IM_COL32(70, 70, 70, 255);
-            const ImU32 light = IM_COL32(100, 100, 100, 255);
-            constexpr float tileSize = 16.0f;
-            for (float y = previewMin.y; y < previewMax.y; y += tileSize)
+            if (ImGui::BeginTable("##texture_preview_table", 2, ImGuiTableFlags_SizingFixedFit))
             {
-                for (float x = previewMin.x; x < previewMax.x; x += tileSize)
+                ImGui::TableSetupColumn("Preview", ImGuiTableColumnFlags_WidthFixed, 96.0f);
+                ImGui::TableSetupColumn("Details", ImGuiTableColumnFlags_WidthStretch);
+
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+
+                const ImVec2 previewSize(96.0f, 96.0f);
+                const ImVec2 previewMin = ImGui::GetCursorScreenPos();
+                const ImVec2 previewMax = ImVec2(previewMin.x + previewSize.x, previewMin.y + previewSize.y);
+
+                ImGui::InvisibleButton("##texture_preview", previewSize);
+
+                ImDrawList *drawList = ImGui::GetWindowDrawList();
+                const ImU32 dark = IM_COL32(70, 70, 70, 255);
+                const ImU32 light = IM_COL32(100, 100, 100, 255);
+                constexpr float tileSize = 16.0f;
+                for (float y = previewMin.y; y < previewMax.y; y += tileSize)
                 {
-                    const int ix = static_cast<int>((x - previewMin.x) / tileSize);
-                    const int iy = static_cast<int>((y - previewMin.y) / tileSize);
-                    const ImU32 color = ((ix + iy) % 2 == 0) ? dark : light;
-                    drawList->AddRectFilled(ImVec2(x, y), ImVec2(std::min(x + tileSize, previewMax.x), std::min(y + tileSize, previewMax.y)), color);
-                }
-            }
-
-            Ref<Texture> texture = nullptr;
-            if (textureHandle != AssetHandle(0))
-            {
-                texture = project->GetAsset<Texture>(textureHandle);
-            }
-
-            if (texture && texture->GetHandle())
-            {
-                drawList->AddImage(
-                    reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
-                    previewMin,
-                    previewMax,
-                    ImVec2(0.0f, 1.0f),
-                    ImVec2(1.0f, 0.0f));
-            }
-
-            drawList->AddRect(previewMin, previewMax, IM_COL32(20, 20, 20, 255), 0.0f, 0, 1.5f);
-
-            if (ImGui::BeginDragDropTarget())
-            {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                {
-                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                    for (float x = previewMin.x; x < previewMax.x; x += tileSize)
                     {
-                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                        const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
-                        if (droppedMetadata.type == AssetType::Texture)
-                        {
-                            textureHandle = droppedHandle;
-                            onChanged();
-                        }
+                        const int ix = static_cast<int>((x - previewMin.x) / tileSize);
+                        const int iy = static_cast<int>((y - previewMin.y) / tileSize);
+                        const ImU32 color = ((ix + iy) % 2 == 0) ? dark : light;
+                        drawList->AddRectFilled(ImVec2(x, y), ImVec2(std::min(x + tileSize, previewMax.x), std::min(y + tileSize, previewMax.y)), color);
                     }
                 }
-                ImGui::EndDragDropTarget();
-            }
 
-            ImGui::SameLine();
-            if (textureHandle != AssetHandle(0))
-            {
-                if (ImGui::Button("Clear Texture"))
+                Ref<Texture> texture = nullptr;
+                if (textureHandle != AssetHandle(0))
                 {
-                    textureHandle = AssetHandle(0);
-                    onChanged();
+                    texture = assetManager->GetAsset<Texture>(textureHandle);
                 }
+
+                if (texture && texture->GetHandle())
+                {
+                    drawList->AddImage(
+                        reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
+                        previewMin,
+                        previewMax,
+                        ImVec2(0.0f, 1.0f),
+                        ImVec2(1.0f, 0.0f));
+                }
+
+                drawList->AddRect(previewMin, previewMax, IM_COL32(20, 20, 20, 255), 0.0f, 0, 1.5f);
+
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                    {
+                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                        {
+                            const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                            const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
+                            if (droppedMetadata.type == AssetType::Texture)
+                            {
+                                textureHandle = droppedHandle;
+                                onChanged();
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::TableNextColumn();
+
+                std::string textureDisplayName = assetManager->GetAssetDisplayName(textureHandle);
+                ImGui::TextWrapped("%s", textureDisplayName.c_str());
+                ImGui::TextDisabled("ID: %llu", static_cast<unsigned long long>(textureHandle));
+
+                if (textureHandle != AssetHandle(0))
+                {
+                    ImGui::Spacing();
+                    if (ImGui::Button("Clear Texture"))
+                    {
+                        textureHandle = AssetHandle(0);
+                        onChanged();
+                    }
+                }
+
+                ImGui::EndTable();
             }
-
-            const auto &style = ImGui::GetStyle();
-            const float xPos = previewMax.x + style.ItemSpacing.x;
-            const float yPos = (textureHandle != AssetHandle(0)) 
-                ? (previewMin.y + ImGui::GetFrameHeightWithSpacing()) 
-                : (previewMin.y + style.ItemSpacing.y);
-
-            std::string textureDisplayName = assetManager->GetAssetDisplayName(textureHandle);
-            std::string text = std::format("{} | {}", textureDisplayName.c_str(), static_cast<uint64_t>(textureHandle));
-            drawList->AddText({xPos, yPos}, 0xFFFFFFFF, text.c_str());
 
             ImGui::PopID();
         }
+
+		static void DrawSceneDetails(AssetEditorData &assetData)
+		{
+			if (ImGui::TreeNode("Scene Details"))
+			{
+				// Environment Texture
+				DrawTexturePreviewDropTarget("Environment", assetData.previewEnvTexHandle, [&]()
+				{
+					if (assetData.sceneData.sceneRenderer)
+						assetData.sceneData.sceneRenderer->SetEnvironmentTexture(assetData.previewEnvTexHandle);
+				});
+
+				// Post Processing Settings
+				if (ImGui::TreeNodeEx("Post Processing"))
+				{
+					auto &postProcessing = assetData.sceneData.sceneRenderer->GetPostProcessingSettings();
+
+					// Bloom Settings
+					if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						bool enableBloom = (postProcessing.flags.x > 0.5f);
+						if (UI::DrawCheckbox("Enable Bloom", &enableBloom))
+						{
+							postProcessing.flags.x = enableBloom ? 1.0f : 0.0f;
+						}
+						UI::DrawFloatControl("Bloom Intensity", &postProcessing.flags.y, 0.025f, 0.0f, 100.0f, 1.0f);
+						ImGui::TreePop();
+					}
+
+					// Vignette Settings
+					if (ImGui::TreeNodeEx("Vignette", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						bool enableVignette = (postProcessing.flags.z > 0.5f);
+						if (UI::DrawCheckbox("Enable Vignette", &enableVignette))
+						{
+							postProcessing.flags.z = enableVignette ? 1.0f : 0.0f;
+						}
+						UI::DrawFloatControl("Vignette Radius", &postProcessing.vignetteParams.x, 0.005f, 0.0f, 2.0f, 1.0f);
+						UI::DrawFloatControl("Vignette Softness", &postProcessing.vignetteParams.y, 0.005f, 0.0f, 2.0f, 0.5f);
+						UI::DrawFloatControl("Vignette Intensity", &postProcessing.vignetteParams.z, 0.005f, 0.0f, 2.0f, 0.5f);
+						UI::DrawColorVec4("Vignette Color", postProcessing.vignetteColor);
+						ImGui::TreePop();
+					}
+
+					// Chromatic Aberration
+					if (ImGui::TreeNodeEx("Chromatic Aberration", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						bool enableChromAb = (postProcessing.flags.w > 0.5f);
+						if (UI::DrawCheckbox("Enable Chromatic Aberration", &enableChromAb))
+						{
+							postProcessing.flags.w = enableChromAb ? 1.0f : 0.0f;
+						}
+						UI::DrawFloatControl("ChromAb Amount", &postProcessing.vignetteParams.w, 0.005f, 0.0f, 5.0f, 1.0f);
+						UI::DrawFloatControl("ChromAb Radial", &postProcessing.chromAbParams.x, 0.005f, 0.0f, 5.0f, 1.0f);
+						ImGui::TreePop();
+					}
+
+					// SSAO
+					if (ImGui::TreeNodeEx("SSAO", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						bool enableSSAO = (postProcessing.chromAbParams.y > 0.5f);
+						if (UI::DrawCheckbox("Enable SSAO", &enableSSAO))
+						{
+							postProcessing.chromAbParams.y = enableSSAO ? 1.0f : 0.0f;
+						}
+						UI::DrawFloatControl("SSAO Intensity", &postProcessing.chromAbParams.z, 0.025f, 0.0f, 10.0f, 1.0f);
+						ImGui::TreePop();
+					}
+
+					// Tonemapping & Color correction
+					if (ImGui::TreeNodeEx("Color Correction", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "Filmic" };
+						int currentTonemap = postProcessing.tonemapMode;
+						if (UI::DrawComboBox("Tonemap Mode", tonemapModes, std::size(tonemapModes), &currentTonemap))
+						{
+							postProcessing.tonemapMode = currentTonemap;
+						}
+						UI::DrawFloatControl("Exposure", &postProcessing.exposure, 0.025f, 0.0f, 10.0f, 1.0f);
+						UI::DrawFloatControl("Gamma", &postProcessing.gamma, 0.025f, 0.1f, 5.0f, 2.2f);
+						ImGui::TreePop();
+					}
+
+					// Depth of Field (DOF)
+					if (ImGui::TreeNodeEx("Depth of Field", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						bool enableDOF = (postProcessing.enableDOF != 0);
+						if (UI::DrawCheckbox("Enable DOF", &enableDOF))
+						{
+							postProcessing.enableDOF = enableDOF ? 1 : 0;
+						}
+						UI::DrawFloatControl("Focal Length", &postProcessing.focalLength, 0.5f, 1.0f, 500.0f, 120.0f);
+						UI::DrawFloatControl("Focal Distance", &postProcessing.focalDistance, 0.05f, 0.1f, 100.0f, 5.5f);
+						UI::DrawFloatControl("fStop", &postProcessing.fStop, 0.05f, 0.1f, 22.0f, 1.4f);
+						UI::DrawFloatControl("Focus Range", &postProcessing.focusRange, 0.05f, 0.1f, 100.0f, 5.0f);
+						UI::DrawFloatControl("Blur Amount", &postProcessing.blurAmount, 0.025f, 0.0f, 10.0f, 1.0f);
+						ImGui::TreePop();
+					}
+
+					// Fog Settings
+					if (ImGui::TreeNodeEx("Fog", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						UI::DrawFloatControl("Fog Density", &postProcessing.fogDensity, 0.005f, 0.0f, 1.0f, 0.0f);
+						UI::DrawFloatControl("Fog Start", &postProcessing.fogStart, 0.5f, 0.0f, 1000.0f, 10.0f);
+						UI::DrawFloatControl("Fog End", &postProcessing.fogEnd, 0.5f, 0.0f, 5000.0f, 100.0f);
+						UI::DrawColorVec4("Fog Color", postProcessing.fogColor);
+						ImGui::TreePop();
+					}
+
+					ImGui::TreePop();
+				}
+
+				ImGui::TreePop();
+			}
+		}
 
         static AssetHandle FindFirstMeshHandleForSkeleton(AssetHandle skeletonHandle)
         {
@@ -402,6 +520,8 @@ namespace ignite
 
         s_SkeletonPreviewMaterial.reset();
         s_SkeletonPreviewEditorState.clear();
+
+        m_Assets.clear();
     }
 
     void AssetEditorPanel::OnUpdate(float deltaTime)
@@ -797,7 +917,7 @@ namespace ignite
             {
                 nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                 GPUUploadSync::DeviceWaitIdle(device);
-                s_MaterialPreviewEditorState.erase(static_cast<uint64_t>(assetData.handle));
+                s_MaterialEditorState.erase(static_cast<uint64_t>(assetData.handle));
 
                 auto sceneRenderer = std::move(assetData.sceneData.sceneRenderer);
                 auto sceneRT = std::move(assetData.sceneData.sceneRT);
@@ -2027,7 +2147,7 @@ namespace ignite
                             material2D->SetDirtyFlag(true);
                         }
 
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Texture Preview", material2D->textureHandle, [&]()
+                        DrawTexturePreviewDropTarget("Texture Preview", material2D->textureHandle, [&]()
                         {
                             material2D->SetDirtyFlag(true);
                         });
@@ -2475,7 +2595,7 @@ namespace ignite
                                 ImGui::SameLine();
 
                                 // Animation2D drag-drop
-                                ImGui::Text("Anim: %llu", static_cast<uint64_t>(state.animHandle));
+                                ImGui::Text("Anim: %llu", static_cast<uint64_t>(state.GetAnimationAssetHandle()));
                                 ImGui::SameLine();
                                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.2f, 0.35f, 1.0f));
                                 ImGui::Button("Drop Anim2D##s_drop", ImVec2(90, 20));
@@ -2488,7 +2608,7 @@ namespace ignite
                                         const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
                                         if (md.type == AssetType::Animation2D)
                                         {
-                                            state.animHandle = handle;
+                                            state.SetAnimationHandle(handle);
                                             ctrl->SetDirtyFlag(true);
                                         }
                                     }
@@ -2775,7 +2895,7 @@ namespace ignite
     void AssetEditorPanel::UIMaterialEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
-        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1100.0f, 900.0f), ImVec2(420.0f, 560.0f), 0))
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1080.0f, 480.0f), ImVec2(420.0f, 560.0f), 0))
         {
             if (DrawAssetEditorHeader(assetData))
             {
@@ -2784,11 +2904,11 @@ namespace ignite
                     if (Ref<Material> material = assetData.asset->As<Material>())
                     {
                         const auto stateKey = static_cast<uint64_t>(assetData.handle);
-                        MaterialPreviewEditorState &previewState = s_MaterialPreviewEditorState[stateKey];
-                        if (!previewState.initialized)
+                        MaterialEditorState &editorState = s_MaterialEditorState[stateKey];
+                        if (!editorState.initialized)
                         {
-                            previewState.selectedMeshType = static_cast<int>(EMeshType::UV_SPHERE);
-                            previewState.initialized = true;
+                            editorState.selectedMeshType = static_cast<int>(EMeshType::UV_SPHERE);
+                            editorState.initialized = true;
                         }
 
                         const ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -2797,14 +2917,14 @@ namespace ignite
                         const float minToolsColumnWidth = 320.0f;
                         const float maxPreviewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - minToolsColumnWidth - splitterWidth);
 
-                        if (previewState.previewColumnWidth <= 0.0f)
+                        if (editorState.previewColumnWidth <= 0.0f)
                         {
                             const float defaultToolsWidth = std::clamp(contentSize.x * 0.36f, 320.0f, 460.0f);
-                            previewState.previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - splitterWidth);
+                            editorState.previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - splitterWidth);
                         }
-                        previewState.previewColumnWidth = std::clamp(previewState.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+                        editorState.previewColumnWidth = std::clamp(editorState.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
 
-                        ImGui::BeginChild("##material_preview_column", ImVec2(previewState.previewColumnWidth, 0.0f), ImGuiChildFlags_None);
+                        ImGui::BeginChild("##material_preview_column", ImVec2(editorState.previewColumnWidth, 0.0f), ImGuiChildFlags_None);
                         ImGui::BeginChild("##material_preview_viewport", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
                         {
                             const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
@@ -2828,6 +2948,7 @@ namespace ignite
 
                         UpdateSceneCamera(assetData.sceneData, ImGui::GetIO().DeltaTime);
 
+						// Horizontal splitter
                         ImGui::SameLine(0.0f, 0.0f);
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
                         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
@@ -2840,156 +2961,146 @@ namespace ignite
                         }
                         if (ImGui::IsItemActive())
                         {
-                            previewState.previewColumnWidth += ImGui::GetIO().MouseDelta.x;
-                            previewState.previewColumnWidth = std::clamp(previewState.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+                            editorState.previewColumnWidth += ImGui::GetIO().MouseDelta.x;
+                            editorState.previewColumnWidth = std::clamp(editorState.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
                         }
                         ImGui::EndChild();
                         ImGui::PopStyleColor(3);
 
                         ImGui::SameLine(0.0f, 0.0f);
                         ImGui::BeginChild("##material_controls_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-
-                        const char *meshNames[] = { "UV Sphere" };
-                        int meshSelection = previewState.selectedMeshType;
-                        if (ImGui::Combo("Preview Mesh", &meshSelection, meshNames, IM_ARRAYSIZE(meshNames)))
                         {
-                            previewState.selectedMeshType = meshSelection;
-                            assetData.sceneData.sceneRenderer->SetPreviewStaticMesh(Renderer::GetDefaultMesh((EMeshType)meshSelection));
+							const char *meshNames[] = { "UV Sphere" };
+							int meshSelection = editorState.selectedMeshType;
+							if (ImGui::Combo("Preview Mesh", &meshSelection, meshNames, IM_ARRAYSIZE(meshNames)))
+							{
+								editorState.selectedMeshType = meshSelection;
+								assetData.sceneData.sceneRenderer->SetPreviewStaticMesh(Renderer::GetDefaultMesh((EMeshType)meshSelection));
+							}
+
+							DrawSceneDetails(assetData);
+
+							if (ImGui::TreeNodeEx("Material Properties", ImGuiTreeNodeFlags_DefaultOpen))
+							{
+								if (UI::DrawColorVec4("Base Color", material->gpuData.baseColorFactor))
+								{
+									material->SetDirtyFlag(true);
+								}
+
+								if (UI::DrawColorVec4("Emissive Color", material->gpuData.emissiveFactor))
+								{
+									material->SetDirtyFlag(true);
+								}
+
+								if (UI::DrawFloatControl("Metallic Factor", &material->gpuData.metallicFactor, 0.025f, 0.0f, 1.0f))
+								{
+									material->SetDirtyFlag(true);
+								}
+
+								if (UI::DrawFloatControl("Roughness Factor", &material->gpuData.roughnessFactor, 0.025f, 0.0f, 1.0f))
+								{
+									material->SetDirtyFlag(true);
+								}
+
+								if (UI::DrawFloatControl("Occlusion Strength", &material->gpuData.occlusionStrength, 0.025f, 0.0f, 1.0f))
+								{
+									material->SetDirtyFlag(true);
+								}
+
+								// Blend Mode
+								{
+									const char *blendModeNames[] = { "Opaque", "Transparent" };
+									int currentBlendMode = static_cast<int>(material->GetType());
+									if (currentBlendMode > 1) currentBlendMode = 0; // clamp Masked to Opaque for display
+									if (ImGui::Combo("Blend Mode", &currentBlendMode, blendModeNames, IM_ARRAYSIZE(blendModeNames)))
+									{
+										material->SetType(static_cast<MaterialType>(currentBlendMode));
+										material->SetDirtyFlag(true);
+										material->InvalidateBindingSet();
+									}
+								}
+
+								// Tiling Factor
+								if (ImGui::DragFloat2("Tiling Factor", &material->gpuData.tilingFactor.x, 0.05f, 0.01f, 100.0f))
+								{
+									material->SetDirtyFlag(true);
+								}
+
+								ImGui::Separator();
+
+								if (ImGui::TreeNodeEx("Textures", ImGuiTreeNodeFlags_DefaultOpen))
+								{
+									// Base texture
+									DrawTexturePreviewDropTarget("Base Color Texture", material->baseColorTextureHandle, [&]() { material->SetDirtyFlag(true); });
+
+									// Normal texture
+									DrawTexturePreviewDropTarget("Normal Texture", material->normalTextureHandle, [&]() { material->SetDirtyFlag(true); });
+
+									// Emissive texture
+									DrawTexturePreviewDropTarget("Emissive Texture", material->emissiveTextureHandle, [&]() { material->SetDirtyFlag(true); });
+
+									// Occlussion texture
+									DrawTexturePreviewDropTarget("Occlusion Texture", material->occlusionTextureHandle, [&]() { material->SetDirtyFlag(true); });
+
+									// Metallic Texture
+									DrawTexturePreviewDropTarget("Metallic Texture", material->metallicTextureHandle, [&]() { material->SetDirtyFlag(true); });
+
+									// Metallic texture channel
+									ImGui::SameLine();
+									ImGui::SetNextItemWidth(70);
+									if (ImGui::BeginCombo("Metallic Channel", TextureChannelToString(material->gpuData.metallicChannel)))
+									{
+										for (int channel = 0; channel < 4; ++channel)
+										{
+											const bool selected = material->gpuData.metallicChannel == channel;
+											if (ImGui::Selectable(TextureChannelToString(channel), selected))
+											{
+												material->gpuData.metallicChannel = channel;
+												material->SetDirtyFlag(true);
+											}
+
+											if (selected)
+											{
+												ImGui::SetItemDefaultFocus();
+											}
+										}
+
+										ImGui::EndCombo();
+									}
+
+									// Roughness texture
+									DrawTexturePreviewDropTarget("Roughness Texture", material->roughnessTextureHandle, [&]() { material->SetDirtyFlag(true); });
+
+									// Roughness texture channel
+									ImGui::SameLine();
+									ImGui::SetNextItemWidth(70);
+									if (ImGui::BeginCombo("Roughness Channel", TextureChannelToString(material->gpuData.roughnessChannel)))
+									{
+										for (int channel = 0; channel < 4; ++channel)
+										{
+											const bool selected = material->gpuData.roughnessChannel == channel;
+											if (ImGui::Selectable(TextureChannelToString(channel), selected))
+											{
+												material->gpuData.roughnessChannel = channel;
+												material->SetDirtyFlag(true);
+											}
+
+											if (selected)
+											{
+												ImGui::SetItemDefaultFocus();
+											}
+										}
+
+										ImGui::EndCombo();
+									}
+
+
+									ImGui::TreePop();
+								}
+
+								ImGui::TreePop();
+							}
                         }
-
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", assetData.previewEnvTexHandle, [&]()
-                        {
-                            if (assetData.sceneData.sceneRenderer)
-                            {
-                                if (assetData.previewEnvTexHandle == AssetHandle(0))
-                                {
-                                    assetData.sceneData.sceneRenderer->SetEnvironmentTexture(AssetHandle(0));
-                                }
-                                else
-                                {
-                                    assetData.sceneData.sceneRenderer->SetEnvironmentTexture(assetData.previewEnvTexHandle);
-                                }
-                            }
-                        });
-
-                        ImGui::Separator();
-
-                        if (ImGui::ColorEdit4("Base Color", &material->gpuData.baseColorFactor.x))
-                        {
-                            material->SetDirtyFlag(true);
-                        }
-
-                        if (ImGui::ColorEdit4("Emissive Color", &material->gpuData.emissiveFactor.x))
-                        {
-                            material->SetDirtyFlag(true);
-                        }
-
-                        if (ImGui::DragFloat("Metallic Factor", &material->gpuData.metallicFactor, 0.025f, 0.0f, 1.0f))
-                        {
-                            material->SetDirtyFlag(true);
-                        }
-
-                        if (ImGui::DragFloat("Roughness Factor", &material->gpuData.roughnessFactor, 0.025f, 0.0f, 1.0f))
-                        {
-                            material->SetDirtyFlag(true);
-                        }
-
-                        if (ImGui::DragFloat("Occlusion Strength", &material->gpuData.occlusionStrength, 0.025f, 0.0f, 1.0f))
-                        {
-                            material->SetDirtyFlag(true);
-                        }
-
-                        // Blend Mode
-                        {
-                            const char *blendModeNames[] = { "Opaque", "Transparent" };
-                            int currentBlendMode = static_cast<int>(material->GetType());
-                            if (currentBlendMode > 1) currentBlendMode = 0; // clamp Masked to Opaque for display
-                            if (ImGui::Combo("Blend Mode", &currentBlendMode, blendModeNames, IM_ARRAYSIZE(blendModeNames)))
-                            {
-                                material->SetType(static_cast<MaterialType>(currentBlendMode));
-                                material->SetDirtyFlag(true);
-                                material->InvalidateBindingSet();
-                            }
-                        }
-
-                        // Tiling Factor
-                        if (ImGui::DragFloat2("Tiling Factor", &material->gpuData.tilingFactor.x, 0.05f, 0.01f, 100.0f))
-                        {
-                            material->SetDirtyFlag(true);
-                        }
-
-                        ImGui::Separator();
-
-                        // Base texture
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Base Color Texture", material->baseColorTextureHandle,
-                            [&]() { material->SetDirtyFlag(true); });
-
-                        // Normal texture
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Normal Texture", material->normalTextureHandle,
-                            [&]() { material->SetDirtyFlag(true); });
-
-                        // Emissive texture
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Emissive Texture", material->emissiveTextureHandle,
-                            [&]() { material->SetDirtyFlag(true); });
-
-                        // Metallic Texture
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Metallic Texture", material->metallicTextureHandle,
-                            [&]() { material->SetDirtyFlag(true); });
-
-                        // Metallic texture channel
-                        ImGui::SameLine();
-                        ImGui::SetNextItemWidth(70);
-                        if (ImGui::BeginCombo("Metallic Channel", TextureChannelToString(material->gpuData.metallicChannel)))
-                        {
-                            for (int channel = 0; channel < 4; ++channel)
-                            {
-                                const bool selected = material->gpuData.metallicChannel == channel;
-                                if (ImGui::Selectable(TextureChannelToString(channel), selected))
-                                {
-                                    material->gpuData.metallicChannel = channel;
-                                    material->SetDirtyFlag(true);
-                                }
-
-                                if (selected)
-                                {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-
-                            ImGui::EndCombo();
-                        }
-
-                        // Roughness texture
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Roughness Texture", material->roughnessTextureHandle,
-                            [&]() { material->SetDirtyFlag(true); });
-
-                        // Rougness texture channel
-                        ImGui::SameLine();
-                        ImGui::SetNextItemWidth(70);
-                        if (ImGui::BeginCombo("Roughness Channel", TextureChannelToString(material->gpuData.roughnessChannel)))
-                        {
-                            for (int channel = 0; channel < 4; ++channel)
-                            {
-                                const bool selected = material->gpuData.roughnessChannel == channel;
-                                if (ImGui::Selectable(TextureChannelToString(channel), selected))
-                                {
-                                    material->gpuData.roughnessChannel = channel;
-                                    material->SetDirtyFlag(true);
-                                }
-
-                                if (selected)
-                                {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-
-                            ImGui::EndCombo();
-                        }
-
-                        // Occlussion texture
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Occlusion Texture", material->occlusionTextureHandle,
-                            [&]() { material->SetDirtyFlag(true); });
-
                         ImGui::EndChild();
                     }
                     else
@@ -3046,7 +3157,7 @@ namespace ignite
     void AssetEditorPanel::UITextureEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
-        if (BeginAssetEditorWindow(assetData, isOpen, { 420.0f, 720.0f }, ImVec2(420.0f, 720.0f), ImGuiWindowFlags_NoScrollbar))
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2{ 420.0f, 720.0f }, ImVec2(420.0f, 720.0f), ImGuiWindowFlags_NoScrollbar))
         {
             if (DrawAssetEditorHeader(assetData))
             {
@@ -3283,7 +3394,7 @@ namespace ignite
 	void AssetEditorPanel::UIStaticMeshEditor(AssetEditorData &assetData)
 	{
 		bool isOpen = assetData.isOpen;
-		if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(900.0f, 680.0f), ImVec2(420.0f, 560.0f), 0))
+		if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1080.0f, 480.0f), ImVec2(420.0f, 560.0f), 0))
 		{
 			if (DrawAssetEditorHeader(assetData))
 			{
@@ -3295,170 +3406,124 @@ namespace ignite
 						auto assetManager = project->GetAssetManager();
 
 						const auto meshKey = static_cast<uint64_t>(mesh->handle);
-						MeshEditorState &meshEditorState = s_MeshEditorState[meshKey];
+						MeshEditorState &editorState = s_MeshEditorState[meshKey];
 
-						const float totalWidth = ImGui::GetContentRegionAvail().x;
-						const float spacing = ImGui::GetStyle().ItemSpacing.x;
-						const float listWidth = std::max(260.0f, totalWidth * 0.28f);
-						const float detailsWidth = std::max(320.0f, totalWidth * 0.30f);
-						const float viewportWidth = std::max(220.0f, totalWidth - listWidth - detailsWidth - spacing * 2.0f);
+						const ImVec2 contentSize = ImGui::GetContentRegionAvail();
+						const float splitterWidth = 6.0f;
+						const float minPreviewColumnWidth = 260.0f;
+						const float minToolsColumnWidth = 320.0f;
+						const float maxPreviewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - minToolsColumnWidth - splitterWidth);
 
-						if (ImGui::BeginChild("##left_details_panel", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar))
+						if (editorState.previewColumnWidth <= 0.0f)
 						{
-							ImGui::BeginTabBar("##tab_bar_left_details");
+							const float defaultToolsWidth = std::clamp(contentSize.x * 0.36f, 320.0f, 460.0f);
+                            editorState.previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - splitterWidth);
+						}
+                        editorState.previewColumnWidth = std::clamp(editorState.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+
+						ImGui::BeginChild("##mesh_preview_column", ImVec2(editorState.previewColumnWidth, 0.0f), ImGuiChildFlags_None);
+						ImGui::BeginChild("##mesh_preview_viewport", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+						{
+							const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+							assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
+							assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+							Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
+							if (previewTexture && previewTexture->GetHandle())
+							{
+								ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+								assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+							}
+							else
+							{
+								ImGui::Dummy(viewportSize);
+								assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+							}
+						}
+                        ImGui::EndChild();
+                        ImGui::EndChild();
+
+						UpdateSceneCamera(assetData.sceneData, ImGui::GetIO().DeltaTime);
+
+						// Horizontal splitter
+						ImGui::SameLine(0.0f, 0.0f);
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
+						ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+						ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+						ImGui::BeginChild("##material_horizontal_splitter", ImVec2(splitterWidth, 0.0f), ImGuiChildFlags_None);
+						ImGui::Button("##material_horizontal_splitter_btn", ImVec2(-1.0f, -1.0f));
+						if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+						{
+							ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+						}
+						if (ImGui::IsItemActive())
+						{
+							editorState.previewColumnWidth += ImGui::GetIO().MouseDelta.x;
+							editorState.previewColumnWidth = std::clamp(editorState.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+						}
+						ImGui::EndChild();
+						ImGui::PopStyleColor(3);
+
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::BeginChild("##mesh_controls_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+						{
+							DrawSceneDetails(assetData);
 
 							// Asset details
-							if (ImGui::BeginTabItem("Asset Details"))
+							if (ImGui::TreeNodeEx("Static Mesh Details", ImGuiTreeNodeFlags_DefaultOpen))
 							{
-								ImGui::BeginChild("##asset_details", { 0.0f, 0.0f }, ImGuiChildFlags_None);
+								const auto &meshInstances = mesh->GetMeshInstances();
+								for (size_t i = 0; i < meshInstances.size(); ++i)
 								{
-									ImGui::SeparatorText("Material Slots");
-									const auto &meshInstances = mesh->GetMeshInstances();
-									for (size_t i = 0; i < meshInstances.size(); ++i)
+									Ref<StaticMeshInstance> instance = meshInstances[i];
+									if (!instance)
+										continue;
+
+									ImGui::PushID(static_cast<int>(i));
+									std::string slotLabel = std::format("Slot {}", i);
+									std::string materialButtonLabel = "Drop Material Here";
+
+									const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
+									if (materialHandle != AssetHandle(0))
 									{
-										Ref<StaticMeshInstance> instance = meshInstances[i];
-										if (!instance)
-										{
-											continue;
-										}
-
-										ImGui::PushID(static_cast<int>(i));
-										std::string slotLabel = std::format("Slot {}", i);
-										std::string materialButtonLabel = "Drop Material Here";
-
-										const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
-										if (materialHandle != AssetHandle(0))
-										{
-											materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
-										}
-
-										ImGui::TextUnformatted(slotLabel.c_str());
-										ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-										if (ImGui::BeginDragDropTarget())
-										{
-											if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-											{
-												if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-												{
-													const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-													const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
-													if (metadata.type == AssetType::Material)
-													{
-														instance->SetMaterial(droppedHandle);
-														mesh->SetDirtyFlag(true);
-													}
-												}
-											}
-											ImGui::EndDragDropTarget();
-										}
-
-										if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
-										{
-											instance->SetMaterial(AssetHandle(0));
-											mesh->SetDirtyFlag(true);
-										}
-
-										ImGui::Separator();
-										ImGui::PopID();
+										materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
 									}
-								}
-								ImGui::EndChild();
 
-								ImGui::EndTabItem();
-							}
-
-							ImGui::EndTabBar();
-
-							ImGui::Separator();
-
-
-						}
-						ImGui::EndChild(); // !left details panel
-						ImGui::SameLine();
-
-						// Mesh preview panel
-						if (ImGui::BeginChild("##mesh_preview", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
-						{
-							ImGui::TextUnformatted("Mesh + Skeleton Preview");
-							ImGui::Separator();
-
-							const float splitterThickness = 6.0f;
-							const float minViewportHeight = 120.0f;
-							const float minTimelineHeight = 120.0f;
-							const ImVec2 previewRegion = ImGui::GetContentRegionAvail();
-							float maxTimelineHeight = minTimelineHeight;
-							float meshScenePreviewHeight = previewRegion.y;
-
-							// scene viewport child
-							if (ImGui::BeginChild("##mesh_scene_preview", { 0.0f, meshScenePreviewHeight }, ImGuiChildFlags_None))
-							{
-								const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-								assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
-								assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
-								UpdateSceneCamera(assetData.sceneData, ImGui::GetIO().DeltaTime);
-
-								Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-								if (previewTexture && previewTexture->GetHandle())
-								{
-									const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-									ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
-									assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
-
-									ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
-									ImGui::TextDisabled(
-										"RTTex=%p | RT=%p | %ux%u",
-										reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
-										assetData.sceneData.compositeRT.get(),
-										assetData.sceneData.viewportWidth,
-										assetData.sceneData.viewportHeight);
-
-									const glm::mat4 viewProjection = assetData.sceneData.camera.GetProjection() * assetData.sceneData.camera.GetView();
-									const Rect viewportRect{ viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
-								}
-								else
-								{
-									ImGui::Dummy(viewportSize);
-									assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
-								}
-							}
-							ImGui::EndChild(); // !scene viewport child
-						}
-						ImGui::EndChild(); // !Mesh preview panel
-						ImGui::SameLine();
-
-						// right details panel
-						if (ImGui::BeginChild("##right_details_panel", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
-						{
-							ImGui::BeginTabBar("##tab_bar_right_details");
-
-							if (ImGui::BeginTabItem("Scene Preview"))
-							{
-								// Scene details preview child
-								if (ImGui::BeginChild("##scene_details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
-								{
-									DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", assetData.previewEnvTexHandle, [&]()
+									ImGui::TextUnformatted(slotLabel.c_str());
+									ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
+									if (ImGui::BeginDragDropTarget())
+									{
+										if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
 										{
-											if (assetData.sceneData.sceneRenderer)
+											if (payload->Data && payload->DataSize == sizeof(AssetHandle))
 											{
-												if (assetData.previewEnvTexHandle == AssetHandle(0))
+												const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+												const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
+												if (metadata.type == AssetType::Material)
 												{
-													assetData.sceneData.sceneRenderer->SetEnvironmentTexture(AssetHandle(0));
-												}
-												else
-												{
-													assetData.sceneData.sceneRenderer->SetEnvironmentTexture(assetData.previewEnvTexHandle);
+													instance->SetMaterial(droppedHandle);
+													mesh->SetDirtyFlag(true);
 												}
 											}
-										});
-								}
-								ImGui::EndChild(); // !scene details preview child
+										}
+										ImGui::EndDragDropTarget();
+									}
 
-								ImGui::EndTabItem();
+									if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
+									{
+										instance->SetMaterial(AssetHandle(0));
+										mesh->SetDirtyFlag(true);
+									}
+
+									ImGui::Separator();
+									ImGui::PopID();
+								}
+							
+
+								ImGui::TreePop();
 							}
 
-							ImGui::EndTabBar();
+						    ImGui::EndChild();
 						}
-						ImGui::EndChild(); // !right details panel
 					}
 					else
 					{
@@ -3481,7 +3546,7 @@ namespace ignite
     void AssetEditorPanel::UISkeletalMeshEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
-        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(900.0f, 680.0f), ImVec2(420.0f, 560.0f), 0))
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1080.0f, 480.0f), ImVec2(420.0f, 560.0f), 0))
         {
             if (DrawAssetEditorHeader(assetData))
             {
@@ -3564,219 +3629,22 @@ namespace ignite
                             ? std::max(1, static_cast<int>(std::ceil(previewAnimation->duration)))
                             : 0;
 
-                        const float totalWidth = ImGui::GetContentRegionAvail().x;
-                        const float spacing = ImGui::GetStyle().ItemSpacing.x;
-                        const float listWidth = std::max(260.0f, totalWidth * 0.28f);
-                        const float detailsWidth = std::max(320.0f, totalWidth * 0.30f);
-                        const float viewportWidth = std::max(220.0f, totalWidth - listWidth - detailsWidth - spacing * 2.0f);
+                        const ImVec2 contentSize = ImGui::GetContentRegionAvail();
+                        const float splitterWidth = 6.0f;
+                        const float minPreviewColumnWidth = 260.0f;
+                        const float minToolsColumnWidth = 320.0f;
+                        const float maxPreviewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - minToolsColumnWidth - splitterWidth);
 
-                        if (ImGui::BeginChild("##left_details_panel", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar))
+                        if (meshEditorState.previewColumnWidth <= 0.0f)
                         {
-                            ImGui::BeginTabBar("##tab_bar_left_details");
-
-                            // Asset details
-                            if (ImGui::BeginTabItem("Asset Details"))
-                            {
-                                ImGui::BeginChild("##asset_details", { 0.0f, 0.0f }, ImGuiChildFlags_None);
-                                {
-                                    std::string skeletonLabel = "Drop Skeleton Here";
-                                    if (skeletonHandle != AssetHandle(0))
-                                    {
-                                        const AssetMetaData &metadata = assetManager->GetMetaData(skeletonHandle);
-                                        if (metadata.type == AssetType::Skeleton)
-                                        {
-                                            skeletonLabel = metadata.filepath.filename().string();
-                                        }
-                                        else
-                                        {
-                                            skeletonLabel = "Skeleton Assigned";
-                                        }
-                                    }
-
-                                    ImGui::Button(skeletonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-                                    if (ImGui::BeginDragDropTarget())
-                                    {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                                        {
-                                            if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                                            {
-                                                const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                                const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
-                                                if (metadata.type == AssetType::Skeleton)
-                                                {
-                                                    mesh->SetSkeleton(droppedHandle);
-                                                    mesh->SetDirtyFlag(true);
-                                                    skeletonHandle = droppedHandle;
-                                                    meshEditorState.skeletonHandle = droppedHandle;
-                                                    meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(droppedHandle);
-                                                    skeleton = meshEditorState.cachedSkeleton;
-                                                }
-                                            }
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    ImGui::SameLine();
-                                    if (ImGui::Button("Clear Skeleton"))
-                                    {
-                                        mesh->SetSkeleton(AssetHandle(0));
-                                        mesh->SetDirtyFlag(true);
-                                        skeletonHandle = AssetHandle(0);
-                                        meshEditorState.skeletonHandle = AssetHandle(0);
-                                        meshEditorState.cachedSkeleton.reset();
-                                        skeleton.reset();
-                                    }
-
-                                    ImGui::TextDisabled("Skeleton Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(skeletonHandle)));
-
-                                    ImGui::SeparatorText("Material Slots");
-                                    const auto &meshInstances = mesh->GetMeshInstances();
-                                    if (meshInstances.empty())
-                                    {
-                                        ImGui::TextDisabled("No mesh instances available.");
-                                        return;
-                                    }
-
-                                    for (size_t i = 0; i < meshInstances.size(); ++i)
-                                    {
-                                        Ref<SkeletalMeshInstance> instance = meshInstances[i];
-                                        if (!instance)
-                                        {
-                                            continue;
-                                        }
-
-                                        ImGui::PushID(static_cast<int>(i));
-                                        std::string slotLabel = std::format("Slot {}", i);
-                                        std::string materialButtonLabel = "Drop Material Here";
-
-                                        const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
-                                        if (materialHandle != AssetHandle(0))
-                                        {
-                                            materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
-                                        }
-
-                                        ImGui::TextUnformatted(slotLabel.c_str());
-                                        ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-                                        if (ImGui::BeginDragDropTarget())
-                                        {
-                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                                            {
-                                                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                                                {
-                                                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                                    const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
-                                                    if (metadata.type == AssetType::Material)
-                                                    {
-                                                        instance->SetMaterial(droppedHandle);
-                                                        mesh->SetDirtyFlag(true);
-                                                    }
-                                                }
-                                            }
-                                            ImGui::EndDragDropTarget();
-                                        }
-
-                                        if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
-                                        {
-                                            instance->SetMaterial(AssetHandle(0));
-                                            mesh->SetDirtyFlag(true);
-                                        }
-
-                                        ImGui::Separator();
-                                        ImGui::PopID();
-                                    }
-                                }
-                                ImGui::EndChild();
-
-                                ImGui::EndTabItem();
-                            }
-
-                            // SKELETON PREVIEW
-                            if (skeleton && ImGui::BeginTabItem("Skeleton Preview"))
-                            {
-                                isViewSkeletonTree = true;
-
-                                ImGui::BeginChild("##skeleton_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None);
-                                {
-                                    if (skeleton)
-                                    {
-                                        ImGui::TextUnformatted("Skeleton Tree");
-                                        std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
-                                        {
-                                            if (jointId < 0 || jointId >= static_cast<int32_t>(jointCount))
-                                            {
-                                                return;
-                                            }
-
-                                            const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
-                                            const bool isSelected = selectedJoint == jointId;
-                                            const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
-
-                                            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
-                                            if (!hasChildren)
-                                            {
-                                                flags |= ImGuiTreeNodeFlags_Leaf;
-                                            }
-                                            if (isSelected)
-                                            {
-                                                flags |= ImGuiTreeNodeFlags_Selected;
-                                            }
-
-                                            const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
-                                            if (ImGui::IsItemClicked())
-                                            {
-                                                selectedJoint = jointId;
-                                            }
-
-                                            if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
-                                            {
-                                                if (!ImGui::IsItemVisible())
-                                                {
-                                                    ImGui::SetScrollHereY(0.5f);
-                                                }
-
-                                                lastAutoScrolledJoint = selectedJoint;
-                                            }
-
-                                            if (opened)
-                                            {
-                                                for (int32_t childJointId : children[static_cast<size_t>(jointId)])
-                                                {
-                                                    drawJointNode(childJointId);
-                                                }
-                                                ImGui::TreePop();
-                                            }
-                                        };
-
-                                        for (const Joint &joint : skeleton->joints)
-                                        {
-                                            if (joint.parentJointId == -1)
-                                            {
-                                                drawJointNode(joint.id);
-                                            }
-                                        }
-                                    }
-
-                                    ImGui::EndChild();
-                                }
-
-                                ImGui::EndTabItem();
-                            }
-
-                            ImGui::EndTabBar();
-
-                            ImGui::Separator();
-
-
+                            const float defaultToolsWidth = std::clamp(contentSize.x * 0.36f, 320.0f, 460.0f);
+                            meshEditorState.previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - splitterWidth);
                         }
-                        ImGui::EndChild(); // !left details panel
-                        ImGui::SameLine();
+                        meshEditorState.previewColumnWidth = std::clamp(meshEditorState.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
 
-                        // Mesh preview panel
-                        if (ImGui::BeginChild("##mesh_preview", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+                        // Viewport Column
+                        ImGui::BeginChild("##mesh_preview_column", ImVec2(meshEditorState.previewColumnWidth, 0.0f), ImGuiChildFlags_None);
                         {
-                            ImGui::TextUnformatted("Mesh + Skeleton Preview");
-                            ImGui::Separator();
-
                             const float splitterThickness = 6.0f;
                             const float minViewportHeight = 120.0f;
                             const float minTimelineHeight = 120.0f;
@@ -3790,7 +3658,7 @@ namespace ignite
                                 meshScenePreviewHeight = std::max(minViewportHeight, previewRegion.y - previewState.animationTimelineHeight - splitterThickness);
                             }
 
-                            // scene viewport child
+                            // Scene viewport child
                             if (ImGui::BeginChild("##mesh_scene_preview", { 0.0f, meshScenePreviewHeight }, ImGuiChildFlags_None))
                             {
                                 const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
@@ -3984,7 +3852,7 @@ namespace ignite
 
                             if (skeleton)
                             {
-                                // SPLITTER
+                                // Timeline Splitter
                                 {
                                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
                                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
@@ -4042,46 +3910,119 @@ namespace ignite
                                     }
                                     ImGui::EndChild(); // !Animation timeline
                                 }
-                                ImGui::EndChild(); // !animation timeline
+                                ImGui::EndChild(); // !animation preview timeline
                             }
                         }
-                        ImGui::EndChild(); // !Mesh preview panel
-                        ImGui::SameLine();
+                        ImGui::EndChild(); // !mesh preview column
 
-                        // right details panel
-                        if (ImGui::BeginChild("##right_details_panel", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+                        // Horizontal Splitter
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+                        ImGui::BeginChild("##mesh_horizontal_splitter", ImVec2(splitterWidth, 0.0f), ImGuiChildFlags_None);
+                        ImGui::Button("##mesh_horizontal_splitter_btn", ImVec2(-1.0f, -1.0f));
+                        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
                         {
-                            ImGui::BeginTabBar("##tab_bar_right_details");
+                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                        }
+                        if (ImGui::IsItemActive())
+                        {
+                            meshEditorState.previewColumnWidth += ImGui::GetIO().MouseDelta.x;
+                            meshEditorState.previewColumnWidth = std::clamp(meshEditorState.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+                        }
+                        ImGui::EndChild();
+                        ImGui::PopStyleColor(3);
 
-                            if (!isViewSkeletonTree)
+                        ImGui::SameLine(0.0f, 0.0f);
+
+                        // Asset Details Column (Right Column)
+                        if (ImGui::BeginChild("##mesh_controls_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+                        {
+                            if (ImGui::BeginTabBar("##tab_bar_right_details"))
                             {
-                                if (ImGui::BeginTabItem("Scene Preview"))
+                                if (ImGui::BeginTabItem("Asset Details"))
                                 {
-                                    // Scene details preview child
-                                    if (ImGui::BeginChild("##scene_details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
+                                    if (ImGui::BeginChild("##asset_details", { 0.0f, 0.0f }, ImGuiChildFlags_None))
                                     {
-
-                                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", assetData.previewEnvTexHandle, [&]()
+                                        std::string skeletonLabel = "Drop Skeleton Here";
+                                        if (skeletonHandle != AssetHandle(0))
                                         {
-                                            if (assetData.sceneData.sceneRenderer)
+                                            const AssetMetaData &metadata = assetManager->GetMetaData(skeletonHandle);
+                                            if (metadata.type == AssetType::Skeleton)
                                             {
-                                                if (assetData.previewEnvTexHandle == AssetHandle(0))
+                                                skeletonLabel = metadata.filepath.filename().string();
+                                            }
+                                            else
+                                            {
+                                                skeletonLabel = "Skeleton Assigned";
+                                            }
+                                        }
+
+                                        ImGui::Button(skeletonLabel.c_str(), ImVec2(-1.0f, 0.0f));
+                                        if (ImGui::BeginDragDropTarget())
+                                        {
+                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                            {
+                                                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                                                 {
-                                                    assetData.sceneData.sceneRenderer->SetEnvironmentTexture(AssetHandle(0));
-                                                }
-                                                else
-                                                {
-                                                    assetData.sceneData.sceneRenderer->SetEnvironmentTexture(assetData.previewEnvTexHandle);
+                                                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                                    const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
+                                                    if (metadata.type == AssetType::Skeleton)
+                                                    {
+                                                        mesh->SetSkeleton(droppedHandle);
+                                                        mesh->SetDirtyFlag(true);
+                                                        skeletonHandle = droppedHandle;
+                                                        meshEditorState.skeletonHandle = droppedHandle;
+                                                        meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(droppedHandle);
+                                                        skeleton = meshEditorState.cachedSkeleton;
+                                                    }
                                                 }
                                             }
-                                        });
+                                            ImGui::EndDragDropTarget();
+                                        }
 
-                                        if (skeleton)
+                                        ImGui::SameLine();
+                                        if (ImGui::Button("Clear Skeleton"))
                                         {
-                                            // Preview animation
-                                            std::string animLabel = isAnimLoaded ? assetManager->GetAssetDisplayName(previewState.previewAnimationHandle) : "Drag Here";
-                                            UI::DrawButtonWithColumn("Preview Anim", animLabel.c_str(), nullptr, [&previewState, &assetManager]()
+                                            mesh->SetSkeleton(AssetHandle(0));
+                                            mesh->SetDirtyFlag(true);
+                                            skeletonHandle = AssetHandle(0);
+                                            meshEditorState.skeletonHandle = AssetHandle(0);
+                                            meshEditorState.cachedSkeleton.reset();
+                                            skeleton.reset();
+                                        }
+
+                                        ImGui::TextDisabled("Skeleton Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(skeletonHandle)));
+
+                                        ImGui::SeparatorText("Material Slots");
+                                        const auto &meshInstances = mesh->GetMeshInstances();
+                                        if (meshInstances.empty())
+                                        {
+                                            ImGui::TextDisabled("No mesh instances available.");
+                                        }
+                                        else
+                                        {
+                                            for (size_t i = 0; i < meshInstances.size(); ++i)
                                             {
+                                                Ref<SkeletalMeshInstance> instance = meshInstances[i];
+                                                if (!instance)
+                                                {
+                                                    continue;
+                                                }
+
+                                                ImGui::PushID(static_cast<int>(i));
+                                                std::string slotLabel = std::format("Slot {}", i);
+                                                std::string materialButtonLabel = "Drop Material Here";
+
+                                                const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
+                                                if (materialHandle != AssetHandle(0))
+                                                {
+                                                    materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
+                                                }
+
+                                                ImGui::TextUnformatted(slotLabel.c_str());
+                                                ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
                                                 if (ImGui::BeginDragDropTarget())
                                                 {
                                                     if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
@@ -4089,31 +4030,97 @@ namespace ignite
                                                         if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                                                         {
                                                             const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                                            const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
-                                                            if (md.type == AssetType::SkeletalAnimation)
+                                                            const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
+                                                            if (metadata.type == AssetType::Material)
                                                             {
-                                                                previewState.previewAnimationHandle = droppedHandle;
-                                                                previewState.timeSeconds = 0.0f;
-                                                                previewState.playing = true;
+                                                                instance->SetMaterial(droppedHandle);
+                                                                mesh->SetDirtyFlag(true);
                                                             }
                                                         }
                                                     }
                                                     ImGui::EndDragDropTarget();
                                                 }
-                                            });
+
+                                                if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
+                                                {
+                                                    instance->SetMaterial(AssetHandle(0));
+                                                    mesh->SetDirtyFlag(true);
+                                                }
+
+                                                ImGui::Separator();
+                                                ImGui::PopID();
+                                            }
                                         }
                                     }
-                                    ImGui::EndChild(); // !scene details preview child
-
+                                    ImGui::EndChild();
                                     ImGui::EndTabItem();
                                 }
-                            }
-                            else if (isViewSkeletonTree)
-                            {
-                                // Skeleton Details
-                                if (ImGui::BeginTabItem("Skeleton Details"))
+
+                                if (skeleton && ImGui::BeginTabItem("Skeleton Preview"))
                                 {
-                                    // skeleton details preview child
+                                    if (ImGui::BeginChild("##skeleton_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
+                                    {
+                                        ImGui::TextUnformatted("Skeleton Tree");
+                                        std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
+                                        {
+                                            if (jointId < 0 || jointId >= static_cast<int32_t>(jointCount))
+                                            {
+                                                return;
+                                            }
+
+                                            const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
+                                            const bool isSelected = selectedJoint == jointId;
+                                            const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
+
+                                            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+                                            if (!hasChildren)
+                                            {
+                                                flags |= ImGuiTreeNodeFlags_Leaf;
+                                            }
+                                            if (isSelected)
+                                            {
+                                                flags |= ImGuiTreeNodeFlags_Selected;
+                                            }
+
+                                            const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
+                                            if (ImGui::IsItemClicked())
+                                            {
+                                                selectedJoint = jointId;
+                                            }
+
+                                            if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
+                                            {
+                                                if (!ImGui::IsItemVisible())
+                                                {
+                                                    ImGui::SetScrollHereY(0.5f);
+                                                }
+                                                lastAutoScrolledJoint = selectedJoint;
+                                            }
+
+                                            if (opened)
+                                            {
+                                                for (int32_t childJointId : children[static_cast<size_t>(jointId)])
+                                                {
+                                                    drawJointNode(childJointId);
+                                                }
+                                                ImGui::TreePop();
+                                            }
+                                        };
+
+                                        for (const Joint &joint : skeleton->joints)
+                                        {
+                                            if (joint.parentJointId == -1)
+                                            {
+                                                drawJointNode(joint.id);
+                                            }
+                                        }
+                                    }
+                                    ImGui::EndChild();
+                                    ImGui::EndTabItem();
+                                }
+
+                                if (skeleton && ImGui::BeginTabItem("Skeleton Details"))
+                                {
                                     if (ImGui::BeginChild("##details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
                                     {
                                         ImGui::TextUnformatted("Joint / Socket Details");
@@ -4159,7 +4166,6 @@ namespace ignite
                                             skeleton->SetDirtyFlag(true);
                                         }
 
-                                        // Skeleton list
                                         if (ImGui::BeginChild("##skeleton_socket_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders))
                                         {
                                             for (int32_t i = 0; i < static_cast<int32_t>(skeleton->sockets.size()); ++i)
@@ -4181,7 +4187,7 @@ namespace ignite
                                                 }
                                             }
                                         }
-                                        ImGui::EndChild(); //!Skeleton list
+                                        ImGui::EndChild();
 
                                         if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
                                         {
@@ -4243,15 +4249,49 @@ namespace ignite
                                             }
                                         }
                                     }
-                                    ImGui::EndChild(); // !skeleton details preview child
-
+                                    ImGui::EndChild();
                                     ImGui::EndTabItem();
                                 }
-                            }
 
-                            ImGui::EndTabBar();
+                                if (ImGui::BeginTabItem("Scene Preview"))
+                                {
+                                    if (ImGui::BeginChild("##scene_details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
+                                    {
+                                        DrawSceneDetails(assetData);
+
+                                        if (skeleton)
+                                        {
+                                            std::string animLabel = isAnimLoaded ? assetManager->GetAssetDisplayName(previewState.previewAnimationHandle) : "Drag Here";
+                                            UI::DrawButtonWithColumn("Preview Anim", animLabel.c_str(), nullptr, [&previewState, &assetManager]()
+                                            {
+                                                if (ImGui::BeginDragDropTarget())
+                                                {
+                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                                    {
+                                                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                                        {
+                                                            const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                                            const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
+                                                            if (md.type == AssetType::SkeletalAnimation)
+                                                            {
+                                                                previewState.previewAnimationHandle = droppedHandle;
+                                                                previewState.timeSeconds = 0.0f;
+                                                                previewState.playing = true;
+                                                            }
+                                                        }
+                                                    }
+                                                    ImGui::EndDragDropTarget();
+                                                }
+                                            });
+                                        }
+                                    }
+                                    ImGui::EndChild();
+                                    ImGui::EndTabItem();
+                                }
+                                ImGui::EndTabBar();
+                            }
                         }
-                        ImGui::EndChild(); // !right details panel
+                        ImGui::EndChild();
                     }
                     else
                     {
@@ -5178,6 +5218,13 @@ namespace ignite
                     it->sceneData.uiRT = uiRT;
                     it->sceneData.compositeRT = compositeRT;
                     it->sceneData.sceneRenderer = CreateRef<AssetSceneRenderer>();
+
+                    if (it->sceneData.sceneRenderer)
+                    {
+					    // Set tonemapping to Filmic for asset preview
+					    auto &postProcessing = it->sceneData.sceneRenderer->GetPostProcessingSettings();
+					    postProcessing.tonemapMode = static_cast<int>(TonemapMode::Filmic);
+                    }
                 }
             });
         });

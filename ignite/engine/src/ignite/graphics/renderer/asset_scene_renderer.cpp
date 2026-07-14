@@ -15,6 +15,7 @@
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/bindless_system.hpp"
 
 #include <type_traits>
 
@@ -54,8 +55,6 @@ namespace ignite
 
     AssetSceneRenderer::~AssetSceneRenderer()
     {
-        ClearPinnedAssets();
-
         m_StaticGeometryPipelineCache.clear();
         m_StaticTransparentPipelineCache.clear();
         m_SkeletalGeometryPipelineCache.clear();
@@ -238,8 +237,19 @@ namespace ignite
         sceneRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
         sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
-
+        
         compositeRT->ClearColorAttachmentFloat(cmd, 0);
+
+		// Transition the scene and UI textures to shader resource state for sampling in the composite pass
+		cmd->setTextureState(sceneRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+		cmd->setTextureState(sceneRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+		cmd->setTextureState(sceneRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+		
+        cmd->setTextureState(uiRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+        cmd->setTextureState(uiRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+        cmd->setTextureState(uiRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+
+		cmd->commitBarriers();
 
         if (m_Environment && m_UseEnvironment)
         {
@@ -443,6 +453,7 @@ namespace ignite
             geopPipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(Renderer::GetBindingLayout(meshBindingLayout))
                 .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
+                .AddBindingLayout(BindlessSystem::GetBindingLayout())
                 .Build(framebuffer, params);
 
             pipelineCache.clear();
@@ -542,7 +553,7 @@ namespace ignite
 
             if (meshBindingSet && materialBindingSet)
             {
-                state.bindings      = { meshBindingSet, materialBindingSet };
+                state.bindings      = { meshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
                 state.vertexBuffers = { nvrhi::VertexBufferBinding{ primitive->vertexBuffer->GetHandle(), 0, 0 } };
                 state.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
                 cmd->setGraphicsState(state);
@@ -595,8 +606,8 @@ namespace ignite
     // ---------------------------------------------------------------------------
     void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
     {
-        CompositePostProcess_GPUData postProcessData;
-        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
+		// Set the post-processing parameters based on the current settings on asset editor panel
+        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&this->m_PostProcessingSettings, sizeof(this->m_PostProcessingSettings)));
 
         Ref<GraphicsPipeline> pipeline;
         if (auto it = m_CompositePipelineCache.find(framebuffer); it != m_CompositePipelineCache.end())
@@ -607,14 +618,14 @@ namespace ignite
         {
             nvrhi::BindingLayoutDesc layoutDesc = {};
             layoutDesc.visibility = nvrhi::ShaderType::All;
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6));
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
             m_CompositeBindingLayout = m_Device->createBindingLayout(layoutDesc);
@@ -667,16 +678,4 @@ namespace ignite
         args.vertexCount   = 6;
         cmd->draw(args);
     }
-
-    void AssetSceneRenderer::AddAssetPin(AssetHandle handle)
-    {
-        m_PinnedAssetHandles.push_back(handle);
-        AssetManager::GetInstance()->AddAssetPin(handle, BuildAssetPinName(handle));
-    }
-
-    std::string_view AssetSceneRenderer::BuildAssetPinName(AssetHandle handle)
-    {
-        return std::format("asset_scene_renderer_", (uint64_t)handle);
-    }
-
 }

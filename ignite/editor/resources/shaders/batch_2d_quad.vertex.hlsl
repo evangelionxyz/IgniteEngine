@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
 #include "include/binding_helpers.hlsli"
 
 struct Camera
@@ -32,9 +34,9 @@ struct PSInput
     float2 tilingFactor : TILINGFACTOR;
     float4 color        : COLOR;
     float4 additiveColor: ADDITIVECOLOR;
-    uint texIndex       : TEXINDEX;
-    uint materialType   : MATTYPE;
-    uint objectID       : OBJECTID;
+    nointerpolation uint texIndex       : TEXINDEX;
+    nointerpolation uint materialType   : MATTYPE;
+    nointerpolation uint objectID       : OBJECTID;
 };
 
 PSInput main(VSInput input)

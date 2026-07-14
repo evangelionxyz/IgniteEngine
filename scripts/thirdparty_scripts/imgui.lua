@@ -10,21 +10,21 @@ project "IMGUI"
     objdir (INTOUTPUT_DIR)
 
     files {
-        "%{THIRDPARTY_DIR}/IMGUI/imgui_demo.cpp",
-        "%{THIRDPARTY_DIR}/IMGUI/imgui_draw.cpp",
-        "%{THIRDPARTY_DIR}/IMGUI/imgui_tables.cpp",
-        "%{THIRDPARTY_DIR}/IMGUI/imgui_widgets.cpp",
-        "%{THIRDPARTY_DIR}/IMGUI/imgui.cpp",
-        "%{THIRDPARTY_DIR}/IMGUI/backends/imgui_impl_sdl3.cpp",
-        "%{THIRDPARTY_DIR}/IMGUI/backends/imgui_impl_sdl3.h",
-        "%{THIRDPARTY_DIR}/IMGUI/backends/imgui_impl_vulkan.cpp",
-        "%{THIRDPARTY_DIR}/IMGUI/backends/imgui_impl_vulkan.h",
-        "%{THIRDPARTY_DIR}/IMGUI/imconfig.h",
-        "%{THIRDPARTY_DIR}/IMGUI/imgui.h",
-        "%{THIRDPARTY_DIR}/IMGUI/imgui_internal.h",
-        "%{THIRDPARTY_DIR}/IMGUI/imstb_rectpack.h",
-        "%{THIRDPARTY_DIR}/IMGUI/imstb_textedit.h",
-        "%{THIRDPARTY_DIR}/IMGUI/imstb_truetype.h",
+        "%{THIRDPARTY_DIR}/ImGui/imgui_demo.cpp",
+        "%{THIRDPARTY_DIR}/ImGui/imgui_draw.cpp",
+        "%{THIRDPARTY_DIR}/ImGui/imgui_tables.cpp",
+        "%{THIRDPARTY_DIR}/ImGui/imgui_widgets.cpp",
+        "%{THIRDPARTY_DIR}/ImGui/imgui.cpp",
+        "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_sdl3.cpp",
+        "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_sdl3.h",
+        "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_vulkan.cpp",
+        "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_vulkan.h",
+        "%{THIRDPARTY_DIR}/ImGui/imconfig.h",
+        "%{THIRDPARTY_DIR}/ImGui/imgui.h",
+        "%{THIRDPARTY_DIR}/ImGui/imgui_internal.h",
+        "%{THIRDPARTY_DIR}/ImGui/imstb_rectpack.h",
+        "%{THIRDPARTY_DIR}/ImGui/imstb_textedit.h",
+        "%{THIRDPARTY_DIR}/ImGui/imstb_truetype.h",
 
         -- include imguizmo src to compile
         "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.cpp",
@@ -40,15 +40,18 @@ project "IMGUI"
     }
 
     includedirs {
-        "%{THIRDPARTY_DIR}/IMGUI/",
+        "%{THIRDPARTY_DIR}/ImGui/",
         "%{THIRDPARTY_DIR}/SDL3/include",
         "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
     }
+
+    filter "system:linux"
+        pic "On"
 
     --windows
     filter "system:windows"
         systemversion "latest"
         files {
-            "%{THIRDPARTY_DIR}/IMGUI/backends/imgui_impl_dx12.cpp",
-            "%{THIRDPARTY_DIR}/IMGUI/backends/imgui_impl_dx12.hpp",
+            "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_dx12.cpp",
+            "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_dx12.hpp",
         }

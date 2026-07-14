@@ -98,18 +98,6 @@ namespace ignite
 		}
 	}
 
-	void ISceneRenderer::ClearPinnedAssets()
-	{
-        if (m_PinnedAssetHandles.empty())
-            return;
-
-		for (const AssetHandle handle : m_PinnedAssetHandles)
-		{
-			AssetManager::GetInstance()->RemoveAssetPin(handle, BuildAssetPinName(handle));
-		}
-		m_PinnedAssetHandles.clear();
-	}
-
     void ISceneRenderer::FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms)
     {
         const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
@@ -184,8 +172,6 @@ namespace ignite
         {
             CSMPerCascadeBuffer = nullptr;
         }
-
-        LOG_ASSERT(m_PinnedAssetHandles.empty(), "[Scene Renderer] Please release all the Pinned asset!");
     }
 
     void ISceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)

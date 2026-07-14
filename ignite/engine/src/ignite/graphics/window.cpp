@@ -79,7 +79,15 @@ namespace ignite
         bool result = m_DeviceManager->CreateInstance(params);
         LOG_ASSERT(result, "Failed to create Instance");
 
-        m_DeviceManager->SetHeadLessDevice(false);
+        m_DeviceManager->SetHeadLessDevice(params.headlessDevice);
+
+        if (params.headlessDevice)
+        {
+            m_Window = nullptr;
+            result = m_DeviceManager->CreateDevice();
+            LOG_ASSERT(result, "Failed to create Device Instance\n");
+            return;
+        }
 
         result = false;
         for (const auto& info : formatInfo)
@@ -158,6 +166,9 @@ namespace ignite
 
     void Window::PollEvents(const SDL_Event &event)
     {
+        if (m_DeviceManager->GetDeviceParameters().headlessDevice)
+            return;
+
 		DeviceParameters &deviceParams = m_DeviceManager->GetDeviceParameters();
         const SDL_WindowID mainWindowId = SDL_GetWindowID(m_Window);
         switch (event.type)
@@ -386,11 +397,14 @@ namespace ignite
 
     void Window::SetTitle(const std::string &title) const
     {
-		SDL_SetWindowTitle(m_Window, title.c_str());
+        if (m_Window)
+		    SDL_SetWindowTitle(m_Window, title.c_str());
     }
 
     void Window::SetIcon(const std::string &filepath)
     {
+        if (!m_Window)
+            return;
         int width, height, channels;
         if (uint8_t *pixels = stbi_load(filepath.c_str(), &width, &height, &channels, 4))
         {
@@ -405,17 +419,20 @@ namespace ignite
 
     void Window::Minimize() const
     {
-		SDL_MinimizeWindow(m_Window);
+        if (m_Window)
+		    SDL_MinimizeWindow(m_Window);
     }
 
     void Window::Maximize() const
     {
-        SDL_MaximizeWindow(m_Window);
+        if (m_Window)
+            SDL_MaximizeWindow(m_Window);
     }
 
     void Window::Restore() const
     {
-		SDL_RestoreWindow(m_Window);
+        if (m_Window)
+		    SDL_RestoreWindow(m_Window);
     }
     
     void Window::Shutdown()
@@ -425,6 +442,8 @@ namespace ignite
 
     void Window::Show()
     {
+        if (!m_Window)
+            return;
         if (!m_DeviceManager->GetDeviceParameters().startMaximized)
         {
 			int width, height;
@@ -441,12 +460,17 @@ namespace ignite
 
     void Window::Hide()
     {
-		m_IsVisible = false;
-		SDL_HideWindow(m_Window);
+        if (m_Window)
+        {
+		    m_IsVisible = false;
+		    SDL_HideWindow(m_Window);
+        }
     }
 
     glm::ivec2 Window::GetPosition()
     {
+        if (!m_Window)
+            return { 0, 0 };
         int x, y;
         SDL_GetWindowPosition(m_Window, &x, &y);
         return { x, y };
@@ -460,18 +484,24 @@ namespace ignite
 
     glm::ivec2 Window::GetSize()
     {
+        if (!m_Window)
+            return { 0, 0 };
 		int width, height;
 		SDL_GetWindowSize(m_Window, &width, &height);
         return { width, height };
     }
 
+#ifdef PLATFORM_WINDOWS
     HWND Window::GetNativeWindow() const
     {
+        if (!m_Window)
+            return nullptr;
         // Retrieve HWND
         SDL_PropertiesID props = SDL_GetWindowProperties(m_Window);
         HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
         return hwnd;
     }
+#endif
 
     void Window::SetEventCallback(const std::function<void(Event &)> &callback)
     {

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
 #include "include/binding_helpers.hlsli"
 
 struct Camera

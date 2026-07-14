@@ -57,6 +57,7 @@ namespace ignite
         bool useGui = true;
         bool usePhysics = true;
         bool useAudio = true;
+        bool headless = false;
 
         nvrhi::GraphicsAPI graphicsApi = nvrhi::GraphicsAPI::VULKAN;
     };
@@ -112,10 +113,10 @@ namespace ignite
         static void SubmitWorkerCommandList(nvrhi::CommandListHandle commandList, std::function<void()> onExecuted = {});
 
         const std::thread *GetRenderThread() const;
+        void ProcessMainThreadSubmissions();
 
     private:
         void UpdateAverageTimeTime(float elapsedTime);
-        void ProcessMainThreadSubmissions();
         void ProcessRenderThreadSubmissions();
 
         void RenderThreadFunc();

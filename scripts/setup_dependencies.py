@@ -8,78 +8,132 @@ import utils
 
 
 def install_vulkan_sdk(target_directory):
-    """Install the Vulkan SDK. Windows only — on Linux use apt (libvulkan-dev)."""
-    if platform.system() != "Windows":
-        print("Vulkan SDK install skipped on non-Windows (use system packages).")
-        return False
-
+    """Install the Vulkan SDK. Windows and Linux support."""
     vulkan_version = "1.4.341.1"
-    vulkan_sdk_link_windows = f"https://sdk.lunarg.com/sdk/download/{vulkan_version}/windows/vulkansdk-windows-X64-{vulkan_version}.exe"
-    vulkan_executable_path = target_directory / f"vulkansdk-{vulkan_version}.exe"
-    vulkan_install_root = Path(f"C:/VulkanSDK/{vulkan_version}")
 
-    if not vulkan_install_root.exists() or not (vulkan_install_root / "Include").exists():
-        # download installer if not exists
-        if not vulkan_executable_path.exists():
-            print(f"Downloading Vulkan SDK {vulkan_version}...")
-            utils.download_file(vulkan_sdk_link_windows, str(vulkan_executable_path))
+    if platform.system() == "Windows":
+        vulkan_sdk_link_windows = f"https://sdk.lunarg.com/sdk/download/{vulkan_version}/windows/vulkansdk-windows-X64-{vulkan_version}.exe"
+        vulkan_executable_path = target_directory / f"vulkansdk-{vulkan_version}.exe"
+        vulkan_install_root = Path(f"C:/VulkanSDK/{vulkan_version}")
 
-        # See https://vulkan.lunarg.com/doc/view/1.3.283.0/windows/getting_started.html for argument details
-        # install
-        print(f"Installing Vulkan SDK {vulkan_version} to {vulkan_install_root}...")
-        # For modern LunarG installers (1.3.216+), use these flags for silent install
-        install_args = [
-            str(vulkan_executable_path),
-            "--root", str(vulkan_install_root),
-            "--accept-licenses",
-            "--default-answer",
-            "--confirm-command", "install",
-        ]
+        if not vulkan_install_root.exists() or not (vulkan_install_root / "Include").exists():
+            # download installer if not exists
+            if not vulkan_executable_path.exists():
+                print(f"Downloading Vulkan SDK {vulkan_version}...")
+                utils.download_file(vulkan_sdk_link_windows, str(vulkan_executable_path))
 
-        # Only install debug symbols if NOT in GitHub Actions
-        if os.environ.get("GITHUB_ACTIONS") != "true":
-            install_args.append("com.lunarg.vulkan.debug")
-        else:
-            print("Skipping Vulkan debug symbols on GitHub Actions")
+            # See https://vulkan.lunarg.com/doc/view/1.3.283.0/windows/getting_started.html for argument details
+            # install
+            print(f"Installing Vulkan SDK {vulkan_version} to {vulkan_install_root}...")
+            # For modern LunarG installers (1.3.216+), use these flags for silent install
+            install_args = [
+                str(vulkan_executable_path),
+                "--root", str(vulkan_install_root),
+                "--accept-licenses",
+                "--default-answer",
+                "--confirm-command", "install",
+            ]
 
-        try:
-            result = subprocess.run(install_args, check=True).returncode
-            print(f"Vulkan SDK installation completed with exit code: {result}")
-        except subprocess.CalledProcessError as e:
-            print(f"Vulkan SDK installation failed with error: {e}")
-            # Fallback to /S if it's an older installer style for some reason
-            print("Attempting fallback installation with /S...")
-            fallback_args = [str(vulkan_executable_path), "/S", f"/D={vulkan_install_root}"]
-            subprocess.run(fallback_args)
-
-        if not (vulkan_install_root / "Include").exists():
-            print(f"Warning: Vulkan SDK Include folder not found at {vulkan_install_root / 'Include'}")
-            # Check for lowercase 'include'
-            if (vulkan_install_root / "include").exists():
-                print("Found lowercase 'include' folder, updating path...")
-                # We might need to handle this in premake scripts too, 
-                # but let's see if we can just use the path as is.
+            # Only install debug symbols if NOT in GitHub Actions
+            if os.environ.get("GITHUB_ACTIONS") != "true":
+                install_args.append("com.lunarg.vulkan.debug")
             else:
-                print("Critical: Installation seems incomplete or failed to create Include directory.")
+                print("Skipping Vulkan debug symbols on GitHub Actions")
 
-        utils.set_env_variable("VULKAN_SDK", str(vulkan_install_root))
-        os.environ["VULKAN_SDK"] = str(vulkan_install_root)
+            try:
+                result = subprocess.run(install_args, check=True).returncode
+                print(f"Vulkan SDK installation completed with exit code: {result}")
+            except subprocess.CalledProcessError as e:
+                print(f"Vulkan SDK installation failed with error: {e}")
+                # Fallback to /S if it's an older installer style for some reason
+                print("Attempting fallback installation with /S...")
+                fallback_args = [str(vulkan_executable_path), "/S", f"/D={vulkan_install_root}"]
+                subprocess.run(fallback_args)
 
-        return True
-    else:
-        # get existing from VULKAN_SDK
-        existing_vulkan_sdk = utils.get_env_variable('VULKAN_SDK')
+            if not (vulkan_install_root / "Include").exists():
+                print(f"Warning: Vulkan SDK Include folder not found at {vulkan_install_root / 'Include'}")
+                # Check for lowercase 'include'
+                if (vulkan_install_root / "include").exists():
+                    print("Found lowercase 'include' folder, updating path...")
+                else:
+                    print("Critical: Installation seems incomplete or failed to create Include directory.")
 
-        if existing_vulkan_sdk is None:
-            existing_vulkan_sdk = str(vulkan_install_root)
+            utils.set_env_variable("VULKAN_SDK", str(vulkan_install_root))
+            os.environ["VULKAN_SDK"] = str(vulkan_install_root)
 
-        if not existing_vulkan_sdk is None:
-            print(f"Vulkan SDK already installed at: {existing_vulkan_sdk}")
-            if existing_vulkan_sdk:
-                utils.set_env_variable("VULKAN_SDK", str(existing_vulkan_sdk))
-                os.environ["VULKAN_SDK"] = str(existing_vulkan_sdk)
             return True
         else:
+            # get existing from VULKAN_SDK
+            existing_vulkan_sdk = utils.get_env_variable('VULKAN_SDK')
+
+            if existing_vulkan_sdk is None:
+                existing_vulkan_sdk = str(vulkan_install_root)
+
+            if not existing_vulkan_sdk is None:
+                print(f"Vulkan SDK already installed at: {existing_vulkan_sdk}")
+                if existing_vulkan_sdk:
+                    utils.set_env_variable("VULKAN_SDK", str(existing_vulkan_sdk))
+                    os.environ["VULKAN_SDK"] = str(existing_vulkan_sdk)
+                return True
+            else:
+                return False
+
+    elif platform.system() == "Linux":
+        existing_vulkan_sdk = os.environ.get("VULKAN_SDK") or utils.get_env_variable("VULKAN_SDK")
+        if existing_vulkan_sdk and ":" in existing_vulkan_sdk[:3]:
+            # Convert Windows path (e.g. C:/VulkanSDK/...) to WSL mount path
+            drive = existing_vulkan_sdk[0].lower()
+            existing_vulkan_sdk = f"/mnt/{drive}{existing_vulkan_sdk[existing_vulkan_sdk.index(':')+1:]}"
+
+        def is_valid_linux_vulkan_sdk(path):
+            if not path:
+                return False
+            p = Path(path)
+            return (p / "include" / "dxc" / "dxcapi.h").exists() or (p / "Include" / "dxc" / "dxcapi.h").exists()
+
+        if is_valid_linux_vulkan_sdk(existing_vulkan_sdk):
+            print(f"Vulkan SDK (Linux) already configured at: {existing_vulkan_sdk}")
+            utils.set_env_variable("VULKAN_SDK", str(existing_vulkan_sdk))
+            os.environ["VULKAN_SDK"] = str(existing_vulkan_sdk)
+            return True
+
+        # Check default paths
+        default_linux_paths = [
+            Path("/vulkan") / vulkan_version / "x86_64",
+            target_directory / "vulkansdk" / vulkan_version / "x86_64"
+        ]
+        for path in default_linux_paths:
+            if is_valid_linux_vulkan_sdk(path):
+                print(f"Vulkan SDK (Linux) found at: {path}")
+                utils.set_env_variable("VULKAN_SDK", str(path))
+                os.environ["VULKAN_SDK"] = str(path)
+                return True
+
+        # Download Vulkan SDK for Linux
+        print(f"Downloading Vulkan SDK {vulkan_version} for Linux...")
+        vulkan_sdk_link_linux = f"https://sdk.lunarg.com/sdk/download/{vulkan_version}/linux/vulkansdk-linux-x86_64-{vulkan_version}.tar.xz"
+        archive_path = target_directory / f"vulkansdk-linux-{vulkan_version}.tar.xz"
+
+        if not archive_path.exists():
+            utils.download_file(vulkan_sdk_link_linux, str(archive_path))
+
+        print("Extracting Vulkan SDK for Linux...")
+        import tarfile
+        vulkan_extract_dir = target_directory / "vulkansdk"
+        vulkan_extract_dir.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(str(archive_path)) as tf:
+            tf.extractall(str(vulkan_extract_dir))
+
+        archive_path.unlink()
+
+        detected_path = vulkan_extract_dir / vulkan_version / "x86_64"
+        if is_valid_linux_vulkan_sdk(detected_path):
+            utils.set_env_variable("VULKAN_SDK", str(detected_path))
+            os.environ["VULKAN_SDK"] = str(detected_path)
+            print(f"Vulkan SDK (Linux) installed at: {detected_path}")
+            return True
+        else:
+            print("Error: Could not verify Linux Vulkan SDK installation.")
             return False
 
 
@@ -331,9 +385,31 @@ def install_fbx_sdk_linux(target_directory):
     # The FBX SDK makeself installer expects:
     #   - First positional arg: destination directory
     #   - ReadMe prompt answered with "n", license prompt answered with "yes"
-    cmd = f'printf "n\\nyes\\n" | "{installer}" "{install_base}"'
+    expect_script_path = target_directory / "fbxsdk_install.exp"
+    expect_content = r"""#!/usr/bin/expect -f
+set timeout 300
+set installer [lindex $argv 0]
+set dest [lindex $argv 1]
+
+spawn $installer $dest
+
+expect {
+    -re {\[y/n\]} { send "n\r"; exp_continue }
+    -re {(?i)(agree|yes/no)} { send "yes\r"; exp_continue }
+    eof
+}
+"""
+    with open(expect_script_path, "w") as f:
+        f.write(expect_content)
+
+    cmd = f'expect "{expect_script_path}" "{installer}" "{install_base}"'
     result = subprocess.run(cmd, shell=True, check=False)
     print(f"FBX SDK installer exited with code {result.returncode}")
+
+    try:
+        expect_script_path.unlink()
+    except Exception:
+        pass
 
     # ---------- verify ----------
 
@@ -349,3 +425,36 @@ def install_fbx_sdk_linux(target_directory):
     os.environ["FBX_SDK"] = str(detected)
     print(f"FBX SDK (Linux) installed at: {detected}")
     return detected
+
+
+def build_sdl3():
+    """Build the SDL3 submodule using CMake."""
+    print("Building SDL3 from source using CMake...")
+    root_dir = Path(__file__).resolve().parent.parent
+    sdl_dir = root_dir / "thirdparty" / "SDL3"
+    build_dir = sdl_dir / "build"
+    
+    configure_args = [
+        "cmake",
+        "-S", str(sdl_dir),
+        "-B", str(build_dir),
+        "-DSDL_SHARED=ON",
+        "-DSDL_STATIC=OFF",
+        "-DSDL_TESTS=OFF",
+        "-DSDL_TEST_LIBRARY=OFF",
+        "-DCMAKE_BUILD_TYPE=Release"
+    ]
+    
+    build_args = [
+        "cmake",
+        "--build", str(build_dir),
+        "--config", "Release"
+    ]
+    
+    try:
+        subprocess.run(configure_args, check=True)
+        subprocess.run(build_args, check=True)
+        print("SDL3 build completed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"SDL3 build failed: {e}")
+        raise e

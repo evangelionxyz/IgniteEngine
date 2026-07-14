@@ -23,18 +23,18 @@
 
 #pragma once
 
+#ifdef PLATFORM_WINDOWS
+
 #include <vector>
 
 #include "device_manager.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/core/types.hpp"
 
-#ifdef PLATFORM_WINDOWS
-    #include <Windows.h>
-    #include <dxgi1_5.h>
-    #include <dxgidebug.h>
-    #include <nvrhi/d3d12.h>
-#endif
+#include <Windows.h>
+#include <dxgi1_5.h>
+#include <dxgidebug.h>
+#include <nvrhi/d3d12.h>
 
 #include <nvrhi/validation.h>
 
@@ -137,3 +137,5 @@ namespace ignite
         void ReleaseRenderTargets();
     };
 }
+
+#endif // PLATFORM_WINDOWS

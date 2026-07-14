@@ -17,8 +17,16 @@ namespace ignite
     struct IGN_API AnimState
     {
         std::string name;
-        AssetHandle animHandle = AssetHandle(0); // Skeletal Animation
         glm::vec2 editorPos = glm::vec2(100.0f, 100.0f);
+
+        void SetAnimationHandle(const AssetHandle &animationHandle);
+		const AssetHandle &GetAnimationAssetHandle() const { return m_AnimHandle; }
+
+        ~AnimState();
+
+    private:
+        UUID m_UUID;
+        AssetHandle m_AnimHandle = AssetHandle(0); // Skeletal Animation
     };
 
     struct IGN_API AnimatorControllerRuntime
@@ -40,7 +48,8 @@ namespace ignite
 
         virtual ~AnimatorController() override;
 
-        AssetHandle skeletonHandle = AssetHandle(0);
+        void SetSkeletonHandle(const AssetHandle &skeletonHandle);
+        const AssetHandle &GetSkeletonHandle() const { return m_SkeletonHandle; }
 
         // Returns new state name if a transition fires, else empty string.
         std::string EvaluateTransitions(const std::string &currentState, float normalizedTime) const;
@@ -57,6 +66,9 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticAssetType(); }
 
         bool UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager);
+
+    private:
+		AssetHandle m_SkeletonHandle = AssetHandle(0);
     };
 }
 

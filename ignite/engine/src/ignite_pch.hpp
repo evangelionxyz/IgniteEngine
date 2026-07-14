@@ -16,8 +16,6 @@
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
-#include <flat_map>
-#include <flat_set>
 #include <map>
 #include <set>
 #include <mutex>
@@ -41,7 +39,6 @@
 #include <random>
 #include <limits>
 #include <typeinfo>
-#include <objbase.h>
 
 #ifdef PLATFORM_WINDOWS
 #include <Windows.h>

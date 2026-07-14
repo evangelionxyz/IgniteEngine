@@ -20,6 +20,9 @@ project "msdf-atlas-gen"
         "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/include"
     }
 
+    filter "system:linux"
+        pic "On"
+
     filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         symbols "on"

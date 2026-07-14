@@ -1,6 +1,6 @@
 import os
-import requests
-import urllib
+import urllib.request
+import urllib.error
 import tarfile
 from zipfile import ZipFile
 import platform
@@ -20,8 +20,12 @@ def set_env_variable(variable_name, directory_path):
             
     elif platform.system() == "Linux":
         os.environ[variable_name] = directory_path
-        with open('/etc/environment', 'a') as file:
-            file.write(f'\n{variable_name}="{directory_path}"\n')
+        try:
+            with open('/etc/environment', 'a') as file:
+                file.write(f'\n{variable_name}="{directory_path}"\n')
+        except IOError as e:
+            print(f"Warning: Could not write to /etc/environment: {e}")
+            print(f"Please manually export {variable_name}=\"{directory_path}\" in your shell config (e.g. ~/.bashrc)")
 
     # Persist for GitHub Actions
     if "GITHUB_ENV" in os.environ:
@@ -54,6 +58,8 @@ def get_env_variable(name):
                     if line.startswith(f'{name}='):
                         return line.split('=', 1)[1].strip().strip('"')
         except FileNotFoundError:
+            return None
+        except IOError:
             return None
     return None
 
@@ -91,8 +97,12 @@ def set_system_path_variable(new_path):
         if new_path not in current_path.split(':'):
             updated_path = f'{current_path}:{new_path}'
             os.environ['PATH'] = updated_path
-            with open('/etc/environment', 'a') as file:
-                file.write(f'\nPATH="{updated_path}"\n')
+            try:
+                with open('/etc/environment', 'a') as file:
+                    file.write(f'\nPATH="{updated_path}"\n')
+            except IOError as e:
+                print(f"Warning: Could not write to /etc/environment: {e}")
+                print(f"Please manually append {new_path} to your PATH in your shell config (e.g. ~/.bashrc)")
             
             # Persist for GitHub Actions
             if "GITHUB_PATH" in os.environ:
@@ -119,10 +129,6 @@ def download_file(url, filepath):
                 print(f"HTTP Error  encountered: {e.code}. Proceeding with backup...\n\n")
                 if os.path.exists(filepath):
                     os.remove(filepath)
-            except requests.exceptions.RequestException as e:
-                print(f"Request error encountered: {e}. Proceeding with backup...\n\n")
-                if os.path.exists(filepath):
-                    os.remove(filepath)
             except Exception:
                 print(f"Something went wrong. Proceeding with backup...\n\n")
                 if os.path.exists(filepath):
@@ -132,20 +138,22 @@ def download_file(url, filepath):
     if (not(type(url) is str)):
         raise ValueError(f"Argument 'url' must be type of list or string")
     
+    headers = {'User-Agent': "Mozilla/5.0 (Macintosh Intel Mac Os X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"}
+    req = urllib.request.Request(url, headers=headers)
+    
     with open(filepath, 'wb') as f:
-        headers = {'User-Agent': "Mozilla/5.0 (Macintosh Intel Mac Os X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"}
-        with requests.get(url, headers=headers, stream=True) as response:
-            response.raise_for_status()
-            total = response.headers.get('content-length')
+        with urllib.request.urlopen(req) as response:
+            total = response.headers.get('Content-Length')
             total_bytes = int(total) if total is not None else None
             chunk_size = max(int(total_bytes / 1000), 1024 * 1024) if total_bytes else 1024 * 1024
             downloaded = 0
             start_time = time.time()
             has_output = False
 
-            for data in response.iter_content(chunk_size=chunk_size):
+            while True:
+                data = response.read(chunk_size)
                 if not data:
-                    continue
+                    break
 
                 f.write(data)
                 downloaded += len(data)

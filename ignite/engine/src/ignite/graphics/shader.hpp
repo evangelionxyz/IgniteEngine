@@ -6,6 +6,10 @@
 
 #include "Umbra/ShaderCompiler.h"
 
+#ifdef GetLastError
+#undef GetLastError
+#endif
+
 #include "ignite/core/types.hpp"
 #include "ignite/core/logger.hpp"
 

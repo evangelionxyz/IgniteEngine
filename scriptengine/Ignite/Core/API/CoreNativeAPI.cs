@@ -17,6 +17,7 @@ public static class CoreNativeAPI
         public IntPtr Input_SetMouseToCenter;
         public IntPtr Input_SetCursorMode;
         public IntPtr Input_IsMouseOverUI;
+        public IntPtr Input_IsActionPressed;
 
         public IntPtr AssetManager_IsAssetHandleValid;
 
@@ -33,6 +34,7 @@ public static class CoreNativeAPI
         public IntPtr ScriptableObject_GetFieldValueBool;
         public IntPtr ScriptableObject_GetFieldValueString;
         public IntPtr ScriptableObject_GetClassName;
+        public IntPtr Scene_TransitionTo;
     }
 
     public struct Funcs
@@ -119,6 +121,10 @@ public static class CoreNativeAPI
         [return: MarshalAs(UnmanagedType.I1)]
         public delegate bool InputIsMouseOverUIFn();
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool InputIsActionPressedFn(IntPtr actionName);
+
         // Asset Manager
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
@@ -146,5 +152,8 @@ public static class CoreNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate IntPtr ScriptableObjectGetClassNameFn(ulong handle);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void SceneTransitionToFn(ulong sceneAssetHandle);
     }
 }

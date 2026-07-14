@@ -47,6 +47,7 @@ namespace ignite
         Mesh, // .mesh (.fbx, .gltf, .glb)
         StaticMesh, // .mesh - engine specific
         SkeletalMesh, // .skmesh - engine specific
+		InputMapping, // .ixinput - engine specific
         Scene,
         Widget,
         AnimatorController, // .ac    - animator state machine
@@ -73,6 +74,7 @@ namespace ignite
             case ignite::AssetType::Project: return "Project";
             case ignite::AssetType::TextureCube: return "TextureCube";
             case ignite::AssetType::Scene: return "Scene";
+            case ignite::AssetType::InputMapping: return "InputMapping";
             case ignite::AssetType::SkeletalAnimation: return "SkeletalAnimation";
             case ignite::AssetType::SpriteSheet: return "SpriteSheet";
             case ignite::AssetType::Anim2D: return "Anim2D";
@@ -113,6 +115,7 @@ namespace ignite
         if (typeStr == "SkeletalMesh")  return AssetType::SkeletalMesh;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
+        if (typeStr == "InputMapping")  return AssetType::InputMapping;
         if (typeStr == "Environment")  return AssetType::Environment;
         if (typeStr == "BlendSpace")  return AssetType::BlendSpace;
         if (typeStr == "LocomotionController")  return AssetType::LocomotionController;
@@ -169,6 +172,8 @@ namespace ignite
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
 
+        { ".ixinput", AssetType::InputMapping},
+
         { ".ixmat2d", AssetType::Material2D},
         { ".anim2d", AssetType::Animation2D},
         { ".ac",   AssetType::AnimatorController},
@@ -191,6 +196,7 @@ namespace ignite
         case AssetType::SkeletalAnimation: return ".ixanim";
         case AssetType::BlendSpace: return ".bsp";
         case AssetType::LocomotionController: return ".ixloco";
+        case AssetType::InputMapping: return ".ixinput";
         case AssetType::Scene: return ".ixscene";
         case AssetType::Project: return ".ixproj";
         case AssetType::SpriteSheet: return ".ixsp";

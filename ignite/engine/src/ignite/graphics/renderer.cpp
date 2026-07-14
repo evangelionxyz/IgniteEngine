@@ -6,6 +6,7 @@
 #include "renderer/renderer_2d.hpp"
 #include "texture.hpp"
 #include "shader.hpp"
+#include "bindless_system.hpp"
 
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
@@ -77,7 +78,6 @@ namespace ignite
 		{
 			m_DefaultMaterial = CreateRef<Material>();
 		}
-
     }
 
 	void Renderer::Shutdown()
@@ -95,6 +95,8 @@ namespace ignite
 
         m_DefaultMeshes.clear();
 		m_BindingLayouts.clear();
+
+		BindlessSystem::Shutdown();
 	}
 
     void Renderer::BeginStats()

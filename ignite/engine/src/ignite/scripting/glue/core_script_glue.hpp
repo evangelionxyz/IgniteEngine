@@ -19,6 +19,7 @@ namespace ignite
         void (*Input_SetMouseToCenter)();
         void (*Input_SetCursorMode)(int32_t mode);
         bool (*Input_IsMouseOverUI)();
+        bool (*Input_IsActionPressed)(const char *actionName);
 
         bool (*AssetManager_IsAssetHandleValid)(uint64_t handle);
         bool (*AssetManager_IsAssetLoaded)(uint64_t handle);
@@ -35,6 +36,8 @@ namespace ignite
         bool        (*ScriptableObject_GetFieldValueBool)(uint64_t handle, const char *fieldName);
         const char *(*ScriptableObject_GetFieldValueString)(uint64_t handle, const char *fieldName);
         const char *(*ScriptableObject_GetClassName)(uint64_t handle);
+
+        void (*Scene_TransitionTo)(uint64_t sceneAssetHandle);
     };
 
     class CoreScriptGlue

@@ -176,8 +176,9 @@ namespace ignite
         cmd->open();
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
-    	createInfo.keepInitialState = true;
     	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+    	createInfo.keepInitialState = true;
+        createInfo.bindless = false;
 
         s_SharedIcons["scene"] = Texture::Create("resources/ui/editor/ic_editor_scene.png", createInfo, cmd);
         s_SharedIcons["shader"] = Texture::Create("resources/ui/editor/ic_editor_shader.png", createInfo, cmd);
@@ -652,8 +653,8 @@ namespace ignite
                                             {
                                                 m_PendingScriptableObjectClassName = entry.className;
                                                 m_PendingScriptableObjectFileName  = entry.fileName;
-                                                strncpy_s(m_PopupInputBuffer, sizeof(m_PopupInputBuffer),
-                                                          entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                                strncpy(m_PopupInputBuffer, entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                                // strncpy_s(m_PopupInputBuffer, sizeof(m_PopupInputBuffer), entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
                                                 m_ShowCreateScriptableObjectModal = true;
                                             }
                                         }
@@ -2594,6 +2595,7 @@ namespace ignite
                 createInfo.keepInitialState = true;
                 createInfo.keepCpuData = false;
                 createInfo.deferGpuCreate = true;
+                createInfo.bindless = false;
                 createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
                 createInfo.width = static_cast<uint32_t>(destWidth);
                 createInfo.height = static_cast<uint32_t>(destHeight);

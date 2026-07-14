@@ -90,7 +90,6 @@ namespace ignite
 
     AssetManager::~AssetManager()
     {
-
         SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
         m_AssetChangeToken = kInvalidSignalToken;
 
@@ -153,6 +152,8 @@ namespace ignite
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
+            metadata.filepath = filepath;
+            metadata.type = GetAssetTypeFromExtension(filepath.extension().generic_string());
             AssignMetaData(handle, metadata);
             GetAsset(handle);
         }
@@ -189,6 +190,8 @@ namespace ignite
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
+            metadata.filepath = filepath;
+            metadata.type = GetAssetTypeFromExtension(filepath.extension().generic_string());
             AssignMetaData(handle, metadata);
             GetAssetImmediate(handle);
         }
@@ -410,15 +413,18 @@ namespace ignite
         if (!activeScene)
             return;
 
+		auto activeSceneRenderer = activeScene->GetSceneRenderer();
+		if (!activeSceneRenderer)
+			return;
+
         switch (signal.type)
         {
         case AssetType::Texture:
         case AssetType::Environment:
         {
-            auto onChangeFunc = [this, scene = activeScene, signal]() -> bool
+            auto onChangeFunc = [this, sceneRenderer = activeSceneRenderer, scene = activeScene, signal]() -> bool
             {
                 // Checking environment map
-                auto sceneRenderer = scene->GetSceneRenderer();
                 auto envMap = sceneRenderer->GetEnvironmentMapColorTexture();
                 auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
 
@@ -477,12 +483,16 @@ namespace ignite
             GPUUploadSync::DeviceWaitIdle(device);
         }
         
+        // Prevent dead lock
+		// - Swap the loaded assets map with an empty one, then clear the old map outside the lock
+        
+        decltype(m_LoadedAssets) oldAssets;
         {
             std::unique_lock lock(m_AssetMutex);
-            m_LoadedAssets.clear();
+            oldAssets.swap(m_LoadedAssets);
         }
-        
-        // LOG_DEBUG("[Asset Manager] All loaded assets cleared");
+
+        oldAssets.clear();
     }
 
     void AssetManager::UnloadAsset(AssetHandle handle)

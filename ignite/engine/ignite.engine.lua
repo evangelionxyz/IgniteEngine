@@ -99,24 +99,29 @@ project "Ignite.Engine"
         libdirs {
             "/usr/lib",
             "/usr/local/lib",
-            "%{LibraryDir.FMOD_LINUX}"
+            "%{LibraryDir.FBX_SDK}/release",
+            "%{LibraryDir.FMOD_LINUX}",
+            "%{LibraryDir.VULKAN_SDK}",
+            "%{LibraryDir.SDL3_LINUX}"
         }
         includedirs {
             "/usr/include",
             "%{IncludeDir.OPENEXR_LINUX}",
-            "%{IncludeDir.IMATH_LINUX}",
-            "%{IncludeDir.SDL3_LINUX}"
+            "%{IncludeDir.IMATH_LINUX}"
         }
         links {
             "vulkan",
-            "shaderc_shared",
+            "shaderc",
+            "shaderc_util",
             "spirv-cross-core",
             "spirv-cross-glsl",
             "nethost",
             "SDL3",
+            "OpenEXRUtil",
             "OpenEXR",
-            "Iex",
+            "OpenEXRCore",
             "IlmThread",
+            "Iex",
             "Imath",
             "xml2",
             "pthread",
@@ -187,7 +192,7 @@ project "Ignite.Engine"
 
             '{COPYFILE} "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll" "%{cfg.targetdir}"',
 
             -- Copying dotnet libraries
             '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',
@@ -247,9 +252,9 @@ project "Ignite.Engine"
 
         filter { "system:linux", "configurations:Debug or Debug-Profiling" }
             libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
-            links { "fmodL", "fbxsdk" }
+            links { "fmodL" }
+            linkoptions { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}/libfbxsdk.a" }
             postbuildcommands {
-                '{COPYFILE} "%{FBX_SDK_PATH}/lib/gcc/x64/debug/libfbxsdk.so" "%{cfg.targetdir}"',
                 '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so" "%{cfg.targetdir}"',
                 '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14" "%{cfg.targetdir}"',
                 '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13" "%{cfg.targetdir}"'
@@ -309,10 +314,8 @@ project "Ignite.Engine"
 
         filter { "system:linux", "configurations:Release or Release-Profiling" }
             libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-            links { "fmod", "fbxsdk" }
-            postbuildcommands {
-                '{COPYFILE} "%{FBX_SDK_PATH}/lib/gcc/x64/release/libfbxsdk.so" "%{cfg.targetdir}"'
-            }
+            links { "fmod" }
+            linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
 
         filter "configurations:Shipping"
             runtime "release"
@@ -363,7 +366,5 @@ project "Ignite.Engine"
 
         filter { "system:linux", "configurations:Shipping or Shipping-Profiling" }
             libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-            links { "fmod", "fbxsdk" }
-            postbuildcommands {
-                '{COPYFILE} "%{FBX_SDK_PATH}/lib/gcc/x64/release/libfbxsdk.so" "%{cfg.targetdir}"'
-            }
+            links { "fmod" }
+            linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }

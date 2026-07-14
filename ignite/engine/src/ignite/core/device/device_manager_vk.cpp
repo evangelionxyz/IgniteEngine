@@ -29,6 +29,7 @@
 
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
+#include "ignite/graphics/bindless_system.hpp"
 
 #include <SDL3/SDL_vulkan.h>
 
@@ -264,11 +265,16 @@ namespace ignite
             m_ValidationLayer = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
         }
 
+        BindlessSystem::Initialize(GetDevice());
+
         return true;
     }
 
     bool DeviceManager_VK::CreateSwapChain()
     {
+        if (m_DeviceParameters.headlessDevice)
+            return true;
+
        CHECK(CreateVkSwapChain())
 
        m_PresentSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
@@ -380,6 +386,11 @@ namespace ignite
 
     bool DeviceManager_VK::BeginFrame()
     {
+        if (m_DeviceParameters.headlessDevice)
+            return true;
+
+        BindlessSystem::FlushPendingWrites();
+
         const auto &semaphore = m_AcquireSemaphores[m_AcquireSemaphoreIndex];
 
         vk::Result res;
@@ -424,6 +435,9 @@ namespace ignite
 
     bool DeviceManager_VK::Present()
     {
+        if (m_DeviceParameters.headlessDevice)
+            return true;
+
         IGN_PROFILE_FUNCTION();
         const auto &semaphore = m_PresentSemaphores[m_PresentSemaphoreIndex];
 
@@ -916,7 +930,7 @@ namespace ignite
                 }
             }
 
-            if (m_PresentQueueFamily == -1)
+            if (m_PresentQueueFamily == -1 && !m_DeviceParameters.headlessDevice)
             {
                 if (queueFamily.queueCount > 0 && SDL_Vulkan_GetPresentationSupport(m_VulkanInstance, physicalDevice, i))
                 {
@@ -938,6 +952,8 @@ namespace ignite
 
     bool DeviceManager_VK::CreateVkDevice()
     {
+        optionalExtensions.device.insert(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME);
+
         // figure out which optional extensions are supported
         auto deviceExtensions = m_VulkanPhysicalDevice.enumerateDeviceExtensionProperties();
         for (const auto &ext : deviceExtensions)
@@ -976,6 +992,7 @@ namespace ignite
         bool synchronization2Supported = false;
         bool maintenance4Supported = false;
         bool aftermathSupported = false;
+		bool mutableDescriptorSupported = false;
 
         LOG_INFO("Enabled Vulkan device extensions: ");
         for (const auto &ext : enabledExtensions.device)
@@ -1006,6 +1023,8 @@ namespace ignite
                 m_SwapChainMutableFormatSupported = true;
             else if (ext == VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME)
                 aftermathSupported = true;
+			else if (ext == VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME)
+				mutableDescriptorSupported = true;
         }
 
 #define APPEND_EXTENSION(condition, desc) if (condition) { (desc).pNext = pNext; pNext = &(desc); }
@@ -1082,6 +1101,9 @@ namespace ignite
             .setFlags(vk::DeviceDiagnosticsConfigFlagBitsNV::eEnableResourceTracking
             | vk::DeviceDiagnosticsConfigFlagBitsNV::eEnableShaderDebugInfo
             | vk::DeviceDiagnosticsConfigFlagBitsNV::eEnableShaderErrorReporting);
+        auto mutableDescriptorFeatures = vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT()
+            .setMutableDescriptorType(true);
+
 
         pNext = nullptr;
         APPEND_EXTENSION(accelStructSupported, accelStructFeatures)
@@ -1094,6 +1116,8 @@ namespace ignite
         APPEND_EXTENSION(storage16BitSupported, storage16BitFeatures)
         APPEND_EXTENSION(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3, vulkan13features)
         APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 &&maintenance4Supported, maintenance4Features);
+		APPEND_EXTENSION(aftermathSupported, aftermathFeatures);
+		APPEND_EXTENSION(mutableDescriptorSupported, mutableDescriptorFeatures);
 
 #undef APPEND_EXTENSION
 

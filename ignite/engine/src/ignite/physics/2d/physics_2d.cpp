@@ -13,21 +13,28 @@
 
 namespace ignite
 {
-    Physics2D::Physics2D(Scene *scene)
-        : m_Scene(scene)
-    {
-    }
 
-    Physics2D::~Physics2D()
-    {
-		SimulationStop();
-    }
+	Physics2D::Physics2D()
+	{
+		b2WorldDef worldDef = b2DefaultWorldDef();
+		m_WorldId = b2CreateWorld(&worldDef);
+        m_Scene = nullptr;
+	}
 
-    void Physics2D::SimulationStart()
+	Physics2D::~Physics2D()
+	{
+		if (B2_IS_NULL(m_WorldId) == false)
+			b2DestroyWorld(m_WorldId);
+
+		m_WorldId = b2_nullWorldId;
+        m_Scene = nullptr;
+	}
+
+	void Physics2D::SimulationStart(Scene *scene)
     {
         IGN_PROFILE_FUNCTION();
-        b2WorldDef worldDef = b2DefaultWorldDef();
-        m_WorldId = b2CreateWorld(&worldDef);
+
+        m_Scene = scene;
 
         entt::registry *reg = m_Scene->registry;
         auto view = reg->view<Rigidbody2DComponent>();
@@ -76,10 +83,16 @@ namespace ignite
     void Physics2D::SimulationStop()
     {
         IGN_PROFILE_FUNCTION();
-        if (B2_IS_NULL(m_WorldId) == false)
-            b2DestroyWorld(m_WorldId);
 
-        m_WorldId = b2_nullWorldId;
+        if (!m_Scene)
+            return;
+
+		for (entt::entity e : m_Scene->registry->view<Rigidbody2DComponent>())
+		{
+			DestroyEntity(Entity{ e, m_Scene });
+		}
+
+        m_Scene = nullptr;
     }
 
     void Physics2D::InstantiateEntity(Entity entity)

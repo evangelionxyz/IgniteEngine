@@ -9,10 +9,10 @@
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/audio/fmod_audio.hpp"
-#include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
+#include "ignite/scene/scene_manager.hpp"
 #include "input/input_system.hpp"
 #include "command.hpp"
 #include <nvrhi/utils.h>
@@ -21,7 +21,35 @@ namespace ignite
 {
     static Application *s_AppInstance = nullptr;
 
-    Application::~Application() = default;
+    Application::~Application()
+    {
+        // Shutdown render thread
+        m_RenderThreadRunning = false;
+        m_FrameCV.notify_all();
+        m_RenderTaskCV.notify_all();
+        if (m_RenderThread && m_RenderThread->joinable())
+            m_RenderThread->join();
+
+        GPUUploadSync::DeviceWaitIdle(DeviceManager::GetInstance()->GetDevice());
+
+        // destroy subsystems
+        for (auto subsystem : m_Subsystems)
+        {
+            subsystem->Shutdown();
+            delete subsystem;
+        }
+        m_Subsystems.clear();
+
+        for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
+        {
+            (*it)->OnDetach();
+            delete *it;
+        }
+
+        // destroy device
+        DeviceManager::GetInstance()->Destroy();
+        m_Window->Destroy();
+    }
 
     Application::Application(const ApplicationCreateInfo &createInfo)
         : m_CreateInfo(createInfo)
@@ -70,6 +98,8 @@ namespace ignite
         deviceParams.enablePerMonitorDPI = true;
         deviceParams.enableGPUValidation = true;
         deviceParams.supportExplicitDisplayScaling = true;
+        deviceParams.enableHeapDirectlyIndexed = true;
+        deviceParams.headlessDevice = m_CreateInfo.headless;
 
         m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceParams, m_CreateInfo.graphicsApi );
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));
@@ -94,8 +124,6 @@ namespace ignite
 
         if (m_CreateInfo.useAudio)
             AddSubsystem(new FmodAudio());
-        if (m_CreateInfo.usePhysics)
-            AddSubsystem(new JoltPhysics());
     }
 
     Application *Application::GetInstance()
@@ -291,8 +319,8 @@ namespace ignite
 
             if (m_CreateInfo.useGui && m_ImGuiLayer)
             {
-				m_ImGuiLayer->EndFrame(backBufferFrameBuffer);
-				m_ImGuiLayer->RenderPlatformWindows();
+                m_ImGuiLayer->EndFrame(backBufferFrameBuffer);
+                m_ImGuiLayer->RenderPlatformWindows();
             }
 
             // Collect worker command lists with minimal lock hold.
@@ -377,13 +405,16 @@ namespace ignite
         nvrhi::IDevice *device = deviceManager->GetDevice();
         
         // Start render thread
-        m_RenderThreadRunning = true;
-        m_RenderThread = CreateScope<std::thread>(&Application::RenderThreadFunc, this);
+        if (!m_CreateInfo.headless)
+        {
+            m_RenderThreadRunning = true;
+            m_RenderThread = CreateScope<std::thread>(&Application::RenderThreadFunc, this);
 
-        std::stringstream ss;
-        ss << m_RenderThread->get_id();
-        unsigned long long id = std::stoull(ss.str());
-        LOG_WARN("[Application] Render thread: {}", id);
+            std::stringstream ss;
+            ss << m_RenderThread->get_id();
+            unsigned long long id = std::stoull(ss.str());
+            LOG_WARN("[Application] Render thread: {}", id);
+        }
         
         SDL_Event sdlEvent;
         
@@ -427,7 +458,9 @@ namespace ignite
                 for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
                     (*layer)->OnUpdate(m_DeltaTime);
 
-                if (m_FrameIndex > 0)
+                SceneManager::ExecutePendingTransition();
+
+                if (!m_CreateInfo.headless && m_FrameIndex > 0)
                 {
                     bool frameBegan = false;
                     {
@@ -506,33 +539,6 @@ namespace ignite
             ++m_FrameIndex;
             IGN_PROFILE_FRAME_NAMED("Main Frame");
         }
-
-        // Shutdown render thread
-        m_RenderThreadRunning = false;
-        m_FrameCV.notify_all();
-        m_RenderTaskCV.notify_all();
-        if (m_RenderThread && m_RenderThread->joinable())
-            m_RenderThread->join();
-
-        GPUUploadSync::DeviceWaitIdle(device);
-
-		// destroy subsystems
-		for (auto subsystem : m_Subsystems)
-		{
-			subsystem->Shutdown();
-			delete subsystem;
-		}
-		m_Subsystems.clear();
-        
-        for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
-        {
-            (*it)->OnDetach();
-            delete *it;
-        }
-
-        // destroy device
-        deviceManager->Destroy();
-        m_Window->Destroy();
     }
 
     void Application::OnEvent(Event &e)
@@ -645,17 +651,17 @@ namespace ignite
         return subsystem;
     }
 
-	Ref<vfs::NativeFileSystem> Application::GetNativeFileSystem()
-	{
-		return GetInstance()->m_AppNativeFileSystem;
-	}
+    Ref<vfs::NativeFileSystem> Application::GetNativeFileSystem()
+    {
+        return GetInstance()->m_AppNativeFileSystem;
+    }
 
-	Ref<vfs::RelativeFileSystem> Application::GeRelativeFileSystem()
-	{
+    Ref<vfs::RelativeFileSystem> Application::GeRelativeFileSystem()
+    {
         return GetInstance()->m_AppRelativeFilesystem;
-	}
+    }
 
-	float Application::GetDeltaTime()
+    float Application::GetDeltaTime()
     {
         return GetInstance()->m_DeltaTime;
     }

@@ -175,6 +175,45 @@ namespace ignite
         return result;
     }
 
+    std::vector<std::string> FileDialogs::OpenFiles(const char *filter)
+    {
+        std::string command = "zenity --file-selection --multiple --separator=\"|\"";
+        if (filter)
+        {
+            command += " --file-filter=\"";
+            command += filter;
+            command += "\"";
+        }
+        std::string result = ExecCommand(command.c_str());
+        std::vector<std::string> files;
+        if (result.empty())
+        {
+            return files;
+        }
+
+        std::string current;
+        for (char c : result)
+        {
+            if (c == '|')
+            {
+                if (!current.empty())
+                {
+                    files.push_back(current);
+                    current.clear();
+                }
+            }
+            else
+            {
+                current += c;
+            }
+        }
+        if (!current.empty())
+        {
+            files.push_back(current);
+        }
+        return files;
+    }
+
     std::string FileDialogs::OpenFile(const char *filter)
     {
         std::string command = "zenity --file-selection";
@@ -184,6 +223,17 @@ namespace ignite
             command += filter;
             command += "\"";
         }
+        std::string result = ExecCommand(command.c_str());
+        if (result.empty())
+        {
+            return {};
+        }
+        return result;
+    }
+
+    std::string FileDialogs::SelectFolder()
+    {
+        std::string command = "zenity --file-selection --directory";
         std::string result = ExecCommand(command.c_str());
         if (result.empty())
         {

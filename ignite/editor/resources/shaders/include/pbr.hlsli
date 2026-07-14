@@ -1,5 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
+#ifndef IGN_PBR_HLSLI
+#define IGN_PBR_HLSLI
+
 #define M_RCPPI 0.31830988618379067153776752674503
 #define M_PI 3.1415926535897932384626433832795
 
@@ -78,3 +82,5 @@ static float3 TextureEmissive(float3 diffuseColor, float emissive)
 {
     return emissive * diffuseColor;
 }
+
+#endif

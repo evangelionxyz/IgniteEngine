@@ -7,10 +7,9 @@ struct PSInput
     float2 texCoord : TEXCOORD;
     float2 tilingFactor : TILINGFACTOR;
     float4 color : COLOR;
-    uint texIndex : TEXINDEX;
+    nointerpolation uint texIndex : TEXINDEX;
 };
 
-Texture2D textures[]    : register(t0);
 SamplerState samplerState : register(s0);
 
 struct PSOutput
@@ -20,7 +19,8 @@ struct PSOutput
 
 PSOutput main(PSInput input)
 {
-    float4 texColor = textures[input.texIndex].Sample(samplerState, input.texCoord * input.tilingFactor);
+    Texture2D tex = ResourceDescriptorHeap[input.texIndex];
+    float4 texColor = tex.Sample(samplerState, input.texCoord * input.tilingFactor);
     float4 finalColor = texColor * input.color;
     finalColor.a = (input.texIndex == 0) ? input.color.a : (texColor.a * input.color.a);
     

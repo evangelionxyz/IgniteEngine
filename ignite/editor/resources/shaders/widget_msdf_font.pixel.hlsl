@@ -5,10 +5,9 @@ struct PSInput
     float4 position     : SV_POSITION;
     float4 color        : COLOR;
     float2 texCoord     : TEXCOORD;
-    uint texIndex       : TEXINDEX;
+    nointerpolation uint texIndex       : TEXINDEX;
 };
 
-Texture2D textures[]    : register(t0);
 SamplerState samplerState : register(s0);
 
 struct PSOutput
@@ -26,7 +25,8 @@ float ScreenPxRange(uint texIndex, float2 uv)
     const float pxRange = 2.0f;
     uint width = 1u;
     uint height = 1u;
-    textures[texIndex].GetDimensions(width, height);
+    Texture2D tex = ResourceDescriptorHeap[texIndex];
+    tex.GetDimensions(width, height);
     width = max(width, 1u);
     height = max(height, 1u);
     const float2 unitRange = float2(pxRange, pxRange) / float2(width, height);
@@ -36,7 +36,8 @@ float ScreenPxRange(uint texIndex, float2 uv)
 
 PSOutput main(PSInput input)
 {
-    float3 msd = textures[input.texIndex].Sample(samplerState, input.texCoord).rgb;
+    Texture2D tex = ResourceDescriptorHeap[input.texIndex];
+    float3 msd = tex.Sample(samplerState, input.texCoord).rgb;
     float screenPxDistance = ScreenPxRange(input.texIndex, input.texCoord) * (Median(msd) - 0.5f);
     float opacity = saturate(screenPxDistance + 0.5f);
 

@@ -1,3 +1,9 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#pragma once
+#ifndef IGN_SHADOW_HLSLI
+#define IGN_SHADOW_HLSLI
+
 #define NUM_CASCADES 4
 
 struct CascadesShadows
@@ -136,3 +142,5 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
 
     return saturate(lerp(1.0f, visibility, csm.shadowStrength));
 }
+
+#endif

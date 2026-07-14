@@ -28,7 +28,11 @@ def ensure_admin():
 
 def generate_project_files(premake_binary):
     # Generate project files using premake5 for the current platform.
-    premake_scripts = ["premake5.lua", "premake5-managed.lua"]
+    if platform.system() == "Windows":
+        premake_scripts = ["premake5.lua", "premake5-managed.lua"]
+    else:
+        premake_scripts = ["premake5.lua"]
+
     for script in premake_scripts:
         premake_args = [str(premake_binary), f"--file=scripts/{script}"]
         if platform.system() == "Windows":
@@ -45,12 +49,8 @@ def run():
 
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-    if platform.system() == "Windows":
-        # Vulkan SDK is only installed via the installer on Windows.
-        # On Linux, Vulkan is installed via apt (libvulkan-dev etc.).
-        dp.install_vulkan_sdk(DOWNLOADS_DIR)
-    else:
-        print("Linux detected — skipping Vulkan SDK installer (use system packages via apt).")
+    # Install Vulkan SDK (on Linux we download and extract it to get the DXC compiler)
+    dp.install_vulkan_sdk(DOWNLOADS_DIR)
 
     # On Linux inside the dev container the FBX SDK is pre-installed by the
     # Dockerfile and FBX_SDK env var is already set correctly.  Skip the
@@ -67,13 +67,14 @@ def run():
     else:
         dp.install_fbx_sdk(DOWNLOADS_DIR)
 
+    dp.build_sdl3()
     premake_binary = dp.install_premake5(DOWNLOADS_DIR)
 
     # Always generate project files regardless of whether deps were freshly installed.
     print("\nGenerating project files...")
     generate_project_files(premake_binary)
 
-    if os.environ.get("GITHUB_ACTIONS") != "true":
+    if platform.system() == "Windows" and os.environ.get("GITHUB_ACTIONS") != "true":
         input("Press any key to continue")
 
 

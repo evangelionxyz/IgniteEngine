@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "scene_renderer.hpp"
+#include "ignite/graphics/bindless_system.hpp"
 
 #include "renderer_2d.hpp"
 #include "ignite/scene/scene.hpp"
@@ -72,8 +73,6 @@ namespace ignite
 
     SceneRenderer::~SceneRenderer()
     {
-        ClearPinnedAssets();
-
         m_WidgetRenderer = nullptr;
         m_WorldEnvironment = nullptr;
 
@@ -102,14 +101,12 @@ namespace ignite
 
         if (m_WorldEnvironment)
         {
-            if (scene == nullptr && m_WorldEnvironment->environment)
-            {
-                m_WorldEnvironment->environment.reset();
-            }
+			if (scene == nullptr && m_WorldEnvironment->environment)
+			{
+				m_WorldEnvironment->environment.reset();
+			}
             m_WorldEnvironment = nullptr;
         }
-
-        ClearPinnedAssets();
 
         m_SelectedEntities.clear();
         m_Has2DPreRenderCache = false;
@@ -224,8 +221,18 @@ namespace ignite
 				DebugPass(cmd, camera, debugFramebuffer);
             }
             
-            const uint32_t width = target->sceneRT->GetWidth();
-            const uint32_t height = target->sceneRT->GetHeight();
+            // Transition color and depth attachments to ShaderResource before they are read by post-processing
+            cmd->setTextureState(target->sceneRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(target->sceneRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+			cmd->setTextureState(target->sceneRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+
+			cmd->setTextureState(target->widgetRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+			cmd->setTextureState(target->debugRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+
+            cmd->commitBarriers();
+
+			const auto width = target->sceneRT->GetWidth();
+			const auto height = target->sceneRT->GetHeight();
 
             Ref<Texture> edgeTexture = nullptr;
             if (m_EdgeDetection && !m_SelectedEntities.empty())
@@ -265,8 +272,9 @@ namespace ignite
                 m_EditorBloom->settings.radius = postProcessing.bloomRadius;
                 m_EditorBloom->settings.threshold = postProcessing.bloomThreshold;
                 m_EditorBloom->settings.iterations = postProcessing.bloomIterations;
-
+                
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
+
                 m_EditorBloom->Resize(width, height);
                 m_EditorBloom->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
                 bloomTexture = m_EditorBloom->GetBloomTexture();
@@ -578,6 +586,8 @@ namespace ignite
                 }
             }
         }
+        cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+        cmd->commitBarriers();
     }
 
     void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
@@ -698,7 +708,7 @@ namespace ignite
                 auto &pipeline = dc.isSkeletal ? animatedTransparentPSO : staticTransparentPSO;
                 transparentGState.pipeline = pipeline->GetHandle();
 
-                transparentGState.bindings = { dc.meshBindingSet, dc.materialBindingSet };
+                transparentGState.bindings = { dc.meshBindingSet, dc.materialBindingSet, BindlessSystem::GetDescriptorTable() };
                 transparentGState.vertexBuffers.resize(0);
                 transparentGState.vertexBuffers.push_back({ dc.vertexBuffer, 0, 0 });
                 transparentGState.setIndexBuffer({ dc.indexBuffer, nvrhi::Format::R32_UINT });
@@ -1159,32 +1169,34 @@ namespace ignite
                     continue;
 
                 const glm::mat4 world = tr.world.GetMatrix();
-                const float maxAxis = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
+                const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
                 const float scaledRadius = capsule.radius * maxAxis;
-                const float scaledHalfHeight = glm::max(capsule.height - capsule.radius, 0.0f) * maxAxis;
+                const float scaledHalfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxAxis;
 
                 const glm::vec3 center = glm::vec3(world * glm::vec4(capsule.center, 1.0f));
                 const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
-                const glm::vec3 up = glm::normalize(glm::vec3(world[1])) * scaledRadius;
-                const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledHalfHeight;
+                const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
+                const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
+				const glm::vec3 upRadius = glm::normalize(glm::vec3(world[1])) * scaledRadius;
 
-                const glm::vec3 heightOffset = forward;
-                const glm::vec3 topCenter = center + heightOffset;
-                const glm::vec3 bottomCenter = center - heightOffset;
+                const glm::vec3 topCenter = center + upHeight;
+                const glm::vec3 bottomCenter = center - upHeight;
 
-                drawCircleRing(topCenter, right, up, kCircleSegments, kPhysicsDebugColor);
-                drawCircleRing(bottomCenter, right, up, kCircleSegments, kPhysicsDebugColor);
+				// Draw capsule as two circle rings and connecting lines
+                drawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                drawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
 
+				// Draw connecting lines between the top and bottom circles
+                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
                 m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
                 m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(topCenter + up, bottomCenter + up, kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(topCenter - up, bottomCenter - up, kPhysicsDebugColor);
 
-                const glm::vec3 axisRadius = forward;
-                drawArc(topCenter, right, axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(topCenter, up, axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(bottomCenter, right, -axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(bottomCenter, up, -axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				// Draw arcs to represent the rounded ends of the capsule
+                drawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
             }
 
             auto meshCollider = m_Scene->registry->view<TransformComponent, MeshColliderComponent>();
@@ -1248,52 +1260,52 @@ namespace ignite
 
         auto compositeFramebuffer = target->compositeRT->GetFramebuffer();
         
-        CompositePostProcess_GPUData postProcessData;
+		// Setup Post Processing settings
         if (camera)
         {
-            postProcessData.flags.x = (postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
-            postProcessData.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
-            postProcessData.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
-            postProcessData.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
-            postProcessData.vignetteParams = glm::vec4(
+            m_PostProcessingSettings.flags.x = (postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
+            m_PostProcessingSettings.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
+            m_PostProcessingSettings.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
+            m_PostProcessingSettings.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
+            m_PostProcessingSettings.vignetteParams = glm::vec4(
                 postProcessing.vignetteRadius,
                 glm::max(postProcessing.vignetteSoftness, 0.001f),
                 postProcessing.vignetteIntensity,
                 postProcessing.chromAbAmount
             );
-            postProcessData.chromAbParams.x = postProcessing.chromAbRadial;
-            postProcessData.chromAbParams.y = (postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
-            postProcessData.chromAbParams.z = postProcessing.aoIntensity;
-            postProcessData.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
-            postProcessData.projectionInv = glm::inverse(camera->GetProjection());
-            postProcessData.enableDOF = lens.enabledDOF ? 1 : 0;
-            postProcessData.focalLength = lens.focalLength;
-            postProcessData.focalDistance = lens.focalDistance;
-            postProcessData.fStop = lens.fStop;
-            postProcessData.focusRange = lens.focusRange;
-            postProcessData.blurAmount = lens.blurAmount;
+            m_PostProcessingSettings.chromAbParams.x = postProcessing.chromAbRadial;
+            m_PostProcessingSettings.chromAbParams.y = (postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
+            m_PostProcessingSettings.chromAbParams.z = postProcessing.aoIntensity;
+            m_PostProcessingSettings.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
+            m_PostProcessingSettings.projectionInv = glm::inverse(camera->GetProjection());
+            m_PostProcessingSettings.enableDOF = lens.enabledDOF ? 1 : 0;
+            m_PostProcessingSettings.focalLength = lens.focalLength;
+            m_PostProcessingSettings.focalDistance = lens.focalDistance;
+            m_PostProcessingSettings.fStop = lens.fStop;
+            m_PostProcessingSettings.focusRange = lens.focusRange;
+            m_PostProcessingSettings.blurAmount = lens.blurAmount;
 
             if (m_WorldEnvironment)
             {
-                postProcessData.tonemapMode = static_cast<int>(m_WorldEnvironment->tonemapMode);
-                postProcessData.exposure = m_WorldEnvironment->exposure;
-                postProcessData.gamma = m_WorldEnvironment->gamma;
+                m_PostProcessingSettings.tonemapMode = static_cast<int>(m_WorldEnvironment->tonemapMode);
+                m_PostProcessingSettings.exposure = m_WorldEnvironment->exposure;
+                m_PostProcessingSettings.gamma = m_WorldEnvironment->gamma;
 
-                postProcessData.fogColor = m_WorldEnvironment->fogColor;
-                postProcessData.fogDensity = m_WorldEnvironment->fogDensity;
-                postProcessData.fogStart = m_WorldEnvironment->fogStart;
-                postProcessData.fogEnd = m_WorldEnvironment->fogEnd;
+                m_PostProcessingSettings.fogColor = m_WorldEnvironment->fogColor;
+                m_PostProcessingSettings.fogDensity = m_WorldEnvironment->fogDensity;
+                m_PostProcessingSettings.fogStart = m_WorldEnvironment->fogStart;
+                m_PostProcessingSettings.fogEnd = m_WorldEnvironment->fogEnd;
             }
             else
             {
-                postProcessData.tonemapMode = 0; // Reinhard
-                postProcessData.exposure = 1.1f;
-                postProcessData.gamma = 2.2f;
-                postProcessData.fogDensity = 0.0f;
+                m_PostProcessingSettings.tonemapMode = 0; // Reinhard
+                m_PostProcessingSettings.exposure = 1.1f;
+                m_PostProcessingSettings.gamma = 2.2f;
+                m_PostProcessingSettings.fogDensity = 0.0f;
             }
         }
 
-        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
+        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&m_PostProcessingSettings, sizeof(m_PostProcessingSettings)));
         cmd->setBufferState(m_CompositePostProcessBuffer->GetHandle(), nvrhi::ResourceStates::ConstantBuffer);
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePSO(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
@@ -1499,6 +1511,7 @@ namespace ignite
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
             .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
+            .AddBindingLayout(BindlessSystem::GetBindingLayout())
             .Build(framebuffer, params);
 
         cache.clear();
@@ -1776,19 +1789,6 @@ namespace ignite
         return target;
     }
 
-    void SceneRenderer::AddAssetPin(AssetHandle handle)
-    {
-        m_PinnedAssetHandles.push_back(handle);
-
-        const auto assetPinName = BuildAssetPinName(handle);
-        AssetManager::GetInstance()->AddAssetPin(handle, assetPinName);
-    }
-
-    std::string_view SceneRenderer::BuildAssetPinName(AssetHandle handle)
-    {
-        return std::format("scene_renderer.", (uint64_t)handle);
-    }
-
     template<typename MeshT>
     void SceneRenderer::DrawMesh(
         nvrhi::ICommandList *cmd,
@@ -1845,12 +1845,14 @@ namespace ignite
                         }
                     }
                 }
-                gpuData.transformation = parentTransform * meshTransform;
-                gpuData.objectID = objectID;
-                gpuData.normal = normalMatrix;
-            }
 
-            meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+				gpuData.transformation = parentTransform * meshTransform;
+				gpuData.normal = normalMatrix;
+            }
+            
+			gpuData.objectID = objectID;
+			meshInstance->SetData(cmd, &gpuData, sizeof(Mesh_GPUData));
+
             if constexpr (isSkeletal)
             {
                 meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
@@ -1888,7 +1890,7 @@ namespace ignite
                 }
                 else
                 {
-                    graphicsState.bindings = { meshBindingSet, materialBindingSet };
+                    graphicsState.bindings = { meshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
                     graphicsState.vertexBuffers.resize(0);
                     graphicsState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
                     graphicsState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });

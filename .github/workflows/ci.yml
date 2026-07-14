@@ -2,16 +2,17 @@ name: CI-Pipeline
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
   
   pull_request:
     branches: [master]
 
 jobs:
    build:
-    runs-on: windows-2025-vs2026
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [windows-2025-vs2026]
         configuration: [Release]
     env:
       VS_VERSION: "2026"
@@ -34,7 +35,9 @@ jobs:
       - name: Cache Python packages
         uses: actions/cache@v4
         with:
-          path: ~\AppData\Local\pip\Cache
+          path: |
+            ~\AppData\Local\pip\Cache
+            ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-
 
@@ -44,6 +47,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Setup MSBuild
+        if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v3
 
       - name: Cache SDK downloads
@@ -55,21 +59,39 @@ jobs:
             ${{ runner.os }}-sdk-cache-v1-${{ hashFiles('scripts/setup_dependencies.py') }}-
             ${{ runner.os }}-sdk-cache-v1-
 
-      - name: Run Generate Script
+      - name: Run Generate Script (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./gen.bat
 
+      - name: Run Generate Script (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x gen.sh
+          ./gen.sh
+
       - name: Cache NuGet packages
+        if: runner.os == 'Windows'
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.vcxproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Resore NuGet packages - Visual Studio
+      - name: Restore NuGet packages - Visual Studio
+        if: runner.os == 'Windows'
         shell: pwsh
         run: msbuild $env:SOLUTION_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /v:n
 
       - name: Build Solution - Visual Studio
+        if: runner.os == 'Windows'
         shell: pwsh
         run: msbuild $env:SOLUTION_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /v:m
+
+      - name: Build Editor (Linux)
+        if: runner.os == 'Linux'
+        run: make -j$(nproc) Ignite.Editor
+
+      - name: Build Test Suite (Linux)
+        if: runner.os == 'Linux'
+        run: make -j$(nproc) Ignite.Test

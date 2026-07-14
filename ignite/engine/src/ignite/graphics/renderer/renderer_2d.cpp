@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "renderer_2d.hpp"
+#include "ignite/graphics/bindless_system.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/device/device_manager.hpp"
@@ -617,6 +618,8 @@ namespace ignite
                 .setPipeline(gp->GetHandle())
                 .setFramebuffer(framebuffer)
                 .addBindingSet(bindingSet)
+                .addBindingSet(BindlessSystem::GetDummyBindingSet())
+                .addBindingSet(BindlessSystem::GetDescriptorTable())
                 .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
                 .addVertexBuffer(nvrhi::VertexBufferBinding{ m_QuadBatch.vertexBuffer->GetHandle(), 0, 0 })
                 .setIndexBuffer({ m_QuadBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
@@ -643,6 +646,8 @@ namespace ignite
                 .setPipeline(gp->GetHandle())
                 .setFramebuffer(framebuffer)
                 .addBindingSet(bindingSet)
+                .addBindingSet(BindlessSystem::GetDummyBindingSet())
+                .addBindingSet(BindlessSystem::GetDescriptorTable())
                 .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
                 .addVertexBuffer(nvrhi::VertexBufferBinding{ m_TextBatch.vertexBuffer->GetHandle(), 0, 0 })
                 .setIndexBuffer({ m_TextBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
@@ -1113,37 +1118,9 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
 
         if (texture == nullptr || (texture && !texture->GetHandle()))
-            return 0;
+            return Renderer::GetWhiteTexture() ? Renderer::GetWhiteTexture()->GetBindlessIndex() : 0;
 
-        uint32_t textureIndex = 0;
-
-        // find texture
-        for (uint32_t i = 0; i < m_QuadBatch.textureSlotIndex; ++i)
-        {
-            if (*m_QuadBatch.textureSlots[i] == *texture)
-            {
-                textureIndex = i;
-                break;
-            }
-        }
-
-        // insert if not found
-        if (textureIndex == 0)
-        {
-            if (m_QuadBatch.textureSlotIndex >= MAX_TEXTURE_BATCH_COUNT)
-            {
-                End();
-                return MAX_TEXTURE_BATCH_COUNT;
-            }
-
-            textureIndex = m_QuadBatch.textureSlotIndex;
-            m_QuadBatch.textureSlots[m_QuadBatch.textureSlotIndex] = texture;
-            m_QuadBatch.textureSlotIndex++;
-
-            m_QuadBindingSetCache.clear(); // reset (so we can recreate it)
-        }
-
-        return textureIndex;
+        return texture->GetBindlessIndex();
     }
 
     uint32_t Renderer2D::GetOrInsertFontTexture(const Ref<Texture> &texture)
@@ -1151,37 +1128,9 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
 
         if (texture == nullptr || (texture && !texture->GetHandle()))
-            return 0;
+            return Renderer::GetWhiteTexture() ? Renderer::GetWhiteTexture()->GetBindlessIndex() : 0;
 
-        uint32_t textureIndex = 0;
-
-        // find texture
-        for (uint32_t i = 0; i < m_TextBatch.textureSlotIndex; ++i)
-        {
-            if (*m_TextBatch.textureSlots[i] == *texture)
-            {
-                textureIndex = i;
-                break;
-            }
-        }
-
-        // insert if not found
-        if (textureIndex == 0)
-        {
-            if (m_TextBatch.textureSlotIndex >= MAX_TEXTURE_BATCH_COUNT)
-            {
-                End();
-                return MAX_TEXTURE_BATCH_COUNT;
-            }
-
-            textureIndex = m_TextBatch.textureSlotIndex;
-            m_TextBatch.textureSlots[m_TextBatch.textureSlotIndex] = texture;
-            m_TextBatch.textureSlotIndex++;
-
-            m_TextBindingSetCache.clear(); // reset (so we can recreate it)
-        }
-
-        return textureIndex;
+        return texture->GetBindlessIndex();
     }
 
 	// Helper to build a quad pipeline for a framebuffer (once) and cache it.
@@ -1216,11 +1165,6 @@ namespace ignite
 		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1));
 		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
-		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; i++)
-		{
-			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(i));
-		}
-
 		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
 		params.cullMode = nvrhi::RasterCullMode::None;
@@ -1232,6 +1176,8 @@ namespace ignite
 		Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
 		gp->SetShaders({ vertexShader, pixelShader })
 			.AddBindingLayout(bindingLayout)
+			.AddBindingLayout(BindlessSystem::GetDummyLayout())
+			.AddBindingLayout(BindlessSystem::GetBindingLayout())
 			.Build(framebuffer, params);
 
 		m_QuadPSOCache.emplace(key, gp);
@@ -1270,11 +1216,6 @@ namespace ignite
 		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1));
 		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
-		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; i++)
-		{
-			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(i));
-		}
-
 		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
 		params.cullMode = nvrhi::RasterCullMode::None;
@@ -1286,6 +1227,8 @@ namespace ignite
 		Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
 		gp->SetShaders({ vertexShader, pixelShader })
 			.AddBindingLayout(bindingLayout)
+			.AddBindingLayout(BindlessSystem::GetDummyLayout())
+			.AddBindingLayout(BindlessSystem::GetBindingLayout())
 			.Build(framebuffer, params);
 
 		m_TextPSOCache.emplace(key, gp);
@@ -1420,13 +1363,6 @@ namespace ignite
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-		{
-			Ref<Texture> tex = textures[i];
-			if (!tex)
-				tex = Renderer::GetWhiteTexture();
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
-		}
 
 		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
 		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
@@ -1472,13 +1408,6 @@ namespace ignite
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-		{
-			Ref<Texture> tex = textures[i];
-			if (!tex)
-				tex = Renderer::GetWhiteTexture();
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
-		}
 
 		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
 		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");

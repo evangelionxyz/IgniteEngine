@@ -18,6 +18,9 @@ project "gtest"
         "%{THIRDPARTY_DIR}/gtest/googletest/include",
     }
 
+    filter "system:linux"
+        pic "On"
+
     filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         optimize "off"

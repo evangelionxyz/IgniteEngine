@@ -20,8 +20,9 @@
 * DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef BINDING_HELPERS_HLSLI
-#define BINDING_HELPERS_HLSLI
+#pragma once
+#ifndef IGN_BINDING_HELPERS_HLSLI
+#define IGN_BINDING_HELPERS_HLSLI
 
 #if defined(SPIRV) || defined(TARGET_VULKAN) // Support old-style and new-style platform macros
 
