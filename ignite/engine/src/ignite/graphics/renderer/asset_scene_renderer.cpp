@@ -55,8 +55,6 @@ namespace ignite
 
     AssetSceneRenderer::~AssetSceneRenderer()
     {
-        ClearPinnedAssets();
-
         m_StaticGeometryPipelineCache.clear();
         m_StaticTransparentPipelineCache.clear();
         m_SkeletalGeometryPipelineCache.clear();
@@ -680,16 +678,4 @@ namespace ignite
         args.vertexCount   = 6;
         cmd->draw(args);
     }
-
-    void AssetSceneRenderer::AddAssetPin(AssetHandle handle)
-    {
-        m_PinnedAssetHandles.push_back(handle);
-        AssetManager::GetInstance()->AddAssetPin(handle, BuildAssetPinName(handle));
-    }
-
-    std::string_view AssetSceneRenderer::BuildAssetPinName(AssetHandle handle)
-    {
-        return std::format("asset_scene_renderer_", (uint64_t)handle);
-    }
-
 }

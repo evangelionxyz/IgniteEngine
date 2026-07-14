@@ -155,10 +155,6 @@ namespace ignite
 
 		void EnsureSceneEnvironmentMap();
 
-        virtual void AddAssetPin(AssetHandle handle) = 0;
-        virtual std::string_view BuildAssetPinName(AssetHandle handle) = 0;
-        void ClearPinnedAssets();
-
         Ref<CascadedShadowMap> m_CascadedShadowMap;
 
         Ref<VertexBuffer> m_CompositeVertexBuffer;
@@ -183,8 +179,6 @@ namespace ignite
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         Scene_GPUData m_SceneGPUData;
-
-        std::vector<AssetHandle> m_PinnedAssetHandles;
 
         std::vector<uint32_t> m_SelectedEntities;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;

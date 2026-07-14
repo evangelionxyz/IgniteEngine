@@ -144,9 +144,6 @@ namespace ignite
         
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
 
-		virtual void AddAssetPin(AssetHandle handle) override;
-		virtual std::string_view BuildAssetPinName(AssetHandle handle) override;
-
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
 

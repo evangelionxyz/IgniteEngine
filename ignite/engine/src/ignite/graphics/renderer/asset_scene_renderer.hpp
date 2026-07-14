@@ -57,9 +57,6 @@ namespace ignite
 
         void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
 
-        virtual void AddAssetPin(AssetHandle handle) override;
-        virtual std::string_view BuildAssetPinName(AssetHandle handle) override;
-
     private:
         Ref<SkeletalMesh> m_PreviewSkeletalMesh;
         Ref<StaticMesh>   m_PreviewStaticMesh;

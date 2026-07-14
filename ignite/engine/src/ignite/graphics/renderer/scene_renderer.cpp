@@ -73,8 +73,6 @@ namespace ignite
 
     SceneRenderer::~SceneRenderer()
     {
-        ClearPinnedAssets();
-
         m_WidgetRenderer = nullptr;
         m_WorldEnvironment = nullptr;
 
@@ -103,14 +101,12 @@ namespace ignite
 
         if (m_WorldEnvironment)
         {
-            if (scene == nullptr && m_WorldEnvironment->environment)
-            {
-                m_WorldEnvironment->environment.reset();
-            }
+			if (scene == nullptr && m_WorldEnvironment->environment)
+			{
+				m_WorldEnvironment->environment.reset();
+			}
             m_WorldEnvironment = nullptr;
         }
-
-        ClearPinnedAssets();
 
         m_SelectedEntities.clear();
         m_Has2DPreRenderCache = false;
@@ -1791,19 +1787,6 @@ namespace ignite
 
         m_RenderTargets.emplace(camera, target);
         return target;
-    }
-
-    void SceneRenderer::AddAssetPin(AssetHandle handle)
-    {
-        m_PinnedAssetHandles.push_back(handle);
-
-        const auto assetPinName = BuildAssetPinName(handle);
-        AssetManager::GetInstance()->AddAssetPin(handle, assetPinName);
-    }
-
-    std::string_view SceneRenderer::BuildAssetPinName(AssetHandle handle)
-    {
-        return std::format("scene_renderer.", (uint64_t)handle);
     }
 
     template<typename MeshT>
