@@ -706,7 +706,7 @@ namespace ignite
         }
 
         project->SetActiveScene(transitionScene);
-        transitionScene->OnStart();
+        transitionScene->OnStart(currentScene->GetState());
 
         assetManager->ClearAssetPins("scene_transition");
 

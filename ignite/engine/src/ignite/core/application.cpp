@@ -421,7 +421,15 @@ namespace ignite
         while (m_Window->IsLooping())
         {
             IGN_PROFILE_SCOPE("MainThread::Frame");
+
+            // Reset per-frame relative mouse delta before processing new events
+            if (auto* activeInput = InputSystem::GetActiveSystem())
+            {
+                activeInput->ResetMouseDelta();
+            }
+
             while (SDL_PollEvent(&sdlEvent))
+
             {
                 if (auto* activeInput = InputSystem::GetActiveSystem())
                 {

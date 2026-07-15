@@ -86,6 +86,7 @@ namespace ignite
         static bool IsRenderThreadRunning();
         static std::thread::id GetMainThreadId();
         static ImGuiContext *GetImGuiContext();
+        ImGuiLayer *GetImGuiLayer() { return m_ImGuiLayer; }
 
         static Subsystem *AddSubsystem(Subsystem* subsystem);
         static Ref<vfs::NativeFileSystem> GetNativeFileSystem();

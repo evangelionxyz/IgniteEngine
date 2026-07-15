@@ -57,7 +57,6 @@ namespace ignite
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
             ProjectInfo projectCreateInfo;
 
-            ESceneState sceneState = ESceneState::Stop;
             nvrhi::RasterFillMode rasterFillMode = nvrhi::RasterFillMode::Solid;
             nvrhi::RasterCullMode rasterCullMode = nvrhi::RasterCullMode::Front;
         };

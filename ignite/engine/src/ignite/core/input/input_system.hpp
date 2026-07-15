@@ -39,6 +39,7 @@ namespace ignite
 		static bool IsModifierPressed(KeyModCode modcode);
 		static bool IsMouseButtonPressed(MouseCode button);
 		static glm::ivec2 GetMousePosition();
+		static glm::vec2 GetMouseDelta();
 
 		static bool IsActionPressed(const std::string &actionName);
 		static void SetInputMapping(Ref<class InputMapping> mapping);
@@ -70,6 +71,8 @@ namespace ignite
 		void SetMouseButton(MouseCode button, bool pressed);
 		void SetJoystickButton(uint8_t button, bool pressed);
 		void SetMousePosition(int x, int y);
+		void AddMouseDelta(float dx, float dy);
+		void ResetMouseDelta();
 
 		CursorMode GetCursorMode() const { return m_CursorMode; }
 		void SetCursorModeImpl(CursorMode mode);
@@ -84,6 +87,7 @@ namespace ignite
 		std::unordered_map<MouseCode, bool> m_MouseButtonState;
 		std::unordered_map<uint8_t, bool> m_JoystickButtonState;
 		glm::ivec2 m_MousePosition{ 0 };
+		glm::vec2 m_MouseDelta{ 0.0f };
 		CursorMode m_CursorMode = CursorMode::Normal;
 
 		Ref<class InputMapping> m_InputMapping;

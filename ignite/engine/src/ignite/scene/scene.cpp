@@ -243,9 +243,11 @@ namespace ignite
         m_Project = nullptr;
     }
 
-    void Scene::OnStart()
+    void Scene::OnStart(ESceneState playOrSimulateState)
     {
-        m_State = ESceneState::Play;
+		LOG_ASSERT(playOrSimulateState == ESceneState::Play || playOrSimulateState == ESceneState::Simulate, "Invalid scene state for OnStart");
+
+        m_State = playOrSimulateState;
 
         if (auto *scriptEngine = ScriptEngine::GetInstance())
         {
@@ -446,11 +448,9 @@ namespace ignite
 
         // Cap maximum delta time to prevent physics explosions/instability during large frame hitches
         if (deltaTime > 0.1f)
-        {
             deltaTime = 0.1f;
-        }
 
-        if (!((m_State & ESceneState::Paused) != ESceneState::None)  || m_StepFrame-- > 0)
+        if (!IsPaused() || m_StepFrame-- > 0)
         {
             IGN_PROFILE_SCOPE("Scene::RuntimeTick");
             timeInSeconds += deltaTime;
@@ -542,18 +542,6 @@ namespace ignite
                 }
             }
         }
-    }
-
-    void Scene::Focus()
-    {
-        m_State |= ESceneState::Focus;
-        // TODO
-    }
-
-    void Scene::Unfocus()
-    {
-        m_State &= ESceneState::Focus;
-        // TODO
     }
 
     Ref<Scene> Scene::Create(Project *project, const std::string &name)

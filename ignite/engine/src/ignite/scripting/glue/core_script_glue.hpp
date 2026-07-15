@@ -16,6 +16,7 @@ namespace ignite
         bool (*Input_IsModifierPressed)(uint16_t modCode);
         bool (*Input_IsMouseButtonPressed)(uint8_t button);
         void (*Input_GetMousePosition)(glm::vec2 *result);
+        void (*Input_GetMouseDelta)(glm::vec2 *result);
         void (*Input_SetMouseToCenter)();
         void (*Input_SetCursorMode)(int32_t mode);
         int32_t (*Input_GetCursorMode)();

@@ -172,7 +172,7 @@ namespace ignite
 
     void ScenePanel::OnUpdate(float deltaTime)
     {
-        if (m_Scene && m_EditorLayer->GetState().sceneState != ESceneState::Play)
+        if (m_Scene && !m_Scene->IsPlaying())
         {
             UpdateCameraInput(deltaTime);
         }
@@ -473,11 +473,11 @@ namespace ignite
 
                 if (m_SelectedEntities.size() > 1)
                 {
-					for (auto &[uuid, selectedEntity] : m_SelectedEntities)
-					{
-						if (selectedEntity.IsValid())
-							selectedUUIDs.push_back(uuid);
-					}
+                    for (auto &[uuid, selectedEntity] : m_SelectedEntities)
+                    {
+                        if (selectedEntity.IsValid())
+                            selectedUUIDs.push_back(uuid);
+                    }
                 }
 
                 ImGui::SetDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM, 
@@ -502,21 +502,21 @@ namespace ignite
                     for (size_t i = 0; i < count; ++i)
                     {
                         const UUID uuid = droppedUUIDs[i];
-						Entity droppedEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
+                        Entity droppedEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
 
                         if (droppedEntity)
                         {
-							// Capture old parent BEFORE re-parenting
-							UUID oldParent = droppedEntity.GetComponent<IDComponent>().parent;
-							UUID newParent = entity.GetComponent<IDComponent>().uuid;
+                            // Capture old parent BEFORE re-parenting
+                            UUID oldParent = droppedEntity.GetComponent<IDComponent>().parent;
+                            UUID newParent = entity.GetComponent<IDComponent>().uuid;
 
-							// the current 'entity' is the target (new parent for src)
-							if (SceneManager::AddChild(m_Scene.get(), entity, droppedEntity))
-							{
-								// Record the re-parent for undo
-								CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
-									m_Scene.get(), droppedEntity.GetUUID(), oldParent, newParent));
-							}
+                            // the current 'entity' is the target (new parent for src)
+                            if (SceneManager::AddChild(m_Scene.get(), entity, droppedEntity))
+                            {
+                                // Record the re-parent for undo
+                                CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
+                                    m_Scene.get(), droppedEntity.GetUUID(), oldParent, newParent));
+                            }
                         }
                     }
                 }
@@ -2802,8 +2802,7 @@ namespace ignite
                 // During Play, render to the Editor Viewport using the EditorPlayCamera (mirror of game camera
                 // with an editor-viewport-sized projection). During Stop/Simulate, use the editor camera as usual.
                 ICamera *editorViewCamera = nullptr;
-                const ESceneState sceneState = m_EditorLayer->GetState().sceneState;
-                if (sceneState == ESceneState::Play)
+                if (m_Scene->IsPlaying())
                 {
                     editorViewCamera = m_EditorLayer->GetEditorPlayCamera();
                 }
@@ -2826,23 +2825,9 @@ namespace ignite
                 globals::GEditor::EditorViewport.min = { canvasPos.x, canvasPos.y };
                 globals::GEditor::EditorViewport.max = { canvasSize.x, canvasSize.y };
 
-                if (sceneState == ESceneState::Play)
-                {
-                    if (m_SceneFocusCooldown > 0)
-                    {
-                        m_SceneFocusCooldown--;
-                    }
-
-                    if (m_SceneFocusCooldown == 0)
-                    {
-                        CursorMode curMode = InputSystem::GetActiveSystem()->GetCursorMode();
-                        if (curMode == CursorMode::Disabled || curMode == CursorMode::Captured)
-                        {
-                            m_SceneFocused = true;
-                        }
-                    }
-                }
-                else
+                // When not playing/simulating, make sure we clear focus state and restore cursor
+                const bool isPlayOrSimulate = m_Scene->IsRunning();
+                if (!isPlayOrSimulate)
                 {
                     if (m_SceneFocused)
                     {
@@ -2850,6 +2835,10 @@ namespace ignite
                         InputSystem::SetCursorMode(CursorMode::Normal);
                     }
                     m_SceneFocusCooldown = 0;
+                }
+                else if (m_SceneFocusCooldown > 0)
+                {
+                    m_SceneFocusCooldown--;
                 }
 
                 // Mouse position in screen space
@@ -2869,10 +2858,24 @@ namespace ignite
 
                 ImDrawList *drawList = ImGui::GetWindowDrawList();
 
+                // Click inside the viewport to (re-)focus in Play or Simulate modes
+				// Only allow focusing if the scene is not already focused and the cooldown has expired
+				// This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
+                if (!m_Data.sceneViewportGameplayVisible && isPlayOrSimulate && !m_SceneFocused && m_SceneFocusCooldown == 0)
+                {
+                    if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                    {
+                        m_SceneFocused = true;
+                        m_SceneFocusCooldown = 10;
+                        InputSystem::SetCursorMode(CursorMode::Disabled);
+                        InputSystem::SetMouseToCenter();
+                    }
+                }
+
                 if (m_SceneFocused)
                 {
-                    std::string bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
-                    ImVec2 textSize = ImGui::CalcTextSize(bannerText.c_str());
+                    const char* bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
+                    ImVec2 textSize = ImGui::CalcTextSize(bannerText);
                     
                     float bannerWidth = textSize.x + 24.0f;
                     float bannerHeight = textSize.y + 12.0f;
@@ -2887,13 +2890,22 @@ namespace ignite
                     
                     // Draw text centered inside the banner
                     ImVec2 textPos = { bannerMin.x + 12.0f, bannerMin.y + 6.0f };
-                    drawList->AddText(textPos, ImColor(255, 255, 255, 255), bannerText.c_str());
+                    drawList->AddText(textPos, ImColor(255, 255, 255, 255), bannerText);
                 }
+                else if (isPlayOrSimulate)
+                {
+                    // Show click-to-focus hint when unfocused in play/simulate
+                    const char* hintText = "Click to focus";
+                    ImVec2 textSize = ImGui::CalcTextSize(hintText);
+                    ImVec2 textPos = { canvasPos.x + (canvasSize.x - textSize.x) * 0.5f, canvasPos.y + 10.0f };
+                    drawList->AddText(textPos, ImColor(200, 200, 200, 180), hintText);
+                }
+
 
                 Entity clickedIconEntity = {};
 
                 // Draw editor icons (cameras, directional lights, etc.)
-                if (m_EditorLayer->GetState().sceneState != ESceneState::Play)
+                if (!m_Scene->IsPlaying())
                 {
                     glm::mat4 viewProjection = editorViewCamera->GetProjection() * editorViewCamera->GetView();
                     Rect viewportRect = { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max };
@@ -3019,7 +3031,7 @@ namespace ignite
                 }
 
                 // Mouse picking from viewport object-id attachment (on mouse down only)
-                if (m_EditorLayer->GetState().sceneState != ESceneState::Play)
+                if (!m_Scene->IsPlaying())
                 {
                     if (activeSceneRenderer)
                     {
@@ -3456,6 +3468,19 @@ namespace ignite
                         if (target)
                         {
                             {
+
+                                // Click inside the viewport to (re-)focus in Play or Simulate modes
+                                if (m_Scene->IsRunning() && !m_SceneFocused && m_SceneFocusCooldown == 0)
+                                {
+                                    if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                                    {
+                                        m_SceneFocused = true;
+                                        m_SceneFocusCooldown = 10;
+                                        InputSystem::SetCursorMode(CursorMode::Disabled);
+                                        InputSystem::SetMouseToCenter();
+                                    }
+                                }
+
                                 uint32_t localMouseX = 0;
                                 uint32_t localMouseY = 0;
 
@@ -3654,8 +3679,7 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        ESceneState sceneState = m_EditorLayer->GetState().sceneState;
-        const bool isScenePlaying = sceneState == ESceneState::Play;
+        const bool isScenePlaying = m_Scene->IsPlaying();
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
         ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
 
@@ -3665,7 +3689,7 @@ namespace ignite
         {
             if (isScenePlaying)
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); m_SceneFocused = false; });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3674,7 +3698,7 @@ namespace ignite
             }
             else
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); m_SceneFocused = true; });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3683,7 +3707,7 @@ namespace ignite
             }
         }
 
-        const bool isSceneSimulate = sceneState == ESceneState::Simulate;
+        const bool isSceneSimulate = m_Scene->IsSimulating();
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
         ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
 
@@ -3693,7 +3717,7 @@ namespace ignite
         {
             if (isSceneSimulate)
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); m_SceneFocused = false; });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3702,7 +3726,7 @@ namespace ignite
             }
             else
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); m_SceneFocused = true; });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3979,13 +4003,12 @@ namespace ignite
 
     void ScenePanel::OnEvent(Event &event)
     {
-        const ESceneState sceneState = m_EditorLayer->GetState().sceneState;
         EventDispatcher dispatcher(event);
 
         // Dispatch key pressed first to check for unfocus hotkey
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnKeyPressedEvent));
 
-        if (m_SceneFocused && sceneState == ESceneState::Play)
+        if (m_Scene && m_SceneFocused && m_Scene->IsPlaying())
         {
             event.Handled = true;
             return;
@@ -4000,12 +4023,12 @@ namespace ignite
     {
         if (m_SceneFocused)
         {
-            if (event.GetKeyCode() == Key::F1 && InputSystem::IsModifierPressed(KeyMod::LeftShift))
+            if (m_Scene && m_Scene->IsRunning() && event.GetKeyCode() == Key::F1 && InputSystem::IsModifierPressed(KeyMod::LeftShift))
             {
                 m_SceneFocused = false;
                 m_SceneFocusCooldown = 10;
                 InputSystem::SetCursorMode(CursorMode::Normal);
-                LOG_INFO("Scene play focused state released");
+                LOG_INFO("Scene play/simulate focused state released");
                 return true;
             }
         }

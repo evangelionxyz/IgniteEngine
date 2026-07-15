@@ -98,6 +98,13 @@ namespace ignite
             *result = absPos;
         }
 
+        static void Input_GetMouseDelta(glm::vec2 *result)
+        {
+            if (!result)
+                return;
+            *result = InputSystem::GetMouseDelta();
+        }
+
         static void Input_SetMouseToCenter()
         {
             InputSystem::SetMouseToCenter();
@@ -281,11 +288,13 @@ namespace ignite
             &Input_IsModifierPressed,
             &Input_IsMouseButtonPressed,
             &Input_GetMousePosition,
+            &Input_GetMouseDelta,
             &Input_SetMouseToCenter,
             &Input_SetCursorMode,
             &Input_GetCursorMode,
             &Input_IsMouseOverUI,
             &Input_IsActionPressed,
+
 
             &AssetManager_IsAssetHandleValid,
             &AssetManager_IsAssetLoaded,

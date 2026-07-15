@@ -17,6 +17,7 @@
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/imgui/imgui_nvrhi.hpp"
+#include "ignite/imgui/imgui_layer.hpp"
 #include "ignite/graphics/shader.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
 #include "ignite/globals/globals.hpp"
@@ -304,7 +305,7 @@ namespace ignite
             // multi select entity
             m_State.multiSelect = InputSystem::IsModifierPressed(KeyMod::LeftShift);
 
-            switch (m_State.sceneState)
+            switch (m_ActiveScene->GetState())
             {
             case ESceneState::Simulate:
             case ESceneState::Play:
@@ -320,6 +321,13 @@ namespace ignite
             }
 
             m_ScenePanel->OnUpdate(deltaTime);
+
+            // Block ImGui mouse/keyboard input while the scene viewport is focused
+            // so users can't accidentally drag editor panels during gameplay.
+            if (auto *imguiLayer = Application::GetInstance()->GetImGuiLayer())
+            {
+                imguiLayer->SetBlock(m_ScenePanel->m_SceneFocused);
+            }
         }
     }
 
@@ -456,17 +464,22 @@ namespace ignite
             }
             case Key::F5:
             {
-                (m_State.sceneState == ESceneState::Stop || m_State.sceneState == ESceneState::Simulate)
-                    ? OnScenePlay()
-                    : OnSceneStop();
-
+                if (m_ActiveScene)
+                {
+					(m_ActiveScene->IsStopped() || m_ActiveScene->IsRunning())
+						? OnScenePlay()
+						: OnSceneStop();
+                }
                 break;
             }
             case Key::F6:
             {
-                (m_State.sceneState == ESceneState::Stop || m_State.sceneState == ESceneState::Play)
-                    ? OnScenePlay()
-                    : OnSceneStop();
+                if (m_ActiveScene)
+                {
+					(m_ActiveScene->IsStopped() || m_ActiveScene->IsRunning())
+						? OnSceneSimulate()
+						: OnSceneStop();
+                }
                 break;
             }
             case Key::D:
@@ -587,7 +600,7 @@ namespace ignite
         // Resize the EditorPlayCamera (mirror camera for Play mode → Editor Viewport).
         // It gets its own independent render target sized to the Editor Viewport,
         // so resizing the editor panel never affects the Game Viewport's projection.
-        if (m_State.sceneState == ESceneState::Play)
+        if (m_ActiveScene->IsRunning())
         {
             if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
             {
@@ -636,7 +649,7 @@ namespace ignite
         // Render to Edit Viewport
         if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
-            switch (m_State.sceneState)
+            switch (m_ActiveScene->GetState())
             {
                 case ESceneState::Play:
                 {
@@ -1148,10 +1161,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        if (m_State.sceneState == ESceneState::Play)
-        {
-            OnSceneStop();
-        }
+		OnSceneStop();
 
         m_CurrentSceneFilePath.clear();
 
@@ -1228,10 +1238,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        if (m_State.sceneState == ESceneState::Play)
-        {
-            OnSceneStop();
-        }
+		OnSceneStop();
 
         if (Ref<Scene> openScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get()))
         {
@@ -1346,34 +1353,24 @@ namespace ignite
 
 		m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
 
-		if (m_State.sceneState != ESceneState::Stop)
-			OnSceneStop();
-
-		m_State.sceneState = ESceneState::Play;
+		OnSceneStop();
 
 		// copy initial components to new scene
 		SetActiveScene(SceneManager::Copy(m_EditorScene));
-		m_ActiveScene->OnStart();
+		m_ActiveScene->OnStart(ESceneState::Play);
     }
 
     void EditorLayer::OnSceneStop()
     {
-		m_State.sceneState = ESceneState::Stop;
-
 		m_ActiveScene->OnStop();
 		SetActiveScene(m_EditorScene);
     }
 
     void EditorLayer::OnSceneSimulate()
     {
-		if (m_State.sceneState != ESceneState::Stop)
-			OnSceneStop();
-
-		m_State.sceneState = ESceneState::Simulate;
-
 		// copy initial components to new scene
 		SetActiveScene(SceneManager::Copy(m_EditorScene));
-		m_ActiveScene->OnStart();
+		m_ActiveScene->OnStart(ESceneState::Simulate);
     }
 
     void EditorLayer::OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter)
@@ -1648,10 +1645,7 @@ namespace ignite
 										m_EditorScene->OnStop();
 									}
 
-									if (m_State.sceneState == ESceneState::Play)
-									{
-										OnSceneStop();
-									}
+									OnSceneStop();
 
 									// Clear active scene references
 									SetActiveScene(nullptr);

@@ -24,7 +24,17 @@ public static class Input
         }
     }
 
+    public static Vector2 MouseDelta
+    {
+        get
+        {
+            CoreInternalCalls.Input_GetMouseDelta(out Vector2 result);
+            return result;
+        }
+    }
+
     public static Vector2 mousePosition => MousePosition;
+
 
     public static bool IsMouseOverUI => CoreInternalCalls.Input_IsMouseOverUI();
 

@@ -409,9 +409,9 @@ TEST(SceneTransition, BasicTransition)
     assetManager->AssignAsset(sceneBHandle, sceneB);
 
     project->SetActiveScene(sceneA);
-    sceneA->OnStart();
+    sceneA->OnStart(ESceneState::Play);
 
-    LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void*)project->GetActiveScene().get(), (int)sceneA->GetStateFlag());
+    LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void*)project->GetActiveScene().get(), (int)sceneA->GetState());
 
     EXPECT_EQ(project->GetActiveScene(), sceneA);
 
@@ -420,7 +420,7 @@ TEST(SceneTransition, BasicTransition)
     SceneManager::ExecutePendingTransition();
 
     Ref<Scene> activeScene = project->GetActiveScene();
-    LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void*)activeScene.get(), (int)sceneA->GetStateFlag(), (int)activeScene->GetStateFlag());
+    LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void*)activeScene.get(), (int)sceneA->GetState(), (int)activeScene->GetState());
 
     EXPECT_NE(activeScene, sceneA);
     EXPECT_EQ(activeScene->name, "SceneB");
@@ -506,7 +506,7 @@ TEST(SceneTransition, SharedAssetPinned)
     sceneB->registry->emplace<Sprite2DComponent>(entityB, sprite);
 
     project->SetActiveScene(sceneA);
-    sceneA->OnStart();
+    sceneA->OnStart(ESceneState::Play);
 
     EXPECT_TRUE(assetManager->IsAssetLoaded(sharedTextureHandle));
 
