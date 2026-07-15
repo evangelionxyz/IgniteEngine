@@ -483,9 +483,10 @@ namespace ignite
         return Entity{};
     }
 
-    void SceneManager::AddChild(Scene *scene, Entity destination, Entity source)
+    bool SceneManager::AddChild(Scene *scene, Entity destination, Entity source)
     {
-        scene->SetDirtyFlag(true);
+		if (source == destination)
+			return false;
 
         IDComponent &destIDComp = destination.GetComponent<IDComponent>();
         IDComponent &sourceIDComp = source.GetComponent<IDComponent>();
@@ -502,7 +503,10 @@ namespace ignite
             // add to target parent
             destIDComp.AddChild(sourceIDComp.uuid);
             sourceIDComp.parent = destIDComp.uuid;
+
+            return true;
         }
+        return false;
     }
 
     bool SceneManager::ChildExists(Scene *scene, Entity destination, Entity source)

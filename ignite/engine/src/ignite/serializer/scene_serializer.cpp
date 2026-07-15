@@ -1327,6 +1327,7 @@ namespace ignite
             }
         }
 
+        desScene->SetDirtyFlag(false);
         return desScene;
     }
 }

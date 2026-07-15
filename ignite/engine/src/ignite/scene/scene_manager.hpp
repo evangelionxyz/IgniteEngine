@@ -52,7 +52,7 @@ namespace ignite
         static Entity GetEntity(Scene *scene, const std::string &name);
         static Entity DuplicateEntity(Scene *scene, Entity entity, bool addToParent = true);
 
-        static void AddChild(Scene *scene, Entity destination, Entity source);
+        static bool AddChild(Scene *scene, Entity destination, Entity source);
         static bool ChildExists(Scene *scene, Entity destination, Entity source);
         static bool IsParent(Scene *scene, UUID target, UUID source);
         static Entity FindChild(Scene *scene, Entity parent, UUID uuid);

@@ -18,6 +18,7 @@ namespace ignite
         void (*Input_GetMousePosition)(glm::vec2 *result);
         void (*Input_SetMouseToCenter)();
         void (*Input_SetCursorMode)(int32_t mode);
+        int32_t (*Input_GetCursorMode)();
         bool (*Input_IsMouseOverUI)();
         bool (*Input_IsActionPressed)(const char *actionName);
 

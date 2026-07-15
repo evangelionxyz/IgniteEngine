@@ -18,6 +18,7 @@ public static class CoreInternalCalls
     private static CoreNativeAPI.Funcs.InputGetMousePositionFn? s_InputGetMousePosition;
     private static CoreNativeAPI.Funcs.InputSetMouseToCenterFn? s_InputSetMouseToCenter;
     private static CoreNativeAPI.Funcs.InputSetCursorModeFn? s_InputSetCursorMode;
+    private static CoreNativeAPI.Funcs.InputGetCursorModeFn? s_InputGetCursorMode;
     private static CoreNativeAPI.Funcs.InputIsMouseOverUIFn? s_InputIsMouseOverUI;
     private static CoreNativeAPI.Funcs.InputIsActionPressedFn? s_InputIsActionPressed;
 
@@ -44,6 +45,7 @@ public static class CoreInternalCalls
         s_InputGetMousePosition = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputGetMousePositionFn>(api.Input_GetMousePosition);
         s_InputSetMouseToCenter = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputSetMouseToCenterFn>(api.Input_SetMouseToCenter);
         s_InputSetCursorMode = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputSetCursorModeFn>(api.Input_SetCursorMode);
+        s_InputGetCursorMode = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputGetCursorModeFn>(api.Input_GetCursorMode);
         s_InputIsMouseOverUI = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputIsMouseOverUIFn>(api.Input_IsMouseOverUI);
         s_InputIsActionPressed = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputIsActionPressedFn>(api.Input_IsActionPressed);
         
@@ -118,6 +120,12 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         s_InputSetCursorMode!(mode);
+    }
+
+    internal static int Input_GetCursorMode()
+    {
+        EnsureInitialized();
+        return s_InputGetCursorMode!();
     }
 
     internal static bool Input_IsMouseOverUI()

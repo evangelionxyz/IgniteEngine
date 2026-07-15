@@ -383,7 +383,7 @@ namespace ignite
 						{
 							if (auto mesh = m_ActiveProject->GetAsset<StaticMesh>(smc.handle))
 							{
-								const auto &aabb = mesh->GetWorldAABB();
+								const auto &aabb = smc.worldAABB;
 								focusCenter = (aabb.min + aabb.max) * 0.5f;
 								halfExtents = glm::abs(aabb.max - aabb.min);
 							}
@@ -396,7 +396,7 @@ namespace ignite
                         {
                             if (auto mesh = m_ActiveProject->GetAsset<SkeletalMesh>(smc.handle))
                             {
-                                const auto &aabb = mesh->GetWorldAABB();
+                                const auto &aabb = smc.worldAABB;
                                 focusCenter = (aabb.min + aabb.max) * 0.5f;
                                 halfExtents = glm::abs(aabb.max - aabb.min);
                             }

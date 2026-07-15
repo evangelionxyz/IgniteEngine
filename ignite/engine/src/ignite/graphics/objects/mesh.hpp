@@ -320,20 +320,11 @@ namespace ignite
 		virtual ~Mesh() = default;
         
 		virtual const AABB &CalculateLocalAABB() = 0;
-		const AABB &GetWorldAABB() { return worldAABB; }
-
-        void CalculateWorldAABB(const glm::mat4 &worldMatrix)
-        {
-			worldAABB = localAABB.Transform(worldMatrix);
-        }
 
 		static AssetType GetStaticType() { return AssetType::Mesh; }
 		virtual AssetType GetAssetType() override { return GetStaticType(); }
 
 		AABB localAABB;
-
-    private:
-		AABB worldAABB;
     };
 
 	class IGN_API StaticMesh : public Mesh

@@ -73,11 +73,11 @@ namespace ignite
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
 
     ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
-        : IPanel(windowTitle, editor), m_Gizmo()
+        : IPanel(windowTitle, editor), m_Gizmo(), m_SceneFocused(false), m_SceneFocusCooldown(0)
     {
         Application* app = Application::GetInstance();
 
-		const uint32_t width = app->GetCreateInfo().width;
+        const uint32_t width = app->GetCreateInfo().width;
         const uint32_t height = app->GetCreateInfo().height;
 
         m_EditorCamera = EditorCamera("ScenePanel-Editor Camera");
@@ -125,8 +125,8 @@ namespace ignite
         m_Icons["simulate"] = Texture::Create("resources/ui/editor/ic_editor_simulate.png", createInfo, cmd);
         m_Icons["stepping"] = Texture::Create("resources/ui/editor/ic_editor_stepping.png", createInfo, cmd);
 
-		m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, cmd);
-		m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, cmd);
+        m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, cmd);
+        m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, cmd);
 
         cmd->close();
         device->executeCommandList(cmd);
@@ -189,21 +189,31 @@ namespace ignite
         {
             if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
             {
-                LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ITEM, that should be an entity");
-                Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
+                const size_t count = payload->DataSize / sizeof(UUID);
+                const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
 
-                // check if src entity has parent
-                auto &idComp = src.GetComponent<IDComponent>();
-                if (idComp.parent != 0)
+                for (size_t i = 0; i < count; ++i)
                 {
-                    UUID oldParent = idComp.parent;
-                    // current parent should be removed
-                    Entity parent = SceneManager::GetEntity(m_Scene.get(), idComp.parent);
-                    parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
-                    idComp.parent = UUID(0);
+                    const UUID uuid = droppedUUIDs[i];
+                    Entity droppedEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
 
-                    // Record for undo — reparenting to root (UUID 0)
-                    CommandManager::AddCommand(CreateScope<EntityReparentCommand>(m_Scene.get(), src.GetUUID(), oldParent, UUID(0)));
+                    if (!droppedEntity)
+                        continue;
+
+                    // check if src entity has parent
+                    auto &idComp = droppedEntity.GetComponent<IDComponent>();
+                    if (idComp.parent != UUID(0))
+                    {
+                        UUID oldParent = idComp.parent;
+                        // current parent should be removed
+                        Entity parent = SceneManager::GetEntity(m_Scene.get(), idComp.parent);
+                        parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
+                        idComp.parent = UUID(0);
+
+                        // Record for undo — re-parenting to root (UUID 0)
+                        CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
+                            m_Scene.get(), droppedEntity.GetUUID(), oldParent, UUID(0)));
+                    }
                 }
             }
 
@@ -301,14 +311,14 @@ namespace ignite
                     entity.AddComponent<SkeletalMeshComponent>();
                 }
             }
-			if (ImGui::MenuItem("Static Mesh"))
-			{
-				entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Static Mesh"));
-				if (entity.IsValid() && !entity.HasComponent<StaticMeshComponent>())
-				{
-					entity.AddComponent<StaticMeshComponent>();
-				}
-			}
+            if (ImGui::MenuItem("Static Mesh"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Static Mesh"));
+                if (entity.IsValid() && !entity.HasComponent<StaticMeshComponent>())
+                {
+                    entity.AddComponent<StaticMeshComponent>();
+                }
+            }
             if (ImGui::MenuItem("Directional Light"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
@@ -424,18 +434,25 @@ namespace ignite
                 {
                     if (const Entity e = ShowEntityContextMenu())
                     {
-                        SceneManager::AddChild(m_Scene.get(), entity, e);
+                        if (SceneManager::AddChild(m_Scene.get(), entity, e))
+                            m_Scene->SetDirtyFlag(true);
+
                         SetSelectedEntity(e);
                     }
 
                     ImGui::EndMenu();
                 }
                 
-                if (ImGui::MenuItem("Delete"))
+                auto deletString = std::format("Delete ({})", m_SelectedEntities.size());
+                if (ImGui::MenuItem(deletString.c_str()))
                 {
                     DestroyEntity(entity);
+                    for (Entity e : m_SelectedEntities | std::views::values)
+                    {
+                        if (e.IsValid())
+                            DestroyEntity(e);
+                    }
                     isDeleting = true;
-
                     m_SelectedEntities.clear();
                 }
 
@@ -449,7 +466,23 @@ namespace ignite
             // drag and drop
             if (isPrefab == false && ImGui::BeginDragDropSource())
             {
-                ImGui::SetDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM, &entity, sizeof(Entity));
+                // Collect UUIDs of selected entities
+                std::vector<UUID> selectedUUIDs;
+                selectedUUIDs.reserve(m_SelectedEntities.size() + 1); // Selected entities + the current entity being dragged
+                selectedUUIDs.push_back(entity.GetUUID());
+
+                if (m_SelectedEntities.size() > 1)
+                {
+					for (auto &[uuid, selectedEntity] : m_SelectedEntities)
+					{
+						if (selectedEntity.IsValid())
+							selectedUUIDs.push_back(uuid);
+					}
+                }
+
+                ImGui::SetDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM, 
+                    selectedUUIDs.data(),
+                    selectedUUIDs.size() * sizeof(UUID));
 
                 ImGui::BeginTooltip();
                 ImGui::Text("%s %llu", idComp.name.c_str(), static_cast<u64>(idComp.uuid));
@@ -463,18 +496,29 @@ namespace ignite
             {
                 if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                 {
-                    LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ITEM, that should be an entity");
-                    Entity src { *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
-                    
-                    // Capture old parent BEFORE reparenting
-                    UUID oldParent = src.GetComponent<IDComponent>().parent;
-                    UUID newParent = entity.GetComponent<IDComponent>().uuid;
+                    const size_t count = payload->DataSize / sizeof(UUID);
+                    const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
 
-                    // the current 'entity' is the target (new parent for src)
-                    SceneManager::AddChild(m_Scene.get(), entity, src);
+                    for (size_t i = 0; i < count; ++i)
+                    {
+                        const UUID uuid = droppedUUIDs[i];
+						Entity droppedEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
 
-                    // Record the reparent for undo
-                    CommandManager::AddCommand(CreateScope<EntityReparentCommand>(m_Scene.get(), src.GetUUID(), oldParent, newParent));
+                        if (droppedEntity)
+                        {
+							// Capture old parent BEFORE re-parenting
+							UUID oldParent = droppedEntity.GetComponent<IDComponent>().parent;
+							UUID newParent = entity.GetComponent<IDComponent>().uuid;
+
+							// the current 'entity' is the target (new parent for src)
+							if (SceneManager::AddChild(m_Scene.get(), entity, droppedEntity))
+							{
+								// Record the re-parent for undo
+								CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
+									m_Scene.get(), droppedEntity.GetUUID(), oldParent, newParent));
+							}
+                        }
+                    }
                 }
 
                 ImGui::EndDragDropTarget();
@@ -703,13 +747,13 @@ namespace ignite
 
                 if (c.cascadeShadow)
                 {
-					UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
-					UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
-					UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
-					UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
-					UI::DrawFloatControl("Shadow Distance", &c.shadowDistance, 1.0f, 10.0f, 2000.0f);
+                    UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+                    UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
+                    UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
+                    UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
+                    UI::DrawFloatControl("Shadow Distance", &c.shadowDistance, 1.0f, 10.0f, 2000.0f);
 
-					static const char *resolutionLabels[] = 
+                    static const char *resolutionLabels[] = 
                     { 
                         "Low - 512px", 
                         "Medium - 1024px", 
@@ -974,114 +1018,114 @@ namespace ignite
                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
             });
 
-			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
-			{
-				auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
+            RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
 
-				bool isMeshLoaded = c.handle != AssetHandle(0);
+                bool isMeshLoaded = c.handle != AssetHandle(0);
 
-				std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-				UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
-				{
-					if (ImGui::BeginDragDropTarget())
-					{
-						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-						{
-							LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-							AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-							auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-							AssetMetaData metadata = assetManager->GetMetaData(handle);
+                std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
+                UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
+                {
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                            AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-							if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
-							{
-								metadata.type = AssetType::StaticMesh;
-								assetManager->AssignMetaData(handle, metadata);
-								assetManager->UnloadAsset(handle);
-								c.handle = handle;
-							}
-						}
-						ImGui::EndDragDropTarget();
-					}
+                            if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
+                            {
+                                metadata.type = AssetType::StaticMesh;
+                                assetManager->AssignMetaData(handle, metadata);
+                                assetManager->UnloadAsset(handle);
+                                c.handle = handle;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
 
-					if (isMeshLoaded)
-					{
-						ImGui::SameLine();
-						if (ImGui::Button("X"))
-						{
-							c.handle = AssetHandle(0); // reset the mesh
-						}
-					}
-				});
+                    if (isMeshLoaded)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X"))
+                        {
+                            c.handle = AssetHandle(0); // reset the mesh
+                        }
+                    }
+                });
 
-				if (isMeshLoaded)
-				{
-					Ref<StaticMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<StaticMesh>(c.handle);
-					if (sm)
-					{
-						// Override Materials
-						if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
-						{
-							const auto &instances = sm->GetMeshInstances();
-							for (size_t i = 0; i < instances.size(); ++i)
-							{
-								const auto &instance = instances[i];
-								std::string submeshName = instance->GetName();
-								if (submeshName.empty())
-								{
-									submeshName = "Submesh " + std::to_string(i);
-								}
-								else
-								{
-									submeshName = std::format("{} (Submesh {})", submeshName, i);
-								}
+                if (isMeshLoaded)
+                {
+                    Ref<StaticMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<StaticMesh>(c.handle);
+                    if (sm)
+                    {
+                        // Override Materials
+                        if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            const auto &instances = sm->GetMeshInstances();
+                            for (size_t i = 0; i < instances.size(); ++i)
+                            {
+                                const auto &instance = instances[i];
+                                std::string submeshName = instance->GetName();
+                                if (submeshName.empty())
+                                {
+                                    submeshName = "Submesh " + std::to_string(i);
+                                }
+                                else
+                                {
+                                    submeshName = std::format("{} (Submesh {})", submeshName, i);
+                                }
 
-								AssetHandle overrideMaterialHandle = AssetHandle(0);
-								auto it = c.overrideMaterials.find(static_cast<int>(i));
-								if (it != c.overrideMaterials.end())
-								{
-									overrideMaterialHandle = it->second;
-								}
+                                AssetHandle overrideMaterialHandle = AssetHandle(0);
+                                auto it = c.overrideMaterials.find(static_cast<int>(i));
+                                if (it != c.overrideMaterials.end())
+                                {
+                                    overrideMaterialHandle = it->second;
+                                }
 
-								bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
-								std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
+                                bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
+                                std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
 
-								UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [this, &c, i, isOverrideLoaded, &selectedEntity]()
-								{
-									if (ImGui::BeginDragDropTarget())
-									{
-										if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-										{
-											LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-											AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-											auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-											AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [this, &c, i, isOverrideLoaded, &selectedEntity]()
+                                {
+                                    if (ImGui::BeginDragDropTarget())
+                                    {
+                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        {
+                                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                            auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                            AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-											if (metadata.type == AssetType::Material)
-											{
-												StaticMeshComponent before = c;
-												c.overrideMaterials[static_cast<int>(i)] = handle;
-												CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-											}
-										}
-										ImGui::EndDragDropTarget();
-									}
+                                            if (metadata.type == AssetType::Material)
+                                            {
+                                                StaticMeshComponent before = c;
+                                                c.overrideMaterials[static_cast<int>(i)] = handle;
+                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                            }
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
 
-									if (isOverrideLoaded)
-									{
-										ImGui::SameLine();
-										if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
-										{
+                                    if (isOverrideLoaded)
+                                    {
+                                        ImGui::SameLine();
+                                        if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
+                                        {
                                             StaticMeshComponent before = c;
-											c.overrideMaterials.erase(static_cast<int>(i));
-											CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-										}
-									}
-								});
-							}
-						}
-					}
-				}
-			});
+                                            c.overrideMaterials.erase(static_cast<int>(i));
+                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            });
 
             RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
             {
@@ -1416,64 +1460,64 @@ namespace ignite
                             }
                         }
 
-						// --- SOCKET SYSTEM: Render Socket Attachments UI ---
-						if (sm->GetSkeletonHandle() != AssetHandle(0))
-						{
-							Ref<Skeleton> skeleton = m_EditorLayer->GetActiveProject()->GetAsset<Skeleton>(sm->GetSkeletonHandle());
-							if (skeleton && !skeleton->sockets.empty())
-							{
-								if (ImGui::CollapsingHeader("Socket Attachments", ImGuiTreeNodeFlags_DefaultOpen))
-								{
-									for (const JointSocket &socket : skeleton->sockets)
-									{
-										AssetHandle attachedMeshHandle = AssetHandle(0);
-										auto it = c.socketAttachments.find(socket.name);
-										if (it != c.socketAttachments.end())
-										{
-											attachedMeshHandle = it->second;
-										}
+                        // --- SOCKET SYSTEM: Render Socket Attachments UI ---
+                        if (sm->GetSkeletonHandle() != AssetHandle(0))
+                        {
+                            Ref<Skeleton> skeleton = m_EditorLayer->GetActiveProject()->GetAsset<Skeleton>(sm->GetSkeletonHandle());
+                            if (skeleton && !skeleton->sockets.empty())
+                            {
+                                if (ImGui::CollapsingHeader("Socket Attachments", ImGuiTreeNodeFlags_DefaultOpen))
+                                {
+                                    for (const JointSocket &socket : skeleton->sockets)
+                                    {
+                                        AssetHandle attachedMeshHandle = AssetHandle(0);
+                                        auto it = c.socketAttachments.find(socket.name);
+                                        if (it != c.socketAttachments.end())
+                                        {
+                                            attachedMeshHandle = it->second;
+                                        }
 
-										bool isAttached = attachedMeshHandle != AssetHandle(0);
-										std::string socketMeshLabel = isAttached
-											? assetManager->GetAssetDisplayName(attachedMeshHandle)
-											: "Drag Mesh Here";
+                                        bool isAttached = attachedMeshHandle != AssetHandle(0);
+                                        std::string socketMeshLabel = isAttached
+                                            ? assetManager->GetAssetDisplayName(attachedMeshHandle)
+                                            : "Drag Mesh Here";
 
-										UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [this, &c, socketName = socket.name, isAttached, &selectedEntity]()
-											{
-												if (ImGui::BeginDragDropTarget())
-												{
-													if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-													{
-														LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-														AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-														auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-														AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                        UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [this, &c, socketName = socket.name, isAttached, &selectedEntity]()
+                                            {
+                                                if (ImGui::BeginDragDropTarget())
+                                                {
+                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                                    {
+                                                        LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                                        AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                                        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-														if (metadata.type == AssetType::Mesh)
-														{
-															SkeletalMeshComponent before = c;
-															c.socketAttachments[socketName] = handle;
-															CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-														}
-													}
-													ImGui::EndDragDropTarget();
-												}
+                                                        if (metadata.type == AssetType::Mesh)
+                                                        {
+                                                            SkeletalMeshComponent before = c;
+                                                            c.socketAttachments[socketName] = handle;
+                                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                        }
+                                                    }
+                                                    ImGui::EndDragDropTarget();
+                                                }
 
-												if (isAttached)
-												{
-													ImGui::SameLine();
-													if (ImGui::Button((std::string("X##socket_") + socketName).c_str()))
-													{
-														SkeletalMeshComponent before = c;
-														c.socketAttachments.erase(socketName);
-														CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-													}
-												}
-											});
-									}
-								}
-							}
-						}
+                                                if (isAttached)
+                                                {
+                                                    ImGui::SameLine();
+                                                    if (ImGui::Button((std::string("X##socket_") + socketName).c_str()))
+                                                    {
+                                                        SkeletalMeshComponent before = c;
+                                                        c.socketAttachments.erase(socketName);
+                                                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                    }
+                                                }
+                                            });
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -1604,14 +1648,14 @@ namespace ignite
                     c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
                 }
 
-				if (c.dirty && m_Data.sceneViewportGameplayVisible)
-				{
-					c.camera.UpdateView();
-					c.camera.UpdateProjection(
-						static_cast<uint32_t>(globals::GEditor::GameViewport.max.x),
-						static_cast<uint32_t>(globals::GEditor::GameViewport.max.y));
-					c.dirty = false;
-				}
+                if (c.dirty && m_Data.sceneViewportGameplayVisible)
+                {
+                    c.camera.UpdateView();
+                    c.camera.UpdateProjection(
+                        static_cast<uint32_t>(globals::GEditor::GameViewport.max.x),
+                        static_cast<uint32_t>(globals::GEditor::GameViewport.max.y));
+                    c.dirty = false;
+                }
             });
 
             RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
@@ -1667,13 +1711,30 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<RigidbodyComponent>();
 
-                std::array<const char *, 3> bodyTypeLabels = { "Static", "Kinematic", "Dynamic" };
-                int bodyTypeIndex = static_cast<int>(c.bodyType);
+                static std::array<const char *, 3> bodyTypeLabels = { "Static", "Kinematic", "Dynamic" };
+                static std::array<const char *, 2> motionTypeLabels = { "Discrete", "LinearCast" };
 
+                int bodyTypeIndex = static_cast<int>(c.bodyType);
                 if (UI::DrawComboBox("Body Type", bodyTypeLabels.data(), static_cast<int>(bodyTypeLabels.size()), &bodyTypeIndex))
                 {
                     c.bodyType = static_cast<RigidbodyComponent::EBodyType>(bodyTypeIndex);
                 }
+
+                int motionTypeIndex = static_cast<int>(c.motionQuality);
+                if (UI::DrawComboBox("Motion Quality", motionTypeLabels.data(), static_cast<int>(motionTypeLabels.size()), &motionTypeIndex))
+                {
+                    c.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(motionTypeIndex);
+                }
+
+                UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+                UI::DrawFloatControl("Mass", &c.mass, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+
+                UI::DrawCheckbox("Use Gravity", &c.useGravity);
+                UI::DrawCheckbox("Allow sleeping", &c.allowSleeping);
+                UI::DrawCheckbox("Retain Acceleration", &c.retainAcceleration);
+
+                UI::DrawCheckbox3("Translation Lock XYZ", &c.moveX, &c.moveY, &c.moveZ);
+                UI::DrawCheckbox3("Rotation Lock XYZ", &c.rotateX, &c.rotateY, &c.rotateZ);
             });
 
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
@@ -2487,15 +2548,24 @@ namespace ignite
                                                 {
                                                     if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                                                     {
-                                                        LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                                        if (payload->DataSize == sizeof(Entity))
+                                                        const size_t count = payload->DataSize / sizeof(UUID);
+                                                        auto UUIDs = static_cast<UUID *>(payload->Data);
+
+                                                        // TODO: Support multiple entities drag and drop
+
+                                                        // Get first entity from the payload
+                                                        if (count > 0)
                                                         {
-                                                            Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
-                                                            uint64_t id = (uint64_t)src.GetUUID();
-                                                            dummy.SetValue<uint64_t>(id);
-                                                            (*classRegisteredInstanceField)[name] = dummy;
-                                                            if (c.runtimeScriptInstance)
-                                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                            UUID entityUUID = UUIDs[0];
+                                                            Entity src{ SceneManager::GetEntity(m_Scene.get(), entityUUID) };
+                                                            if (src)
+                                                            {
+                                                                uint64_t id = (uint64_t)src.GetUUID();
+                                                                dummy.SetValue<uint64_t>(id);
+                                                                (*classRegisteredInstanceField)[name] = dummy;
+                                                                if (c.runtimeScriptInstance)
+                                                                    c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2653,9 +2723,9 @@ namespace ignite
                     case CompType_SkeletalMesh:
                         entity.AddComponent<SkeletalMeshComponent>();
                         break;
-					case CompType_StaticMesh:
-						entity.AddComponent<StaticMeshComponent>();
-						break;
+                    case CompType_StaticMesh:
+                        entity.AddComponent<StaticMeshComponent>();
+                        break;
                     case CompType_Rigidbody:
                         entity.AddComponent<RigidbodyComponent>();
                         break;
@@ -2729,303 +2799,350 @@ namespace ignite
             {
                 activeSceneRenderer = m_Scene->GetSceneRenderer();
 
-				// During Play, render to the Editor Viewport using the EditorPlayCamera (mirror of game camera
-				// with an editor-viewport-sized projection). During Stop/Simulate, use the editor camera as usual.
-				ICamera *editorViewCamera = nullptr;
-				const ESceneState sceneState = m_EditorLayer->GetState().sceneState;
-				if (sceneState == ESceneState::Play)
-				{
-					editorViewCamera = m_EditorLayer->GetEditorPlayCamera();
-				}
-				else
-				{
-					editorViewCamera = (ICamera *)&m_EditorCamera;
-				}
+                // During Play, render to the Editor Viewport using the EditorPlayCamera (mirror of game camera
+                // with an editor-viewport-sized projection). During Stop/Simulate, use the editor camera as usual.
+                ICamera *editorViewCamera = nullptr;
+                const ESceneState sceneState = m_EditorLayer->GetState().sceneState;
+                if (sceneState == ESceneState::Play)
+                {
+                    editorViewCamera = m_EditorLayer->GetEditorPlayCamera();
+                }
+                else
+                {
+                    editorViewCamera = (ICamera *)&m_EditorCamera;
+                }
 
                 auto target = activeSceneRenderer->GetRenderTarget(editorViewCamera);
 
-				const ImGuiWindow *window = ImGui::GetCurrentWindow();
+                const ImGuiWindow *window = ImGui::GetCurrentWindow();
 
-				m_IsFocused = ImGui::IsWindowFocused();
-				m_IsHovered = ImGui::IsWindowHovered();
+                m_IsFocused = ImGui::IsWindowFocused();
+                m_IsHovered = ImGui::IsWindowHovered();
 
-				// Calculating Scene Viewport location
-				const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
-				const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
+                // Calculating Scene Viewport location
+                const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
+                const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
-				globals::GEditor::EditorViewport.min = { canvasPos.x, canvasPos.y };
-				globals::GEditor::EditorViewport.max = { canvasSize.x, canvasSize.y };
+                globals::GEditor::EditorViewport.min = { canvasPos.x, canvasPos.y };
+                globals::GEditor::EditorViewport.max = { canvasSize.x, canvasSize.y };
 
-				// Mouse position in screen space
-				const ImVec2 &mousePos = ImGui::GetMousePos();
-				m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
+                if (sceneState == ESceneState::Play)
+                {
+                    if (m_SceneFocusCooldown > 0)
+                    {
+                        m_SceneFocusCooldown--;
+                    }
+
+                    if (m_SceneFocusCooldown == 0)
+                    {
+                        CursorMode curMode = InputSystem::GetActiveSystem()->GetCursorMode();
+                        if (curMode == CursorMode::Disabled || curMode == CursorMode::Captured)
+                        {
+                            m_SceneFocused = true;
+                        }
+                    }
+                }
+                else
+                {
+                    if (m_SceneFocused)
+                    {
+                        m_SceneFocused = false;
+                        InputSystem::SetCursorMode(CursorMode::Normal);
+                    }
+                    m_SceneFocusCooldown = 0;
+                }
+
+                // Mouse position in screen space
+                const ImVec2 &mousePos = ImGui::GetMousePos();
+                m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
                 if (target)
                 {
-					// Render scene texture to imgui
-					ImTextureID editorViewImage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
-					ImGui::Image(editorViewImage, canvasSize);
+                    // Render scene texture to imgui
+                    ImTextureID editorViewImage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
+                    ImGui::Image(editorViewImage, canvasSize);
                 }
 
-				const bool imageHovered = ImGui::IsItemHovered();
-				const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-				const bool mouseDoubleDown = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+                const bool imageHovered = ImGui::IsItemHovered();
+                const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+                const bool mouseDoubleDown = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
 
-				ImDrawList *drawList = ImGui::GetWindowDrawList();
+                ImDrawList *drawList = ImGui::GetWindowDrawList();
 
-				Entity clickedIconEntity = {};
-
-				// Draw editor icons (cameras, directional lights, etc.)
-				if (m_EditorLayer->GetState().sceneState != ESceneState::Play)
+                if (m_SceneFocused)
                 {
-					glm::mat4 viewProjection = editorViewCamera->GetProjection() * editorViewCamera->GetView();
-					Rect viewportRect = { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max };
+                    std::string bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
+                    ImVec2 textSize = ImGui::CalcTextSize(bannerText.c_str());
+                    
+                    float bannerWidth = textSize.x + 24.0f;
+                    float bannerHeight = textSize.y + 12.0f;
+                    
+                    ImVec2 bannerMin = { canvasPos.x + (canvasSize.x - bannerWidth) * 0.5f, canvasPos.y + 10.0f };
+                    ImVec2 bannerMax = { bannerMin.x + bannerWidth, bannerMin.y + bannerHeight };
+                    
+                    // Draw a rounded semi-transparent dark banner
+                    drawList->AddRectFilled(bannerMin, bannerMax, ImColor(15, 15, 15, 180), 6.0f);
+                    // Draw border
+                    drawList->AddRect(bannerMin, bannerMax, ImColor(255, 128, 0, 220), 6.0f, 0, 1.5f);
+                    
+                    // Draw text centered inside the banner
+                    ImVec2 textPos = { bannerMin.x + 12.0f, bannerMin.y + 6.0f };
+                    drawList->AddText(textPos, ImColor(255, 255, 255, 255), bannerText.c_str());
+                }
 
-					// Camera icons & frustum outlines
-					auto cameraViewReg = m_Scene->registry->view<TransformComponent, CameraComponent>();
-					for (entt::entity e : cameraViewReg)
-					{
-						auto &tr = m_Scene->registry->get<TransformComponent>(e);
-						if (!tr.visible)
-							continue;
+                Entity clickedIconEntity = {};
 
-						const glm::mat4 world = tr.world.GetMatrix();
-						const glm::vec3 worldPos = glm::vec3(world[3]);
+                // Draw editor icons (cameras, directional lights, etc.)
+                if (m_EditorLayer->GetState().sceneState != ESceneState::Play)
+                {
+                    glm::mat4 viewProjection = editorViewCamera->GetProjection() * editorViewCamera->GetView();
+                    Rect viewportRect = { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max };
 
-						ImVec2 screenPos;
-						if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenPos))
-						{
-							Ref<Texture> texture = m_Icons["camera"];
-							if (texture && texture->GetHandle())
-							{
-								const float size = 36.0f;
-								ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
-								ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
-								drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax);
+                    // Camera icons & frustum outlines
+                    auto cameraViewReg = m_Scene->registry->view<TransformComponent, CameraComponent>();
+                    for (entt::entity e : cameraViewReg)
+                    {
+                        auto &tr = m_Scene->registry->get<TransformComponent>(e);
+                        if (!tr.visible)
+                            continue;
 
-								if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
-								{
-									if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
-										mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
-									{
-										clickedIconEntity = Entity{ e, m_Scene.get() };
-									}
-								}
-							}
-						}
+                        const glm::mat4 world = tr.world.GetMatrix();
+                        const glm::vec3 worldPos = glm::vec3(world[3]);
 
-						auto &cc = m_Scene->registry->get<CameraComponent>(e);
-						if (cc.camera.GetAspectRatioPreset() != SceneCamera::AspectRatioPreset::Free)
-						{
-							glm::mat4 camViewProj = cc.camera.GetProjection() * glm::inverse(world);
-							Frustum frustum(camViewProj);
-							auto edges = frustum.GetEdges();
-							for (const auto &edge : edges)
-							{
-								ImVec2 screenStart, screenEnd;
-								if (Math::ProjectWorldToScreen(edge.first, viewProjection, viewportRect, screenStart)
-									&& Math::ProjectWorldToScreen(edge.second, viewProjection, viewportRect, screenEnd))
-								{
-									drawList->AddLine(screenStart, screenEnd, IM_COL32(255, 255, 255, 128), 1.0f);
-								}
-							}
-						}
-					}
+                        ImVec2 screenPos;
+                        if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenPos))
+                        {
+                            Ref<Texture> texture = m_Icons["camera"];
+                            if (texture && texture->GetHandle())
+                            {
+                                const float size = 36.0f;
+                                ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
+                                ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
+                                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax);
 
-					// Light icons & direction vectors
-					auto dirLightReg = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
-					for (entt::entity e : dirLightReg)
-					{
-						auto &tr = m_Scene->registry->get<TransformComponent>(e);
-						if (!tr.visible)
-							continue;
+                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                                {
+                                    if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
+                                        mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
+                                    {
+                                        clickedIconEntity = Entity{ e, m_Scene.get() };
+                                    }
+                                }
+                            }
+                        }
 
-						auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
+                        auto &cc = m_Scene->registry->get<CameraComponent>(e);
+                        if (cc.camera.GetAspectRatioPreset() != SceneCamera::AspectRatioPreset::Free)
+                        {
+                            glm::mat4 camViewProj = cc.camera.GetProjection() * glm::inverse(world);
+                            Frustum frustum(camViewProj);
+                            auto edges = frustum.GetEdges();
+                            for (const auto &edge : edges)
+                            {
+                                ImVec2 screenStart, screenEnd;
+                                if (Math::ProjectWorldToScreen(edge.first, viewProjection, viewportRect, screenStart)
+                                    && Math::ProjectWorldToScreen(edge.second, viewProjection, viewportRect, screenEnd))
+                                {
+                                    drawList->AddLine(screenStart, screenEnd, IM_COL32(255, 255, 255, 128), 1.0f);
+                                }
+                            }
+                        }
+                    }
 
-						const glm::mat4 world = tr.world.GetMatrix();
-						const glm::vec3 worldPos = glm::vec3(world[3]);
+                    // Light icons & direction vectors
+                    auto dirLightReg = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
+                    for (entt::entity e : dirLightReg)
+                    {
+                        auto &tr = m_Scene->registry->get<TransformComponent>(e);
+                        if (!tr.visible)
+                            continue;
 
-						ImVec2 screenPos;
-						if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenPos))
-						{
-							Ref<Texture> texture = m_Icons["lighting"];
-							if (texture && texture->GetHandle())
-							{
-								const float size = 36.0f;
-								ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
-								ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
-								ImU32 col = IM_COL32(
-									static_cast<int>(lc.color.r * 255.0f),
-									static_cast<int>(lc.color.g * 255.0f),
-									static_cast<int>(lc.color.b * 255.0f),
-									static_cast<int>(lc.color.a * 255.0f)
-								);
-								drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
+                        auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
 
-								if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
-								{
-									if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
-										mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
-									{
-										clickedIconEntity = Entity{ e, m_Scene.get() };
-									}
-								}
-							}
-						}
+                        const glm::mat4 world = tr.world.GetMatrix();
+                        const glm::vec3 worldPos = glm::vec3(world[3]);
 
-						const glm::vec3 direction = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-						ImVec2 screenStart, screenEnd;
-						if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenStart)
-							&& Math::ProjectWorldToScreen(worldPos - direction * 5.0f, viewProjection, viewportRect, screenEnd))
-						{
-							ImU32 col = IM_COL32(
-								static_cast<int>(lc.color.r * 255.0f),
-								static_cast<int>(lc.color.g * 255.0f),
-								static_cast<int>(lc.color.b * 255.0f),
-								static_cast<int>(lc.color.a * 255.0f)
-							);
-							drawList->AddLine(screenStart, screenEnd, col, 1.5f);
-						}
-					}
-				}
+                        ImVec2 screenPos;
+                        if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenPos))
+                        {
+                            Ref<Texture> texture = m_Icons["lighting"];
+                            if (texture && texture->GetHandle())
+                            {
+                                const float size = 36.0f;
+                                ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
+                                ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
+                                ImU32 col = IM_COL32(
+                                    static_cast<int>(lc.color.r * 255.0f),
+                                    static_cast<int>(lc.color.g * 255.0f),
+                                    static_cast<int>(lc.color.b * 255.0f),
+                                    static_cast<int>(lc.color.a * 255.0f)
+                                );
+                                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
 
-				{
-					const float padding = 18.0f;
-					float yPosition = 6.0f;
-					const float fps = ImGui::GetIO().Framerate;
-					std::string statusStr = std::format("FPS {:.5} {:.3}ms", fps, 1000.0f / fps);
-					drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
+                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                                {
+                                    if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
+                                        mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
+                                    {
+                                        clickedIconEntity = Entity{ e, m_Scene.get() };
+                                    }
+                                }
+                            }
+                        }
 
-					yPosition += padding;
-					statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-					drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
-				}
+                        const glm::vec3 direction = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+                        ImVec2 screenStart, screenEnd;
+                        if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenStart)
+                            && Math::ProjectWorldToScreen(worldPos - direction * 5.0f, viewProjection, viewportRect, screenEnd))
+                        {
+                            ImU32 col = IM_COL32(
+                                static_cast<int>(lc.color.r * 255.0f),
+                                static_cast<int>(lc.color.g * 255.0f),
+                                static_cast<int>(lc.color.b * 255.0f),
+                                static_cast<int>(lc.color.a * 255.0f)
+                            );
+                            drawList->AddLine(screenStart, screenEnd, col, 1.5f);
+                        }
+                    }
+                }
 
-				// Mouse picking from viewport object-id attachment (on mouse down only)
-				if (m_EditorLayer->GetState().sceneState != ESceneState::Play)
-				{
-					if (activeSceneRenderer)
-					{
-						const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
-						const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
-						activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
-					}					if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
-					{
-						if (clickedIconEntity.IsValid())
-						{
-							Entity targetSelection = clickedIconEntity;
-							if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
-							{
-								const auto parent = clickedIconEntity.GetParentUUID();
-								if (parent != UUID(0))
-								{
-									if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
-									{
-										targetSelection = parentEntity;
-									}
-								}
-							}
-							SetSelectedEntity(targetSelection);
-						}
-						else
-						{
-							Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
-							if (objectIdTexture && objectIdTexture->GetHandle())
-							{
-								const int texWidth = objectIdTexture->GetWidth();
-								const int texHeight = objectIdTexture->GetHeight();
+                {
+                    const float padding = 18.0f;
+                    float yPosition = 6.0f;
+                    const float fps = ImGui::GetIO().Framerate;
+                    std::string statusStr = std::format("FPS {:.5} {:.3}ms", fps, 1000.0f / fps);
+                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
-								if (canvasSize.x > 0.0f && canvasSize.y > 0.0f && texWidth > 0 && texHeight > 0)
-								{
-									const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / canvasSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
-									const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / canvasSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
+                    yPosition += padding;
+                    statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                }
 
-									nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-									nvrhi::TextureDesc stagingDesc = objectIdTexture->GetHandle()->getDesc();
-									stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-									nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+                // Mouse picking from viewport object-id attachment (on mouse down only)
+                if (m_EditorLayer->GetState().sceneState != ESceneState::Play)
+                {
+                    if (activeSceneRenderer)
+                    {
+                        const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
+                        const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
+                        activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                    }					if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                    {
+                        if (clickedIconEntity.IsValid())
+                        {
+                            Entity targetSelection = clickedIconEntity;
+                            if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
+                            {
+                                const auto parent = clickedIconEntity.GetParentUUID();
+                                if (parent != UUID(0))
+                                {
+                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
+                                    {
+                                        targetSelection = parentEntity;
+                                    }
+                                }
+                            }
+                            SetSelectedEntity(targetSelection);
+                        }
+                        else
+                        {
+                            Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
+                            if (objectIdTexture && objectIdTexture->GetHandle())
+                            {
+                                const int texWidth = objectIdTexture->GetWidth();
+                                const int texHeight = objectIdTexture->GetHeight();
 
-									nvrhi::CommandListHandle copyCmd = device->createCommandList();
-									copyCmd->open();
-									copyCmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), objectIdTexture->GetHandle(), nvrhi::TextureSlice());
-									copyCmd->close();
-									device->executeCommandList(copyCmd);
+                                if (canvasSize.x > 0.0f && canvasSize.y > 0.0f && texWidth > 0 && texHeight > 0)
+                                {
+                                    const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / canvasSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
+                                    const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / canvasSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
 
-									size_t rowPitch = 0;
-									if (void *mapped = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
-									{
-										const auto pixelData = static_cast<const uint32_t *>(mapped);
-										const uint32_t pickedObjectId = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
-										device->unmapStagingTexture(stagingTexture);
+                                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+                                    nvrhi::TextureDesc stagingDesc = objectIdTexture->GetHandle()->getDesc();
+                                    stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+                                    nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
 
-										Entity pickedEntity = {};
-										if (pickedObjectId != 0xFFFFFFFFu)
-										{
-											m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
-											{
-												if (pickedEntity.IsValid())
-													return;
+                                    nvrhi::CommandListHandle copyCmd = device->createCommandList();
+                                    copyCmd->open();
+                                    copyCmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), objectIdTexture->GetHandle(), nvrhi::TextureSlice());
+                                    copyCmd->close();
+                                    device->executeCommandList(copyCmd);
 
-												const auto objectId = static_cast<uint32_t>(static_cast<uint64_t>(id.uuid));
-												if (objectId == pickedObjectId)
-												{
-													pickedEntity = Entity{ e, m_Scene.get() };
-												}
-											});
-										}
+                                    size_t rowPitch = 0;
+                                    if (void *mapped = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
+                                    {
+                                        const auto pixelData = static_cast<const uint32_t *>(mapped);
+                                        const uint32_t pickedObjectId = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
+                                        device->unmapStagingTexture(stagingTexture);
 
-										if (pickedEntity.IsValid())
-										{
-											Entity targetSelection = pickedEntity;
+                                        Entity pickedEntity = {};
+                                        if (pickedObjectId != 0xFFFFFFFFu)
+                                        {
+                                            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
+                                            {
+                                                if (pickedEntity.IsValid())
+                                                    return;
 
-											// Single click: prefer selecting the direct parent group first.
-											// Double click: select the exact clicked entity.
-											if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
-											{
-												const auto parent = pickedEntity.GetParentUUID();
-												if (parent != UUID(0))
-												{
-													if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
-													{
-														targetSelection = parentEntity;
-													}
-												}
-											}
+                                                const auto objectId = static_cast<uint32_t>(static_cast<uint64_t>(id.uuid));
+                                                if (objectId == pickedObjectId)
+                                                {
+                                                    pickedEntity = Entity{ e, m_Scene.get() };
+                                                }
+                                            });
+                                        }
 
-											SetSelectedEntity(targetSelection);
-										}
-										else if (!m_EditorLayer->GetState().multiSelect)
-										{
-											SetSelectedEntity(Entity{});
-											SetGizmoOperation(GizmoOperation::NONE);
-										}
-									}
-								}
-							}
-						}
-					}
+                                        if (pickedEntity.IsValid())
+                                        {
+                                            Entity targetSelection = pickedEntity;
 
-					if (ImGui::BeginDragDropTarget())
-					{
-						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-						{
-							if (payload->DataSize == sizeof(AssetHandle))
-							{
-								auto *handle = static_cast<AssetHandle *>(payload->Data);
-								if (handle && *handle != AssetHandle(0))
-								{
-									AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
-									if (metadata.type == AssetType::Scene)
-									{
-										const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
-										m_EditorLayer->OpenScene(filepath);
-									}
-								}
-							}
-						}
+                                            // Single click: prefer selecting the direct parent group first.
+                                            // Double click: select the exact clicked entity.
+                                            if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
+                                            {
+                                                const auto parent = pickedEntity.GetParentUUID();
+                                                if (parent != UUID(0))
+                                                {
+                                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
+                                                    {
+                                                        targetSelection = parentEntity;
+                                                    }
+                                                }
+                                            }
 
-						ImGui::EndDragDropTarget();
-					}
+                                            SetSelectedEntity(targetSelection);
+                                        }
+                                        else if (!m_EditorLayer->GetState().multiSelect)
+                                        {
+                                            SetSelectedEntity(Entity{});
+                                            SetGizmoOperation(GizmoOperation::NONE);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            if (payload->DataSize == sizeof(AssetHandle))
+                            {
+                                auto *handle = static_cast<AssetHandle *>(payload->Data);
+                                if (handle && *handle != AssetHandle(0))
+                                {
+                                    AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
+                                    if (metadata.type == AssetType::Scene)
+                                    {
+                                        const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
+                                        m_EditorLayer->OpenScene(filepath);
+                                    }
+                                }
+                            }
+                        }
+
+                        ImGui::EndDragDropTarget();
+                    }
 
                     auto view = m_EditorCamera.GetView();
                     auto &projection = m_EditorCamera.GetProjection();
@@ -3247,7 +3364,7 @@ namespace ignite
             }
             else
             {
-				ImGui::Text("No Scene");
+                ImGui::Text("No Scene");
             }
         }
 
@@ -3266,7 +3383,7 @@ namespace ignite
                 // Preview camera
                 if (m_Scene)
                 {
-					auto activeSceneRenderer = m_Scene->GetSceneRenderer();
+                    auto activeSceneRenderer = m_Scene->GetSceneRenderer();
                     ImGui::TextUnformatted("Zoom");
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(120.0f);
@@ -3333,50 +3450,50 @@ namespace ignite
                         const bool imageHovered = cursor.x >= imagePos.x && cursor.x <= imagePos.x + imageSize.x  // X Bounds
                                                && cursor.y >= imagePos.y && cursor.y <= imagePos.y + imageSize.y; // Y Bounds
 
-						ImDrawList *drawList = ImGui::GetWindowDrawList();
-						auto target = activeSceneRenderer->GetRenderTarget(camera);
+                        ImDrawList *drawList = ImGui::GetWindowDrawList();
+                        auto target = activeSceneRenderer->GetRenderTarget(camera);
 
                         if (target)
                         {
-							{
-								uint32_t localMouseX = 0;
-								uint32_t localMouseY = 0;
+                            {
+                                uint32_t localMouseX = 0;
+                                uint32_t localMouseY = 0;
 
-								// We need to store the Game-play Mouse Position if only the Image is hovered
-								if (imageHovered)
-								{
-									const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
-									const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
-									localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(target->widgetRT->GetWidth(), 1u)));
-									localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(target->widgetRT->GetHeight(), 1u)));
+                                // We need to store the Game-play Mouse Position if only the Image is hovered
+                                if (imageHovered)
+                                {
+                                    const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
+                                    const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
+                                    localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(target->widgetRT->GetWidth(), 1u)));
+                                    localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(target->widgetRT->GetHeight(), 1u)));
 
-									float rx = u * baseImageSize.x;
-									float ry = v * baseImageSize.y;
-									InputSystem::SetGameplayMousePosition(rx, ry, true);
-								}
-								else
-								{
-									// Otherwise set it to Zero and and Disable it
-									InputSystem::SetGameplayMousePosition(0.0f, 0.0f, false);
-								}
+                                    float rx = u * baseImageSize.x;
+                                    float ry = v * baseImageSize.y;
+                                    InputSystem::SetGameplayMousePosition(rx, ry, true);
+                                }
+                                else
+                                {
+                                    // Otherwise set it to Zero and and Disable it
+                                    InputSystem::SetGameplayMousePosition(0.0f, 0.0f, false);
+                                }
 
-								// Set the Widget Mouse Position
-								activeSceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
-							}
+                                // Set the Widget Mouse Position
+                                activeSceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                            }
 
-							if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
-							{
-								const ImVec2 delta = ImGui::GetIO().MouseDelta;
-								m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
-							}
+                            if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+                            {
+                                const ImVec2 delta = ImGui::GetIO().MouseDelta;
+                                m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
+                            }
 
-							globals::GEditor::GameViewport.min = { baseImagePos.x, baseImagePos.y };
-							globals::GEditor::GameViewport.max = { baseImageSize.x, baseImageSize.y };
+                            globals::GEditor::GameViewport.min = { baseImagePos.x, baseImagePos.y };
+                            globals::GEditor::GameViewport.max = { baseImageSize.x, baseImageSize.y };
 
-							ImTextureID gameplayViewImaage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
-							drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
-							drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
-							drawList->PopClipRect();
+                            ImTextureID gameplayViewImaage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
+                            drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
+                            drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
+                            drawList->PopClipRect();
                         }
                         
 
@@ -3525,12 +3642,12 @@ namespace ignite
         case ImGuizmo::OPERATION::TRANSLATE:
             ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[0], 0.05f, 0.0f, 100.0f, "Snap %.2f");
             break;
-		case ImGuizmo::OPERATION::ROTATE:
-			ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[1], 0.05f, 0.0f, 100.0f, "Snap %.2f");
-			break;
-		case ImGuizmo::OPERATION::SCALE:
-			ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[2], 0.05f, 0.0f, 100.0f, "Snap %.2f");
-			break;
+        case ImGuizmo::OPERATION::ROTATE:
+            ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[1], 0.05f, 0.0f, 100.0f, "Snap %.2f");
+            break;
+        case ImGuizmo::OPERATION::SCALE:
+            ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[2], 0.05f, 0.0f, 100.0f, "Snap %.2f");
+            break;
         }
         ImGui::SameLine();
 
@@ -3557,7 +3674,7 @@ namespace ignite
             }
             else
             {
-				Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3576,7 +3693,7 @@ namespace ignite
         {
             if (isSceneSimulate)
             {
-				Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3585,7 +3702,7 @@ namespace ignite
             }
             else
             {
-				Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3862,11 +3979,37 @@ namespace ignite
 
     void ScenePanel::OnEvent(Event &event)
     {
+        const ESceneState sceneState = m_EditorLayer->GetState().sceneState;
         EventDispatcher dispatcher(event);
+
+        // Dispatch key pressed first to check for unfocus hotkey
+        dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnKeyPressedEvent));
+
+        if (m_SceneFocused && sceneState == ESceneState::Play)
+        {
+            event.Handled = true;
+            return;
+        }
 
         dispatcher.Dispatch<MouseScrolledEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseScrolledEvent));
         dispatcher.Dispatch<MouseMovedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseMovedEvent));
         dispatcher.Dispatch<JoystickConnectionEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnJoystickConnectionEvent));
+    }
+
+    bool ScenePanel::OnKeyPressedEvent(KeyPressedEvent &event)
+    {
+        if (m_SceneFocused)
+        {
+            if (event.GetKeyCode() == Key::F1 && InputSystem::IsModifierPressed(KeyMod::LeftShift))
+            {
+                m_SceneFocused = false;
+                m_SceneFocusCooldown = 10;
+                InputSystem::SetCursorMode(CursorMode::Normal);
+                LOG_INFO("Scene play focused state released");
+                return true;
+            }
+        }
+        return false;
     }
 
     bool ScenePanel::OnMouseScrolledEvent(MouseScrolledEvent &event)

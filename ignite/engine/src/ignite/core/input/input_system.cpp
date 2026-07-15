@@ -131,6 +131,10 @@ namespace ignite
 		{
 			const auto size = s_Window->GetSize();
 			SDL_WarpMouseInWindow(s_Window->GetWindowHandle(), size.x / 2.0f, size.y / 2.0f);
+			if (s_ActiveSystem)
+			{
+				s_ActiveSystem->SetMousePosition(size.x / 2, size.y / 2);
+			}
 		}
 	}
 

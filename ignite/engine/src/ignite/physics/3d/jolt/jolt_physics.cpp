@@ -6,6 +6,7 @@
 #include "ignite/core/types.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/scene.hpp"
+#include "ignite/scene/scene_manager.hpp"
 
 #include <Jolt/Core/Factory.h>
 
@@ -309,11 +310,43 @@ namespace ignite
                 }
                 else
                 {
-                    // we don't care about the parent
-                    tr.local.translation = JoltToGlmVec3(rb.body->GetPosition());
-                    tr.local.rotation = JoltToGlmQuat(rb.body->GetRotation());
-                    tr.world.translation = tr.local.translation;
-                    tr.world.rotation = tr.local.rotation;
+                    glm::vec3 worldTranslation = JoltToGlmVec3(rb.body->GetPosition());
+                    glm::quat worldRotation = JoltToGlmQuat(rb.body->GetRotation());
+
+                    if (idc.parent != 0)
+                    {
+                        Entity parentEntity = SceneManager::GetEntity(m_Scene, idc.parent);
+                        if (parentEntity.IsValid())
+                        {
+                            const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
+                            glm::mat4 parentWorldMatrix = parentTr.world.GetMatrix();
+                            glm::mat4 invParentWorldMatrix = glm::inverse(parentWorldMatrix);
+                            
+                            glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation) * glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), tr.world.scale);
+                            glm::mat4 childLocalMatrix = invParentWorldMatrix * childWorldMatrix;
+                            
+                            glm::vec3 savedLocalScale = tr.local.scale;
+                            Transform::Decompose(childLocalMatrix, tr.local);
+                            tr.local.scale = savedLocalScale;
+                            
+                            tr.world.translation = worldTranslation;
+                            tr.world.rotation = worldRotation;
+                        }
+                        else
+                        {
+                            tr.local.translation = worldTranslation;
+                            tr.local.rotation = worldRotation;
+                            tr.world.translation = worldTranslation;
+                            tr.world.rotation = worldRotation;
+                        }
+                    }
+                    else
+                    {
+                        tr.local.translation = worldTranslation;
+                        tr.local.rotation = worldRotation;
+                        tr.world.translation = worldTranslation;
+                        tr.world.rotation = worldRotation;
+                    }
                 }
             }
         }

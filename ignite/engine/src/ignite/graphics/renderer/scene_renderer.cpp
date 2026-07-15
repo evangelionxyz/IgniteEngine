@@ -510,7 +510,7 @@ namespace ignite
 						continue;
 
 					// Perform cascade frustum culling
-					if (!cascadeFrustum.IsAABBVisible(sm->GetWorldAABB()))
+					if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
 						continue;
 
 					const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
@@ -543,7 +543,7 @@ namespace ignite
                         continue;
 
                     // Perform cascade frustum culling
-                    if (!cascadeFrustum.IsAABBVisible(sm->GetWorldAABB()))
+                    if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
                         continue;
 
                     const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
@@ -621,7 +621,7 @@ namespace ignite
                 if (!mesh)
                     continue;
 
-                if (!frustum.IsAABBVisible(mesh->GetWorldAABB()))
+                if (!frustum.IsAABBVisible(smc.worldAABB))
                     continue;
 
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
@@ -645,7 +645,7 @@ namespace ignite
                 if (!mesh)
                     continue;
 
-                if (!frustum.IsAABBVisible(mesh->GetWorldAABB()))
+                if (!frustum.IsAABBVisible(smc.worldAABB))
                     continue;
 
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
@@ -1078,7 +1078,7 @@ namespace ignite
 				if (!sm)
                     continue;
 
-				m_Renderer2D->DrawAABB(sm->GetWorldAABB());
+				m_Renderer2D->DrawAABB(smc.worldAABB);
 			}
 
             auto skeletalAabbView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
@@ -1093,7 +1093,7 @@ namespace ignite
 				if (!sm)
 					continue;
 
-				m_Renderer2D->DrawAABB(sm->GetWorldAABB());
+				m_Renderer2D->DrawAABB(smc.worldAABB);
             }
         }
 

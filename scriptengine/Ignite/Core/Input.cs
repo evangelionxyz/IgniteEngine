@@ -42,6 +42,7 @@ public static class Input
 
     public static void SetMouseToCenter() => CoreInternalCalls.Input_SetMouseToCenter();
     public static void SetCursorMode(CursorMode mode) => CoreInternalCalls.Input_SetCursorMode((int)mode);
+    public static CursorMode GetCursorMode() => (CursorMode)CoreInternalCalls.Input_GetCursorMode();
 }
 
 public enum CursorMode

@@ -85,10 +85,10 @@ public static partial class Mathf
             float s3 = (float)System.Math.Sin(roll / 2);
 
             return new Quaternion(
-                s1 * c2 * c3 + c1 * s2 * s3,
-                c1 * s2 * c3 - s1 * c2 * s3,
-                c1 * c2 * s3 + s1 * s2 * c3,
-                c1 * c2 * c3 - s1 * s2 * s3
+                s2 * c1 * c3 + c2 * s1 * s3,
+                c2 * s1 * c3 - s2 * c1 * s3,
+                c2 * c1 * s3 - s2 * s1 * c3,
+                c2 * c1 * c3 + s2 * s1 * s3
             );
         }
 

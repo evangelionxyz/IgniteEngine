@@ -263,7 +263,9 @@ namespace ignite
             if (as.handle == AssetHandle(0))
                 continue;
 
-            Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+            // Main thread
+			// Load the sound asset immediately to ensure it's ready for playback
+            Ref<FmodSound> sound = m_AssetManager->GetAssetImmediate<FmodSound>(as.handle);
             if (as.playOnStart)
             {
                 if (sound)
@@ -371,7 +373,7 @@ namespace ignite
             {
                 const auto worldMatrix = tr.world.GetMatrix();
                 smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-                mesh->CalculateWorldAABB(worldMatrix);
+                smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
             }
         }
 
@@ -441,6 +443,13 @@ namespace ignite
     void Scene::OnUpdateRuntimeSimulate(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
+
+        // Cap maximum delta time to prevent physics explosions/instability during large frame hitches
+        if (deltaTime > 0.1f)
+        {
+            deltaTime = 0.1f;
+        }
+
         if (!((m_State & ESceneState::Paused) != ESceneState::None)  || m_StepFrame-- > 0)
         {
             IGN_PROFILE_SCOPE("Scene::RuntimeTick");
@@ -455,8 +464,6 @@ namespace ignite
                 });
             }
 
-            UpdateTransforms(deltaTime);
-
             {
                 IGN_PROFILE_SCOPE("Scene::Physics2D");
                 m_Physics2D->Simulate(deltaTime);
@@ -466,6 +473,8 @@ namespace ignite
                 IGN_PROFILE_SCOPE("Scene::Physics3D");
                 m_JoltScene->Simulate(deltaTime);
             }
+
+			UpdateTransforms(deltaTime);
 
             // Dispatch Jolt collision events to C# scripts
             {
@@ -670,7 +679,7 @@ namespace ignite
             {
                 const auto worldMatrix = tr.world.GetMatrix();
                 smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-                mesh->CalculateWorldAABB(worldMatrix);
+                smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
             }
 
             AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(smc, mesh);
