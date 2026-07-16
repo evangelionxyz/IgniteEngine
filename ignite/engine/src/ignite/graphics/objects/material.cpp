@@ -28,6 +28,13 @@ namespace ignite
             GPUUploadSync::DeviceWaitIdle(device);
         }
 
+		AssetManager::GetInstance()->RemoveAssetPin(baseColorTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(baseColorTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(emissiveTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(emissiveTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(metallicTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(metallicTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(roughnessTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(roughnessTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(normalTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(normalTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(occlusionTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(occlusionTextureHandle)));
+
         // Clear binding set first (references other resources)
         m_BindingSet = nullptr;
 
@@ -58,7 +65,7 @@ namespace ignite
             }
         }
 
-        auto isTextureReady = [](AssetHandle textureHandle, Ref<Texture> &outTexture, Ref<Texture> fallback) -> bool
+        auto isTextureReady = [this](AssetHandle textureHandle, Ref<Texture> &outTexture, Ref<Texture> fallback) -> bool
         {
             if (textureHandle == AssetHandle(0))
             {
@@ -70,7 +77,8 @@ namespace ignite
             const bool ready = result && result->IsReady();
 			if (result && result->IsReady())
 			{
-                AssetManager::GetInstance()->AddAssetPin(textureHandle, std::format("material_{}", static_cast<uint64_t>(textureHandle)));
+                AssetManager::GetInstance()->AddAssetPin(textureHandle, 
+                    std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(textureHandle)));
 				outTexture = result;
 			}
             return ready;
