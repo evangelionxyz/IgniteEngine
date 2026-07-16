@@ -234,8 +234,26 @@ namespace ignite
 			const auto width = target->sceneRT->GetWidth();
 			const auto height = target->sceneRT->GetHeight();
 
+            // Differentiate between Edit Viewport and Game Viewport cameras.
+            // This is crucial to prevent resources (Bloom, SSAO, Edge Detection) from fighting
+            // and constantly recreating textures when both viewports are active with different sizes.
+            bool isGameCamera = false;
+            if (m_Scene)
+            {
+                if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+                {
+                    const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                    if (camera == &cc.camera)
+                    {
+                        isGameCamera = true;
+                    }
+                }
+            }
+
+            // Skip selection highlights/outlines for the game camera (gameplay viewport).
+            // This avoids running EdgeDetection compute shaders and recreating the outline texture for the game's resolution.
             Ref<Texture> edgeTexture = nullptr;
-            if (m_EdgeDetection && !m_SelectedEntities.empty())
+            if (!isGameCamera && m_EdgeDetection && !m_SelectedEntities.empty())
             {
                 if (!m_EdgeDetection->GetOutputTexture() || m_EdgeDetection->GetOutputTexture()->GetWidth() != static_cast<int>(width) || m_EdgeDetection->GetOutputTexture()->GetHeight() != static_cast<int>(height))
                 {
@@ -267,26 +285,30 @@ namespace ignite
             Ref<Texture> bloomTexture = nullptr;
             if (postProcessing.enableBloom)
             {
-                m_EditorBloom->settings.intensity = postProcessing.bloomIntensity;
-                m_EditorBloom->settings.knee = postProcessing.bloomKnee;
-                m_EditorBloom->settings.radius = postProcessing.bloomRadius;
-                m_EditorBloom->settings.threshold = postProcessing.bloomThreshold;
-                m_EditorBloom->settings.iterations = postProcessing.bloomIterations;
+                // Use distinct Bloom instances for game/edit to prevent texture resizing ping-pong
+                Ref<Bloom> bloomInstance = isGameCamera ? m_GameplayBloom : m_EditorBloom;
+                bloomInstance->settings.intensity = postProcessing.bloomIntensity;
+                bloomInstance->settings.knee = postProcessing.bloomKnee;
+                bloomInstance->settings.radius = postProcessing.bloomRadius;
+                bloomInstance->settings.threshold = postProcessing.bloomThreshold;
+                bloomInstance->settings.iterations = postProcessing.bloomIterations;
                 
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
 
-                m_EditorBloom->Resize(width, height);
-                m_EditorBloom->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
-                bloomTexture = m_EditorBloom->GetBloomTexture();
+                bloomInstance->Resize(width, height);
+                bloomInstance->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+                bloomTexture = bloomInstance->GetBloomTexture();
             }
 
             Ref<Texture> ssaoTexture = nullptr;
             if (postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
-                m_EditorSSAO->Resize(width, height);
-                m_EditorSSAO->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
-                ssaoTexture = m_EditorSSAO->GetAOTexture();
+                // Use distinct SSAO instances for game/edit to prevent texture resizing ping-pong
+                Ref<SSAO> ssaoInstance = isGameCamera ? m_GameplaySSAO : m_EditorSSAO;
+                ssaoInstance->Resize(width, height);
+                ssaoInstance->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
+                ssaoTexture = ssaoInstance->GetAOTexture();
             }
 
             {
@@ -307,11 +329,36 @@ namespace ignite
     {
         ISceneRenderer::ResizeFramebuffer(camera, width, height);
 
-        if (m_EditorBloom)
-            m_EditorBloom->Resize(width, height);
+        // Differentiate resizing between edit-viewport and game-viewport post-processing instances
+        bool isGameCamera = false;
+        if (m_Scene)
+        {
+            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+            {
+                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                if (camera == &cc.camera)
+                {
+                    isGameCamera = true;
+                }
+            }
+        }
 
-        if (m_EditorSSAO)
-            m_EditorSSAO->Resize(width, height);
+        if (isGameCamera)
+        {
+            if (m_GameplayBloom)
+                m_GameplayBloom->Resize(width, height);
+
+            if (m_GameplaySSAO)
+                m_GameplaySSAO->Resize(width, height);
+        }
+        else
+        {
+            if (m_EditorBloom)
+                m_EditorBloom->Resize(width, height);
+
+            if (m_EditorSSAO)
+                m_EditorSSAO->Resize(width, height);
+        }
 
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
