@@ -424,6 +424,7 @@ namespace ignite
             motionType == JPH::EMotionType::Static ? Layers::NON_MOVING : Layers::MOVING);
 
         bodySettings.mMotionQuality = static_cast<JPH::EMotionQuality>(rb.motionQuality);
+        bodySettings.mIsSensor = rb.isSensor;
 
         bodySettings.mAllowedDOFs = JPH::EAllowedDOFs::None;
         if (rb.rotateX) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::RotationX;

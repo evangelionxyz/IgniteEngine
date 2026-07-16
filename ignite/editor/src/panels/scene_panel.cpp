@@ -1733,6 +1733,7 @@ namespace ignite
                 UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
                 UI::DrawFloatControl("Mass", &c.mass, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
 
+                UI::DrawCheckbox("Is Sensor", &c.isSensor);
                 UI::DrawCheckbox("Use Gravity", &c.useGravity);
                 UI::DrawCheckbox("Allow sleeping", &c.allowSleeping);
                 UI::DrawCheckbox("Retain Acceleration", &c.retainAcceleration);

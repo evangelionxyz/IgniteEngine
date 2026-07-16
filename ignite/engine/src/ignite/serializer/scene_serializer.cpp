@@ -389,6 +389,7 @@ namespace ignite
                         sr.AddKeyValue("MoveZ", comp.moveZ);
                         sr.AddKeyValue("Mass", comp.mass);
                         sr.AddKeyValue("AllowSleeping", comp.allowSleeping);
+                        sr.AddKeyValue("IsSensor", comp.isSensor);
                         sr.AddKeyValue("RetainAcceleration", comp.retainAcceleration);
                         sr.AddKeyValue("GravityFactor", comp.gravityFactor);
                         sr.AddKeyValue("CenterMass", comp.centerMass);
@@ -909,6 +910,7 @@ namespace ignite
                 if (auto n = node["MoveZ"]) comp.moveZ = n.as<bool>();
                 if (auto n = node["Mass"]) comp.mass = n.as<float>();
                 if (auto n = node["AllowSleeping"]) comp.allowSleeping = n.as<bool>();
+                if (auto n = node["IsSensor"]) comp.isSensor = n.as<bool>();
                 if (auto n = node["RetainAcceleration"]) comp.retainAcceleration = n.as<bool>();
                 if (auto n = node["GravityFactor"]) comp.gravityFactor = n.as<float>();
                 if (auto n = node["CenterMass"]) comp.centerMass = n.as<glm::vec3>();

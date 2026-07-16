@@ -522,6 +522,7 @@ namespace ignite
         bool moveX = true, moveY = true, moveZ = true;
         float mass = 1.0f;
         bool allowSleeping = true;
+        bool isSensor = false;
         bool retainAcceleration = false;
         float gravityFactor = 1.0f;
         glm::vec3 centerMass = { 0.0f, 0.0f, 0.0f };
