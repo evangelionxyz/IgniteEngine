@@ -73,7 +73,11 @@ namespace ignite
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
 
     ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
-        : IPanel(windowTitle, editor), m_Gizmo(), m_SceneFocused(false), m_SceneFocusCooldown(0)
+        : IPanel(windowTitle, editor)
+        , m_Gizmo()
+        , m_SceneFocused(false)
+        , m_Scene(nullptr)
+        , m_SceneFocusCooldown(0)
     {
         Application* app = Application::GetInstance();
 
@@ -3019,15 +3023,15 @@ namespace ignite
                 }
 
                 {
-                    const float padding = 18.0f;
+                    constexpr float padding = 18.0f;
                     float yPosition = 6.0f;
                     const float fps = ImGui::GetIO().Framerate;
-                    std::string statusStr = std::format("FPS {:.5} {:.3}ms", fps, 1000.0f / fps);
+                    std::string statusStr = std::format("FPS {:.5}", fps);
                     drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
-                    yPosition += padding;
-                    statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+					yPosition += padding;
+					statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+					drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
                 }
 
                 // Mouse picking from viewport object-id attachment (on mouse down only)
@@ -3521,18 +3525,19 @@ namespace ignite
                             drawList->PopClipRect();
                         }
                         
-
                         {
-                            const float padding = 18.0f;
+                            constexpr float padding = 18.0f;
                             float yPosition = 6.0f;
                             const float fps = ImGui::GetIO().Framerate;
-                            std::string statusStr = std::format("FPS {:.5} {:.3}ms", fps, 1000.0f / fps);
+                            std::string statusStr = std::format("FPS {:.5}", fps);
                             drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
+							yPosition += padding;
+							statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+							drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+
                             yPosition += padding;
-                            statusStr = std::format("Viewport x: {} y: {} w: {} h: {}", baseImagePos.x, baseImagePos.y,
-                                baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
-                            
+                            statusStr = std::format("Viewport x: {} y: {} w: {} h: {}", baseImagePos.x, baseImagePos.y, baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
                             drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
                         }
 
@@ -3625,8 +3630,10 @@ namespace ignite
         auto drawGizmoBtn = [&](const std::string &iconName, bool active)
         {
             ImTextureID texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
+
+            const auto colors = ImGui::GetStyle().Colors;
             ImVec4 tint = active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-            ImVec4 bg = active ? ImVec4(1.0f, 0.78f, 0.0f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+            ImVec4 bg = active ? colors[ImGuiCol_ButtonActive] : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
             return ImGui::ImageButton(iconName.c_str(), texID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bg, tint);
         };
 
@@ -3679,7 +3686,7 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        const bool isScenePlaying = m_Scene->IsPlaying();
+        const bool isScenePlaying = m_Scene && m_Scene->IsPlaying();
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
         ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
 
@@ -3707,7 +3714,7 @@ namespace ignite
             }
         }
 
-        const bool isSceneSimulate = m_Scene->IsSimulating();
+        const bool isSceneSimulate = m_Scene && m_Scene->IsSimulating();
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
         ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
 
