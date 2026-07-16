@@ -63,6 +63,13 @@ namespace ignite
                 return;
             }
 
+            if (InputSystem::GetActiveSystem()->GetCursorMode() == CursorMode::Disabled)
+            {
+                const glm::ivec2 mousePos = InputSystem::GetMousePosition();
+                *result = glm::vec2(mousePos.x, mousePos.y);
+                return;
+            }
+
             if (InputSystem::IsGameplayMousePositionEnabled())
             {
                 *result = InputSystem::GetGameplayMousePosition();
@@ -91,6 +98,13 @@ namespace ignite
             *result = absPos;
         }
 
+        static void Input_GetMouseDelta(glm::vec2 *result)
+        {
+            if (!result)
+                return;
+            *result = InputSystem::GetMouseDelta();
+        }
+
         static void Input_SetMouseToCenter()
         {
             InputSystem::SetMouseToCenter();
@@ -99,6 +113,11 @@ namespace ignite
         static void Input_SetCursorMode(int32_t mode)
         {
             InputSystem::SetCursorMode(static_cast<CursorMode>(mode));
+        }
+
+        static int32_t Input_GetCursorMode()
+        {
+            return static_cast<int32_t>(InputSystem::GetActiveSystem()->GetCursorMode());
         }
 
         static bool Input_IsMouseOverUI()
@@ -269,10 +288,13 @@ namespace ignite
             &Input_IsModifierPressed,
             &Input_IsMouseButtonPressed,
             &Input_GetMousePosition,
+            &Input_GetMouseDelta,
             &Input_SetMouseToCenter,
             &Input_SetCursorMode,
+            &Input_GetCursorMode,
             &Input_IsMouseOverUI,
             &Input_IsActionPressed,
+
 
             &AssetManager_IsAssetHandleValid,
             &AssetManager_IsAssetLoaded,

@@ -409,9 +409,9 @@ TEST(SceneTransition, BasicTransition)
     assetManager->AssignAsset(sceneBHandle, sceneB);
 
     project->SetActiveScene(sceneA);
-    sceneA->OnStart();
+    sceneA->OnStart(ESceneState::Play);
 
-    LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void*)project->GetActiveScene().get(), (int)sceneA->GetStateFlag());
+    LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void*)project->GetActiveScene().get(), (int)sceneA->GetState());
 
     EXPECT_EQ(project->GetActiveScene(), sceneA);
 
@@ -420,7 +420,7 @@ TEST(SceneTransition, BasicTransition)
     SceneManager::ExecutePendingTransition();
 
     Ref<Scene> activeScene = project->GetActiveScene();
-    LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void*)activeScene.get(), (int)sceneA->GetStateFlag(), (int)activeScene->GetStateFlag());
+    LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void*)activeScene.get(), (int)sceneA->GetState(), (int)activeScene->GetState());
 
     EXPECT_NE(activeScene, sceneA);
     EXPECT_EQ(activeScene->name, "SceneB");
@@ -506,7 +506,7 @@ TEST(SceneTransition, SharedAssetPinned)
     sceneB->registry->emplace<Sprite2DComponent>(entityB, sprite);
 
     project->SetActiveScene(sceneA);
-    sceneA->OnStart();
+    sceneA->OnStart(ESceneState::Play);
 
     EXPECT_TRUE(assetManager->IsAssetLoaded(sharedTextureHandle));
 
@@ -577,6 +577,174 @@ TEST(SceneTransition, InvalidHandleRejected)
     LOG_INFO("DEBUG: Checking active scene is still A (final)");
     EXPECT_EQ(project->GetActiveScene(), sceneA);
     LOG_INFO("DEBUG: Reached end of test body");
+}
+
+// -------------------------------------------------
+// Hot-Reload Field Reflection Test
+// -------------------------------------------------
+TEST(EngineTests, ScriptHotReload)
+{
+    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    ignite::Path projectDir = testResourcesRoot / "temp/ScriptHotReloadProject";
+
+    if (ignite::Path::exists(projectDir))
+        std::filesystem::remove_all(projectDir.string());
+    ignite::Path::create_directories(projectDir);
+
+    ProjectInfo info;
+    info.name = "ScriptHotReloadProject";
+    info.filepath = projectDir / "ScriptHotReloadProject.ixproj";
+    info.rootDirectory = projectDir;
+    info.assetDirectory = "Assets";
+    info.scriptsDirectory = "Scripts";
+    info.assetRegistryFilepath = "AssetRegistry.ixreg";
+    info.configuration = ProjectConfiguration::Debug;
+
+    Ref<Project> project = Project::Create(info);
+    ASSERT_NE(project, nullptr);
+
+    // --- Write initial Player.cs (one public field) ---
+    ignite::Path playerScript = project->GetScriptsDirectory() / "Player.cs";
+    {
+        std::ofstream out(playerScript.generic_string());
+        out << R"(using Ignite;
+namespace ScriptHotReloadProject;
+public class Player : Entity
+{
+    public float Speed;
+}
+)";
+    }
+
+    // --- Write initial GameSettings.cs (ScriptableObject, one public field) ---
+    ignite::Path settingsScript = project->GetScriptsDirectory() / "GameSettings.cs";
+    {
+        std::ofstream out(settingsScript.generic_string());
+        out << R"(using Ignite;
+namespace ScriptHotReloadProject;
+[CreateAssetMenu(FileName = "GameSettings", MenuName = "Settings/Game")]
+public class GameSettings : ScriptableObject
+{
+    public int MaxPlayers;
+}
+)";
+    }
+
+    project->RegenerateCSharpProject();
+    project->InitScriptEngine();
+
+    auto scriptEngine = project->GetScriptEngine();
+    ASSERT_NE(scriptEngine, nullptr);
+
+    // --- Wait for initial load ---
+    auto waitReady = [&](int timeoutSecs) {
+        auto start = std::chrono::steady_clock::now();
+        while (!scriptEngine->IsReady())
+        {
+            Application::GetInstance()->ProcessMainThreadSubmissions();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (std::chrono::steady_clock::now() - start > std::chrono::seconds(timeoutSecs))
+                break;
+        }
+    };
+    waitReady(30);
+    ASSERT_TRUE(scriptEngine->IsReady());
+
+    // Verify initial entity class & field
+    EXPECT_TRUE(scriptEngine->IsEntityClassExists("ScriptHotReloadProject.Player"));
+    {
+        auto cls = scriptEngine->GetEntityClassByName("ScriptHotReloadProject.Player");
+        ASSERT_NE(cls, nullptr);
+        auto &fields = cls->GetFields();
+        EXPECT_TRUE(fields.count("Speed") > 0);
+        if (fields.count("Speed"))
+            EXPECT_EQ(fields.at("Speed").Type, ScriptFieldType::Float);
+    }
+
+    // Verify initial ScriptableObject class
+    EXPECT_TRUE(scriptEngine->IsScriptableObjectClassExists("ScriptHotReloadProject.GameSettings"));
+    {
+        auto cls = scriptEngine->GetScriptableObjectClassByName("ScriptHotReloadProject.GameSettings");
+        ASSERT_NE(cls, nullptr);
+        EXPECT_TRUE(cls->GetFields().count("MaxPlayers") > 0);
+    }
+
+    // --- Modify Player.cs: add [SerializeField] private int Health ---
+    {
+        std::ofstream out(playerScript.generic_string());
+        out << R"(using Ignite;
+namespace ScriptHotReloadProject;
+public class Player : Entity
+{
+    public float Speed;
+    [SerializeField] private int Health;
+}
+)";
+    }
+
+    // --- Modify GameSettings.cs: add a new field ---
+    {
+        std::ofstream out(settingsScript.generic_string());
+        out << R"(using Ignite;
+namespace ScriptHotReloadProject;
+[CreateAssetMenu(FileName = "GameSettings", MenuName = "Settings/Game")]
+public class GameSettings : ScriptableObject
+{
+    public int MaxPlayers;
+    public float RoundTime;
+}
+)";
+    }
+
+    // Trigger recompilation and hot-reload
+    project->RegenerateCSharpProject();
+    project->BuildSolution(true);
+
+    // Wait for engine to go not-ready then become ready again (hot-reload cycle)
+    // Give it a moment to detect the change via file-watcher
+    {
+        auto start = std::chrono::steady_clock::now();
+        while (scriptEngine->IsReady()
+               && std::chrono::steady_clock::now() - start < std::chrono::seconds(5))
+        {
+            Application::GetInstance()->ProcessMainThreadSubmissions();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    waitReady(30);
+    ASSERT_TRUE(scriptEngine->IsReady());
+
+    // --- Verify reloaded entity class has both fields ---
+    EXPECT_TRUE(scriptEngine->IsEntityClassExists("ScriptHotReloadProject.Player"));
+    {
+        auto cls = scriptEngine->GetEntityClassByName("ScriptHotReloadProject.Player");
+        ASSERT_NE(cls, nullptr);
+        auto &fields = cls->GetFields();
+
+        // Speed (public) must still be present
+        EXPECT_TRUE(fields.count("Speed") > 0) << "Speed field missing after reload";
+        if (fields.count("Speed"))
+            EXPECT_EQ(fields.at("Speed").Type, ScriptFieldType::Float);
+
+        // Health ([SerializeField]) must now appear
+        EXPECT_TRUE(fields.count("Health") > 0) << "Health field missing after reload";
+        if (fields.count("Health"))
+        {
+            EXPECT_EQ(fields.at("Health").Type, ScriptFieldType::Int);
+            EXPECT_TRUE(fields.at("Health").HasSerializeFieldAttribute);
+            EXPECT_FALSE(fields.at("Health").IsPublic);
+        }
+    }
+
+    // --- Verify reloaded ScriptableObject class has both fields ---
+    EXPECT_TRUE(scriptEngine->IsScriptableObjectClassExists("ScriptHotReloadProject.GameSettings"));
+    {
+        auto cls = scriptEngine->GetScriptableObjectClassByName("ScriptHotReloadProject.GameSettings");
+        ASSERT_NE(cls, nullptr);
+        auto &fields = cls->GetFields();
+        EXPECT_TRUE(fields.count("MaxPlayers") > 0) << "MaxPlayers missing after SO reload";
+        EXPECT_TRUE(fields.count("RoundTime") > 0) << "RoundTime missing after SO reload";
+    }
 }
 
 int main(int argc, char **argv)

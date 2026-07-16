@@ -73,11 +73,15 @@ namespace ignite
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
 
     ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
-        : IPanel(windowTitle, editor), m_Gizmo()
+        : IPanel(windowTitle, editor)
+        , m_Gizmo()
+        , m_SceneFocused(false)
+        , m_Scene(nullptr)
+        , m_SceneFocusCooldown(0)
     {
         Application* app = Application::GetInstance();
 
-		const uint32_t width = app->GetCreateInfo().width;
+        const uint32_t width = app->GetCreateInfo().width;
         const uint32_t height = app->GetCreateInfo().height;
 
         m_EditorCamera = EditorCamera("ScenePanel-Editor Camera");
@@ -125,8 +129,8 @@ namespace ignite
         m_Icons["simulate"] = Texture::Create("resources/ui/editor/ic_editor_simulate.png", createInfo, cmd);
         m_Icons["stepping"] = Texture::Create("resources/ui/editor/ic_editor_stepping.png", createInfo, cmd);
 
-		m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, cmd);
-		m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, cmd);
+        m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, cmd);
+        m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, cmd);
 
         cmd->close();
         device->executeCommandList(cmd);
@@ -172,7 +176,7 @@ namespace ignite
 
     void ScenePanel::OnUpdate(float deltaTime)
     {
-        if (m_Scene && m_EditorLayer->GetState().sceneState != ESceneState::Play)
+        if (m_Scene && !m_Scene->IsPlaying())
         {
             UpdateCameraInput(deltaTime);
         }
@@ -189,21 +193,31 @@ namespace ignite
         {
             if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
             {
-                LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ITEM, that should be an entity");
-                Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
+                const size_t count = payload->DataSize / sizeof(UUID);
+                const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
 
-                // check if src entity has parent
-                auto &idComp = src.GetComponent<IDComponent>();
-                if (idComp.parent != 0)
+                for (size_t i = 0; i < count; ++i)
                 {
-                    UUID oldParent = idComp.parent;
-                    // current parent should be removed
-                    Entity parent = SceneManager::GetEntity(m_Scene.get(), idComp.parent);
-                    parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
-                    idComp.parent = UUID(0);
+                    const UUID uuid = droppedUUIDs[i];
+                    Entity droppedEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
 
-                    // Record for undo — reparenting to root (UUID 0)
-                    CommandManager::AddCommand(CreateScope<EntityReparentCommand>(m_Scene.get(), src.GetUUID(), oldParent, UUID(0)));
+                    if (!droppedEntity)
+                        continue;
+
+                    // check if src entity has parent
+                    auto &idComp = droppedEntity.GetComponent<IDComponent>();
+                    if (idComp.parent != UUID(0))
+                    {
+                        UUID oldParent = idComp.parent;
+                        // current parent should be removed
+                        Entity parent = SceneManager::GetEntity(m_Scene.get(), idComp.parent);
+                        parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
+                        idComp.parent = UUID(0);
+
+                        // Record for undo — re-parenting to root (UUID 0)
+                        CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
+                            m_Scene.get(), droppedEntity.GetUUID(), oldParent, UUID(0)));
+                    }
                 }
             }
 
@@ -301,14 +315,14 @@ namespace ignite
                     entity.AddComponent<SkeletalMeshComponent>();
                 }
             }
-			if (ImGui::MenuItem("Static Mesh"))
-			{
-				entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Static Mesh"));
-				if (entity.IsValid() && !entity.HasComponent<StaticMeshComponent>())
-				{
-					entity.AddComponent<StaticMeshComponent>();
-				}
-			}
+            if (ImGui::MenuItem("Static Mesh"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Static Mesh"));
+                if (entity.IsValid() && !entity.HasComponent<StaticMeshComponent>())
+                {
+                    entity.AddComponent<StaticMeshComponent>();
+                }
+            }
             if (ImGui::MenuItem("Directional Light"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
@@ -424,18 +438,25 @@ namespace ignite
                 {
                     if (const Entity e = ShowEntityContextMenu())
                     {
-                        SceneManager::AddChild(m_Scene.get(), entity, e);
+                        if (SceneManager::AddChild(m_Scene.get(), entity, e))
+                            m_Scene->SetDirtyFlag(true);
+
                         SetSelectedEntity(e);
                     }
 
                     ImGui::EndMenu();
                 }
                 
-                if (ImGui::MenuItem("Delete"))
+                auto deletString = std::format("Delete ({})", m_SelectedEntities.size());
+                if (ImGui::MenuItem(deletString.c_str()))
                 {
                     DestroyEntity(entity);
+                    for (Entity e : m_SelectedEntities | std::views::values)
+                    {
+                        if (e.IsValid())
+                            DestroyEntity(e);
+                    }
                     isDeleting = true;
-
                     m_SelectedEntities.clear();
                 }
 
@@ -449,7 +470,23 @@ namespace ignite
             // drag and drop
             if (isPrefab == false && ImGui::BeginDragDropSource())
             {
-                ImGui::SetDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM, &entity, sizeof(Entity));
+                // Collect UUIDs of selected entities
+                std::vector<UUID> selectedUUIDs;
+                selectedUUIDs.reserve(m_SelectedEntities.size() + 1); // Selected entities + the current entity being dragged
+                selectedUUIDs.push_back(entity.GetUUID());
+
+                if (m_SelectedEntities.size() > 1)
+                {
+                    for (auto &[uuid, selectedEntity] : m_SelectedEntities)
+                    {
+                        if (selectedEntity.IsValid())
+                            selectedUUIDs.push_back(uuid);
+                    }
+                }
+
+                ImGui::SetDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM, 
+                    selectedUUIDs.data(),
+                    selectedUUIDs.size() * sizeof(UUID));
 
                 ImGui::BeginTooltip();
                 ImGui::Text("%s %llu", idComp.name.c_str(), static_cast<u64>(idComp.uuid));
@@ -463,18 +500,29 @@ namespace ignite
             {
                 if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                 {
-                    LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ITEM, that should be an entity");
-                    Entity src { *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
-                    
-                    // Capture old parent BEFORE reparenting
-                    UUID oldParent = src.GetComponent<IDComponent>().parent;
-                    UUID newParent = entity.GetComponent<IDComponent>().uuid;
+                    const size_t count = payload->DataSize / sizeof(UUID);
+                    const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
 
-                    // the current 'entity' is the target (new parent for src)
-                    SceneManager::AddChild(m_Scene.get(), entity, src);
+                    for (size_t i = 0; i < count; ++i)
+                    {
+                        const UUID uuid = droppedUUIDs[i];
+                        Entity droppedEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
 
-                    // Record the reparent for undo
-                    CommandManager::AddCommand(CreateScope<EntityReparentCommand>(m_Scene.get(), src.GetUUID(), oldParent, newParent));
+                        if (droppedEntity)
+                        {
+                            // Capture old parent BEFORE re-parenting
+                            UUID oldParent = droppedEntity.GetComponent<IDComponent>().parent;
+                            UUID newParent = entity.GetComponent<IDComponent>().uuid;
+
+                            // the current 'entity' is the target (new parent for src)
+                            if (SceneManager::AddChild(m_Scene.get(), entity, droppedEntity))
+                            {
+                                // Record the re-parent for undo
+                                CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
+                                    m_Scene.get(), droppedEntity.GetUUID(), oldParent, newParent));
+                            }
+                        }
+                    }
                 }
 
                 ImGui::EndDragDropTarget();
@@ -703,13 +751,13 @@ namespace ignite
 
                 if (c.cascadeShadow)
                 {
-					UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
-					UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
-					UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
-					UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
-					UI::DrawFloatControl("Shadow Distance", &c.shadowDistance, 1.0f, 10.0f, 2000.0f);
+                    UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+                    UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
+                    UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
+                    UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
+                    UI::DrawFloatControl("Shadow Distance", &c.shadowDistance, 1.0f, 10.0f, 2000.0f);
 
-					static const char *resolutionLabels[] = 
+                    static const char *resolutionLabels[] = 
                     { 
                         "Low - 512px", 
                         "Medium - 1024px", 
@@ -974,114 +1022,114 @@ namespace ignite
                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
             });
 
-			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
-			{
-				auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
+            RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
 
-				bool isMeshLoaded = c.handle != AssetHandle(0);
+                bool isMeshLoaded = c.handle != AssetHandle(0);
 
-				std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-				UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
-				{
-					if (ImGui::BeginDragDropTarget())
-					{
-						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-						{
-							LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-							AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-							auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-							AssetMetaData metadata = assetManager->GetMetaData(handle);
+                std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
+                UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
+                {
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                            AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-							if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
-							{
-								metadata.type = AssetType::StaticMesh;
-								assetManager->AssignMetaData(handle, metadata);
-								assetManager->UnloadAsset(handle);
-								c.handle = handle;
-							}
-						}
-						ImGui::EndDragDropTarget();
-					}
+                            if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
+                            {
+                                metadata.type = AssetType::StaticMesh;
+                                assetManager->AssignMetaData(handle, metadata);
+                                assetManager->UnloadAsset(handle);
+                                c.handle = handle;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
 
-					if (isMeshLoaded)
-					{
-						ImGui::SameLine();
-						if (ImGui::Button("X"))
-						{
-							c.handle = AssetHandle(0); // reset the mesh
-						}
-					}
-				});
+                    if (isMeshLoaded)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X"))
+                        {
+                            c.handle = AssetHandle(0); // reset the mesh
+                        }
+                    }
+                });
 
-				if (isMeshLoaded)
-				{
-					Ref<StaticMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<StaticMesh>(c.handle);
-					if (sm)
-					{
-						// Override Materials
-						if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
-						{
-							const auto &instances = sm->GetMeshInstances();
-							for (size_t i = 0; i < instances.size(); ++i)
-							{
-								const auto &instance = instances[i];
-								std::string submeshName = instance->GetName();
-								if (submeshName.empty())
-								{
-									submeshName = "Submesh " + std::to_string(i);
-								}
-								else
-								{
-									submeshName = std::format("{} (Submesh {})", submeshName, i);
-								}
+                if (isMeshLoaded)
+                {
+                    Ref<StaticMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<StaticMesh>(c.handle);
+                    if (sm)
+                    {
+                        // Override Materials
+                        if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            const auto &instances = sm->GetMeshInstances();
+                            for (size_t i = 0; i < instances.size(); ++i)
+                            {
+                                const auto &instance = instances[i];
+                                std::string submeshName = instance->GetName();
+                                if (submeshName.empty())
+                                {
+                                    submeshName = "Submesh " + std::to_string(i);
+                                }
+                                else
+                                {
+                                    submeshName = std::format("{} (Submesh {})", submeshName, i);
+                                }
 
-								AssetHandle overrideMaterialHandle = AssetHandle(0);
-								auto it = c.overrideMaterials.find(static_cast<int>(i));
-								if (it != c.overrideMaterials.end())
-								{
-									overrideMaterialHandle = it->second;
-								}
+                                AssetHandle overrideMaterialHandle = AssetHandle(0);
+                                auto it = c.overrideMaterials.find(static_cast<int>(i));
+                                if (it != c.overrideMaterials.end())
+                                {
+                                    overrideMaterialHandle = it->second;
+                                }
 
-								bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
-								std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
+                                bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
+                                std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
 
-								UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [this, &c, i, isOverrideLoaded, &selectedEntity]()
-								{
-									if (ImGui::BeginDragDropTarget())
-									{
-										if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-										{
-											LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-											AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-											auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-											AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [this, &c, i, isOverrideLoaded, &selectedEntity]()
+                                {
+                                    if (ImGui::BeginDragDropTarget())
+                                    {
+                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        {
+                                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                            auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                            AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-											if (metadata.type == AssetType::Material)
-											{
-												StaticMeshComponent before = c;
-												c.overrideMaterials[static_cast<int>(i)] = handle;
-												CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-											}
-										}
-										ImGui::EndDragDropTarget();
-									}
+                                            if (metadata.type == AssetType::Material)
+                                            {
+                                                StaticMeshComponent before = c;
+                                                c.overrideMaterials[static_cast<int>(i)] = handle;
+                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                            }
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
 
-									if (isOverrideLoaded)
-									{
-										ImGui::SameLine();
-										if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
-										{
+                                    if (isOverrideLoaded)
+                                    {
+                                        ImGui::SameLine();
+                                        if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
+                                        {
                                             StaticMeshComponent before = c;
-											c.overrideMaterials.erase(static_cast<int>(i));
-											CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-										}
-									}
-								});
-							}
-						}
-					}
-				}
-			});
+                                            c.overrideMaterials.erase(static_cast<int>(i));
+                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            });
 
             RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
             {
@@ -1416,64 +1464,64 @@ namespace ignite
                             }
                         }
 
-						// --- SOCKET SYSTEM: Render Socket Attachments UI ---
-						if (sm->GetSkeletonHandle() != AssetHandle(0))
-						{
-							Ref<Skeleton> skeleton = m_EditorLayer->GetActiveProject()->GetAsset<Skeleton>(sm->GetSkeletonHandle());
-							if (skeleton && !skeleton->sockets.empty())
-							{
-								if (ImGui::CollapsingHeader("Socket Attachments", ImGuiTreeNodeFlags_DefaultOpen))
-								{
-									for (const JointSocket &socket : skeleton->sockets)
-									{
-										AssetHandle attachedMeshHandle = AssetHandle(0);
-										auto it = c.socketAttachments.find(socket.name);
-										if (it != c.socketAttachments.end())
-										{
-											attachedMeshHandle = it->second;
-										}
+                        // --- SOCKET SYSTEM: Render Socket Attachments UI ---
+                        if (sm->GetSkeletonHandle() != AssetHandle(0))
+                        {
+                            Ref<Skeleton> skeleton = m_EditorLayer->GetActiveProject()->GetAsset<Skeleton>(sm->GetSkeletonHandle());
+                            if (skeleton && !skeleton->sockets.empty())
+                            {
+                                if (ImGui::CollapsingHeader("Socket Attachments", ImGuiTreeNodeFlags_DefaultOpen))
+                                {
+                                    for (const JointSocket &socket : skeleton->sockets)
+                                    {
+                                        AssetHandle attachedMeshHandle = AssetHandle(0);
+                                        auto it = c.socketAttachments.find(socket.name);
+                                        if (it != c.socketAttachments.end())
+                                        {
+                                            attachedMeshHandle = it->second;
+                                        }
 
-										bool isAttached = attachedMeshHandle != AssetHandle(0);
-										std::string socketMeshLabel = isAttached
-											? assetManager->GetAssetDisplayName(attachedMeshHandle)
-											: "Drag Mesh Here";
+                                        bool isAttached = attachedMeshHandle != AssetHandle(0);
+                                        std::string socketMeshLabel = isAttached
+                                            ? assetManager->GetAssetDisplayName(attachedMeshHandle)
+                                            : "Drag Mesh Here";
 
-										UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [this, &c, socketName = socket.name, isAttached, &selectedEntity]()
-											{
-												if (ImGui::BeginDragDropTarget())
-												{
-													if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-													{
-														LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-														AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-														auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-														AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                        UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [this, &c, socketName = socket.name, isAttached, &selectedEntity]()
+                                            {
+                                                if (ImGui::BeginDragDropTarget())
+                                                {
+                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                                    {
+                                                        LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                                        AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                                        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-														if (metadata.type == AssetType::Mesh)
-														{
-															SkeletalMeshComponent before = c;
-															c.socketAttachments[socketName] = handle;
-															CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-														}
-													}
-													ImGui::EndDragDropTarget();
-												}
+                                                        if (metadata.type == AssetType::Mesh)
+                                                        {
+                                                            SkeletalMeshComponent before = c;
+                                                            c.socketAttachments[socketName] = handle;
+                                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                        }
+                                                    }
+                                                    ImGui::EndDragDropTarget();
+                                                }
 
-												if (isAttached)
-												{
-													ImGui::SameLine();
-													if (ImGui::Button((std::string("X##socket_") + socketName).c_str()))
-													{
-														SkeletalMeshComponent before = c;
-														c.socketAttachments.erase(socketName);
-														CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-													}
-												}
-											});
-									}
-								}
-							}
-						}
+                                                if (isAttached)
+                                                {
+                                                    ImGui::SameLine();
+                                                    if (ImGui::Button((std::string("X##socket_") + socketName).c_str()))
+                                                    {
+                                                        SkeletalMeshComponent before = c;
+                                                        c.socketAttachments.erase(socketName);
+                                                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                    }
+                                                }
+                                            });
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -1604,14 +1652,14 @@ namespace ignite
                     c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
                 }
 
-				if (c.dirty && m_Data.sceneViewportGameplayVisible)
-				{
-					c.camera.UpdateView();
-					c.camera.UpdateProjection(
-						static_cast<uint32_t>(globals::GEditor::GameViewport.max.x),
-						static_cast<uint32_t>(globals::GEditor::GameViewport.max.y));
-					c.dirty = false;
-				}
+                if (c.dirty && m_Data.sceneViewportGameplayVisible)
+                {
+                    c.camera.UpdateView();
+                    c.camera.UpdateProjection(
+                        static_cast<uint32_t>(globals::GEditor::GameViewport.max.x),
+                        static_cast<uint32_t>(globals::GEditor::GameViewport.max.y));
+                    c.dirty = false;
+                }
             });
 
             RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
@@ -1667,13 +1715,30 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<RigidbodyComponent>();
 
-                std::array<const char *, 3> bodyTypeLabels = { "Static", "Kinematic", "Dynamic" };
-                int bodyTypeIndex = static_cast<int>(c.bodyType);
+                static std::array<const char *, 3> bodyTypeLabels = { "Static", "Kinematic", "Dynamic" };
+                static std::array<const char *, 2> motionTypeLabels = { "Discrete", "LinearCast" };
 
+                int bodyTypeIndex = static_cast<int>(c.bodyType);
                 if (UI::DrawComboBox("Body Type", bodyTypeLabels.data(), static_cast<int>(bodyTypeLabels.size()), &bodyTypeIndex))
                 {
                     c.bodyType = static_cast<RigidbodyComponent::EBodyType>(bodyTypeIndex);
                 }
+
+                int motionTypeIndex = static_cast<int>(c.motionQuality);
+                if (UI::DrawComboBox("Motion Quality", motionTypeLabels.data(), static_cast<int>(motionTypeLabels.size()), &motionTypeIndex))
+                {
+                    c.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(motionTypeIndex);
+                }
+
+                UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+                UI::DrawFloatControl("Mass", &c.mass, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+
+                UI::DrawCheckbox("Use Gravity", &c.useGravity);
+                UI::DrawCheckbox("Allow sleeping", &c.allowSleeping);
+                UI::DrawCheckbox("Retain Acceleration", &c.retainAcceleration);
+
+                UI::DrawCheckbox3("Translation Lock XYZ", &c.moveX, &c.moveY, &c.moveZ);
+                UI::DrawCheckbox3("Rotation Lock XYZ", &c.rotateX, &c.rotateY, &c.rotateZ);
             });
 
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
@@ -2487,15 +2552,24 @@ namespace ignite
                                                 {
                                                     if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                                                     {
-                                                        LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                                        if (payload->DataSize == sizeof(Entity))
+                                                        const size_t count = payload->DataSize / sizeof(UUID);
+                                                        auto UUIDs = static_cast<UUID *>(payload->Data);
+
+                                                        // TODO: Support multiple entities drag and drop
+
+                                                        // Get first entity from the payload
+                                                        if (count > 0)
                                                         {
-                                                            Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
-                                                            uint64_t id = (uint64_t)src.GetUUID();
-                                                            dummy.SetValue<uint64_t>(id);
-                                                            (*classRegisteredInstanceField)[name] = dummy;
-                                                            if (c.runtimeScriptInstance)
-                                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                            UUID entityUUID = UUIDs[0];
+                                                            Entity src{ SceneManager::GetEntity(m_Scene.get(), entityUUID) };
+                                                            if (src)
+                                                            {
+                                                                uint64_t id = (uint64_t)src.GetUUID();
+                                                                dummy.SetValue<uint64_t>(id);
+                                                                (*classRegisteredInstanceField)[name] = dummy;
+                                                                if (c.runtimeScriptInstance)
+                                                                    c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2653,9 +2727,9 @@ namespace ignite
                     case CompType_SkeletalMesh:
                         entity.AddComponent<SkeletalMeshComponent>();
                         break;
-					case CompType_StaticMesh:
-						entity.AddComponent<StaticMeshComponent>();
-						break;
+                    case CompType_StaticMesh:
+                        entity.AddComponent<StaticMeshComponent>();
+                        break;
                     case CompType_Rigidbody:
                         entity.AddComponent<RigidbodyComponent>();
                         break;
@@ -2728,511 +2802,585 @@ namespace ignite
             if (m_Scene)
             {
                 activeSceneRenderer = m_Scene->GetSceneRenderer();
-                auto target = activeSceneRenderer->GetRenderTarget((ICamera *)&m_EditorCamera);
 
-				const ImGuiWindow *window = ImGui::GetCurrentWindow();
+                // During Play, render to the Editor Viewport using the EditorPlayCamera (mirror of game camera
+                // with an editor-viewport-sized projection). During Stop/Simulate, use the editor camera as usual.
+                ICamera *editorViewCamera = nullptr;
+                if (m_Scene->IsPlaying())
+                {
+                    editorViewCamera = m_EditorLayer->GetEditorPlayCamera();
+                }
+                else
+                {
+                    editorViewCamera = (ICamera *)&m_EditorCamera;
+                }
 
-				m_IsFocused = ImGui::IsWindowFocused();
-				m_IsHovered = ImGui::IsWindowHovered();
+                auto target = activeSceneRenderer->GetRenderTarget(editorViewCamera);
 
-				// Calculating Scene Viewport location
-				const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
-				const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
+                const ImGuiWindow *window = ImGui::GetCurrentWindow();
 
-				globals::GEditor::EditorViewport.min = { canvasPos.x, canvasPos.y };
-				globals::GEditor::EditorViewport.max = { canvasSize.x, canvasSize.y };
+                m_IsFocused = ImGui::IsWindowFocused();
+                m_IsHovered = ImGui::IsWindowHovered();
 
-				// Mouse position in screen space
-				const ImVec2 &mousePos = ImGui::GetMousePos();
-				m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
+                // Calculating Scene Viewport location
+                const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
+                const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
+
+                globals::GEditor::EditorViewport.min = { canvasPos.x, canvasPos.y };
+                globals::GEditor::EditorViewport.max = { canvasSize.x, canvasSize.y };
+
+                // When not playing/simulating, make sure we clear focus state and restore cursor
+                const bool isPlayOrSimulate = m_Scene->IsRunning();
+                if (!isPlayOrSimulate)
+                {
+                    if (m_SceneFocused)
+                    {
+                        m_SceneFocused = false;
+                        InputSystem::SetCursorMode(CursorMode::Normal);
+                    }
+                    m_SceneFocusCooldown = 0;
+                }
+                else if (m_SceneFocusCooldown > 0)
+                {
+                    m_SceneFocusCooldown--;
+                }
+
+                // Mouse position in screen space
+                const ImVec2 &mousePos = ImGui::GetMousePos();
+                m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
                 if (target)
                 {
-					// Render scene texture to imgui
-					ImTextureID editorViewImage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
-					ImGui::Image(editorViewImage, canvasSize);
+                    // Render scene texture to imgui
+                    ImTextureID editorViewImage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
+                    ImGui::Image(editorViewImage, canvasSize);
                 }
 
-				const bool imageHovered = ImGui::IsItemHovered();
-				const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-				const bool mouseDoubleDown = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+                const bool imageHovered = ImGui::IsItemHovered();
+                const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+                const bool mouseDoubleDown = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
 
-				ImDrawList *drawList = ImGui::GetWindowDrawList();
+                ImDrawList *drawList = ImGui::GetWindowDrawList();
 
-				Entity clickedIconEntity = {};
+                // Click inside the viewport to (re-)focus in Play or Simulate modes
+				// Only allow focusing if the scene is not already focused and the cooldown has expired
+				// This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
+                if (!m_Data.sceneViewportGameplayVisible && isPlayOrSimulate && !m_SceneFocused && m_SceneFocusCooldown == 0)
+                {
+                    if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                    {
+                        m_SceneFocused = true;
+                        m_SceneFocusCooldown = 10;
+                        InputSystem::SetCursorMode(CursorMode::Disabled);
+                        InputSystem::SetMouseToCenter();
+                    }
+                }
 
-				// Draw editor icons (cameras, directional lights, etc.)
-				{
-					ICamera &camera = GetViewportCamera();
-					glm::mat4 viewProjection = camera.GetProjection() * camera.GetView();
-					Rect viewportRect = { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max };
+                if (m_SceneFocused)
+                {
+                    const char* bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
+                    ImVec2 textSize = ImGui::CalcTextSize(bannerText);
+                    
+                    float bannerWidth = textSize.x + 24.0f;
+                    float bannerHeight = textSize.y + 12.0f;
+                    
+                    ImVec2 bannerMin = { canvasPos.x + (canvasSize.x - bannerWidth) * 0.5f, canvasPos.y + 10.0f };
+                    ImVec2 bannerMax = { bannerMin.x + bannerWidth, bannerMin.y + bannerHeight };
+                    
+                    // Draw a rounded semi-transparent dark banner
+                    drawList->AddRectFilled(bannerMin, bannerMax, ImColor(15, 15, 15, 180), 6.0f);
+                    // Draw border
+                    drawList->AddRect(bannerMin, bannerMax, ImColor(255, 128, 0, 220), 6.0f, 0, 1.5f);
+                    
+                    // Draw text centered inside the banner
+                    ImVec2 textPos = { bannerMin.x + 12.0f, bannerMin.y + 6.0f };
+                    drawList->AddText(textPos, ImColor(255, 255, 255, 255), bannerText);
+                }
+                else if (isPlayOrSimulate)
+                {
+                    // Show click-to-focus hint when unfocused in play/simulate
+                    const char* hintText = "Click to focus";
+                    ImVec2 textSize = ImGui::CalcTextSize(hintText);
+                    ImVec2 textPos = { canvasPos.x + (canvasSize.x - textSize.x) * 0.5f, canvasPos.y + 10.0f };
+                    drawList->AddText(textPos, ImColor(200, 200, 200, 180), hintText);
+                }
 
-					// Camera icons & frustum outlines
-					auto cameraViewReg = m_Scene->registry->view<TransformComponent, CameraComponent>();
-					for (entt::entity e : cameraViewReg)
-					{
-						auto &tr = m_Scene->registry->get<TransformComponent>(e);
-						if (!tr.visible)
-							continue;
 
-						const glm::mat4 world = tr.world.GetMatrix();
-						const glm::vec3 worldPos = glm::vec3(world[3]);
+                Entity clickedIconEntity = {};
 
-						ImVec2 screenPos;
-						if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenPos))
-						{
-							Ref<Texture> texture = m_Icons["camera"];
-							if (texture && texture->GetHandle())
-							{
-								const float size = 36.0f;
-								ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
-								ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
-								drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax);
+                // Draw editor icons (cameras, directional lights, etc.)
+                if (!m_Scene->IsPlaying())
+                {
+                    glm::mat4 viewProjection = editorViewCamera->GetProjection() * editorViewCamera->GetView();
+                    Rect viewportRect = { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max };
 
-								if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
-								{
-									if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
-										mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
-									{
-										clickedIconEntity = Entity{ e, m_Scene.get() };
-									}
-								}
-							}
-						}
+                    // Camera icons & frustum outlines
+                    auto cameraViewReg = m_Scene->registry->view<TransformComponent, CameraComponent>();
+                    for (entt::entity e : cameraViewReg)
+                    {
+                        auto &tr = m_Scene->registry->get<TransformComponent>(e);
+                        if (!tr.visible)
+                            continue;
 
-						auto &cc = m_Scene->registry->get<CameraComponent>(e);
-						if (cc.camera.GetAspectRatioPreset() != SceneCamera::AspectRatioPreset::Free)
-						{
-							glm::mat4 camViewProj = cc.camera.GetProjection() * glm::inverse(world);
-							Frustum frustum(camViewProj);
-							auto edges = frustum.GetEdges();
-							for (const auto &edge : edges)
-							{
-								ImVec2 screenStart, screenEnd;
-								if (Math::ProjectWorldToScreen(edge.first, viewProjection, viewportRect, screenStart)
-									&& Math::ProjectWorldToScreen(edge.second, viewProjection, viewportRect, screenEnd))
-								{
-									drawList->AddLine(screenStart, screenEnd, IM_COL32(255, 255, 255, 128), 1.0f);
-								}
-							}
-						}
-					}
+                        const glm::mat4 world = tr.world.GetMatrix();
+                        const glm::vec3 worldPos = glm::vec3(world[3]);
 
-					// Light icons & direction vectors
-					auto dirLightReg = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
-					for (entt::entity e : dirLightReg)
-					{
-						auto &tr = m_Scene->registry->get<TransformComponent>(e);
-						if (!tr.visible)
-							continue;
+                        ImVec2 screenPos;
+                        if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenPos))
+                        {
+                            Ref<Texture> texture = m_Icons["camera"];
+                            if (texture && texture->GetHandle())
+                            {
+                                const float size = 36.0f;
+                                ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
+                                ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
+                                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax);
 
-						auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
+                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                                {
+                                    if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
+                                        mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
+                                    {
+                                        clickedIconEntity = Entity{ e, m_Scene.get() };
+                                    }
+                                }
+                            }
+                        }
 
-						const glm::mat4 world = tr.world.GetMatrix();
-						const glm::vec3 worldPos = glm::vec3(world[3]);
+                        auto &cc = m_Scene->registry->get<CameraComponent>(e);
+                        if (cc.camera.GetAspectRatioPreset() != SceneCamera::AspectRatioPreset::Free)
+                        {
+                            glm::mat4 camViewProj = cc.camera.GetProjection() * glm::inverse(world);
+                            Frustum frustum(camViewProj);
+                            auto edges = frustum.GetEdges();
+                            for (const auto &edge : edges)
+                            {
+                                ImVec2 screenStart, screenEnd;
+                                if (Math::ProjectWorldToScreen(edge.first, viewProjection, viewportRect, screenStart)
+                                    && Math::ProjectWorldToScreen(edge.second, viewProjection, viewportRect, screenEnd))
+                                {
+                                    drawList->AddLine(screenStart, screenEnd, IM_COL32(255, 255, 255, 128), 1.0f);
+                                }
+                            }
+                        }
+                    }
 
-						ImVec2 screenPos;
-						if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenPos))
-						{
-							Ref<Texture> texture = m_Icons["lighting"];
-							if (texture && texture->GetHandle())
-							{
-								const float size = 36.0f;
-								ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
-								ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
-								ImU32 col = IM_COL32(
-									static_cast<int>(lc.color.r * 255.0f),
-									static_cast<int>(lc.color.g * 255.0f),
-									static_cast<int>(lc.color.b * 255.0f),
-									static_cast<int>(lc.color.a * 255.0f)
-								);
-								drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
+                    // Light icons & direction vectors
+                    auto dirLightReg = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
+                    for (entt::entity e : dirLightReg)
+                    {
+                        auto &tr = m_Scene->registry->get<TransformComponent>(e);
+                        if (!tr.visible)
+                            continue;
 
-								if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
-								{
-									if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
-										mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
-									{
-										clickedIconEntity = Entity{ e, m_Scene.get() };
-									}
-								}
-							}
-						}
+                        auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
 
-						const glm::vec3 direction = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-						ImVec2 screenStart, screenEnd;
-						if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenStart)
-							&& Math::ProjectWorldToScreen(worldPos - direction * 5.0f, viewProjection, viewportRect, screenEnd))
-						{
-							ImU32 col = IM_COL32(
-								static_cast<int>(lc.color.r * 255.0f),
-								static_cast<int>(lc.color.g * 255.0f),
-								static_cast<int>(lc.color.b * 255.0f),
-								static_cast<int>(lc.color.a * 255.0f)
-							);
-							drawList->AddLine(screenStart, screenEnd, col, 1.5f);
-						}
-					}
-				}
+                        const glm::mat4 world = tr.world.GetMatrix();
+                        const glm::vec3 worldPos = glm::vec3(world[3]);
 
-				{
-					const float padding = 18.0f;
-					float yPosition = 6.0f;
-					const float fps = ImGui::GetIO().Framerate;
-					std::string statusStr = std::format("FPS {:.5}", fps);
-					drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
+                        ImVec2 screenPos;
+                        if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenPos))
+                        {
+                            Ref<Texture> texture = m_Icons["lighting"];
+                            if (texture && texture->GetHandle())
+                            {
+                                const float size = 36.0f;
+                                ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
+                                ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
+                                ImU32 col = IM_COL32(
+                                    static_cast<int>(lc.color.r * 255.0f),
+                                    static_cast<int>(lc.color.g * 255.0f),
+                                    static_cast<int>(lc.color.b * 255.0f),
+                                    static_cast<int>(lc.color.a * 255.0f)
+                                );
+                                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
+
+                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                                {
+                                    if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
+                                        mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
+                                    {
+                                        clickedIconEntity = Entity{ e, m_Scene.get() };
+                                    }
+                                }
+                            }
+                        }
+
+                        const glm::vec3 direction = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+                        ImVec2 screenStart, screenEnd;
+                        if (Math::ProjectWorldToScreen(worldPos, viewProjection, viewportRect, screenStart)
+                            && Math::ProjectWorldToScreen(worldPos - direction * 5.0f, viewProjection, viewportRect, screenEnd))
+                        {
+                            ImU32 col = IM_COL32(
+                                static_cast<int>(lc.color.r * 255.0f),
+                                static_cast<int>(lc.color.g * 255.0f),
+                                static_cast<int>(lc.color.b * 255.0f),
+                                static_cast<int>(lc.color.a * 255.0f)
+                            );
+                            drawList->AddLine(screenStart, screenEnd, col, 1.5f);
+                        }
+                    }
+                }
+
+                {
+                    constexpr float padding = 18.0f;
+                    float yPosition = 6.0f;
+                    const float fps = ImGui::GetIO().Framerate;
+                    std::string statusStr = std::format("FPS {:.5}", fps);
+                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
 					yPosition += padding;
 					statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
 					drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
-				}
+                }
 
-				// Mouse picking from viewport object-id attachment (on mouse down only)
-				{
-					if (activeSceneRenderer)
-					{
-						const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
-						const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
-						activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
-					}					if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
-					{
-						if (clickedIconEntity.IsValid())
-						{
-							Entity targetSelection = clickedIconEntity;
-							if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
-							{
-								const auto parent = clickedIconEntity.GetParentUUID();
-								if (parent != UUID(0))
-								{
-									if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
-									{
-										targetSelection = parentEntity;
-									}
-								}
-							}
-							SetSelectedEntity(targetSelection);
-						}
-						else
-						{
-							Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
-							if (objectIdTexture && objectIdTexture->GetHandle())
-							{
-								const int texWidth = objectIdTexture->GetWidth();
-								const int texHeight = objectIdTexture->GetHeight();
+                // Mouse picking from viewport object-id attachment (on mouse down only)
+                if (!m_Scene->IsPlaying())
+                {
+                    if (activeSceneRenderer)
+                    {
+                        const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
+                        const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
+                        activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                    }					if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                    {
+                        if (clickedIconEntity.IsValid())
+                        {
+                            Entity targetSelection = clickedIconEntity;
+                            if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
+                            {
+                                const auto parent = clickedIconEntity.GetParentUUID();
+                                if (parent != UUID(0))
+                                {
+                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
+                                    {
+                                        targetSelection = parentEntity;
+                                    }
+                                }
+                            }
+                            SetSelectedEntity(targetSelection);
+                        }
+                        else
+                        {
+                            Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
+                            if (objectIdTexture && objectIdTexture->GetHandle())
+                            {
+                                const int texWidth = objectIdTexture->GetWidth();
+                                const int texHeight = objectIdTexture->GetHeight();
 
-								if (canvasSize.x > 0.0f && canvasSize.y > 0.0f && texWidth > 0 && texHeight > 0)
-								{
-									const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / canvasSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
-									const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / canvasSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
+                                if (canvasSize.x > 0.0f && canvasSize.y > 0.0f && texWidth > 0 && texHeight > 0)
+                                {
+                                    const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / canvasSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
+                                    const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / canvasSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
 
-									nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-									nvrhi::TextureDesc stagingDesc = objectIdTexture->GetHandle()->getDesc();
-									stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-									nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+                                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+                                    nvrhi::TextureDesc stagingDesc = objectIdTexture->GetHandle()->getDesc();
+                                    stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+                                    nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
 
-									nvrhi::CommandListHandle copyCmd = device->createCommandList();
-									copyCmd->open();
-									copyCmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), objectIdTexture->GetHandle(), nvrhi::TextureSlice());
-									copyCmd->close();
-									device->executeCommandList(copyCmd);
+                                    nvrhi::CommandListHandle copyCmd = device->createCommandList();
+                                    copyCmd->open();
+                                    copyCmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), objectIdTexture->GetHandle(), nvrhi::TextureSlice());
+                                    copyCmd->close();
+                                    device->executeCommandList(copyCmd);
 
-									size_t rowPitch = 0;
-									if (void *mapped = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
-									{
-										const auto pixelData = static_cast<const uint32_t *>(mapped);
-										const uint32_t pickedObjectId = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
-										device->unmapStagingTexture(stagingTexture);
+                                    size_t rowPitch = 0;
+                                    if (void *mapped = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
+                                    {
+                                        const auto pixelData = static_cast<const uint32_t *>(mapped);
+                                        const uint32_t pickedObjectId = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
+                                        device->unmapStagingTexture(stagingTexture);
 
-										Entity pickedEntity = {};
-										if (pickedObjectId != 0xFFFFFFFFu)
-										{
-											m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
-											{
-												if (pickedEntity.IsValid())
-													return;
+                                        Entity pickedEntity = {};
+                                        if (pickedObjectId != 0xFFFFFFFFu)
+                                        {
+                                            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
+                                            {
+                                                if (pickedEntity.IsValid())
+                                                    return;
 
-												const auto objectId = static_cast<uint32_t>(static_cast<uint64_t>(id.uuid));
-												if (objectId == pickedObjectId)
-												{
-													pickedEntity = Entity{ e, m_Scene.get() };
-												}
-											});
-										}
+                                                const auto objectId = static_cast<uint32_t>(static_cast<uint64_t>(id.uuid));
+                                                if (objectId == pickedObjectId)
+                                                {
+                                                    pickedEntity = Entity{ e, m_Scene.get() };
+                                                }
+                                            });
+                                        }
 
-										if (pickedEntity.IsValid())
-										{
-											Entity targetSelection = pickedEntity;
+                                        if (pickedEntity.IsValid())
+                                        {
+                                            Entity targetSelection = pickedEntity;
 
-											// Single click: prefer selecting the direct parent group first.
-											// Double click: select the exact clicked entity.
-											if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
-											{
-												const auto parent = pickedEntity.GetParentUUID();
-												if (parent != UUID(0))
-												{
-													if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
-													{
-														targetSelection = parentEntity;
-													}
-												}
-											}
+                                            // Single click: prefer selecting the direct parent group first.
+                                            // Double click: select the exact clicked entity.
+                                            if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
+                                            {
+                                                const auto parent = pickedEntity.GetParentUUID();
+                                                if (parent != UUID(0))
+                                                {
+                                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
+                                                    {
+                                                        targetSelection = parentEntity;
+                                                    }
+                                                }
+                                            }
 
-											SetSelectedEntity(targetSelection);
-										}
-										else if (!m_EditorLayer->GetState().multiSelect)
-										{
-											SetSelectedEntity(Entity{});
-											SetGizmoOperation(GizmoOperation::NONE);
-										}
-									}
-								}
-							}
-						}
-					}
-				}
+                                            SetSelectedEntity(targetSelection);
+                                        }
+                                        else if (!m_EditorLayer->GetState().multiSelect)
+                                        {
+                                            SetSelectedEntity(Entity{});
+                                            SetGizmoOperation(GizmoOperation::NONE);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-				if (ImGui::BeginDragDropTarget())
-				{
-					if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-					{
-						if (payload->DataSize == sizeof(AssetHandle))
-						{
-							auto *handle = static_cast<AssetHandle *>(payload->Data);
-							if (handle && *handle != AssetHandle(0))
-							{
-								AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
-								if (metadata.type == AssetType::Scene)
-								{
-									const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
-									m_EditorLayer->OpenScene(filepath);
-								}
-							}
-						}
-					}
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            if (payload->DataSize == sizeof(AssetHandle))
+                            {
+                                auto *handle = static_cast<AssetHandle *>(payload->Data);
+                                if (handle && *handle != AssetHandle(0))
+                                {
+                                    AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
+                                    if (metadata.type == AssetType::Scene)
+                                    {
+                                        const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
+                                        m_EditorLayer->OpenScene(filepath);
+                                    }
+                                }
+                            }
+                        }
 
-					ImGui::EndDragDropTarget();
-				}
+                        ImGui::EndDragDropTarget();
+                    }
 
-				auto view = m_EditorCamera.GetView();
-				auto &projection = m_EditorCamera.GetProjection();
+                    auto view = m_EditorCamera.GetView();
+                    auto &projection = m_EditorCamera.GetProjection();
 
-				if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
-				{
-					constexpr float orientationSize = 80.0f;
-					ImGuiOrientation::internal::config.mSize = orientationSize;
+                    if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
+                    {
+                        constexpr float orientationSize = 80.0f;
+                        ImGuiOrientation::internal::config.mSize = orientationSize;
 
-					constexpr float orientationPadding = 25.0f;
-					ImGuiOrientation::config.axisLengthScale = 0.25f;
-					ImGuiOrientation::SetRect
-					(
-						globals::GEditor::EditorViewport.max.x + globals::GEditor::EditorViewport.min.x - orientationSize - orientationPadding,
-						globals::GEditor::EditorViewport.min.y + orientationPadding
-					);
+                        constexpr float orientationPadding = 25.0f;
+                        ImGuiOrientation::config.axisLengthScale = 0.25f;
+                        ImGuiOrientation::SetRect
+                        (
+                            globals::GEditor::EditorViewport.max.x + globals::GEditor::EditorViewport.min.x - orientationSize - orientationPadding,
+                            globals::GEditor::EditorViewport.min.y + orientationPadding
+                        );
 
-					if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
-					{
-						glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
-						m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
-						m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
-					}
-				}
+                        if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
+                        {
+                            glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
+                            m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
+                            m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
+                        }
+                    }
 
-				GizmoInfo gizmoInfo;
-				gizmoInfo.cameraView = view;
-				gizmoInfo.cameraProjection = projection;
-				gizmoInfo.cameraType = m_EditorCamera.projectionType;
-				gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
-				switch (m_Gizmo.GetOperation())
-				{
-				default:
-				case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
-                case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
-                case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
-				}
+                    GizmoInfo gizmoInfo;
+                    gizmoInfo.cameraView = view;
+                    gizmoInfo.cameraProjection = projection;
+                    gizmoInfo.cameraType = m_EditorCamera.projectionType;
+                    gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
+                    switch (m_Gizmo.GetOperation())
+                    {
+                    default:
+                    case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
+                    case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
+                    case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
+                    }
 
-				m_Gizmo.SetInfo(gizmoInfo);
+                    m_Gizmo.SetInfo(gizmoInfo);
 
-				Render2DBoundsSizing();
+                    Render2DBoundsSizing();
 
-				// Start manipulation: Fired only on the first frame of interaction
-				const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
-				bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
+                    // Start manipulation: Fired only on the first frame of interaction
+                    const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
+                    bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
 
-				static std::unordered_map<UUID, TransformComponent> initialTransforms;
+                    static std::unordered_map<UUID, TransformComponent> initialTransforms;
 
-				if (isManipulatingNow && !m_Data.isGizmoManipulating)
-				{
-					initialTransforms.clear();
-					for (const auto &[uuid, entity] : m_SelectedEntities)
-					{
-						// Store the original transform of each selected entity
-						initialTransforms[uuid] = entity.GetTransform();
-					}
-				}
-				// Capture PREVIOUS frame value before overwriting — needed for the release-commit below
-				bool wasManipulating = m_Data.isGizmoManipulating;
-				m_Data.isGizmoManipulating = isManipulatingNow;
-				m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered() || m_Data.is2DBoundsHovered || m_Data.is2DBoundsSizing;
+                    if (isManipulatingNow && !m_Data.isGizmoManipulating)
+                    {
+                        initialTransforms.clear();
+                        for (const auto &[uuid, entity] : m_SelectedEntities)
+                        {
+                            // Store the original transform of each selected entity
+                            initialTransforms[uuid] = entity.GetTransform();
+                        }
+                    }
+                    // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
+                    bool wasManipulating = m_Data.isGizmoManipulating;
+                    m_Data.isGizmoManipulating = isManipulatingNow;
+                    m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered() || m_Data.is2DBoundsHovered || m_Data.is2DBoundsSizing;
 
-				if (allowGizmoManipulation && m_SelectedEntities.size() > 1)
-				{
-					// Step 1: Compute shared pivot (center of all selected entities)
-					glm::vec3 pivot(0.0f);
-					for (Entity entity : m_SelectedEntities | std::views::values)
-					{
-						pivot += entity.GetTransform().world.translation;
-					}
-					pivot /= static_cast<float>(m_SelectedEntities.size());
+                    if (allowGizmoManipulation && m_SelectedEntities.size() > 1)
+                    {
+                        // Step 1: Compute shared pivot (center of all selected entities)
+                        glm::vec3 pivot(0.0f);
+                        for (Entity entity : m_SelectedEntities | std::views::values)
+                        {
+                            pivot += entity.GetTransform().world.translation;
+                        }
+                        pivot /= static_cast<float>(m_SelectedEntities.size());
 
-					// Step 2: create a transform matrix for the gizmo at the pivot point
-					glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
-					glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
+                        // Step 2: create a transform matrix for the gizmo at the pivot point
+                        glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
+                        glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
 
-					// Step 3: Manipulate the matrix
-					m_Gizmo.Manipulate(manipulatedTransform);
+                        // Step 3: Manipulate the matrix
+                        m_Gizmo.Manipulate(manipulatedTransform);
 
-					if (m_Data.isGizmoManipulating)
-					{
-						// THis delta is now the TOTAL change from the moment of manipulation began
-						glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
+                        if (m_Data.isGizmoManipulating)
+                        {
+                            // THis delta is now the TOTAL change from the moment of manipulation began
+                            glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
 
-						// Decompose the total delta
-						glm::vec3 deltaTranslation, deltaScale, deltaRotation;
-						Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
+                            // Decompose the total delta
+                            glm::vec3 deltaTranslation, deltaScale, deltaRotation;
+                            Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
 
-						for (auto &[uuid, entity] : m_SelectedEntities)
-						{
-							// Get the live transform component to apply changes to it
-							auto &tr = entity.GetTransform();
+                            for (auto &[uuid, entity] : m_SelectedEntities)
+                            {
+                                // Get the live transform component to apply changes to it
+                                auto &tr = entity.GetTransform();
 
-							// Get the ORIGINAL transform we stored at the beginning of the manipulation
-							const auto &initialTransform = initialTransforms.at(uuid);
-							glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
+                                // Get the ORIGINAL transform we stored at the beginning of the manipulation
+                                const auto &initialTransform = initialTransforms.at(uuid);
+                                glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
 
-							// Apply Translation and Rotation around the shared pivot
-							glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
-							glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), pivot);
-							glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
+                                // Apply Translation and Rotation around the shared pivot
+                                glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
+                                glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), pivot);
+                                glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
 
-							// Apply the total delta to the ORIGINAL world matrix
-							glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
-							glm::vec3 newTranslation, newRotationEuler, newScale;
-							Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
+                                // Apply the total delta to the ORIGINAL world matrix
+                                glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
+                                glm::vec3 newTranslation, newRotationEuler, newScale;
+                                Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
 
-							// ----- Apply Scale and Update Local Transform -----
-							if (entity.GetParentUUID() != UUID(0))
-							{
-								Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-								const auto &parentTr = parent.GetTransform();
-								glm::mat4 parentWorld = parentTr.world.GetMatrix();
-								glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
+                                // ----- Apply Scale and Update Local Transform -----
+                                if (entity.GetParentUUID() != UUID(0))
+                                {
+                                    Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+                                    const auto &parentTr = parent.GetTransform();
+                                    glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                                    glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
-								glm::vec3 localTranslation, localEuler, localScale;
-								Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-								tr.local.translation = localTranslation;
-								tr.local.rotation = glm::quat(localEuler);
+                                    glm::vec3 localTranslation, localEuler, localScale;
+                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                    tr.local.translation = localTranslation;
+                                    tr.local.rotation = glm::quat(localEuler);
 
-								// Apply the total scale delta to the ORIGINAL local scale
-								tr.local.scale = initialTransform.local.scale * deltaScale;
-							}
-							else
-							{
-								tr.local.translation = newTranslation;
-								tr.local.rotation = glm::quat(newRotationEuler);
+                                    // Apply the total scale delta to the ORIGINAL local scale
+                                    tr.local.scale = initialTransform.local.scale * deltaScale;
+                                }
+                                else
+                                {
+                                    tr.local.translation = newTranslation;
+                                    tr.local.rotation = glm::quat(newRotationEuler);
 
-								// Apply the total scale delta to the ORIGINAL local scale
-								tr.local.scale = initialTransform.local.scale * deltaScale;
-							}
-							tr.dirty = true;
-						}
-					}
+                                    // Apply the total scale delta to the ORIGINAL local scale
+                                    tr.local.scale = initialTransform.local.scale * deltaScale;
+                                }
+                                tr.dirty = true;
+                            }
+                        }
 
-					// Commit commands when the multi-entity gizmo is released
-					if (!isManipulatingNow && wasManipulating)
-					{
-						std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
-						for (auto &[uuid, entity] : m_SelectedEntities)
-						{
-							if (auto it = initialTransforms.find(uuid); it != initialTransforms.end())
-							{
-								entries.push_back({ uuid, it->second, entity.GetTransform() });
-							}
-						}
+                        // Commit commands when the multi-entity gizmo is released
+                        if (!isManipulatingNow && wasManipulating)
+                        {
+                            std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
+                            for (auto &[uuid, entity] : m_SelectedEntities)
+                            {
+                                if (auto it = initialTransforms.find(uuid); it != initialTransforms.end())
+                                {
+                                    entries.push_back({ uuid, it->second, entity.GetTransform() });
+                                }
+                            }
 
-						if (!entries.empty())
-						{
-							CommandManager::AddCommand(CreateScope<ComponentPropertyBatchCommand<TransformComponent>>(m_Scene.get(), std::move(entries)));
-						}
-					}
-				}
-				else if (Entity entity = GetSelectedEntity())
-				{
-					if (allowGizmoManipulation)
-					{
-						auto &tr = entity.GetTransform();
-						glm::mat4 transformMatrix = tr.world.GetMatrix();
+                            if (!entries.empty())
+                            {
+                                CommandManager::AddCommand(CreateScope<ComponentPropertyBatchCommand<TransformComponent>>(m_Scene.get(), std::move(entries)));
+                            }
+                        }
+                    }
+                    else if (Entity entity = GetSelectedEntity())
+                    {
+                        if (allowGizmoManipulation)
+                        {
+                            auto &tr = entity.GetTransform();
+                            glm::mat4 transformMatrix = tr.world.GetMatrix();
 
-						m_Gizmo.Manipulate(transformMatrix);
+                            m_Gizmo.Manipulate(transformMatrix);
 
-						if (m_Gizmo.IsManipulating())
-						{
-							const glm::vec3 preservedLocalScale = tr.local.scale;
-							glm::vec3 translation, rotation, scale;
-							Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
-							const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
+                            if (m_Gizmo.IsManipulating())
+                            {
+                                const glm::vec3 preservedLocalScale = tr.local.scale;
+                                glm::vec3 translation, rotation, scale;
+                                Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
+                                const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
 
-							if (entity.GetParentUUID() != UUID(0))
-							{
-								Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-								const auto &parentTr = parent.GetTransform();
-								const glm::mat4 parentWorld = parentTr.world.GetMatrix();
-								const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
+                                if (entity.GetParentUUID() != UUID(0))
+                                {
+                                    Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+                                    const auto &parentTr = parent.GetTransform();
+                                    const glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
 
-								glm::vec3 localTranslation, localEuler, localScale;
-								Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-								tr.local.translation = localTranslation;
-								tr.local.rotation = glm::quat(localEuler);
+                                    glm::vec3 localTranslation, localEuler, localScale;
+                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                    tr.local.translation = localTranslation;
+                                    tr.local.rotation = glm::quat(localEuler);
 
-								if (op == ImGuizmo::SCALE)
-								{
-									tr.local.scale = localScale;
-								}
-								else
-								{
-									tr.local.scale = preservedLocalScale;
-								}
-							}
-							else
-							{
-								tr.local.translation = translation;
-								tr.local.rotation = glm::quat(rotation);
+                                    if (op == ImGuizmo::SCALE)
+                                    {
+                                        tr.local.scale = localScale;
+                                    }
+                                    else
+                                    {
+                                        tr.local.scale = preservedLocalScale;
+                                    }
+                                }
+                                else
+                                {
+                                    tr.local.translation = translation;
+                                    tr.local.rotation = glm::quat(rotation);
 
-								if (op == ImGuizmo::SCALE)
-								{
-									tr.local.scale = scale;
-								}
-								else
-								{
-									tr.local.scale = preservedLocalScale;
-								}
-							}
-							tr.dirty = true;
-						}
+                                    if (op == ImGuizmo::SCALE)
+                                    {
+                                        tr.local.scale = scale;
+                                    }
+                                    else
+                                    {
+                                        tr.local.scale = preservedLocalScale;
+                                    }
+                                }
+                                tr.dirty = true;
+                            }
 
-						// Commit a single command when the gizmo is released (single entity)
-						if (!isManipulatingNow && wasManipulating)
-						{
-							if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
-							{
-								CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
-							}
-						}
-					}
-				}
+                            // Commit a single command when the gizmo is released (single entity)
+                            if (!isManipulatingNow && wasManipulating)
+                            {
+                                if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
+                                {
+                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
+                                }
+                            }
+                        }
+                    }
+                }
             }
             else
             {
-				ImGui::Text("No Scene");
+                ImGui::Text("No Scene");
             }
         }
 
@@ -3251,7 +3399,7 @@ namespace ignite
                 // Preview camera
                 if (m_Scene)
                 {
-					auto activeSceneRenderer = m_Scene->GetSceneRenderer();
+                    auto activeSceneRenderer = m_Scene->GetSceneRenderer();
                     ImGui::TextUnformatted("Zoom");
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(120.0f);
@@ -3318,64 +3466,78 @@ namespace ignite
                         const bool imageHovered = cursor.x >= imagePos.x && cursor.x <= imagePos.x + imageSize.x  // X Bounds
                                                && cursor.y >= imagePos.y && cursor.y <= imagePos.y + imageSize.y; // Y Bounds
 
-						ImDrawList *drawList = ImGui::GetWindowDrawList();
-						auto target = activeSceneRenderer->GetRenderTarget(camera);
+                        ImDrawList *drawList = ImGui::GetWindowDrawList();
+                        auto target = activeSceneRenderer->GetRenderTarget(camera);
 
                         if (target)
                         {
-							{
-								uint32_t localMouseX = 0;
-								uint32_t localMouseY = 0;
+                            {
 
-								// We need to store the Game-play Mouse Position if only the Image is hovered
-								if (imageHovered)
-								{
-									const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
-									const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
-									localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(target->widgetRT->GetWidth(), 1u)));
-									localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(target->widgetRT->GetHeight(), 1u)));
+                                // Click inside the viewport to (re-)focus in Play or Simulate modes
+                                if (m_Scene->IsRunning() && !m_SceneFocused && m_SceneFocusCooldown == 0)
+                                {
+                                    if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                                    {
+                                        m_SceneFocused = true;
+                                        m_SceneFocusCooldown = 10;
+                                        InputSystem::SetCursorMode(CursorMode::Disabled);
+                                        InputSystem::SetMouseToCenter();
+                                    }
+                                }
 
-									float rx = u * baseImageSize.x;
-									float ry = v * baseImageSize.y;
-									InputSystem::SetGameplayMousePosition(rx, ry, true);
-								}
-								else
-								{
-									// Otherwise set it to Zero and and Disable it
-									InputSystem::SetGameplayMousePosition(0.0f, 0.0f, false);
-								}
+                                uint32_t localMouseX = 0;
+                                uint32_t localMouseY = 0;
 
-								// Set the Widget Mouse Position
-								activeSceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
-							}
+                                // We need to store the Game-play Mouse Position if only the Image is hovered
+                                if (imageHovered)
+                                {
+                                    const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
+                                    const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
+                                    localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(target->widgetRT->GetWidth(), 1u)));
+                                    localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(target->widgetRT->GetHeight(), 1u)));
 
-							if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
-							{
-								const ImVec2 delta = ImGui::GetIO().MouseDelta;
-								m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
-							}
+                                    float rx = u * baseImageSize.x;
+                                    float ry = v * baseImageSize.y;
+                                    InputSystem::SetGameplayMousePosition(rx, ry, true);
+                                }
+                                else
+                                {
+                                    // Otherwise set it to Zero and and Disable it
+                                    InputSystem::SetGameplayMousePosition(0.0f, 0.0f, false);
+                                }
 
-							globals::GEditor::GameViewport.min = { baseImagePos.x, baseImagePos.y };
-							globals::GEditor::GameViewport.max = { baseImageSize.x, baseImageSize.y };
+                                // Set the Widget Mouse Position
+                                activeSceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                            }
 
-							ImTextureID gameplayViewImaage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
-							drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
-							drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
-							drawList->PopClipRect();
+                            if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+                            {
+                                const ImVec2 delta = ImGui::GetIO().MouseDelta;
+                                m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
+                            }
+
+                            globals::GEditor::GameViewport.min = { baseImagePos.x, baseImagePos.y };
+                            globals::GEditor::GameViewport.max = { baseImageSize.x, baseImageSize.y };
+
+                            ImTextureID gameplayViewImaage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
+                            drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
+                            drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
+                            drawList->PopClipRect();
                         }
                         
-
                         {
-                            const float padding = 18.0f;
+                            constexpr float padding = 18.0f;
                             float yPosition = 6.0f;
                             const float fps = ImGui::GetIO().Framerate;
-                            std::string statusStr = std::format("FPS {:.5} {:.3}ms", fps, 1000.0f / fps);
+                            std::string statusStr = std::format("FPS {:.5}", fps);
                             drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
+							yPosition += padding;
+							statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+							drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+
                             yPosition += padding;
-                            statusStr = std::format("Viewport x: {} y: {} w: {} h: {}", baseImagePos.x, baseImagePos.y,
-                                baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
-                            
+                            statusStr = std::format("Viewport x: {} y: {} w: {} h: {}", baseImagePos.x, baseImagePos.y, baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
                             drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
                         }
 
@@ -3468,8 +3630,10 @@ namespace ignite
         auto drawGizmoBtn = [&](const std::string &iconName, bool active)
         {
             ImTextureID texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
+
+            const auto colors = ImGui::GetStyle().Colors;
             ImVec4 tint = active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-            ImVec4 bg = active ? ImVec4(1.0f, 0.78f, 0.0f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+            ImVec4 bg = active ? colors[ImGuiCol_ButtonActive] : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
             return ImGui::ImageButton(iconName.c_str(), texID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bg, tint);
         };
 
@@ -3510,20 +3674,19 @@ namespace ignite
         case ImGuizmo::OPERATION::TRANSLATE:
             ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[0], 0.05f, 0.0f, 100.0f, "Snap %.2f");
             break;
-		case ImGuizmo::OPERATION::ROTATE:
-			ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[1], 0.05f, 0.0f, 100.0f, "Snap %.2f");
-			break;
-		case ImGuizmo::OPERATION::SCALE:
-			ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[2], 0.05f, 0.0f, 100.0f, "Snap %.2f");
-			break;
+        case ImGuizmo::OPERATION::ROTATE:
+            ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[1], 0.05f, 0.0f, 100.0f, "Snap %.2f");
+            break;
+        case ImGuizmo::OPERATION::SCALE:
+            ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[2], 0.05f, 0.0f, 100.0f, "Snap %.2f");
+            break;
         }
         ImGui::SameLine();
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        ESceneState sceneState = m_EditorLayer->GetState().sceneState;
-        const bool isScenePlaying = sceneState == ESceneState::Play;
+        const bool isScenePlaying = m_Scene && m_Scene->IsPlaying();
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
         ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
 
@@ -3533,7 +3696,7 @@ namespace ignite
         {
             if (isScenePlaying)
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); m_SceneFocused = false; });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3542,7 +3705,7 @@ namespace ignite
             }
             else
             {
-				Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); m_SceneFocused = true; });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3551,7 +3714,7 @@ namespace ignite
             }
         }
 
-        const bool isSceneSimulate = sceneState == ESceneState::Simulate;
+        const bool isSceneSimulate = m_Scene && m_Scene->IsSimulating();
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
         ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
 
@@ -3561,7 +3724,7 @@ namespace ignite
         {
             if (isSceneSimulate)
             {
-				Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); m_SceneFocused = false; });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3570,7 +3733,7 @@ namespace ignite
             }
             else
             {
-				Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); });
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); m_SceneFocused = true; });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3849,9 +4012,34 @@ namespace ignite
     {
         EventDispatcher dispatcher(event);
 
+        // Dispatch key pressed first to check for unfocus hotkey
+        dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnKeyPressedEvent));
+
+        if (m_Scene && m_SceneFocused && m_Scene->IsPlaying())
+        {
+            event.Handled = true;
+            return;
+        }
+
         dispatcher.Dispatch<MouseScrolledEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseScrolledEvent));
         dispatcher.Dispatch<MouseMovedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseMovedEvent));
         dispatcher.Dispatch<JoystickConnectionEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnJoystickConnectionEvent));
+    }
+
+    bool ScenePanel::OnKeyPressedEvent(KeyPressedEvent &event)
+    {
+        if (m_SceneFocused)
+        {
+            if (m_Scene && m_Scene->IsRunning() && event.GetKeyCode() == Key::F1 && InputSystem::IsModifierPressed(KeyMod::LeftShift))
+            {
+                m_SceneFocused = false;
+                m_SceneFocusCooldown = 10;
+                InputSystem::SetCursorMode(CursorMode::Normal);
+                LOG_INFO("Scene play/simulate focused state released");
+                return true;
+            }
+        }
+        return false;
     }
 
     bool ScenePanel::OnMouseScrolledEvent(MouseScrolledEvent &event)

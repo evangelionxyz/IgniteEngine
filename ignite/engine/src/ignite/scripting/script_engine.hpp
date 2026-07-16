@@ -32,7 +32,7 @@ namespace ignite
         bool LoadCoreAssembly(const ignite::Path &filepath);
         bool LoadAppAssembly(const ignite::Path &filepath);
 
-        void ReloadAssembly();
+        bool ReloadAssembly();
 
         void SetSceneContext(Scene *scene);
         void ClearSceneContext();
@@ -73,6 +73,7 @@ namespace ignite
 
         void LoadAppAssemblyClasses();
         void LoadAppClasses(const std::string &classFullName, ScriptClassMap &outClasses);
+        void RefreshScriptableObjectInstances();
 
         Project *m_Project;
         Scene *m_Scene;

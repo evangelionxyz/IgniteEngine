@@ -6,6 +6,7 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/graphics/renderer.hpp"
 
 namespace ignite
 {
@@ -23,11 +24,13 @@ namespace ignite
         cbDesc.maxVersions = maxVersion;
         cbDesc.debugName = debugName;
 
+        m_ByteSize = size;
         m_Handle = device->createBuffer(cbDesc);
         LOG_ASSERT(m_Handle, "Failed to create constant buffer!");
         if (m_Handle)
         {
             IGN_PROFILE_ALLOC_N(m_Handle.Get(), size, "GPU Constant Buffer");
+            Renderer::Stats.gpuConstantBufferBytes += size;
         }
     }
 
@@ -36,6 +39,7 @@ namespace ignite
         if (m_Handle)
         {
             IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Constant Buffer");
+            Renderer::Stats.gpuConstantBufferBytes -= m_ByteSize;
             m_Handle = nullptr;
         }
     }

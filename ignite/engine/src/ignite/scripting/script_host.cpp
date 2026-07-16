@@ -169,6 +169,12 @@ namespace ignite
         m_CoreAssembly = nullptr;
         m_AppAssembly = nullptr;
 
+        if (m_LoadContext)
+        {
+            // Call Mochi's UnloadAssemblyLoadContext passing the ref
+            m_Host.UnloadAssemblyLoadContext(*m_LoadContext);
+        }
+
         m_LoadContext.reset();
         const std::string alcName = "Ignite.Scripting." + std::to_string(++m_ReloadCounter);
         m_LoadContext = CreateScope<mochi::AssemblyLoadContext>(m_Host.CreateAssemblyLoadContext(alcName, m_BaseDir.string()));

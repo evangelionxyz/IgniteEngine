@@ -30,7 +30,7 @@ namespace ignite
         static void SetMasterVolume(float volume);
         static void MuteMaster(bool mute);
 
-        static void Update(float deltaTime);
+        static void Update();
 
         static FMOD::ChannelGroup *CreateChannelGroup(const std::string &name);
         static std::unordered_map<std::string, FMOD::ChannelGroup *> GetChannelGroupMap();
@@ -40,14 +40,11 @@ namespace ignite
         static FMOD::System *GetFmodSystem();
         static FMOD::ChannelGroup *GetMasterChannel();
         static float GetMasterVolume();
-        static void InsertFmodSound(const std::string &name, const Ref<FmodSound>& sound);
-        static void RemoveFmodSound(const std::string &name);
 
     private:
         FMOD::System *m_System;
         FMOD::ChannelGroup *m_MasterGroup;
         std::unordered_map<std::string, FMOD::ChannelGroup *> m_ChannelGroups;
-        std::unordered_map<std::string, Ref<FmodSound>> m_SoundMap;
 
         FMOD_VECTOR listenerPos;
         FMOD_VECTOR listenerVel;

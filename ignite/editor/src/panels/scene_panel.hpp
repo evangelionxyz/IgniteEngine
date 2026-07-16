@@ -43,6 +43,7 @@ namespace ignite
         bool OnMouseScrolledEvent(MouseScrolledEvent &event);
         bool OnMouseMovedEvent(MouseMovedEvent &event);
         bool OnJoystickConnectionEvent(JoystickConnectionEvent &event);
+        bool OnKeyPressedEvent(KeyPressedEvent &event);
 
         void SetGizmoOperation(GizmoOperation op);
         void SetGizmoMode(ImGuizmo::MODE mode);
@@ -76,6 +77,7 @@ namespace ignite
         glm::vec3 ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid = nullptr);
 
     private:
+
         EditorCamera m_EditorCamera;
         std::optional<EditorCamera> m_EditorCamera2D;
         std::optional<EditorCamera> m_EditorCamera3D;
@@ -123,6 +125,9 @@ namespace ignite
             GizmoOperation gizmoOp;
             TransformComponent before2DResize;
 		} m_Data;
+
+        bool m_SceneFocused = false;
+        int m_SceneFocusCooldown = 0;
 
         friend class EditorLayer;
     };

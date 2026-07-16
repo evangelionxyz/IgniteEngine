@@ -234,8 +234,26 @@ namespace ignite
 			const auto width = target->sceneRT->GetWidth();
 			const auto height = target->sceneRT->GetHeight();
 
+            // Differentiate between Edit Viewport and Game Viewport cameras.
+            // This is crucial to prevent resources (Bloom, SSAO, Edge Detection) from fighting
+            // and constantly recreating textures when both viewports are active with different sizes.
+            bool isGameCamera = false;
+            if (m_Scene)
+            {
+                if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+                {
+                    const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                    if (camera == &cc.camera)
+                    {
+                        isGameCamera = true;
+                    }
+                }
+            }
+
+            // Skip selection highlights/outlines for the game camera (gameplay viewport).
+            // This avoids running EdgeDetection compute shaders and recreating the outline texture for the game's resolution.
             Ref<Texture> edgeTexture = nullptr;
-            if (m_EdgeDetection && !m_SelectedEntities.empty())
+            if (!isGameCamera && m_EdgeDetection && !m_SelectedEntities.empty())
             {
                 if (!m_EdgeDetection->GetOutputTexture() || m_EdgeDetection->GetOutputTexture()->GetWidth() != static_cast<int>(width) || m_EdgeDetection->GetOutputTexture()->GetHeight() != static_cast<int>(height))
                 {
@@ -267,26 +285,30 @@ namespace ignite
             Ref<Texture> bloomTexture = nullptr;
             if (postProcessing.enableBloom)
             {
-                m_EditorBloom->settings.intensity = postProcessing.bloomIntensity;
-                m_EditorBloom->settings.knee = postProcessing.bloomKnee;
-                m_EditorBloom->settings.radius = postProcessing.bloomRadius;
-                m_EditorBloom->settings.threshold = postProcessing.bloomThreshold;
-                m_EditorBloom->settings.iterations = postProcessing.bloomIterations;
+                // Use distinct Bloom instances for game/edit to prevent texture resizing ping-pong
+                Ref<Bloom> bloomInstance = isGameCamera ? m_GameplayBloom : m_EditorBloom;
+                bloomInstance->settings.intensity = postProcessing.bloomIntensity;
+                bloomInstance->settings.knee = postProcessing.bloomKnee;
+                bloomInstance->settings.radius = postProcessing.bloomRadius;
+                bloomInstance->settings.threshold = postProcessing.bloomThreshold;
+                bloomInstance->settings.iterations = postProcessing.bloomIterations;
                 
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
 
-                m_EditorBloom->Resize(width, height);
-                m_EditorBloom->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
-                bloomTexture = m_EditorBloom->GetBloomTexture();
+                bloomInstance->Resize(width, height);
+                bloomInstance->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+                bloomTexture = bloomInstance->GetBloomTexture();
             }
 
             Ref<Texture> ssaoTexture = nullptr;
             if (postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
-                m_EditorSSAO->Resize(width, height);
-                m_EditorSSAO->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
-                ssaoTexture = m_EditorSSAO->GetAOTexture();
+                // Use distinct SSAO instances for game/edit to prevent texture resizing ping-pong
+                Ref<SSAO> ssaoInstance = isGameCamera ? m_GameplaySSAO : m_EditorSSAO;
+                ssaoInstance->Resize(width, height);
+                ssaoInstance->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
+                ssaoTexture = ssaoInstance->GetAOTexture();
             }
 
             {
@@ -307,11 +329,36 @@ namespace ignite
     {
         ISceneRenderer::ResizeFramebuffer(camera, width, height);
 
-        if (m_EditorBloom)
-            m_EditorBloom->Resize(width, height);
+        // Differentiate resizing between edit-viewport and game-viewport post-processing instances
+        bool isGameCamera = false;
+        if (m_Scene)
+        {
+            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+            {
+                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                if (camera == &cc.camera)
+                {
+                    isGameCamera = true;
+                }
+            }
+        }
 
-        if (m_EditorSSAO)
-            m_EditorSSAO->Resize(width, height);
+        if (isGameCamera)
+        {
+            if (m_GameplayBloom)
+                m_GameplayBloom->Resize(width, height);
+
+            if (m_GameplaySSAO)
+                m_GameplaySSAO->Resize(width, height);
+        }
+        else
+        {
+            if (m_EditorBloom)
+                m_EditorBloom->Resize(width, height);
+
+            if (m_EditorSSAO)
+                m_EditorSSAO->Resize(width, height);
+        }
 
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
@@ -339,22 +386,6 @@ namespace ignite
 
         // Animated
 		Ref<GraphicsPipeline> animatedCSMPSO = GetAnimatedCSMPSO();
-
-        auto dirLightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
-        for (entt::entity e : dirLightView)
-        {
-            const TransformComponent &tr = dirLightView.get<TransformComponent>(e);
-            const DirectionalLightComponent &light = dirLightView.get<DirectionalLightComponent>(e);
-
-            const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-
-            m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-            m_SceneGPUData.sungAngles.x = std::atan2(forward.x, forward.z);
-            m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(forward.y, -1.0f, 1.0f));
-            m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
-
-            break;
-        }
 
         auto worldEnvView = m_Scene->registry->view<WorldEnvironment>();
         for (entt::entity e : worldEnvView)
@@ -433,6 +464,7 @@ namespace ignite
             glm::cos(m_SceneGPUData.sungAngles.y) * glm::cos(m_SceneGPUData.sungAngles.x)
         };
 
+        bool cascadeShadow = false;
         float shadowDist = 200.0f; // default if no directional light found
         auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
         for (entt::entity e : lightView)
@@ -442,12 +474,19 @@ namespace ignite
 
             sunDirection = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 
+            cascadeShadow = light.cascadeShadow;
+
             auto &csmData = m_CascadedShadowMap->GetGPUData();
             csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
             csmData.minBias = light.shadowMinBias;
             csmData.maxBias = light.shadowMaxBias;
             csmData.pcfRadius = light.pcfRadius;
             shadowDist = light.shadowDistance;
+
+			m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+			m_SceneGPUData.sungAngles.x = std::atan2(sunDirection.x, sunDirection.z);
+			m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
+			m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
 
             const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
             if (m_CascadedShadowMap->GetQuality() != quality)
@@ -463,131 +502,147 @@ namespace ignite
             break;
         }
 
-        m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
-
-        // Share cascade data with the main scene pass (cascadeIndex is unused there)
-        CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
-        sceneCascadeData.cascadeIndex = -1;
-        m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
-
-        for (int i = 0; i < NUM_CASCADES; ++i)
+		if (!cascadeShadow)
+		{
+            for (int i = 0; i < NUM_CASCADES; ++i)
+            {
+                IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
+                CSM_GPUData cascadeGpuData = {};
+                cascadeGpuData.cascadeIndex = i;
+                m_CSMPerCascadeBuffers[i]->SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
+                m_CascadedShadowMap->BeginCascade(cmd, i);
+            }
+		}
+        else
         {
-            IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
+			m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
 
-            CSM_GPUData cascadeGpuData = sceneCascadeData;
-            cascadeGpuData.cascadeIndex = i;
-            m_CSMPerCascadeBuffers[i]->SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
+			// Share cascade data with the main scene pass (cascadeIndex is unused there)
+			CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
+			sceneCascadeData.cascadeIndex = -1;
+			m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
 
-            // Clear the specific array layer for this cascade
-            m_CascadedShadowMap->BeginCascade(cmd, i);
-
-            nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i);
-            nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
-
-            Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
-
-			nvrhi::GraphicsState staticState = nvrhi::GraphicsState();
-            staticState.framebuffer = csmFramebuffer;
-            staticState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
-			staticState.pipeline = staticCSMPSO->GetHandle();
-
-            // Static Mesh
+			for (int i = 0; i < NUM_CASCADES; ++i)
 			{
-				IGN_PROFILE_SCOPE("SceneRenderer::StaticMesh");
-				auto skelMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
-				for (entt::entity e : skelMeshView)
+				IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
+
+				CSM_GPUData cascadeGpuData = sceneCascadeData;
+				cascadeGpuData.cascadeIndex = i;
+				m_CSMPerCascadeBuffers[i]->SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
+
+				// Clear the specific array layer for this cascade
+				m_CascadedShadowMap->BeginCascade(cmd, i);
+
+				nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i);
+				nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
+
+				Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
+
+				nvrhi::GraphicsState staticState = nvrhi::GraphicsState();
+				staticState.framebuffer = csmFramebuffer;
+				staticState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+				staticState.pipeline = staticCSMPSO->GetHandle();
+
+				// Static Mesh
 				{
-					TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-					if (!tr.visible)
-						continue;
+					IGN_PROFILE_SCOPE("SceneRenderer::StaticMesh");
+					auto skelMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+					for (entt::entity e : skelMeshView)
+					{
+						TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+						if (!tr.visible)
+							continue;
 
-					StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-					if (smc.handle == AssetHandle(0))
-						continue;
+						StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
+						if (smc.handle == AssetHandle(0))
+							continue;
 
-					auto sm = ResolveAsset<StaticMesh>(smc.handle);
-					if (!sm)
-						continue;
+						auto sm = ResolveAsset<StaticMesh>(smc.handle);
+						if (!sm)
+							continue;
 
-					// Perform cascade frustum culling
-					if (!cascadeFrustum.IsAABBVisible(sm->GetWorldAABB()))
-						continue;
+						// Perform cascade frustum culling
+						if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
+							continue;
 
-					const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-					DrawMeshShadow(cmd, sm, tr.world.GetMatrix(), smc.normalMatrix, objectID, std::vector<glm::mat4>(), 
-                        smc.cachedInstanceTransforms, staticState, m_CSMPerCascadeBuffers[i]);
+						const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+						DrawMeshShadow(cmd, sm, tr.world.GetMatrix(), smc.normalMatrix, objectID, std::vector<glm::mat4>(),
+							smc.cachedInstanceTransforms, staticState, m_CSMPerCascadeBuffers[i]);
+					}
+				}
+
+				nvrhi::GraphicsState animatedState = nvrhi::GraphicsState();
+				animatedState.framebuffer = csmFramebuffer;
+				animatedState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+				animatedState.pipeline = animatedCSMPSO->GetHandle();
+
+				// Skeletal Mesh
+				{
+					IGN_PROFILE_SCOPE("SceneRenderer::MeshesShadow");
+					auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+					for (entt::entity e : skelMeshView)
+					{
+						TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+						if (!tr.visible)
+							continue;
+
+						SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
+						if (smc.handle == AssetHandle(0))
+							continue;
+
+						auto sm = ResolveAsset<SkeletalMesh>(smc.handle);
+						if (!sm)
+							continue;
+
+						// Perform cascade frustum culling
+						if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
+							continue;
+
+						const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+						DrawMeshShadow(cmd, sm, tr.world.GetMatrix(), smc.normalMatrix, objectID, smc.finalBoneTransforms, smc.cachedInstanceTransforms,
+							animatedState, m_CSMPerCascadeBuffers[i]);
+
+						// --- SOCKET SYSTEM: Render attached meshes for Shadows ---
+						if (sm && sm->GetSkeletonHandle() != AssetHandle(0))
+						{
+							Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(sm->GetSkeletonHandle());
+							if (skeleton)
+							{
+								for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+								{
+									if (attachedMeshHandle == AssetHandle(0))
+										continue;
+
+									auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
+									if (!attachedMeshAsset)
+										continue;
+
+									glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+									glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
+
+									if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
+									{
+										auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
+										DrawMeshShadow(cmd, attachedMesh, socketWorld, normalMatrix, objectID,
+											smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, m_CSMPerCascadeBuffers[i]);
+									}
+									else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
+									{
+										auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
+										DrawMeshShadow(cmd, attachedMesh, socketWorld, normalMatrix, objectID,
+											std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, m_CSMPerCascadeBuffers[i]);
+									}
+								}
+							}
+						}
+					}
 				}
 			}
-
-			nvrhi::GraphicsState animatedState = nvrhi::GraphicsState();
-            animatedState.framebuffer = csmFramebuffer;
-            animatedState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
-            animatedState.pipeline = animatedCSMPSO->GetHandle();
-
-            // Skeletal Mesh
-            {
-                IGN_PROFILE_SCOPE("SceneRenderer::MeshesShadow");
-                auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
-                for (entt::entity e : skelMeshView)
-                {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                    if (!tr.visible)
-                        continue;
-
-                    SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
-                    if (smc.handle == AssetHandle(0))
-                        continue;
-
-                    auto sm = ResolveAsset<SkeletalMesh>(smc.handle);
-                    if (!sm)
-                        continue;
-
-                    // Perform cascade frustum culling
-                    if (!cascadeFrustum.IsAABBVisible(sm->GetWorldAABB()))
-                        continue;
-
-                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                    DrawMeshShadow(cmd, sm, tr.world.GetMatrix(), smc.normalMatrix, objectID, smc.finalBoneTransforms, smc.cachedInstanceTransforms,
-                        animatedState, m_CSMPerCascadeBuffers[i]);
-
-                    // --- SOCKET SYSTEM: Render attached meshes for Shadows ---
-                    if (sm && sm->GetSkeletonHandle() != AssetHandle(0))
-                    {
-                        Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(sm->GetSkeletonHandle());
-                        if (skeleton)
-                        {
-                            for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
-                            {
-                                if (attachedMeshHandle == AssetHandle(0))
-                                    continue;
-
-                                auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
-                                if (!attachedMeshAsset)
-                                    continue;
-
-                                glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
-                                glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
-
-                                if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
-                                {
-                                    auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-                                    DrawMeshShadow(cmd, attachedMesh, socketWorld, normalMatrix, objectID, 
-                                        smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, m_CSMPerCascadeBuffers[i]);
-                                }
-                                else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
-                                {
-                                    auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
-                                    DrawMeshShadow(cmd, attachedMesh, socketWorld, normalMatrix, objectID, 
-                                        std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, m_CSMPerCascadeBuffers[i]);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+			
         }
-        cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-        cmd->commitBarriers();
+
+		cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+		cmd->commitBarriers();
     }
 
     void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
@@ -621,13 +676,14 @@ namespace ignite
                 if (!mesh)
                     continue;
 
-                if (!frustum.IsAABBVisible(mesh->GetWorldAABB()))
+                if (!frustum.IsAABBVisible(smc.worldAABB))
                     continue;
 
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
                 DrawMesh(cmd, framebuffer, mesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, 
                     smc.overrideMaterials, std::vector<glm::mat4>(), smc.cachedInstanceTransforms, 
                     camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass);
+                Renderer::Stats.staticMeshCount++;
             }
         }
 
@@ -645,13 +701,14 @@ namespace ignite
                 if (!mesh)
                     continue;
 
-                if (!frustum.IsAABBVisible(mesh->GetWorldAABB()))
+                if (!frustum.IsAABBVisible(smc.worldAABB))
                     continue;
 
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
                 DrawMesh(cmd, framebuffer, mesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, 
                     smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms, 
                     camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass);
+                Renderer::Stats.skeletalMeshCount++;
 
                 // --- SOCKET SYSTEM: Render attached meshes ---
                 if (mesh && mesh->GetSkeletonHandle() != AssetHandle(0))
@@ -720,6 +777,8 @@ namespace ignite
                 args.instanceCount = 1;
 
                 cmd->drawIndexed(args);
+                Renderer::Stats.drawCallCount++;
+                Renderer::Stats.indexCount3D += dc.indexCount;
             }
         }
 
@@ -1078,7 +1137,7 @@ namespace ignite
 				if (!sm)
                     continue;
 
-				m_Renderer2D->DrawAABB(sm->GetWorldAABB());
+				m_Renderer2D->DrawAABB(smc.worldAABB);
 			}
 
             auto skeletalAabbView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
@@ -1093,7 +1152,7 @@ namespace ignite
 				if (!sm)
 					continue;
 
-				m_Renderer2D->DrawAABB(sm->GetWorldAABB());
+				m_Renderer2D->DrawAABB(smc.worldAABB);
             }
         }
 
@@ -1897,10 +1956,15 @@ namespace ignite
 
                     cmd->setGraphicsState(graphicsState);
 
+                    const uint32_t idxCount = primitive->indexBuffer->GetCount();
                     nvrhi::DrawArguments args;
-                    args.setVertexCount(primitive->indexBuffer->GetCount());
+                    args.setVertexCount(idxCount);
                     args.instanceCount = 1;
                     cmd->drawIndexed(args);
+
+                    Renderer::Stats.drawCallCount++;
+                    Renderer::Stats.indexCount3D += idxCount;
+                    Renderer::Stats.vertexCount3D += primitive->vertexBuffer->GetByteSize() / sizeof(float); // approx
                 }
             }
         }
@@ -1984,10 +2048,13 @@ namespace ignite
 
                 cmd->setGraphicsState(csmState);
 
+                const uint32_t idxCount = primitive->indexBuffer->GetCount();
                 nvrhi::DrawArguments args;
-                args.setVertexCount(primitive->indexBuffer->GetCount());
+                args.setVertexCount(idxCount);
                 args.instanceCount = 1;
                 cmd->drawIndexed(args);
+
+                Renderer::Stats.shadowDrawCallCount++;
             }
         }
     }

@@ -95,8 +95,11 @@ namespace ignite
                     continue;
 
 				auto mesh = AssetManager::GetInstance()->GetAsset<SkeletalMesh>(smc.handle);
+				if (!mesh)
+					continue;
+
                 float t;
-                if (mesh->GetWorldAABB().IntersectRay(*origin, *direction, t))
+                if (smc.worldAABB.IntersectRay(*origin, *direction, t))
                 {
                     if (t < minDistance)
                     {

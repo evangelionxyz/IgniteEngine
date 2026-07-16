@@ -7,8 +7,6 @@
 #include "glue/core_script_glue.hpp"
 #include "script_class.hpp"
 #include "script_host.hpp"
-
-
 #include "ignite/scene/component.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
@@ -281,9 +279,6 @@ namespace ignite
         {
             scriptEngineData->assemblyReloadingPending = true;
 
-            // NOTE: Use [] (no capture) — this lambda is queued to the main thread and
-            // executes later; the file-watcher thread's stack frame will be gone by then.
-            // We rely on the process-lifetime globals `scriptEngineData` and `scriptEngine`.
             Application::SubmitToMainThread([]()
             {
                 if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsRunning())
@@ -326,6 +321,7 @@ namespace ignite
         if (!ignite::Path::WaitForFileReady(filepath))
         {
             LOG_WARN("[Script Engine] App assembly may still be updating: {}", filepath.generic_string());
+            return false;
         }
 
         if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
@@ -337,26 +333,26 @@ namespace ignite
         // Configure field serialization
         if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldTypeName, kEntityTypeName))
         {
-            LOG_ERROR("[Script Engine] Failed to configure Entity script serialization type names");
+            LOG_ASSERT(false, "[Script Engine] Failed to configure Entity script serialization type names");
             return false;
         }
 
         if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldTypeName, kScriptableObjectTypeName))
         {
-            LOG_ERROR("[Script Engine] Failed to configure Scriptable Object serialization type names");
+            LOG_ASSERT(false, "[Script Engine] Failed to configure Scriptable Object serialization type names");
             return false;
         }
 
         // Initialize CORE & COMPONENT Internal Calls
         if (!scriptEngineData->scriptHost->InitializeCoreInternalCalls())
         {
-            LOG_ERROR("[Script Engine] Failed to initialize CORE internal calls bridge");
+            LOG_ASSERT(false, "[Script Engine] Failed to initialize CORE internal calls bridge");
             return false;
         }
 
         if (!scriptEngineData->scriptHost->InitializeComponentInternalCalls())
         {
-            LOG_ERROR("[Script Engine] Failed to initialize COMPONENT internal calls bridge");
+            LOG_ASSERT(false, "[Script Engine] Failed to initialize COMPONENT internal calls bridge");
             return false;
         }
 
@@ -377,10 +373,13 @@ namespace ignite
         // Load the classes
         LoadAppAssemblyClasses();
 
+        // Refresh any already-loaded ScriptableObject managed instances in the new ALC
+        RefreshScriptableObjectInstances();
+
         return true;
     }
 
-    void ScriptEngine::ReloadAssembly()
+    bool ScriptEngine::ReloadAssembly()
     {
         scriptEngineData->isReady = false;
 
@@ -402,14 +401,14 @@ namespace ignite
 
         if (!scriptEngineData->scriptHost || !scriptEngineData->scriptHost->ResetLoadContext())
         {
-            LOG_ERROR("[Script Engine] Failed to reset script host load context during reload");
-            return;
+            LOG_ASSERT(false, "[Script Engine] Failed to reset script host load context during reload");
+            return false;
         }
 
         if (!LoadCoreAssembly(scriptEngineData->coreAssemblyFilepath))
         {
             LOG_ASSERT(false, "[Script Engine] Failed to reload core assembly '{}'", scriptEngineData->coreAssemblyFilepath.generic_string());
-            return;
+            return false;
         }
 
         // Register method signatures AFTER Core Assembly is loaded
@@ -421,19 +420,21 @@ namespace ignite
         // fields, so they must be re-populated before any managed code runs.
         if (!scriptEngineData->scriptHost->InitializeCoreInternalCalls())
         {
-            LOG_ERROR("[Script Engine] Failed to re-initialize CORE internal calls bridge after reload");
-            return;
+            LOG_ASSERT(false, "[Script Engine] Failed to re-initialize CORE internal calls bridge after reload");
+            return false;
         }
 
         if (!scriptEngineData->scriptHost->InitializeComponentInternalCalls())
         {
-            LOG_ERROR("[Script Engine] Failed to re-initialize COMPONENT internal calls bridge after reload");
-            return;
+            LOG_ASSERT(false, "[Script Engine] Failed to re-initialize COMPONENT internal calls bridge after reload");
+            return false;
         }
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
         EnsureAppAssembly();
 		scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
+
+        return true;
     }
 
     void ScriptEngine::SetSceneContext(Scene *scene)
@@ -808,5 +809,39 @@ namespace ignite
         }
 
         LOG_INFO("[Script Engine] Loaded {} script classes", outClasses.size());
+    }
+
+    void ScriptEngine::RefreshScriptableObjectInstances()
+    {
+        if (!scriptEngineData || !scriptEngineData->scriptHost)
+            return;
+
+        AssetManager *am = m_Project ? m_Project->GetAssetManager() : nullptr;
+        if (!am)
+            return;
+
+        for (auto &[handle, asset] : am->GetAssetAssetRegistry())
+        {
+            if (asset.type != AssetType::ScriptableObject)
+                continue;
+
+            auto so = am->GetAssetImmediate<ScriptableObject>(handle);
+            if (!so || !IsScriptableObjectClassExists(so->GetClassName()))
+                continue;
+
+            // Ensure a fresh managed instance exists for this SO in the new ALC
+            const uint64_t id = static_cast<uint64_t>(handle);
+            if (!scriptEngineData->scriptHost->CreateInstance(id, so->GetClassName()))
+            {
+                LOG_WARN("[Script Engine] Failed to recreate managed SO instance '{}' (handle={})",
+                    so->GetClassName(), id);
+                continue;
+            }
+
+            // Re-push the stored C++ fields into the new managed instance
+            ScriptInstance::PopulateSOFields(scriptEngineData->scriptHost.get(), id, *so);
+            LOG_TRACE("[Script Engine] Refreshed ScriptableObject '{}' (handle={})",
+                so->GetClassName(), id);
+        }
     }
 }

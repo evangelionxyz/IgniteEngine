@@ -24,7 +24,17 @@ public static class Input
         }
     }
 
+    public static Vector2 MouseDelta
+    {
+        get
+        {
+            CoreInternalCalls.Input_GetMouseDelta(out Vector2 result);
+            return result;
+        }
+    }
+
     public static Vector2 mousePosition => MousePosition;
+
 
     public static bool IsMouseOverUI => CoreInternalCalls.Input_IsMouseOverUI();
 
@@ -42,6 +52,7 @@ public static class Input
 
     public static void SetMouseToCenter() => CoreInternalCalls.Input_SetMouseToCenter();
     public static void SetCursorMode(CursorMode mode) => CoreInternalCalls.Input_SetCursorMode((int)mode);
+    public static CursorMode GetCursorMode() => (CursorMode)CoreInternalCalls.Input_GetCursorMode();
 }
 
 public enum CursorMode

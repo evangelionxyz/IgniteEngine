@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -150,15 +151,35 @@ internal static class ScriptReflectionBridge
     {
         string expectedName = assemblyName.Trim();
 
-        // IMPORTANT: Search within the same AssemblyLoadContext that this bridge lives in.
-        // Using AppDomain.CurrentDomain.GetAssemblies() would search ALL ALCs, including
-        // old collectible ALCs that are still being unloaded by the GC after a hot-reload.
-        // FirstOrDefault would then return the OLD assembly (same name, stale types),
-        // causing class names from the previous compilation to persist after reload.
         var selfContext = AssemblyLoadContext.GetLoadContext(typeof(ScriptReflectionBridge).Assembly);
+        
+        var alcList = new List<AssemblyLoadContext>(AssemblyLoadContext.All);
+        alcList.Sort((a, b) =>
+        {
+            string nameA = a.Name ?? string.Empty;
+            string nameB = b.Name ?? string.Empty;
+            return string.Compare(nameB, nameA, StringComparison.OrdinalIgnoreCase);
+        });
+
+        // Search self context first
         if (selfContext != null)
         {
             var found = selfContext.Assemblies
+                .FirstOrDefault(a => string.Equals(a.GetName().Name, expectedName, StringComparison.OrdinalIgnoreCase));
+            if (found != null)
+                return found;
+        }
+
+        // Search other sorted ALCs
+        foreach (var alc in alcList)
+        {
+            if (alc == selfContext)
+                continue;
+
+            if (alc.Name == null || !alc.Name.StartsWith("Ignite.Scripting", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var found = alc.Assemblies
                 .FirstOrDefault(a => string.Equals(a.GetName().Name, expectedName, StringComparison.OrdinalIgnoreCase));
             if (found != null)
                 return found;
@@ -208,22 +229,54 @@ internal static class ScriptReflectionBridge
             return null;
 
         string trimmedName = typeName.Trim();
-        Type? fallback = null;
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        // 1. Get the current load context of the bridge (this ALC contains the refreshed core assemblies)
+        var selfContext = AssemblyLoadContext.GetLoadContext(typeof(ScriptReflectionBridge).Assembly);
+        
+        // 2. Iterate all ALCs in the app, but prioritize the active one first.
+        // We look for assemblies loaded in ALCs matching the "Ignite.Scripting" pattern.
+        // To avoid picking up stale assemblies, we can order ALCs such that the highest reload counter
+        // (the last one created) is checked first.
+        var alcList = new List<AssemblyLoadContext>(AssemblyLoadContext.All);
+        
+        // Sort ALCs so that newer contexts (e.g. Ignite.Scripting.2) come before older ones (Ignite.Scripting.1)
+        alcList.Sort((a, b) =>
         {
-            var type = assembly.GetType(trimmedName, throwOnError: false, ignoreCase: false);
-            if (type == null)
-                continue;
+            string nameA = a.Name ?? string.Empty;
+            string nameB = b.Name ?? string.Empty;
+            return string.Compare(nameB, nameA, StringComparison.OrdinalIgnoreCase);
+        });
 
-            var loadContext = AssemblyLoadContext.GetLoadContext(assembly);
-            if (loadContext != null && loadContext.Name != null && loadContext.Name.StartsWith("Ignite.Scripting", StringComparison.OrdinalIgnoreCase))
-                return type;
-
-            if (fallback == null)
-                fallback = type;
+        // Search in self context first if it's the active one
+        if (selfContext != null)
+        {
+            foreach (var assembly in selfContext.Assemblies)
+            {
+                var type = assembly.GetType(trimmedName, throwOnError: false, ignoreCase: false);
+                if (type != null)
+                    return type;
+            }
         }
 
-        return fallback ?? ResolveType(trimmedName);
+        // Search sorted ALCs
+        foreach (var alc in alcList)
+        {
+            if (alc == selfContext)
+                continue;
+
+            // Only consider the newer Ignite.Scripting ALCs
+            if (alc.Name == null || !alc.Name.StartsWith("Ignite.Scripting", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            foreach (var assembly in alc.Assemblies)
+            {
+                var type = assembly.GetType(trimmedName, throwOnError: false, ignoreCase: false);
+                if (type != null)
+                    return type;
+            }
+        }
+
+        // Fallback: search the whole domain (covers default ALC or other unusual layouts).
+        return ResolveType(trimmedName);
     }
 }

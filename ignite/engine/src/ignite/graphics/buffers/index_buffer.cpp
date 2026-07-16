@@ -14,6 +14,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         m_Count = static_cast<uint32_t>(size) / sizeof(uint32_t);
+        m_ByteSize = size;
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::BufferDesc desc;
@@ -28,6 +29,7 @@ namespace ignite
         if (m_Handle)
         {
             IGN_PROFILE_ALLOC_N(m_Handle.Get(), size, "GPU Index Buffer");
+            Renderer::Stats.gpuIndexBufferBytes += size;
         }
     }
 
@@ -36,6 +38,7 @@ namespace ignite
         if (m_Handle)
         {
             IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Index Buffer");
+            Renderer::Stats.gpuIndexBufferBytes -= m_ByteSize;
             m_Handle = nullptr;
         }
     }

@@ -32,19 +32,19 @@ namespace ignite
 
         GPUUploadSync::DeviceWaitIdle(DeviceManager::GetInstance()->GetDevice());
 
-        // destroy subsystems
-        for (auto subsystem : m_Subsystems)
-        {
-            subsystem->Shutdown();
-            delete subsystem;
-        }
-        m_Subsystems.clear();
-
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             (*it)->OnDetach();
             delete *it;
         }
+
+		// destroy subsystems
+		for (auto subsystem : m_Subsystems)
+		{
+			subsystem->Shutdown();
+			delete subsystem;
+		}
+		m_Subsystems.clear();
 
         // destroy device
         DeviceManager::GetInstance()->Destroy();
@@ -421,7 +421,15 @@ namespace ignite
         while (m_Window->IsLooping())
         {
             IGN_PROFILE_SCOPE("MainThread::Frame");
+
+            // Reset per-frame relative mouse delta before processing new events
+            if (auto* activeInput = InputSystem::GetActiveSystem())
+            {
+                activeInput->ResetMouseDelta();
+            }
+
             while (SDL_PollEvent(&sdlEvent))
+
             {
                 if (auto* activeInput = InputSystem::GetActiveSystem())
                 {
@@ -448,7 +456,7 @@ namespace ignite
 
             if (m_CreateInfo.useAudio)
             {
-                FmodAudio::Update(m_DeltaTime);
+                FmodAudio::Update();
             }
 
             if (m_Window->IsVisible() && m_Window->IsInFocus())

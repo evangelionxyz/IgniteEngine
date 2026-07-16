@@ -428,6 +428,7 @@ namespace ignite
         AssetHandle handle = AssetHandle(0);                    // class Mesh in mesh.hpp
         std::unordered_map<int, AssetHandle> overrideMaterials; // Mesh index, Material Handle
         glm::mat4 normalMatrix = glm::mat4(1.0f);
+        AABB worldAABB;
 
         // ==== RUNTIME DATA ====
         std::vector<Mesh_GPUData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
@@ -443,6 +444,7 @@ namespace ignite
         std::unordered_map<int, AssetHandle> overrideMaterials; // Mesh index, Material Handle
 
         glm::mat4 normalMatrix = glm::mat4(1.0f);
+        AABB worldAABB;
 
         // ==== RUNTIME DATA ====
         std::string currentStateName;

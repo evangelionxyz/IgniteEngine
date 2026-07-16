@@ -42,6 +42,14 @@ namespace ignite
 
     struct RendererStats
     {
+        // 3D Statistics
+        size_t drawCallCount = 0;          // total indexed draw calls (opaque + transparent)
+        size_t shadowDrawCallCount = 0;    // draw calls in shadow/CSM passes
+        size_t staticMeshCount = 0;        // visible static mesh entities drawn
+        size_t skeletalMeshCount = 0;      // visible skeletal mesh entities drawn
+        size_t vertexCount3D = 0;          // total vertices submitted (sum of index counts for 3D)
+        size_t indexCount3D = 0;           // total indices submitted across all 3D draw calls
+
         // 2D Statistics
         size_t quadCount = 0;
         size_t lineCount = 0;
@@ -56,6 +64,11 @@ namespace ignite
         size_t circleIndicesSize = 0;
         size_t textVerticesSize = 0;
         size_t textIndicesSize = 0;
+
+        // GPU Buffer Memory (bytes)
+        size_t gpuVertexBufferBytes = 0;   // sum of all live VertexBuffer allocations
+        size_t gpuIndexBufferBytes = 0;    // sum of all live IndexBuffer allocations
+        size_t gpuConstantBufferBytes = 0; // sum of all live ConstantBuffer allocations
     };
 
     class IGN_API Renderer : public Subsystem

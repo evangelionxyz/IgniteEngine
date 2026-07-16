@@ -37,44 +37,11 @@ namespace ignite
     enum class ESceneState : uint8_t
     {
         None = 0,
-        Stop = BIT(1),
-        Play = BIT(2),
-        Simulate = BIT(3),
-        Paused = BIT(4),
-
-        Focus = BIT(5),
+        Stop = 1,
+        Play = 2,
+        Simulate = 3,
+        Paused = 4,
     };
-
-    inline IGN_API ESceneState operator|(ESceneState lhs, ESceneState rhs)
-    {
-        using UnderlyingType = std::underlying_type_t<ESceneState>;
-        return static_cast<ESceneState>(static_cast<UnderlyingType>(lhs) | static_cast<UnderlyingType>(rhs));
-    }
-    inline IGN_API ESceneState operator&(ESceneState lhs, ESceneState rhs)
-    {
-        using UnderlyingType = std::underlying_type_t<ESceneState>;
-        return static_cast<ESceneState>(static_cast<UnderlyingType>(lhs) & static_cast<UnderlyingType>(rhs));
-    }
-    inline IGN_API ESceneState operator~(ESceneState flag)
-    {
-        using UnderlyingType = std::underlying_type_t<ESceneState>;
-        return static_cast<ESceneState>(~static_cast<UnderlyingType>(flag));
-    }
-    inline IGN_API ESceneState& operator|=(ESceneState& lhs, ESceneState rhs)
-    {
-        lhs = lhs | rhs;
-        return lhs;
-    }
-    inline IGN_API ESceneState &operator&=(ESceneState &lhs, ESceneState rhs)
-    {
-        lhs = lhs & rhs;
-        return lhs;
-    }
-    inline IGN_API bool operator==(ESceneState lhs, uint8_t rhs)
-    {
-        using UnderlyingType = std::underlying_type_t<ESceneState>;
-        return static_cast<UnderlyingType>(lhs) == rhs;
-    }
 
     class IGN_API Scene final : public Asset
     {
@@ -84,7 +51,7 @@ namespace ignite
 
         ~Scene();
 
-        void OnStart();
+        void OnStart(ESceneState playOrSimulateState);
         void OnStop();
 
         void Pause();
@@ -97,9 +64,7 @@ namespace ignite
         void OnUpdateEdit(float deltaTime);
         void SetSceneRenderer(SceneRenderer *sceneRenderer) { m_SceneRenderer = sceneRenderer; }
 
-        inline void SetStateFlag(ESceneState state) { m_State = state; }
-        inline bool IsInState(ESceneState state) const { return (m_State & state) != ESceneState::None; }
-        inline ESceneState GetStateFlag() const { return m_State; }
+        const ESceneState &GetState() const { return m_State; }
 
         template<typename T>
         void OnComponentAdded(Entity entity, T &comp);
@@ -114,12 +79,11 @@ namespace ignite
         entt::registry *registry;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
         
-        inline bool IsPaused() const { return IsInState(ESceneState::Paused); }
-        inline bool IsRunning() const { return IsInState(ESceneState::Play); }
-        inline bool IsFocus() const { return IsInState(ESceneState::Focus); }
-
-        void Focus();
-        void Unfocus();
+        inline bool IsPaused() const { return m_State == ESceneState::Paused; }
+		inline bool IsStopped() const { return m_State == ESceneState::Stop; }
+        inline bool IsSimulating() const { return m_State == ESceneState::Simulate; }
+		inline bool IsPlaying() const { return m_State == ESceneState::Play; }
+        inline bool IsRunning() const { return m_State == ESceneState::Play || m_State == ESceneState::Simulate; }
         
         static Ref<Scene> Create(Project *project, const std::string &name);
         

@@ -558,8 +558,6 @@ namespace ignite
 
             m_Cmd->setBufferState(m_LineBatch.vertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
 
-            Renderer::Stats.lineVerticesSize += bufferSize;
-
             Ref<GraphicsPipeline> gp = GetLinePipelineForFB(framebuffer);
             nvrhi::BindingSetHandle bindingSet = GetLineBindingSet(gp->GetBindingLayout(0), cameraBuffer);
 
@@ -958,16 +956,13 @@ namespace ignite
         for (uint32_t i = 0; i < m_Material2DLightingData->pointLightCount; ++i)
         {
             m_Material2DLightingData->pointLights[i] = pointLights[i];
+			Renderer::Stats.pointLight2dCount++;
         }
 
         for (uint32_t i = m_Material2DLightingData->pointLightCount; i < MAX_POINT_LIGHTS_2D; ++i)
         {
             m_Material2DLightingData->pointLights[i] = PointLight2D_GPUData{};
         }
-
-        m_Material2DLightingDirty = true;
-        Renderer::Stats.pointLight2dCount++;
-
     }
 
     void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID)

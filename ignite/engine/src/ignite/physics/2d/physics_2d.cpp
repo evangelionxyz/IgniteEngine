@@ -142,37 +142,28 @@ namespace ignite
 
 	void Physics2D::DestroyEntity(Entity entity)
     {
+		if (!m_Scene || !b2World_IsValid(m_WorldId))
+			return;
+
 		if (entity.HasComponent<BoxCollider2DComponent>())
 		{
 			auto &c = entity.GetComponent<BoxCollider2DComponent>();
-
-			// check b2world is already created
-			if (b2World_IsValid(m_WorldId))
-			{
+			if (b2Shape_IsValid(c.shapeId))
 				b2DestroyShape(c.shapeId, false);
-			}
 		}
 
 		if (entity.HasComponent<CircleCollider2DComponent>())
 		{
 			auto &c = entity.GetComponent<CircleCollider2DComponent>();
-
-			// check b2world is already created
-			if (b2World_IsValid(m_WorldId))
-			{
+			if (b2Shape_IsValid(c.shapeId))
 				b2DestroyShape(c.shapeId, false);
-			}
 		}
 
         if (entity.HasComponent<Rigidbody2DComponent>())
         {
 			auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-
-			// check b2world is already created
-			if (b2World_IsValid(m_WorldId))
-			{
+			if (b2Body_IsValid(rb.bodyId))
 				b2DestroyBody(rb.bodyId);
-			}
         }
     }
 
@@ -261,11 +252,44 @@ namespace ignite
                 const b2Rot rotation = b2Body_GetRotation(rb.bodyId);
                 const b2Vec2 linearVelocity = b2Body_GetLinearVelocity(rb.bodyId);
 
-                tr.local.translation = { x, y, tr.world.translation.z };
-                tr.local.rotation = glm::quat({ 0.0f, 0.0f, b2Rot_GetAngle(rotation) });
+                glm::vec3 worldTranslation = { x, y, tr.world.translation.z };
+                glm::quat worldRotation = glm::quat({ 0.0f, 0.0f, b2Rot_GetAngle(rotation) });
 
-                tr.world.translation = tr.local.translation;
-                tr.world.rotation = tr.local.rotation;
+                IDComponent &idc = reg->get<IDComponent>(e);
+                if (idc.parent != 0)
+                {
+                    Entity parentEntity = SceneManager::GetEntity(m_Scene, idc.parent);
+                    if (parentEntity.IsValid())
+                    {
+                        const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
+                        glm::mat4 parentWorldMatrix = parentTr.world.GetMatrix();
+                        glm::mat4 invParentWorldMatrix = glm::inverse(parentWorldMatrix);
+                        
+                        glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation) * glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), tr.world.scale);
+                        glm::mat4 childLocalMatrix = invParentWorldMatrix * childWorldMatrix;
+                        
+                        glm::vec3 savedLocalScale = tr.local.scale;
+                        Transform::Decompose(childLocalMatrix, tr.local);
+                        tr.local.scale = savedLocalScale;
+                        
+                        tr.world.translation = worldTranslation;
+                        tr.world.rotation = worldRotation;
+                    }
+                    else
+                    {
+                        tr.local.translation = worldTranslation;
+                        tr.local.rotation = worldRotation;
+                        tr.world.translation = worldTranslation;
+                        tr.world.rotation = worldRotation;
+                    }
+                }
+                else
+                {
+                    tr.local.translation = worldTranslation;
+                    tr.local.rotation = worldRotation;
+                    tr.world.translation = worldTranslation;
+                    tr.world.rotation = worldRotation;
+                }
 
                 rb.linearVelocity = { linearVelocity.x, linearVelocity.y };
                 rb.angularVelocity = b2Body_GetAngularVelocity(rb.bodyId);

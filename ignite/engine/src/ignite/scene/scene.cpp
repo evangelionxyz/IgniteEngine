@@ -243,9 +243,11 @@ namespace ignite
         m_Project = nullptr;
     }
 
-    void Scene::OnStart()
+    void Scene::OnStart(ESceneState playOrSimulateState)
     {
-        m_State = ESceneState::Play;
+		LOG_ASSERT(playOrSimulateState == ESceneState::Play || playOrSimulateState == ESceneState::Simulate, "Invalid scene state for OnStart");
+
+        m_State = playOrSimulateState;
 
         if (auto *scriptEngine = ScriptEngine::GetInstance())
         {
@@ -263,7 +265,9 @@ namespace ignite
             if (as.handle == AssetHandle(0))
                 continue;
 
-            Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+            // Main thread
+			// Load the sound asset immediately to ensure it's ready for playback
+            Ref<FmodSound> sound = m_AssetManager->GetAssetImmediate<FmodSound>(as.handle);
             if (as.playOnStart)
             {
                 if (sound)
@@ -298,23 +302,27 @@ namespace ignite
 
     void Scene::OnStop()
     {
+        if (!IsRunning())
+            return;
+
         m_State = ESceneState::Stop;
 
-        m_StepFrame = 0;
+        m_StepFrame = 0; 
         timeInSeconds = 0.0f;
 
-        // play on start audio
-        auto audioView = registry->view<AudioSourceComponent>();
-        for (entt::entity e : audioView)
-        {
-            AudioSourceComponent &as = audioView.get<AudioSourceComponent>(e);
-            Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
-            if (sound)
-            {
-                sound->Stop();
-            }
-        }
+		registry->view<AudioSourceComponent>().each([this](entt::entity e, AudioSourceComponent &as)
+		{
+			if (as.handle == AssetHandle(0))
+				return;
 
+            if (m_AssetManager->IsAssetLoaded(as.handle))
+            {
+			    Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+			    if (sound)
+				    sound->Stop();
+            }
+		});
+        
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity { e, this };
@@ -371,7 +379,7 @@ namespace ignite
             {
                 const auto worldMatrix = tr.world.GetMatrix();
                 smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-                mesh->CalculateWorldAABB(worldMatrix);
+                smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
             }
         }
 
@@ -441,10 +449,26 @@ namespace ignite
     void Scene::OnUpdateRuntimeSimulate(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
-        if (!((m_State & ESceneState::Paused) != ESceneState::None)  || m_StepFrame-- > 0)
+
+        // Cap maximum delta time to prevent physics explosions/instability during large frame hitches
+        if (deltaTime > 0.1f)
+            deltaTime = 0.1f;
+
+        if (!IsPaused() || m_StepFrame-- > 0)
         {
             IGN_PROFILE_SCOPE("Scene::RuntimeTick");
             timeInSeconds += deltaTime;
+
+            // Update audio
+			registry->view<AudioSourceComponent>().each([this, deltaTime](entt::entity e, AudioSourceComponent &as)
+				{
+					if (as.handle == AssetHandle(0))
+                        return;
+
+					Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+                    if (sound)
+                        sound->Update(deltaTime);
+				});
 
             {
                 IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
@@ -455,8 +479,6 @@ namespace ignite
                 });
             }
 
-            UpdateTransforms(deltaTime);
-
             {
                 IGN_PROFILE_SCOPE("Scene::Physics2D");
                 m_Physics2D->Simulate(deltaTime);
@@ -466,6 +488,8 @@ namespace ignite
                 IGN_PROFILE_SCOPE("Scene::Physics3D");
                 m_JoltScene->Simulate(deltaTime);
             }
+
+			UpdateTransforms(deltaTime);
 
             // Dispatch Jolt collision events to C# scripts
             {
@@ -533,18 +557,6 @@ namespace ignite
                 }
             }
         }
-    }
-
-    void Scene::Focus()
-    {
-        m_State |= ESceneState::Focus;
-        // TODO
-    }
-
-    void Scene::Unfocus()
-    {
-        m_State &= ESceneState::Focus;
-        // TODO
     }
 
     Ref<Scene> Scene::Create(Project *project, const std::string &name)
@@ -670,7 +682,7 @@ namespace ignite
             {
                 const auto worldMatrix = tr.world.GetMatrix();
                 smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-                mesh->CalculateWorldAABB(worldMatrix);
+                smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
             }
 
             AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(smc, mesh);

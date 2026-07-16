@@ -67,6 +67,15 @@ namespace ignite
 		return glm::ivec2(0);
 	}
 
+	glm::vec2 InputSystem::GetMouseDelta()
+	{
+		if (s_ActiveSystem)
+		{
+			return s_ActiveSystem->m_MouseDelta;
+		}
+		return glm::vec2(0.0f);
+	}
+
 	bool InputSystem::IsActionPressed(const std::string &actionName)
 	{
 		if (s_ActiveSystem)
@@ -131,6 +140,10 @@ namespace ignite
 		{
 			const auto size = s_Window->GetSize();
 			SDL_WarpMouseInWindow(s_Window->GetWindowHandle(), size.x / 2.0f, size.y / 2.0f);
+			if (s_ActiveSystem)
+			{
+				s_ActiveSystem->SetMousePosition(size.x / 2, size.y / 2);
+			}
 		}
 	}
 
@@ -307,6 +320,17 @@ namespace ignite
 		m_MousePosition = glm::ivec2(x, y);
 	}
 
+	void InputSystem::AddMouseDelta(float dx, float dy)
+	{
+		m_MouseDelta.x += dx;
+		m_MouseDelta.y += dy;
+	}
+
+	void InputSystem::ResetMouseDelta()
+	{
+		m_MouseDelta = glm::vec2(0.0f);
+	}
+
 	void InputSystem::SetCursorModeImpl(CursorMode mode)
 	{
 		if (m_CursorMode == mode)
@@ -382,6 +406,7 @@ namespace ignite
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
 			SetMousePosition((int)event->motion.x, (int)event->motion.y);
+			AddMouseDelta(event->motion.xrel, event->motion.yrel);
 			break;
 		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 			SetJoystickButton(event->gbutton.button, true);
@@ -426,6 +451,7 @@ namespace ignite
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
 			SetMousePosition((int)event->motion.x, (int)event->motion.y);
+			AddMouseDelta(event->motion.xrel, event->motion.yrel);
 			break;
 		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 			SetJoystickButton(event->gbutton.button, true);

@@ -62,7 +62,17 @@ namespace ignite
 
         void PollEvent(const SDL_Event &event);
 
-        void SetBlock(bool block) { m_BlockEvents = block; }
+        void SetBlock(bool block)
+        {
+            if (block && !m_BlockEvents)
+            {
+                // Clear any stuck ImGui mouse button state when entering block mode
+                ImGuiIO &io = ImGui::GetIO();
+                for (int i = 0; i < 5; ++i)
+                    io.AddMouseButtonEvent(i, false);
+            }
+            m_BlockEvents = block;
+        }
 
         void OnEvent(Event &event) override;
         bool OnFramebufferResize(FramebufferResizeEvent &event) const;
@@ -74,7 +84,7 @@ namespace ignite
 
         bool m_SupportExplicitDisplayScaling;
         bool m_BeginFrameCalled = false;
-        bool m_BlockEvents = true;
+        bool m_BlockEvents = false;
 
         DeviceManager *m_DeviceManager = nullptr;
         

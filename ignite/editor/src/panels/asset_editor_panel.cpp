@@ -607,8 +607,7 @@ namespace ignite
                         auto mesh = loaded->As<Mesh>();
                         if (mesh)
                         {
-                            mesh->CalculateWorldAABB(glm::mat4(1.0f));
-							const auto &aabb = mesh->GetWorldAABB();
+							const auto &aabb = mesh->localAABB;
 							glm::vec3 focusCenter = (aabb.min + aabb.max) * 0.5f;
 							glm::vec3 halfExtents = glm::abs(aabb.max - aabb.min);
 							const float radius = glm::max(halfExtents.x, glm::max(halfExtents.y, halfExtents.z));

@@ -39,6 +39,7 @@ namespace ignite
         void SetData(nvrhi::ICommandList *cmd, Buffer buffer, size_t offset = 0) const;
 
         const uint32_t GetCount() { return m_Count; }
+        size_t GetByteSize() const { return m_ByteSize; }
 
         nvrhi::BufferHandle GetHandle() { return m_Handle; }
 
@@ -46,6 +47,7 @@ namespace ignite
 
     private:
         uint32_t m_Count = 0;
+        size_t m_ByteSize = 0;
         nvrhi::BufferHandle m_Handle;
     };
 }

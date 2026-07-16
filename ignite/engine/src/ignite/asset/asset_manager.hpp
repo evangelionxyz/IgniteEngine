@@ -193,9 +193,10 @@ namespace ignite
         fbxsdk::FbxManager *GetOrCreateFbxSdkManager();
         std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
 
+        uint64_t GetAssetFileSize(const AssetMetaData &metadata) const;
+
     private:
         static void VerifyNotRenderThread();
-        uint64_t GetAssetFileSize(const AssetMetaData &metadata) const;
 
         std::atomic<uint64_t> m_ActiveLoadBytes{ 0 };
         std::mutex m_ThrottleMutex;

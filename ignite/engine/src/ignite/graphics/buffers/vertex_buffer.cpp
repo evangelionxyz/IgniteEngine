@@ -22,11 +22,13 @@ namespace ignite
         desc.initialState = nvrhi::ResourceStates::VertexBuffer;
         desc.debugName = debugName;
 
+        m_ByteSize = size;
         m_Handle = device->createBuffer(desc);
         LOG_ASSERT(m_Handle, "[Vertex Buffer] Failed to create handle!");
         if (m_Handle)
         {
             IGN_PROFILE_ALLOC_N(m_Handle.Get(), size, "GPU Vertex Buffer");
+            Renderer::Stats.gpuVertexBufferBytes += size;
         }
     }
 
@@ -35,6 +37,7 @@ namespace ignite
         if (m_Handle)
         {
             IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Vertex Buffer");
+            Renderer::Stats.gpuVertexBufferBytes -= m_ByteSize;
             m_Handle = nullptr;
         }
     }

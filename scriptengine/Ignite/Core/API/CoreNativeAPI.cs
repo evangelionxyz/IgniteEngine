@@ -14,8 +14,10 @@ public static class CoreNativeAPI
         public IntPtr Input_IsModifierPressed;
         public IntPtr Input_IsMouseButtonPressed;
         public IntPtr Input_GetMousePosition;
+        public IntPtr Input_GetMouseDelta;
         public IntPtr Input_SetMouseToCenter;
         public IntPtr Input_SetCursorMode;
+        public IntPtr Input_GetCursorMode;
         public IntPtr Input_IsMouseOverUI;
         public IntPtr Input_IsActionPressed;
 
@@ -112,10 +114,16 @@ public static class CoreNativeAPI
         public delegate void InputGetMousePositionFn(out NativeObject.Vector2 result);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void InputGetMouseDeltaFn(out NativeObject.Vector2 result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void InputSetMouseToCenterFn();
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void InputSetCursorModeFn(int mode);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate int InputGetCursorModeFn();
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
