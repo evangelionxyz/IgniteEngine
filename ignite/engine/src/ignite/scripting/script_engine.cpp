@@ -7,8 +7,6 @@
 #include "glue/core_script_glue.hpp"
 #include "script_class.hpp"
 #include "script_host.hpp"
-
-
 #include "ignite/scene/component.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
@@ -374,6 +372,9 @@ namespace ignite
 
         // Load the classes
         LoadAppAssemblyClasses();
+
+        // Refresh any already-loaded ScriptableObject managed instances in the new ALC
+        RefreshScriptableObjectInstances();
 
         return true;
     }
@@ -808,5 +809,39 @@ namespace ignite
         }
 
         LOG_INFO("[Script Engine] Loaded {} script classes", outClasses.size());
+    }
+
+    void ScriptEngine::RefreshScriptableObjectInstances()
+    {
+        if (!scriptEngineData || !scriptEngineData->scriptHost)
+            return;
+
+        AssetManager *am = m_Project ? m_Project->GetAssetManager() : nullptr;
+        if (!am)
+            return;
+
+        for (auto &[handle, asset] : am->GetAssetAssetRegistry())
+        {
+            if (asset.type != AssetType::ScriptableObject)
+                continue;
+
+            auto so = am->GetAssetImmediate<ScriptableObject>(handle);
+            if (!so || !IsScriptableObjectClassExists(so->GetClassName()))
+                continue;
+
+            // Ensure a fresh managed instance exists for this SO in the new ALC
+            const uint64_t id = static_cast<uint64_t>(handle);
+            if (!scriptEngineData->scriptHost->CreateInstance(id, so->GetClassName()))
+            {
+                LOG_WARN("[Script Engine] Failed to recreate managed SO instance '{}' (handle={})",
+                    so->GetClassName(), id);
+                continue;
+            }
+
+            // Re-push the stored C++ fields into the new managed instance
+            ScriptInstance::PopulateSOFields(scriptEngineData->scriptHost.get(), id, *so);
+            LOG_TRACE("[Script Engine] Refreshed ScriptableObject '{}' (handle={})",
+                so->GetClassName(), id);
+        }
     }
 }

@@ -73,6 +73,7 @@ namespace ignite
 
         void LoadAppAssemblyClasses();
         void LoadAppClasses(const std::string &classFullName, ScriptClassMap &outClasses);
+        void RefreshScriptableObjectInstances();
 
         Project *m_Project;
         Scene *m_Scene;
