@@ -1066,7 +1066,7 @@ namespace ignite
                         }
 
                         ImGui::PushStyleColor(ImGuiCol_Text, color);
-                        ImGui::TextUnformatted(log.message.c_str());
+                        ImGui::TextWrapped("%s", log.message.c_str());
                         ImGui::PopStyleColor();
                     }
                 }
@@ -1850,45 +1850,50 @@ namespace ignite
     {
         if (m_ActiveScene && m_State.settingsWindow)
         {
-            if (ImGui::Begin("Settings", &m_State.settingsWindow))
-            {
-                if (ImGui::BeginTabBar("##settings_tabs", ImGuiTabBarFlags_Reorderable))
-                {
-                    if (ImGui::BeginTabItem("Pipeline"))
-                    {
-                        // Raster settings
-                        static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
-                        const char *currentFillMode = rasterFillStr[static_cast<i32>(m_State.rasterFillMode)];
-                        if (ImGui::BeginCombo("Fill", currentFillMode))
-                        {
-                            for (size_t i = 0; i < std::size(rasterFillStr); ++i)
-                            {
-                                bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
-                                if (ImGui::Selectable(rasterFillStr[i], isSelected))
-                                {
-                                    m_State.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
-                                    m_SceneRenderer->SetFillMode(m_State.rasterFillMode);
-                                }
+            ImGui::Begin("Settings", &m_State.settingsWindow);
 
-                                if (isSelected)
-                                {
-                                    ImGui::SetItemDefaultFocus();
-                                }
+            if (ImGui::BeginTabBar("##settings_tabs", ImGuiTabBarFlags_Reorderable))
+            {
+                if (ImGui::BeginTabItem("Pipeline"))
+                {
+                    // Raster settings
+                    static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
+                    const char *currentFillMode = rasterFillStr[static_cast<i32>(m_State.rasterFillMode)];
+                    if (ImGui::BeginCombo("Fill", currentFillMode))
+                    {
+                        for (size_t i = 0; i < std::size(rasterFillStr); ++i)
+                        {
+                            bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
+                            if (ImGui::Selectable(rasterFillStr[i], isSelected))
+                            {
+                                m_State.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
+                                m_SceneRenderer->SetFillMode(m_State.rasterFillMode);
                             }
-                            ImGui::EndCombo();
+
+                            if (isSelected)
+                            {
+                                ImGui::SetItemDefaultFocus();
+                            }
                         }
-                        ImGui::EndTabItem();
+                        ImGui::EndCombo();
                     }
-                    ImGui::EndTabBar();
+                    ImGui::EndTabItem();
                 }
+                ImGui::EndTabBar();
             }
+
             ImGui::End(); // !settings window
         }
 
-        if (m_State.assetRegistryWindow)
+
+        // ----------------------------------------
+		// ASSET REGISTRY & MEMORY MONITOR
+        // ----------------------------------------
+        if (m_ActiveScene && m_State.assetRegistryWindow)
         {
-            AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager()->GetAssetAssetRegistry();
-            const auto &loadedAssets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
+			auto assetManager = AssetManager::GetInstance();
+            AssetRegistry assetRegistry = assetManager->GetAssetAssetRegistry();
+            const auto &loadedAssets = assetManager->GetLoadedAssets();
 
             struct AssetPairCompare
             {
@@ -1905,94 +1910,90 @@ namespace ignite
             static int sortColumn = 0; // 0=Handle, 1=Type, 2=Filepath, 3=Status
             static bool sortAscending = true;
 
-            ImGui::SetNextWindowSize(ImVec2(1200, 700), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(940, 512), ImGuiCond_FirstUseEver);
             ImGui::Begin("Asset Registry & Memory Monitor", &m_State.assetRegistryWindow);
-            ImGui::BeginChild("asset_registry_scroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
 
-            // === STATISTICS PANEL ===
-            ImGui::Text("Asset Statistics & Memory Usage");
-            ImGui::Separator();
+			// === Asset Statistics & Memory Usage ===
+			std::unordered_map<AssetType, int> registeredCounts;
+			std::unordered_map<AssetType, int> loadedCounts;
+			std::unordered_map<AssetType, size_t> memoryUsage;
 
-            // Calculate statistics
-            std::unordered_map<AssetType, int> registeredCounts;
-            std::unordered_map<AssetType, int> loadedCounts;
-            std::unordered_map<AssetType, size_t> memoryUsage;
+			// Display table
+			constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg 
+                | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable;
+			
+            if (ImGui::BeginTable("asset_statistics_memory_usage", 2, ImGuiTableFlags_SizingStretchProp | tableFlags))
+			{
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::AlignTextToFramePadding();
 
-            for (const auto &[handle, metadata] : assetRegistry)
-            {
-                registeredCounts[metadata.type]++;
-            }
+				for (const auto &[handle, metadata] : assetRegistry)
+					registeredCounts[metadata.type]++;
 
-            for (const auto &[handle, asset] : loadedAssets)
-            {
-                if (asset)
-                {
-                    AssetType type = m_ActiveProject->GetAssetManager()->GetAssetType(handle);
-                    loadedCounts[type]++;
-                    // Estimate memory usage (this is approximate)
-                    memoryUsage[type] += asset.use_count() * 8; // Basic pointer overhead
-                }
-            }
+				for (const auto &[handle, asset] : loadedAssets)
+				{
+					if (asset)
+					{
+						AssetType type = assetManager->GetAssetType(handle);
+						loadedCounts[type]++;
+						// Estimate memory usage (this is approximate)
+						memoryUsage[type] += asset.use_count() * 8; // Basic pointer overhead
+					}
+				}
 
-            // Display statistics in columns
-            ImGui::Columns(2, "stats_columns", true);
+				// Left column - Asset counts
+				int totalRegistered = 0;
+				for (const auto &[type, count] : registeredCounts)
+				{
+					if (type != AssetType::Invalid)
+					{
+						ImGui::Text("%s: %d", AssetTypeToString(type).c_str(), count);
+						totalRegistered += count;
+					}
+				}
+				ImGui::Separator();
+				ImGui::Text("Total Registered: %d", totalRegistered);
 
-            // Left column - Asset counts
-            ImGui::Text("REGISTERED ASSETS");
-            ImGui::Separator();
-            int totalRegistered = 0;
-            for (const auto &[type, count] : registeredCounts)
-            {
-                if (type != AssetType::Invalid)
-                {
-                    ImGui::Text("%s: %d", AssetTypeToString(type).c_str(), count);
-                    totalRegistered += count;
-                }
-            }
-            ImGui::Separator();
-            ImGui::Text("Total Registered: %d", totalRegistered);
+				ImGui::TableNextColumn(); // ------------ NEXT COLUMN ------------
 
-            ImGui::NextColumn();
+				// Right column - Loaded assets & memory
+				int totalLoaded = 0;
+				for (const auto &[type, count] : loadedCounts)
+				{
+					if (type != AssetType::Invalid)
+					{
+						float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
 
-            // Right column - Loaded assets & memory
-            ImGui::Text("LOADED IN MEMORY");
-            ImGui::Separator();
-            int totalLoaded = 0;
-            for (const auto &[type, count] : loadedCounts)
-            {
-                if (type != AssetType::Invalid)
-                {
-                    float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
+						// Color code by type
+						ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
+						if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
+						else if (type == AssetType::Mesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+						else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
 
-                    // Color code by type
-                    ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
-                    if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-                    else if (type == AssetType::Mesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
-                    else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
+						ImGui::TextColored(color, "%s: %d (%.1f%%)", AssetTypeToString(type).c_str(), count, percentage);
 
-                    ImGui::TextColored(color, "%s: %d (%.1f%%)",
-                        AssetTypeToString(type).c_str(), count, percentage);
+						if (memoryUsage[type] > 0)
+						{
+							ImGui::SameLine();
+							ImGui::Text("~%zu KB", memoryUsage[type] / 1024u);
+						}
 
-                    // Memory bar
-                    if (memoryUsage[type] > 0)
-                    {
-                        ImGui::SameLine();
-                        ImGui::Text("~%zu KB", memoryUsage[type] / 1024);
-                    }
+						totalLoaded += count;
+					}
+				}
 
-                    totalLoaded += count;
-                }
-            }
-            ImGui::Separator();
-            ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Total Loaded: %d", totalLoaded);
+				ImGui::Separator();
+				ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Total Loaded: %d", totalLoaded);
 
-            ImGui::Columns(1);
-
-            // Memory usage bar
-            ImGui::Spacing();
-            float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
-            ImGui::ProgressBar(loadRatio, ImVec2(-1, 0),
-                std::string("Memory Load: " + std::to_string((int)(loadRatio * 100)) + "%").c_str());
+				// Memory usage bar
+				const float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
+                const auto memoryLoadText = std::format("Memory Load: {} %", (int)(loadRatio * 100));
+                const float textWidth = ImGui::CalcTextSize(memoryLoadText.c_str()).x + 16.0f;
+				ImGui::ProgressBar(loadRatio, ImVec2(textWidth, 0.0f), memoryLoadText.c_str());
+				
+				ImGui::EndTable();
+			}
 
             // === FILTERS & CONTROLS ===
             if (ImGui::BeginTable("asset_registry_controls", 2, ImGuiTableFlags_SizingStretchProp))
@@ -2016,10 +2017,26 @@ namespace ignite
                 ImGui::SameLine();
 
                 // Type filter dropdown
-                const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };
+                const char *typeNames[] = { 
+                    "All", 
+                    "Scene", 
+                    "Texture", 
+                    "Material", 
+                    "StaticMesh", 
+                    "SkeletalMesh", 
+                    "Audio", 
+                    "Skeleton"
+                };
+
                 const AssetType typeValues[] = {
-                    AssetType::Invalid, AssetType::Scene, AssetType::Texture,
-                    AssetType::Material, AssetType::Mesh, AssetType::Audio, AssetType::Skeleton
+                    AssetType::Invalid, 
+                    AssetType::Scene, 
+                    AssetType::Texture,
+                    AssetType::Material, 
+                    AssetType::Mesh, 
+                    AssetType::SkeletalMesh, 
+                    AssetType::Audio, 
+                    AssetType::Skeleton
                 };
 
                 int currentTypeIndex = 0;
@@ -2041,7 +2058,8 @@ namespace ignite
                 ImGui::SameLine();
                 ImGui::Checkbox("Full Path", &showFullPath);
 
-                ImGui::TableNextColumn();
+				ImGui::TableNextColumn(); // ------------ NEXT COLUMN ------------
+
                 ImGui::BeginGroup();
                 if (ImGui::SmallButton("Refresh Registry"))
                 {
@@ -2049,7 +2067,7 @@ namespace ignite
                 }
                 if (ImGui::SmallButton("Unload Unused Assets"))
                 {
-                    m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
+                    assetManager->UnloadUnusedAssets();
                 }
                 ImGui::EndGroup();
                 ImGui::EndTable();
@@ -2087,15 +2105,10 @@ namespace ignite
                 filteredAssets.insert({ handle, metadata });
             }
 
-            // Display table
-            ImGuiTableFlags tableFlags = ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg |
-                ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
-                ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY;
-
             if (ImGui::BeginTable("asset_registry_table", 5, tableFlags))
             {
                 ImGui::TableSetupScrollFreeze(0, 1);
-                ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 100.0f, 0);
+                ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 120.0f, 0);
                 ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 100.0f, 1);
                 ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 80.0f, 2);
                 ImGui::TableSetupColumn("Refs", ImGuiTableColumnFlags_WidthFixed, 50.0f, 3);
@@ -2271,7 +2284,7 @@ namespace ignite
                 }
                 ImGui::EndTable();
             }
-            ImGui::EndChild();
+
             ImGui::End();
         }
     }

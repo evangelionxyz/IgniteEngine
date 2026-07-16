@@ -36,7 +36,12 @@ namespace ignite
         m_FadeOutStartMs(0), m_FadeOutEndMs(0), m_ChannelGroup(nullptr)
     { }
 
-    void FmodSound::Play()
+	FmodSound::~FmodSound()
+	{
+        Release();
+	}
+
+	void FmodSound::Play()
     {
         const FMOD_RESULT result = FmodAudio::GetFmodSystem()->playSound(
             m_Sound,
@@ -251,7 +256,6 @@ namespace ignite
 
         LOG_WARN("[FMOD Sound] Load sound '{}'", filepath);
 
-        FmodAudio::InsertFmodSound(name, fmod_sound);
         return fmod_sound;
     }
 
@@ -259,8 +263,6 @@ namespace ignite
     {
         Ref<FmodSound> fmod_sound = CreateRef<FmodSound>(name, mode);
         FmodAudio::GetFmodSystem()->createStream(filepath.c_str(), mode, nullptr, &fmod_sound->m_Sound);
-
-        FmodAudio::InsertFmodSound(name, fmod_sound);
         return fmod_sound;
     }
 

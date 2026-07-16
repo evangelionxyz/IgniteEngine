@@ -302,23 +302,27 @@ namespace ignite
 
     void Scene::OnStop()
     {
+        if (!IsRunning())
+            return;
+
         m_State = ESceneState::Stop;
 
-        m_StepFrame = 0;
+        m_StepFrame = 0; 
         timeInSeconds = 0.0f;
 
-        // play on start audio
-        auto audioView = registry->view<AudioSourceComponent>();
-        for (entt::entity e : audioView)
-        {
-            AudioSourceComponent &as = audioView.get<AudioSourceComponent>(e);
-            Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
-            if (sound)
-            {
-                sound->Stop();
-            }
-        }
+		registry->view<AudioSourceComponent>().each([this](entt::entity e, AudioSourceComponent &as)
+		{
+			if (as.handle == AssetHandle(0))
+				return;
 
+            if (m_AssetManager->IsAssetLoaded(as.handle))
+            {
+			    Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+			    if (sound)
+				    sound->Stop();
+            }
+		});
+        
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity { e, this };
@@ -454,6 +458,17 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("Scene::RuntimeTick");
             timeInSeconds += deltaTime;
+
+            // Update audio
+			registry->view<AudioSourceComponent>().each([this, deltaTime](entt::entity e, AudioSourceComponent &as)
+				{
+					if (as.handle == AssetHandle(0))
+                        return;
+
+					Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+                    if (sound)
+                        sound->Update(deltaTime);
+				});
 
             {
                 IGN_PROFILE_SCOPE("Scene::ScriptUpdate");

@@ -20,9 +20,9 @@ namespace ignite {
 
     struct IGN_API FmodSound : public Asset
     {
-        FmodSound() = default;
         FmodSound(const std::string &name, FMOD_MODE mode = FMOD_DEFAULT | FMOD_LOOP_OFF);
-    
+        virtual ~FmodSound() override;
+
         void Play();
         void Stop() const;
         void Pause() const;
