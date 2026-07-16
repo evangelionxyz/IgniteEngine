@@ -200,11 +200,12 @@ namespace ignite
         style.TabCloseButtonMinWidthSelected = 1.0f;
         style.TabCloseButtonMinWidthUnselected = 1.0f;
         style.DockingSeparatorSize = 1.0f;
-        style.SeparatorTextPadding = ImVec2{ 0.0f, 5.0f };
-        style.SeparatorTextAlign = ImVec2{ 0.0f, 1.0f };
-        style.ImageRounding = 12.0f;
+        style.SeparatorSize = 1.0f;
+        style.SeparatorTextBorderSize = 1.0f;
+        style.SeparatorTextPadding = ImVec2{ 0.0f, 1.0f };
+        style.SeparatorTextAlign = ImVec2{ 0.5f, 0.5f };
+        style.ImageRounding = 0.0f;
         style.ImageBorderSize = 0.0f;
-
         style.WindowMenuButtonPosition = ImGuiDir_Right;
         style.ColorButtonPosition = ImGuiDir_Right;
         style.AntiAliasedFill = true;
