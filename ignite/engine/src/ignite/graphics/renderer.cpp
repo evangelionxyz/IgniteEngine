@@ -101,6 +101,15 @@ namespace ignite
 
     void Renderer::BeginStats()
     {
+        // 3D
+        Stats.drawCallCount = 0;
+        Stats.shadowDrawCallCount = 0;
+        Stats.staticMeshCount = 0;
+        Stats.skeletalMeshCount = 0;
+        Stats.vertexCount3D = 0;
+        Stats.indexCount3D = 0;
+
+        // 2D
         Stats.quadCount = 0;
         Stats.lineCount = 0;
         Stats.circleCount = 0;

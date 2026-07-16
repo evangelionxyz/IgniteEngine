@@ -39,10 +39,12 @@ namespace ignite
         void SetData(nvrhi::ICommandList *cmd, Buffer buffer, size_t offset = 0) const;
 
         nvrhi::BufferHandle GetHandle() { return m_Handle; }
+        size_t GetByteSize() const { return m_ByteSize; }
 
         static Ref<VertexBuffer> Create(const size_t size, const std::string &debugName = "Vertex Buffer");
 
     private:
         nvrhi::BufferHandle m_Handle;
+        size_t m_ByteSize = 0;
     };
 }

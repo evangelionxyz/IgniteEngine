@@ -9,6 +9,7 @@
 #include "ext/editor_ui.hpp"
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer/renderer_2d.hpp"
+#include "ignite/graphics/renderer.hpp"
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
@@ -1937,8 +1938,9 @@ namespace ignite
 					{
 						AssetType type = assetManager->GetAssetType(handle);
 						loadedCounts[type]++;
-						// Estimate memory usage (this is approximate)
-						memoryUsage[type] += asset.use_count() * 8; // Basic pointer overhead
+						// Use on-disk file size as a reasonable memory estimate
+						const AssetMetaData &meta = assetManager->GetMetaData(handle);
+						memoryUsage[type] += assetManager->GetAssetFileSize(meta);
 					}
 				}
 
@@ -1975,8 +1977,12 @@ namespace ignite
 
 						if (memoryUsage[type] > 0)
 						{
+							const size_t bytes = memoryUsage[type];
 							ImGui::SameLine();
-							ImGui::Text("~%zu KB", memoryUsage[type] / 1024u);
+							if (bytes >= 1024u * 1024u)
+								ImGui::Text("~%.1f MB", bytes / (1024.0f * 1024.0f));
+							else
+								ImGui::Text("~%zu KB", bytes / 1024u);
 						}
 
 						totalLoaded += count;
@@ -2305,8 +2311,59 @@ namespace ignite
         }
 
         // Render Stats
-        if (ImGui::TreeNodeEx("Stats", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
+            const auto &stats = Renderer::Stats;
+
+            // Helper lambda to format bytes as KB or MB
+            auto fmtBytes = [](size_t bytes, char *buf, size_t bufLen)
+            {
+                if (bytes >= 1024u * 1024u)
+                    snprintf(buf, bufLen, "%.1f MB", bytes / (1024.0f * 1024.0f));
+                else
+                    snprintf(buf, bufLen, "%zu KB", bytes / 1024u);
+            };
+            char memBuf[32];
+
+            ImGui::SeparatorText("3D Renderer");
+            ImGui::Text("Draw Calls (opaque+transparent): %zu", stats.drawCallCount);
+            ImGui::Text("Shadow Draw Calls (CSM) %zu", stats.shadowDrawCallCount);
+            ImGui::Text("Static Meshes Drawn: %zu", stats.staticMeshCount);
+            ImGui::Text("Skeletal Meshes Drawn: %zu", stats.skeletalMeshCount);
+            ImGui::Text("Indices Submitted: %zu", stats.indexCount3D);
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("2D Renderer");
+            ImGui::Text("Quads: %zu", stats.quadCount);
+            ImGui::Text("Lines: %zu", stats.lineCount);
+            ImGui::Text("Circles: %zu", stats.circleCount);
+            ImGui::Text("Text Glyphs: %zu", stats.textCount);
+            ImGui::Text("Point Lights 2D: %zu", stats.pointLight2dCount);
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("GPU Buffer Memory");
+            fmtBytes(stats.gpuVertexBufferBytes, memBuf, sizeof(memBuf));
+            ImGui::Text("Vertex Buffers: %s", memBuf);
+            fmtBytes(stats.gpuIndexBufferBytes, memBuf, sizeof(memBuf));
+            ImGui::Text("Index Buffers: %s", memBuf);
+            fmtBytes(stats.gpuConstantBufferBytes, memBuf, sizeof(memBuf));
+            ImGui::Text("Constant Buffers: %s", memBuf);
+            const size_t totalGpu = stats.gpuVertexBufferBytes + stats.gpuIndexBufferBytes + stats.gpuConstantBufferBytes;
+            fmtBytes(totalGpu, memBuf, sizeof(memBuf));
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Total GPU Buffers: %s", memBuf);
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("2D Batch Buffer Sizes");
+            fmtBytes(stats.quadVerticesSize + stats.quadIndicesSize, memBuf, sizeof(memBuf));
+            ImGui::Text("Quad VB+IB: %s", memBuf);
+            fmtBytes(stats.lineVerticesSize, memBuf, sizeof(memBuf));
+            ImGui::Text("Line VB: %s", memBuf);
+            fmtBytes(stats.circleVerticesSize + stats.circleIndicesSize, memBuf, sizeof(memBuf));
+            ImGui::Text("Circle VB+IB:%s", memBuf);
+            fmtBytes(stats.textVerticesSize + stats.textIndicesSize, memBuf, sizeof(memBuf));
+            ImGui::Text("Text VB+IB: %s", memBuf);
+
             ImGui::TreePop();
         }
 
