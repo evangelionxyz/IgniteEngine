@@ -2832,6 +2832,8 @@ namespace ignite
 
                 // When not playing/simulating, make sure we clear focus state and restore cursor
                 const bool isPlayOrSimulate = m_Scene->IsRunning();
+				const bool mouseWantsFocus = (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
+
                 if (!isPlayOrSimulate)
                 {
                     if (m_SceneFocused)
@@ -2864,8 +2866,8 @@ namespace ignite
                 ImDrawList *drawList = ImGui::GetWindowDrawList();
 
                 // Click inside the viewport to (re-)focus in Play or Simulate modes
-				// Only allow focusing if the scene is not already focused and the cooldown has expired
-				// This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
+                // Only allow focusing if the scene is not already focused and the cooldown has expired
+                // This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
                 if (!m_Data.sceneViewportGameplayVisible && isPlayOrSimulate && !m_SceneFocused && m_SceneFocusCooldown == 0)
                 {
                     if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -2877,7 +2879,7 @@ namespace ignite
                     }
                 }
 
-                if (m_SceneFocused)
+				if (m_SceneFocused && mouseWantsFocus)
                 {
                     const char* bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
                     ImVec2 textSize = ImGui::CalcTextSize(bannerText);
@@ -2897,18 +2899,8 @@ namespace ignite
                     ImVec2 textPos = { bannerMin.x + 12.0f, bannerMin.y + 6.0f };
                     drawList->AddText(textPos, ImColor(255, 255, 255, 255), bannerText);
                 }
-                else if (isPlayOrSimulate)
-                {
-                    // Show click-to-focus hint when unfocused in play/simulate
-                    const char* hintText = "Click to focus";
-                    ImVec2 textSize = ImGui::CalcTextSize(hintText);
-                    ImVec2 textPos = { canvasPos.x + (canvasSize.x - textSize.x) * 0.5f, canvasPos.y + 10.0f };
-                    drawList->AddText(textPos, ImColor(200, 200, 200, 180), hintText);
-                }
-
 
                 Entity clickedIconEntity = {};
-
                 // Draw editor icons (cameras, directional lights, etc.)
                 if (!m_Scene->IsPlaying())
                 {
@@ -3030,9 +3022,9 @@ namespace ignite
                     std::string statusStr = std::format("FPS {:.5}", fps);
                     drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
-					yPosition += padding;
-					statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-					drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                    yPosition += padding;
+                    statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
                 }
 
                 // Mouse picking from viewport object-id attachment (on mouse down only)
@@ -3043,7 +3035,9 @@ namespace ignite
                         const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
                         const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
                         activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
-                    }					if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                    }
+                    
+                    if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
                     {
                         if (clickedIconEntity.IsValid())
                         {
@@ -3061,7 +3055,7 @@ namespace ignite
                             }
                             SetSelectedEntity(targetSelection);
                         }
-                        else
+                        else // invalid entity
                         {
                             Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
                             if (objectIdTexture && objectIdTexture->GetHandle())
@@ -3139,6 +3133,8 @@ namespace ignite
                         }
                     }
 
+                    // Viewport drag and drop
+                    // TODO: Implement drag drop for meshes
                     if (ImGui::BeginDragDropTarget())
                     {
                         if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
@@ -3161,9 +3157,11 @@ namespace ignite
                         ImGui::EndDragDropTarget();
                     }
 
+                    // Begin GIZMO Manipulation
                     auto view = m_EditorCamera.GetView();
                     auto &projection = m_EditorCamera.GetProjection();
 
+                    // Draw orientation just for Perspective projection
                     if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
                     {
                         constexpr float orientationSize = 80.0f;
@@ -3185,6 +3183,7 @@ namespace ignite
                         }
                     }
 
+                    // Setup gizmo
                     GizmoInfo gizmoInfo;
                     gizmoInfo.cameraView = view;
                     gizmoInfo.cameraProjection = projection;
@@ -3192,10 +3191,10 @@ namespace ignite
                     gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
                     switch (m_Gizmo.GetOperation())
                     {
-                    default:
-                    case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
-                    case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
-                    case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
+                        default:
+                        case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
+                        case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
+                        case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
                     }
 
                     m_Gizmo.SetInfo(gizmoInfo);
@@ -3217,6 +3216,7 @@ namespace ignite
                             initialTransforms[uuid] = entity.GetTransform();
                         }
                     }
+
                     // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
                     bool wasManipulating = m_Data.isGizmoManipulating;
                     m_Data.isGizmoManipulating = isManipulatingNow;
@@ -3533,9 +3533,9 @@ namespace ignite
                             std::string statusStr = std::format("FPS {:.5}", fps);
                             drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
-							yPosition += padding;
-							statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-							drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                            yPosition += padding;
+                            statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
 
                             yPosition += padding;
                             statusStr = std::format("Viewport x: {} y: {} w: {} h: {}", baseImagePos.x, baseImagePos.y, baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);

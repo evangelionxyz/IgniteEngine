@@ -155,6 +155,15 @@ namespace ignite
 		}
 	}
 
+	CursorMode InputSystem::GetCursorMode()
+	{
+		if (s_ActiveSystem)
+		{
+			return s_ActiveSystem->m_CursorMode;
+		}
+		return CursorMode::Normal;
+	}
+
 	bool InputSystem::IsKeyPressedImpl(KeyCode keycode) const
 	{
 		auto it = m_KeyState.find(keycode);
