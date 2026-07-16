@@ -2,6 +2,7 @@
   <PropertyGroup>
     <BaseOutputPath>$(SolutionDir)Bin</BaseOutputPath>
     <IntermediateOutputPath>$(SolutionDir)Bin/objs/$(MSBuildProjectName)/</IntermediateOutputPath>
+    <DebugType>pdbonly</DebugType>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

@@ -86,8 +86,8 @@ namespace ignite
 
         Ref<Texture> baseColor, emissive, metallic, roughness, normal, occlusion;
 		bool allTexturesReady = isTextureReady(baseColorTextureHandle, baseColor, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(emissiveTextureHandle, emissive, Renderer::GetBlackTexture());
-        allTexturesReady &= isTextureReady(metallicTextureHandle, metallic, Renderer::GetBlackTexture());
+        allTexturesReady &= isTextureReady(emissiveTextureHandle, emissive, Renderer::GetWhiteTexture());
+        allTexturesReady &= isTextureReady(metallicTextureHandle, metallic, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(roughnessTextureHandle, roughness, Renderer::GetBlackTexture());
         allTexturesReady &= isTextureReady(normalTextureHandle, normal, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(occlusionTextureHandle, occlusion, Renderer::GetWhiteTexture());
