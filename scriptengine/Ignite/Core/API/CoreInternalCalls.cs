@@ -31,7 +31,7 @@ public static class CoreInternalCalls
     private static CoreNativeAPI.Funcs.AssetManagerQueryFn? s_AssetManagerIsAssetLoaded;
     private static CoreNativeAPI.Funcs.AssetManagerLoadFn? s_AssetManagerLoadAssetAsync;
     private static CoreNativeAPI.Funcs.AssetManagerLoadFn? s_AssetManagerLoadAssetImmediate;
-    private static CoreNativeAPI.Funcs.SceneTransitionToFn? s_SceneTransitionTo;
+    private static CoreNativeAPI.Funcs.SceneLoadFn? s_SceneLoad;
 
     public static void Initialize(ulong apiPtr)
     {
@@ -66,7 +66,7 @@ public static class CoreInternalCalls
         try
         {
             if (api.Scene_TransitionTo != IntPtr.Zero)
-                s_SceneTransitionTo = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SceneTransitionToFn>(api.Scene_TransitionTo);
+                s_SceneLoad = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SceneLoadFn>(api.Scene_TransitionTo);
         }
         catch { /* optional binding */ }
 
@@ -281,11 +281,11 @@ public static class CoreInternalCalls
         catch { /* optional binding - older native hosts may not have SO support */ }
      }
 
-    internal static void Scene_TransitionTo(ulong handle)
+    internal static void Scene_Load(ulong handle)
     {
         EnsureInitialized();
-        if (s_SceneTransitionTo == null)
+        if (s_SceneLoad == null)
             throw new InvalidOperationException("Scene transition native call is not bound.");
-        s_SceneTransitionTo(handle);
+        s_SceneLoad(handle);
     }
 }

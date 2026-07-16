@@ -415,7 +415,8 @@ TEST(SceneTransition, BasicTransition)
 
     EXPECT_EQ(project->GetActiveScene(), sceneA);
 
-    SceneManager::TransitionTo(sceneBHandle);
+    SceneManager::Transition(sceneBHandle);
+    Application::GetInstance()->ProcessMainThreadSubmissions();
     LOG_INFO("DEBUG basic: calling ExecutePendingTransition");
     SceneManager::ExecutePendingTransition();
 
@@ -510,7 +511,8 @@ TEST(SceneTransition, SharedAssetPinned)
 
     EXPECT_TRUE(assetManager->IsAssetLoaded(sharedTextureHandle));
 
-    SceneManager::TransitionTo(sceneBHandle);
+    SceneManager::Transition(sceneBHandle);
+    Application::GetInstance()->ProcessMainThreadSubmissions();
     SceneManager::ExecutePendingTransition();
 
     assetManager->UnloadUnusedAssets();
@@ -562,7 +564,7 @@ TEST(SceneTransition, InvalidHandleRejected)
     project->SetActiveScene(sceneA);
 
     LOG_INFO("DEBUG: TransitionTo 0");
-    SceneManager::TransitionTo(AssetHandle(0));
+    SceneManager::Transition(AssetHandle(0));
     LOG_INFO("DEBUG: ExecutePendingTransition 0");
     SceneManager::ExecutePendingTransition();
 
@@ -570,7 +572,7 @@ TEST(SceneTransition, InvalidHandleRejected)
     EXPECT_EQ(project->GetActiveScene(), sceneA);
 
     LOG_INFO("DEBUG: TransitionTo 9999");
-    SceneManager::TransitionTo(AssetHandle(9999));
+    SceneManager::Transition(AssetHandle(9999));
     LOG_INFO("DEBUG: ExecutePendingTransition 9999");
     SceneManager::ExecutePendingTransition();
 
@@ -768,5 +770,5 @@ int main(int argc, char **argv)
     app.reset();
     ignite::Logger::Shutdown();
 
-    return result;
+    exit(result);
 }

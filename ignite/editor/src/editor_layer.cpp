@@ -1348,11 +1348,7 @@ namespace ignite
     void EditorLayer::OnScenePlay()
     {
 		if (m_EditorScene)
-		{
 			m_EditorScene->OnStop();
-		}
-
-		m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
 
 		OnSceneStop();
 
@@ -1363,12 +1359,20 @@ namespace ignite
 
     void EditorLayer::OnSceneStop()
     {
+		if (m_EditorScene)
+			m_EditorScene->OnStop();
+
 		m_ActiveScene->OnStop();
 		SetActiveScene(m_EditorScene);
     }
 
     void EditorLayer::OnSceneSimulate()
     {
+		if (m_EditorScene)
+			m_EditorScene->OnStop();
+
+		OnSceneStop();
+
 		// copy initial components to new scene
 		SetActiveScene(SceneManager::Copy(m_EditorScene));
 		m_ActiveScene->OnStart(ESceneState::Simulate);

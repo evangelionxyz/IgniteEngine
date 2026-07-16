@@ -12,8 +12,8 @@ public static class Scene
     /// Note: The transition is deferred and will be executed at the end of the current frame.
     /// </summary>
     /// <param name="handle">The asset handle of the next scene to transition to.</param>
-    public static void TransitionTo(AssetHandle handle)
+    public static void Load(AssetHandle handle)
     {
-        CoreInternalCalls.Scene_TransitionTo(handle.Value);
+        CoreInternalCalls.Scene_Load(handle.Value);
     }
 }

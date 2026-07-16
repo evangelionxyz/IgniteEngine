@@ -618,7 +618,7 @@ namespace ignite
     bool SceneManager::s_TransitionPending = false;
     AssetHandle SceneManager::s_PendingSceneHandle = AssetHandle(0);
 
-    void SceneManager::TransitionTo(AssetHandle nextSceneHandle)
+    void SceneManager::Transition(AssetHandle nextSceneHandle)
     {
         if (s_TransitionPending)
         {
@@ -683,8 +683,10 @@ namespace ignite
             return;
 
         Ref<Scene> currentScene = project->GetActiveScene();
+        ESceneState previousState = ESceneState::Stop;
         if (currentScene)
         {
+            previousState = currentScene->GetState();
             currentScene->OnStop();
         }
 
@@ -706,7 +708,7 @@ namespace ignite
         }
 
         project->SetActiveScene(transitionScene);
-        transitionScene->OnStart(currentScene->GetState());
+        transitionScene->OnStart(previousState);
 
         assetManager->ClearAssetPins("scene_transition");
 
