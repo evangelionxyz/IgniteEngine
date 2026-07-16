@@ -115,9 +115,6 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <Compile Include="Scripts\Game.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="MochiSharp.Managed">
-      <HintPath>$(SolutionDir)\Bin\MochiSharp.Managed.dll</HintPath>
-    </Reference>
     <Reference Include="Ignite.ScriptEngine">
       <HintPath>$(SolutionDir)\Bin\Ignite.ScriptEngine.dll</HintPath>
     </Reference>
