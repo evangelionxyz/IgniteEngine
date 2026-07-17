@@ -33,11 +33,11 @@ namespace ignite
     class StaticMeshInstance;
     class SkeletalMeshInstance;
 
-	// Create a mapping between MeshVertex types and their corresponding MeshInstance types
+    // Create a mapping between MeshVertex types and their corresponding MeshInstance types
     template<MeshVertex VertexType_T>
     struct MeshInstanceTraits;
 
-	// Specializations for each MeshVertex type
+    // Specializations for each MeshVertex type
     template<>
     struct MeshInstanceTraits<VertexMeshStatic>
     {
@@ -50,17 +50,17 @@ namespace ignite
         using Type = SkeletalMeshInstance;
     };
 
-	// Helper alias template to get the corresponding MeshInstance type for a given MeshVertex type
+    // Helper alias template to get the corresponding MeshInstance type for a given MeshVertex type
     template<MeshVertex VertexType_T>
     using MeshInstanceFor = typename MeshInstanceTraits<VertexType_T>::Type;
 
-	class Scene;
-	class Shader;
-	class Skeleton;
-	class Environment;
-	class SkeletalMeshInstance;
-	class GraphicsPipeline;
-	class SkeletalAnimation;
+    class Scene;
+    class Shader;
+    class Skeleton;
+    class Environment;
+    class SkeletalMeshInstance;
+    class GraphicsPipeline;
+    class SkeletalAnimation;
     class AssetManager;
 
     // scene graph structures
@@ -108,23 +108,23 @@ namespace ignite
         MeshPrimitive() = default;
         ~MeshPrimitive()
         {
-			// Wait for GPU to ensure buffers are not in use
-			if (auto *device = DeviceManager::GetInstance()->GetDevice())
-			{
-				GPUUploadSync::DeviceWaitIdle(device);
-			}
+            // Wait for GPU to ensure buffers are not in use
+            if (auto *device = DeviceManager::GetInstance()->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(device);
+            }
 
-			// Clear GPU buffers
-			vertexBuffer.reset();
-			indexBuffer.reset();
+            // Clear GPU buffers
+            vertexBuffer.reset();
+            indexBuffer.reset();
 
-			// Clear CPU data
-			vertices.clear();
-			indices.clear();
+            // Clear CPU data
+            vertices.clear();
+            indices.clear();
         }
 
         MeshPrimitive(const std::vector<VertexType_T> &vertices, const std::vector<uint32_t> &indices)
-			: vertices(vertices), indices(indices)
+            : vertices(vertices), indices(indices)
         {
         }
 
@@ -136,31 +136,31 @@ namespace ignite
 
         static Ref<MeshPrimitive> Create(const std::vector<VertexType_T> &vertices, const std::vector<uint32_t> &indices)
         {
-			return CreateRef<MeshPrimitive>(vertices, indices);
+            return CreateRef<MeshPrimitive>(vertices, indices);
         }
 
         void WriteBuffer(nvrhi::ICommandList *cmd)
         {
-			if (vertices.empty() || indices.empty())
-			{
-				LOG_ASSERT(false, "[MeshPrimitive] Please validate buffers data");
-				return;
-			}
+            if (vertices.empty() || indices.empty())
+            {
+                LOG_ASSERT(false, "[MeshPrimitive] Please validate buffers data");
+                return;
+            }
 
-			if (!vertexBuffer)
-				vertexBuffer = VertexBuffer::Create(sizeof(VertexType_T) * vertices.size());
+            if (!vertexBuffer)
+                vertexBuffer = VertexBuffer::Create(sizeof(VertexType_T) * vertices.size());
 
-			if (!indexBuffer)
-				indexBuffer = IndexBuffer::Create(sizeof(uint32_t) * indices.size());
+            if (!indexBuffer)
+                indexBuffer = IndexBuffer::Create(sizeof(uint32_t) * indices.size());
 
-			vertexBuffer->SetData(cmd, Buffer((void *)vertices.data(), sizeof(VertexType_T) * vertices.size()));
-			indexBuffer->SetData(cmd, Buffer((void *)indices.data(), sizeof(uint32_t) * indices.size()));
+            vertexBuffer->SetData(cmd, Buffer((void *)vertices.data(), sizeof(VertexType_T) * vertices.size()));
+            indexBuffer->SetData(cmd, Buffer((void *)indices.data(), sizeof(uint32_t) * indices.size()));
         }
 
         void ClearPrimitivesData()
         {
-			vertices.clear();
-			indices.clear();
+            vertices.clear();
+            indices.clear();
         }
     };
 
@@ -170,9 +170,9 @@ namespace ignite
         MeshInstance() = default;
         virtual ~MeshInstance();
 
-		glm::mat4 local = glm::mat4(1.0f);
-		glm::mat4 global = glm::mat4(1.0f);
-		int32_t linkedJointIndex = -1;
+        glm::mat4 local = glm::mat4(1.0f);
+        glm::mat4 global = glm::mat4(1.0f);
+        int32_t linkedJointIndex = -1;
 
         void SetName(const std::string &name) { m_Name = name; }
         void SetMaterial(const AssetHandle &assetHandle);
@@ -182,72 +182,72 @@ namespace ignite
         const std::string &GetName() { return m_Name; }
         const AssetHandle &GetMaterialAssetHandle() const { return m_MaterialHandle; }
 
-		nvrhi::BindingSetHandle GetBindingSet() const { return m_MeshBindingSet; }
-		Ref<ConstantBuffer> GetConstantBuffer() { return m_MeshConstantBuffer; }
+        nvrhi::BindingSetHandle GetBindingSet() const { return m_MeshBindingSet; }
+        Ref<ConstantBuffer> GetConstantBuffer() { return m_MeshConstantBuffer; }
 
     protected:
-		Ref<ConstantBuffer> m_MeshConstantBuffer;
-		nvrhi::BindingSetHandle m_MeshBindingSet;
+        Ref<ConstantBuffer> m_MeshConstantBuffer;
+        nvrhi::BindingSetHandle m_MeshBindingSet;
 
-		UUID m_UUID;
+        UUID m_UUID;
         std::string m_Name;
-		AssetHandle m_MaterialHandle = AssetHandle(0);
+        AssetHandle m_MaterialHandle = AssetHandle(0);
     };
 
     class IGN_API StaticMeshInstance : public MeshInstance
     {
     public:
-		StaticMeshInstance();
+        StaticMeshInstance();
         virtual ~StaticMeshInstance() override;
 
         StaticMeshInstance(const MeshNode<VertexMeshStatic> &node, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive);
         StaticMeshInstance(const std::string &name, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive);
 
-		static Ref<StaticMeshInstance> Create(const MeshNode<VertexMeshStatic> &node, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive);
+        static Ref<StaticMeshInstance> Create(const MeshNode<VertexMeshStatic> &node, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive);
         static Ref<StaticMeshInstance> Create(const std::string &name, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive);
 
         Ref<MeshPrimitive<VertexMeshStatic>> &GetPrimitive() { return m_Primitive; }
 
-		bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer,
-			const Ref<ConstantBuffer> &pointLightBuffer = nullptr, const Ref<ConstantBuffer> &spotLightBuffer = nullptr);
+        bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer,
+            const Ref<ConstantBuffer> &pointLightBuffer = nullptr, const Ref<ConstantBuffer> &spotLightBuffer = nullptr);
 
     private:
-		struct BindingSetCacheKey
-		{
-			nvrhi::IBuffer *cameraBuffer = nullptr;
-			nvrhi::IBuffer *objectBuffer = nullptr;
-			nvrhi::IBuffer *sceneBuffer = nullptr;
-			nvrhi::IBuffer *csmBuffer = nullptr;
-			nvrhi::IBuffer *pointLightBuffer = nullptr;
-			nvrhi::IBuffer *spotLightBuffer = nullptr;
+        struct BindingSetCacheKey
+        {
+            nvrhi::IBuffer *cameraBuffer = nullptr;
+            nvrhi::IBuffer *objectBuffer = nullptr;
+            nvrhi::IBuffer *sceneBuffer = nullptr;
+            nvrhi::IBuffer *csmBuffer = nullptr;
+            nvrhi::IBuffer *pointLightBuffer = nullptr;
+            nvrhi::IBuffer *spotLightBuffer = nullptr;
 
-			bool operator==(const BindingSetCacheKey &other) const noexcept
-			{
-				return cameraBuffer == other.cameraBuffer
-					&& objectBuffer == other.objectBuffer
-					&& sceneBuffer == other.sceneBuffer
-					&& csmBuffer == other.csmBuffer
-					&& pointLightBuffer == other.pointLightBuffer
-					&& spotLightBuffer == other.spotLightBuffer;
-			}
-		};
+            bool operator==(const BindingSetCacheKey &other) const noexcept
+            {
+                return cameraBuffer == other.cameraBuffer
+                    && objectBuffer == other.objectBuffer
+                    && sceneBuffer == other.sceneBuffer
+                    && csmBuffer == other.csmBuffer
+                    && pointLightBuffer == other.pointLightBuffer
+                    && spotLightBuffer == other.spotLightBuffer;
+            }
+        };
 
-		struct BindingSetCacheKeyHash
-		{
-			size_t operator()(const BindingSetCacheKey &k) const noexcept
-			{
-				size_t h = std::hash<const void *>{}(k.cameraBuffer);
-				h ^= (std::hash<const void *>{}(k.objectBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.sceneBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.csmBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.pointLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.spotLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				return h;
-			}
-		};
+        struct BindingSetCacheKeyHash
+        {
+            size_t operator()(const BindingSetCacheKey &k) const noexcept
+            {
+                size_t h = std::hash<const void *>{}(k.cameraBuffer);
+                h ^= (std::hash<const void *>{}(k.objectBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.sceneBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.csmBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.pointLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.spotLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                return h;
+            }
+        };
 
-		std::unordered_map<BindingSetCacheKey, nvrhi::BindingSetHandle, BindingSetCacheKeyHash> m_MeshBindingSetCache;
-		Ref<MeshPrimitive<VertexMeshStatic>> m_Primitive;
+        std::unordered_map<BindingSetCacheKey, nvrhi::BindingSetHandle, BindingSetCacheKeyHash> m_MeshBindingSetCache;
+        Ref<MeshPrimitive<VertexMeshStatic>> m_Primitive;
     };
 
     class IGN_API SkeletalMeshInstance : public MeshInstance
@@ -311,43 +311,43 @@ namespace ignite
 
         Ref<ConstantBuffer> m_SkeletonBuffer;
         std::unordered_map<BindingSetCacheKey, nvrhi::BindingSetHandle, BindingSetCacheKeyHash> m_MeshBindingSetCache;
-		Ref<MeshPrimitive<VertexMeshAnim>> m_Primitive;
+        Ref<MeshPrimitive<VertexMeshAnim>> m_Primitive;
     };
 
     class IGN_API Mesh : public Asset
     {
     public:
-		virtual ~Mesh() = default;
+        virtual ~Mesh() = default;
         
-		virtual const AABB &CalculateLocalAABB() = 0;
+        virtual const AABB &CalculateLocalAABB() = 0;
 
-		static AssetType GetStaticType() { return AssetType::Mesh; }
-		virtual AssetType GetAssetType() override { return GetStaticType(); }
+        static AssetType GetStaticType() { return AssetType::Mesh; }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
 
-		AABB localAABB;
+        AABB localAABB;
     };
 
-	class IGN_API StaticMesh : public Mesh
-	{
-	public:
+    class IGN_API StaticMesh : public Mesh
+    {
+    public:
         StaticMesh() = default;
-		virtual ~StaticMesh() override;
+        virtual ~StaticMesh() override;
 
-		static Ref<StaticMesh> Create();
-		static AssetType GetStaticType() { return AssetType::StaticMesh; }
-		virtual AssetType GetAssetType() override { return GetStaticType(); }
+        static Ref<StaticMesh> Create();
+        static AssetType GetStaticType() { return AssetType::StaticMesh; }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
 
         const std::vector<Ref<StaticMeshInstance>> &GetMeshInstances() const { return m_MeshInstances; }
-		void SetMeshInstances(const std::vector<Ref<StaticMeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }
-		void AddMeshInstance(const Ref<StaticMeshInstance> &meshInstance) { m_MeshInstances.push_back(meshInstance); }
+        void SetMeshInstances(const std::vector<Ref<StaticMeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }
+        void AddMeshInstance(const Ref<StaticMeshInstance> &meshInstance) { m_MeshInstances.push_back(meshInstance); }
 
-		virtual bool Serialize(const ignite::Path &filepath) override;
-		static Ref<StaticMesh> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath) override;
+        static Ref<StaticMesh> Deserialize(const ignite::Path &filepath);
 
-		virtual const AABB &CalculateLocalAABB() override;
-	private:
-		std::vector<Ref<StaticMeshInstance>> m_MeshInstances;
-	};
+        virtual const AABB &CalculateLocalAABB() override;
+    private:
+        std::vector<Ref<StaticMeshInstance>> m_MeshInstances;
+    };
 
     class IGN_API SkeletalMesh : public Mesh 
     {
@@ -372,7 +372,7 @@ namespace ignite
         virtual bool Serialize(const ignite::Path &filepath) override;
         static Ref<SkeletalMesh> Deserialize(const ignite::Path &filepath);
 
-		virtual const AABB &CalculateLocalAABB() override;
+        virtual const AABB &CalculateLocalAABB() override;
     private:
         AssetHandle m_AnimatorHandle = AssetHandle(0);
         AssetHandle m_SkeletonHandle = AssetHandle(0);
@@ -394,7 +394,7 @@ namespace ignite
         static void LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
 
         // Generic loader
-		template<MeshVertex VertexType_T>
+        template<MeshVertex VertexType_T>
         static void LoadSceneGraph(const std::string& filename, MeshScene<VertexType_T> &outScene, AssetManager *assetManager);
 
     private:
@@ -422,11 +422,11 @@ namespace ignite
             std::unordered_map<std::string, int> textureLookup;
         };
 
-		struct FBXBoneInfluence
-		{
-			std::array<uint32_t, VERTEX_MAX_BONES> ids = { 0, 0, 0, 0 };
-			std::array<float, VERTEX_MAX_BONES> weights = { 0.0f, 0.0f, 0.0f, 0.0f };
-		};
+        struct FBXBoneInfluence
+        {
+            std::array<uint32_t, VERTEX_MAX_BONES> ids = { 0, 0, 0, 0 };
+            std::array<float, VERTEX_MAX_BONES> weights = { 0.0f, 0.0f, 0.0f, 0.0f };
+        };
 
         // Generic loader
         template<MeshVertex VertexType_T>
@@ -435,7 +435,7 @@ namespace ignite
         static void LoadSkeletonOnly(const std::string &filename, Ref<Skeleton> &skeleton, AssetManager *assetManager);
         static void LoadAnimationsOnly(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations, AssetManager *assetManager);
 
-		template<MeshVertex VertexType_T>
+        template<MeshVertex VertexType_T>
         static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene<VertexType_T> &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const ignite::Path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData = true);
 
         static Ref<Skeleton> LoadSkeleton(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult, float scaleFactor);
@@ -450,14 +450,14 @@ namespace ignite
         static void ProcessMeshGeometry(fbxsdk::FbxMesh *fbxMesh, const fbxsdk::FbxAMatrix &meshGeom, float scaleFactor, const std::vector<FBXBoneInfluence> &controlPointInfluence, bool importSkinningData, std::vector<VertexType_T> &vertices, std::vector<uint32_t> &indices);
         static void LinkUnskinnedMeshToSkeleton(fbxsdk::FbxNode *node, const MeshNode<VertexMeshAnim> &meshNode, Ref<SkeletalMeshInstance> &meshInstance, MeshScene<VertexMeshAnim> &outScene, fbxsdk::FbxScene *fbxScene);
         
-		template<MeshVertex VertexType_T>
+        template<MeshVertex VertexType_T>
         static int ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const ignite::Path &sourceDir);
     };
 
     class IGN_API MeshLoader
     {
     public:
-		template<MeshVertex VertexType_T>
+        template<MeshVertex VertexType_T>
         static void LoadSceneGraph(const std::string &filename, MeshScene<VertexType_T> &outScene, AssetManager *assetManager);
     };
 }

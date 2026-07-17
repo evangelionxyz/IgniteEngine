@@ -283,8 +283,8 @@ namespace ignite
         bool IsReady() const { return m_Ready; }
 
     protected:
-        bool m_Ready = false;
-        bool m_Dirty = true;
+        bool m_Ready = true;
+        bool m_Dirty = false;
     };
 }
 
