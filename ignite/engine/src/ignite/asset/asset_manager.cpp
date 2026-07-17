@@ -385,6 +385,30 @@ namespace ignite
         return m_AssetPinCounts.contains(handle);
     }
 
+    uint32_t AssetManager::GetAssetPinCount(AssetHandle handle) const
+    {
+        std::unique_lock lock(m_AssetMutex);
+        if (m_AssetPinCounts.contains(handle))
+        {
+            return m_AssetPinCounts.at(handle);
+        }
+        return 0;
+    }
+
+    std::vector<std::string> AssetManager::GetAssetPinOwners(AssetHandle handle) const
+    {
+        std::unique_lock lock(m_AssetMutex);
+        std::vector<std::string> owners;
+        for (const auto &[owner, assets] : m_PinnedAssetsByOwner)
+        {
+            if (assets.contains(handle))
+            {
+                owners.push_back(owner);
+            }
+        }
+        return owners;
+    }
+
     void AssetManager::OnUpdate(float deltaTime)
     {
 		// Call each frame

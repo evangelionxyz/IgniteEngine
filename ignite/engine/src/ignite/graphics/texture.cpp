@@ -178,6 +178,7 @@ namespace ignite
     Texture::Texture(TextureCreateInfo createInfo, const std::string &debugName)
         : m_CreateInfo(createInfo), m_DebugName(debugName)
     {
+        m_Ready = true;
         if (!m_CreateInfo.deferGpuCreate)
         {
             CreateTextureHandle();
@@ -187,6 +188,7 @@ namespace ignite
     Texture::Texture(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
         : m_Buffer(data), m_CreateInfo(createInfo), m_DebugName(debugName)
     {
+        m_Ready = (cmd != nullptr);
         if (!m_CreateInfo.deferGpuCreate)
         {
             CreateTextureHandle();
@@ -205,6 +207,7 @@ namespace ignite
     Texture::Texture(const ignite::Path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
         : m_CreateInfo(createInfo), m_Filepath(filepath), m_DebugName(debugName)
     {
+        m_Ready = (cmd != nullptr);
         if (!ignite::Path::exists(filepath))
         {
             LOG_ERROR("[Texture] File does not found! {}", filepath.generic_string());

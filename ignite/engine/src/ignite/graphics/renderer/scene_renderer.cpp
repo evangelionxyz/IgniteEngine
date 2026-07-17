@@ -69,6 +69,7 @@ namespace ignite
         }
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
+        m_RuntimeMaterial   = CreateRef<Material>();
     }
 
     SceneRenderer::~SceneRenderer()
@@ -85,6 +86,7 @@ namespace ignite
         m_RenderTargets.clear();
 
         m_ResolvedAssetsCache.clear();
+        m_RuntimeMaterial.reset();
     }
 
     void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
@@ -1877,6 +1879,11 @@ namespace ignite
         graphicsState.framebuffer = framebuffer;
         graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
+        if (m_RuntimeMaterial)
+        {
+            m_RuntimeMaterial->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
+        }
+
         const auto &instances = mesh->GetMeshInstances();
         for (size_t idx = 0; idx < instances.size(); ++idx)
         {
@@ -1926,16 +1933,30 @@ namespace ignite
             Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), overrideMaterials, meshInstance->GetMaterialAssetHandle());
 
             const nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
-            const nvrhi::BindingSetHandle materialBindingSet = material ? material->GetBindingSet() : nullptr;
+            const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                ? material->GetBindingSet()
+                : m_RuntimeMaterial->GetBindingSet();
 
             if (meshBindingSet && materialBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
             {
-                if (uploadedMaterialsThisPass.insert(material.get()).second)
+                if (material)
                 {
-                    material->UploadToGpu(cmd);
+                    if (uploadedMaterialsThisPass.insert(material.get()).second)
+                    {
+                        material->UploadToGpu(cmd);
+                    }
+                }
+                else
+                {
+                    if (uploadedMaterialsThisPass.insert(m_RuntimeMaterial.get()).second)
+                    {
+                        m_RuntimeMaterial->UploadToGpu(cmd);
+                    }
                 }
 
-                if (material->GetType() == MaterialType::Transparent)
+                MaterialType materialType = material ? material->GetType() : m_RuntimeMaterial->GetType();
+
+                if (materialType == MaterialType::Transparent)
                 {
                     TransparentDrawCall dc;
                     dc.meshBindingSet = meshBindingSet;

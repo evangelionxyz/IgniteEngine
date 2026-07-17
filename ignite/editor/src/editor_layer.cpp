@@ -307,7 +307,7 @@ namespace ignite
             // so users can't accidentally drag editor panels during gameplay.
             if (auto *imguiLayer = Application::GetInstance()->GetImGuiLayer())
             {
-                const bool isSceneFocused = m_ScenePanel->IsFocused() && m_ScenePanel->m_SceneFocused && m_ActiveScene->IsRunning()
+                const bool isSceneFocused = m_ScenePanel->m_SceneFocused && m_ActiveScene->IsRunning()
                     && (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
                 imguiLayer->SetBlock(isSceneFocused);
             }
@@ -1077,15 +1077,12 @@ namespace ignite
             return;
         }
 
-        constexpr std::string_view kActiveSceneAssetOwner = "editor.active-scene";
+		// Update asset pins in the project for the new scene
         if (m_ActiveProject)
         {
             std::unordered_set<AssetHandle> referencedHandles;
             if (scene)
-            {
                 referencedHandles = scene->CollectReferencedAssetHandles();
-            }
-
             m_ActiveProject->GetAssetManager()->ReplaceAssetPins(std::string(kActiveSceneAssetOwner), referencedHandles);
         }
 
@@ -1279,7 +1276,12 @@ namespace ignite
             return;
 
 		SaveProject();
-		OnSceneStop();
+
+        // Stop scene
+		if (m_EditorScene) m_EditorScene->OnStop();
+		m_ActiveScene->OnStop();
+
+        SetActiveScene(nullptr);
 
 		m_EditorScene.reset();
 		m_ActiveScene.reset();
@@ -1958,7 +1960,7 @@ namespace ignite
                         // Color code by type
                         ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
                         if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-                        else if (type == AssetType::Mesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+                        else if (type == AssetType::StaticMesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
                         else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
 
                         ImGui::TextColored(color, "%s: %d (%.1f%%)", AssetTypeToString(type).c_str(), count, percentage);
@@ -2027,7 +2029,7 @@ namespace ignite
                     AssetType::Scene, 
                     AssetType::Texture,
                     AssetType::Material, 
-                    AssetType::Mesh, 
+                    AssetType::StaticMesh,
                     AssetType::SkeletalMesh, 
                     AssetType::Audio, 
                     AssetType::Skeleton
@@ -2099,14 +2101,15 @@ namespace ignite
                 filteredAssets.insert({ handle, metadata });
             }
 
-            if (ImGui::BeginTable("asset_registry_table", 5, tableFlags))
+            if (ImGui::BeginTable("asset_registry_table", 6, tableFlags))
             {
                 ImGui::TableSetupScrollFreeze(0, 1);
-                ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 120.0f, 0);
+                ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 140.0f, 0);
                 ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 100.0f, 1);
                 ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 80.0f, 2);
                 ImGui::TableSetupColumn("Refs", ImGuiTableColumnFlags_WidthFixed, 50.0f, 3);
-                ImGui::TableSetupColumn("Filepath", ImGuiTableColumnFlags_WidthStretch, 0.0f, 4);
+                ImGui::TableSetupColumn("Pins", ImGuiTableColumnFlags_WidthFixed, 50.0f, 4);
+                ImGui::TableSetupColumn("Filepath", ImGuiTableColumnFlags_WidthStretch, 0.0f, 5);
                 ImGui::TableHeadersRow();
 
                 // Handle sorting
@@ -2121,159 +2124,148 @@ namespace ignite
                 // Determine which assets to display
                 bool useFiltered = !filteredAssets.empty() || !assetRegistryFilterResultStr.empty() || selectedTypeFilter != AssetType::Invalid;
 
+                auto drawAssetRegistryRow = [&](AssetHandle handle, const AssetMetaData &metadata)
+                {
+                    ImGui::TableNextRow();
+
+                    const uint32_t pinCount = assetManager->GetAssetPinCount(handle);
+                    const auto owners = assetManager->GetAssetPinOwners(handle);
+
+                    // Column 0: Handle (TreeNode)
+                    ImGui::TableNextColumn();
+                    ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_SpanFullWidth;
+                    if (pinCount == 0)
+                    {
+                        treeNodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                    }
+
+                    bool open = ImGui::TreeNodeEx((void*)(uint64_t)handle, treeNodeFlags | ImGuiTreeNodeFlags_DefaultOpen, "%llu", static_cast<uint64_t>(handle));
+
+                    // Column 1: Type with color coding
+                    ImGui::TableNextColumn();
+                    ImVec4 typeColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+                    if (metadata.type == AssetType::Texture) typeColor = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
+                    else if (metadata.type == AssetType::Mesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+                    else if (metadata.type == AssetType::Material) typeColor = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
+                    else if (metadata.type == AssetType::Scene) typeColor = ImVec4(0.5f, 0.9f, 0.9f, 1.0f);
+
+                    std::string assetTypeStr = AssetTypeToString(metadata.type);
+                    ImGui::TextColored(typeColor, "%s", assetTypeStr.c_str());
+
+                    // Column 2: Load Status
+                    ImGui::TableNextColumn();
+                    bool isLoaded = loadedAssets.find(handle) != loadedAssets.end();
+                    if (isLoaded)
+                    {
+                        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "LOADED");
+                    }
+                    else
+                    {
+                        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Disk");
+                    }
+
+                    // Column 3: Reference count
+                    ImGui::TableNextColumn();
+                    if (isLoaded)
+                    {
+                        auto it = loadedAssets.find(handle);
+                        if (it != loadedAssets.end() && it->second)
+                        {
+                            long refCount = it->second.use_count();
+                            ImVec4 refColor = refCount == 1 ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f) : ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+                            ImGui::TextColored(refColor, "%ld", refCount);
+                        }
+                    }
+                    else
+                    {
+                        ImGui::Text("-");
+                    }
+
+                    // Column 4: Pins count
+                    ImGui::TableNextColumn();
+                    if (pinCount > 0)
+                    {
+                        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "%u", pinCount);
+                    }
+                    else
+                    {
+                        ImGui::Text("-");
+                    }
+
+                    // Column 5: Filepath
+                    ImGui::TableNextColumn();
+                    std::string displayPath;
+                    if (showFullPath)
+                    {
+                        displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath).string()).generic_string();
+                    }
+                    else
+                    {
+                        displayPath = metadata.filepath.generic_string();
+                    }
+                    ImGui::TextWrapped("%s", displayPath.c_str());
+
+                    // Actions for Scene assets
+                    if (metadata.type == AssetType::Scene)
+                    {
+                        ImGui::SameLine();
+                        ImGui::PushID(static_cast<int>(handle));
+                        if (ImGui::SmallButton("Set as default"))
+                        {
+                            m_ActiveProject->GetInfo().defaultSceneHandle = handle;
+                            SaveProject();
+                        }
+                        ImGui::PopID();
+                    }
+
+                    // Render nested owner pins if node is expanded
+                    if (open && pinCount > 0)
+                    {
+                        for (const auto &owner : owners)
+                        {
+                            ImGui::TableNextRow();
+
+                            // Column 0: Handle / Owner sub-node indicator
+                            ImGui::TableNextColumn();
+                            ImGui::TreeNodeEx(owner.c_str(), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen, "Owner");
+
+                            // Column 1: Type ("Pin")
+                            ImGui::TableNextColumn();
+                            ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "Pin");
+
+                            // Column 2: Status
+                            ImGui::TableNextColumn();
+                            ImGui::Text("-");
+
+                            // Column 3: Refs
+                            ImGui::TableNextColumn();
+                            ImGui::Text("-");
+
+                            // Column 4: Pins
+                            ImGui::TableNextColumn();
+                            ImGui::Text("-");
+
+                            // Column 5: Tag name
+                            ImGui::TableNextColumn();
+                            ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "%s", owner.c_str());
+                        }
+                        ImGui::TreePop();
+                    }
+                };
+
                 // Iterate through appropriate asset collection
                 if (useFiltered)
                 {
                     for (const auto &[handle, metadata] : filteredAssets)
                     {
-                        ImGui::TableNextRow();
-
-                        // Column 0: Handle
-                        ImGui::TableNextColumn();
-                        ImGui::Text("%llu", static_cast<uint64_t>(handle));
-
-                        // Column 1: Type with color coding
-                        ImGui::TableNextColumn();
-                        ImVec4 typeColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-                        if (metadata.type == AssetType::Texture) typeColor = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-                        else if (metadata.type == AssetType::Mesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
-                        else if (metadata.type == AssetType::Material) typeColor = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
-                        else if (metadata.type == AssetType::Scene) typeColor = ImVec4(0.5f, 0.9f, 0.9f, 1.0f);
-
-                        std::string assetTypeStr = AssetTypeToString(metadata.type);
-                        ImGui::TextColored(typeColor, "%s", assetTypeStr.c_str());
-
-                        // Column 2: Load Status
-                        ImGui::TableNextColumn();
-                        bool isLoaded = loadedAssets.find(handle) != loadedAssets.end();
-                        if (isLoaded)
-                        {
-                            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "LOADED");
-                        }
-                        else
-                        {
-                            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Disk");
-                        }
-
-                        // Column 3: Reference count
-                        ImGui::TableNextColumn();
-                        if (isLoaded)
-                        {
-                            auto it = loadedAssets.find(handle);
-                            if (it != loadedAssets.end() && it->second)
-                            {
-                                long refCount = it->second.use_count();
-                                ImVec4 refColor = refCount == 1 ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f) : ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-                                ImGui::TextColored(refColor, "%ld", refCount);
-                            }
-                        }
-                        else
-                        {
-                            ImGui::Text("-");
-                        }
-
-                        // Column 4: Filepath
-                        ImGui::TableNextColumn();
-                        std::string displayPath;
-                        if (showFullPath)
-                        {
-                            displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath).string()).generic_string();
-                        }
-                        else
-                        {
-                            displayPath = metadata.filepath.generic_string();
-                        }
-                        ImGui::TextWrapped("%s", displayPath.c_str());
-
-                        // Actions for Scene assets
-                        if (metadata.type == AssetType::Scene)
-                        {
-                            ImGui::SameLine();
-                            ImGui::PushID(static_cast<int>(handle));
-                            if (ImGui::SmallButton("Default"))
-                            {
-                                m_ActiveProject->GetInfo().defaultSceneHandle = handle;
-                                SaveProject();
-                            }
-                            ImGui::PopID();
-                        }
+                        drawAssetRegistryRow(handle, metadata);
                     }
                 }
                 else
                 {
                     for (const auto &[handle, metadata] : assetRegistry)
                     {
-                        ImGui::TableNextRow();
-
-                        // Column 0: Handle
-                        ImGui::TableNextColumn();
-                        ImGui::Text("%llu", static_cast<uint64_t>(handle));
-
-                        // Column 1: Type with color coding
-                        ImGui::TableNextColumn();
-                        ImVec4 typeColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-                        if (metadata.type == AssetType::Texture) typeColor = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-                        else if (metadata.type == AssetType::Mesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
-                        else if (metadata.type == AssetType::Material) typeColor = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
-                        else if (metadata.type == AssetType::Scene) typeColor = ImVec4(0.5f, 0.9f, 0.9f, 1.0f);
-
-                        std::string assetTypeStr = AssetTypeToString(metadata.type);
-                        ImGui::TextColored(typeColor, "%s", assetTypeStr.c_str());
-
-                        // Column 2: Load Status
-                        ImGui::TableNextColumn();
-                        bool isLoaded = loadedAssets.find(handle) != loadedAssets.end();
-                        if (isLoaded)
-                        {
-                            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "LOADED");
-                        }
-                        else
-                        {
-                            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Disk");
-                        }
-
-                        // Column 3: Reference count
-                        ImGui::TableNextColumn();
-                        if (isLoaded)
-                        {
-                            auto it = loadedAssets.find(handle);
-                            if (it != loadedAssets.end() && it->second)
-                            {
-                                long refCount = it->second.use_count();
-                                ImVec4 refColor = refCount == 1 ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f) : ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-                                ImGui::TextColored(refColor, "%ld", refCount);
-                            }
-                        }
-                        else
-                        {
-                            ImGui::Text("-");
-                        }
-
-                        // Column 4: Filepath
-                        ImGui::TableNextColumn();
-                        std::string displayPath;
-                        if (showFullPath)
-                        {
-                            displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath).string()).generic_string();
-                        }
-                        else
-                        {
-                            displayPath = metadata.filepath.generic_string();
-                        }
-                        ImGui::TextWrapped("%s", displayPath.c_str());
-
-                        // Actions for Scene assets
-                        if (metadata.type == AssetType::Scene)
-                        {
-                            ImGui::SameLine();
-                            ImGui::PushID(static_cast<int>(handle));
-                            if (ImGui::SmallButton("Set as default"))
-                            {
-                                m_ActiveProject->GetInfo().defaultSceneHandle = handle;
-                                SaveProject();
-                            }
-                            ImGui::PopID();
-                        }
+                        drawAssetRegistryRow(handle, metadata);
                     }
                 }
                 ImGui::EndTable();

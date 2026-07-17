@@ -22,7 +22,7 @@ namespace ignite
     public:
 
         Font(const ignite::Path &filepath);
-        ~Font();
+        virtual ~Font() override;
 
         static Ref<Font> Create(const ignite::Path &filepath);
 

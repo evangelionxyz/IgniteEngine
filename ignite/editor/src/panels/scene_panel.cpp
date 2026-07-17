@@ -660,6 +660,8 @@ namespace ignite
                             {
                                 c.widgetHandle = handle;
                                 c.dirty = true;
+
+                                assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -721,6 +723,8 @@ namespace ignite
                                     c.hdrHandle = handle;
                                     c.dirtyEnvironment = true;
                                     c.gpuInitialized = false;
+
+                                    AssetManager::GetInstance()->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                 }
                             }
                             ImGui::EndDragDropTarget();
@@ -832,7 +836,7 @@ namespace ignite
                 // Material 2D
                 bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
                 std::string mat2dLabel = isMat2dLoaded ? assetManager->GetAssetDisplayName(c.materialHandle) : "Drag Here";
-                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [&c, &selectedEntity, &isMat2dLoaded, this]()
+                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [&c, &selectedEntity, &isMat2dLoaded, assetManager, this]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -840,12 +844,14 @@ namespace ignite
                             {
                                 LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                 AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                AssetType type = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle);
+                                AssetType type = assetManager->GetAssetType(handle);
                                 if (type == AssetType::Material2D)
                                 {
                                     Sprite2DComponent before = c;
                                     c.materialHandle = handle;
                                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
+
+                                    assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                 }
                             }
                             ImGui::EndDragDropTarget();
@@ -875,7 +881,7 @@ namespace ignite
                     // Texture on sprite 2d
                     const bool isTextureLoaded = c.handle != AssetHandle(0);
                     const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, &selectedEntity]()
+                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, assetManager, &selectedEntity]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -883,10 +889,12 @@ namespace ignite
                                 {
                                     LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                     AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    AssetType type = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle);
+                                    AssetType type = assetManager->GetAssetType(handle);
                                     if (type == AssetType::Texture)
                                     {
                                         c.handle = handle;
+
+                                        assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                     }
                                 }
                                 else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_SPRITE_SHEET_ITEM))
@@ -1038,7 +1046,7 @@ namespace ignite
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
                 std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
+                UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, assetManager, &isMeshLoaded]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -1046,7 +1054,6 @@ namespace ignite
                         {
                             LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                             AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                            auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
                             AssetMetaData metadata = assetManager->GetMetaData(handle);
 
                             if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
@@ -1055,6 +1062,8 @@ namespace ignite
                                 assetManager->AssignMetaData(handle, metadata);
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
+
+                                assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -1165,6 +1174,8 @@ namespace ignite
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
 
+                                AssetManager::GetInstance()->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
+
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -1272,6 +1283,8 @@ namespace ignite
                                         c.stateElapsed = 0.0f;
                                         c.stateNormalized = 0.0f;
                                         c.runtimeParams.clear();
+
+                                        assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                     }
                                 }
 
@@ -1838,9 +1851,10 @@ namespace ignite
                                 {
                                     LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                     AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    if (m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle) == AssetType::Font)
+                                    if (assetManager->GetAssetType(handle) == AssetType::Font)
                                     {
                                         c.fontHandle = handle;
+                                        assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                     }
                                 }
                                 ImGui::EndDragDropTarget();
@@ -1858,7 +1872,7 @@ namespace ignite
 
                     const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
                     std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Here";
-                    UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c, this, &isMaterialLoaded]()
+                    UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c, this, assetManager, &isMaterialLoaded]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -1866,7 +1880,7 @@ namespace ignite
                                 {
                                     LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                     AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    if (m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle) == AssetType::Material2D)
+                                    if (assetManager->GetAssetType(handle) == AssetType::Material2D)
                                     {
                                         c.material2dHandle = handle;
                                     }
@@ -1904,7 +1918,7 @@ namespace ignite
                 const bool isLoaded = c.handle != AssetHandle(0);
                 std::string label = isLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 
-                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, this, &isLoaded]()
+                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, this, &isLoaded, assetManager]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -1912,14 +1926,16 @@ namespace ignite
                             {
                                 if (payload->DataSize == sizeof(AssetHandle))
                                 {
-                                    AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
-                                    if (handle && *handle != AssetHandle(0))
+                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                    if (handle != AssetHandle(0))
                                     {
-                                        AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
+                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
                                         if (metadata.type == AssetType::Audio)
                                         {
-                                            c.handle = *handle;
-                                            Ref<FmodSound> sound = m_EditorLayer->GetActiveProject()->GetAsset<FmodSound>(*handle);
+                                            c.handle = handle;
+                                            Ref<FmodSound> sound = m_EditorLayer->GetActiveProject()->GetAsset<FmodSound>(handle);
+
+                                            assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                         }
                                     }
                                 }
@@ -3820,7 +3836,11 @@ namespace ignite
         {
             if (isScenePlaying)
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); m_SceneFocused = false; });
+                Application::SubmitToMainThread([this]()
+                    { 
+                        m_EditorLayer->OnSceneStop();
+                        m_SceneFocused = false;
+                    });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3829,7 +3849,11 @@ namespace ignite
             }
             else
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); m_SceneFocused = true; });
+                Application::SubmitToMainThread([this]() 
+                    { 
+                        m_EditorLayer->OnScenePlay(); 
+                        m_SceneFocused = true; 
+                    });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3848,7 +3872,11 @@ namespace ignite
         {
             if (isSceneSimulate)
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); m_SceneFocused = false; });
+                Application::SubmitToMainThread([this]()
+                    { 
+                        m_EditorLayer->OnSceneStop();
+                        m_SceneFocused = false; 
+                    });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3857,7 +3885,11 @@ namespace ignite
             }
             else
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); m_SceneFocused = true; });
+                Application::SubmitToMainThread([this]()
+                    { 
+                        m_EditorLayer->OnSceneSimulate();
+                        m_SceneFocused = true; 
+                    });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;

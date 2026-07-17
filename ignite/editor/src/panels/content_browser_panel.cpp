@@ -143,7 +143,7 @@ namespace ignite
 
         static const SDL_DialogFileFilter kExtFilters[]
         {
-            {"All Supported Assets", "fbx;gltf;glb;png;jpg;jpeg;hdr;wav;mp3;flac;ttf;otf;ixscene;mesh;ixmat;ixmat2d;ixsp;ixanim;ixmontage;ixskeleton;ixbs;ixloco;ac;ac2d;anim2d"},
+            {"All Supported Assets", "fbx;gltf;glb;png;jpg;jpeg;hdr;wav;mp3;flac;ttf;otf;ixscene;mesh;skmesh;ixmat;ixmat2d;ixsp;ixanim;ixmontage;ixskeleton;ixbs;ixloco;ac;ac2d;anim2d"},
             {"FBX File (.fbx)", "fbx"},
             {"GLTF File (.gltf)", "gltf"},
             {"GLB File (.glb)", "glb"},
@@ -153,8 +153,17 @@ namespace ignite
             {"Font", "ttf;otf" },
             {"Ignite Scene (.ixscene)", "ixscene"},
             {"Ignite Static Mesh (.mesh)", "mesh"},
+            {"Ignite Skeletal Mesh (.skmesh)", "skmesh"},
             {"Ignite Material (.ixmat)", "ixmat"},
-            {"Ignite Material2D (.ixmat2d)", "ixmat2d"}
+            {"Ignite Material2D (.ixmat2d)", "ixmat2d"},
+            {"Ignite Animation (.ixanim)", "ixanim"},
+            {"Ignite Animation Montage (.ixmontage)", "ixmontage"},
+            {"Ignite Skeleton (.ixskeleton)", "ixskeleton"},
+            {"Ignite Blend Space (.ixbs)", "ixbs"},
+            {"Ignite Locomotion (.ixloco)", "ixloco"},
+            {"Animation Controller (.ac)", "ac"},
+            {"Animation Controller 2D (.ac2d)", "ac2d"},
+            {"Animation 2D (.anim2d)", "anim2d"}
         };
     }
 

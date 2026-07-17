@@ -179,6 +179,8 @@ namespace ignite
         uint32_t m_GameplayWidgetMouseY = 0;
         bool m_GameplayWidgetMouseHovered = false;
         bool m_UseGameplayWidgetMouseOverride = false;
+
+        Ref<Material> m_RuntimeMaterial;
     };
 }
 

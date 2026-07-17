@@ -22,7 +22,7 @@ namespace ignite
     static constexpr auto LCG_INCREMENT = 1442695040888963407ull;
 
     template<typename T, typename S, int N, msdf_atlas::GeneratorFunction<S, N> GenFunc>
-    static Ref<Texture> CreateAndCacheAtlas(const std::vector<msdf_atlas::GlyphGeometry> &glyphs, uint32_t width, uint32_t height, std::function<void(const Ref<Texture> &)> onReady = nullptr)
+    static Ref<Texture> CreateAndCacheAtlas(const std::vector<msdf_atlas::GlyphGeometry> &glyphs, uint32_t width, uint32_t height, Font *f)
     {
         msdf_atlas::GeneratorAttributes attributes;
         attributes.config.overlapSupport = true;
@@ -95,7 +95,7 @@ namespace ignite
         atlas->SetReadyFlag(false);
 
         atlas->PrepareUploadData(4);
-        Application::SubmitToRenderThread([atlas, onReady]()
+        Application::SubmitToRenderThread([atlas, f]()
         {
             if (atlas)
             {
@@ -105,11 +105,14 @@ namespace ignite
 				atlas->SetData(cmd, 4);
 				cmd->close();
 
-                Application::SubmitWorkerCommandList(cmd, [atlas, onReady]()
+                Application::SubmitWorkerCommandList(cmd, [atlas, f]()
                 {
                     atlas->SetReadyFlag(true);
-                    if (onReady)
-                        Application::SubmitToMainThread([atlas, onReady]() { onReady(atlas); });
+                    if (f)
+                    {
+                        f->SetReadyFlag(atlas->IsReady());
+                        f->NotifyChange();
+                    }
                 });
             }
         });
@@ -119,6 +122,7 @@ namespace ignite
 
     Font::Font(const ignite::Path &filepath)
     {
+        m_Ready = false;
         LoadGlyphs(filepath);
     }
 
@@ -270,11 +274,7 @@ namespace ignite
             LOG_WARN("[Font] Edge coloring takes {}s to be done.", timer.Elapsed());
         }
 
-        m_AtlasTexture = CreateAndCacheAtlas<float, float, 3, msdf_atlas::msdfGenerator>(m_Glyphs, width, height,
-        [this](const Ref<Texture> &texture)
-        {
-            SetReadyFlag(texture && texture->IsReady());
-        });
+        m_AtlasTexture = CreateAndCacheAtlas<float, float, 3, msdf_atlas::msdfGenerator>(m_Glyphs, width, height, this);
 
         msdfgen::destroyFont(font);
         msdfgen::deinitializeFreetype(ft);

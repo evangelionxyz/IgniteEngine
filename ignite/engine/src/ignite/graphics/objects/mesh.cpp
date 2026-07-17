@@ -365,178 +365,178 @@ namespace ignite
 
             return glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
-	}
+    }
 
-	// ===================================
-	// Mesh Instance
-	// ===================================
-	MeshInstance::~MeshInstance()
-	{
-		// Wait for GPU to ensure resources are not in use
-		if (auto *device = DeviceManager::GetInstance()->GetDevice())
-		{
-			GPUUploadSync::DeviceWaitIdle(device);
-		}
+    // ===================================
+    // Mesh Instance
+    // ===================================
+    MeshInstance::~MeshInstance()
+    {
+        // Wait for GPU to ensure resources are not in use
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
+        {
+            GPUUploadSync::DeviceWaitIdle(device);
+        }
 
-		AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
+        AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
 
-		m_MeshBindingSet = nullptr;
-	}
+        m_MeshBindingSet = nullptr;
+    }
     
-	void MeshInstance::SetMaterial(const AssetHandle &assetHandle)
-	{
-		m_MaterialHandle = assetHandle;
-		AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
-	}
+    void MeshInstance::SetMaterial(const AssetHandle &assetHandle)
+    {
+        m_MaterialHandle = assetHandle;
+        AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
+    }
 
-	void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
-	{
-		m_MeshConstantBuffer->SetData(cmd, Buffer(data, size));
-	}
+    void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
+    {
+        m_MeshConstantBuffer->SetData(cmd, Buffer(data, size));
+    }
 
-	// ===================================
-	// Static Mesh Instance
-	// ===================================
+    // ===================================
+    // Static Mesh Instance
+    // ===================================
     StaticMeshInstance::StaticMeshInstance(const MeshNode<VertexMeshStatic> &node, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
-	{
-		m_Name = node.name;
-		m_Primitive = primitive;
+    {
+        m_Name = node.name;
+        m_Primitive = primitive;
 
-		local = node.local;
-		global = node.global;
+        local = node.local;
+        global = node.global;
 
-		if (!m_MeshConstantBuffer)
-		{
-			constexpr uint32_t maxVersion = 1;
-			m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, 1, "Per-Entity Transform Buffer");
-			LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-		}
-	}
+        if (!m_MeshConstantBuffer)
+        {
+            constexpr uint32_t maxVersion = 1;
+            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, 1, "Per-Entity Transform Buffer");
+            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
+    }
 
-	StaticMeshInstance::StaticMeshInstance(const std::string &name, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
-	{
+    StaticMeshInstance::StaticMeshInstance(const std::string &name, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
+    {
         m_Name = name;
         m_Primitive = primitive;
 
-		if (!m_MeshConstantBuffer)
-		{
-			constexpr uint32_t maxVersion = 1;
-			m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, 1, "Per-Entity Transform Buffer");
-			LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-		}
-	}
+        if (!m_MeshConstantBuffer)
+        {
+            constexpr uint32_t maxVersion = 1;
+            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, 1, "Per-Entity Transform Buffer");
+            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
+    }
 
-	StaticMeshInstance::StaticMeshInstance()
-	{
-		m_Primitive = CreateRef<MeshPrimitive<VertexMeshStatic>>();
-	}
+    StaticMeshInstance::StaticMeshInstance()
+    {
+        m_Primitive = CreateRef<MeshPrimitive<VertexMeshStatic>>();
+    }
 
     StaticMeshInstance::~StaticMeshInstance()
     {
         m_Primitive.reset();
-		m_MeshBindingSetCache.clear();
+        m_MeshBindingSetCache.clear();
     }
 
-	bool StaticMeshInstance::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, const Ref<ConstantBuffer> &pointLightBuffer /*= nullptr*/, const Ref<ConstantBuffer> &spotLightBuffer /*= nullptr */)
-	{
-		if (!m_MeshConstantBuffer)
-		{
-			return false;
-		}
+    bool StaticMeshInstance::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, const Ref<ConstantBuffer> &pointLightBuffer /*= nullptr*/, const Ref<ConstantBuffer> &spotLightBuffer /*= nullptr */)
+    {
+        if (!m_MeshConstantBuffer)
+        {
+            return false;
+        }
 
-		BindingSetCacheKey cacheKey{};
-		cacheKey.cameraBuffer = cameraBuffer->GetHandle();
-		cacheKey.objectBuffer = m_MeshConstantBuffer->GetHandle();
-		cacheKey.sceneBuffer = sceneBuffer ? sceneBuffer->GetHandle() : nullptr;
-		cacheKey.csmBuffer = csmBuffer ? csmBuffer->GetHandle() : nullptr;
-		cacheKey.pointLightBuffer = pointLightBuffer ? pointLightBuffer->GetHandle() : nullptr;
-		cacheKey.spotLightBuffer = spotLightBuffer ? spotLightBuffer->GetHandle() : nullptr;
+        BindingSetCacheKey cacheKey{};
+        cacheKey.cameraBuffer = cameraBuffer->GetHandle();
+        cacheKey.objectBuffer = m_MeshConstantBuffer->GetHandle();
+        cacheKey.sceneBuffer = sceneBuffer ? sceneBuffer->GetHandle() : nullptr;
+        cacheKey.csmBuffer = csmBuffer ? csmBuffer->GetHandle() : nullptr;
+        cacheKey.pointLightBuffer = pointLightBuffer ? pointLightBuffer->GetHandle() : nullptr;
+        cacheKey.spotLightBuffer = spotLightBuffer ? spotLightBuffer->GetHandle() : nullptr;
 
-		if (auto it = m_MeshBindingSetCache.find(cacheKey); it != m_MeshBindingSetCache.end())
-		{
-			m_MeshBindingSet = it->second;
-			return true;
-		}
+        if (auto it = m_MeshBindingSetCache.find(cacheKey); it != m_MeshBindingSetCache.end())
+        {
+            m_MeshBindingSet = it->second;
+            return true;
+        }
 
-		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-		auto desc = nvrhi::BindingSetDesc();
-		desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cacheKey.cameraBuffer));
-		desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cacheKey.objectBuffer));
-		desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, cacheKey.sceneBuffer));
-		desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, cacheKey.csmBuffer));
-		desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, cacheKey.pointLightBuffer));
-		desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, cacheKey.spotLightBuffer));
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto desc = nvrhi::BindingSetDesc();
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cacheKey.cameraBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cacheKey.objectBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, cacheKey.sceneBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, cacheKey.csmBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, cacheKey.pointLightBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, cacheKey.spotLightBuffer));
 
-		m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(EBindingLayout::MESH_STATIC));
-		LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");
+        m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(EBindingLayout::MESH_STATIC));
+        LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");
 
-		if (m_MeshBindingSet)
-		{
-			m_MeshBindingSetCache.emplace(cacheKey, m_MeshBindingSet);
-			if (m_MeshBindingSetCache.size() > 512)
-			{
-				LOG_WARN("[MeshInstance] Binding cache for '{}' grew to {} entries. Verify instance buffer sharing strategy.", m_Name, m_MeshBindingSetCache.size());
-			}
-		}
+        if (m_MeshBindingSet)
+        {
+            m_MeshBindingSetCache.emplace(cacheKey, m_MeshBindingSet);
+            if (m_MeshBindingSetCache.size() > 512)
+            {
+                LOG_WARN("[MeshInstance] Binding cache for '{}' grew to {} entries. Verify instance buffer sharing strategy.", m_Name, m_MeshBindingSetCache.size());
+            }
+        }
 
-		return true;
-	}
+        return true;
+    }
 
     Ref<StaticMeshInstance> StaticMeshInstance::Create(const MeshNode<VertexMeshStatic> &node, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
-	{
-		return CreateRef<StaticMeshInstance>(node, primitive);
-	}
+    {
+        return CreateRef<StaticMeshInstance>(node, primitive);
+    }
 
-	Ref<StaticMeshInstance> StaticMeshInstance::Create(const std::string &name, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
-	{
-		return CreateRef<StaticMeshInstance>(name, primitive);
-	}
+    Ref<StaticMeshInstance> StaticMeshInstance::Create(const std::string &name, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
+    {
+        return CreateRef<StaticMeshInstance>(name, primitive);
+    }
 
-	// ===================================
-	// Skeletal Mesh Instance
-	// ===================================
+    // ===================================
+    // Skeletal Mesh Instance
+    // ===================================
     SkeletalMeshInstance::SkeletalMeshInstance(const std::string &name, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive)
     {
-		m_Name = name;
-		m_Primitive = primitive;
+        m_Name = name;
+        m_Primitive = primitive;
 
         constexpr uint32_t maxVersion = 1;
-		if (!m_MeshConstantBuffer)
-		{
-			m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, maxVersion, "Per-Entity Transform Buffer");
-			LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-		}
+        if (!m_MeshConstantBuffer)
+        {
+            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, maxVersion, "Per-Entity Transform Buffer");
+            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
 
-		if (!m_SkeletonBuffer)
-		{
-			m_SkeletonBuffer = ConstantBuffer::Create(sizeof(glm::mat4) * MAX_BONES, false, maxVersion, "Default Skeleton Buffer");
-			LOG_INFO("[MeshInstance] Created skeleton buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-		}
+        if (!m_SkeletonBuffer)
+        {
+            m_SkeletonBuffer = ConstantBuffer::Create(sizeof(glm::mat4) * MAX_BONES, false, maxVersion, "Default Skeleton Buffer");
+            LOG_INFO("[MeshInstance] Created skeleton buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
 
     }
 
     SkeletalMeshInstance::SkeletalMeshInstance(const MeshNode<VertexMeshAnim> &node, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive)
-	{
-		m_Name = node.name;
-		m_Primitive = primitive;
+    {
+        m_Name = node.name;
+        m_Primitive = primitive;
 
-		local = node.local;
-		global = node.global;
+        local = node.local;
+        global = node.global;
 
-		constexpr uint32_t maxVersion = 1;
+        constexpr uint32_t maxVersion = 1;
 
-		if (!m_MeshConstantBuffer)
-		{
-			m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, maxVersion, "Per-Entity Transform Buffer");
-			LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-		}
+        if (!m_MeshConstantBuffer)
+        {
+            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, maxVersion, "Per-Entity Transform Buffer");
+            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
 
-		if (!m_SkeletonBuffer)
-		{
-			m_SkeletonBuffer = ConstantBuffer::Create(sizeof(glm::mat4) * MAX_BONES, false, maxVersion, "Default Skeleton Buffer");
-			LOG_INFO("[MeshInstance] Created skeleton buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-		}
-	}
+        if (!m_SkeletonBuffer)
+        {
+            m_SkeletonBuffer = ConstantBuffer::Create(sizeof(glm::mat4) * MAX_BONES, false, maxVersion, "Default Skeleton Buffer");
+            LOG_INFO("[MeshInstance] Created skeleton buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
+    }
 
     SkeletalMeshInstance::SkeletalMeshInstance()
     {
@@ -549,12 +549,12 @@ namespace ignite
         m_MeshBindingSetCache.clear();
     }
 
-	void SkeletalMeshInstance::SetSkeletonData(nvrhi::ICommandList *cmd, void *data, size_t size)
-	{
+    void SkeletalMeshInstance::SetSkeletonData(nvrhi::ICommandList *cmd, void *data, size_t size)
+    {
         m_SkeletonBuffer->SetData(cmd, Buffer(data, size));
-	}
+    }
 
-	bool SkeletalMeshInstance::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer,
+    bool SkeletalMeshInstance::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer,
         const Ref<ConstantBuffer> &pointLightBuffer, const Ref<ConstantBuffer> &spotLightBuffer
     )
     {
@@ -603,7 +603,7 @@ namespace ignite
         return true;
     }
 
-	Ref<SkeletalMeshInstance> SkeletalMeshInstance::Create(const std::string &name, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive)
+    Ref<SkeletalMeshInstance> SkeletalMeshInstance::Create(const std::string &name, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive)
     {
         return CreateRef<SkeletalMeshInstance>(name, primitive);
     }
@@ -613,82 +613,82 @@ namespace ignite
         return CreateRef<SkeletalMeshInstance>(node, primitive);
     }
 
-	
-	// ===================================
-	// Static Mesh
-	// ===================================
-	Ref<StaticMesh> StaticMesh::Create()
-	{
-		return CreateRef<StaticMesh>();
-	}
+    
+    // ===================================
+    // Static Mesh
+    // ===================================
+    Ref<StaticMesh> StaticMesh::Create()
+    {
+        return CreateRef<StaticMesh>();
+    }
 
-	StaticMesh::~StaticMesh()
-	{
+    StaticMesh::~StaticMesh()
+    {
         m_MeshInstances.clear();
-	}
+    }
 
-	bool StaticMesh::Serialize(const ignite::Path &filepath)
-	{
-		BinarySerializer::SerializeMesh<StaticMesh, VertexMeshStatic>(this, filepath);
-		SetDirtyFlag(false);
-		return true;
-	}
+    bool StaticMesh::Serialize(const ignite::Path &filepath)
+    {
+        BinarySerializer::SerializeMesh<StaticMesh, VertexMeshStatic>(this, filepath);
+        SetDirtyFlag(false);
+        return true;
+    }
 
     Ref<StaticMesh> StaticMesh::Deserialize(const ignite::Path &filepath)
     {
-		return BinarySerializer::DeserializeMesh<StaticMesh, VertexMeshStatic>(filepath);
+        return BinarySerializer::DeserializeMesh<StaticMesh, VertexMeshStatic>(filepath);
     }
 
-	const AABB &StaticMesh::CalculateLocalAABB()
-	{
-		for (const auto &mesh : m_MeshInstances)
-		{
-			if (!mesh)
-				continue;
+    const AABB &StaticMesh::CalculateLocalAABB()
+    {
+        for (const auto &mesh : m_MeshInstances)
+        {
+            if (!mesh)
+                continue;
 
-			auto &prim = mesh->GetPrimitive();
-			if (!prim || prim->vertices.empty())
-			{
-				continue;
-			}
+            auto &prim = mesh->GetPrimitive();
+            if (!prim || prim->vertices.empty())
+            {
+                continue;
+            }
 
-			AABB meshBounds;
-			// Vertices are already transformed when the mesh is loaded, so
-			// use vertex positions directly and do not apply the mesh local transform.
-			for (const auto &vertex : prim->vertices)
-			{
-				meshBounds.min = glm::min(meshBounds.min, vertex.position);
-				meshBounds.max = glm::max(meshBounds.max, vertex.position);
-			}
+            AABB meshBounds;
+            // Vertices are already transformed when the mesh is loaded, so
+            // use vertex positions directly and do not apply the mesh local transform.
+            for (const auto &vertex : prim->vertices)
+            {
+                meshBounds.min = glm::min(meshBounds.min, vertex.position);
+                meshBounds.max = glm::max(meshBounds.max, vertex.position);
+            }
 
-			localAABB.min = glm::min(localAABB.min, meshBounds.min);
-			localAABB.max = glm::max(localAABB.max, meshBounds.max);
-		}
+            localAABB.min = glm::min(localAABB.min, meshBounds.min);
+            localAABB.max = glm::max(localAABB.max, meshBounds.max);
+        }
 
-		return this->localAABB;
-	}
+        return this->localAABB;
+    }
 
-	// ===================================
-	// Skeletal Mesh
-	// ===================================
+    // ===================================
+    // Skeletal Mesh
+    // ===================================
     Ref<SkeletalMesh> SkeletalMesh::Create()
     {
         return CreateRef<SkeletalMesh>();
     }
 
-	void SkeletalMesh::SetSkeleton(AssetHandle skeletonHandle)
-	{
+    void SkeletalMesh::SetSkeleton(AssetHandle skeletonHandle)
+    {
         m_SkeletonHandle = handle;
         AssetManager::GetInstance()->AddAssetPin(skeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)skeletonHandle));
-	}
+    }
 
-	void SkeletalMesh::SetAnimator(AssetHandle animatorHandle)
-	{
+    void SkeletalMesh::SetAnimator(AssetHandle animatorHandle)
+    {
         m_AnimatorHandle = handle;
-		AssetManager::GetInstance()->AddAssetPin(animatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)animatorHandle));
-	}
+        AssetManager::GetInstance()->AddAssetPin(animatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)animatorHandle));
+    }
 
-	bool SkeletalMesh::Serialize(const ignite::Path &filepath)
+    bool SkeletalMesh::Serialize(const ignite::Path &filepath)
     {
         BinarySerializer::SerializeMesh<SkeletalMesh, VertexMeshAnim>(this, filepath);
         SetDirtyFlag(false);
@@ -700,39 +700,39 @@ namespace ignite
         return BinarySerializer::DeserializeMesh<SkeletalMesh, VertexMeshAnim>(filepath);
     }
 
-	const AABB &SkeletalMesh::CalculateLocalAABB()
-	{
-		for (const auto &mesh : m_MeshInstances)
-		{
-			if (!mesh)
-				continue;
-
-			auto &prim = mesh->GetPrimitive();
-			if (!prim || prim->vertices.empty())
-			{
-				continue;
-			}
-
-			AABB meshBounds;
-			// Vertices are already transformed when the mesh is loaded, so
-			// use vertex positions directly and do not apply the mesh local transform.
-			for (const auto &vertex : prim->vertices)
-			{
-				meshBounds.min = glm::min(meshBounds.min, vertex.position);
-				meshBounds.max = glm::max(meshBounds.max, vertex.position);
-			}
-
-			localAABB.min = glm::min(localAABB.min, meshBounds.min);
-			localAABB.max = glm::max(localAABB.max, meshBounds.max);
-		}
-
-		return this->localAABB;
-	}
-
-	SkeletalMesh::~SkeletalMesh()
+    const AABB &SkeletalMesh::CalculateLocalAABB()
     {
-		AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)m_SkeletonHandle));
-		AssetManager::GetInstance()->RemoveAssetPin(m_AnimatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)m_AnimatorHandle));
+        for (const auto &mesh : m_MeshInstances)
+        {
+            if (!mesh)
+                continue;
+
+            auto &prim = mesh->GetPrimitive();
+            if (!prim || prim->vertices.empty())
+            {
+                continue;
+            }
+
+            AABB meshBounds;
+            // Vertices are already transformed when the mesh is loaded, so
+            // use vertex positions directly and do not apply the mesh local transform.
+            for (const auto &vertex : prim->vertices)
+            {
+                meshBounds.min = glm::min(meshBounds.min, vertex.position);
+                meshBounds.max = glm::max(meshBounds.max, vertex.position);
+            }
+
+            localAABB.min = glm::min(localAABB.min, meshBounds.min);
+            localAABB.max = glm::max(localAABB.max, meshBounds.max);
+        }
+
+        return this->localAABB;
+    }
+
+    SkeletalMesh::~SkeletalMesh()
+    {
+        AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)m_SkeletonHandle));
+        AssetManager::GetInstance()->RemoveAssetPin(m_AnimatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)m_AnimatorHandle));
         m_MeshInstances.clear();
     }
 
@@ -840,7 +840,7 @@ namespace ignite
         return material;
     }
 
-	template<MeshVertex VertexType_T>
+    template<MeshVertex VertexType_T>
     void GLTFMeshLoader::LoadVertexData(std::vector<VertexType_T> &vertices, const tinygltf::Primitive &primitive, const tinygltf::Model &model)
     {
         // Get vertex positions
@@ -894,7 +894,7 @@ namespace ignite
             colorCount = accessor.count;
         }
 
-		// Get joint indices and weights for animated vertices (optional)
+        // Get joint indices and weights for animated vertices (optional)
         const unsigned char *jointData = nullptr;
         int jointComponentType = 0;
         size_t jointStride = 0;
@@ -903,28 +903,28 @@ namespace ignite
         int weightComponentType = 0;
         size_t weightStride = 0;
         size_t weightCount = 0;
-		if constexpr (AnimatedVertex<VertexType_T>)
-		{
-			// Get joint indices (optional)
-			if (primitive.attributes.contains("JOINTS_0"))
-			{
-				const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("JOINTS_0")];
-				jointData = GetBufferData(model, accessor);
-				jointComponentType = accessor.componentType;
-				jointStride = accessor.ByteStride(model.bufferViews[accessor.bufferView]);
-				jointCount = accessor.count;
-			}
+        if constexpr (AnimatedVertex<VertexType_T>)
+        {
+            // Get joint indices (optional)
+            if (primitive.attributes.contains("JOINTS_0"))
+            {
+                const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("JOINTS_0")];
+                jointData = GetBufferData(model, accessor);
+                jointComponentType = accessor.componentType;
+                jointStride = accessor.ByteStride(model.bufferViews[accessor.bufferView]);
+                jointCount = accessor.count;
+            }
 
-			// Get joint weights (optional)
-			if (primitive.attributes.contains("WEIGHTS_0"))
-			{
-				const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("WEIGHTS_0")];
-				weightData = GetBufferData(model, accessor);
-				weightComponentType = accessor.componentType;
-				weightStride = accessor.ByteStride(model.bufferViews[accessor.bufferView]);
-				weightCount = accessor.count;
-			}
-		}
+            // Get joint weights (optional)
+            if (primitive.attributes.contains("WEIGHTS_0"))
+            {
+                const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("WEIGHTS_0")];
+                weightData = GetBufferData(model, accessor);
+                weightComponentType = accessor.componentType;
+                weightStride = accessor.ByteStride(model.bufferViews[accessor.bufferView]);
+                weightCount = accessor.count;
+            }
+        }
         
         // Build vertices
         vertices.reserve(positionCount);
@@ -998,7 +998,7 @@ namespace ignite
                 }
             }
 
-			// Load joint indices and weights for animated vertices
+            // Load joint indices and weights for animated vertices
             if constexpr (AnimatedVertex<VertexType_T>)
             {
                 // Load bone IDs and weights
@@ -1172,6 +1172,22 @@ namespace ignite
                     outScene.roots.push_back(static_cast<int>(i));
                 }
             }
+        }
+
+        // Compute initial global transforms for all nodes via DFS so they are available when processing meshes
+        std::function<void(int, const glm::mat4 &)> computeGlobals = [&](const int nodeIndex, const glm::mat4 &parentGlobal)
+        {
+            MeshNode<VertexType_T> &node = outScene.nodes[nodeIndex];
+            node.global = parentGlobal * node.local;
+            for (const int c : node.children)
+            {
+                computeGlobals(c, node.global);
+            }
+        };
+
+        for (const int root : outScene.roots)
+        {
+            computeGlobals(root, glm::mat4(1.0f));
         }
 
         // Load GLTF Skeleton & Animations
@@ -1361,6 +1377,19 @@ namespace ignite
                 // get vertices and indices
                 LoadVertexData(vertices, gltfPrim, gltfModel);
                 LoadIndicesData(indices, gltfPrim, gltfModel);
+
+                if (!vertices.empty() && !indices.empty())
+                {
+                    const glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(meshNode.global)));
+                    for (auto &vertex : vertices)
+                    {
+                        vertex.position  = glm::vec3(meshNode.global * glm::vec4(vertex.position, 1.0f));
+                        vertex.normal    = glm::normalize(normalMatrix * vertex.normal);
+                        vertex.tangent   = glm::normalize(normalMatrix * vertex.tangent);
+                        vertex.bitangent = glm::normalize(normalMatrix * vertex.bitangent);
+                    }
+                }
+
                 Ref<MeshPrimitive<VertexType_T>> primitive = MeshPrimitive<VertexType_T>::Create(vertices, indices);
 
                 // material
@@ -1373,10 +1402,15 @@ namespace ignite
                     material = CreateDefaultMaterial("DefaultMaterial");
                 }
 
+                // Since vertices are baked to model space, the mesh instance node local/global transforms should be identity.
+                MeshNode<VertexType_T> instanceNode = meshNode;
+                instanceNode.local = glm::mat4(1.0f);
+                instanceNode.global = glm::mat4(1.0f);
+
                 Ref<MeshInstanceFor<VertexType_T>> meshInstance;
                 if constexpr (SkeletalMeshVertex<VertexType_T>)
                 {
-                    meshInstance = MeshInstanceFor<VertexType_T>::Create(meshNode, primitive);
+                    meshInstance = MeshInstanceFor<VertexType_T>::Create(instanceNode, primitive);
 
                     // Link unskinned meshes to matching joint if skeletal scene
                     const bool isSkinned = gltfPrim.attributes.contains("JOINTS_0");
@@ -1411,7 +1445,7 @@ namespace ignite
                 }
                 else
                 {
-                    meshInstance = MeshInstanceFor<VertexType_T>::Create(meshNode, primitive);
+                    meshInstance = MeshInstanceFor<VertexType_T>::Create(instanceNode, primitive);
                 }
 
                 outScene.nodes[i].meshes.push_back(meshInstance);
@@ -1427,20 +1461,20 @@ namespace ignite
 
         // compute global transform via DFS
         std::function<void(int, const glm::mat4 &)> recurse = [&](const int nodeIndex, const glm::mat4 &parentGlobal)
+        {
+            MeshNode<VertexType_T> &node = outScene.nodes[nodeIndex];
+            node.global = parentGlobal * node.local;
+            for (const auto &m : node.meshes)
             {
-                MeshNode<VertexType_T> &node = outScene.nodes[nodeIndex];
-                node.global = parentGlobal * node.local;
-                for (const auto &m : node.meshes)
-                {
-                    m->local = node.local;
-                    m->global = node.global;
-                }
+                m->local = glm::mat4(1.0f);
+                m->global = glm::mat4(1.0f);
+            }
 
-                for (const int c : node.children)
-                {
-                    recurse(c, node.global);
-                }
-            };
+            for (const int c : node.children)
+            {
+                recurse(c, node.global);
+            }
+        };
 
         for (const int root : outScene.roots)
         {
@@ -1451,7 +1485,11 @@ namespace ignite
     std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTextures(const tinygltf::Model &model)
     {
         std::vector<std::pair<std::string, Ref<Texture>>> gltfTextures;
+        gltfTextures.resize(model.textures.size(), { "", nullptr });
+
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
+
+        std::unordered_map<int, Ref<Texture>> loadedImages;
 
         for (size_t i = 0; i < model.textures.size(); ++i)
         {
@@ -1460,50 +1498,60 @@ namespace ignite
             if (gltfTexture.source >= 0 && gltfTexture.source < model.images.size())
             {
                 const tinygltf::Image &image = model.images[gltfTexture.source];
-                const std::string imageName = image.name.empty() ? std::format("embedded_texture_{}", i) : image.name;
-                LOG_TRACE(" Texture {}: {} ({}x{})", i, imageName, image.width, image.height);
+                const std::string imageName = image.name.empty() ? std::format("embedded_texture_{}", gltfTexture.source) : image.name;
 
-                TextureCreateInfo createInfo;
-                createInfo.width = image.width;
-                createInfo.height = image.height;
-                createInfo.flip = false;
-                createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-                createInfo.keepInitialState = true;
-                createInfo.keepCpuData = true;
-                createInfo.deferGpuCreate = true;
-
-                Ref<Texture> texture;
-                if (!image.image.empty())
+                Ref<Texture> texture = nullptr;
+                if (loadedImages.contains(gltfTexture.source))
                 {
-                    std::vector<uint8_t> data;
-                    data.resize(image.image.size() * sizeof(uint8_t));
-                    std::memcpy(data.data(), image.image.data(), data.size());
+                    texture = loadedImages[gltfTexture.source];
+                }
+                else
+                {
+                    LOG_TRACE(" Texture {}: {} ({}x{})", i, imageName, image.width, image.height);
 
-                    texture = Texture::Create(data, createInfo, nullptr);
-                    LOG_TRACE(" Loaded embedded texture");
+                    TextureCreateInfo createInfo;
+                    createInfo.width = image.width;
+                    createInfo.height = image.height;
+                    createInfo.flip = false;
+                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
+                    createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+                    createInfo.keepInitialState = true;
+                    createInfo.keepCpuData = true;
+                    createInfo.deferGpuCreate = true;
 
-                    texture->PrepareUploadData(4);
-                    Application::SubmitToRenderThread([texture]()
+                    if (!image.image.empty())
                     {
-                        nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-                        cmd->open();
-                        texture->SetData(cmd, 4);
-                        texture->SetReadyFlag(false);
-                        cmd->close();
+                        std::vector<uint8_t> data;
+                        data.resize(image.image.size() * sizeof(uint8_t));
+                        std::memcpy(data.data(), image.image.data(), data.size());
 
-                        Application::SubmitWorkerCommandList(cmd, [texture]()
+                        texture = Texture::Create(data, createInfo, nullptr);
+                        LOG_TRACE(" Loaded embedded texture");
+
+                        texture->PrepareUploadData(4);
+                        Application::SubmitToRenderThread([texture]()
                         {
-                            texture->SetReadyFlag(true);
+                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
+                            cmd->open();
+                            texture->SetData(cmd, 4);
+                            texture->SetReadyFlag(false);
+                            cmd->close();
+
+                            Application::SubmitWorkerCommandList(cmd, [texture]()
+                            {
+                                texture->SetReadyFlag(true);
+                            });
                         });
-                    });
-                }
-                else if (!image.uri.empty())
-                {
-                    LOG_ASSERT(false, "Not implemented yet!");
+                    }
+                    else if (!image.uri.empty())
+                    {
+                        LOG_ASSERT(false, "Not implemented yet!");
+                    }
+
+                    loadedImages[gltfTexture.source] = texture;
                 }
 
-                gltfTextures.push_back({ imageName, texture });
+                gltfTextures[i] = { imageName, texture };
             }
         }
 
@@ -1557,7 +1605,7 @@ namespace ignite
         return &buffer.data[accessor.byteOffset + bufferView.byteOffset];
     }
 
-	template<MeshVertex VertexType_T>
+    template<MeshVertex VertexType_T>
     void FBXMeshLoader::LoadSceneGraph(const std::string &filename, MeshScene<VertexType_T> &outScene, AssetManager *assetManager, bool importSkeletonAndAnimations)
     {
         FbxManager *sdkManager = assetManager->GetOrCreateFbxSdkManager();
@@ -2090,7 +2138,7 @@ namespace ignite
         }
     }
 
-	template<MeshVertex VertexType_T>
+    template<MeshVertex VertexType_T>
     int FBXMeshLoader::ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const ignite::Path &sourceDir)
     {
         FbxSurfaceMaterial *fbxMaterial = node->GetMaterialCount() > 0 ? node->GetMaterial(0) : nullptr;
@@ -2123,7 +2171,7 @@ namespace ignite
         return sceneMaterialIndex;
     }
 
-	template<MeshVertex VertexType_T>
+    template<MeshVertex VertexType_T>
     void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const ignite::Path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
     {
         if (!node)
@@ -2156,55 +2204,55 @@ namespace ignite
 
             FbxAMatrix meshGeom = BuildNodeGeometricMatrix(node);
 
-			// Extract bone influences for skinning
-			size_t influencedControlPoints = 0;
-			std::vector<FBXBoneInfluence> controlPointInfluence;
+            // Extract bone influences for skinning
+            size_t influencedControlPoints = 0;
+            std::vector<FBXBoneInfluence> controlPointInfluence;
 
             if constexpr (std::is_same_v<VertexType_T, VertexMeshAnim>)
-			{
-				controlPointInfluence.resize(static_cast<size_t>(fbxMesh->GetControlPointsCount()));
+            {
+                controlPointInfluence.resize(static_cast<size_t>(fbxMesh->GetControlPointsCount()));
 
-				const bool hasSkinDeformer = fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
-				bool isSkinned = importSkinningData && hasSkinDeformer;
-				LOG_INFO("[FBX SKIN DEBUG] Node='{}' parent='{}' mesh='{}' skinned={} deformers={} cpCount={}",
-					meshNode.name,
-					(parentIdx >= 0 ? outScene.nodes[parentIdx].name : std::string("<root>")),
-					(fbxMesh->GetName() ? std::string(fbxMesh->GetName()) : std::string("<unnamed>")),
-					isSkinned, fbxMesh->GetDeformerCount(FbxDeformer::eSkin),
-					fbxMesh->GetControlPointsCount());
+                const bool hasSkinDeformer = fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
+                bool isSkinned = importSkinningData && hasSkinDeformer;
+                LOG_INFO("[FBX SKIN DEBUG] Node='{}' parent='{}' mesh='{}' skinned={} deformers={} cpCount={}",
+                    meshNode.name,
+                    (parentIdx >= 0 ? outScene.nodes[parentIdx].name : std::string("<root>")),
+                    (fbxMesh->GetName() ? std::string(fbxMesh->GetName()) : std::string("<unnamed>")),
+                    isSkinned, fbxMesh->GetDeformerCount(FbxDeformer::eSkin),
+                    fbxMesh->GetControlPointsCount());
 
-				if (isSkinned)
-				{
-					auto skin = static_cast<FbxSkin *>(fbxMesh->GetDeformer(0, FbxDeformer::eSkin));
-					if (skin && skin->GetClusterCount() > 0)
-					{
-						LOG_INFO("[FBX SKIN DEBUG] Node='{}' firstSkinClusters={}", meshNode.name, skin->GetClusterCount());
-					}
-				}
+                if (isSkinned)
+                {
+                    auto skin = static_cast<FbxSkin *>(fbxMesh->GetDeformer(0, FbxDeformer::eSkin));
+                    if (skin && skin->GetClusterCount() > 0)
+                    {
+                        LOG_INFO("[FBX SKIN DEBUG] Node='{}' firstSkinClusters={}", meshNode.name, skin->GetClusterCount());
+                    }
+                }
 
-				ExtractBonesAndWeights(fbxMesh, meshNode, controlPointInfluence, outScene, jointLoader, scaleFactor, importSkinningData);
+                ExtractBonesAndWeights(fbxMesh, meshNode, controlPointInfluence, outScene, jointLoader, scaleFactor, importSkinningData);
 
-				for (const FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
-				{
-					float wsum = 0.0f;
-					for (float w : influence.weights)
-					{
-						wsum += w;
-					}
+                for (const FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
+                {
+                    float wsum = 0.0f;
+                    for (float w : influence.weights)
+                    {
+                        wsum += w;
+                    }
 
-					if (wsum > 0.00001f)
-					{
-						influencedControlPoints++;
-					}
-				}
+                    if (wsum > 0.00001f)
+                    {
+                        influencedControlPoints++;
+                    }
+                }
 
-				if (isSkinned)
-				{
-					LOG_INFO("[FBX SKIN DEBUG] Node='{}' influencedCP={}/{}", meshNode.name, influencedControlPoints, controlPointInfluence.size());
-				}
+                if (isSkinned)
+                {
+                    LOG_INFO("[FBX SKIN DEBUG] Node='{}' influencedCP={}/{}", meshNode.name, influencedControlPoints, controlPointInfluence.size());
+                }
 
-				ProcessMeshGeometry(fbxMesh, meshGeom, scaleFactor, controlPointInfluence, importSkinningData, vertices, indices);
-			}
+                ProcessMeshGeometry(fbxMesh, meshGeom, scaleFactor, controlPointInfluence, importSkinningData, vertices, indices);
+            }
             else
             {
                 ProcessMeshGeometry(fbxMesh, meshGeom, scaleFactor, {}, false, vertices, indices);
