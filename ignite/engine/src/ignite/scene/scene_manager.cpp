@@ -678,7 +678,7 @@ namespace ignite
         if (!assetManager)
             return;
 
-        Project* project = assetManager->GetProject();
+        Ref<Project> project = assetManager->LockActiveProject();
         if (!project)
             return;
 

@@ -6,6 +6,7 @@
 
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/subsystem.hpp"
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/input/asset_signal.hpp"
 #include "asset_worker.hpp"
@@ -31,11 +32,15 @@ namespace ignite
 
     class Project;
 
-    class IGN_API AssetManager
+	class IGN_API AssetManager : public Subsystem
     {
     public:
-        AssetManager(Project *project);
-        ~AssetManager();
+        virtual void Init() override;
+		virtual void Shutdown() override;
+
+        void Reset();
+
+        void SetActiveProject(const Ref<Project> &project);
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
 
@@ -176,7 +181,6 @@ namespace ignite
         bool IsAssetHandleValid(AssetHandle handle) const;
         
         // Asset lifecycle management
-        void ClearAllLoadedAssets();
         void UnloadAsset(AssetHandle handle);
         void UnloadUnusedAssets();
         void PauseUnloadAssets() { m_UnloadPaused = true; }
@@ -188,7 +192,9 @@ namespace ignite
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
-        Project *GetProject() { return m_Project; }
+        WeakRef<Project> GetActiveProjectWeak() const { return m_Project; }
+
+        Ref<Project> LockActiveProject() const { return m_Project.lock(); }
 
         static AssetManager *GetInstance();
 
@@ -207,7 +213,7 @@ namespace ignite
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_set<AssetHandle> m_LoadingAssets;
-        Project *m_Project;
+        WeakRef<Project> m_Project;
 
         fbxsdk::FbxManager *m_FbxSdkManager = nullptr;
         std::atomic<bool> m_UnloadPaused = false;

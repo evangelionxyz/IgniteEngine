@@ -69,7 +69,7 @@ namespace ignite
 					if (!child.enabled || child.handle == AssetHandle(0))
 						continue;
 
-					Ref<WidgetCanvas> childCanvas = project->GetAsset<WidgetCanvas>(child.handle);
+					Ref<WidgetCanvas> childCanvas = AssetManager::GetInstance()->GetAsset<WidgetCanvas>(child.handle);
 					if (childCanvas)
 					{
 						if (CheckCanvasRecursive(childCanvas, mx, my, project))

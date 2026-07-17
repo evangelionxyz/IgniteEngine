@@ -1027,7 +1027,7 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        auto assetManager = project->GetAssetManager();
+		auto assetManager = AssetManager::GetInstance();
 
         if (m_CreateRequest.type == AssetType::Material2D && !m_CreateRequest.asset)
         {
@@ -1326,7 +1326,7 @@ namespace ignite
                         }
 
                         Project *project = m_EditorLayer->GetActiveProject().get();
-                        auto assetManager = project->GetAssetManager();
+                        auto assetManager = AssetManager::GetInstance();
 
                         const auto stateKey = static_cast<uint64_t>(spriteSheet->handle);
                         SpriteSheetEditorState &state = s_SpriteSheetEditorState[stateKey];
@@ -1352,7 +1352,7 @@ namespace ignite
                         Ref<Texture> texture = nullptr;
                         if (spriteSheet->GetTextureHandle() != AssetHandle(0))
                         {
-                            texture = project->GetAsset<Texture>(spriteSheet->GetTextureHandle());
+                            texture = assetManager->GetAsset<Texture>(spriteSheet->GetTextureHandle());
                         }
 
                         const ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -2185,16 +2185,16 @@ namespace ignite
                 {
                     if (Ref<Animation2D> anim = assetData.asset->As<Animation2D>())
                     {
-                        auto project = m_EditorLayer->GetActiveProject();
+                        auto assetManager = AssetManager::GetInstance();
 
-                        const uint64_t stateKey = static_cast<uint64_t>(anim->handle);
+                        const auto stateKey = static_cast<uint64_t>(anim->handle);
                         Animation2DEditorState &st = s_Anim2DEditorState[stateKey];
 
                         // Resolve texture
                         Ref<Texture> texture = nullptr;
                         if (anim->textureHandle != AssetHandle(0))
                         {
-                            texture = project->GetAsset<Texture>(anim->textureHandle);
+                            texture = assetManager->GetAsset<Texture>(anim->textureHandle);
                         }
 
                         const int frameCount = static_cast<int>(anim->frames.size());
@@ -2437,7 +2437,7 @@ namespace ignite
                                 if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                                 {
                                     const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                                    const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
+                                    const AssetMetaData &md = AssetManager::GetInstance()->GetMetaData(handle);
                                     if (md.type == AssetType::Texture)
                                     {
                                         anim->textureHandle = handle;
@@ -2474,10 +2474,10 @@ namespace ignite
                                     if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                                     {
                                         const AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                        const auto &md = project->GetAssetManager()->GetMetaData(handle);
+                                        const auto &md = AssetManager::GetInstance()->GetMetaData(handle);
                                         if (md.type == AssetType::SpriteSheet)
                                         {
-                                            Ref<SpriteSheet> ss = project->GetAsset<SpriteSheet>(handle);
+                                            Ref<SpriteSheet> ss = assetManager->GetAsset<SpriteSheet>(handle);
                                             if (ss)
                                             {
                                                 for (const auto &sp : ss->GetSprites())
@@ -2608,7 +2608,7 @@ namespace ignite
                                     if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                                     {
                                         const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                                        const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
+                                        const AssetMetaData &md = AssetManager::GetInstance()->GetMetaData(handle);
                                         if (md.type == AssetType::Animation2D)
                                         {
                                             state.SetAnimationHandle(handle);
@@ -3169,7 +3169,7 @@ namespace ignite
                     if (Ref<Texture> texture = assetData.asset->As<Texture>())
                     {
                         auto project = m_EditorLayer->GetActiveProject().get();
-                        auto assetManager = project->GetAssetManager();
+                        auto assetManager = AssetManager::GetInstance();
 
                         const auto stateKey = static_cast<uint64_t>(assetData.handle);
                         TextureEditorState &state = s_TextureEditorState[stateKey];
@@ -3330,7 +3330,7 @@ namespace ignite
                     if (Ref<AnimatorController> animator = assetData.asset->As<AnimatorController>())
                     {
                         auto project = m_EditorLayer->GetActiveProject().get();
-                        auto assetManager = project->GetAssetManager();
+                        auto assetManager = AssetManager::GetInstance();
                         AnimatorControllerEditorState &ui = s_AnimatorControllerEditorState[static_cast<uint64_t>(animator->handle)];
                         if (!ui.initialized)
                         {
@@ -3406,7 +3406,7 @@ namespace ignite
 					if (Ref<StaticMesh> mesh = assetData.asset->As<StaticMesh>())
 					{
 						auto project = m_EditorLayer->GetActiveProject().get();
-						auto assetManager = project->GetAssetManager();
+						auto assetManager = AssetManager::GetInstance();
 
 						const auto meshKey = static_cast<uint64_t>(mesh->handle);
 						MeshEditorState &editorState = s_MeshEditorState[meshKey];
@@ -3558,7 +3558,7 @@ namespace ignite
                     if (Ref<SkeletalMesh> mesh = assetData.asset->As<SkeletalMesh>())
                     {
                         auto project = m_EditorLayer->GetActiveProject().get();
-                        auto assetManager = project->GetAssetManager();
+                        auto assetManager = AssetManager::GetInstance();
 
                         const auto meshKey = static_cast<uint64_t>(mesh->handle);
                         MeshEditorState &meshEditorState = s_MeshEditorState[meshKey];
@@ -3582,7 +3582,7 @@ namespace ignite
 
                         if (skeletonHandle != AssetHandle(0) && !meshEditorState.cachedSkeleton)
                         {
-                            meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(skeletonHandle);
+                            meshEditorState.cachedSkeleton = assetManager->GetAsset<Skeleton>(skeletonHandle);
                         }
 
                         Ref<Skeleton> skeleton = meshEditorState.cachedSkeleton;
@@ -3621,7 +3621,7 @@ namespace ignite
                         Ref<SkeletalAnimation> previewAnimation = nullptr;
                         if (previewState.previewAnimationHandle != AssetHandle(0))
                         {
-                            previewAnimation = project->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
+                            previewAnimation = assetManager->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
                         }
 
                         const float timelineFps = previewAnimation ? std::max(previewAnimation->ticksPerSeconds, 0.001f) : 0.001f;
@@ -3977,7 +3977,7 @@ namespace ignite
                                                         mesh->SetDirtyFlag(true);
                                                         skeletonHandle = droppedHandle;
                                                         meshEditorState.skeletonHandle = droppedHandle;
-                                                        meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(droppedHandle);
+                                                        meshEditorState.cachedSkeleton = assetManager->GetAsset<Skeleton>(droppedHandle);
                                                         skeleton = meshEditorState.cachedSkeleton;
                                                     }
                                                 }
@@ -4326,7 +4326,7 @@ namespace ignite
                     if (Ref<Skeleton> skeleton = assetData.asset->As<Skeleton>())
                     {
                         auto project = m_EditorLayer->GetActiveProject().get();
-                        auto assetManager = project->GetAssetManager();
+                        auto assetManager = AssetManager::GetInstance();
 
                         const uint64_t key = static_cast<uint64_t>(skeleton->handle);
                         static std::unordered_map<uint64_t, int32_t> s_SelectedJoint;
@@ -4852,7 +4852,7 @@ namespace ignite
                     if (Ref<SkeletalAnimation> animation = assetData.asset->As<SkeletalAnimation>())
                     {
                         auto project = m_EditorLayer->GetActiveProject().get();
-                        auto assetManager = project->GetAssetManager();
+                        auto assetManager = AssetManager::GetInstance();
 
                         ImGui::Text("Name: %s", animation->name.c_str());
                         ImGui::Text("Duration: %.3f", animation->duration);

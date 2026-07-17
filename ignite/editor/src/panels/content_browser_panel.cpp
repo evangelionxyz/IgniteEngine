@@ -250,9 +250,9 @@ namespace ignite
         s_SharedCurrentFrame = 0;
     }
 
-    void ContentBrowserPanel::LoadProjectFiles(AssetManager *assetManager)
+    void ContentBrowserPanel::LoadProjectFiles()
     {
-        m_AssetManager = assetManager;
+        m_AssetManager = AssetManager::GetInstance();
 
         // clear directories
         m_PathEntryList.clear();
@@ -1492,7 +1492,7 @@ namespace ignite
                                     montage->name = std::format("{}_Montage", path.stem().string());
                                     montage->SetAnimationHandle(animHandle);
 
-                                    Ref<SkeletalAnimation> animation = project->GetAsset<SkeletalAnimation>(animHandle);
+                                    Ref<SkeletalAnimation> animation = m_AssetManager->GetAsset<SkeletalAnimation>(animHandle);
                                     if (animation)
                                     {
                                         montage->SetSkeletonHandle(animation->GetSkeletonHandle());
@@ -1602,13 +1602,13 @@ namespace ignite
 
                 if (ImGui::BeginPopup(popupId.c_str()))
                 {
-                    Ref<SpriteSheet> spriteSheet = project->GetAsset<SpriteSheet>(handle);
+                    Ref<SpriteSheet> spriteSheet = m_AssetManager->GetAsset<SpriteSheet>(handle);
                     if (spriteSheet)
                     {
                         Ref<Texture> texture = nullptr;
                         if (spriteSheet->GetTextureHandle() != AssetHandle(0))
                         {
-                            texture = project->GetAsset<Texture>(spriteSheet->GetTextureHandle());
+                            texture = m_AssetManager->GetAsset<Texture>(spriteSheet->GetTextureHandle());
                         }
 
                         const auto &sprites = spriteSheet->GetSprites();

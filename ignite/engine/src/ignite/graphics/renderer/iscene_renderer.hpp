@@ -131,22 +131,29 @@ namespace ignite
 			if (!assetManager || handle == AssetHandle(0))
 				return nullptr;
 
-			AssetResolveKey key{ assetManager->GetProject(), handle};
-			auto it = m_ResolvedAssetsCache.find(key);
-			if (it != m_ResolvedAssetsCache.end())
+			if (auto project = assetManager->LockActiveProject())
 			{
-				if (Ref<Asset> cached = it->second.lock())
+				AssetResolveKey key{ assetManager->LockActiveProject().get(), handle };
+				auto it = m_ResolvedAssetsCache.find(key);
+				if (it != m_ResolvedAssetsCache.end())
 				{
-					return cached->As<T>();
+					if (Ref<Asset> cached = it->second.lock())
+					{
+						return cached->As<T>();
+					}
+					m_ResolvedAssetsCache.erase(it);
 				}
-				m_ResolvedAssetsCache.erase(it);
+
+				Ref<T> asset = assetManager->GetAsset<T>(handle);
+                if (asset)
+                {
+					m_ResolvedAssetsCache.emplace(key, asset);
+                }
+
+				return asset;
 			}
 
-			Ref<T> asset = assetManager->GetAsset<T>(handle);
-			if (asset)
-				m_ResolvedAssetsCache.emplace(key, asset);
-
-			return asset;
+			return nullptr;
 		}
 
 		SceneRenderSettings sceneRenderSettings;

@@ -29,6 +29,7 @@ namespace ignite
     class InputSystem;
     class EditorInputSystem;
     class GameInputSystem;
+    class AssetManager;
     class ImGuiLayer;
 
     struct ApplicationCommandLineArgs
@@ -131,6 +132,7 @@ namespace ignite
         EditorInputSystem *m_EditorInputSystem;
         GameInputSystem *m_GameInputSystem;
         Renderer *m_Renderer;
+        AssetManager *m_AssetManager;
 
         std::vector<Subsystem *> m_Subsystems;
 

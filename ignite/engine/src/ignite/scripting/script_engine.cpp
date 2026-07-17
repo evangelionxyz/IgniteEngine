@@ -822,7 +822,7 @@ namespace ignite
         if (!scriptEngineData || !scriptEngineData->scriptHost)
             return;
 
-        AssetManager *am = m_Project ? m_Project->GetAssetManager() : nullptr;
+        AssetManager *am = AssetManager::GetInstance();
         if (!am)
             return;
 

@@ -78,7 +78,7 @@ namespace ignite
 				Ref<Texture> hdrTexture;
 				if (isHDRLoaded)
 				{
-					hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(m_WorldEnvironment->hdrHandle);
+					hdrTexture = ResolveAsset<Texture>(m_WorldEnvironment->hdrHandle);
 					if (hdrTexture && hdrTexture->IsReady())
 					{
 						m_WorldEnvironment->environment->SetTexture(hdrTexture);

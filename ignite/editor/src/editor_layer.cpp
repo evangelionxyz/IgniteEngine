@@ -177,7 +177,7 @@ namespace ignite
 
         if (m_ActiveProject)
         {
-            panel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+            panel->LoadProjectFiles();
         }
     }
 
@@ -192,7 +192,7 @@ namespace ignite
         {
             if (panel)
             {
-                panel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+                panel->LoadProjectFiles();
             }
         }
     }
@@ -277,7 +277,7 @@ namespace ignite
 
         if (m_ActiveProject)
         {
-            m_ActiveProject->GetAssetManager()->OnUpdate(deltaTime);
+            AssetManager::GetInstance()->OnUpdate(deltaTime);
         }
 
         // update panels
@@ -372,7 +372,7 @@ namespace ignite
                         const auto &smc = entity.GetComponent<StaticMeshComponent>();
                         if (smc.handle != AssetHandle(0))
                         {
-                            if (auto mesh = m_ActiveProject->GetAsset<StaticMesh>(smc.handle))
+                            if (auto mesh = AssetManager::GetInstance()->GetAsset<StaticMesh>(smc.handle))
                             {
                                 const auto &aabb = smc.worldAABB;
                                 focusCenter = (aabb.min + aabb.max) * 0.5f;
@@ -385,7 +385,7 @@ namespace ignite
                         const auto &smc = entity.GetComponent<SkeletalMeshComponent>();
                         if (smc.handle != AssetHandle(0))
                         {
-                            if (auto mesh = m_ActiveProject->GetAsset<SkeletalMesh>(smc.handle))
+                            if (auto mesh = AssetManager::GetInstance()->GetAsset<SkeletalMesh>(smc.handle))
                             {
                                 const auto &aabb = smc.worldAABB;
                                 focusCenter = (aabb.min + aabb.max) * 0.5f;
@@ -1083,7 +1083,7 @@ namespace ignite
             std::unordered_set<AssetHandle> referencedHandles;
             if (scene)
                 referencedHandles = scene->CollectReferencedAssetHandles();
-            m_ActiveProject->GetAssetManager()->ReplaceAssetPins(std::string(kActiveSceneAssetOwner), referencedHandles);
+            AssetManager::GetInstance()->ReplaceAssetPins(std::string(kActiveSceneAssetOwner), referencedHandles);
         }
 
         // Clear references in all systems before changing active scene
@@ -1157,7 +1157,7 @@ namespace ignite
         // Unload unused assets (assets not referenced by anything else)
         if (m_ActiveProject)
         {
-            m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
+            AssetManager::GetInstance()->UnloadUnusedAssets();
         }
         
         // Force a brief wait to allow cleanup
@@ -1206,7 +1206,7 @@ namespace ignite
 
     void EditorLayer::OpenScene(const ignite::Path &filepath)
     {
-        AssetHandle openSceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
+        AssetHandle openSceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
 
         if (m_CurrentSceneHandle == openSceneHandle)
             return;
@@ -1238,7 +1238,7 @@ namespace ignite
             // Unload unused assets from previous scene
             if (m_ActiveProject)
             {
-                m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
+                AssetManager::GetInstance()->UnloadUnusedAssets();
             }
             
             m_EditorScene = SceneManager::Copy(openScene);
@@ -1291,7 +1291,7 @@ namespace ignite
 			m_AssetEditorPanel->CloseAllAssetEditors();
 		}
 
-		m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
+        AssetManager::GetInstance()->Reset();
 
 		// Reset everything
 		m_ActiveProject.reset();
@@ -1575,13 +1575,13 @@ namespace ignite
             if (defSceneAssetHandle != AssetHandle(0))
             {
                 // Use GetAssetImmediate since we're on main thread and need synchronous load
-                if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
+                if (Ref<Scene> activeScene = AssetManager::GetInstance()->GetAssetImmediate<Scene>(defSceneAssetHandle))
                 {
                     m_EditorScene = SceneManager::Copy(activeScene);
                     m_EditorScene->SetDirtyFlag(false);
                     SetActiveScene(m_EditorScene);
 
-                    const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
+                    const auto &[assetFilepath, assetType] = AssetManager::GetInstance()->GetMetaData(activeScene->handle);
 
                     m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
                     m_CurrentSceneHandle = activeScene->handle;
@@ -1610,7 +1610,7 @@ namespace ignite
             {
                 // Submit scene loading to asset worker
                 ignite::Path filepath = payload.metadata.filepath;
-                AssetHandle sceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
+                AssetHandle sceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
 
                 if (m_CurrentSceneHandle == sceneHandle)
                     break;
@@ -1654,7 +1654,7 @@ namespace ignite
                                     // Unload unused assets
                                     if (m_ActiveProject)
                                     {
-                                        m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
+                                        AssetManager::GetInstance()->UnloadUnusedAssets();
                                     }
 
                                     // Copy and activate new scene

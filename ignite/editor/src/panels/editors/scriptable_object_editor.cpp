@@ -26,7 +26,7 @@ namespace ignite
         if (!scriptClass)
             return false;
 
-        auto assetManager = editorLayer->GetActiveProject()->GetAssetManager();
+		auto assetManager = AssetManager::GetInstance();
         Ref<Scene> activeScene = editorLayer->GetActiveScene();
         bool isRunning = activeScene && activeScene->IsRunning();
 
