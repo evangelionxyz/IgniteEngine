@@ -134,7 +134,13 @@ namespace ignite
 			AssetResolveKey key{ assetManager->GetProject(), handle};
 			auto it = m_ResolvedAssetsCache.find(key);
 			if (it != m_ResolvedAssetsCache.end())
-				return it->second->As<T>();
+			{
+				if (Ref<Asset> cached = it->second.lock())
+				{
+					return cached->As<T>();
+				}
+				m_ResolvedAssetsCache.erase(it);
+			}
 
 			Ref<T> asset = assetManager->GetAsset<T>(handle);
 			if (asset)
@@ -172,7 +178,7 @@ namespace ignite
         Ref<ConstantBuffer> m_PointLightBuffer;
         Ref<ConstantBuffer> m_SpotLightBuffer;
 
-		std::unordered_map<AssetResolveKey, Ref<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
+		std::unordered_map<AssetResolveKey, WeakRef<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
 
 		WorldEnvironment *m_WorldEnvironment = nullptr;
 		CompositePostProcess_GPUData m_PostProcessingSettings;

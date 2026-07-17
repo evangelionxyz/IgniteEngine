@@ -140,6 +140,10 @@ namespace ignite
 
     ScenePanel::~ScenePanel()
     {
+        if (m_EditorLayer)
+        {
+            m_EditorLayer->m_ScenePanel = nullptr;
+        }
     }
 
     void ScenePanel::SetActiveScene(Scene *scene)

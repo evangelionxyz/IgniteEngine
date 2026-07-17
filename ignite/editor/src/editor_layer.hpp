@@ -31,6 +31,11 @@ namespace ignite
 
     class EditorLayer final : public Layer
     {
+        friend class ScenePanel;
+        friend class AssetImporterPanel;
+        friend class AssetEditorPanel;
+        friend class ContentBrowserPanel;
+
     private:
         struct EditorState
         {

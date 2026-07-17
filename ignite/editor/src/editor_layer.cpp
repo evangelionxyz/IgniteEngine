@@ -137,21 +137,7 @@ namespace ignite
         Layer::OnDetach();
 
         // Close project
-        if (m_ActiveProject)
-        {
-            SaveProject();
-            OnSceneStop();
-
-            m_EditorScene.reset();
-            m_ActiveScene.reset();
-
-            m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
-
-            // Reset everything
-            m_CurrentProjectFilepath.clear();
-            m_CurrentSceneFilePath.clear();
-            m_CurrentSceneHandle = AssetHandle(0);
-        }
+        CloseCurrentProject();
 
         // Unsubscribe signals
         SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
@@ -159,13 +145,12 @@ namespace ignite
         m_ProjectReadySignalToken = kInvalidSignalToken;
         m_FileImportSignalToken = kInvalidSignalToken;
 
+        ContentBrowserPanel::ReleaseSharedResources();
         m_ContentBrowserPanels.clear();
         m_ContentBrowserPanelsPendingRemoval.clear();
         m_ContentBrowserPanel = nullptr;
-        ContentBrowserPanel::ReleaseSharedResources();
 
-        m_SceneRenderer = nullptr;
-        m_ActiveProject = nullptr;
+        m_SceneRenderer.reset();
     }
 
     void EditorLayer::AddContentBrowserPanel()
@@ -1290,25 +1275,27 @@ namespace ignite
 
     void EditorLayer::CloseCurrentProject()
     {
-        if (m_ActiveProject)
-        {
-            SaveProject();
+        if (!m_ActiveProject)
+            return;
 
-            OnSceneStop();
+		SaveProject();
+		OnSceneStop();
 
-            SetActiveScene(nullptr);
+		m_EditorScene.reset();
+		m_ActiveScene.reset();
 
-            m_EditorScene.reset();
-            m_ActiveScene.reset();
+		if (m_AssetEditorPanel)
+		{
+			m_AssetEditorPanel->CloseAllAssetEditors();
+		}
 
-            m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
+		m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
 
-            // Reset everything
-            m_ActiveProject.reset();
-            m_CurrentProjectFilepath.clear();
-            m_CurrentSceneFilePath.clear();
-            m_CurrentSceneHandle = AssetHandle(0);
-        }
+		// Reset everything
+		m_ActiveProject.reset();
+		m_CurrentProjectFilepath.clear();
+		m_CurrentSceneFilePath.clear();
+		m_CurrentSceneHandle = AssetHandle(0);
     }
 
     void EditorLayer::OpenProject(const ignite::Path &filepath)

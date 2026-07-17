@@ -492,9 +492,13 @@ namespace ignite
     AssetEditorPanel::AssetEditorPanel(const char *windowTitle, EditorLayer *editor) : IPanel(windowTitle, editor)
     { }
 
-    // :Desctructor
     AssetEditorPanel::~AssetEditorPanel()
-    { }
+    {
+        if (m_EditorLayer)
+        {
+            m_EditorLayer->m_AssetEditorPanel = nullptr;
+        }
+    }
 
     void AssetEditorPanel::OnAttach()
     {
@@ -5396,5 +5400,40 @@ namespace ignite
     bool AssetEditorPanel::OnMouseScrollEvent(MouseScrolledEvent &event)
     {
         return false;
+    }
+
+    void AssetEditorPanel::CloseAllAssetEditors()
+    {
+        if (m_EditorLayer && m_EditorLayer->GetActiveProject())
+        {
+            auto assetManager = AssetManager::GetInstance();
+            if (assetManager)
+            {
+                for (const auto &assetData : m_Assets)
+                {
+                    assetManager->ClearAssetPins(BuildAssetEditorPinOwnerTag(assetData.handle));
+                }
+            }
+        }
+
+        bool needsGpuSync = false;
+        for (const auto &assetData : m_Assets)
+        {
+            if (assetData.sceneData.sceneRenderer || assetData.sceneData.sceneRT || assetData.sceneData.uiRT || assetData.sceneData.compositeRT)
+            {
+                needsGpuSync = true;
+                break;
+            }
+        }
+
+        if (needsGpuSync)
+        {
+            if (nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(device);
+            }
+        }
+
+        m_Assets.clear();
     }
 }
