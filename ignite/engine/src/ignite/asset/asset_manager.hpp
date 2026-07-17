@@ -72,6 +72,8 @@ namespace ignite
         void ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles);
         void ClearAssetPins(std::string_view ownerTag);
         bool IsAssetPinned(AssetHandle handle) const;
+        uint32_t GetAssetPinCount(AssetHandle handle) const;
+        std::vector<std::string> GetAssetPinOwners(AssetHandle handle) const;
 
         void OnUpdate(float deltaTime);
 

@@ -29,6 +29,8 @@ namespace ignite
     class AssetEditorPanel;
     class ContentBrowserPanel;
 
+	static constexpr std::string_view kActiveSceneAssetOwner = "editor.active-scene";
+
     class EditorLayer final : public Layer
     {
         friend class ScenePanel;
