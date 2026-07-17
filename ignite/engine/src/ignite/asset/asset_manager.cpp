@@ -131,8 +131,6 @@ namespace ignite
 
 		m_Project.reset();
 		m_AssetHandleByPath.clear();
-
-		LOG_WARN("[Asset Manager] Reset");
 	}
 
 	void AssetManager::SetActiveProject(const Ref<Project> &project)

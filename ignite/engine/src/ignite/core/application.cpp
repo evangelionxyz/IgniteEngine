@@ -34,17 +34,18 @@ namespace ignite
 
         GPUUploadSync::DeviceWaitIdle(DeviceManager::GetInstance()->GetDevice());
 
+		// Detach and delete layers in reverse order
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             (*it)->OnDetach();
             delete *it;
         }
 
-		// destroy subsystems
-		for (auto subsystem : m_Subsystems)
+		// Destroy subsystems in reverse order
+		for (auto it = m_Subsystems.rbegin(); it != m_Subsystems.rend(); ++it)
 		{
-			subsystem->Shutdown();
-			delete subsystem;
+			(*it)->Shutdown();
+			delete *it;
 		}
 		m_Subsystems.clear();
 
