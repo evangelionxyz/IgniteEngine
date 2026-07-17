@@ -93,31 +93,18 @@ namespace ignite
             return m_Info.rootDirectory / "Bin" / configDir / (m_Info.name + ".dll");
         }
 
-        template<typename T>
-        Ref<T> GetAsset(AssetHandle handle)
-        {
-            return m_AssetManager->GetAsset<T>(handle);
-        }
-
-        template<typename T>
-        Ref<T> GetAssetImmediate(AssetHandle handle)
-        {
-            return m_AssetManager->GetAssetImmediate<T>(handle);
-        }
-
         const std::string GetAssetDisplayName(AssetHandle handle) const;
 
         virtual bool Serialize(const ignite::Path &filepath) override;
         static Ref<Project> Deserialize(const ignite::Path &filepath);
 
-        AssetManager *GetAssetManager() { return m_AssetManager; }
         MaterialManager &GetMaterialManager() { return m_MaterialManager; }
 
         ScriptEngine *GetScriptEngine() { return m_ScriptEngine; }
         ProjectInfo &GetInfo() { return m_Info; }
 
         WeakRef<Scene> GetActiveSceneWeak() const { return m_ActiveScene; }
-		Ref<Scene> LockActiveScene() const { return m_ActiveScene.lock(); }
+		Ref<Scene> LockActiveScene() const { return m_ActiveScene; }
 		
         IPhysics3D *GetPhysics3D() { return m_Physics3D.get(); }
 		Physics2D *GetPhysics2D() { return m_Physics2D.get(); }
@@ -138,11 +125,10 @@ namespace ignite
         void CreateDirectories() const;
         void GenerateProject();
 
-        WeakRef<Scene> m_ActiveScene; // current active scene in editor
+        Ref<Scene> m_ActiveScene; // current active scene in editor
         ProjectInfo m_Info;
 
         MaterialManager m_MaterialManager;
-        AssetManager *m_AssetManager = nullptr;
 		ScriptEngine *m_ScriptEngine = nullptr;
 
         Scope<Physics2D> m_Physics2D;

@@ -14,6 +14,8 @@
 #include "ignite/graphics/ui/game_ui_system.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "input/input_system.hpp"
+#include "ignite/asset/asset_manager.hpp"
+
 #include "command.hpp"
 #include <nvrhi/utils.h>
 
@@ -107,12 +109,13 @@ namespace ignite
 
         InputSystem::SetWindow(m_Window.get());
 
+		// Create subsystems
+		m_AssetManager = (AssetManager *)AddSubsystem(new AssetManager());
         m_EditorInputSystem = (EditorInputSystem *)AddSubsystem(new EditorInputSystem());
         m_GameInputSystem = (GameInputSystem *)AddSubsystem(new GameInputSystem());
-        
-        InputSystem::SetActiveSystem(m_EditorInputSystem);
-
         m_Renderer = (Renderer *)AddSubsystem(new Renderer(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi));
+
+		InputSystem::SetActiveSystem(m_EditorInputSystem);
 
         if (createInfo.useGui)
         {
@@ -121,9 +124,10 @@ namespace ignite
         }
 
         AddSubsystem(new AssetWorker());
-
         if (m_CreateInfo.useAudio)
+        {
             AddSubsystem(new FmodAudio());
+        }
     }
 
     Application *Application::GetInstance()
@@ -654,8 +658,7 @@ namespace ignite
     Subsystem *Application::AddSubsystem(Subsystem* subsystem)
     {
         subsystem->Init();
-        auto app = GetInstance();
-        app->m_Subsystems.push_back(subsystem);
+        GetInstance()->m_Subsystems.push_back(subsystem);
         return subsystem;
     }
 

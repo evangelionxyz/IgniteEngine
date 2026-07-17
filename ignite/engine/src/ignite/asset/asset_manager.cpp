@@ -19,21 +19,6 @@ namespace ignite
     static AssetMetaData s_NullMetaData;
     static AssetManager *s_AssetManagerInstance = nullptr;
 
-    AssetManager::AssetManager(Project *project)
-        : m_Project(project)
-    {
-        s_AssetManagerInstance = this;
-
-        // Self-register for asset change notifications via SignalBus.
-        // This avoids the old pattern of manually forwarding Event& through
-        // EditorLayer::OnEvent → assetManager->OnEvent(e).
-        m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
-            [this](const AssetChangeSignal& signal)
-            {
-                OnAssetChangeSignal(signal);
-            });
-    }
-
     void AssetManager::VerifyNotRenderThread()
     {
         auto *app = Application::GetInstance();
@@ -52,7 +37,7 @@ namespace ignite
         }
 
         std::error_code ec;
-        const auto absolutePath = m_Project->GetProjectFilepath(metadata.filepath);
+        const auto absolutePath = LockActiveProject()->GetProjectFilepath(metadata.filepath);
         const uint64_t size = std::filesystem::file_size(absolutePath.string(), ec);
         return ec ? 0 : size;
     }
@@ -88,26 +73,76 @@ namespace ignite
         return !it->second->IsReady();
     }
 
-    AssetManager::~AssetManager()
-    {
-        SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
-        m_AssetChangeToken = kInvalidSignalToken;
+	void AssetManager::Init()
+	{
+		LOG_WARN("[Asset Manager] Initialized");
+		s_AssetManagerInstance = this;
 
-        m_PinnedAssetsByOwner.clear();
-        m_AssetPinCounts.clear();
-        m_AssetHandleByPath.clear();
+		m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
+			[this](const AssetChangeSignal &signal)
+			{
+				OnAssetChangeSignal(signal);
+			});
+	}
 
-        if (m_FbxSdkManager)
+	void AssetManager::Shutdown()
+	{
+		SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
+		m_AssetChangeToken = kInvalidSignalToken;
+		if (m_FbxSdkManager)
+		{
+			m_FbxSdkManager->Destroy();
+			m_FbxSdkManager = nullptr;
+		}
+
+        Reset();
+		s_AssetManagerInstance = nullptr;
+
+		LOG_WARN("[Asset Manager] Shutdown");
+	}
+
+	void AssetManager::Reset()
+	{
+        IGN_PROFILE_FUNCTION();
+
+		if (auto *device = DeviceManager::GetInstance()->GetDevice())
+		{
+			GPUUploadSync::DeviceWaitIdle(device);
+		}
+
+		decltype(m_LoadedAssets) OLD_LoadedAssets;
+		decltype(m_PinnedAssetsByOwner) OLD_PinnedAssetsByOwner;
+		decltype(m_AssetPinCounts) OLD_AssetPinCounts;
+		decltype(m_LoadingAssets) OLD_LoadingAssets;
+		decltype(m_AssetRegistry) OLD_AssetRegistry;
         {
-            m_FbxSdkManager->Destroy();
-            m_FbxSdkManager = nullptr;
-        }
+			std::unique_lock lock(m_AssetMutex);
+			OLD_LoadedAssets.swap(m_LoadedAssets);
+			OLD_PinnedAssetsByOwner.swap(m_PinnedAssetsByOwner);
+			OLD_AssetPinCounts.swap(m_AssetPinCounts);
+			OLD_LoadingAssets.swap(m_LoadingAssets);
+			OLD_AssetRegistry.swap(m_AssetRegistry);
+		}
 
-        m_LoadedAssets.clear();
-        m_LoadingAssets.clear();
+		OLD_LoadedAssets.clear();
+		OLD_PinnedAssetsByOwner.clear();
+		OLD_AssetPinCounts.clear();
+		OLD_AssetRegistry.clear();
 
-        s_AssetManagerInstance = nullptr;
-    }
+		m_Project.reset();
+		m_AssetHandleByPath.clear();
+
+		LOG_WARN("[Asset Manager] Reset");
+	}
+
+	void AssetManager::SetActiveProject(const Ref<Project> &project)
+	{
+        if (m_Project.lock() == project)
+            return;
+
+        Reset();
+		m_Project = project;
+	}
 
 	AssetManager *AssetManager::GetInstance()
 	{
@@ -215,7 +250,7 @@ namespace ignite
 
         if (!metadata.filepath.empty())
         {
-            const ignite::Path absoluteMetadataPath = m_Project->GetProjectFilepath(metadata.filepath);
+            const ignite::Path absoluteMetadataPath = LockActiveProject()->GetProjectFilepath(metadata.filepath);
             m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
         }
     }
@@ -247,7 +282,7 @@ namespace ignite
         {
             if (!it->second.filepath.empty())
             {
-                const auto absoluteMetadataPath = std::filesystem::absolute(m_Project->GetProjectFilepath(it->second.filepath).string());
+                const auto absoluteMetadataPath = std::filesystem::absolute(LockActiveProject()->GetProjectFilepath(it->second.filepath).string());
                 m_AssetHandleByPath.erase(absoluteMetadataPath.generic_string());
             }
 
@@ -433,7 +468,7 @@ namespace ignite
 
     void AssetManager::OnAssetChangeSignal(const AssetChangeSignal &signal)
     {
-        auto activeScene = m_Project->LockActiveScene();
+        auto activeScene = LockActiveProject()->LockActiveScene();
         if (!activeScene)
             return;
 
@@ -494,29 +529,6 @@ namespace ignite
             break;
         }
         }
-    }
-
-    void AssetManager::ClearAllLoadedAssets()
-    {
-        IGN_PROFILE_FUNCTION();
-
-        // LOG_DEBUG("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
-        
-        if (auto* device = DeviceManager::GetInstance()->GetDevice())
-        {
-            GPUUploadSync::DeviceWaitIdle(device);
-        }
-        
-        // Prevent dead lock
-		// - Swap the loaded assets map with an empty one, then clear the old map outside the lock
-        
-        decltype(m_LoadedAssets) oldAssets;
-        {
-            std::unique_lock lock(m_AssetMutex);
-            oldAssets.swap(m_LoadedAssets);
-        }
-
-        oldAssets.clear();
     }
 
     void AssetManager::UnloadAsset(AssetHandle handle)
@@ -625,7 +637,7 @@ namespace ignite
 
     AssetHandle AssetManager::GetAssetHandle(const ignite::Path &filepath)
     {
-        const auto &absoluteFilepath = std::filesystem::absolute(m_Project->GetProjectFilepath(filepath).string());
+        const auto &absoluteFilepath = std::filesystem::absolute(LockActiveProject()->GetProjectFilepath(filepath).string());
 
         std::unique_lock lock(m_AssetMutex);
         auto it = m_AssetHandleByPath.find(absoluteFilepath.generic_string());
@@ -659,11 +671,8 @@ namespace ignite
             }
         }
 
-#if _DEBUG
-        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 256 * 1024 * 1024; // 256 MB
-#else
-        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 512 * 1024 * 1024; // 512 MB
-#endif
+        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 64 * 1024 * 1024; // 512 MB
+
         const uint64_t size = GetAssetFileSize(metadata);
         
         struct ThrottleGuard
@@ -745,14 +754,18 @@ namespace ignite
             {
                 if (getterMetadata.type == AssetType::Texture)
                 {
-                    AssetMetaData textureMetadata = getterMetadata;
-                    textureMetadata.filepath = m_Project->GetProjectFilepath(getterMetadata.filepath);
-                    TextureCreateInfo createInfo = Texture::GetDefaultCreateInfo(getterMetadata);
-                    if (!Texture::LoadCreateInfoFile(Texture::GetMetaPath(m_Project, getterMetadata), createInfo))
-                    {
-                        Texture::LoadCreateInfoFile(Texture::GetLegacyMetaPath(m_Project, getterMetadata), createInfo);
-                    }
-                    asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
+					if (auto project = LockActiveProject())
+					{
+					    AssetMetaData textureMetadata = getterMetadata;
+                        textureMetadata.filepath = project->GetProjectFilepath(getterMetadata.filepath);
+                        TextureCreateInfo createInfo = Texture::GetDefaultCreateInfo(getterMetadata);
+                        if (!Texture::LoadCreateInfoFile(Texture::GetMetaPath(project.get(), getterMetadata), createInfo))
+                        {
+                            Texture::LoadCreateInfoFile(Texture::GetLegacyMetaPath(project.get(), getterMetadata), createInfo);
+                        }
+
+						asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
+					}
                 }
                 else
                 {

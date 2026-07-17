@@ -340,7 +340,7 @@ namespace ignite
 
     void Renderer2D::InitQuadData()
     {
-        m_QuadBatch.minCount = 256;
+        m_QuadBatch.minCount = 32;
         m_QuadBatch.maxCount = m_QuadBatch.minCount;
         m_QuadBatch.verticesPerObject = 4;
         m_QuadBatch.indicesPerObject = 6;
@@ -393,7 +393,7 @@ namespace ignite
 
     void Renderer2D::InitLineData()
     {
-        m_LineBatch.minCount = 256;
+        m_LineBatch.minCount = 32;
         m_LineBatch.maxCount = m_LineBatch.minCount;
         m_LineBatch.verticesPerObject = 24;
         m_LineBatch.indicesPerObject = 0;
@@ -409,7 +409,7 @@ namespace ignite
 
     void Renderer2D::InitCircleData()
     {
-        m_CircleBatch.minCount = 256;
+        m_CircleBatch.minCount = 32;
         m_CircleBatch.maxCount = m_CircleBatch.minCount;
         m_CircleBatch.verticesPerObject = 4;
         m_CircleBatch.indicesPerObject = 6;
@@ -452,7 +452,7 @@ namespace ignite
 
     void Renderer2D::InitTextData()
     {
-        m_TextBatch.minCount = 256;
+        m_TextBatch.minCount = 32;
         m_TextBatch.maxCount = m_TextBatch.minCount;
         m_TextBatch.verticesPerObject = 4;
         m_TextBatch.indicesPerObject = 6;
@@ -581,8 +581,6 @@ namespace ignite
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferBase);
             m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_CircleBatch.vertexBufferBase, bufferSize));
 
-            Renderer::Stats.circleVerticesSize += bufferSize;
-
             Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0), cameraBuffer);
 
@@ -606,8 +604,6 @@ namespace ignite
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferBase);
             m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
-
-            Renderer::Stats.quadVerticesSize += bufferSize;
 
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots, cameraBuffer, m_Material2DLightingBuffer);
@@ -634,8 +630,6 @@ namespace ignite
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferBase);
             m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_TextBatch.vertexBufferBase, bufferSize));
-
-            Renderer::Stats.textVerticesSize += bufferSize;
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, cameraBuffer, m_Material2DLightingBuffer);

@@ -378,7 +378,7 @@ namespace ignite
             GPUUploadSync::DeviceWaitIdle(device);
         }
 
-        AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
+        AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}.{}", m_Name, (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
 
         m_MeshBindingSet = nullptr;
     }
@@ -386,7 +386,7 @@ namespace ignite
     void MeshInstance::SetMaterial(const AssetHandle &assetHandle)
     {
         m_MaterialHandle = assetHandle;
-        AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
+        AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}.{}", m_Name, (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
     }
 
     void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)

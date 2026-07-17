@@ -159,8 +159,8 @@ namespace ignite
         uint32_t blackIdx = Renderer::GetBlackTexture() ? Renderer::GetBlackTexture()->GetBindlessIndex() : 0;
 
         gpuData.baseColorTextureIndex = getBindlessIndex(baseColorTextureHandle, whiteIdx);
-        gpuData.emissiveTextureIndex = getBindlessIndex(emissiveTextureHandle, blackIdx);
-        gpuData.metallicTextureIndex = getBindlessIndex(metallicTextureHandle, blackIdx);
+        gpuData.emissiveTextureIndex = getBindlessIndex(emissiveTextureHandle, whiteIdx);
+        gpuData.metallicTextureIndex = getBindlessIndex(metallicTextureHandle, whiteIdx);
         gpuData.roughnessTextureIndex = getBindlessIndex(roughnessTextureHandle, blackIdx);
         gpuData.normalTextureIndex = getBindlessIndex(normalTextureHandle, whiteIdx);
         gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);

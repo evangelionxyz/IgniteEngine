@@ -211,7 +211,7 @@ namespace ignite
         m_Physics2D = project->GetPhysics2D();
         m_JoltScene = new JoltScene();
 
-        m_AssetManager = m_Project->GetAssetManager();
+		m_AssetManager = AssetManager::GetInstance();
     }
 
     Scene::~Scene()

@@ -146,7 +146,7 @@ namespace ignite
 
                 if (auto project = m_EditorLayer->GetActiveProject())
                 {
-                    if (auto assetManager = project->GetAssetManager())
+                    if (auto assetManager = AssetManager::GetInstance())
                     {
                         assetManager->ResumeUnloadAssets();
                     }
@@ -291,7 +291,7 @@ namespace ignite
 										auto project = m_EditorLayer->GetActiveProject();
 										if (project)
 										{
-											const AssetMetaData &metadata = project->GetAssetManager()->GetMetaData(droppedHandle);
+											const AssetMetaData &metadata = AssetManager::GetInstance()->GetMetaData(droppedHandle);
 											if (metadata.type == AssetType::Skeleton)
 											{
 												m_SkeletalMeshImportPayload.existingSkeletonHandle = droppedHandle;
@@ -356,7 +356,7 @@ namespace ignite
         if (!project)
             return false;
 
-        auto assetManager = project->GetAssetManager();
+        auto assetManager = AssetManager::GetInstance();
         if (!assetManager)
             return false;
 
@@ -466,7 +466,7 @@ namespace ignite
             return;
 
         auto project = m_EditorLayer->GetActiveProject();
-        auto assetManager = project->GetAssetManager();
+        auto assetManager = AssetManager::GetInstance();
 
         if (assetManager)
         {
@@ -568,8 +568,8 @@ namespace ignite
 			return false;
 		}
 
-		auto assetManager = project->GetAssetManager();
-		const ignite::Path meshRelativePath = assetManager->GetProject()->GetProjectFilepath(filepath);
+		auto assetManager = AssetManager::GetInstance();
+		const ignite::Path meshRelativePath = project->GetProjectFilepath(filepath);
 
 		AssetHandle handle = assetManager->GetAssetHandle(meshRelativePath);
 		if (handle == AssetHandle(0))
@@ -600,7 +600,7 @@ namespace ignite
 			return false;
 		}
 
-		auto assetManager = project->GetAssetManager();
+		auto assetManager = AssetManager::GetInstance();
 		const ignite::Path skmRelativePath = project->GetProjectFilepath(filepath);
 
 		AssetHandle handle = assetManager->GetAssetHandle(skmRelativePath);

@@ -754,7 +754,7 @@ namespace ignite
     {
         if (!assetData.asset || !assetData.asset->IsReady())
         {
-            auto assetManager = editorLayer && editorLayer->GetActiveProject() ? editorLayer->GetActiveProject()->GetAssetManager() : nullptr;
+            auto assetManager = AssetManager::GetInstance();
             assetData.asset = assetManager ? assetManager->GetAsset(assetData.handle) : nullptr;
             if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
             {
@@ -765,8 +765,7 @@ namespace ignite
 
         if (Ref<WidgetCanvas> widget = assetData.asset->As<WidgetCanvas>())
         {
-            Project *project = editorLayer ? editorLayer->GetActiveProject().get() : nullptr;
-            AssetManager *assetManager = project ? project->GetAssetManager() : nullptr;
+			auto assetManager = AssetManager::GetInstance();
 
             EditorSceneData &sceneData = assetData.sceneData;
 

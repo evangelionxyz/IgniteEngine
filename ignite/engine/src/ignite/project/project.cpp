@@ -138,8 +138,6 @@ R"(<Project>
     {
         GenerateProject();
 
-        m_AssetManager = new AssetManager(this);
-
         m_Physics2D = CreateScope<Physics2D>();
 
         switch (m_Info.physics3DType)
@@ -167,8 +165,6 @@ R"(<Project>
         m_CoreDependencyWatchers.clear();
         if (m_ScriptEngine)
             delete m_ScriptEngine;
-        if (m_AssetManager)
-            delete m_AssetManager;
     }
 
     ignite::Path Project::GetProjectFilepath(const ignite::Path &filepath) const
@@ -227,7 +223,7 @@ R"(<Project>
     std::vector<std::pair<AssetHandle, AssetMetaData>> Project::ValidateAssetRegistry()
     {
         std::vector<std::pair<AssetHandle, AssetMetaData>> invalidRegistry;
-        AssetRegistry &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
+        AssetRegistry &assetRegistry = AssetManager::GetInstance()->GetAssetAssetRegistry();
 
         for (auto it = assetRegistry.begin(); it != assetRegistry.end();)
         {
@@ -248,7 +244,7 @@ R"(<Project>
 
     const std::string Project::GetAssetDisplayName(AssetHandle handle) const
     {
-        return m_AssetManager->GetAssetDisplayName(handle);
+        return AssetManager::GetInstance()->GetAssetDisplayName(handle);
     }
 
     bool Project::Serialize(const ignite::Path &filepath)
@@ -280,7 +276,7 @@ R"(<Project>
         this->SetDirtyFlag(false);
 
         // Serialize asset manager
-        auto &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
+        auto &assetRegistry = AssetManager::GetInstance()->GetAssetAssetRegistry();
 
         {
             const ignite::Path assetRegFilepath = m_Info.rootDirectory / m_Info.assetRegistryFilepath;
@@ -315,7 +311,7 @@ R"(<Project>
         }
 
         // Save dirty assets
-        auto &loadedAssets = m_AssetManager->GetLoadedAssets();
+        auto &loadedAssets = AssetManager::GetInstance()->GetLoadedAssets();
         for (auto &[handle, metadata] : assetRegistry)
         {
             auto it = loadedAssets.find(handle);
@@ -366,7 +362,7 @@ R"(<Project>
 
         Ref<Project> project = Project::Create(info);
 
-        auto assetManager = project->GetAssetManager();
+        auto assetManager = AssetManager::GetInstance();
 
         // import registry
         if (!info.assetRegistryFilepath.empty())
@@ -375,6 +371,8 @@ R"(<Project>
             ignite::Path assetRegFilepath = info.rootDirectory / info.assetRegistryFilepath;
             YAML::Node assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
             YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
+
+			assetManager->SetActiveProject(project);
 
             for (YAML::Node assetNode : assetRegNode["Assets"])
             {
@@ -647,7 +645,7 @@ R"(<Project>
 
         // Register it in the asset manager
         const auto relPath = GetProjectRelativeFilepath(outPath);
-        AssetHandle handle = m_AssetManager->GetAssetHandle(relPath);
+        AssetHandle handle = AssetManager::GetInstance()->GetAssetHandle(relPath);
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle(); // new UUID
@@ -657,8 +655,8 @@ R"(<Project>
         AssetMetaData metadata;
         metadata.filepath = relPath;
         metadata.type = AssetType::ScriptableObject;
-        m_AssetManager->AssignAsset(handle, so);
-        m_AssetManager->AssignMetaData(handle, metadata);
+        AssetManager::GetInstance()->AssignAsset(handle, so);
+        AssetManager::GetInstance()->AssignMetaData(handle, metadata);
 
         LOG_INFO("[Project] Created ScriptableObject '{}' at '{}'", className, outPath.generic_string());
     }

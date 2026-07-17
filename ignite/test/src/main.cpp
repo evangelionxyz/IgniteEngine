@@ -126,8 +126,9 @@ TEST(EngineTests, AssetManager)
     Ref<Project> project = Project::Create(info);
     ASSERT_NE(project, nullptr);
 
-    AssetManager *assetManager = project->GetAssetManager();
+	AssetManager *assetManager = AssetManager::GetInstance();
     ASSERT_NE(assetManager, nullptr);
+	assetManager->SetActiveProject(project);
 
     for (auto texFilepath : { "test_image.png" })
     {
@@ -384,8 +385,9 @@ TEST(SceneTransition, BasicTransition)
     }
     ASSERT_TRUE(scriptEngine->IsReady());
 
-    AssetManager *assetManager = project->GetAssetManager();
+    AssetManager *assetManager = AssetManager::GetInstance();
     ASSERT_NE(assetManager, nullptr);
+	assetManager->SetActiveProject(project);
 
     Ref<Scene> sceneA = Scene::Create(project.get(), "SceneA");
     Ref<Scene> sceneB = Scene::Create(project.get(), "SceneB");
@@ -411,22 +413,28 @@ TEST(SceneTransition, BasicTransition)
     project->SetActiveScene(sceneA);
     sceneA->OnStart(ESceneState::Play);
 
-	LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void *)project->LockActiveScene().get(), (int)sceneA->GetState());
-
-    EXPECT_EQ(project->LockActiveScene(), sceneA);
+    {
+        auto activeScene = project->LockActiveScene();
+        ASSERT_NE(activeScene, nullptr);
+        LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void *)activeScene.get(), (int)sceneA->GetState());
+        EXPECT_EQ(activeScene, sceneA);
+    }
 
     SceneManager::Transition(sceneBHandle);
     Application::GetInstance()->ProcessMainThreadSubmissions();
     LOG_INFO("DEBUG basic: calling ExecutePendingTransition");
     SceneManager::ExecutePendingTransition();
 
-    Ref<Scene> activeScene = project->LockActiveScene();
-    LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void*)activeScene.get(), (int)sceneA->GetState(), (int)activeScene->GetState());
+    {
+        auto activeScene = project->LockActiveScene();
+        ASSERT_NE(activeScene, nullptr);
+        LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void *)activeScene.get(), (int)sceneA->GetState(), (int)activeScene->GetState());
 
-    EXPECT_NE(activeScene, sceneA);
-    EXPECT_EQ(activeScene->name, "SceneB");
-    EXPECT_TRUE(activeScene->IsRunning());
-    EXPECT_FALSE(sceneA->IsRunning());
+        EXPECT_NE(activeScene, sceneA);
+        EXPECT_EQ(activeScene->name, "SceneB");
+        EXPECT_TRUE(activeScene->IsRunning());
+        EXPECT_FALSE(sceneA->IsRunning());
+    }
 }
 
 TEST(SceneTransition, SharedAssetPinned)
@@ -467,8 +475,9 @@ TEST(SceneTransition, SharedAssetPinned)
     }
     ASSERT_TRUE(scriptEngine->IsReady());
 
-    AssetManager *assetManager = project->GetAssetManager();
+    AssetManager *assetManager = AssetManager::GetInstance();
     ASSERT_NE(assetManager, nullptr);
+	assetManager->SetActiveProject(project);
 
     Ref<Scene> sceneA = Scene::Create(project.get(), "SceneA");
     Ref<Scene> sceneB = Scene::Create(project.get(), "SceneB");

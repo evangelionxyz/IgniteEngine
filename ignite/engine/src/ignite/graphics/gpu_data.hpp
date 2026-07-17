@@ -64,9 +64,9 @@ namespace ignite
 	struct Material_GPUData
 	{
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		glm::vec4 emissiveFactor = glm::vec4(1.0f);
-		float metallicFactor = 1.0f;
-		float roughnessFactor = 1.0f;
+		glm::vec4 emissiveFactor = glm::vec4(0.0f);
+		float metallicFactor = 0.0f;
+		float roughnessFactor = 0.0f;
 		float occlusionStrength = 0.0f;
 		int metallicChannel = 2;
 		int roughnessChannel = 1;

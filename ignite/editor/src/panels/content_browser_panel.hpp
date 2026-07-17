@@ -55,7 +55,7 @@ namespace ignite
         virtual void OnGuiRender() override;
         virtual void OnUpdate(float deltaTime) override;
 
-        void LoadProjectFiles(AssetManager *assetManager);
+        void LoadProjectFiles();
         void RefreshFiles();
 
     private:
