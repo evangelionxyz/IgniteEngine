@@ -3836,7 +3836,11 @@ namespace ignite
         {
             if (isScenePlaying)
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); m_SceneFocused = false; });
+                Application::SubmitToMainThread([this]()
+                    { 
+                        m_EditorLayer->OnSceneStop();
+                        m_SceneFocused = false;
+                    });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3845,7 +3849,11 @@ namespace ignite
             }
             else
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); m_SceneFocused = true; });
+                Application::SubmitToMainThread([this]() 
+                    { 
+                        m_EditorLayer->OnScenePlay(); 
+                        m_SceneFocused = true; 
+                    });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3864,7 +3872,11 @@ namespace ignite
         {
             if (isSceneSimulate)
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); m_SceneFocused = false; });
+                Application::SubmitToMainThread([this]()
+                    { 
+                        m_EditorLayer->OnSceneStop();
+                        m_SceneFocused = false; 
+                    });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3873,7 +3885,11 @@ namespace ignite
             }
             else
             {
-                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); m_SceneFocused = true; });
+                Application::SubmitToMainThread([this]()
+                    { 
+                        m_EditorLayer->OnSceneSimulate();
+                        m_SceneFocused = true; 
+                    });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;

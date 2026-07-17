@@ -307,7 +307,7 @@ namespace ignite
             // so users can't accidentally drag editor panels during gameplay.
             if (auto *imguiLayer = Application::GetInstance()->GetImGuiLayer())
             {
-                const bool isSceneFocused = m_ScenePanel->IsFocused() && m_ScenePanel->m_SceneFocused && m_ActiveScene->IsRunning()
+                const bool isSceneFocused = m_ScenePanel->m_SceneFocused && m_ActiveScene->IsRunning()
                     && (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
                 imguiLayer->SetBlock(isSceneFocused);
             }
