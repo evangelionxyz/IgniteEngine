@@ -244,10 +244,26 @@ namespace ignite
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
+		std::unique_lock lock(m_AssetMutex);
+
         m_AssetRegistry[handle] = metadata;
 
         if (!metadata.filepath.empty())
         {
+			// Remove any previous entries for this handle in the path map
+			for (auto it = m_AssetHandleByPath.begin(); it != m_AssetHandleByPath.end();)
+			{
+                if (it->second == handle)
+                {
+					it = m_AssetHandleByPath.erase(it);
+                    break;
+                }
+                else
+                {
+					++it;
+                }
+			}
+
             const ignite::Path absoluteMetadataPath = LockActiveProject()->GetProjectFilepath(metadata.filepath);
             m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
         }
