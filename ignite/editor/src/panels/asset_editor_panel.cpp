@@ -3482,7 +3482,7 @@ namespace ignite
 										continue;
 
 									ImGui::PushID(static_cast<int>(i));
-									std::string slotLabel = std::format("Slot {}", i);
+                                    const std::string meshInstanceName = std::format("{} (Submesh {})", instance->GetName(), i);
 									std::string materialButtonLabel = "Drop Material Here";
 
 									const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
@@ -3491,7 +3491,7 @@ namespace ignite
 										materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
 									}
 
-									ImGui::TextUnformatted(slotLabel.c_str());
+									ImGui::TextUnformatted(meshInstanceName.c_str());
 									ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
 									if (ImGui::BeginDragDropTarget())
 									{
@@ -4015,7 +4015,7 @@ namespace ignite
                                                 }
 
                                                 ImGui::PushID(static_cast<int>(i));
-                                                std::string meshInstanceName = std::format("{} (Submesh {})", instance->GetName(), i);
+                                                const std::string meshInstanceName = std::format("{} (Submesh {})", instance->GetName(), i);
                                                 std::string materialButtonLabel = "Drop Material Here";
 
                                                 const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
