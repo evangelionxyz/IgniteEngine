@@ -61,7 +61,6 @@ public class AudioSourceComponent : IComponent
     public void Stop() => ComponentInternalCalls.AudioSourceComponent_Stop(Entity!.ID);
     public void Pause() => ComponentInternalCalls.AudioSourceComponent_Pause(Entity!.ID);
     public void Resume() => ComponentInternalCalls.AudioSourceComponent_Resume(Entity!.ID);
-
     public void ClearDSPs() => ComponentInternalCalls.AudioSourceComponent_ClearDSPs(Entity!.ID);
 
     public bool AddDSP(FmodDsp dsp)

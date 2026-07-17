@@ -58,6 +58,7 @@ namespace ignite
         bool allowFastRotation = true;
         bool fixedRotation = false;
         b2BodyId bodyId = {};
+        bool isGizmoDragging = false;
 
 		COMPONENT_CLASS_TYPE(CompType_Rigidbody2D)
     };

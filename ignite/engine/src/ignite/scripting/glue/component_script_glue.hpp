@@ -181,30 +181,34 @@ namespace ignite
         void (*RigidbodyComponent_Activate)(uint64_t entityID);
         void (*RigidbodyComponent_Deactivate)(uint64_t entityID);
         void (*RigidbodyComponent_MoveKinematic)(uint64_t entityID, const glm::vec3 *targetPosition, const glm::vec3 *targetRotation, float deltaTime);
+        void (*RigidbodyComponent_SetMass)(uint64_t entityID, float value);
+        void (*RigidbodyComponent_GetLinearDamping)(uint64_t entityID, float *result);
+        void (*RigidbodyComponent_SetLinearDamping)(uint64_t entityID, float value);
+        void (*RigidbodyComponent_GetAngularDamping)(uint64_t entityID, float *result);
+        void (*RigidbodyComponent_SetAngularDamping)(uint64_t entityID, float value);
+        void (*RigidbodyComponent_GetFriction)(uint64_t entityID, float *result);
+        void (*RigidbodyComponent_SetFriction)(uint64_t entityID, float value);
+        void (*RigidbodyComponent_GetRestitution)(uint64_t entityID, float *result);
+        void (*RigidbodyComponent_SetRestitution)(uint64_t entityID, float value);
+        void (*RigidbodyComponent_GetMaxLinearVelocity)(uint64_t entityID, float *result);
+        void (*RigidbodyComponent_SetMaxLinearVelocity)(uint64_t entityID, float value);
+        void (*RigidbodyComponent_GetMaxAngularVelocity)(uint64_t entityID, float *result);
+        void (*RigidbodyComponent_SetMaxAngularVelocity)(uint64_t entityID, float value);
+        void (*RigidbodyComponent_GetApplyGyroscopicForce)(uint64_t entityID, bool *result);
+        void (*RigidbodyComponent_SetApplyGyroscopicForce)(uint64_t entityID, bool value);
+        void (*RigidbodyComponent_SetAngularVelocity)(uint64_t entityID, const glm::vec3 *value);
 
         // BoxColliderComponent
         void (*BoxColliderComponent_GetCenter)(uint64_t entityID, glm::vec3 *result);
         void (*BoxColliderComponent_SetCenter)(uint64_t entityID, const glm::vec3 *value);
         void (*BoxColliderComponent_GetScale)(uint64_t entityID, glm::vec3 *result);
         void (*BoxColliderComponent_SetScale)(uint64_t entityID, const glm::vec3 *value);
-        void (*BoxColliderComponent_GetFriction)(uint64_t entityID, float *result);
-        void (*BoxColliderComponent_SetFriction)(uint64_t entityID, float value);
-        void (*BoxColliderComponent_GetRestitution)(uint64_t entityID, float *result);
-        void (*BoxColliderComponent_SetRestitution)(uint64_t entityID, float value);
-        void (*BoxColliderComponent_GetDensity)(uint64_t entityID, float *result);
-        void (*BoxColliderComponent_SetDensity)(uint64_t entityID, float value);
 
         // SphereColliderComponent
         void (*SphereColliderComponent_GetCenter)(uint64_t entityID, glm::vec3 *result);
         void (*SphereColliderComponent_SetCenter)(uint64_t entityID, const glm::vec3 *value);
         void (*SphereColliderComponent_GetRadius)(uint64_t entityID, float *result);
         void (*SphereColliderComponent_SetRadius)(uint64_t entityID, float value);
-        void (*SphereColliderComponent_GetFriction)(uint64_t entityID, float *result);
-        void (*SphereColliderComponent_SetFriction)(uint64_t entityID, float value);
-        void (*SphereColliderComponent_GetRestitution)(uint64_t entityID, float *result);
-        void (*SphereColliderComponent_SetRestitution)(uint64_t entityID, float value);
-        void (*SphereColliderComponent_GetDensity)(uint64_t entityID, float *result);
-        void (*SphereColliderComponent_SetDensity)(uint64_t entityID, float value);
 
         // CapsuleColliderComponent
         void (*CapsuleColliderComponent_GetCenter)(uint64_t entityID, glm::vec3 *result);
@@ -213,12 +217,6 @@ namespace ignite
         void (*CapsuleColliderComponent_SetRadius)(uint64_t entityID, float value);
         void (*CapsuleColliderComponent_GetHeight)(uint64_t entityID, float *result);
         void (*CapsuleColliderComponent_SetHeight)(uint64_t entityID, float value);
-        void (*CapsuleColliderComponent_GetFriction)(uint64_t entityID, float *result);
-        void (*CapsuleColliderComponent_SetFriction)(uint64_t entityID, float value);
-        void (*CapsuleColliderComponent_GetRestitution)(uint64_t entityID, float *result);
-        void (*CapsuleColliderComponent_SetRestitution)(uint64_t entityID, float value);
-        void (*CapsuleColliderComponent_GetDensity)(uint64_t entityID, float *result);
-        void (*CapsuleColliderComponent_SetDensity)(uint64_t entityID, float value);
     };
 
     class ComponentScriptGlue

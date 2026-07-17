@@ -308,17 +308,17 @@ namespace ignite
 
             switch (m_ActiveScene->GetState())
             {
-            case ESceneState::Simulate:
-            case ESceneState::Play:
-            {
-                m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
-                break;
-            }
-            case ESceneState::Stop:
-            {
-                m_ActiveScene->OnUpdateEdit(deltaTime);
-                break;
-            }
+                case ESceneState::Simulate:
+                case ESceneState::Play:
+                {
+                    m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
+                    break;
+                }
+                case ESceneState::Stop:
+                {
+                    m_ActiveScene->OnUpdateEdit(deltaTime);
+                    break;
+                }
             }
 
             m_ScenePanel->OnUpdate(deltaTime);

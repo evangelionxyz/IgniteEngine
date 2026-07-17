@@ -263,7 +263,6 @@ namespace ignite
 
         bool isAnimated = false;
         bool visible = true;
-        bool dirtyPhysics = false;
 
         TransformComponent() = default;
 
@@ -501,6 +500,8 @@ namespace ignite
     class RigidbodyComponent : public IComponent
     {
     public:
+        using CollisionGroup = uint32_t;
+
         enum class EMotionQuality : uint8_t
         {
             Discrete = 0,
@@ -520,14 +521,26 @@ namespace ignite
         bool useGravity = true;
         bool rotateX = true, rotateY = true, rotateZ = true;
         bool moveX = true, moveY = true, moveZ = true;
-        float mass = 1.0f;
         bool allowSleeping = true;
         bool isSensor = false;
         bool retainAcceleration = false;
+		bool applyGyroscopicForce = false;
+
+        float mass = 1.0f;
         float gravityFactor = 1.0f;
+		float linearDamping = 0.0f;
+		float angularDamping = 0.05f;
+		float friction = 0.2f;
+		float restitution = 0.0f;
+		float maxLinearVelocity = 500.0f; // Jolt's default
+		float maxAngularVelocity = 0.25f * 3.14159265358979323846f * 60.0f; // Jolt's default - JPH_PI
+
+        glm::vec3 angularVelocity = { 0.0f, 0.0f, 0.0f };
+        glm::vec3 linearVelocity = { 0.0f, 0.0f, 0.0f };
         glm::vec3 centerMass = { 0.0f, 0.0f, 0.0f };
 
         JPH::Body *body = nullptr;
+        bool isGizmoDragging = false;
 
         RigidbodyComponent() = default;
 
@@ -537,18 +550,13 @@ namespace ignite
     class PhysicsColliderComponent
     {
     public:
-        float friction = 0.6f;
-        float staticFriction = 0.6f;
-        float restitution = 0.6f;
-        float density = 1.0f;
-
+		glm::vec3 center = { 0.0f, 0.0f, 0.0f };
         void *shape = nullptr;
     };
 
     class BoxColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
-        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
         glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
         BoxColliderComponent() = default;
@@ -559,7 +567,6 @@ namespace ignite
     class PlaneColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
-        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
         glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
         PlaneColliderComponent() = default;
@@ -570,7 +577,6 @@ namespace ignite
     class SphereColliderComponent: public PhysicsColliderComponent, public IComponent
     {
     public:
-        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
         float radius = 1.0f;
 
         SphereColliderComponent() = default;
@@ -581,7 +587,6 @@ namespace ignite
     class CapsuleColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
-        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
         float radius = 0.5f;
         float height = 2.0f;
 

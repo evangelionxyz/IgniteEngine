@@ -170,30 +170,34 @@ public static class ComponentInternalCalls
     private static ComponentNativeAPI.Funcs.RigidbodyActionFn? s_RigidbodyActivate;
     private static ComponentNativeAPI.Funcs.RigidbodyActionFn? s_RigidbodyDeactivate;
     private static ComponentNativeAPI.Funcs.RigidbodyMoveKinematicFn? s_RigidbodyMoveKinematic;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_RigidbodySetMass;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_RigidbodyGetLinearDamping;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_RigidbodySetLinearDamping;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_RigidbodyGetAngularDamping;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_RigidbodySetAngularDamping;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_RigidbodyGetFriction;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_RigidbodySetFriction;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_RigidbodyGetRestitution;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_RigidbodySetRestitution;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_RigidbodyGetMaxLinearVelocity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_RigidbodySetMaxLinearVelocity;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_RigidbodyGetMaxAngularVelocity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_RigidbodySetMaxAngularVelocity;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_RigidbodyGetApplyGyroscopicForce;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_RigidbodySetApplyGyroscopicForce;
+    private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_RigidbodySetAngularVelocity;
 
     // BoxColliderComponent
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_BoxColliderGetCenter;
     private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_BoxColliderSetCenter;
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_BoxColliderGetScale;
     private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_BoxColliderSetScale;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_BoxColliderGetFriction;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_BoxColliderSetFriction;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_BoxColliderGetRestitution;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_BoxColliderSetRestitution;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_BoxColliderGetDensity;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_BoxColliderSetDensity;
 
     // SphereColliderComponent
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_SphereColliderGetCenter;
     private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_SphereColliderSetCenter;
     private static CoreNativeAPI.Funcs.GetFloatFn? s_SphereColliderGetRadius;
     private static CoreNativeAPI.Funcs.SetFloatFn? s_SphereColliderSetRadius;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_SphereColliderGetFriction;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_SphereColliderSetFriction;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_SphereColliderGetRestitution;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_SphereColliderSetRestitution;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_SphereColliderGetDensity;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_SphereColliderSetDensity;
 
     // CapsuleColliderComponent
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CapsuleColliderGetCenter;
@@ -202,12 +206,6 @@ public static class ComponentInternalCalls
     private static CoreNativeAPI.Funcs.SetFloatFn? s_CapsuleColliderSetRadius;
     private static CoreNativeAPI.Funcs.GetFloatFn? s_CapsuleColliderGetHeight;
     private static CoreNativeAPI.Funcs.SetFloatFn? s_CapsuleColliderSetHeight;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_CapsuleColliderGetFriction;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_CapsuleColliderSetFriction;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_CapsuleColliderGetRestitution;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_CapsuleColliderSetRestitution;
-    private static CoreNativeAPI.Funcs.GetFloatFn? s_CapsuleColliderGetDensity;
-    private static CoreNativeAPI.Funcs.SetFloatFn? s_CapsuleColliderSetDensity;
 
     public static void Initialize(ulong apiPtr)
     {
@@ -378,30 +376,34 @@ public static class ComponentInternalCalls
         s_RigidbodyActivate = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.RigidbodyActionFn>(api.RigidbodyComponent_Activate);
         s_RigidbodyDeactivate = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.RigidbodyActionFn>(api.RigidbodyComponent_Deactivate);
         s_RigidbodyMoveKinematic = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.RigidbodyMoveKinematicFn>(api.RigidbodyComponent_MoveKinematic);
+        s_RigidbodySetMass = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.RigidbodyComponent_SetMass);
+        s_RigidbodyGetLinearDamping = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.RigidbodyComponent_GetLinearDamping);
+        s_RigidbodySetLinearDamping = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.RigidbodyComponent_SetLinearDamping);
+        s_RigidbodyGetAngularDamping = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.RigidbodyComponent_GetAngularDamping);
+        s_RigidbodySetAngularDamping = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.RigidbodyComponent_SetAngularDamping);
+        s_RigidbodyGetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.RigidbodyComponent_GetFriction);
+        s_RigidbodySetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.RigidbodyComponent_SetFriction);
+        s_RigidbodyGetRestitution = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.RigidbodyComponent_GetRestitution);
+        s_RigidbodySetRestitution = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.RigidbodyComponent_SetRestitution);
+        s_RigidbodyGetMaxLinearVelocity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.RigidbodyComponent_GetMaxLinearVelocity);
+        s_RigidbodySetMaxLinearVelocity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.RigidbodyComponent_SetMaxLinearVelocity);
+        s_RigidbodyGetMaxAngularVelocity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.RigidbodyComponent_GetMaxAngularVelocity);
+        s_RigidbodySetMaxAngularVelocity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.RigidbodyComponent_SetMaxAngularVelocity);
+        s_RigidbodyGetApplyGyroscopicForce = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.RigidbodyComponent_GetApplyGyroscopicForce);
+        s_RigidbodySetApplyGyroscopicForce = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetBoolFn>(api.RigidbodyComponent_SetApplyGyroscopicForce);
+        s_RigidbodySetAngularVelocity = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.RigidbodyComponent_SetAngularVelocity);
 
         // BoxColliderComponent
         s_BoxColliderGetCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.BoxColliderComponent_GetCenter);
         s_BoxColliderSetCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.BoxColliderComponent_SetCenter);
         s_BoxColliderGetScale = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.BoxColliderComponent_GetScale);
         s_BoxColliderSetScale = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.BoxColliderComponent_SetScale);
-        s_BoxColliderGetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.BoxColliderComponent_GetFriction);
-        s_BoxColliderSetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.BoxColliderComponent_SetFriction);
-        s_BoxColliderGetRestitution = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.BoxColliderComponent_GetRestitution);
-        s_BoxColliderSetRestitution = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.BoxColliderComponent_SetRestitution);
-        s_BoxColliderGetDensity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.BoxColliderComponent_GetDensity);
-        s_BoxColliderSetDensity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.BoxColliderComponent_SetDensity);
 
         // SphereColliderComponent
         s_SphereColliderGetCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.SphereColliderComponent_GetCenter);
         s_SphereColliderSetCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.SphereColliderComponent_SetCenter);
         s_SphereColliderGetRadius = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.SphereColliderComponent_GetRadius);
         s_SphereColliderSetRadius = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.SphereColliderComponent_SetRadius);
-        s_SphereColliderGetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.SphereColliderComponent_GetFriction);
-        s_SphereColliderSetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.SphereColliderComponent_SetFriction);
-        s_SphereColliderGetRestitution = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.SphereColliderComponent_GetRestitution);
-        s_SphereColliderSetRestitution = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.SphereColliderComponent_SetRestitution);
-        s_SphereColliderGetDensity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.SphereColliderComponent_GetDensity);
-        s_SphereColliderSetDensity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.SphereColliderComponent_SetDensity);
 
         // CapsuleColliderComponent
         s_CapsuleColliderGetCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CapsuleColliderComponent_GetCenter);
@@ -410,12 +412,6 @@ public static class ComponentInternalCalls
         s_CapsuleColliderSetRadius = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CapsuleColliderComponent_SetRadius);
         s_CapsuleColliderGetHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CapsuleColliderComponent_GetHeight);
         s_CapsuleColliderSetHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CapsuleColliderComponent_SetHeight);
-        s_CapsuleColliderGetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CapsuleColliderComponent_GetFriction);
-        s_CapsuleColliderSetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CapsuleColliderComponent_SetFriction);
-        s_CapsuleColliderGetRestitution = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CapsuleColliderComponent_GetRestitution);
-        s_CapsuleColliderSetRestitution = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CapsuleColliderComponent_SetRestitution);
-        s_CapsuleColliderGetDensity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CapsuleColliderComponent_GetDensity);
-        s_CapsuleColliderSetDensity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CapsuleColliderComponent_SetDensity);
 
         s_Initialized = true;
     }
@@ -1587,41 +1583,6 @@ public static class ComponentInternalCalls
         s_BoxColliderSetScale!(entityID, ref v);
     }
 
-    internal static void BoxColliderComponent_GetFriction(ulong entityID, out float result)
-    {
-        EnsureInitialized();
-        s_BoxColliderGetFriction!(entityID, out result);
-    }
-
-    internal static void BoxColliderComponent_SetFriction(ulong entityID, float value)
-    {
-        EnsureInitialized();
-        s_BoxColliderSetFriction!(entityID, value);
-    }
-
-    internal static void BoxColliderComponent_GetRestitution(ulong entityID, out float result)
-    {
-        EnsureInitialized();
-        s_BoxColliderGetRestitution!(entityID, out result);
-    }
-
-    internal static void BoxColliderComponent_SetRestitution(ulong entityID, float value)
-    {
-        EnsureInitialized();
-        s_BoxColliderSetRestitution!(entityID, value);
-    }
-
-    internal static void BoxColliderComponent_GetDensity(ulong entityID, out float result)
-    {
-        EnsureInitialized();
-        s_BoxColliderGetDensity!(entityID, out result);
-    }
-
-    internal static void BoxColliderComponent_SetDensity(ulong entityID, float value)
-    {
-        EnsureInitialized();
-        s_BoxColliderSetDensity!(entityID, value);
-    }
 
     // SphereColliderComponent wrappers
     internal static void SphereColliderComponent_GetCenter(ulong entityID, out Mathf.Vector3 result)
@@ -1648,42 +1609,6 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         s_SphereColliderSetRadius!(entityID, value);
-    }
-
-    internal static void SphereColliderComponent_GetFriction(ulong entityID, out float result)
-    {
-        EnsureInitialized();
-        s_SphereColliderGetFriction!(entityID, out result);
-    }
-
-    internal static void SphereColliderComponent_SetFriction(ulong entityID, float value)
-    {
-        EnsureInitialized();
-        s_SphereColliderSetFriction!(entityID, value);
-    }
-
-    internal static void SphereColliderComponent_GetRestitution(ulong entityID, out float result)
-    {
-        EnsureInitialized();
-        s_SphereColliderGetRestitution!(entityID, out result);
-    }
-
-    internal static void SphereColliderComponent_SetRestitution(ulong entityID, float value)
-    {
-        EnsureInitialized();
-        s_SphereColliderSetRestitution!(entityID, value);
-    }
-
-    internal static void SphereColliderComponent_GetDensity(ulong entityID, out float result)
-    {
-        EnsureInitialized();
-        s_SphereColliderGetDensity!(entityID, out result);
-    }
-
-    internal static void SphereColliderComponent_SetDensity(ulong entityID, float value)
-    {
-        EnsureInitialized();
-        s_SphereColliderSetDensity!(entityID, value);
     }
 
     // CapsuleColliderComponent wrappers
@@ -1725,39 +1650,100 @@ public static class ComponentInternalCalls
         s_CapsuleColliderSetHeight!(entityID, value);
     }
 
-    internal static void CapsuleColliderComponent_GetFriction(ulong entityID, out float result)
+    internal static void RigidbodyComponent_SetMass(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_CapsuleColliderGetFriction!(entityID, out result);
+        s_RigidbodySetMass!(entityID, value);
     }
 
-    internal static void CapsuleColliderComponent_SetFriction(ulong entityID, float value)
+    internal static void RigidbodyComponent_GetLinearDamping(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_CapsuleColliderSetFriction!(entityID, value);
+        s_RigidbodyGetLinearDamping!(entityID, out result);
     }
 
-    internal static void CapsuleColliderComponent_GetRestitution(ulong entityID, out float result)
+    internal static void RigidbodyComponent_SetLinearDamping(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_CapsuleColliderGetRestitution!(entityID, out result);
+        s_RigidbodySetLinearDamping!(entityID, value);
     }
 
-    internal static void CapsuleColliderComponent_SetRestitution(ulong entityID, float value)
+    internal static void RigidbodyComponent_GetAngularDamping(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_CapsuleColliderSetRestitution!(entityID, value);
+        s_RigidbodyGetAngularDamping!(entityID, out result);
     }
 
-    internal static void CapsuleColliderComponent_GetDensity(ulong entityID, out float result)
+    internal static void RigidbodyComponent_SetAngularDamping(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_CapsuleColliderGetDensity!(entityID, out result);
+        s_RigidbodySetAngularDamping!(entityID, value);
     }
 
-    internal static void CapsuleColliderComponent_SetDensity(ulong entityID, float value)
+    internal static void RigidbodyComponent_GetFriction(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_CapsuleColliderSetDensity!(entityID, value);
+        s_RigidbodyGetFriction!(entityID, out result);
+    }
+
+    internal static void RigidbodyComponent_SetFriction(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_RigidbodySetFriction!(entityID, value);
+    }
+
+    internal static void RigidbodyComponent_GetRestitution(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_RigidbodyGetRestitution!(entityID, out result);
+    }
+
+    internal static void RigidbodyComponent_SetRestitution(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_RigidbodySetRestitution!(entityID, value);
+    }
+
+    internal static void RigidbodyComponent_GetMaxLinearVelocity(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_RigidbodyGetMaxLinearVelocity!(entityID, out result);
+    }
+
+    internal static void RigidbodyComponent_SetMaxLinearVelocity(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_RigidbodySetMaxLinearVelocity!(entityID, value);
+    }
+
+    internal static void RigidbodyComponent_GetMaxAngularVelocity(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_RigidbodyGetMaxAngularVelocity!(entityID, out result);
+    }
+
+    internal static void RigidbodyComponent_SetMaxAngularVelocity(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_RigidbodySetMaxAngularVelocity!(entityID, value);
+    }
+
+    internal static void RigidbodyComponent_GetApplyGyroscopicForce(ulong entityID, out bool result)
+    {
+        EnsureInitialized();
+        s_RigidbodyGetApplyGyroscopicForce!(entityID, out result);
+    }
+
+    internal static void RigidbodyComponent_SetApplyGyroscopicForce(ulong entityID, bool value)
+    {
+        EnsureInitialized();
+        s_RigidbodySetApplyGyroscopicForce!(entityID, value);
+    }
+
+    internal static void RigidbodyComponent_SetAngularVelocity(ulong entityID, Mathf.Vector3 value)
+    {
+        EnsureInitialized();
+        NativeObject.Vector3 nativeVal = NativeObject.ToNative(value);
+        s_RigidbodySetAngularVelocity!(entityID, ref nativeVal);
     }
 }

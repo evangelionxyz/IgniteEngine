@@ -1554,7 +1554,6 @@ namespace ignite
             transform.local.translation = *value;
             transform.world.translation = *value;
             transform.dirty = true;
-            transform.dirtyPhysics = true;
         }
 
         static void TransformComponent_GetRotation(uint64_t entityID, glm::quat *result)
@@ -1583,7 +1582,6 @@ namespace ignite
             transform.local.rotation = *value;
             transform.world.rotation = *value;
             transform.dirty = true;
-            transform.dirtyPhysics = true;
         }
 
         static void TransformComponent_GetEulerAngles(uint64_t entityID, glm::vec3 *result)
@@ -1732,9 +1730,10 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.bodyType = static_cast<Rigidbody2DComponent::EBodyType>(value);
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                b2Body_SetType(rb.bodyId, static_cast<b2BodyType>(rb.bodyType));
+                scene->GetPhysics2D()->SetBodyType(rb.bodyId, static_cast<b2BodyType>(rb.bodyType));
             }
         }
 
@@ -1760,9 +1759,10 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.linearVelocity = *value;
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                b2Body_SetLinearVelocity(rb.bodyId, { value->x, value->y });
+                scene->GetPhysics2D()->SetLinearVelocity(rb.bodyId, *value);
             }
         }
 
@@ -1789,9 +1789,10 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.angularVelocity = value;
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                b2Body_SetAngularVelocity(rb.bodyId, value);
+                scene->GetPhysics2D()->SetAngularVelocity(rb.bodyId, value);
             }
         }
 
@@ -1818,9 +1819,10 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.gravityScale = value;
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                b2Body_SetGravityScale(rb.bodyId, value);
+                scene->GetPhysics2D()->SetGravityScale(rb.bodyId, value);
             }
         }
 
@@ -1847,9 +1849,10 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.linearDamping = value;
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                b2Body_SetLinearDamping(rb.bodyId, value);
+                scene->GetPhysics2D()->SetLinearDamping(rb.bodyId, value);
             }
         }
 
@@ -1876,9 +1879,10 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.angularDamping = value;
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                b2Body_SetAngularDamping(rb.bodyId, value);
+                scene->GetPhysics2D()->SetAngularDamping(rb.bodyId, value);
             }
         }
 
@@ -1905,9 +1909,10 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.isAwake = value;
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                b2Body_SetAwake(rb.bodyId, value);
+                scene->GetPhysics2D()->SetAwake(rb.bodyId, value);
             }
         }
 
@@ -1934,15 +1939,16 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.isEnabled = value;
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
                 if (value)
                 {
-                    b2Body_Enable(rb.bodyId);
+                    scene->GetPhysics2D()->ActivateBody(rb.bodyId);
                 }
                 else
                 {
-                    b2Body_Disable(rb.bodyId);
+                    scene->GetPhysics2D()->DeactivateBody(rb.bodyId);
                 }
             }
         }
@@ -1970,9 +1976,10 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.isEnableSleep = value;
-            if (b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                b2Body_EnableSleep(rb.bodyId, value);
+                scene->GetPhysics2D()->SetEnableSleep(rb.bodyId, value);
             }
         }
 
@@ -1983,12 +1990,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                scene->GetPhysics2D()->ApplyForce(rb.bodyId, force, point, wake);
             }
-
-            b2Body_ApplyForce(rb.bodyId, { force.x, force.y }, { point.x, point.y }, wake);
         }
 
         static void Rigidbody2DComponent_ApplyForceToCenter(uint64_t entityID, glm::vec2 force, bool wake)
@@ -1998,12 +2004,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                scene->GetPhysics2D()->ApplyForceToCenter(rb.bodyId, force, wake);
             }
-
-            b2Body_ApplyForceToCenter(rb.bodyId, { force.x, force.y }, wake);
         }
 
         static void Rigidbody2DComponent_ApplyLinearImpulse(uint64_t entityID, glm::vec2 impulse, glm::vec2 point, bool wake)
@@ -2013,12 +2018,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                scene->GetPhysics2D()->ApplyLinearImpulse(rb.bodyId, impulse, point, wake);
             }
-
-            b2Body_ApplyLinearImpulse(rb.bodyId, { impulse.x, impulse.y }, { point.x, point.y }, wake);
         }
 
         static void Rigidbody2DComponent_ApplyLinearImpulseToCenter(uint64_t entityID, glm::vec2 impulse, bool wake)
@@ -2028,12 +2032,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                scene->GetPhysics2D()->ApplyLinearImpulseToCenter(rb.bodyId, impulse, wake);
             }
-
-            b2Body_ApplyLinearImpulseToCenter(rb.bodyId, { impulse.x, impulse.y }, wake);
         }
 
         static void Rigidbody2DComponent_ApplyAngularImpulse(uint64_t entityID, float impulse, bool wake)
@@ -2043,12 +2046,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                scene->GetPhysics2D()->ApplyAngularImpulse(rb.bodyId, impulse, wake);
             }
-
-            b2Body_ApplyAngularImpulse(rb.bodyId, impulse, wake);
         }
 
         static void Rigidbody2DComponent_ApplyTorque(uint64_t entityID, float torque, bool wake)
@@ -2058,12 +2060,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                scene->GetPhysics2D()->ApplyTorque(rb.bodyId, torque, wake);
             }
-
-            b2Body_ApplyTorque(rb.bodyId, torque, wake);
         }
 
         static void Rigidbody2DComponent_GetMass(uint64_t entityID, float *result)
@@ -2079,12 +2080,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                *result = scene->GetPhysics2D()->GetMass(rb.bodyId);
             }
-
-            *result = b2Body_GetMass(rb.bodyId);
         }
 
         static void Rigidbody2DComponent_GetIsBullet(uint64_t entityID, bool *result)
@@ -2100,12 +2100,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                *result = scene->GetPhysics2D()->IsBullet(rb.bodyId);
             }
-
-            *result = b2Body_IsBullet(rb.bodyId);
         }
 
         static void Rigidbody2DComponent_SetIsBullet(uint64_t entityID, bool value)
@@ -2115,12 +2114,11 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            if (!b2Body_IsValid(rb.bodyId))
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
-                return;
+                scene->GetPhysics2D()->SetBullet(rb.bodyId, value);
             }
-
-            b2Body_SetBullet(rb.bodyId, value);
         }
 
         static void BoxCollider2DComponent_GetSize(uint64_t entityID, glm::vec2 *result)
@@ -2607,6 +2605,10 @@ namespace ignite
             {
                 *result = scene->GetJoltScene()->GetLinearVelocity(*rb.body);
             }
+            else
+            {
+                *result = rb.linearVelocity;
+            }
         }
 
         static void RigidbodyComponent_SetLinearVelocity(uint64_t entityID, const glm::vec3 *value)
@@ -2616,6 +2618,7 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.linearVelocity = *value;
             Scene *scene = GetSceneContext();
             if (scene && scene->GetJoltScene() && rb.body)
             {
@@ -2693,6 +2696,281 @@ namespace ignite
             if (scene && scene->GetJoltScene() && rb.body)
             {
                 *result = JoltToGlmVec3(scene->GetJoltScene()->GetBodyInterface()->GetAngularVelocity(rb.body->GetID()));
+            }
+            else
+            {
+                *result = rb.angularVelocity;
+            }
+        }
+
+        static void RigidbodyComponent_SetAngularVelocity(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.angularVelocity = *value;
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                scene->GetJoltScene()->GetBodyInterface()->SetAngularVelocity(rb.body->GetID(), GlmToJoltVec3(*value));
+            }
+        }
+
+        static void RigidbodyComponent_SetMass(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.mass = value;
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                auto shape = rb.body->GetShape();
+                if (shape)
+                {
+                    JPH::MassProperties massProperties = shape->GetMassProperties();
+                    massProperties.ScaleToMass(value);
+                    scene->GetJoltScene()->SetMassProperties(*rb.body, massProperties);
+                }
+            }
+        }
+
+        static void RigidbodyComponent_GetLinearDamping(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                if (auto *mp = rb.body->GetMotionProperties())
+                {
+                    *result = mp->GetLinearDamping();
+                    return;
+                }
+            }
+            *result = rb.linearDamping;
+        }
+
+        static void RigidbodyComponent_SetLinearDamping(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.linearDamping = value;
+            if (rb.body)
+            {
+                if (auto *mp = rb.body->GetMotionProperties())
+                {
+                    mp->SetLinearDamping(value);
+                }
+            }
+        }
+
+        static void RigidbodyComponent_GetAngularDamping(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                if (auto *mp = rb.body->GetMotionProperties())
+                {
+                    *result = mp->GetAngularDamping();
+                    return;
+                }
+            }
+            *result = rb.angularDamping;
+        }
+
+        static void RigidbodyComponent_SetAngularDamping(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.angularDamping = value;
+            if (rb.body)
+            {
+                if (auto *mp = rb.body->GetMotionProperties())
+                {
+                    mp->SetAngularDamping(value);
+                }
+            }
+        }
+
+        static void RigidbodyComponent_GetFriction(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                *result = scene->GetJoltScene()->GetFriction(*rb.body);
+            }
+            else
+            {
+                *result = rb.friction;
+            }
+        }
+
+        static void RigidbodyComponent_SetFriction(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.friction = value;
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                scene->GetJoltScene()->SetFriction(*rb.body, value);
+            }
+        }
+
+        static void RigidbodyComponent_GetRestitution(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                *result = scene->GetJoltScene()->GetRestitution(*rb.body);
+            }
+            else
+            {
+                *result = rb.restitution;
+            }
+        }
+
+        static void RigidbodyComponent_SetRestitution(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.restitution = value;
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                scene->GetJoltScene()->SetRestitution(*rb.body, value);
+            }
+        }
+
+        static void RigidbodyComponent_GetMaxLinearVelocity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                if (auto *mp = rb.body->GetMotionProperties())
+                {
+                    *result = mp->GetMaxLinearVelocity();
+                    return;
+                }
+            }
+            *result = rb.maxLinearVelocity;
+        }
+
+        static void RigidbodyComponent_SetMaxLinearVelocity(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.maxLinearVelocity = value;
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                scene->GetJoltScene()->SetMaxLinearVelocity(*rb.body, value);
+            }
+        }
+
+        static void RigidbodyComponent_GetMaxAngularVelocity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                if (auto *mp = rb.body->GetMotionProperties())
+                {
+                    *result = mp->GetMaxAngularVelocity();
+                    return;
+                }
+            }
+            *result = rb.maxAngularVelocity;
+        }
+
+        static void RigidbodyComponent_SetMaxAngularVelocity(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.maxAngularVelocity = value;
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+                scene->GetJoltScene()->SetMaxAngularVelocity(*rb.body, value);
+            }
+        }
+
+        static void RigidbodyComponent_GetApplyGyroscopicForce(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->GetJoltScene() && rb.body)
+            {
+				*result = rb.body->GetApplyGyroscopicForce();
+                return;
+            }
+            *result = rb.applyGyroscopicForce;
+        }
+
+        static void RigidbodyComponent_SetApplyGyroscopicForce(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.applyGyroscopicForce = value;
+            if (rb.body)
+            {
+				rb.body->SetApplyGyroscopicForce(value);
             }
         }
 
@@ -2889,76 +3167,6 @@ namespace ignite
             }
         }
 
-        static void BoxColliderComponent_GetFriction(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 0.6f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
-                *result = entity.GetComponent<BoxColliderComponent>().friction;
-        }
-
-        static void BoxColliderComponent_SetFriction(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
-            {
-                auto &col = entity.GetComponent<BoxColliderComponent>();
-                col.friction = value;
-                Scene *scene = GetSceneContext();
-                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
-                {
-                    auto &rb = entity.GetComponent<RigidbodyComponent>();
-                    if (rb.body)
-                        scene->GetJoltScene()->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
-                }
-            }
-        }
-
-        static void BoxColliderComponent_GetRestitution(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 0.6f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
-                *result = entity.GetComponent<BoxColliderComponent>().restitution;
-        }
-
-        static void BoxColliderComponent_SetRestitution(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
-            {
-                auto &col = entity.GetComponent<BoxColliderComponent>();
-                col.restitution = value;
-                Scene *scene = GetSceneContext();
-                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
-                {
-                    auto &rb = entity.GetComponent<RigidbodyComponent>();
-                    if (rb.body)
-                        scene->GetJoltScene()->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
-                }
-            }
-        }
-
-        static void BoxColliderComponent_GetDensity(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 1.0f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
-                *result = entity.GetComponent<BoxColliderComponent>().density;
-        }
-
-        static void BoxColliderComponent_SetDensity(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
-            {
-                entity.GetComponent<BoxColliderComponent>().density = value;
-            }
-        }
-
         // --- SphereColliderComponent ---
         static void SphereColliderComponent_GetCenter(uint64_t entityID, glm::vec3 *result)
         {
@@ -2994,76 +3202,6 @@ namespace ignite
             if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
             {
                 entity.GetComponent<SphereColliderComponent>().radius = value;
-            }
-        }
-
-        static void SphereColliderComponent_GetFriction(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 0.6f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
-                *result = entity.GetComponent<SphereColliderComponent>().friction;
-        }
-
-        static void SphereColliderComponent_SetFriction(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
-            {
-                auto &col = entity.GetComponent<SphereColliderComponent>();
-                col.friction = value;
-                Scene *scene = GetSceneContext();
-                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
-                {
-                    auto &rb = entity.GetComponent<RigidbodyComponent>();
-                    if (rb.body)
-                        scene->GetJoltScene()->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
-                }
-            }
-        }
-
-        static void SphereColliderComponent_GetRestitution(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 0.6f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
-                *result = entity.GetComponent<SphereColliderComponent>().restitution;
-        }
-
-        static void SphereColliderComponent_SetRestitution(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
-            {
-                auto &col = entity.GetComponent<SphereColliderComponent>();
-                col.restitution = value;
-                Scene *scene = GetSceneContext();
-                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
-                {
-                    auto &rb = entity.GetComponent<RigidbodyComponent>();
-                    if (rb.body)
-                        scene->GetJoltScene()->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
-                }
-            }
-        }
-
-        static void SphereColliderComponent_GetDensity(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 1.0f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
-                *result = entity.GetComponent<SphereColliderComponent>().density;
-        }
-
-        static void SphereColliderComponent_SetDensity(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
-            {
-                entity.GetComponent<SphereColliderComponent>().density = value;
             }
         }
 
@@ -3120,76 +3258,6 @@ namespace ignite
             if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
             {
                 entity.GetComponent<CapsuleColliderComponent>().height = value;
-            }
-        }
-
-        static void CapsuleColliderComponent_GetFriction(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 0.6f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
-                *result = entity.GetComponent<CapsuleColliderComponent>().friction;
-        }
-
-        static void CapsuleColliderComponent_SetFriction(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
-            {
-                auto &col = entity.GetComponent<CapsuleColliderComponent>();
-                col.friction = value;
-                Scene *scene = GetSceneContext();
-                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
-                {
-                    auto &rb = entity.GetComponent<RigidbodyComponent>();
-                    if (rb.body)
-                        scene->GetJoltScene()->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
-                }
-            }
-        }
-
-        static void CapsuleColliderComponent_GetRestitution(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 0.6f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
-                *result = entity.GetComponent<CapsuleColliderComponent>().restitution;
-        }
-
-        static void CapsuleColliderComponent_SetRestitution(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
-            {
-                auto &col = entity.GetComponent<CapsuleColliderComponent>();
-                col.restitution = value;
-                Scene *scene = GetSceneContext();
-                if (scene && scene->GetJoltScene() && entity.HasComponent<RigidbodyComponent>())
-                {
-                    auto &rb = entity.GetComponent<RigidbodyComponent>();
-                    if (rb.body)
-                        scene->GetJoltScene()->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
-                }
-            }
-        }
-
-        static void CapsuleColliderComponent_GetDensity(uint64_t entityID, float *result)
-        {
-            if (!result) return;
-            *result = 1.0f;
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
-                *result = entity.GetComponent<CapsuleColliderComponent>().density;
-        }
-
-        static void CapsuleColliderComponent_SetDensity(uint64_t entityID, float value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
-            {
-                entity.GetComponent<CapsuleColliderComponent>().density = value;
             }
         }
 
@@ -3361,41 +3429,39 @@ namespace ignite
             &RigidbodyComponent_Activate,
             &RigidbodyComponent_Deactivate,
             &RigidbodyComponent_MoveKinematic,
+            &RigidbodyComponent_SetMass,
+            &RigidbodyComponent_GetLinearDamping,
+            &RigidbodyComponent_SetLinearDamping,
+            &RigidbodyComponent_GetAngularDamping,
+            &RigidbodyComponent_SetAngularDamping,
+            &RigidbodyComponent_GetFriction,
+            &RigidbodyComponent_SetFriction,
+            &RigidbodyComponent_GetRestitution,
+            &RigidbodyComponent_SetRestitution,
+            &RigidbodyComponent_GetMaxLinearVelocity,
+            &RigidbodyComponent_SetMaxLinearVelocity,
+            &RigidbodyComponent_GetMaxAngularVelocity,
+            &RigidbodyComponent_SetMaxAngularVelocity,
+            &RigidbodyComponent_GetApplyGyroscopicForce,
+            &RigidbodyComponent_SetApplyGyroscopicForce,
+            &RigidbodyComponent_SetAngularVelocity,
 
             &BoxColliderComponent_GetCenter,
             &BoxColliderComponent_SetCenter,
             &BoxColliderComponent_GetScale,
             &BoxColliderComponent_SetScale,
-            &BoxColliderComponent_GetFriction,
-            &BoxColliderComponent_SetFriction,
-            &BoxColliderComponent_GetRestitution,
-            &BoxColliderComponent_SetRestitution,
-            &BoxColliderComponent_GetDensity,
-            &BoxColliderComponent_SetDensity,
 
             &SphereColliderComponent_GetCenter,
             &SphereColliderComponent_SetCenter,
             &SphereColliderComponent_GetRadius,
             &SphereColliderComponent_SetRadius,
-            &SphereColliderComponent_GetFriction,
-            &SphereColliderComponent_SetFriction,
-            &SphereColliderComponent_GetRestitution,
-            &SphereColliderComponent_SetRestitution,
-            &SphereColliderComponent_GetDensity,
-            &SphereColliderComponent_SetDensity,
 
             &CapsuleColliderComponent_GetCenter,
             &CapsuleColliderComponent_SetCenter,
             &CapsuleColliderComponent_GetRadius,
             &CapsuleColliderComponent_SetRadius,
             &CapsuleColliderComponent_GetHeight,
-            &CapsuleColliderComponent_SetHeight,
-            &CapsuleColliderComponent_GetFriction,
-            &CapsuleColliderComponent_SetFriction,
-            &CapsuleColliderComponent_GetRestitution,
-            &CapsuleColliderComponent_SetRestitution,
-            &CapsuleColliderComponent_GetDensity,
-            &CapsuleColliderComponent_SetDensity,
+            &CapsuleColliderComponent_SetHeight
         };
     }
 

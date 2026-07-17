@@ -30,6 +30,29 @@ namespace ignite
         void CreateBoxCollider(BoxCollider2DComponent *box, b2BodyId bodyId, b2Vec2 size);
         void CreateCircleCollider(CircleCollider2DComponent *circle, b2BodyId bodyId, float size);
 
+        bool IsValidBody(b2BodyId bodyId);
+        void SetBodyType(b2BodyId bodyId, b2BodyType type);
+		void SetPosition(b2BodyId bodyId, const glm::vec2 &position);
+		void SetRotation(b2BodyId bodyId, float rotation);
+        void SetLinearVelocity(b2BodyId bodyId, const glm::vec2 &velocity);
+		void SetAngularVelocity(b2BodyId bodyId, float velocity);
+		void ApplyLinearImpulse(b2BodyId bodyId, const glm::vec2 &impulse, const glm::vec2 &point, bool wake);
+        void ApplyLinearImpulseToCenter(b2BodyId bodyId, const glm::vec2 &impulse, bool wake);
+		void ApplyForce(b2BodyId bodyId, const glm::vec2 &force, const glm::vec2 &point, bool wake);
+		void ApplyForceToCenter(b2BodyId bodyId, const glm::vec2 &force, bool wake);
+		void ApplyTorque(b2BodyId bodyId, float torque, bool wake);
+		void ApplyAngularImpulse(b2BodyId bodyId, float impulse, bool wake);
+		void ActivateBody(b2BodyId bodyId);
+		void DeactivateBody(b2BodyId bodyId);
+        void SetAwake(b2BodyId bodyId, bool awake);
+        void SetEnableSleep(b2BodyId bodyId, bool enable);
+		void SetGravityScale(b2BodyId bodyId, float scale);
+		void SetLinearDamping(b2BodyId bodyId, float damping);
+		void SetAngularDamping(b2BodyId bodyId, float damping);
+		void SetMotionLock(b2BodyId bodyId, bool lockX, bool lockY, bool lockRotation);
+        float GetMass(b2BodyId bodyId);
+        bool IsBullet(b2BodyId bodyId);
+        void SetBullet(b2BodyId bodyId, bool bullet);
     private:
         Scene *m_Scene;
         b2WorldId m_WorldId{ b2_nullWorldId };

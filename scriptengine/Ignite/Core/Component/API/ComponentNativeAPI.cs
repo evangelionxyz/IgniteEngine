@@ -175,30 +175,34 @@ public static class ComponentNativeAPI
         public IntPtr RigidbodyComponent_Activate;
         public IntPtr RigidbodyComponent_Deactivate;
         public IntPtr RigidbodyComponent_MoveKinematic;
+        public IntPtr RigidbodyComponent_SetMass;
+        public IntPtr RigidbodyComponent_GetLinearDamping;
+        public IntPtr RigidbodyComponent_SetLinearDamping;
+        public IntPtr RigidbodyComponent_GetAngularDamping;
+        public IntPtr RigidbodyComponent_SetAngularDamping;
+        public IntPtr RigidbodyComponent_GetFriction;
+        public IntPtr RigidbodyComponent_SetFriction;
+        public IntPtr RigidbodyComponent_GetRestitution;
+        public IntPtr RigidbodyComponent_SetRestitution;
+        public IntPtr RigidbodyComponent_GetMaxLinearVelocity;
+        public IntPtr RigidbodyComponent_SetMaxLinearVelocity;
+        public IntPtr RigidbodyComponent_GetMaxAngularVelocity;
+        public IntPtr RigidbodyComponent_SetMaxAngularVelocity;
+        public IntPtr RigidbodyComponent_GetApplyGyroscopicForce;
+        public IntPtr RigidbodyComponent_SetApplyGyroscopicForce;
+        public IntPtr RigidbodyComponent_SetAngularVelocity;
 
         // BoxColliderComponent
         public IntPtr BoxColliderComponent_GetCenter;
         public IntPtr BoxColliderComponent_SetCenter;
         public IntPtr BoxColliderComponent_GetScale;
         public IntPtr BoxColliderComponent_SetScale;
-        public IntPtr BoxColliderComponent_GetFriction;
-        public IntPtr BoxColliderComponent_SetFriction;
-        public IntPtr BoxColliderComponent_GetRestitution;
-        public IntPtr BoxColliderComponent_SetRestitution;
-        public IntPtr BoxColliderComponent_GetDensity;
-        public IntPtr BoxColliderComponent_SetDensity;
 
         // SphereColliderComponent
         public IntPtr SphereColliderComponent_GetCenter;
         public IntPtr SphereColliderComponent_SetCenter;
         public IntPtr SphereColliderComponent_GetRadius;
         public IntPtr SphereColliderComponent_SetRadius;
-        public IntPtr SphereColliderComponent_GetFriction;
-        public IntPtr SphereColliderComponent_SetFriction;
-        public IntPtr SphereColliderComponent_GetRestitution;
-        public IntPtr SphereColliderComponent_SetRestitution;
-        public IntPtr SphereColliderComponent_GetDensity;
-        public IntPtr SphereColliderComponent_SetDensity;
 
         // CapsuleColliderComponent
         public IntPtr CapsuleColliderComponent_GetCenter;
@@ -207,12 +211,6 @@ public static class ComponentNativeAPI
         public IntPtr CapsuleColliderComponent_SetRadius;
         public IntPtr CapsuleColliderComponent_GetHeight;
         public IntPtr CapsuleColliderComponent_SetHeight;
-        public IntPtr CapsuleColliderComponent_GetFriction;
-        public IntPtr CapsuleColliderComponent_SetFriction;
-        public IntPtr CapsuleColliderComponent_GetRestitution;
-        public IntPtr CapsuleColliderComponent_SetRestitution;
-        public IntPtr CapsuleColliderComponent_GetDensity;
-        public IntPtr CapsuleColliderComponent_SetDensity;
     }
 
     public struct Funcs

@@ -35,6 +35,9 @@
 #include "ignite/scene/component_property_command.hpp"
 #include "ignite/globals/globals.hpp"
 
+#include "ignite/physics/2d/physics_2d.hpp"
+#include "ignite/physics/3d/jolt/jolt_physics.hpp"
+
 #include "ext/imgui_orientation.hpp"
 #include "ext/imgui_knobs.hpp"
 #include "ext/editor_ui.hpp"
@@ -142,6 +145,9 @@ namespace ignite
 
     void ScenePanel::SetActiveScene(const Ref<Scene> &scene)
     {
+        if (m_Scene == scene)
+            return;
+
         m_Scene = scene;
         m_SelectedEntities.clear();
     }
@@ -1718,28 +1724,60 @@ namespace ignite
                 static std::array<const char *, 3> bodyTypeLabels = { "Static", "Kinematic", "Dynamic" };
                 static std::array<const char *, 2> motionTypeLabels = { "Discrete", "LinearCast" };
 
-                int bodyTypeIndex = static_cast<int>(c.bodyType);
-                if (UI::DrawComboBox("Body Type", bodyTypeLabels.data(), static_cast<int>(bodyTypeLabels.size()), &bodyTypeIndex))
+                if (ImGui::TreeNodeEx("Physics Properties", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    c.bodyType = static_cast<RigidbodyComponent::EBodyType>(bodyTypeIndex);
+                    int bodyTypeIndex = static_cast<int>(c.bodyType);
+                    if (UI::DrawComboBox("Body Type", bodyTypeLabels.data(), static_cast<int>(bodyTypeLabels.size()), &bodyTypeIndex))
+                    {
+                        c.bodyType = static_cast<RigidbodyComponent::EBodyType>(bodyTypeIndex);
+                        c.dirty = true;
+                    }
+
+                    int motionTypeIndex = static_cast<int>(c.motionQuality);
+                    if (UI::DrawComboBox("Motion Quality", motionTypeLabels.data(), static_cast<int>(motionTypeLabels.size()), &motionTypeIndex))
+                    {
+                        c.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(motionTypeIndex);
+                        c.dirty = true;
+                    }
+
+                    c.dirty |= UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+                    c.dirty |= UI::DrawFloatControl("Mass", &c.mass, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+                    c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
+                    c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
+
+                    ImGui::TreePop();
                 }
 
-                int motionTypeIndex = static_cast<int>(c.motionQuality);
-                if (UI::DrawComboBox("Motion Quality", motionTypeLabels.data(), static_cast<int>(motionTypeLabels.size()), &motionTypeIndex))
+                if (ImGui::TreeNodeEx("Velocities", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    c.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(motionTypeIndex);
+                    c.dirty |= UI::DrawVec3Control("Linear Velocity", c.linearVelocity, 0.025f);
+                    c.dirty |= UI::DrawVec3Control("Angular Velocity", c.angularVelocity, 0.025f);
+                    c.dirty |= UI::DrawFloatControl("Max Linear Velocity", &c.maxLinearVelocity, 0.025f, 0.0f, FLT_MAX);
+                    c.dirty |= UI::DrawFloatControl("Max Angular Velocity", &c.maxAngularVelocity, 0.025f, 0.0f, FLT_MAX);
+
+                    if (ImGui::TreeNodeEx("Damping", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        c.dirty |= UI::DrawFloatControl("Linear Damping", &c.linearDamping, 0.0025f, 0.0f, FLT_MAX);
+                        c.dirty |= UI::DrawFloatControl("Angular Damping", &c.angularDamping, 0.0025f, 0.0f, FLT_MAX);
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::TreePop();
                 }
 
-                UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
-                UI::DrawFloatControl("Mass", &c.mass, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+                if (ImGui::TreeNodeEx("Constraints"))
+                {
+                    c.dirty |= UI::DrawCheckbox3("Translation Lock XYZ", &c.moveX, &c.moveY, &c.moveZ);
+                    c.dirty |= UI::DrawCheckbox3("Rotation Lock XYZ", &c.rotateX, &c.rotateY, &c.rotateZ);
 
-                UI::DrawCheckbox("Is Sensor", &c.isSensor);
-                UI::DrawCheckbox("Use Gravity", &c.useGravity);
-                UI::DrawCheckbox("Allow sleeping", &c.allowSleeping);
-                UI::DrawCheckbox("Retain Acceleration", &c.retainAcceleration);
+                    ImGui::TreePop();
+                }
 
-                UI::DrawCheckbox3("Translation Lock XYZ", &c.moveX, &c.moveY, &c.moveZ);
-                UI::DrawCheckbox3("Rotation Lock XYZ", &c.rotateX, &c.rotateY, &c.rotateZ);
+                c.dirty |= UI::DrawCheckbox("Is Sensor", &c.isSensor);
+                c.dirty |= UI::DrawCheckbox("Use Gravity", &c.useGravity);
+                c.dirty |= UI::DrawCheckbox("Allow sleeping", &c.allowSleeping);
+                c.dirty |= UI::DrawCheckbox("Retain Acceleration", &c.retainAcceleration);
+                c.dirty |= UI::DrawCheckbox("Apply Gyroscopic Force", &c.applyGyroscopicForce);
             });
 
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
@@ -1747,11 +1785,6 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<BoxColliderComponent>();
                 c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
-                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
-
                 // TODO: Collider Edit from UI (TOGGLES)
             });
 
@@ -1760,10 +1793,6 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<SphereColliderComponent>();
                 c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
-                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
 
                 // TODO: Collider Edit from UI (TOGGLES)
             });
@@ -1774,10 +1803,6 @@ namespace ignite
                 c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Height", &c.height, 0.025f, 0.01f, 10000.0f, 1.0f);
-                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
 
                 // TODO: Collider Edit from UI (TOGGLES)
             });
@@ -1788,10 +1813,6 @@ namespace ignite
                 c.dirty = UI::DrawCheckbox("Convex", &c.convex);
                 ImGui::Text("Vertices: %zu", c.vertices.size());
                 ImGui::Text("Indices: %zu", c.indices.size());
-                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
                 if (ImGui::Button("Clear Mesh Data"))
                 {
                     c.dirty = false;
@@ -2832,7 +2853,7 @@ namespace ignite
 
                 // When not playing/simulating, make sure we clear focus state and restore cursor
                 const bool isPlayOrSimulate = m_Scene->IsRunning();
-				const bool mouseWantsFocus = (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
+                const bool mouseWantsFocus = (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
 
                 if (!isPlayOrSimulate)
                 {
@@ -2879,7 +2900,7 @@ namespace ignite
                     }
                 }
 
-				if (m_SceneFocused && mouseWantsFocus)
+                if (m_SceneFocused && mouseWantsFocus)
                 {
                     const char* bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
                     ImVec2 textSize = ImGui::CalcTextSize(bannerText);
@@ -3291,13 +3312,64 @@ namespace ignite
                                     // Apply the total scale delta to the ORIGINAL local scale
                                     tr.local.scale = initialTransform.local.scale * deltaScale;
                                 }
+
                                 tr.dirty = true;
+
+                                if (isPlayOrSimulate)
+                                {
+                                    Application::SubmitToMainThread([scene = m_Scene, entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
+                                        if (entity.IsValid())
+                                        {
+                                            if (entity.HasComponent<RigidbodyComponent>())
+                                            {
+                                                auto &rb = entity.GetComponent<RigidbodyComponent>();
+                                                rb.isGizmoDragging = true;
+                                                if (rb.body && scene->GetJoltScene())
+                                                {
+                                                    scene->GetJoltScene()->SetPosition(*rb.body, translation, true);
+                                                    scene->GetJoltScene()->SetRotation(*rb.body, rotation, true);
+                                                    scene->GetJoltScene()->SetLinearVelocity(*rb.body, glm::vec3(0.0f));
+                                                    scene->GetJoltScene()->GetBodyInterface()->SetAngularVelocity(rb.body->GetID(), JPH::Vec3(0.0f, 0.0f, 0.0f));
+                                                }
+                                            }
+                                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                            {
+                                                auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
+                                                rb2D.isGizmoDragging = true;
+                                                if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
+                                                {
+                                                    scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
+                                                    scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
+                                                    scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
+                                                    scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
+                                                    scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
                             }
                         }
 
                         // Commit commands when the multi-entity gizmo is released
                         if (!isManipulatingNow && wasManipulating)
                         {
+                            if (isPlayOrSimulate)
+                            {
+                                for (auto &[uuid, entity] : m_SelectedEntities)
+                                {
+                                    Application::SubmitToMainThread([scene = m_Scene, entity]() mutable {
+                                        if (entity.IsValid())
+                                        {
+                                            if (entity.HasComponent<RigidbodyComponent>())
+                                                entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
+                                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                                entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
+                                        }
+                                    });
+                                }
+                            }
+
                             std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
                             for (auto &[uuid, entity] : m_SelectedEntities)
                             {
@@ -3365,11 +3437,59 @@ namespace ignite
                                     }
                                 }
                                 tr.dirty = true;
+
+                                // check if the entity has rigidbody and update its position and rotation in the physics engine
+                                if (isPlayOrSimulate)
+                                {
+                                    Application::SubmitToMainThread([scene = m_Scene, entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
+                                        if (entity.IsValid())
+                                        {
+                                            if (entity.HasComponent<RigidbodyComponent>())
+                                            {
+                                                auto &rb = entity.GetComponent<RigidbodyComponent>();
+                                                rb.isGizmoDragging = true;
+                                                if (rb.body && scene->GetJoltScene())
+                                                {
+                                                    scene->GetJoltScene()->SetPosition(*rb.body, translation, true);
+                                                    scene->GetJoltScene()->SetRotation(*rb.body, rotation, true);
+                                                    scene->GetJoltScene()->SetLinearVelocity(*rb.body, glm::vec3(0.0f));
+                                                    scene->GetJoltScene()->GetBodyInterface()->SetAngularVelocity(rb.body->GetID(), JPH::Vec3(0.0f, 0.0f, 0.0f));
+                                                }
+                                            }
+                                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                            {
+                                                auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
+                                                rb2D.isGizmoDragging = true;
+                                                if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
+                                                {
+                                                    scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
+                                                    scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
+                                                    scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
+                                                    scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
+                                                    scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
                             }
 
                             // Commit a single command when the gizmo is released (single entity)
                             if (!isManipulatingNow && wasManipulating)
                             {
+                                if (isPlayOrSimulate)
+                                {
+                                    Application::SubmitToMainThread([scene = m_Scene, entity]() mutable {
+                                        if (entity.IsValid())
+                                        {
+                                            if (entity.HasComponent<RigidbodyComponent>())
+                                                entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
+                                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                                entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
+                                        }
+                                    });
+                                }
+
                                 if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
                                 {
                                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
