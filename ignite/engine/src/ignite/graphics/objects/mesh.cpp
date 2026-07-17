@@ -290,6 +290,7 @@ namespace ignite
 
             Ref<Material> material = CreateRef<Material>();
             material->name = fbxMaterial->GetName();
+			LOG_ASSERT(material->name.empty(), "FBX material has no name, using default name instead");
 
             glm::vec3 diffuse(1.0f);
             if (TryGetMaterialPropertyVec3(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, diffuse))
@@ -751,10 +752,12 @@ namespace ignite
             *materialIndex = primitive.material;
 
             const tinygltf::Material &gltfMaterial = gltfMaterials[primitive.material];
-            LOG_TRACE("Loading material: {}", gltfMaterial.name);
+
+			std::string materialName = gltfMaterial.name.empty() ? std::format("Material_{}", primitive.material) : gltfMaterial.name;
+            LOG_TRACE("Loading material: {}", materialName);
 
             material = CreateRef<Material>();
-            material->name = gltfMaterial.name;
+            material->name = materialName;
 
             material->gpuData.baseColorFactor =
             {
