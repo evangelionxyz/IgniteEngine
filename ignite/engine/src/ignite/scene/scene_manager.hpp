@@ -107,7 +107,7 @@ namespace ignite
             CopyComponentIfExists<Component...>(dstEntity, srcEntity);
         }
 
-        static void TransitionTo(AssetHandle nextSceneHandle);
+        static void Transition(AssetHandle nextSceneHandle);
         static void ExecutePendingTransition();
 
     private:

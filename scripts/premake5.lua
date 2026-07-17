@@ -34,7 +34,6 @@ workspace "IGN"
     end
 
 
-
 -- Generate .vcxproj.user for C++ projects that host .NET via hostfxr.
 -- Sets debugger type to "Mixed (.NET Core, .NET 5+)" and points the symbol
 -- search path at the per-configuration output directory so VS finds both
@@ -74,7 +73,7 @@ local function writeMixedDebuggerUserFile(prj, wksLocation)
 
         f:write(string.format("  <PropertyGroup Condition=\"%s\">\n", condition))
         f:write("    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n")
-        -- f:write("    <LocalDebuggerDebuggerType>NativeWithManagedCore</LocalDebuggerDebuggerType>\n")
+        f:write("    <LocalDebuggerDebuggerType>NativeWithManagedCore</LocalDebuggerDebuggerType>\n")
         f:write("    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>\n")
         f:write(string.format("    <LocalDebuggerSymbolPath>%s</LocalDebuggerSymbolPath>\n", symPath))
         f:write("  </PropertyGroup>\n")
@@ -105,6 +104,7 @@ premake.override(premake.action, "call", function(base, name)
                     f:write("  <PropertyGroup>\n")
                     f:write("    <BaseOutputPath>$(SolutionDir)Bin</BaseOutputPath>\n")
                     f:write("    <IntermediateOutputPath>$(SolutionDir)Bin/objs/$(MSBuildProjectName)/</IntermediateOutputPath>\n")
+                    f:write("    <DebugType>pdbonly</DebugType>\n")
                     f:write("    <Nullable>enable</Nullable>\n")
                     f:write("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>\n")
                     f:write("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>\n")

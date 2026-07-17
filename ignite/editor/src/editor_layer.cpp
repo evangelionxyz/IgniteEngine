@@ -137,35 +137,20 @@ namespace ignite
         Layer::OnDetach();
 
         // Close project
-		if (m_ActiveProject)
-		{
-			SaveProject();
-			OnSceneStop();
-
-			m_EditorScene.reset();
-			m_ActiveScene.reset();
-
-			m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
-
-			// Reset everything
-			m_CurrentProjectFilepath.clear();
-			m_CurrentSceneFilePath.clear();
-			m_CurrentSceneHandle = AssetHandle(0);
-		}
+        CloseCurrentProject();
 
         // Unsubscribe signals
-		SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
-		SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
-		m_ProjectReadySignalToken = kInvalidSignalToken;
+        SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
+        SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
+        m_ProjectReadySignalToken = kInvalidSignalToken;
         m_FileImportSignalToken = kInvalidSignalToken;
 
+        ContentBrowserPanel::ReleaseSharedResources();
         m_ContentBrowserPanels.clear();
         m_ContentBrowserPanelsPendingRemoval.clear();
         m_ContentBrowserPanel = nullptr;
-        ContentBrowserPanel::ReleaseSharedResources();
 
-        m_SceneRenderer = nullptr;
-		m_ActiveProject = nullptr;
+        m_SceneRenderer.reset();
     }
 
     void EditorLayer::AddContentBrowserPanel()
@@ -295,11 +280,6 @@ namespace ignite
             m_ActiveProject->GetAssetManager()->OnUpdate(deltaTime);
         }
 
-        if (m_ActiveProject && m_ActiveProject->GetActiveScene() != m_ActiveScene)
-        {
-            SetActiveScene(m_ActiveProject->GetActiveScene());
-        }
-
         // update panels
         if (m_ActiveScene)
         {
@@ -308,17 +288,17 @@ namespace ignite
 
             switch (m_ActiveScene->GetState())
             {
-            case ESceneState::Simulate:
-            case ESceneState::Play:
-            {
-                m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
-                break;
-            }
-            case ESceneState::Stop:
-            {
-                m_ActiveScene->OnUpdateEdit(deltaTime);
-                break;
-            }
+                case ESceneState::Simulate:
+                case ESceneState::Play:
+                {
+                    m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
+                    break;
+                }
+                case ESceneState::Stop:
+                {
+                    m_ActiveScene->OnUpdateEdit(deltaTime);
+                    break;
+                }
             }
 
             m_ScenePanel->OnUpdate(deltaTime);
@@ -327,7 +307,9 @@ namespace ignite
             // so users can't accidentally drag editor panels during gameplay.
             if (auto *imguiLayer = Application::GetInstance()->GetImGuiLayer())
             {
-                imguiLayer->SetBlock(m_ScenePanel->m_SceneFocused);
+                const bool isSceneFocused = m_ScenePanel->IsFocused() && m_ScenePanel->m_SceneFocused && m_ActiveScene->IsRunning()
+                    && (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
+                imguiLayer->SetBlock(isSceneFocused);
             }
         }
     }
@@ -385,19 +367,19 @@ namespace ignite
                     glm::vec3 focusCenter = tr.world.translation;
                     glm::vec3 halfExtents = glm::abs(tr.world.scale) * 0.5f;
 
-					if (entity.HasComponent<StaticMeshComponent>())
-					{
-						const auto &smc = entity.GetComponent<StaticMeshComponent>();
-						if (smc.handle != AssetHandle(0))
-						{
-							if (auto mesh = m_ActiveProject->GetAsset<StaticMesh>(smc.handle))
-							{
-								const auto &aabb = smc.worldAABB;
-								focusCenter = (aabb.min + aabb.max) * 0.5f;
-								halfExtents = glm::abs(aabb.max - aabb.min);
-							}
-						}
-					}
+                    if (entity.HasComponent<StaticMeshComponent>())
+                    {
+                        const auto &smc = entity.GetComponent<StaticMeshComponent>();
+                        if (smc.handle != AssetHandle(0))
+                        {
+                            if (auto mesh = m_ActiveProject->GetAsset<StaticMesh>(smc.handle))
+                            {
+                                const auto &aabb = smc.worldAABB;
+                                focusCenter = (aabb.min + aabb.max) * 0.5f;
+                                halfExtents = glm::abs(aabb.max - aabb.min);
+                            }
+                        }
+                    }
                     else if (entity.HasComponent<SkeletalMeshComponent>())
                     {
                         const auto &smc = entity.GetComponent<SkeletalMeshComponent>();
@@ -467,9 +449,9 @@ namespace ignite
             {
                 if (m_ActiveScene)
                 {
-					(m_ActiveScene->IsStopped() || m_ActiveScene->IsRunning())
-						? OnScenePlay()
-						: OnSceneStop();
+                    (m_ActiveScene->IsStopped() || m_ActiveScene->IsRunning())
+                        ? OnScenePlay()
+                        : OnSceneStop();
                 }
                 break;
             }
@@ -477,9 +459,9 @@ namespace ignite
             {
                 if (m_ActiveScene)
                 {
-					(m_ActiveScene->IsStopped() || m_ActiveScene->IsRunning())
-						? OnSceneSimulate()
-						: OnSceneStop();
+                    (m_ActiveScene->IsStopped() || m_ActiveScene->IsRunning())
+                        ? OnSceneSimulate()
+                        : OnSceneStop();
                 }
                 break;
             }
@@ -531,31 +513,31 @@ namespace ignite
             auto target = m_SceneRenderer->GetRenderTarget(editCamera);
             if (target)
             {
-				const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
-				const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
-				const bool framebufferNeedsResize = (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y);
-				const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
+                const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
+                const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
+                const bool framebufferNeedsResize = (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y);
+                const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
-				if (isFramebufferSizeValid)
-				{
-					// Resize camera
-					if (framebufferNeedsResize)
-					{
-						m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
-						m_State.editorResizing = true;
-					}
+                if (isFramebufferSizeValid)
+                {
+                    // Resize camera
+                    if (framebufferNeedsResize)
+                    {
+                        m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
+                        m_State.editorResizing = true;
+                    }
 
-					// Resize framebuffer when in stable frame
-					if (m_State.editorResizing)
-					{
-						if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-						{
-							m_SceneRenderer->ResizeFramebuffer(editCamera, desiredSize.x, desiredSize.y);
-							m_State.editorResizing = false;
-							m_State.editorResizingFrame = 0;
-						}
-					}
-				}
+                    // Resize framebuffer when in stable frame
+                    if (m_State.editorResizing)
+                    {
+                        if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+                        {
+                            m_SceneRenderer->ResizeFramebuffer(editCamera, desiredSize.x, desiredSize.y);
+                            m_State.editorResizing = false;
+                            m_State.editorResizingFrame = 0;
+                        }
+                    }
+                }
             }
             
         }
@@ -566,34 +548,34 @@ namespace ignite
             auto &cc = primaryCam.GetComponent<CameraComponent>();
             ICamera *gameCamera = &cc.camera;
             {
-				auto target = m_SceneRenderer->GetRenderTarget(gameCamera);
+                auto target = m_SceneRenderer->GetRenderTarget(gameCamera);
                 
                 if (target)
                 {
-					// Resize Game Viewport Framebuffer
+                    // Resize Game Viewport Framebuffer
                     const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
-					const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
-					const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-					const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
+                    const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
+                    const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+                    const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
-					if (isFramebufferSizeValid)
-					{
-						if (framebufferNeedsResize)
-						{
-							gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
-							m_State.gameplayResizing = true;
-						}
+                    if (isFramebufferSizeValid)
+                    {
+                        if (framebufferNeedsResize)
+                        {
+                            gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
+                            m_State.gameplayResizing = true;
+                        }
 
-						if (m_State.gameplayResizing)
-						{
-							if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-							{
-								m_SceneRenderer->ResizeFramebuffer(gameCamera, desiredSize.x, desiredSize.y);
-								m_State.gameplayResizing = false;
-								m_State.gameplayResizingFrame = 0;
-							}
-						}
-					}
+                        if (m_State.gameplayResizing)
+                        {
+                            if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+                            {
+                                m_SceneRenderer->ResizeFramebuffer(gameCamera, desiredSize.x, desiredSize.y);
+                                m_State.gameplayResizing = false;
+                                m_State.gameplayResizingFrame = 0;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -654,26 +636,26 @@ namespace ignite
             {
                 case ESceneState::Play:
                 {
-					if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
-					{
-						auto &cc = primaryCam.GetComponent<CameraComponent>();
-						// Copy the live view matrix from the game camera into our editor-side mirror camera.
-						// The projection is already sized to the Editor Viewport, so both viewports are independent.
-						m_EditorPlayCamera.SetView(cc.camera.GetView());
-						m_EditorPlayCamera.position = cc.camera.position;
-						{
-							IGN_PROFILE_SCOPE("SceneRenderer::RenderPlayToEditorViewport");
-							m_SceneRenderer->Render(&m_EditorPlayCamera, false);
-						}
+                    if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+                    {
+                        auto &cc = primaryCam.GetComponent<CameraComponent>();
+                        // Copy the live view matrix from the game camera into our editor-side mirror camera.
+                        // The projection is already sized to the Editor Viewport, so both viewports are independent.
+                        m_EditorPlayCamera.SetView(cc.camera.GetView());
+                        m_EditorPlayCamera.position = cc.camera.position;
+                        {
+                            IGN_PROFILE_SCOPE("SceneRenderer::RenderPlayToEditorViewport");
+                            m_SceneRenderer->Render(&m_EditorPlayCamera, false);
+                        }
                         break;
-					}
+                    }
                 }
                 case ESceneState::Simulate:
                 case ESceneState::Stop:
                 {
-					IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
-					m_SceneRenderer->Render(editCamera, true); // enable draw debug
-					break;
+                    IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                    m_SceneRenderer->Render(editCamera, true); // enable draw debug
+                    break;
                 }
             }
         }
@@ -697,60 +679,60 @@ namespace ignite
             auto target = m_SceneRenderer->GetRenderTarget(editCamera);
             if (target)
             {
-				auto sceneTexture = target->compositeRT->GetColorAttachment(0)->GetHandle();
-				nvrhi::TextureDesc stagingDesc = sceneTexture->getDesc();
-				stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-				auto screenShotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+                auto sceneTexture = target->compositeRT->GetColorAttachment(0)->GetHandle();
+                nvrhi::TextureDesc stagingDesc = sceneTexture->getDesc();
+                stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+                auto screenShotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
 
-				nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-				cmd->open();
-				cmd->copyTexture(screenShotStagingTexture, nvrhi::TextureSlice(), sceneTexture, nvrhi::TextureSlice());
-				cmd->close();
+                nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+                cmd->open();
+                cmd->copyTexture(screenShotStagingTexture, nvrhi::TextureSlice(), sceneTexture, nvrhi::TextureSlice());
+                cmd->close();
 
-				m_Device->executeCommandList(cmd);
+                m_Device->executeCommandList(cmd);
 
-				if (!screenShotStagingTexture)
-				{
-					m_State.takeScreenshot = false;
-				}
-				else
-				{
-					// Map and read the pixel data
-					size_t rowPitch = 0;
-					if (void *mappedData = m_Device->mapStagingTexture(screenShotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
-					{
-						static ImageData image;
-						image.width = screenShotStagingTexture->getDesc().width;
-						image.height = screenShotStagingTexture->getDesc().height;
+                if (!screenShotStagingTexture)
+                {
+                    m_State.takeScreenshot = false;
+                }
+                else
+                {
+                    // Map and read the pixel data
+                    size_t rowPitch = 0;
+                    if (void *mappedData = m_Device->mapStagingTexture(screenShotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
+                    {
+                        static ImageData image;
+                        image.width = screenShotStagingTexture->getDesc().width;
+                        image.height = screenShotStagingTexture->getDesc().height;
 
-						const uint32_t packedStride = image.width * 4u;
+                        const uint32_t packedStride = image.width * 4u;
 
-						image.pixels.resize(image.height * packedStride);
-						const auto src = static_cast<const uint8_t *>(mappedData);
-						uint8_t *dst = image.pixels.data();
+                        image.pixels.resize(image.height * packedStride);
+                        const auto src = static_cast<const uint8_t *>(mappedData);
+                        uint8_t *dst = image.pixels.data();
 
-						for (uint32_t y = 0u; y < image.height; ++y)
-						{
-							memcpy(dst + y * packedStride, src + y * rowPitch, packedStride);
-						}
+                        for (uint32_t y = 0u; y < image.height; ++y)
+                        {
+                            memcpy(dst + y * packedStride, src + y * rowPitch, packedStride);
+                        }
 
-						m_Device->unmapStagingTexture(screenShotStagingTexture);
+                        m_Device->unmapStagingTexture(screenShotStagingTexture);
 
-						const std::tm local_tm = Timestep::GetLocalTime();
+                        const std::tm local_tm = Timestep::GetLocalTime();
 
-						std::ostringstream oss;
-						oss << std::put_time(&local_tm, "igite_ss %D-%H-%M-%S");
-						std::string filename = oss.str();
-						stringutils::ReplaceWith(filename, "/", "-");
+                        std::ostringstream oss;
+                        oss << std::put_time(&local_tm, "igite_ss %D-%H-%M-%S");
+                        std::string filename = oss.str();
+                        stringutils::ReplaceWith(filename, "/", "-");
 
-						SDL_ShowSaveFileDialog(OnScreenshotSaveFileSelected, &image,
-							Application::GetInstance()->GetWindow()->GetWindowHandle(),
-							kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
-							filename.c_str());
-					}
+                        SDL_ShowSaveFileDialog(OnScreenshotSaveFileSelected, &image,
+                            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                            kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
+                            filename.c_str());
+                    }
 
-					m_State.takeScreenshot = false;
-				}
+                    m_State.takeScreenshot = false;
+                }
             }
         }
     }
@@ -813,10 +795,10 @@ namespace ignite
                     OpenProject();
                 }
 
-				else if (ImGui::MenuItem("Close Project", nullptr, false, m_ActiveProject != nullptr))
-				{
-					CloseCurrentProject();
-				}
+                else if (ImGui::MenuItem("Close Project", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    CloseCurrentProject();
+                }
 
                 ImGui::EndMenu();
             }
@@ -866,9 +848,9 @@ namespace ignite
                     m_ActiveProject->BuildSolution(true);
                 }
 
-				ProjectConfiguration currentConfig = m_ActiveProject->GetConfiguration();
-				static const char *configNames[] = { "Debug", "Release", "Shipping" };
-				const char *currentConfigName = configNames[static_cast<int>(currentConfig)];
+                ProjectConfiguration currentConfig = m_ActiveProject->GetConfiguration();
+                static const char *configNames[] = { "Debug", "Release", "Shipping" };
+                const char *currentConfigName = configNames[static_cast<int>(currentConfig)];
 
                 if (ImGui::BeginMenu("Active Configuration"))
                 {
@@ -876,13 +858,13 @@ namespace ignite
                     {
                         if (ImGui::MenuItem(configNames[i], nullptr, nullptr, i != (size_t)m_ActiveProject->GetConfiguration()))
                         {
-							m_ActiveProject->GetInfo().configuration = static_cast<ProjectConfiguration>(i);
-							AssetWorker::SubmitJob([this]()
-							{
-							    SaveProject();
-							    m_ActiveProject->BuildSolution(true);
-								m_ActiveProject->GetScriptEngine()->ReloadAssembly();
-							});
+                            m_ActiveProject->GetInfo().configuration = static_cast<ProjectConfiguration>(i);
+                            AssetWorker::SubmitJob([this]()
+                            {
+                                SaveProject();
+                                m_ActiveProject->BuildSolution(true);
+                                m_ActiveProject->GetScriptEngine()->ReloadAssembly();
+                            });
                         }
                     }
                     ImGui::EndMenu();
@@ -1126,7 +1108,7 @@ namespace ignite
         // Update all systems with new scene
         if (m_ScenePanel)
         {
-            m_ScenePanel->SetActiveScene(scene);
+            m_ScenePanel->SetActiveScene(scene.get());
         }
         
         if (m_ActiveProject)
@@ -1162,7 +1144,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-		OnSceneStop();
+        OnSceneStop();
 
         m_CurrentSceneFilePath.clear();
 
@@ -1239,7 +1221,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-		OnSceneStop();
+        OnSceneStop();
 
         if (Ref<Scene> openScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get()))
         {
@@ -1293,25 +1275,27 @@ namespace ignite
 
     void EditorLayer::CloseCurrentProject()
     {
-        if (m_ActiveProject)
-        {
-            SaveProject();
+        if (!m_ActiveProject)
+            return;
 
-            OnSceneStop();
+		SaveProject();
+		OnSceneStop();
 
-            SetActiveScene(nullptr);
+		m_EditorScene.reset();
+		m_ActiveScene.reset();
 
-            m_EditorScene.reset();
-            m_ActiveScene.reset();
+		if (m_AssetEditorPanel)
+		{
+			m_AssetEditorPanel->CloseAllAssetEditors();
+		}
 
-            m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
+		m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
 
-            // Reset everything
-            m_ActiveProject.reset();
-            m_CurrentProjectFilepath.clear();
-            m_CurrentSceneFilePath.clear();
-            m_CurrentSceneHandle = AssetHandle(0);
-        }
+		// Reset everything
+		m_ActiveProject.reset();
+		m_CurrentProjectFilepath.clear();
+		m_CurrentSceneFilePath.clear();
+		m_CurrentSceneHandle = AssetHandle(0);
     }
 
     void EditorLayer::OpenProject(const ignite::Path &filepath)
@@ -1330,9 +1314,9 @@ namespace ignite
 
         if (const Ref<Project> openedProject = Project::Deserialize(filepath))
         {
-			// Subscribe Build Solution callback
-			m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
-				{ OnProjectReadySignal(signal); });
+            // Subscribe Build Solution callback
+            m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
+                { OnProjectReadySignal(signal); });
 
             m_ActiveProject = openedProject;
             m_CurrentProjectFilepath = filepath;
@@ -1347,31 +1331,35 @@ namespace ignite
 
     void EditorLayer::OnScenePlay()
     {
-		if (m_EditorScene)
-		{
-			m_EditorScene->OnStop();
-		}
+        if (m_EditorScene)
+            m_EditorScene->OnStop();
 
-		m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
+        OnSceneStop();
 
-		OnSceneStop();
-
-		// copy initial components to new scene
-		SetActiveScene(SceneManager::Copy(m_EditorScene));
-		m_ActiveScene->OnStart(ESceneState::Play);
+        // copy initial components to new scene
+        SetActiveScene(SceneManager::Copy(m_EditorScene));
+        m_ActiveScene->OnStart(ESceneState::Play);
     }
 
     void EditorLayer::OnSceneStop()
     {
-		m_ActiveScene->OnStop();
-		SetActiveScene(m_EditorScene);
+        if (m_EditorScene)
+            m_EditorScene->OnStop();
+
+        m_ActiveScene->OnStop();
+        SetActiveScene(m_EditorScene);
     }
 
     void EditorLayer::OnSceneSimulate()
     {
-		// copy initial components to new scene
-		SetActiveScene(SceneManager::Copy(m_EditorScene));
-		m_ActiveScene->OnStart(ESceneState::Simulate);
+        if (m_EditorScene)
+            m_EditorScene->OnStop();
+
+        OnSceneStop();
+
+        // copy initial components to new scene
+        SetActiveScene(SceneManager::Copy(m_EditorScene));
+        m_ActiveScene->OnStart(ESceneState::Simulate);
     }
 
     void EditorLayer::OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter)
@@ -1404,17 +1392,17 @@ namespace ignite
 
             editor->m_CurrentSceneFilePath = filepath;
 
-			Application::SubmitToMainThread([editor, file = filepath, userData]()
-			{
-				SignalBus::Emit<FileImportPayload>(
-					FileImportPayload{ 
+            Application::SubmitToMainThread([editor, file = filepath, userData]()
+            {
+                SignalBus::Emit<FileImportPayload>(
+                    FileImportPayload{ 
                         .type = ImportType::Save, 
                         .status = FileStatus::Success, 
                         .metadata = AssetMetaData(file, AssetType::Scene),
                         .userData = userData
                     }
-				);
-			});
+                );
+            });
         }
     }
 
@@ -1441,17 +1429,17 @@ namespace ignite
         if (!filepath.empty())
         {
             
-			Application::SubmitToMainThread([editor, file = filepath, userData]()
-			{
-				SignalBus::Emit<FileImportPayload>(
-					FileImportPayload{ 
+            Application::SubmitToMainThread([editor, file = filepath, userData]()
+            {
+                SignalBus::Emit<FileImportPayload>(
+                    FileImportPayload{ 
                         .type = ImportType::Open,
                         .status = FileStatus::Success, 
                         .metadata = AssetMetaData(file, AssetType::Scene), 
                         .userData = userData 
                     }
-				);
-			});
+                );
+            });
         }
     }
 
@@ -1483,17 +1471,17 @@ namespace ignite
                 filepath += ".ixproj";
             }
 
-			Application::SubmitToMainThread([editor, file = filepath, userData]()
-			{
-				SignalBus::Emit<FileImportPayload>(
-					FileImportPayload{ 
+            Application::SubmitToMainThread([editor, file = filepath, userData]()
+            {
+                SignalBus::Emit<FileImportPayload>(
+                    FileImportPayload{ 
                         .type = ImportType::Save, 
                         .status = FileStatus::Success, 
                         .metadata = AssetMetaData(file, AssetType::Project), 
                         .userData = userData
                     }
-				);
-			});
+                );
+            });
         }
     }
 
@@ -1569,158 +1557,158 @@ namespace ignite
         }
     }
 
-	void EditorLayer::OnProjectReadySignal(const SuccessResultSignal &signal)
-	{
-		if (signal.isSuccess && signal.type == SignalType::Project)
-		{
-			// One shot signal
-			SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
-			m_ProjectReadySignalToken = kInvalidSignalToken;
-
-			// Reload project files
-			ReloadContentBrowserPanels();
-
-			// Get Project default scene (use immediate load for synchronous path)
-			AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
-			if (defSceneAssetHandle != AssetHandle(0))
-			{
-				// Use GetAssetImmediate since we're on main thread and need synchronous load
-				if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
-				{
-					m_EditorScene = SceneManager::Copy(activeScene);
-					m_EditorScene->SetDirtyFlag(false);
-					SetActiveScene(m_EditorScene);
-
-					const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
-
-					m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
-					m_CurrentSceneHandle = activeScene->handle;
-				}
-				else
-				{
-					// Create a default scene if load failed
-					NewScene();
-				}
-			}
-			else
-			{
-				// Create a default scene
-				NewScene();
-			}
-		}
-	}
-
-	void EditorLayer::OnFileImport(const FileImportPayload &payload)
+    void EditorLayer::OnProjectReadySignal(const SuccessResultSignal &signal)
     {
-		switch (payload.type)
-		{
-		case ImportType::Open:
-		{
-			if (payload.metadata.type == AssetType::Scene)
-			{
-				// Submit scene loading to asset worker
-				ignite::Path filepath = payload.metadata.filepath;
-				AssetHandle sceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
+        if (signal.isSuccess && signal.type == SignalType::Project)
+        {
+            // One shot signal
+            SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
+            m_ProjectReadySignalToken = kInvalidSignalToken;
 
-				if (m_CurrentSceneHandle == sceneHandle)
-					break;
+            // Reload project files
+            ReloadContentBrowserPanels();
 
-				m_CurrentSceneHandle = sceneHandle;
+            // Get Project default scene (use immediate load for synchronous path)
+            AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
+            if (defSceneAssetHandle != AssetHandle(0))
+            {
+                // Use GetAssetImmediate since we're on main thread and need synchronous load
+                if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
+                {
+                    m_EditorScene = SceneManager::Copy(activeScene);
+                    m_EditorScene->SetDirtyFlag(false);
+                    SetActiveScene(m_EditorScene);
 
-				// Submit heavy I/O work to asset worker
-				AssetWorker::SubmitJob([this, filepath, sceneHandle]()
-					{
-						AssetWorker::ReportStatus(std::format("Loading scene {}...", filepath.filename().string()), 0.5f);
+                    const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
 
-						// Load scene on worker thread (I/O happens here)
-						Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
-						if (loadedScene)
-						{
-							// Submit UI update back to main thread
-							Application::SubmitToMainThread([this, loadedScene, filepath]() mutable
-								{
-									AssetWorker::ReportStatus("Finalizing scene load...", 0.9f);
+                    m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
+                    m_CurrentSceneHandle = activeScene->handle;
+                }
+                else
+                {
+                    // Create a default scene if load failed
+                    NewScene();
+                }
+            }
+            else
+            {
+                // Create a default scene
+                NewScene();
+            }
+        }
+    }
 
-									if (m_EditorScene)
-									{
-										m_EditorScene->OnStop();
-									}
+    void EditorLayer::OnFileImport(const FileImportPayload &payload)
+    {
+        switch (payload.type)
+        {
+        case ImportType::Open:
+        {
+            if (payload.metadata.type == AssetType::Scene)
+            {
+                // Submit scene loading to asset worker
+                ignite::Path filepath = payload.metadata.filepath;
+                AssetHandle sceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
 
-									OnSceneStop();
+                if (m_CurrentSceneHandle == sceneHandle)
+                    break;
 
-									// Clear active scene references
-									SetActiveScene(nullptr);
+                m_CurrentSceneHandle = sceneHandle;
 
-									// Wait for GPU
-									if (m_Device)
-									{
-										m_Device->waitForIdle();
-									}
+                // Submit heavy I/O work to asset worker
+                AssetWorker::SubmitJob([this, filepath, sceneHandle]()
+                    {
+                        AssetWorker::ReportStatus(std::format("Loading scene {}...", filepath.filename().string()), 0.5f);
 
-									// Reset old scene
-									m_EditorScene.reset();
-									m_ActiveScene.reset();
+                        // Load scene on worker thread (I/O happens here)
+                        Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
+                        if (loadedScene)
+                        {
+                            // Submit UI update back to main thread
+                            Application::SubmitToMainThread([this, loadedScene, filepath]() mutable
+                                {
+                                    AssetWorker::ReportStatus("Finalizing scene load...", 0.9f);
 
-									// Unload unused assets
-									if (m_ActiveProject)
-									{
-										m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
-									}
+                                    if (m_EditorScene)
+                                    {
+                                        m_EditorScene->OnStop();
+                                    }
 
-									// Copy and activate new scene
-									m_EditorScene = SceneManager::Copy(loadedScene);
-									m_EditorScene->SetDirtyFlag(false);
-									SetActiveScene(m_EditorScene);
-									m_CurrentSceneFilePath = filepath;
+                                    OnSceneStop();
 
-									AssetWorker::ReportStatus("Ready", 0.0f);
-								});
-						}
-						else
-						{
-							LOG_ERROR("[Editor] Failed to load scene: {}", filepath.generic_string());
-						}
-					});
-			}
-			else if (payload.metadata.type == AssetType::Project)
-			{
-				ignite::Path filepath = payload.metadata.filepath;
+                                    // Clear active scene references
+                                    SetActiveScene(nullptr);
 
-				if (filepath == m_CurrentProjectFilepath)
-				{
-					LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
-					break;
-				}
+                                    // Wait for GPU
+                                    if (m_Device)
+                                    {
+                                        m_Device->waitForIdle();
+                                    }
 
-				OpenProject(filepath);
-			}
-			break;
-		}
-		case ImportType::Save:
-		{
-			if (payload.metadata.type == AssetType::Scene)
-			{
-				// Submit scene save to asset worker
-				ignite::Path filepath = payload.metadata.filepath;
+                                    // Reset old scene
+                                    m_EditorScene.reset();
+                                    m_ActiveScene.reset();
 
-				// AssetWorker::SubmitJob([this, filepath]()
-				Application::SubmitToMainThread([this, filepath]()
-					{
-						SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
-						serializer.Serialize(filepath);
+                                    // Unload unused assets
+                                    if (m_ActiveProject)
+                                    {
+                                        m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
+                                    }
 
-						LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
+                                    // Copy and activate new scene
+                                    m_EditorScene = SceneManager::Copy(loadedScene);
+                                    m_EditorScene->SetDirtyFlag(false);
+                                    SetActiveScene(m_EditorScene);
+                                    m_CurrentSceneFilePath = filepath;
 
-						RefreshContentBrowsers();
-					});
-			}
-			else if (payload.metadata.type == AssetType::Project)
-			{
-				SaveProjectAs();
-			}
-			break;
-		}
-		}
+                                    AssetWorker::ReportStatus("Ready", 0.0f);
+                                });
+                        }
+                        else
+                        {
+                            LOG_ERROR("[Editor] Failed to load scene: {}", filepath.generic_string());
+                        }
+                    });
+            }
+            else if (payload.metadata.type == AssetType::Project)
+            {
+                ignite::Path filepath = payload.metadata.filepath;
+
+                if (filepath == m_CurrentProjectFilepath)
+                {
+                    LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
+                    break;
+                }
+
+                OpenProject(filepath);
+            }
+            break;
+        }
+        case ImportType::Save:
+        {
+            if (payload.metadata.type == AssetType::Scene)
+            {
+                // Submit scene save to asset worker
+                ignite::Path filepath = payload.metadata.filepath;
+
+                // AssetWorker::SubmitJob([this, filepath]()
+                Application::SubmitToMainThread([this, filepath]()
+                    {
+                        SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
+                        serializer.Serialize(filepath);
+
+                        LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
+
+                        RefreshContentBrowsers();
+                    });
+            }
+            else if (payload.metadata.type == AssetType::Project)
+            {
+                SaveProjectAs();
+            }
+            break;
+        }
+        }
     }
 
     void EditorLayer::UIProjectCreation()
@@ -1809,9 +1797,9 @@ namespace ignite
 
                 if (Ref<Project> newProject = Project::Create(m_State.projectCreateInfo))
                 {
-					// Subscribe Build Solution callback
-					m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
-						{ OnProjectReadySignal(signal); });
+                    // Subscribe Build Solution callback
+                    m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
+                        { OnProjectReadySignal(signal); });
 
                     // Submit to main thread to sync
                     Application::SubmitToMainThread([this, newProject]()
@@ -1888,11 +1876,11 @@ namespace ignite
 
 
         // ----------------------------------------
-		// ASSET REGISTRY & MEMORY MONITOR
+        // ASSET REGISTRY & MEMORY MONITOR
         // ----------------------------------------
         if (m_ActiveScene && m_State.assetRegistryWindow)
         {
-			auto assetManager = AssetManager::GetInstance();
+            auto assetManager = AssetManager::GetInstance();
             AssetRegistry assetRegistry = assetManager->GetAssetAssetRegistry();
             const auto &loadedAssets = assetManager->GetLoadedAssets();
 
@@ -1914,92 +1902,92 @@ namespace ignite
             ImGui::SetNextWindowSize(ImVec2(940, 512), ImGuiCond_FirstUseEver);
             ImGui::Begin("Asset Registry & Memory Monitor", &m_State.assetRegistryWindow);
 
-			// === Asset Statistics & Memory Usage ===
-			std::unordered_map<AssetType, int> registeredCounts;
-			std::unordered_map<AssetType, int> loadedCounts;
-			std::unordered_map<AssetType, size_t> memoryUsage;
+            // === Asset Statistics & Memory Usage ===
+            std::unordered_map<AssetType, int> registeredCounts;
+            std::unordered_map<AssetType, int> loadedCounts;
+            std::unordered_map<AssetType, size_t> memoryUsage;
 
-			// Display table
-			constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg 
+            // Display table
+            constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg 
                 | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable;
-			
+            
             if (ImGui::BeginTable("asset_statistics_memory_usage", 2, ImGuiTableFlags_SizingStretchProp | tableFlags))
-			{
-				ImGui::TableNextRow();
-				ImGui::TableNextColumn();
-				ImGui::AlignTextToFramePadding();
+            {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::AlignTextToFramePadding();
 
-				for (const auto &[handle, metadata] : assetRegistry)
-					registeredCounts[metadata.type]++;
+                for (const auto &[handle, metadata] : assetRegistry)
+                    registeredCounts[metadata.type]++;
 
-				for (const auto &[handle, asset] : loadedAssets)
-				{
-					if (asset)
-					{
-						AssetType type = assetManager->GetAssetType(handle);
-						loadedCounts[type]++;
-						// Use on-disk file size as a reasonable memory estimate
-						const AssetMetaData &meta = assetManager->GetMetaData(handle);
-						memoryUsage[type] += assetManager->GetAssetFileSize(meta);
-					}
-				}
+                for (const auto &[handle, asset] : loadedAssets)
+                {
+                    if (asset)
+                    {
+                        AssetType type = assetManager->GetAssetType(handle);
+                        loadedCounts[type]++;
+                        // Use on-disk file size as a reasonable memory estimate
+                        const AssetMetaData &meta = assetManager->GetMetaData(handle);
+                        memoryUsage[type] += assetManager->GetAssetFileSize(meta);
+                    }
+                }
 
-				// Left column - Asset counts
-				int totalRegistered = 0;
-				for (const auto &[type, count] : registeredCounts)
-				{
-					if (type != AssetType::Invalid)
-					{
-						ImGui::Text("%s: %d", AssetTypeToString(type).c_str(), count);
-						totalRegistered += count;
-					}
-				}
-				ImGui::Separator();
-				ImGui::Text("Total Registered: %d", totalRegistered);
+                // Left column - Asset counts
+                int totalRegistered = 0;
+                for (const auto &[type, count] : registeredCounts)
+                {
+                    if (type != AssetType::Invalid)
+                    {
+                        ImGui::Text("%s: %d", AssetTypeToString(type).c_str(), count);
+                        totalRegistered += count;
+                    }
+                }
+                ImGui::Separator();
+                ImGui::Text("Total Registered: %d", totalRegistered);
 
-				ImGui::TableNextColumn(); // ------------ NEXT COLUMN ------------
+                ImGui::TableNextColumn(); // ------------ NEXT COLUMN ------------
 
-				// Right column - Loaded assets & memory
-				int totalLoaded = 0;
-				for (const auto &[type, count] : loadedCounts)
-				{
-					if (type != AssetType::Invalid)
-					{
-						float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
+                // Right column - Loaded assets & memory
+                int totalLoaded = 0;
+                for (const auto &[type, count] : loadedCounts)
+                {
+                    if (type != AssetType::Invalid)
+                    {
+                        float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
 
-						// Color code by type
-						ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
-						if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-						else if (type == AssetType::Mesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
-						else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
+                        // Color code by type
+                        ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
+                        if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
+                        else if (type == AssetType::Mesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+                        else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
 
-						ImGui::TextColored(color, "%s: %d (%.1f%%)", AssetTypeToString(type).c_str(), count, percentage);
+                        ImGui::TextColored(color, "%s: %d (%.1f%%)", AssetTypeToString(type).c_str(), count, percentage);
 
-						if (memoryUsage[type] > 0)
-						{
-							const size_t bytes = memoryUsage[type];
-							ImGui::SameLine();
-							if (bytes >= 1024u * 1024u)
-								ImGui::Text("~%.1f MB", bytes / (1024.0f * 1024.0f));
-							else
-								ImGui::Text("~%zu KB", bytes / 1024u);
-						}
+                        if (memoryUsage[type] > 0)
+                        {
+                            const size_t bytes = memoryUsage[type];
+                            ImGui::SameLine();
+                            if (bytes >= 1024u * 1024u)
+                                ImGui::Text("~%.1f MB", bytes / (1024.0f * 1024.0f));
+                            else
+                                ImGui::Text("~%zu KB", bytes / 1024u);
+                        }
 
-						totalLoaded += count;
-					}
-				}
+                        totalLoaded += count;
+                    }
+                }
 
-				ImGui::Separator();
-				ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Total Loaded: %d", totalLoaded);
+                ImGui::Separator();
+                ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Total Loaded: %d", totalLoaded);
 
-				// Memory usage bar
-				const float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
+                // Memory usage bar
+                const float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
                 const auto memoryLoadText = std::format("Memory Load: {} %", (int)(loadRatio * 100));
                 const float textWidth = ImGui::CalcTextSize(memoryLoadText.c_str()).x + 16.0f;
-				ImGui::ProgressBar(loadRatio, ImVec2(textWidth, 0.0f), memoryLoadText.c_str());
-				
-				ImGui::EndTable();
-			}
+                ImGui::ProgressBar(loadRatio, ImVec2(textWidth, 0.0f), memoryLoadText.c_str());
+                
+                ImGui::EndTable();
+            }
 
             // === FILTERS & CONTROLS ===
             if (ImGui::BeginTable("asset_registry_controls", 2, ImGuiTableFlags_SizingStretchProp))
@@ -2064,7 +2052,7 @@ namespace ignite
                 ImGui::SameLine();
                 ImGui::Checkbox("Full Path", &showFullPath);
 
-				ImGui::TableNextColumn(); // ------------ NEXT COLUMN ------------
+                ImGui::TableNextColumn(); // ------------ NEXT COLUMN ------------
 
                 ImGui::BeginGroup();
                 if (ImGui::SmallButton("Refresh Registry"))

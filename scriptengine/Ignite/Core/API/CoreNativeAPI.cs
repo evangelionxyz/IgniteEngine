@@ -162,6 +162,6 @@ public static class CoreNativeAPI
         public delegate IntPtr ScriptableObjectGetClassNameFn(ulong handle);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void SceneTransitionToFn(ulong sceneAssetHandle);
+        public delegate void SceneLoadFn(ulong sceneAssetHandle);
     }
 }

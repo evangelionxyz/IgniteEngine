@@ -147,8 +147,6 @@ namespace ignite
                                 {
                                     shape = offsetResult.Get();
                                     m_BodyInterface->SetShape(rb.body->GetID(), shape.GetPtr(), true, JPH::EActivation::Activate);
-                                    m_BodyInterface->SetFriction(rb.body->GetID(), col.friction);
-                                    m_BodyInterface->SetRestitution(rb.body->GetID(), col.restitution);
                                     col.shape = (void *)shape.GetPtr();
                                 }
                             }
@@ -177,8 +175,6 @@ namespace ignite
                                 {
                                     shape = offsetResult.Get();
                                     m_BodyInterface->SetShape(rb.body->GetID(), shape.GetPtr(), true, JPH::EActivation::Activate);
-                                    m_BodyInterface->SetFriction(rb.body->GetID(), col.friction);
-                                    m_BodyInterface->SetRestitution(rb.body->GetID(), col.restitution);
                                     col.shape = (void *)shape.GetPtr();
                                 }
                             }
@@ -209,8 +205,6 @@ namespace ignite
                                 {
                                     JPH::ShapeRefC shape = shapeResult.Get();
                                     m_BodyInterface->SetShape(rb.body->GetID(), shape.GetPtr(), true, JPH::EActivation::Activate);
-                                    m_BodyInterface->SetFriction(rb.body->GetID(), col.friction);
-                                    m_BodyInterface->SetRestitution(rb.body->GetID(), col.restitution);
                                     col.shape = (void *)shape.GetPtr();
                                 }
                             }
@@ -293,8 +287,6 @@ namespace ignite
                             if (shape)
                             {
                                 m_BodyInterface->SetShape(rb.body->GetID(), shape.GetPtr(), true, JPH::EActivation::Activate);
-                                m_BodyInterface->SetFriction(rb.body->GetID(), col.friction);
-                                m_BodyInterface->SetRestitution(rb.body->GetID(), col.restitution);
                                 col.shape = (void *)shape.GetPtr();
                             }
                         }
@@ -302,52 +294,46 @@ namespace ignite
                     }
                 }
 
-                if (tr.dirtyPhysics)
-                {
-                    SetPosition(*rb.body, tr.world.translation, true);
-                    SetRotation(*rb.body, tr.world.rotation, true);
-                    tr.dirtyPhysics = false;
-                }
-                else
-                {
-                    glm::vec3 worldTranslation = JoltToGlmVec3(rb.body->GetPosition());
-                    glm::quat worldRotation = JoltToGlmQuat(rb.body->GetRotation());
+                if (rb.isGizmoDragging)
+                    continue;
 
-                    if (idc.parent != 0)
-                    {
-                        Entity parentEntity = SceneManager::GetEntity(m_Scene, idc.parent);
-                        if (parentEntity.IsValid())
-                        {
-                            const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
-                            glm::mat4 parentWorldMatrix = parentTr.world.GetMatrix();
-                            glm::mat4 invParentWorldMatrix = glm::inverse(parentWorldMatrix);
-                            
-                            glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation) * glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), tr.world.scale);
-                            glm::mat4 childLocalMatrix = invParentWorldMatrix * childWorldMatrix;
-                            
-                            glm::vec3 savedLocalScale = tr.local.scale;
-                            Transform::Decompose(childLocalMatrix, tr.local);
-                            tr.local.scale = savedLocalScale;
-                            
-                            tr.world.translation = worldTranslation;
-                            tr.world.rotation = worldRotation;
-                        }
-                        else
-                        {
-                            tr.local.translation = worldTranslation;
-                            tr.local.rotation = worldRotation;
-                            tr.world.translation = worldTranslation;
-                            tr.world.rotation = worldRotation;
-                        }
-                    }
-                    else
-                    {
-                        tr.local.translation = worldTranslation;
-                        tr.local.rotation = worldRotation;
-                        tr.world.translation = worldTranslation;
-                        tr.world.rotation = worldRotation;
-                    }
-                }
+				glm::vec3 worldTranslation = JoltToGlmVec3(rb.body->GetPosition());
+				glm::quat worldRotation = JoltToGlmQuat(rb.body->GetRotation());
+
+				if (idc.parent != 0)
+				{
+					Entity parentEntity = SceneManager::GetEntity(m_Scene, idc.parent);
+					if (parentEntity.IsValid())
+					{
+						const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
+						glm::mat4 parentWorldMatrix = parentTr.world.GetMatrix();
+						glm::mat4 invParentWorldMatrix = glm::inverse(parentWorldMatrix);
+
+						glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation) * glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), tr.world.scale);
+						glm::mat4 childLocalMatrix = invParentWorldMatrix * childWorldMatrix;
+
+						glm::vec3 savedLocalScale = tr.local.scale;
+						Transform::Decompose(childLocalMatrix, tr.local);
+						tr.local.scale = savedLocalScale;
+
+						tr.world.translation = worldTranslation;
+						tr.world.rotation = worldRotation;
+					}
+					else
+					{
+						tr.local.translation = worldTranslation;
+						tr.local.rotation = worldRotation;
+						tr.world.translation = worldTranslation;
+						tr.world.rotation = worldRotation;
+					}
+				}
+				else
+				{
+					tr.local.translation = worldTranslation;
+					tr.local.rotation = worldRotation;
+					tr.world.translation = worldTranslation;
+					tr.world.rotation = worldRotation;
+				}
             }
         }
 
@@ -424,6 +410,22 @@ namespace ignite
             motionType == JPH::EMotionType::Static ? Layers::NON_MOVING : Layers::MOVING);
 
         bodySettings.mMotionQuality = static_cast<JPH::EMotionQuality>(rb.motionQuality);
+        bodySettings.mIsSensor = rb.isSensor;
+		bodySettings.mGravityFactor = rb.gravityFactor;
+		bodySettings.mLinearDamping = rb.linearDamping;
+		bodySettings.mAngularDamping = rb.angularDamping;
+		bodySettings.mFriction = rb.friction;
+        bodySettings.mRestitution = rb.restitution;
+		bodySettings.mAllowSleeping = rb.allowSleeping;
+		bodySettings.mApplyGyroscopicForce = rb.applyGyroscopicForce;
+		bodySettings.mMaxLinearVelocity = rb.maxLinearVelocity;
+		bodySettings.mMaxAngularVelocity = rb.maxAngularVelocity;
+        bodySettings.mLinearVelocity = GlmToJoltVec3(rb.linearVelocity);
+		bodySettings.mAngularVelocity = GlmToJoltVec3(rb.angularVelocity);
+		bodySettings.mMassPropertiesOverride.mMass = rb.mass;
+
+		// TODO: Add support for collision group
+        // bodySettings.mCollisionGroup
 
         bodySettings.mAllowedDOFs = JPH::EAllowedDOFs::None;
         if (rb.rotateX) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::RotationX;
@@ -476,8 +478,6 @@ namespace ignite
         {
             JPH::BodyID bodyId = body->GetID();
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
-            m_BodyInterface->SetFriction(bodyId, col.friction);
-            m_BodyInterface->SetRestitution(bodyId, col.restitution);
             body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
@@ -549,8 +549,6 @@ namespace ignite
         {
             JPH::BodyID bodyId = body->GetID();
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
-            m_BodyInterface->SetFriction(bodyId, col.friction);
-            m_BodyInterface->SetRestitution(bodyId, col.restitution);
             body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
@@ -613,8 +611,6 @@ namespace ignite
         {
             JPH::BodyID bodyId = body->GetID();
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
-            m_BodyInterface->SetFriction(bodyId, col.friction);
-            m_BodyInterface->SetRestitution(bodyId, col.restitution);
             body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
@@ -681,8 +677,6 @@ namespace ignite
         {
             JPH::BodyID bodyId = body->GetID();
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
-            m_BodyInterface->SetFriction(bodyId, col.friction);
-            m_BodyInterface->SetRestitution(bodyId, col.restitution);
             body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
@@ -800,8 +794,6 @@ namespace ignite
         {
             JPH::BodyID bodyId = body->GetID();
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
-            m_BodyInterface->SetFriction(bodyId, col.friction);
-            m_BodyInterface->SetRestitution(bodyId, col.restitution);
             body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
@@ -949,7 +941,12 @@ namespace ignite
         body.GetMotionProperties()->SetMaxAngularVelocity(max);
     }
 
-    JoltRaycastHit JoltScene::Raycast(const glm::vec3 &origin, const glm::vec3 &direction, float maxDistance)
+	void JoltScene::SetMassProperties(JPH::Body &body, const JPH::MassProperties &props)
+	{
+		body.GetMotionProperties()->SetMassProperties(body.GetMotionProperties()->GetAllowedDOFs(), props);
+	}
+
+	JoltRaycastHit JoltScene::Raycast(const glm::vec3 &origin, const glm::vec3 &direction, float maxDistance)
     {
         JoltRaycastHit result;
 

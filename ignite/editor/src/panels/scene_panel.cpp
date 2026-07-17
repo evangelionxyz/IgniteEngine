@@ -35,6 +35,9 @@
 #include "ignite/scene/component_property_command.hpp"
 #include "ignite/globals/globals.hpp"
 
+#include "ignite/physics/2d/physics_2d.hpp"
+#include "ignite/physics/3d/jolt/jolt_physics.hpp"
+
 #include "ext/imgui_orientation.hpp"
 #include "ext/imgui_knobs.hpp"
 #include "ext/editor_ui.hpp"
@@ -74,7 +77,6 @@ namespace ignite
 
     ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
         : IPanel(windowTitle, editor)
-        , m_Gizmo()
         , m_SceneFocused(false)
         , m_Scene(nullptr)
         , m_SceneFocusCooldown(0)
@@ -138,10 +140,17 @@ namespace ignite
 
     ScenePanel::~ScenePanel()
     {
+        if (m_EditorLayer)
+        {
+            m_EditorLayer->m_ScenePanel = nullptr;
+        }
     }
 
-    void ScenePanel::SetActiveScene(const Ref<Scene> &scene)
+    void ScenePanel::SetActiveScene(Scene *scene)
     {
+        if (m_Scene == scene)
+            return;
+
         m_Scene = scene;
         m_SelectedEntities.clear();
     }
@@ -199,7 +208,7 @@ namespace ignite
                 for (size_t i = 0; i < count; ++i)
                 {
                     const UUID uuid = droppedUUIDs[i];
-                    Entity droppedEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
+                    Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
 
                     if (!droppedEntity)
                         continue;
@@ -210,13 +219,13 @@ namespace ignite
                     {
                         UUID oldParent = idComp.parent;
                         // current parent should be removed
-                        Entity parent = SceneManager::GetEntity(m_Scene.get(), idComp.parent);
+                        Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
                         parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
                         idComp.parent = UUID(0);
 
                         // Record for undo — re-parenting to root (UUID 0)
                         CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
-                            m_Scene.get(), droppedEntity.GetUUID(), oldParent, UUID(0)));
+                            m_Scene, droppedEntity.GetUUID(), oldParent, UUID(0)));
                     }
                 }
             }
@@ -243,7 +252,7 @@ namespace ignite
             {
                 if (id.parent == UUID(0))
                 {
-                    rootEntities.emplace_back(e, m_Scene.get());
+                    rootEntities.emplace_back(e, m_Scene);
                 }
             });
 
@@ -273,15 +282,15 @@ namespace ignite
         Entity entity = {};
         if (ImGui::MenuItem("Empty"))
         {
-            entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Empty"));
+            entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Empty"));
         }
         if (ImGui::MenuItem("Camera"))
         {
-            entity = SetSelectedEntity(SceneManager::CreateCamera(m_Scene.get(), "Camera"));
+            entity = SetSelectedEntity(SceneManager::CreateCamera(m_Scene, "Camera"));
         }
         if (ImGui::MenuItem("Widget"))
         {
-            entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Widget"));
+            entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Widget"));
             if (entity.IsValid() && !entity.HasComponent<WidgetComponent>())
             {
                 entity.AddComponent<WidgetComponent>();
@@ -292,15 +301,15 @@ namespace ignite
         {
             if (ImGui::MenuItem("Sprite"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateSprite(m_Scene.get(), "Sprite"));
+                entity = SetSelectedEntity(SceneManager::CreateSprite(m_Scene, "Sprite"));
             }
             if (ImGui::MenuItem("Circle"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateCircle(m_Scene.get(), "Circle"));
+                entity = SetSelectedEntity(SceneManager::CreateCircle(m_Scene, "Circle"));
             }
             if (ImGui::MenuItem("Point Light"))
             {
-                entity = SetSelectedEntity(SceneManager::CreatePointLight2D(m_Scene.get(), "Point Light 2D"));
+                entity = SetSelectedEntity(SceneManager::CreatePointLight2D(m_Scene, "Point Light 2D"));
             }
             ImGui::EndMenu();
         }
@@ -309,7 +318,7 @@ namespace ignite
         {
             if (ImGui::MenuItem("Skeletal Mesh"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Skeletal Mesh"));
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Skeletal Mesh"));
                 if (entity.IsValid() && !entity.HasComponent<SkeletalMeshComponent>())
                 {
                     entity.AddComponent<SkeletalMeshComponent>();
@@ -317,7 +326,7 @@ namespace ignite
             }
             if (ImGui::MenuItem("Static Mesh"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Static Mesh"));
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Static Mesh"));
                 if (entity.IsValid() && !entity.HasComponent<StaticMeshComponent>())
                 {
                     entity.AddComponent<StaticMeshComponent>();
@@ -325,7 +334,7 @@ namespace ignite
             }
             if (ImGui::MenuItem("Directional Light"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Directional Light"));
                 if (entity.IsValid() && !entity.HasComponent<DirectionalLightComponent>())
                 {
                     entity.AddComponent<DirectionalLightComponent>();
@@ -333,7 +342,7 @@ namespace ignite
             }
             if (ImGui::MenuItem("Point Light"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Point Light"));
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Point Light"));
                 if (entity.IsValid() && !entity.HasComponent<PointLightComponent>())
                 {
                     entity.AddComponent<PointLightComponent>();
@@ -341,7 +350,7 @@ namespace ignite
             }
             if (ImGui::MenuItem("Spot Light"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Spot Light"));
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Spot Light"));
                 if (entity.IsValid() && !entity.HasComponent<SpotLightComponent>())
                 {
                     entity.AddComponent<SpotLightComponent>();
@@ -349,7 +358,7 @@ namespace ignite
             }
             if (ImGui::MenuItem("World Environment"))
             {
-                entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene.get(), "World Environment"));
+                entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene, "World Environment"));
             }
             ImGui::EndMenu();
         }
@@ -388,7 +397,7 @@ namespace ignite
                 if (m_SelectedEntities.contains(childUuid))
                     return true;
 
-                Entity child = SceneManager::GetEntity(m_Scene.get(), childUuid);
+                Entity child = SceneManager::GetEntity(m_Scene, childUuid);
                 if (child.IsValid() && hasSelectedDescendant(child))
                     return true;
             }
@@ -438,7 +447,7 @@ namespace ignite
                 {
                     if (const Entity e = ShowEntityContextMenu())
                     {
-                        if (SceneManager::AddChild(m_Scene.get(), entity, e))
+                        if (SceneManager::AddChild(m_Scene, entity, e))
                             m_Scene->SetDirtyFlag(true);
 
                         SetSelectedEntity(e);
@@ -506,7 +515,7 @@ namespace ignite
                     for (size_t i = 0; i < count; ++i)
                     {
                         const UUID uuid = droppedUUIDs[i];
-                        Entity droppedEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
+                        Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
 
                         if (droppedEntity)
                         {
@@ -515,11 +524,11 @@ namespace ignite
                             UUID newParent = entity.GetComponent<IDComponent>().uuid;
 
                             // the current 'entity' is the target (new parent for src)
-                            if (SceneManager::AddChild(m_Scene.get(), entity, droppedEntity))
+                            if (SceneManager::AddChild(m_Scene, entity, droppedEntity))
                             {
                                 // Record the re-parent for undo
                                 CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
-                                    m_Scene.get(), droppedEntity.GetUUID(), oldParent, newParent));
+                                    m_Scene, droppedEntity.GetUUID(), oldParent, newParent));
                             }
                         }
                     }
@@ -540,7 +549,7 @@ namespace ignite
             {
                 for (UUID uuid : entity.GetComponent<IDComponent>().children)
                 {
-                    Entity childEntity = SceneManager::GetEntity(m_Scene.get(), uuid);
+                    Entity childEntity = SceneManager::GetEntity(m_Scene, uuid);
                     RenderEntityNode(childEntity);
                 }
             }
@@ -569,7 +578,7 @@ namespace ignite
             {
                 std::string oldName = idComp.name;
                 std::string newName(buffer);
-                CommandManager::ExecuteCommand(CreateScope<EntityRenameCommand>(m_Scene.get(), idComp.uuid, oldName, newName));
+                CommandManager::ExecuteCommand(CreateScope<EntityRenameCommand>(m_Scene, idComp.uuid, oldName, newName));
             }
 
             ImGui::SameLine();
@@ -593,7 +602,7 @@ namespace ignite
                 UI::State translationState = UI::DrawVec3Control("Translation", comp.local.translation, 0.025f, 0.0f);
                 if (translationState.isItemActivated)            s_TransformBefore = comp;
                 if (translationState.isItemEdited)               comp.dirty = true;
-                if (translationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
+                if (translationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, selectedEntity.GetUUID(), s_TransformBefore, comp));
 
                 static UUID s_RotationEditEntity = UUID(0);
                 static glm::vec3 s_RotationEditEuler = glm::vec3(0.0f);
@@ -615,19 +624,19 @@ namespace ignite
                 if (rotationState.isItemActivated)            s_TransformBefore = comp;
                 if (rotationState.isItemActivated)            s_RotationEditing = true;
                 if (rotationState.isItemEdited)               { comp.local.rotation = glm::quat(s_RotationEditEuler); comp.dirty = true; }
-                if (rotationState.isItemDeactivatedAfterEdit) { CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp)); s_RotationEditing = false; }
+                if (rotationState.isItemDeactivatedAfterEdit) { CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, selectedEntity.GetUUID(), s_TransformBefore, comp)); s_RotationEditing = false; }
 
                 UI::State scaleState = UI::DrawVec3Control("Scale", comp.local.scale, 0.025f, 1.0f);
                 if (scaleState.isItemActivated)            s_TransformBefore = comp;
                 if (scaleState.isItemEdited)               comp.dirty = true;
-                if (scaleState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
+                if (scaleState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, selectedEntity.GetUUID(), s_TransformBefore, comp));
 
                 // Visibility checkbox — instant commit
                 {
                     TransformComponent before = comp;
                     UI::State visibleState = UI::DrawCheckbox("Visible", &comp.visible);
                     if (visibleState.isItemEdited)
-                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, comp));
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, selectedEntity.GetUUID(), before, comp));
                 }
 
             }, false); // false: not allowed to remove the component
@@ -836,7 +845,7 @@ namespace ignite
                                 {
                                     Sprite2DComponent before = c;
                                     c.materialHandle = handle;
-                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                 }
                             }
                             ImGui::EndDragDropTarget();
@@ -849,7 +858,7 @@ namespace ignite
                             {
                                 Sprite2DComponent before = c;
                                 c.materialHandle = AssetHandle(0);
-                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                             }
                         }
                     });
@@ -892,7 +901,7 @@ namespace ignite
                                         c.uv0 = dropped.uv0;
                                         c.uv1 = dropped.uv1;
                                         c.materialHandle = AssetHandle(0);
-                                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                     }
                                 }
 
@@ -912,38 +921,38 @@ namespace ignite
                     UI::State tilingState = UI::DrawVec2Control("Tiling", c.tilingFactor, 0.025f, 1.0f);
                     if (tilingState.isItemActivated)            s_Sprite2DBefore = c;
                     if (tilingState.isItemDeactivatedAfterEdit)
-                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                             selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
                     auto colorState = UI::DrawColorVec4("Color", c.color);
                     if (colorState.isItemActivated) s_Sprite2DBefore = c;
                     if (colorState.isItemDeactivatedAfterEdit)
-                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                             selectedEntity.GetUUID(), s_Sprite2DBefore, c));
                 }
 
                 UI::State uv0State = UI::DrawVec2Control("UV0", c.uv0, 0.001f);
                 if (uv0State.isItemActivated)            s_Sprite2DBefore = c;
                 if (uv0State.isItemDeactivatedAfterEdit)
-                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                         selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
                 UI::State uv1State = UI::DrawVec2Control("UV1", c.uv1, 0.001f);
                 if (uv1State.isItemActivated)            s_Sprite2DBefore = c;
                 if (uv1State.isItemDeactivatedAfterEdit)
-                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                         selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
                 UI::State flipXState = UI::DrawCheckbox("Flip X", &c.flipX);
                 if (flipXState.isItemActivated)            s_Sprite2DBefore = c;
                 if (flipXState.isItemDeactivatedAfterEdit)
-                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                         selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
                 UI::State flipYState = UI::DrawCheckbox("Flip Y", &c.flipY);
                 if (flipYState.isItemActivated)            s_Sprite2DBefore = c;
                 if (flipYState.isItemDeactivatedAfterEdit)
-                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                         selectedEntity.GetUUID(), s_Sprite2DBefore, c));
             });
 
@@ -1019,7 +1028,7 @@ namespace ignite
                     compBefore = c;
 
                 if (colorState.isItemDeactivatedAfterEdit)
-                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene, selectedEntity.GetUUID(), compBefore, c));
             });
 
             RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
@@ -1108,7 +1117,7 @@ namespace ignite
                                             {
                                                 StaticMeshComponent before = c;
                                                 c.overrideMaterials[static_cast<int>(i)] = handle;
-                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                             }
                                         }
                                         ImGui::EndDragDropTarget();
@@ -1121,7 +1130,7 @@ namespace ignite
                                         {
                                             StaticMeshComponent before = c;
                                             c.overrideMaterials.erase(static_cast<int>(i));
-                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                         }
                                     }
                                 });
@@ -1218,7 +1227,7 @@ namespace ignite
                                             {
                                                 SkeletalMeshComponent before = c;
                                                 c.overrideMaterials[static_cast<int>(i)] = handle;
-                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                             }
                                         }
                                         ImGui::EndDragDropTarget();
@@ -1231,7 +1240,7 @@ namespace ignite
                                         {
                                             SkeletalMeshComponent before = c;
                                             c.overrideMaterials.erase(static_cast<int>(i));
-                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                         }
                                     }
                                 });
@@ -1501,7 +1510,7 @@ namespace ignite
                                                         {
                                                             SkeletalMeshComponent before = c;
                                                             c.socketAttachments[socketName] = handle;
-                                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                                         }
                                                     }
                                                     ImGui::EndDragDropTarget();
@@ -1514,7 +1523,7 @@ namespace ignite
                                                     {
                                                         SkeletalMeshComponent before = c;
                                                         c.socketAttachments.erase(socketName);
-                                                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                                     }
                                                 }
                                             });
@@ -1561,7 +1570,7 @@ namespace ignite
                     if (fovState.isItemEdited)
                         c.dirty = true;
                     if (fovState.isItemDeactivatedAfterEdit)
-                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene, selectedEntity.GetUUID(), s_CameraBefore, c));
                 }
                 else
                 {
@@ -1571,7 +1580,7 @@ namespace ignite
                     if (orthoState.isItemEdited)
                         c.dirty = true;
                     if (orthoState.isItemDeactivatedAfterEdit)
-                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene, selectedEntity.GetUUID(), s_CameraBefore, c));
                 }
 
                 UI::State nearState = UI::DrawFloatControl("Near", &c.camera.nearPlane, 0.025f, 0.0f, FLT_MAX);
@@ -1580,7 +1589,7 @@ namespace ignite
                 if (nearState.isItemEdited)
                     c.dirty = true;
                 if (nearState.isItemDeactivatedAfterEdit)
-                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene, selectedEntity.GetUUID(), s_CameraBefore, c));
 
                 UI::State farState = UI::DrawFloatControl("Far", &c.camera.farPlane, 0.025f, 0.0f, FLT_MAX);
                 if (farState.isItemActivated)
@@ -1588,14 +1597,14 @@ namespace ignite
                 if (farState.isItemEdited)
                     c.dirty = true;
                 if (farState.isItemDeactivatedAfterEdit)
-                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene, selectedEntity.GetUUID(), s_CameraBefore, c));
 
                 {
                     CameraComponent before = c;
                     if (UI::DrawCheckbox("Primary", &c.primary).isItemEdited)
                     {
                         c.dirty = true;
-                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                     }
                 }
 
@@ -1718,27 +1727,60 @@ namespace ignite
                 static std::array<const char *, 3> bodyTypeLabels = { "Static", "Kinematic", "Dynamic" };
                 static std::array<const char *, 2> motionTypeLabels = { "Discrete", "LinearCast" };
 
-                int bodyTypeIndex = static_cast<int>(c.bodyType);
-                if (UI::DrawComboBox("Body Type", bodyTypeLabels.data(), static_cast<int>(bodyTypeLabels.size()), &bodyTypeIndex))
+                if (ImGui::TreeNodeEx("Physics Properties", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    c.bodyType = static_cast<RigidbodyComponent::EBodyType>(bodyTypeIndex);
+                    int bodyTypeIndex = static_cast<int>(c.bodyType);
+                    if (UI::DrawComboBox("Body Type", bodyTypeLabels.data(), static_cast<int>(bodyTypeLabels.size()), &bodyTypeIndex))
+                    {
+                        c.bodyType = static_cast<RigidbodyComponent::EBodyType>(bodyTypeIndex);
+                        c.dirty = true;
+                    }
+
+                    int motionTypeIndex = static_cast<int>(c.motionQuality);
+                    if (UI::DrawComboBox("Motion Quality", motionTypeLabels.data(), static_cast<int>(motionTypeLabels.size()), &motionTypeIndex))
+                    {
+                        c.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(motionTypeIndex);
+                        c.dirty = true;
+                    }
+
+                    c.dirty |= UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+                    c.dirty |= UI::DrawFloatControl("Mass", &c.mass, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+                    c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
+                    c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
+
+                    ImGui::TreePop();
                 }
 
-                int motionTypeIndex = static_cast<int>(c.motionQuality);
-                if (UI::DrawComboBox("Motion Quality", motionTypeLabels.data(), static_cast<int>(motionTypeLabels.size()), &motionTypeIndex))
+                if (ImGui::TreeNodeEx("Velocities", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    c.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(motionTypeIndex);
+                    c.dirty |= UI::DrawVec3Control("Linear Velocity", c.linearVelocity, 0.025f);
+                    c.dirty |= UI::DrawVec3Control("Angular Velocity", c.angularVelocity, 0.025f);
+                    c.dirty |= UI::DrawFloatControl("Max Linear Velocity", &c.maxLinearVelocity, 0.025f, 0.0f, FLT_MAX);
+                    c.dirty |= UI::DrawFloatControl("Max Angular Velocity", &c.maxAngularVelocity, 0.025f, 0.0f, FLT_MAX);
+
+                    if (ImGui::TreeNodeEx("Damping", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        c.dirty |= UI::DrawFloatControl("Linear Damping", &c.linearDamping, 0.0025f, 0.0f, FLT_MAX);
+                        c.dirty |= UI::DrawFloatControl("Angular Damping", &c.angularDamping, 0.0025f, 0.0f, FLT_MAX);
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::TreePop();
                 }
 
-                UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
-                UI::DrawFloatControl("Mass", &c.mass, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
+                if (ImGui::TreeNodeEx("Constraints"))
+                {
+                    c.dirty |= UI::DrawCheckbox3("Translation Lock XYZ", &c.moveX, &c.moveY, &c.moveZ);
+                    c.dirty |= UI::DrawCheckbox3("Rotation Lock XYZ", &c.rotateX, &c.rotateY, &c.rotateZ);
 
-                UI::DrawCheckbox("Use Gravity", &c.useGravity);
-                UI::DrawCheckbox("Allow sleeping", &c.allowSleeping);
-                UI::DrawCheckbox("Retain Acceleration", &c.retainAcceleration);
+                    ImGui::TreePop();
+                }
 
-                UI::DrawCheckbox3("Translation Lock XYZ", &c.moveX, &c.moveY, &c.moveZ);
-                UI::DrawCheckbox3("Rotation Lock XYZ", &c.rotateX, &c.rotateY, &c.rotateZ);
+                c.dirty |= UI::DrawCheckbox("Is Sensor", &c.isSensor);
+                c.dirty |= UI::DrawCheckbox("Use Gravity", &c.useGravity);
+                c.dirty |= UI::DrawCheckbox("Allow sleeping", &c.allowSleeping);
+                c.dirty |= UI::DrawCheckbox("Retain Acceleration", &c.retainAcceleration);
+                c.dirty |= UI::DrawCheckbox("Apply Gyroscopic Force", &c.applyGyroscopicForce);
             });
 
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
@@ -1746,11 +1788,6 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<BoxColliderComponent>();
                 c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
-                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
-
                 // TODO: Collider Edit from UI (TOGGLES)
             });
 
@@ -1759,10 +1796,6 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<SphereColliderComponent>();
                 c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
-                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
 
                 // TODO: Collider Edit from UI (TOGGLES)
             });
@@ -1773,10 +1806,6 @@ namespace ignite
                 c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Height", &c.height, 0.025f, 0.01f, 10000.0f, 1.0f);
-                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
 
                 // TODO: Collider Edit from UI (TOGGLES)
             });
@@ -1787,10 +1816,6 @@ namespace ignite
                 c.dirty = UI::DrawCheckbox("Convex", &c.convex);
                 ImGui::Text("Vertices: %zu", c.vertices.size());
                 ImGui::Text("Indices: %zu", c.indices.size());
-                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
-                c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
                 if (ImGui::Button("Clear Mesh Data"))
                 {
                     c.dirty = false;
@@ -2530,7 +2555,7 @@ namespace ignite
                                         {
                                             if (handle)
                                             {
-                                                Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(handle));
+                                                Entity e = SceneManager::GetEntity(m_Scene, UUID(handle));
                                                 if (e)
                                                     label = e.GetName();
                                             }
@@ -2561,7 +2586,7 @@ namespace ignite
                                                         if (count > 0)
                                                         {
                                                             UUID entityUUID = UUIDs[0];
-                                                            Entity src{ SceneManager::GetEntity(m_Scene.get(), entityUUID) };
+                                                            Entity src{ SceneManager::GetEntity(m_Scene, entityUUID) };
                                                             if (src)
                                                             {
                                                                 uint64_t id = (uint64_t)src.GetUUID();
@@ -2608,7 +2633,7 @@ namespace ignite
                                                 {
                                                     if (field.Type == ScriptFieldType::Entity)
                                                     {
-                                                        Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(handle));
+                                                        Entity e = SceneManager::GetEntity(m_Scene, UUID(handle));
                                                         if (e) ImGui::Text("Entity Name : %s\nEntity ID : %llu", e.GetName().c_str(), handle);
                                                         else ImGui::Text("Invalid Entity");
                                                     }
@@ -2764,7 +2789,7 @@ namespace ignite
                     {
                         if (ImGui::Selectable(strName.c_str()))
                         {
-                            addCompFunc(Entity{ selectedEntity, m_Scene.get()}, type);
+                            addCompFunc(Entity{ selectedEntity, m_Scene}, type);
                             ImGui::CloseCurrentPopup();
                         }
                     }
@@ -2774,7 +2799,7 @@ namespace ignite
                 {
                     if (ImGui::Selectable(strName.c_str()))
                     {
-                        addCompFunc(Entity{ selectedEntity, m_Scene.get() }, type);
+                        addCompFunc(Entity{ selectedEntity, m_Scene }, type);
                         ImGui::CloseCurrentPopup();
                     }
                 }
@@ -2831,6 +2856,8 @@ namespace ignite
 
                 // When not playing/simulating, make sure we clear focus state and restore cursor
                 const bool isPlayOrSimulate = m_Scene->IsRunning();
+                const bool mouseWantsFocus = (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
+
                 if (!isPlayOrSimulate)
                 {
                     if (m_SceneFocused)
@@ -2863,8 +2890,8 @@ namespace ignite
                 ImDrawList *drawList = ImGui::GetWindowDrawList();
 
                 // Click inside the viewport to (re-)focus in Play or Simulate modes
-				// Only allow focusing if the scene is not already focused and the cooldown has expired
-				// This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
+                // Only allow focusing if the scene is not already focused and the cooldown has expired
+                // This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
                 if (!m_Data.sceneViewportGameplayVisible && isPlayOrSimulate && !m_SceneFocused && m_SceneFocusCooldown == 0)
                 {
                     if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -2876,7 +2903,7 @@ namespace ignite
                     }
                 }
 
-                if (m_SceneFocused)
+                if (m_SceneFocused && mouseWantsFocus)
                 {
                     const char* bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
                     ImVec2 textSize = ImGui::CalcTextSize(bannerText);
@@ -2896,18 +2923,8 @@ namespace ignite
                     ImVec2 textPos = { bannerMin.x + 12.0f, bannerMin.y + 6.0f };
                     drawList->AddText(textPos, ImColor(255, 255, 255, 255), bannerText);
                 }
-                else if (isPlayOrSimulate)
-                {
-                    // Show click-to-focus hint when unfocused in play/simulate
-                    const char* hintText = "Click to focus";
-                    ImVec2 textSize = ImGui::CalcTextSize(hintText);
-                    ImVec2 textPos = { canvasPos.x + (canvasSize.x - textSize.x) * 0.5f, canvasPos.y + 10.0f };
-                    drawList->AddText(textPos, ImColor(200, 200, 200, 180), hintText);
-                }
-
 
                 Entity clickedIconEntity = {};
-
                 // Draw editor icons (cameras, directional lights, etc.)
                 if (!m_Scene->IsPlaying())
                 {
@@ -2941,7 +2958,7 @@ namespace ignite
                                     if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
                                         mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
                                     {
-                                        clickedIconEntity = Entity{ e, m_Scene.get() };
+                                        clickedIconEntity = Entity{ e, m_Scene };
                                     }
                                 }
                             }
@@ -3000,7 +3017,7 @@ namespace ignite
                                     if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
                                         mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
                                     {
-                                        clickedIconEntity = Entity{ e, m_Scene.get() };
+                                        clickedIconEntity = Entity{ e, m_Scene };
                                     }
                                 }
                             }
@@ -3029,9 +3046,9 @@ namespace ignite
                     std::string statusStr = std::format("FPS {:.5}", fps);
                     drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
-					yPosition += padding;
-					statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-					drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                    yPosition += padding;
+                    statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
                 }
 
                 // Mouse picking from viewport object-id attachment (on mouse down only)
@@ -3042,7 +3059,9 @@ namespace ignite
                         const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
                         const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
                         activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
-                    }					if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                    }
+                    
+                    if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
                     {
                         if (clickedIconEntity.IsValid())
                         {
@@ -3052,7 +3071,7 @@ namespace ignite
                                 const auto parent = clickedIconEntity.GetParentUUID();
                                 if (parent != UUID(0))
                                 {
-                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
+                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene, parent); parentEntity.IsValid())
                                     {
                                         targetSelection = parentEntity;
                                     }
@@ -3060,7 +3079,7 @@ namespace ignite
                             }
                             SetSelectedEntity(targetSelection);
                         }
-                        else
+                        else // invalid entity
                         {
                             Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
                             if (objectIdTexture && objectIdTexture->GetHandle())
@@ -3102,7 +3121,7 @@ namespace ignite
                                                 const auto objectId = static_cast<uint32_t>(static_cast<uint64_t>(id.uuid));
                                                 if (objectId == pickedObjectId)
                                                 {
-                                                    pickedEntity = Entity{ e, m_Scene.get() };
+                                                    pickedEntity = Entity{ e, m_Scene };
                                                 }
                                             });
                                         }
@@ -3118,7 +3137,7 @@ namespace ignite
                                                 const auto parent = pickedEntity.GetParentUUID();
                                                 if (parent != UUID(0))
                                                 {
-                                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
+                                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene, parent); parentEntity.IsValid())
                                                     {
                                                         targetSelection = parentEntity;
                                                     }
@@ -3138,6 +3157,8 @@ namespace ignite
                         }
                     }
 
+                    // Viewport drag and drop
+                    // TODO: Implement drag drop for meshes
                     if (ImGui::BeginDragDropTarget())
                     {
                         if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
@@ -3160,9 +3181,11 @@ namespace ignite
                         ImGui::EndDragDropTarget();
                     }
 
+                    // Begin GIZMO Manipulation
                     auto view = m_EditorCamera.GetView();
                     auto &projection = m_EditorCamera.GetProjection();
 
+                    // Draw orientation just for Perspective projection
                     if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
                     {
                         constexpr float orientationSize = 80.0f;
@@ -3184,6 +3207,7 @@ namespace ignite
                         }
                     }
 
+                    // Setup gizmo
                     GizmoInfo gizmoInfo;
                     gizmoInfo.cameraView = view;
                     gizmoInfo.cameraProjection = projection;
@@ -3191,10 +3215,10 @@ namespace ignite
                     gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
                     switch (m_Gizmo.GetOperation())
                     {
-                    default:
-                    case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
-                    case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
-                    case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
+                        default:
+                        case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
+                        case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
+                        case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
                     }
 
                     m_Gizmo.SetInfo(gizmoInfo);
@@ -3216,6 +3240,7 @@ namespace ignite
                             initialTransforms[uuid] = entity.GetTransform();
                         }
                     }
+
                     // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
                     bool wasManipulating = m_Data.isGizmoManipulating;
                     m_Data.isGizmoManipulating = isManipulatingNow;
@@ -3269,7 +3294,7 @@ namespace ignite
                                 // ----- Apply Scale and Update Local Transform -----
                                 if (entity.GetParentUUID() != UUID(0))
                                 {
-                                    Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+                                    Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
                                     const auto &parentTr = parent.GetTransform();
                                     glm::mat4 parentWorld = parentTr.world.GetMatrix();
                                     glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
@@ -3290,13 +3315,64 @@ namespace ignite
                                     // Apply the total scale delta to the ORIGINAL local scale
                                     tr.local.scale = initialTransform.local.scale * deltaScale;
                                 }
+
                                 tr.dirty = true;
+
+                                if (isPlayOrSimulate)
+                                {
+                                    Application::SubmitToMainThread([scene = m_Scene, entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
+                                        if (entity.IsValid())
+                                        {
+                                            if (entity.HasComponent<RigidbodyComponent>())
+                                            {
+                                                auto &rb = entity.GetComponent<RigidbodyComponent>();
+                                                rb.isGizmoDragging = true;
+                                                if (rb.body && scene->GetJoltScene())
+                                                {
+                                                    scene->GetJoltScene()->SetPosition(*rb.body, translation, true);
+                                                    scene->GetJoltScene()->SetRotation(*rb.body, rotation, true);
+                                                    scene->GetJoltScene()->SetLinearVelocity(*rb.body, glm::vec3(0.0f));
+                                                    scene->GetJoltScene()->GetBodyInterface()->SetAngularVelocity(rb.body->GetID(), JPH::Vec3(0.0f, 0.0f, 0.0f));
+                                                }
+                                            }
+                                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                            {
+                                                auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
+                                                rb2D.isGizmoDragging = true;
+                                                if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
+                                                {
+                                                    scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
+                                                    scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
+                                                    scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
+                                                    scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
+                                                    scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
                             }
                         }
 
                         // Commit commands when the multi-entity gizmo is released
                         if (!isManipulatingNow && wasManipulating)
                         {
+                            if (isPlayOrSimulate)
+                            {
+                                for (auto &[uuid, entity] : m_SelectedEntities)
+                                {
+                                    Application::SubmitToMainThread([scene = m_Scene, entity]() mutable {
+                                        if (entity.IsValid())
+                                        {
+                                            if (entity.HasComponent<RigidbodyComponent>())
+                                                entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
+                                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                                entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
+                                        }
+                                    });
+                                }
+                            }
+
                             std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
                             for (auto &[uuid, entity] : m_SelectedEntities)
                             {
@@ -3308,7 +3384,7 @@ namespace ignite
 
                             if (!entries.empty())
                             {
-                                CommandManager::AddCommand(CreateScope<ComponentPropertyBatchCommand<TransformComponent>>(m_Scene.get(), std::move(entries)));
+                                CommandManager::AddCommand(CreateScope<ComponentPropertyBatchCommand<TransformComponent>>(m_Scene, std::move(entries)));
                             }
                         }
                     }
@@ -3330,7 +3406,7 @@ namespace ignite
 
                                 if (entity.GetParentUUID() != UUID(0))
                                 {
-                                    Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+                                    Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
                                     const auto &parentTr = parent.GetTransform();
                                     const glm::mat4 parentWorld = parentTr.world.GetMatrix();
                                     const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
@@ -3364,14 +3440,62 @@ namespace ignite
                                     }
                                 }
                                 tr.dirty = true;
+
+                                // check if the entity has rigidbody and update its position and rotation in the physics engine
+                                if (isPlayOrSimulate)
+                                {
+                                    Application::SubmitToMainThread([scene = m_Scene, entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
+                                        if (entity.IsValid())
+                                        {
+                                            if (entity.HasComponent<RigidbodyComponent>())
+                                            {
+                                                auto &rb = entity.GetComponent<RigidbodyComponent>();
+                                                rb.isGizmoDragging = true;
+                                                if (rb.body && scene->GetJoltScene())
+                                                {
+                                                    scene->GetJoltScene()->SetPosition(*rb.body, translation, true);
+                                                    scene->GetJoltScene()->SetRotation(*rb.body, rotation, true);
+                                                    scene->GetJoltScene()->SetLinearVelocity(*rb.body, glm::vec3(0.0f));
+                                                    scene->GetJoltScene()->GetBodyInterface()->SetAngularVelocity(rb.body->GetID(), JPH::Vec3(0.0f, 0.0f, 0.0f));
+                                                }
+                                            }
+                                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                            {
+                                                auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
+                                                rb2D.isGizmoDragging = true;
+                                                if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
+                                                {
+                                                    scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
+                                                    scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
+                                                    scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
+                                                    scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
+                                                    scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
                             }
 
                             // Commit a single command when the gizmo is released (single entity)
                             if (!isManipulatingNow && wasManipulating)
                             {
+                                if (isPlayOrSimulate)
+                                {
+                                    Application::SubmitToMainThread([scene = m_Scene, entity]() mutable {
+                                        if (entity.IsValid())
+                                        {
+                                            if (entity.HasComponent<RigidbodyComponent>())
+                                                entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
+                                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                                entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
+                                        }
+                                    });
+                                }
+
                                 if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
                                 {
-                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
+                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, entity.GetUUID(), it->second, entity.GetTransform()));
                                 }
                             }
                         }
@@ -3532,9 +3656,9 @@ namespace ignite
                             std::string statusStr = std::format("FPS {:.5}", fps);
                             drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
-							yPosition += padding;
-							statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-							drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                            yPosition += padding;
+                            statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
 
                             yPosition += padding;
                             statusStr = std::format("Viewport x: {} y: {} w: {} h: {}", baseImagePos.x, baseImagePos.y, baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
@@ -3784,11 +3908,11 @@ namespace ignite
                 return;
             }
 
-            Entity resizedEntity = SceneManager::GetEntity(m_Scene.get(), m_Data.active2DEntity);
+            Entity resizedEntity = SceneManager::GetEntity(m_Scene, m_Data.active2DEntity);
             if (resizedEntity.IsValid())
             {
                 CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(
-                    m_Scene.get(), resizedEntity.GetUUID(), m_Data.before2DResize, resizedEntity.GetTransform()));
+                    m_Scene, resizedEntity.GetUUID(), m_Data.before2DResize, resizedEntity.GetTransform()));
             }
 
             clearResizeState();
@@ -3930,7 +4054,7 @@ namespace ignite
 
                     if (entity.GetParentUUID() != UUID(0))
                     {
-                        Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+                        Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
                         const glm::mat4 parentWorld = parent.GetTransform().world.GetMatrix();
                         const glm::mat4 localMatrix = glm::inverse(parentWorld) * targetWorld;
 
@@ -4142,7 +4266,7 @@ namespace ignite
 
     void ScenePanel::DestroyEntity(Entity entity)
     {
-        CommandManager::ExecuteCommand(CreateScope<EntityDestroyCommand>(m_Scene.get(), entity));
+        CommandManager::ExecuteCommand(CreateScope<EntityDestroyCommand>(m_Scene, entity));
     }
 
     void ScenePanel::ClearSelection()
@@ -4215,7 +4339,7 @@ namespace ignite
         {
             if (entity.IsValid())
             {
-                SceneManager::DuplicateEntity(m_Scene.get(), entity);
+                SceneManager::DuplicateEntity(m_Scene, entity);
             }
         }
     }

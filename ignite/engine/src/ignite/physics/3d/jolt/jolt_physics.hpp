@@ -380,6 +380,9 @@ namespace ignite
         void SetFriction(const JPH::Body &body, float value);
         void SetRestitution(const JPH::Body &body, float value);
         void SetGravityFactor(const JPH::Body &body, float value);
+        void SetMaxLinearVelocity(JPH::Body &body, float max);
+        void SetMaxAngularVelocity(JPH::Body &body, float max);
+		void SetMassProperties(JPH::Body &body, const JPH::MassProperties &props);
         float GetRestitution(const JPH::Body &body);
         float GetFriction(const JPH::Body &body);
         float GetGravityFactor(const JPH::Body &body);
@@ -388,8 +391,6 @@ namespace ignite
         glm::quat GetRotation(const JPH::Body &body);
         glm::vec3 GetCenterOfMassPosition(const JPH::Body &body);
         glm::vec3 GetLinearVelocity(const JPH::Body &body);
-        void SetMaxLinearVelocity(JPH::Body &body, float max);
-        void SetMaxAngularVelocity(JPH::Body &body, float max);
 
         JPH::BodyInterface *GetBodyInterface() const;
     private:

@@ -249,6 +249,12 @@ namespace ignite
             return;
         }
 
+        if (scriptEngineData->solutionBuildToken != kInvalidSignalToken)
+        {
+            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+        }
+
         scriptEngineData->entityClasses.clear();
         scriptEngineData->entityScriptInstances.clear();
 

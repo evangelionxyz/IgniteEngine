@@ -275,9 +275,9 @@ namespace ignite
             return "";
         }
 
-        static void Scene_TransitionTo(uint64_t sceneAssetHandle)
+        static void Scene_Load(uint64_t sceneAssetHandle)
         {
-            SceneManager::TransitionTo(AssetHandle(sceneAssetHandle));
+            SceneManager::Transition(AssetHandle(sceneAssetHandle));
         }
 
         static const CoreScriptGlueAPI s_CoreScriptGlueAPI =
@@ -312,7 +312,7 @@ namespace ignite
             &ScriptableObject_GetFieldValueString,
             &ScriptableObject_GetClassName,
 
-            &Scene_TransitionTo,
+            &Scene_Load,
         };
     }
 

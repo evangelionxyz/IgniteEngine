@@ -115,9 +115,6 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <Compile Include="Scripts\Game.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="MochiSharp.Managed">
-      <HintPath>$(SolutionDir)\Bin\MochiSharp.Managed.dll</HintPath>
-    </Reference>
     <Reference Include="Ignite.ScriptEngine">
       <HintPath>$(SolutionDir)\Bin\Ignite.ScriptEngine.dll</HintPath>
     </Reference>
@@ -164,12 +161,7 @@ R"(<Project>
     }
 
     Project::~Project()
-    {
-		if (m_ActiveScene)
-		{
-            m_ActiveScene = nullptr;
-		}
-
+    {		
         m_Physics3D->Shutdown();
 
         m_CoreDependencyWatchers.clear();
@@ -573,7 +565,8 @@ R"(<Project>
         {
             bool buildSuccess = ignite::Path::exists(GetScriptModulePath());
 
-            std::string configStr = "Debug";
+			std::string_view verbosity = "/v:m"; // verbose minimal
+            std::string_view configStr = "Debug";
             if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
             else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
 
@@ -582,14 +575,16 @@ R"(<Project>
                 // restore NuGet
                 {
                     AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
-                    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=" + configStr + " /p:Platform=\"x64\"";
+					std::string buildCommand = std::format("msbuild \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                        GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
                     std::system(buildCommand.c_str());
                 }
 
                 // Build
                 {
                     AssetWorker::ReportStatus("Building Solution...", 0.8f);
-                    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=" + configStr + " /p:Platform=\"x64\"";
+					std::string buildCommand = std::format("msbuild \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+						GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
                     std::system(buildCommand.c_str());
                 }
             }

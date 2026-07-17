@@ -39,7 +39,7 @@ namespace ignite
         const char *(*ScriptableObject_GetFieldValueString)(uint64_t handle, const char *fieldName);
         const char *(*ScriptableObject_GetClassName)(uint64_t handle);
 
-        void (*Scene_TransitionTo)(uint64_t sceneAssetHandle);
+        void (*Scene_Load)(uint64_t sceneAssetHandle);
     };
 
     class CoreScriptGlue

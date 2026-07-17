@@ -76,6 +76,7 @@ namespace ignite
         bool OnAssetEditorOpenSignal(const AssetEditorOpenSignal &signal);
         bool OnAssetEditorCreateSignal(const AssetEditorCreateSignal &signal);
         bool OnMouseScrollEvent(MouseScrolledEvent &event);
+        void CloseAllAssetEditors();
 
         struct CreateAssetRequest
         {

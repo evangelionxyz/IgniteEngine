@@ -74,6 +74,10 @@ namespace ignite
 
     AssetImporterPanel::~AssetImporterPanel()
     {
+        if (m_EditorLayer)
+        {
+            m_EditorLayer->m_AssetImporterPanel = nullptr;
+        }
         SignalBus::Unsubscribe<AssetImportSignal>(m_ImportSignalToken);
         m_ImportSignalToken = kInvalidSignalToken;
     }

@@ -14,23 +14,23 @@
 namespace ignite
 {
 
-	Physics2D::Physics2D()
-	{
-		b2WorldDef worldDef = b2DefaultWorldDef();
-		m_WorldId = b2CreateWorld(&worldDef);
+    Physics2D::Physics2D()
+    {
+        b2WorldDef worldDef = b2DefaultWorldDef();
+        m_WorldId = b2CreateWorld(&worldDef);
         m_Scene = nullptr;
-	}
+    }
 
-	Physics2D::~Physics2D()
-	{
-		if (B2_IS_NULL(m_WorldId) == false)
-			b2DestroyWorld(m_WorldId);
+    Physics2D::~Physics2D()
+    {
+        if (B2_IS_NULL(m_WorldId) == false)
+            b2DestroyWorld(m_WorldId);
 
-		m_WorldId = b2_nullWorldId;
+        m_WorldId = b2_nullWorldId;
         m_Scene = nullptr;
-	}
+    }
 
-	void Physics2D::SimulationStart(Scene *scene)
+    void Physics2D::SimulationStart(Scene *scene)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -56,8 +56,8 @@ namespace ignite
             bodyDef.linearDamping    = rb.linearDamping;
             bodyDef.isEnabled        = rb.isEnabled;
             bodyDef.isAwake          = rb.isAwake;
-			bodyDef.motionLocks.angularZ = rb.fixedRotation;
-			bodyDef.allowFastRotation = rb.allowFastRotation;
+            bodyDef.motionLocks.angularZ = rb.fixedRotation;
+            bodyDef.allowFastRotation = rb.allowFastRotation;
 
             rb.bodyId = b2CreateBody(m_WorldId, &bodyDef);
             b2Body_SetUserData(rb.bodyId, static_cast<void *>(&e));
@@ -74,8 +74,8 @@ namespace ignite
             if (reg->any_of<CircleCollider2DComponent>(e))
             {
                 auto &cc = reg->get<CircleCollider2DComponent>(e);
-				CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.world.scale.x, tr.world.scale.y));
-				b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&e));
+                CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.world.scale.x, tr.world.scale.y));
+                b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&e));
             }
         }
     }
@@ -87,10 +87,10 @@ namespace ignite
         if (!m_Scene)
             return;
 
-		for (entt::entity e : m_Scene->registry->view<Rigidbody2DComponent>())
-		{
-			DestroyEntity(Entity{ e, m_Scene });
-		}
+        for (entt::entity e : m_Scene->registry->view<Rigidbody2DComponent>())
+        {
+            DestroyEntity(Entity{ e, m_Scene });
+        }
 
         m_Scene = nullptr;
     }
@@ -131,39 +131,39 @@ namespace ignite
             b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&entity));
         }
 
-		// create circle collider
-		if (entity.HasComponent<CircleCollider2DComponent>())
-		{
-			auto &cc = entity.GetComponent<CircleCollider2DComponent>();
-			CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.world.scale.x, tr.world.scale.y));
-			b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&entity));
-		}
+        // create circle collider
+        if (entity.HasComponent<CircleCollider2DComponent>())
+        {
+            auto &cc = entity.GetComponent<CircleCollider2DComponent>();
+            CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.world.scale.x, tr.world.scale.y));
+            b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&entity));
+        }
     }
 
-	void Physics2D::DestroyEntity(Entity entity)
+    void Physics2D::DestroyEntity(Entity entity)
     {
-		if (!m_Scene || !b2World_IsValid(m_WorldId))
-			return;
+        if (!m_Scene || !b2World_IsValid(m_WorldId))
+            return;
 
-		if (entity.HasComponent<BoxCollider2DComponent>())
-		{
-			auto &c = entity.GetComponent<BoxCollider2DComponent>();
-			if (b2Shape_IsValid(c.shapeId))
-				b2DestroyShape(c.shapeId, false);
-		}
+        if (entity.HasComponent<BoxCollider2DComponent>())
+        {
+            auto &c = entity.GetComponent<BoxCollider2DComponent>();
+            if (b2Shape_IsValid(c.shapeId))
+                b2DestroyShape(c.shapeId, false);
+        }
 
-		if (entity.HasComponent<CircleCollider2DComponent>())
-		{
-			auto &c = entity.GetComponent<CircleCollider2DComponent>();
-			if (b2Shape_IsValid(c.shapeId))
-				b2DestroyShape(c.shapeId, false);
-		}
+        if (entity.HasComponent<CircleCollider2DComponent>())
+        {
+            auto &c = entity.GetComponent<CircleCollider2DComponent>();
+            if (b2Shape_IsValid(c.shapeId))
+                b2DestroyShape(c.shapeId, false);
+        }
 
         if (entity.HasComponent<Rigidbody2DComponent>())
         {
-			auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-			if (b2Body_IsValid(rb.bodyId))
-				b2DestroyBody(rb.bodyId);
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (b2Body_IsValid(rb.bodyId))
+                b2DestroyBody(rb.bodyId);
         }
     }
 
@@ -183,6 +183,9 @@ namespace ignite
             {
                 TransformComponent &tr = reg->get<TransformComponent>(e);
                 Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
+
+                if (rb.isGizmoDragging)
+                    continue;
 
                 if (rb.dirty)
                 {
@@ -241,16 +244,9 @@ namespace ignite
                     }
                 }
 
-                if (tr.dirtyPhysics)
-                {
-                    b2Body_SetTransform(rb.bodyId, { tr.world.translation.x, tr.world.translation.y }, b2MakeRot(eulerAngles(tr.world.rotation).z));
-                    tr.dirtyPhysics = false;
-                }
-
                 // first, calculate the local transform
                 const auto [x, y] = b2Body_GetPosition(rb.bodyId);
                 const b2Rot rotation = b2Body_GetRotation(rb.bodyId);
-                const b2Vec2 linearVelocity = b2Body_GetLinearVelocity(rb.bodyId);
 
                 glm::vec3 worldTranslation = { x, y, tr.world.translation.z };
                 glm::quat worldRotation = glm::quat({ 0.0f, 0.0f, b2Rot_GetAngle(rotation) });
@@ -290,11 +286,6 @@ namespace ignite
                     tr.world.translation = worldTranslation;
                     tr.world.rotation = worldRotation;
                 }
-
-                rb.linearVelocity = { linearVelocity.x, linearVelocity.y };
-                rb.angularVelocity = b2Body_GetAngularVelocity(rb.bodyId);
-                rb.isAwake = b2Body_IsAwake(rb.bodyId);
-                rb.isEnabled = b2Body_IsEnabled(rb.bodyId);
             }
         }
     }
@@ -306,10 +297,10 @@ namespace ignite
         if (glm::abs(box->size.x) > glm::epsilon<float>())
             scaleX = size.x / box->size.x;
         if (glm::abs(box->size.y) > glm::epsilon<float>())
-			scaleY = size.y / box->size.y;
+            scaleY = size.y / box->size.y;
 
-		const float width = glm::max(glm::abs(size.x), glm::epsilon<float>());
-		const float height = glm::max(glm::abs(size.y), glm::epsilon<float>());
+        const float width = glm::max(glm::abs(size.x), glm::epsilon<float>());
+        const float height = glm::max(glm::abs(size.y), glm::epsilon<float>());
 
         const b2Vec2 offset = { box->offset.x * scaleX, box->offset.y * scaleY };
         const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
@@ -322,20 +313,135 @@ namespace ignite
         box->shapeId                  = b2CreatePolygonShape(bodyId, &shapeDef, &boxShape);
     }
 
-	void Physics2D::CreateCircleCollider(CircleCollider2DComponent *circle, b2BodyId bodyId, float size)
-	{
+    void Physics2D::CreateCircleCollider(CircleCollider2DComponent *circle, b2BodyId bodyId, float size)
+    {
         b2Circle circleShape =
         {
             .center = {circle->center.x, circle->center.y},
             .radius = circle->radius * size
         };
 
-		b2ShapeDef shapeDef = b2DefaultShapeDef();
-		shapeDef.density = circle->density;
-		shapeDef.material.friction = circle->friction;
-		shapeDef.material.restitution = circle->restitution;
-		shapeDef.isSensor = circle->isSensor;
-		circle->shapeId = b2CreateCircleShape(bodyId, &shapeDef, &circleShape);
+        b2ShapeDef shapeDef = b2DefaultShapeDef();
+        shapeDef.density = circle->density;
+        shapeDef.material.friction = circle->friction;
+        shapeDef.material.restitution = circle->restitution;
+        shapeDef.isSensor = circle->isSensor;
+        circle->shapeId = b2CreateCircleShape(bodyId, &shapeDef, &circleShape);
+    }
+
+	bool Physics2D::IsValidBody(b2BodyId bodyId)
+	{
+        return b2Body_IsValid(bodyId);
 	}
+
+    void Physics2D::SetBodyType(b2BodyId bodyId, b2BodyType type)
+    {
+        b2Body_SetType(bodyId, type);
+    }
+
+	void Physics2D::SetPosition(b2BodyId bodyId, const glm::vec2 &position)
+    {
+        b2Body_SetTransform(bodyId, { position.x, position.y }, b2Body_GetRotation(bodyId));
+    }
+
+    void Physics2D::SetRotation(b2BodyId bodyId, float rotation)
+    {
+        b2Body_SetTransform(bodyId, b2Body_GetPosition(bodyId), b2MakeRot(glm::radians(rotation)));
+    }
+
+	void Physics2D::SetLinearVelocity(b2BodyId bodyId, const glm::vec2 &velocity)
+	{
+		b2Body_SetLinearVelocity(bodyId, { velocity.x, velocity.y });
+	}
+
+	void Physics2D::SetAngularVelocity(b2BodyId bodyId, float velocity)
+	{
+		b2Body_SetAngularVelocity(bodyId, velocity);
+	}
+
+	void Physics2D::ApplyLinearImpulse(b2BodyId bodyId, const glm::vec2 &impulse, const glm::vec2 &point, bool wake)
+	{
+        b2Body_ApplyLinearImpulse(bodyId, { impulse.x, impulse.y }, { point.x, point.y }, wake);
+	}
+
+    void Physics2D::ApplyLinearImpulseToCenter(b2BodyId bodyId, const glm::vec2 &impulse, bool wake)
+    {
+        b2Body_ApplyLinearImpulseToCenter(bodyId, { impulse.x, impulse.y }, wake);
+    }
+
+	void Physics2D::ApplyForce(b2BodyId bodyId, const glm::vec2 &force, const glm::vec2 &point, bool wake)
+	{
+        b2Body_ApplyForce(bodyId, { force.x, force.y }, { point.x, point.y }, wake);
+	}
+
+	void Physics2D::ApplyForceToCenter(b2BodyId bodyId, const glm::vec2 &force, bool wake)
+	{
+        b2Body_ApplyForceToCenter(bodyId, { force.x, force.y }, wake);
+	}
+
+	void Physics2D::ApplyTorque(b2BodyId bodyId, float torque, bool wake)
+	{
+        b2Body_ApplyTorque(bodyId, torque, wake);
+	}
+
+	void Physics2D::ApplyAngularImpulse(b2BodyId bodyId, float impulse, bool wake)
+	{
+		b2Body_ApplyAngularImpulse(bodyId, impulse, wake);
+	}
+
+	void Physics2D::ActivateBody(b2BodyId bodyId)
+	{
+		b2Body_Enable(bodyId);
+	}
+
+	void Physics2D::DeactivateBody(b2BodyId bodyId)
+	{
+        b2Body_Disable(bodyId);
+	}
+
+	void Physics2D::SetAwake(b2BodyId bodyId, bool awake)
+	{
+        b2Body_SetAwake(bodyId, awake);
+	}
+
+    void Physics2D::SetEnableSleep(b2BodyId bodyId, bool enable)
+    {
+        b2Body_EnableSleep(bodyId, enable);
+    }
+
+	void Physics2D::SetGravityScale(b2BodyId bodyId, float scale)
+	{
+        b2Body_SetGravityScale(bodyId, scale);
+	}
+
+	void Physics2D::SetLinearDamping(b2BodyId bodyId, float damping)
+	{
+        b2Body_SetLinearDamping(bodyId, damping);
+	}
+
+	void Physics2D::SetAngularDamping(b2BodyId bodyId, float damping)
+	{
+		b2Body_SetAngularDamping(bodyId, damping);
+	}
+
+	void Physics2D::SetMotionLock(b2BodyId bodyId, bool lockX, bool lockY, bool lockRotation)
+	{
+		b2Body_SetMotionLocks(bodyId, { lockX, lockY, lockRotation });
+	}
+
+    float Physics2D::GetMass(b2BodyId bodyId)
+    {
+        return b2Body_GetMass(bodyId);
+    }
+
+    bool Physics2D::IsBullet(b2BodyId bodyId)
+    {
+        return b2Body_IsBullet(bodyId);
+    }
+
+    void Physics2D::SetBullet(b2BodyId bodyId, bool bullet)
+    {
+        b2Body_SetBullet(bodyId, bullet);
+    }
 
 } // namespace ignite

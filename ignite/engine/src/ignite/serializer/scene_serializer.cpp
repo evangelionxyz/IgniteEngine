@@ -388,7 +388,17 @@ namespace ignite
                         sr.AddKeyValue("MoveY", comp.moveY);
                         sr.AddKeyValue("MoveZ", comp.moveZ);
                         sr.AddKeyValue("Mass", comp.mass);
+                        sr.AddKeyValue("LinearVelocity", comp.linearVelocity);
+                        sr.AddKeyValue("LinearDamping", comp.linearDamping);
+                        sr.AddKeyValue("MaxLinearVelocity", comp.maxLinearVelocity);
+                        sr.AddKeyValue("AngularVelocity", comp.angularVelocity);
+                        sr.AddKeyValue("AngularDamping", comp.angularDamping);
+                        sr.AddKeyValue("MaxAngularVelocity", comp.maxAngularVelocity);
+                        sr.AddKeyValue("Restitution", comp.restitution);
+                        sr.AddKeyValue("Friction", comp.friction);
+                        sr.AddKeyValue("ApplyGyroscopicForce", comp.applyGyroscopicForce);
                         sr.AddKeyValue("AllowSleeping", comp.allowSleeping);
+                        sr.AddKeyValue("IsSensor", comp.isSensor);
                         sr.AddKeyValue("RetainAcceleration", comp.retainAcceleration);
                         sr.AddKeyValue("GravityFactor", comp.gravityFactor);
                         sr.AddKeyValue("CenterMass", comp.centerMass);
@@ -403,10 +413,6 @@ namespace ignite
                     {
                         sr.AddKeyValue("Scale", comp.scale);
                         sr.AddKeyValue("Center", comp.center);
-                        sr.AddKeyValue("Friction", comp.friction);
-                        sr.AddKeyValue("StaticFriction", comp.staticFriction);
-                        sr.AddKeyValue("Restitution", comp.restitution);
-                        sr.AddKeyValue("Density", comp.density);
                     }
                     sr.EndMap();
                 }
@@ -419,10 +425,6 @@ namespace ignite
                     {
                         sr.AddKeyValue("Radius", comp.radius);
                         sr.AddKeyValue("Center", comp.center);
-                        sr.AddKeyValue("Friction", comp.friction);
-                        sr.AddKeyValue("StaticFriction", comp.staticFriction);
-                        sr.AddKeyValue("Restitution", comp.restitution);
-                        sr.AddKeyValue("Density", comp.density);
                     }
                     sr.EndMap();
                 }
@@ -436,10 +438,6 @@ namespace ignite
                         sr.AddKeyValue("Radius", comp.radius);
                         sr.AddKeyValue("Center", comp.center);
                         sr.AddKeyValue("Height", comp.height);
-                        sr.AddKeyValue("Friction", comp.friction);
-                        sr.AddKeyValue("StaticFriction", comp.staticFriction);
-                        sr.AddKeyValue("Restitution", comp.restitution);
-                        sr.AddKeyValue("Density", comp.density);
                     }
                     sr.EndMap();
                 }
@@ -450,12 +448,6 @@ namespace ignite
                     const auto &comp = entity.GetComponent<MeshColliderComponent>();
                     sr.BeginMap("MeshCollider");
                     {
-                        sr.AddKeyValue("Convex", comp.convex);
-                        sr.AddKeyValue("Friction", comp.friction);
-                        sr.AddKeyValue("StaticFriction", comp.staticFriction);
-                        sr.AddKeyValue("Restitution", comp.restitution);
-                        sr.AddKeyValue("Density", comp.density);
-
                         // Serialize vertices
                         sr.BeginSequence("Vertices");
                         for (const auto &vertex : comp.vertices)
@@ -908,7 +900,17 @@ namespace ignite
                 if (auto n = node["MoveY"]) comp.moveY = n.as<bool>();
                 if (auto n = node["MoveZ"]) comp.moveZ = n.as<bool>();
                 if (auto n = node["Mass"]) comp.mass = n.as<float>();
+                if (auto n = node["LinearVelocity"]) comp.linearVelocity = n.as<glm::vec3>();
+                if (auto n = node["LinearDamping"]) comp.linearDamping = n.as<float>();
+                if (auto n = node["MaxLinearVelocity"]) comp.maxLinearVelocity = n.as<float>();
+                if (auto n = node["AngularVelocity"]) comp.angularVelocity = n.as<glm::vec3>();
+                if (auto n = node["AngularDamping"]) comp.angularDamping = n.as<float>();
+                if (auto n = node["MaxAngularVelocity"]) comp.maxAngularVelocity = n.as<float>();
+                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
+                if (auto n = node["Friction"]) comp.friction = n.as<float>();
+                if (auto n = node["ApplyGyroscopicForce"]) comp.applyGyroscopicForce = n.as<bool>();
                 if (auto n = node["AllowSleeping"]) comp.allowSleeping = n.as<bool>();
+                if (auto n = node["IsSensor"]) comp.isSensor = n.as<bool>();
                 if (auto n = node["RetainAcceleration"]) comp.retainAcceleration = n.as<bool>();
                 if (auto n = node["GravityFactor"]) comp.gravityFactor = n.as<float>();
                 if (auto n = node["CenterMass"]) comp.centerMass = n.as<glm::vec3>();
@@ -920,10 +922,6 @@ namespace ignite
                 auto &comp = desEntity.AddComponent<BoxColliderComponent>();
                 if (auto n = node["Scale"]) comp.scale = n.as<glm::vec3>();
                 if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
-                if (auto n = node["Friction"]) comp.friction = n.as<float>();
-                if (auto n = node["StaticFriction"]) comp.staticFriction = n.as<float>();
-                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
-                if (auto n = node["Density"]) comp.density = n.as<float>();
             }
 
             // SphereCollider
@@ -932,10 +930,6 @@ namespace ignite
                 auto &comp = desEntity.AddComponent<SphereColliderComponent>();
                 if (auto n = node["Radius"]) comp.radius = n.as<float>();
                 if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
-                if (auto n = node["Friction"]) comp.friction = n.as<float>();
-                if (auto n = node["StaticFriction"]) comp.staticFriction = n.as<float>();
-                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
-                if (auto n = node["Density"]) comp.density = n.as<float>();
             }
 
             // CapsuleCollider
@@ -945,10 +939,6 @@ namespace ignite
                 if (auto n = node["Radius"]) comp.radius = n.as<float>();
                 if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
                 if (auto n = node["Height"]) comp.height = n.as<float>();
-                if (auto n = node["Friction"]) comp.friction = n.as<float>();
-                if (auto n = node["StaticFriction"]) comp.staticFriction = n.as<float>();
-                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
-                if (auto n = node["Density"]) comp.density = n.as<float>();
             }
 
             // MeshCollider
@@ -956,10 +946,6 @@ namespace ignite
             {
                 auto &comp = desEntity.AddComponent<MeshColliderComponent>();
                 comp.convex = node["Convex"].as<bool>();
-                comp.friction = node["Friction"].as<float>();
-                comp.staticFriction = node["StaticFriction"].as<float>();
-                comp.restitution = node["Restitution"].as<float>();
-                comp.density = node["Density"].as<float>();
 
                 // Deserialize vertices
                 if (YAML::Node verticesNode = node["Vertices"])

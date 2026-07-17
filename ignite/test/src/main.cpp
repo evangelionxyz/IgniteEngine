@@ -411,15 +411,16 @@ TEST(SceneTransition, BasicTransition)
     project->SetActiveScene(sceneA);
     sceneA->OnStart(ESceneState::Play);
 
-    LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void*)project->GetActiveScene().get(), (int)sceneA->GetState());
+	LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void *)project->LockActiveScene().get(), (int)sceneA->GetState());
 
-    EXPECT_EQ(project->GetActiveScene(), sceneA);
+    EXPECT_EQ(project->LockActiveScene(), sceneA);
 
-    SceneManager::TransitionTo(sceneBHandle);
+    SceneManager::Transition(sceneBHandle);
+    Application::GetInstance()->ProcessMainThreadSubmissions();
     LOG_INFO("DEBUG basic: calling ExecutePendingTransition");
     SceneManager::ExecutePendingTransition();
 
-    Ref<Scene> activeScene = project->GetActiveScene();
+    Ref<Scene> activeScene = project->LockActiveScene();
     LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void*)activeScene.get(), (int)sceneA->GetState(), (int)activeScene->GetState());
 
     EXPECT_NE(activeScene, sceneA);
@@ -510,7 +511,8 @@ TEST(SceneTransition, SharedAssetPinned)
 
     EXPECT_TRUE(assetManager->IsAssetLoaded(sharedTextureHandle));
 
-    SceneManager::TransitionTo(sceneBHandle);
+    SceneManager::Transition(sceneBHandle);
+    Application::GetInstance()->ProcessMainThreadSubmissions();
     SceneManager::ExecutePendingTransition();
 
     assetManager->UnloadUnusedAssets();
@@ -562,20 +564,20 @@ TEST(SceneTransition, InvalidHandleRejected)
     project->SetActiveScene(sceneA);
 
     LOG_INFO("DEBUG: TransitionTo 0");
-    SceneManager::TransitionTo(AssetHandle(0));
+    SceneManager::Transition(AssetHandle(0));
     LOG_INFO("DEBUG: ExecutePendingTransition 0");
     SceneManager::ExecutePendingTransition();
 
     LOG_INFO("DEBUG: Checking active scene is still A");
-    EXPECT_EQ(project->GetActiveScene(), sceneA);
+	EXPECT_EQ(project->LockActiveScene(), sceneA);
 
     LOG_INFO("DEBUG: TransitionTo 9999");
-    SceneManager::TransitionTo(AssetHandle(9999));
+    SceneManager::Transition(AssetHandle(9999));
     LOG_INFO("DEBUG: ExecutePendingTransition 9999");
     SceneManager::ExecutePendingTransition();
 
     LOG_INFO("DEBUG: Checking active scene is still A (final)");
-    EXPECT_EQ(project->GetActiveScene(), sceneA);
+    EXPECT_EQ(project->LockActiveScene(), sceneA);
     LOG_INFO("DEBUG: Reached end of test body");
 }
 
@@ -768,5 +770,5 @@ int main(int argc, char **argv)
     app.reset();
     ignite::Logger::Shutdown();
 
-    return result;
+    exit(result);
 }

@@ -29,7 +29,7 @@ namespace ignite
         explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
         virtual ~ScenePanel() override;
         
-        void SetActiveScene(const Ref<Scene> &scene);
+        void SetActiveScene(Scene *scene);
 
         void OnUpdate(float deltaTime) override;
         void OnGuiRender() override;
@@ -82,7 +82,7 @@ namespace ignite
         std::optional<EditorCamera> m_EditorCamera2D;
         std::optional<EditorCamera> m_EditorCamera3D;
 
-        Ref<Scene> m_Scene;
+        Scene *m_Scene;
         Gizmo m_Gizmo;
         std::unordered_map<UUID, Entity> m_SelectedEntities;
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
@@ -126,8 +126,8 @@ namespace ignite
             TransformComponent before2DResize;
 		} m_Data;
 
-        bool m_SceneFocused = false;
-        int m_SceneFocusCooldown = 0;
+        bool m_SceneFocused;
+        int m_SceneFocusCooldown;
 
         friend class EditorLayer;
     };

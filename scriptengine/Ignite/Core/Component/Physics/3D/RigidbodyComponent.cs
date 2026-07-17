@@ -48,6 +48,7 @@ public sealed class RigidbodyComponent : IComponent
             ComponentInternalCalls.RigidbodyComponent_GetMass(Entity!.ID, out float result);
             return result;
         }
+        set => ComponentInternalCalls.RigidbodyComponent_SetMass(Entity!.ID, value);
     }
 
     public float GetMass()
@@ -63,6 +64,76 @@ public sealed class RigidbodyComponent : IComponent
             return result;
         }
         set => ComponentInternalCalls.RigidbodyComponent_SetGravityFactor(Entity!.ID, value);
+    }
+
+    public float LinearDamping
+    {
+        get
+        {
+            ComponentInternalCalls.RigidbodyComponent_GetLinearDamping(Entity!.ID, out float result);
+            return result;
+        }
+        set => ComponentInternalCalls.RigidbodyComponent_SetLinearDamping(Entity!.ID, value);
+    }
+
+    public float AngularDamping
+    {
+        get
+        {
+            ComponentInternalCalls.RigidbodyComponent_GetAngularDamping(Entity!.ID, out float result);
+            return result;
+        }
+        set => ComponentInternalCalls.RigidbodyComponent_SetAngularDamping(Entity!.ID, value);
+    }
+
+    public float Friction
+    {
+        get
+        {
+            ComponentInternalCalls.RigidbodyComponent_GetFriction(Entity!.ID, out float result);
+            return result;
+        }
+        set => ComponentInternalCalls.RigidbodyComponent_SetFriction(Entity!.ID, value);
+    }
+
+    public float Restitution
+    {
+        get
+        {
+            ComponentInternalCalls.RigidbodyComponent_GetRestitution(Entity!.ID, out float result);
+            return result;
+        }
+        set => ComponentInternalCalls.RigidbodyComponent_SetRestitution(Entity!.ID, value);
+    }
+
+    public float MaxLinearVelocity
+    {
+        get
+        {
+            ComponentInternalCalls.RigidbodyComponent_GetMaxLinearVelocity(Entity!.ID, out float result);
+            return result;
+        }
+        set => ComponentInternalCalls.RigidbodyComponent_SetMaxLinearVelocity(Entity!.ID, value);
+    }
+
+    public float MaxAngularVelocity
+    {
+        get
+        {
+            ComponentInternalCalls.RigidbodyComponent_GetMaxAngularVelocity(Entity!.ID, out float result);
+            return result;
+        }
+        set => ComponentInternalCalls.RigidbodyComponent_SetMaxAngularVelocity(Entity!.ID, value);
+    }
+
+    public bool ApplyGyroscopicForce
+    {
+        get
+        {
+            ComponentInternalCalls.RigidbodyComponent_GetApplyGyroscopicForce(Entity!.ID, out bool result);
+            return result;
+        }
+        set => ComponentInternalCalls.RigidbodyComponent_SetApplyGyroscopicForce(Entity!.ID, value);
     }
 
     public Vector3 Position
@@ -102,6 +173,7 @@ public sealed class RigidbodyComponent : IComponent
             ComponentInternalCalls.RigidbodyComponent_GetAngularVelocity(Entity!.ID, out Vector3 result);
             return result;
         }
+        set => ComponentInternalCalls.RigidbodyComponent_SetAngularVelocity(Entity!.ID, value);
     }
 
     public Vector3 CenterOfMass
@@ -113,13 +185,10 @@ public sealed class RigidbodyComponent : IComponent
         }
     }
 
-    public bool IsActive
+    public bool IsActive()
     {
-        get
-        {
-            ComponentInternalCalls.RigidbodyComponent_IsActive(Entity!.ID, out bool result);
-            return result;
-        }
+        ComponentInternalCalls.RigidbodyComponent_IsActive(Entity!.ID, out bool result);
+        return result;
     }
 
     public void ApplyForce(Vector3 force, Vector3 point)

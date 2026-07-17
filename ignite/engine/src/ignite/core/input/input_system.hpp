@@ -56,6 +56,7 @@ namespace ignite
 
 		static void SetMouseToCenter();
 		static void SetCursorMode(CursorMode mode);
+		static CursorMode GetCursorMode();
 
 		// Instance implementations
 		bool IsKeyPressedImpl(KeyCode keycode) const;
@@ -73,8 +74,6 @@ namespace ignite
 		void SetMousePosition(int x, int y);
 		void AddMouseDelta(float dx, float dy);
 		void ResetMouseDelta();
-
-		CursorMode GetCursorMode() const { return m_CursorMode; }
 		void SetCursorModeImpl(CursorMode mode);
 
 	protected:

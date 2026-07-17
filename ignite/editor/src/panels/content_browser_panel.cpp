@@ -209,6 +209,15 @@ namespace ignite
 
 	ContentBrowserPanel::~ContentBrowserPanel()
 	{
+        if (m_EditorLayer)
+        {
+            if (m_EditorLayer->m_ContentBrowserPanel == this)
+            {
+                m_EditorLayer->m_ContentBrowserPanel = nullptr;
+            }
+            std::erase(m_EditorLayer->m_ContentBrowserPanels, this);
+        }
+
         if (s_InstanceCount > 0)
         {
             --s_InstanceCount;

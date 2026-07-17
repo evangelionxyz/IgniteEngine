@@ -372,13 +372,13 @@ namespace ignite
 	// ===================================
 	MeshInstance::~MeshInstance()
 	{
-		AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
-
 		// Wait for GPU to ensure resources are not in use
 		if (auto *device = DeviceManager::GetInstance()->GetDevice())
 		{
 			GPUUploadSync::DeviceWaitIdle(device);
 		}
+
+		AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
 
 		m_MeshBindingSet = nullptr;
 	}
