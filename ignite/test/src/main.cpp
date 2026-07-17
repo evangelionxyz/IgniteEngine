@@ -411,16 +411,16 @@ TEST(SceneTransition, BasicTransition)
     project->SetActiveScene(sceneA);
     sceneA->OnStart(ESceneState::Play);
 
-    LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void*)project->GetActiveScene().get(), (int)sceneA->GetState());
+	LOG_INFO("DEBUG basic: active scene at start: {}, running state: {}", (void *)project->LockActiveScene().get(), (int)sceneA->GetState());
 
-    EXPECT_EQ(project->GetActiveScene(), sceneA);
+    EXPECT_EQ(project->LockActiveScene(), sceneA);
 
     SceneManager::Transition(sceneBHandle);
     Application::GetInstance()->ProcessMainThreadSubmissions();
     LOG_INFO("DEBUG basic: calling ExecutePendingTransition");
     SceneManager::ExecutePendingTransition();
 
-    Ref<Scene> activeScene = project->GetActiveScene();
+    Ref<Scene> activeScene = project->LockActiveScene();
     LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void*)activeScene.get(), (int)sceneA->GetState(), (int)activeScene->GetState());
 
     EXPECT_NE(activeScene, sceneA);
@@ -569,7 +569,7 @@ TEST(SceneTransition, InvalidHandleRejected)
     SceneManager::ExecutePendingTransition();
 
     LOG_INFO("DEBUG: Checking active scene is still A");
-    EXPECT_EQ(project->GetActiveScene(), sceneA);
+	EXPECT_EQ(project->LockActiveScene(), sceneA);
 
     LOG_INFO("DEBUG: TransitionTo 9999");
     SceneManager::Transition(AssetHandle(9999));
@@ -577,7 +577,7 @@ TEST(SceneTransition, InvalidHandleRejected)
     SceneManager::ExecutePendingTransition();
 
     LOG_INFO("DEBUG: Checking active scene is still A (final)");
-    EXPECT_EQ(project->GetActiveScene(), sceneA);
+    EXPECT_EQ(project->LockActiveScene(), sceneA);
     LOG_INFO("DEBUG: Reached end of test body");
 }
 

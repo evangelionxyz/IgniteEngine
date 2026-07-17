@@ -682,7 +682,7 @@ namespace ignite
         if (!project)
             return;
 
-        Ref<Scene> currentScene = project->GetActiveScene();
+        Ref<Scene> currentScene = project->LockActiveScene();
         ESceneState previousState = ESceneState::Stop;
         if (currentScene)
         {

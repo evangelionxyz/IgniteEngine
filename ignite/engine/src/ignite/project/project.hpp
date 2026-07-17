@@ -115,9 +115,11 @@ namespace ignite
 
         ScriptEngine *GetScriptEngine() { return m_ScriptEngine; }
         ProjectInfo &GetInfo() { return m_Info; }
-        Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
 
-		IPhysics3D *GetPhysics3D() { return m_Physics3D.get(); }
+        WeakRef<Scene> GetActiveSceneWeak() const { return m_ActiveScene; }
+		Ref<Scene> LockActiveScene() const { return m_ActiveScene.lock(); }
+		
+        IPhysics3D *GetPhysics3D() { return m_Physics3D.get(); }
 		Physics2D *GetPhysics2D() { return m_Physics2D.get(); }
 
         ProjectConfiguration GetConfiguration() const { return m_Info.configuration; }
@@ -136,7 +138,7 @@ namespace ignite
         void CreateDirectories() const;
         void GenerateProject();
 
-        Ref<Scene> m_ActiveScene; // current active scene in editor
+        WeakRef<Scene> m_ActiveScene; // current active scene in editor
         ProjectInfo m_Info;
 
         MaterialManager m_MaterialManager;

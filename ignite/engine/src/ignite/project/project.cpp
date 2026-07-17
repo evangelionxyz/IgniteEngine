@@ -161,12 +161,7 @@ R"(<Project>
     }
 
     Project::~Project()
-    {
-		if (m_ActiveScene)
-		{
-            m_ActiveScene = nullptr;
-		}
-
+    {		
         m_Physics3D->Shutdown();
 
         m_CoreDependencyWatchers.clear();

@@ -409,7 +409,7 @@ namespace ignite
 
     void AssetManager::OnAssetChangeSignal(const AssetChangeSignal &signal)
     {
-        auto activeScene = m_Project->GetActiveScene();
+        auto activeScene = m_Project->LockActiveScene();
         if (!activeScene)
             return;
 
