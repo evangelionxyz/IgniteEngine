@@ -1,9 +1,10 @@
 #include "include/binding_helpers.hlsli"
 #include "include/scene.hlsli"
 
-cbuffer CameraBuffer : register(b0, space0) { Camera camera; }
-cbuffer ObjectBuffer : register(b1, space0) { Object object; }
-cbuffer SkeletonBuffer : register(b2, space0) { Skeleton skeleton; }
+DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0
+cbuffer CameraBuffer                    : register(b1, space0) { Camera camera; }
+StructuredBuffer<Object> g_ObjectBuffer : register(t2, space0);
+StructuredBuffer<float4x4> g_Bones      : register(t3, space0);
 
 PixelVertexInput main(VertexMeshAnim input)
 {
@@ -32,7 +33,8 @@ PixelVertexInput main(VertexMeshAnim input)
             if (weight > 0.0f)
             {
                 uint boneId = min(input.boneIDs[i], (uint)(MAX_BONES - 1));
-                float4x4 transform = skeleton.boneTransforms[boneId];
+                uint globalBoneIdx = g_ObjectBuffer[g_Push.objectIndex].boneOffset + boneId;
+                float4x4 transform = g_Bones[globalBoneIdx];
 
                 posL += weight * mul(transform, float4(input.position, 1.0));
                 normalL += weight * mul((float3x3)transform, input.normal);
@@ -42,11 +44,11 @@ PixelVertexInput main(VertexMeshAnim input)
         }
     }
 
-    float4 worldPos    = mul(object.transformMatrix, posL);
+    float4 worldPos    = mul(g_ObjectBuffer[g_Push.objectIndex].transformMatrix, posL);
 
     pixelInput.position     = mul(mul(camera.projection, camera.view), worldPos);
     // Use normal matrix for correct inverse-transpose transform of direction vectors
-    float3x3 N = (float3x3)object.normalMatrix;
+    float3x3 N = (float3x3)g_ObjectBuffer[g_Push.objectIndex].normalMatrix;
     pixelInput.normal       = normalize(mul(N, normalL));
     pixelInput.tangent      = normalize(mul(N, tangentL));
     pixelInput.bitangent    = normalize(mul(N, bitangentL));

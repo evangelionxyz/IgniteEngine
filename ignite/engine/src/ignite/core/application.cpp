@@ -290,8 +290,8 @@ namespace ignite
                 }
             }
 
-            // Record statistics
-            Renderer::BeginStats();
+			// Begin frame (must be done after framebuffer clear to avoid GPU sync issues)
+            m_Renderer->BeginFrame(m_FrameCounter);
 
             // Render layers
             {

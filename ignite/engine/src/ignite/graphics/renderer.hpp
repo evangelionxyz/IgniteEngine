@@ -6,11 +6,9 @@
 
 #include "ignite/core/subsystem.hpp"
 #include "ignite/core/types.hpp"
-#include "graphics_pipeline.hpp"
+#include "frame_context.hpp"
 
-#include <nvrhi/nvrhi.h>
 #include <string>
-#include <unordered_map>
 
 namespace ignite
 {
@@ -25,7 +23,7 @@ namespace ignite
     class StaticMesh;
     class Material;
     class Shader;
-	class ConstantBuffer;
+    class ConstantBuffer;
 
     enum class EBindingLayout
     {
@@ -74,16 +72,18 @@ namespace ignite
     class IGN_API Renderer : public Subsystem
     {
     public:
-        Renderer() = default;
         Renderer(DeviceManager *deviceManager, nvrhi::GraphicsAPI api);
 
         virtual void Shutdown() override;
+        void BeginFrame(const uint64_t frameIndex);
+        void ResetStatistics();
 
-        static void BeginStats();
+		static FrameContext *GetCurrentFrameContext();
         
         static Ref<Texture> GetWhiteTexture();
         static Ref<Texture> GetBlackTexture();
         static Ref<Texture> GetMagentaTexture();
+        static Ref<Texture> GetBlackUIntTexture();
 
         static Ref<Material> GetDefaultMaterial();
 
@@ -103,12 +103,13 @@ namespace ignite
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
         Ref<Texture> m_MagentaTexture;
-
+        Ref<Texture> m_BlackUIntTexture;
         Ref<Material> m_DefaultMaterial;
 
-        nvrhi::IDevice *m_Device;
         std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;
-
+		std::vector<FrameContext> m_Frames; // Triple buffering
+		uint64_t m_MaxFramesInFlight = 3;
+        uint64_t m_FrameCounter = 0;
 
         friend class ShaderLibrary;
     };

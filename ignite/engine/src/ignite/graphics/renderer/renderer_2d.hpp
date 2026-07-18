@@ -53,7 +53,7 @@ namespace ignite
         ~Renderer2D();
 
         void Begin(nvrhi::ICommandList *cmd);
-        void Flush(nvrhi::IFramebuffer *framebuffer, const Ref<ConstantBuffer> &cameraBuffer);
+        void Flush(nvrhi::IFramebuffer *framebuffer, const nvrhi::BufferHandle &cameraBuffer);
         void End();
 
         void SetFillMode(nvrhi::RasterFillMode mode) { m_FillMode = mode; ClearPipelineCache(); }
@@ -80,7 +80,7 @@ namespace ignite
         void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID = 0xFFFFFFFFu);
 
         void BuildPreRenderCache();
-        bool ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const Ref<ConstantBuffer> &cameraBuffer);
+        bool ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const nvrhi::BufferHandle &cameraBuffer);
         void InvalidatePreRenderCache();
 
         void InitQuadData();
@@ -101,11 +101,10 @@ namespace ignite
         Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
         Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer);
 
-        nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer);
-        nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer);
-        nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer);
-        nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer);
-
+        nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &lightingBuffer);
+        nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &lightingBuffer);
+		nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer);
+        nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer);
 
     private:
         nvrhi::ICommandList *m_Cmd;
@@ -114,8 +113,8 @@ namespace ignite
         BatchRender<Vertex2DCircle> m_CircleBatch;
         BatchRender<VertexText> m_TextBatch;
 
-        Ref<ConstantBuffer> m_Material2DLightingBuffer;
-        Ref<Material2DLighting_GPUData> m_Material2DLightingData;
+        ConstantBuffer m_Material2DLightingBuffer;
+        Material2DLighting_GPUData m_Material2DLightingData;
 
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_LinePSOCache;
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadPSOCache;
@@ -129,7 +128,7 @@ namespace ignite
 
         struct PreRenderCacheData
         {
-            Ref<Material2DLighting_GPUData> lightingData;
+            Material2DLighting_GPUData lightingData;
 
             std::vector<Vertex2DCircle> circleVertices;
             uint32_t circleIndexCount = 0;

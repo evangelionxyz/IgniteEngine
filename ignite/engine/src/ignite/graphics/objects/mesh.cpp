@@ -3,16 +3,15 @@
 #include "ignite_pch.hpp"
 
 #include "mesh.hpp"
+#include "ignite/asset/asset_manager.hpp"
 #include "ignite/core/time.hpp"
-#include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/graphics/renderer/scene_renderer.hpp"
+#include "ignite/graphics/binding_cache.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
-#include "ignite/scene/scene.hpp"
 
 #include <fbxsdk.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -389,8 +388,6 @@ namespace ignite
         }
 
         AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}.{}", m_Name, (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
-
-        m_MeshBindingSet = nullptr;
     }
     
     void MeshInstance::SetMaterial(const AssetHandle &assetHandle)
@@ -399,39 +396,12 @@ namespace ignite
         AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}.{}", m_Name, (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
     }
 
-    void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
-    {
-        m_MeshConstantBuffer->SetData(cmd, Buffer(data, size));
-    }
-
     // ===================================
     // Static Mesh Instance
     // ===================================
     StaticMeshInstance::StaticMeshInstance(const MeshNode<VertexMeshStatic> &node, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
+        : StaticMeshInstance(node.name, primitive)
     {
-        m_Name = node.name;
-        m_Primitive = primitive;
-
-        local = node.local;
-        global = node.global;
-
-        if (primitive && !primitive->vertices.empty())
-        {
-            localAABB.min = primitive->vertices[0].position;
-            localAABB.max = primitive->vertices[0].position;
-            for (const auto &v : primitive->vertices)
-            {
-                localAABB.min = glm::min(localAABB.min, v.position);
-                localAABB.max = glm::max(localAABB.max, v.position);
-            }
-        }
-
-        if (!m_MeshConstantBuffer)
-        {
-            constexpr uint32_t maxVersion = 1;
-            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, 1, "Per-Entity Transform Buffer");
-            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-        }
     }
 
     StaticMeshInstance::StaticMeshInstance(const std::string &name, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
@@ -449,13 +419,6 @@ namespace ignite
                 localAABB.max = glm::max(localAABB.max, v.position);
             }
         }
-
-        if (!m_MeshConstantBuffer)
-        {
-            constexpr uint32_t maxVersion = 1;
-            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, 1, "Per-Entity Transform Buffer");
-            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-        }
     }
 
     StaticMeshInstance::StaticMeshInstance()
@@ -466,52 +429,6 @@ namespace ignite
     StaticMeshInstance::~StaticMeshInstance()
     {
         m_Primitive.reset();
-        m_MeshBindingSetCache.clear();
-    }
-
-    bool StaticMeshInstance::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, const Ref<ConstantBuffer> &pointLightBuffer /*= nullptr*/, const Ref<ConstantBuffer> &spotLightBuffer /*= nullptr */)
-    {
-        if (!m_MeshConstantBuffer)
-        {
-            return false;
-        }
-
-        BindingSetCacheKey cacheKey{};
-        cacheKey.cameraBuffer = cameraBuffer->GetHandle();
-        cacheKey.objectBuffer = m_MeshConstantBuffer->GetHandle();
-        cacheKey.sceneBuffer = sceneBuffer ? sceneBuffer->GetHandle() : nullptr;
-        cacheKey.csmBuffer = csmBuffer ? csmBuffer->GetHandle() : nullptr;
-        cacheKey.pointLightBuffer = pointLightBuffer ? pointLightBuffer->GetHandle() : nullptr;
-        cacheKey.spotLightBuffer = spotLightBuffer ? spotLightBuffer->GetHandle() : nullptr;
-
-        if (auto it = m_MeshBindingSetCache.find(cacheKey); it != m_MeshBindingSetCache.end())
-        {
-            m_MeshBindingSet = it->second;
-            return true;
-        }
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        auto desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cacheKey.cameraBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cacheKey.objectBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, cacheKey.sceneBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, cacheKey.csmBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, cacheKey.pointLightBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, cacheKey.spotLightBuffer));
-
-        m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(EBindingLayout::MESH_STATIC));
-        LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");
-
-        if (m_MeshBindingSet)
-        {
-            m_MeshBindingSetCache.emplace(cacheKey, m_MeshBindingSet);
-            if (m_MeshBindingSetCache.size() > 512)
-            {
-                LOG_WARN("[MeshInstance] Binding cache for '{}' grew to {} entries. Verify instance buffer sharing strategy.", m_Name, m_MeshBindingSetCache.size());
-            }
-        }
-
-        return true;
     }
 
     Ref<StaticMeshInstance> StaticMeshInstance::Create(const MeshNode<VertexMeshStatic> &node, const Ref<MeshPrimitive<VertexMeshStatic>> &primitive)
@@ -527,10 +444,15 @@ namespace ignite
     // ===================================
     // Skeletal Mesh Instance
     // ===================================
+	SkeletalMeshInstance::SkeletalMeshInstance(const MeshNode<VertexMeshAnim> &node, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive)
+		: SkeletalMeshInstance(node.name, primitive)
+	{
+	}
+
     SkeletalMeshInstance::SkeletalMeshInstance(const std::string &name, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive)
     {
         m_Name = name;
-        m_Primitive = primitive;
+		m_Primitive = primitive;
 
         if (primitive && !primitive->vertices.empty())
         {
@@ -541,54 +463,6 @@ namespace ignite
                 localAABB.min = glm::min(localAABB.min, v.position);
                 localAABB.max = glm::max(localAABB.max, v.position);
             }
-        }
-
-        constexpr uint32_t maxVersion = 1;
-        if (!m_MeshConstantBuffer)
-        {
-            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, maxVersion, "Per-Entity Transform Buffer");
-            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-        }
-
-        if (!m_SkeletonBuffer)
-        {
-            m_SkeletonBuffer = ConstantBuffer::Create(sizeof(glm::mat4) * MAX_BONES, false, maxVersion, "Default Skeleton Buffer");
-            LOG_INFO("[MeshInstance] Created skeleton buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-        }
-
-    }
-
-    SkeletalMeshInstance::SkeletalMeshInstance(const MeshNode<VertexMeshAnim> &node, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive)
-    {
-        m_Name = node.name;
-        m_Primitive = primitive;
-
-        local = node.local;
-        global = node.global;
-
-        if (primitive && !primitive->vertices.empty())
-        {
-            localAABB.min = primitive->vertices[0].position;
-            localAABB.max = primitive->vertices[0].position;
-            for (const auto &v : primitive->vertices)
-            {
-                localAABB.min = glm::min(localAABB.min, v.position);
-                localAABB.max = glm::max(localAABB.max, v.position);
-            }
-        }
-
-        constexpr uint32_t maxVersion = 1;
-
-        if (!m_MeshConstantBuffer)
-        {
-            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(Mesh_GPUData), false, maxVersion, "Per-Entity Transform Buffer");
-            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-        }
-
-        if (!m_SkeletonBuffer)
-        {
-            m_SkeletonBuffer = ConstantBuffer::Create(sizeof(glm::mat4) * MAX_BONES, false, maxVersion, "Default Skeleton Buffer");
-            LOG_INFO("[MeshInstance] Created skeleton buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
         }
     }
 
@@ -600,61 +474,6 @@ namespace ignite
     SkeletalMeshInstance::~SkeletalMeshInstance()
     {
         m_Primitive.reset();
-        m_MeshBindingSetCache.clear();
-    }
-
-    void SkeletalMeshInstance::SetSkeletonData(nvrhi::ICommandList *cmd, void *data, size_t size)
-    {
-        m_SkeletonBuffer->SetData(cmd, Buffer(data, size));
-    }
-
-    bool SkeletalMeshInstance::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer,
-        const Ref<ConstantBuffer> &pointLightBuffer, const Ref<ConstantBuffer> &spotLightBuffer
-    )
-    {
-        if (!m_SkeletonBuffer || !m_MeshConstantBuffer)
-        {
-            return false;
-        }
-
-        BindingSetCacheKey cacheKey {};
-        cacheKey.cameraBuffer = cameraBuffer->GetHandle();
-        cacheKey.objectBuffer = m_MeshConstantBuffer->GetHandle();
-        cacheKey.skeletonBuffer = m_SkeletonBuffer->GetHandle();
-        cacheKey.sceneBuffer = sceneBuffer ? sceneBuffer->GetHandle() : nullptr;
-        cacheKey.csmBuffer = csmBuffer ? csmBuffer->GetHandle() : nullptr;
-        cacheKey.pointLightBuffer = pointLightBuffer ? pointLightBuffer->GetHandle() : nullptr;
-        cacheKey.spotLightBuffer = spotLightBuffer ? spotLightBuffer->GetHandle() : nullptr;
-
-        if (auto it = m_MeshBindingSetCache.find(cacheKey); it != m_MeshBindingSetCache.end())
-        {
-            m_MeshBindingSet = it->second;
-            return true;
-        }
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        auto desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cacheKey.cameraBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cacheKey.objectBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, cacheKey.skeletonBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, cacheKey.sceneBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, cacheKey.csmBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, cacheKey.pointLightBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, cacheKey.spotLightBuffer));
-
-        m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(EBindingLayout::MESH_ANIM));
-        LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");
-
-        if (m_MeshBindingSet)
-        {
-            m_MeshBindingSetCache.emplace(cacheKey, m_MeshBindingSet);
-            if (m_MeshBindingSetCache.size() > 512)
-            {
-                LOG_WARN("[MeshInstance] Binding cache for '{}' grew to {} entries. Verify instance buffer sharing strategy.", m_Name, m_MeshBindingSetCache.size());
-            }
-        }
-
-        return true;
     }
 
     Ref<SkeletalMeshInstance> SkeletalMeshInstance::Create(const std::string &name, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive)

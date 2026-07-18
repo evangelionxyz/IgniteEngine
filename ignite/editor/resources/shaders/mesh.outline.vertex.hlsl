@@ -1,9 +1,9 @@
 #include "include/binding_helpers.hlsli"
 #include "include/scene.hlsli"
 
-cbuffer CameraBuffer : register(b0) { Camera camera; }
-cbuffer ObjectBuffer : register(b1) { Object object; }
-cbuffer SkeletonBuffer : register(b2) { Skeleton skeleton; }
+cbuffer CameraBuffer   : register(b0, space0) { Camera camera; }
+cbuffer ObjectBuffer   : register(b1, space0) { Object object; }
+cbuffer SkeletonBuffer : register(b2, space0) { Skeleton skeleton; }
 
 struct VSInput
 {

@@ -71,11 +71,12 @@ namespace ignite
 	struct DebugGridBindingKey
 	{
 		nvrhi::IBindingLayout *layout = nullptr;
+		nvrhi::IBuffer *cameraBuffer = nullptr;
 		nvrhi::IBuffer *gridBuffer = nullptr;
 
 		bool operator==(const DebugGridBindingKey &other) const noexcept
 		{
-			return layout == other.layout && gridBuffer == other.gridBuffer;
+			return layout == other.layout && cameraBuffer == other.cameraBuffer && gridBuffer == other.gridBuffer;
 		}
 	};
 
@@ -83,7 +84,7 @@ namespace ignite
 	{
 		size_t operator()(const DebugGridBindingKey &k) const noexcept
 		{
-			return Hashing::HashCombineAll(k.layout, k.gridBuffer);
+			return Hashing::HashCombineAll(k.layout, k.cameraBuffer, k.gridBuffer);
 		}
 	};
 

@@ -1,8 +1,9 @@
 #include "include/binding_helpers.hlsli"
 #include "include/scene.hlsli"
 
-cbuffer CameraBuffer : register(b0, space0) { Camera camera; }
-cbuffer ObjectBuffer : register(b1, space0) { Object object; }
+DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0
+cbuffer CameraBuffer                    : register(b1, space0) { Camera camera; }
+StructuredBuffer<Object> g_ObjectBuffer : register(t2, space0);
 
 PixelVertexInput main(VertexMesh input)
 {
@@ -13,11 +14,11 @@ PixelVertexInput main(VertexMesh input)
     float3 tangentL = input.tangent;
     float3 bitangentL = input.bitangent;
 
-    float4 worldPos = mul(object.transformMatrix, posL);
+    float4 worldPos = mul(g_ObjectBuffer[g_Push.objectIndex].transformMatrix, posL);
 
     pixelInput.position = mul(mul(camera.projection, camera.view), worldPos);
     // Use normal matrix for correct inverse-transpose transform of direction vectors
-    float3x3 N = (float3x3) object.normalMatrix;
+    float3x3 N = (float3x3)g_ObjectBuffer[g_Push.objectIndex].normalMatrix;
     pixelInput.normal = normalize(mul(N, normalL));
     pixelInput.tangent = normalize(mul(N, tangentL));
     pixelInput.bitangent = normalize(mul(N, bitangentL));

@@ -4,6 +4,7 @@
 #define IGN_MESH_HPP
 
 #include "ignite/core/base.hpp"
+#include "ignite/core/logger.hpp"
 #include "ignite/core/path.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/buffers/vertex_buffer.hpp"
@@ -178,18 +179,10 @@ namespace ignite
         void SetName(const std::string &name) { m_Name = name; }
         void SetMaterial(const AssetHandle &assetHandle);
         
-        void SetData(nvrhi::ICommandList *cmd, void *data, size_t size);
-
         const std::string &GetName() { return m_Name; }
         const AssetHandle &GetMaterialAssetHandle() const { return m_MaterialHandle; }
 
-        nvrhi::BindingSetHandle GetBindingSet() const { return m_MeshBindingSet; }
-        Ref<ConstantBuffer> GetConstantBuffer() { return m_MeshConstantBuffer; }
-
     protected:
-        Ref<ConstantBuffer> m_MeshConstantBuffer;
-        nvrhi::BindingSetHandle m_MeshBindingSet;
-
         UUID m_UUID;
         std::string m_Name;
         AssetHandle m_MaterialHandle = AssetHandle(0);
@@ -209,45 +202,7 @@ namespace ignite
 
         Ref<MeshPrimitive<VertexMeshStatic>> &GetPrimitive() { return m_Primitive; }
 
-        bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer,
-            const Ref<ConstantBuffer> &pointLightBuffer = nullptr, const Ref<ConstantBuffer> &spotLightBuffer = nullptr);
-
     private:
-        struct BindingSetCacheKey
-        {
-            nvrhi::IBuffer *cameraBuffer = nullptr;
-            nvrhi::IBuffer *objectBuffer = nullptr;
-            nvrhi::IBuffer *sceneBuffer = nullptr;
-            nvrhi::IBuffer *csmBuffer = nullptr;
-            nvrhi::IBuffer *pointLightBuffer = nullptr;
-            nvrhi::IBuffer *spotLightBuffer = nullptr;
-
-            bool operator==(const BindingSetCacheKey &other) const noexcept
-            {
-                return cameraBuffer == other.cameraBuffer
-                    && objectBuffer == other.objectBuffer
-                    && sceneBuffer == other.sceneBuffer
-                    && csmBuffer == other.csmBuffer
-                    && pointLightBuffer == other.pointLightBuffer
-                    && spotLightBuffer == other.spotLightBuffer;
-            }
-        };
-
-        struct BindingSetCacheKeyHash
-        {
-            size_t operator()(const BindingSetCacheKey &k) const noexcept
-            {
-                size_t h = std::hash<const void *>{}(k.cameraBuffer);
-                h ^= (std::hash<const void *>{}(k.objectBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.sceneBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.csmBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.pointLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.spotLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                return h;
-            }
-        };
-
-        std::unordered_map<BindingSetCacheKey, nvrhi::BindingSetHandle, BindingSetCacheKeyHash> m_MeshBindingSetCache;
         Ref<MeshPrimitive<VertexMeshStatic>> m_Primitive;
     };
 
@@ -264,54 +219,7 @@ namespace ignite
         static Ref<SkeletalMeshInstance> Create(const std::string &name, const Ref<MeshPrimitive<VertexMeshAnim>> &primitive);
 
         Ref<MeshPrimitive<VertexMeshAnim>> &GetPrimitive() { return m_Primitive; }
-
-        void SetSkeletonData(nvrhi::ICommandList *cmd, void *data, size_t size);
-
-        bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, 
-            const Ref<ConstantBuffer> &pointLightBuffer = nullptr, const Ref<ConstantBuffer> &spotLightBuffer = nullptr);
-
-        Ref<ConstantBuffer> GetSkeletonBuffer() { return m_SkeletonBuffer; }
-
     private:
-        struct BindingSetCacheKey
-        {
-            nvrhi::IBuffer *cameraBuffer = nullptr;
-            nvrhi::IBuffer *objectBuffer = nullptr;
-            nvrhi::IBuffer *skeletonBuffer = nullptr;
-            nvrhi::IBuffer *sceneBuffer = nullptr;
-            nvrhi::IBuffer *csmBuffer = nullptr;
-            nvrhi::IBuffer *pointLightBuffer = nullptr;
-            nvrhi::IBuffer *spotLightBuffer = nullptr;
-
-            bool operator==(const BindingSetCacheKey &other) const noexcept
-            {
-                return cameraBuffer == other.cameraBuffer
-                    && objectBuffer == other.objectBuffer
-                    && skeletonBuffer == other.skeletonBuffer
-                    && sceneBuffer == other.sceneBuffer
-                    && csmBuffer == other.csmBuffer
-                    && pointLightBuffer == other.pointLightBuffer
-                    && spotLightBuffer == other.spotLightBuffer;
-            }
-        };
-
-        struct BindingSetCacheKeyHash
-        {
-            size_t operator()(const BindingSetCacheKey &k) const noexcept
-            {
-                size_t h = std::hash<const void *>{}(k.cameraBuffer);
-                h ^= (std::hash<const void *>{}(k.objectBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.skeletonBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.sceneBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.csmBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.pointLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                h ^= (std::hash<const void *>{}(k.spotLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                return h;
-            }
-        };
-
-        Ref<ConstantBuffer> m_SkeletonBuffer;
-        std::unordered_map<BindingSetCacheKey, nvrhi::BindingSetHandle, BindingSetCacheKeyHash> m_MeshBindingSetCache;
         Ref<MeshPrimitive<VertexMeshAnim>> m_Primitive;
     };
 

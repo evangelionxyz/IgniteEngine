@@ -5,6 +5,7 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "render_target.hpp"
 #include "texture.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <ignite/core/logger.hpp>
 #include <ignite/core/types.hpp>
@@ -163,7 +164,7 @@ namespace ignite {
         }
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        device->waitForIdle();
+        GPUUploadSync::DeviceWaitIdle(device);
 
         if (m_FramebufferHandle != nullptr)
             m_FramebufferHandle.Reset();

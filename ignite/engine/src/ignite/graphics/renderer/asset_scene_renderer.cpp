@@ -60,7 +60,6 @@ namespace ignite
         m_SkeletalGeometryPipelineCache.clear();
         m_SkeletalTransparentPipelineCache.clear();
         m_CompositePipelineCache.clear();
-
         m_Environment = nullptr;
 
         if (m_DefaultEnvTexture && m_DefaultEnvTexture.use_count() == 1)
@@ -164,7 +163,7 @@ namespace ignite
         m_PreviewMouseHovered = hovered;
     }
 
-    void AssetSceneRenderer::Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT)
+    void AssetSceneRenderer::Render(ICamera *camera, FrameContext *frameContext, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT)
     {
         SyncRuntimeMaterialFromSource();
 
@@ -221,15 +220,21 @@ namespace ignite
         }
 
         CameraBufferData cameraBufferData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-        m_CameraBuffer->SetData(cmd, Buffer(&cameraBufferData, sizeof(CameraBufferData)));
-        m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(Scene_GPUData)));
+        frameContext->cameraBuffer.SetData(cmd, Buffer(&cameraBufferData, sizeof(CameraBufferData)));
+        frameContext->sceneBuffer.SetData(cmd, Buffer(&m_SceneGPUData, sizeof(Scene_GPUData)));
+        {
+		    // Cascaded Shadow Map — disabled in preview (shadowStrength = 0)
+            CSM_GPUData csmGpuData = {};
+            csmGpuData.cascadeIndex = -1;
+            csmGpuData.shadowStrength = 0.0f;
+            frameContext->csmBuffer.SetData(cmd, Buffer(&csmGpuData, sizeof(csmGpuData)));
 
-        // Cascaded Shadow Map — disabled in preview (shadowStrength = 0)
-        m_CSMGPUData               = {};
-        m_CSMGPUData.cascadeIndex  = -1;
-        m_CSMGPUData.shadowStrength = 0.0f;
-        m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&m_CSMGPUData, sizeof(CSM_GPUData)));
-
+			PointLightBufferData pointLightData = {};
+			SpotLightBufferData spotLightData = {};
+			frameContext->pointLightBuffer.SetData(cmd, Buffer(&pointLightData, sizeof(pointLightData)));
+			frameContext->spotLightBuffer.SetData(cmd, Buffer(&spotLightData, sizeof(spotLightData)));
+        }
+		
         uiRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
         uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
@@ -253,13 +258,13 @@ namespace ignite
 
         if (m_Environment && m_UseEnvironment)
         {
-            DrawEnvironment(cmd, camera, sceneRT->GetFramebuffer());
+            DrawEnvironment(cmd, camera, sceneRT->GetFramebuffer(), frameContext);
         }
 
         if (hasMeshPreview)
         {
-            DrawPreviewStaticMesh(cmd, sceneRT->GetFramebuffer());
-            DrawPreviewSkeletalMesh(cmd, sceneRT->GetFramebuffer());
+            DrawPreviewStaticMesh(cmd, sceneRT->GetFramebuffer(), frameContext);
+            DrawPreviewSkeletalMesh(cmd, sceneRT->GetFramebuffer(), frameContext);
         }
 
         if (m_PreviewWidget)
@@ -330,7 +335,7 @@ namespace ignite
     // ---------------------------------------------------------------------------
     // DrawEnvironment
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawEnvironment(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
+    void AssetSceneRenderer::DrawEnvironment(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
     {
         Ref<GraphicsPipeline> envPipeline;
         if (auto it = m_EnvironmentPipelineCache.find(framebuffer); it != m_EnvironmentPipelineCache.end())
@@ -369,12 +374,12 @@ namespace ignite
             if (tex && tex->IsReady())
             {
                 m_Environment->WriteBuffer(cmd);
-                m_Environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
                 m_EnvTextureInvalidating = false;
             }
         }
 
-        m_Environment->Draw(cmd, framebuffer, envPipeline);
+        m_Environment->Draw(cmd, framebuffer, envPipeline,
+            frameContext->cameraBuffer.GetHandle(), frameContext->sceneBuffer.GetHandle());
     }
 
     // ---------------------------------------------------------------------------
@@ -394,12 +399,15 @@ namespace ignite
         const Ref<MeshT>           &mesh,
         nvrhi::ICommandList        *cmd,
         nvrhi::IFramebuffer        *framebuffer,
+        FrameContext               *frameContext,
         const char                 *vertexShaderPath,
         const char                 *pixelShaderPath,
         EBindingLayout              meshBindingLayout,
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> &opaqueCache,
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> &transparentCache)
     {
+		constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
+
         static_assert(std::is_same_v<MeshT, StaticMesh> || std::is_same_v<MeshT, SkeletalMesh>,
             "DrawPreviewMeshImpl: MeshT must be StaticMesh or SkeletalMesh");
 
@@ -420,7 +428,7 @@ namespace ignite
 
         // Pre-build bone matrix array (only for skeletal meshes)
         glm::mat4 bones[MAX_BONES];
-        if constexpr (std::is_same_v<MeshT, SkeletalMesh>)
+        if constexpr (isSkeletal)
         {
             if (!m_BoneTransforms.empty())
             {
@@ -438,6 +446,9 @@ namespace ignite
             }
         }
 
+        uint32_t objectIndex = 0;
+        uint32_t boneOffset = 0;
+
         for (auto &meshInstance : mesh->GetMeshInstances())
         {
             auto &primitive = meshInstance->GetPrimitive();
@@ -446,10 +457,6 @@ namespace ignite
 
             if (!primitive->vertexBuffer || !primitive->indexBuffer)
                 primitive->WriteBuffer(cmd);
-
-            if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer,
-                    m_PointLightBuffer, m_SpotLightBuffer))
-                continue;
 
             // Resolve material:
             //  - Material-preview mode (m_SourceMaterial set): always use the runtime material
@@ -483,18 +490,18 @@ namespace ignite
             else
             {
                 GraphicsPipelineParams params;
-                params.enableDepthTest   = true;
+                params.enableDepthTest = true;
                 params.enableDepthStencil = false;
-                params.fillMode          = nvrhi::RasterFillMode::Solid;
-                params.cullMode          = nvrhi::RasterCullMode::None;
-                params.depthFunc         = nvrhi::ComparisonFunc::LessOrEqual;
-                params.enableBlend       = isTransparent;
+                params.fillMode = nvrhi::RasterFillMode::Solid;
+                params.cullMode = nvrhi::RasterCullMode::None;
+                params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+                params.enableBlend = isTransparent;
 
                 if (isTransparent)
                 {
-                    params.srcBlend       = nvrhi::BlendFactor::SrcAlpha;
-                    params.destBlend      = nvrhi::BlendFactor::InvSrcAlpha;
-                    params.srcBlendAlpha  = nvrhi::BlendFactor::One;
+                    params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+                    params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+                    params.srcBlendAlpha = nvrhi::BlendFactor::One;
                     params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
                     params.enableDepthWrite = false;
                 }
@@ -504,7 +511,7 @@ namespace ignite
                 }
 
                 Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
-                Ref<Shader> pixelShader  = Shader::Create(pixelShaderPath,  UMBRA_SHADER_TYPE_PIXEL,  false);
+                Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
 
                 geopPipeline = GraphicsPipeline::Create();
                 geopPipeline->SetShaders({ vertexShader, pixelShader })
@@ -523,7 +530,7 @@ namespace ignite
             Mesh_GPUData gpuData;
             glm::mat4 meshTransform = meshInstance->global;
 
-            if constexpr (std::is_same_v<MeshT, SkeletalMesh>)
+            if constexpr (isSkeletal)
             {
                 // Apply the bone's world transform for meshes linked to a skeleton joint
                 if (meshInstance->linkedJointIndex >= 0 && !m_BoneTransforms.empty())
@@ -540,14 +547,27 @@ namespace ignite
 
             const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
             gpuData.normal = glm::mat4(normalMat3);
-            meshInstance->SetData(cmd, &gpuData, sizeof(Mesh_GPUData));
+            gpuData.objectID = 0xFFFFFFFFu;
+            gpuData.boneOffset = boneOffset;
 
-            if constexpr (std::is_same_v<MeshT, SkeletalMesh>)
-            {
-                meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
-            }
+			if constexpr (isSkeletal)
+			{
+				gpuData.boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
+			}
+			else
+			{
+				gpuData.boneOffset = 0;
+			}
 
-            const nvrhi::BindingSetHandle meshBindingSet     = meshInstance->GetBindingSet();
+			// Allocate a unique object ID for this mesh instance and store it in the GPU data
+			const uint32_t PushConstant_ObjectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+
+			nvrhi::BindingSetHandle meshBindingSet = frameContext->staticMeshBindingSet;
+			if constexpr (isSkeletal)
+			{
+				meshBindingSet = frameContext->animatedBindingSet;
+			}
+
             const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
                 ? material->GetBindingSet()
                 : m_RuntimeMaterial->GetBindingSet();
@@ -559,11 +579,16 @@ namespace ignite
                 state.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
                 cmd->setGraphicsState(state);
 
+                // Push the object ID to the shader via push constants
+                cmd->setPushConstants(&objectIndex, sizeof(objectIndex));
+
                 nvrhi::DrawArguments args;
                 args.setVertexCount(primitive->indexBuffer->GetCount());
                 args.instanceCount = 1;
                 cmd->drawIndexed(args);
             }
+
+            objectIndex++;
         }
     }
 
@@ -572,12 +597,13 @@ namespace ignite
     // Uses the static-mesh shaders and its own pipeline cache pair so it never
     // collides with the skeletal-mesh pipeline cache.
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawPreviewStaticMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    void AssetSceneRenderer::DrawPreviewStaticMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
     {
         DrawPreviewMeshImpl(
             m_PreviewStaticMesh,
             cmd,
             framebuffer,
+            frameContext,
             "resources/shaders/mesh_static.vertex.hlsl",
             "resources/shaders/mesh_static.pixel.hlsl",
             EBindingLayout::MESH_STATIC,
@@ -589,12 +615,13 @@ namespace ignite
     // DrawPreviewSkeletalMesh — delegates to the generic template.
     // Uses the animated-mesh shaders and its own pipeline cache pair.
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawPreviewSkeletalMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    void AssetSceneRenderer::DrawPreviewSkeletalMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
     {
         DrawPreviewMeshImpl(
             m_PreviewSkeletalMesh,
             cmd,
             framebuffer,
+            frameContext,
             "resources/shaders/mesh_anim.vertex.hlsl",
             "resources/shaders/mesh_anim.pixel.hlsl",
             EBindingLayout::MESH_ANIM,
@@ -608,7 +635,7 @@ namespace ignite
     void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
     {
 		// Set the post-processing parameters based on the current settings on asset editor panel
-        m_CompositePostProcessBuffer->SetData(cmd, Buffer(&this->m_PostProcessingSettings, sizeof(this->m_PostProcessingSettings)));
+        m_CompositePostProcessBuffer.SetData(cmd, Buffer(&this->m_PostProcessingSettings, sizeof(this->m_PostProcessingSettings)));
 
         Ref<GraphicsPipeline> pipeline;
         if (auto it = m_CompositePipelineCache.find(framebuffer); it != m_CompositePipelineCache.end())
@@ -660,8 +687,8 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, Renderer::GetWhiteTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, Renderer::GetBlackTexture()->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, Renderer::GetBlackTexture()->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_CompositePostProcessBuffer->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, Renderer::GetBlackUIntTexture()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_CompositePostProcessBuffer.GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_CompositeSampler));
 
         nvrhi::BindingSetHandle bindingSet = m_Device->createBindingSet(bindingSetDesc, pipeline->GetBindingLayout(0));

@@ -6,6 +6,8 @@
 #include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/binding_cache.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/scene/icamera.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
@@ -40,11 +42,9 @@ namespace ignite
     {
         if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
-            device->waitForIdle();
+            GPUUploadSync::DeviceWaitIdle(device);
         }
 
-        // Clear binding set first (it references other resources)
-        m_BindingSet.Reset();
         m_Sampler.Reset();
 
         m_HDRTexture.reset();
@@ -52,15 +52,25 @@ namespace ignite
         m_IndexBuffer.reset();
     }
 
-    void Environment::Draw(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &pipeline)
+    void Environment::Draw(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &pipeline,
+        const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &sceneBuffer)
     {
-        LOG_ASSERT(m_BindingSet, "[Environment] Invalid binding set");
+        Ref<Texture> tex = m_HDRTexture ? m_HDRTexture : Renderer::GetBlackTexture();
+
+        nvrhi::BindingSetDesc bsDesc;
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, sceneBuffer));
+        bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, tex->GetHandle()));
+        bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_Sampler));
+
+        nvrhi::BindingSetHandle bindingSet = BindingCache::GetOrCreateBindingSet(bsDesc, Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT));
+        LOG_ASSERT(bindingSet, "[Environment] Failed to get or create binding set");
 
         // render
         auto state = nvrhi::GraphicsState();
         state.pipeline = pipeline->GetHandle();
         state.framebuffer = fb;
-        state.bindings = { m_BindingSet };
+        state.bindings = { bindingSet };
         state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(fb->getFramebufferInfo().getViewport());
         state.addVertexBuffer({ m_VertexBuffer->GetHandle(), 0, 0 });
         state.indexBuffer = { m_IndexBuffer->GetHandle(), nvrhi::Format::R32_UINT };
@@ -72,43 +82,6 @@ namespace ignite
         args.instanceCount = 1;
 
         cmd->drawIndexed(args);
-    }
-
-    bool Environment::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer)
-    {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        if (!device)
-        {
-            return false;
-        }
-
-        if (!cameraBuffer || !sceneBuffer)
-        {
-            return false;
-        }
-
-        if (!m_HDRTexture)
-        {
-            m_HDRTexture = Renderer::GetBlackTexture();
-        }
-
-        // create binding set after load the texture
-        nvrhi::BindingSetDesc bsDesc;
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, sceneBuffer->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_Sampler));
-
-        m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT));
-        LOG_ASSERT(m_BindingSet, "Failed to create binding set");
-
-		// Notify dependents (e.g. AssetManager) that this environment has changed.
-		Application::SubmitToMainThread([this]()
-		{
-			SignalBus::Emit(AssetChangeSignal{ handle, AssetType::Environment });
-		});
-
-        return m_BindingSet != nullptr;
     }
 
     void Environment::LoadTexture(const std::string& filepath)
@@ -143,8 +116,8 @@ namespace ignite
     {
         return nvrhi::BindingLayoutDesc()
             .setVisibility(nvrhi::ShaderType::All)
-            .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // camera
-            .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1)) // scene
+            .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // camera
+            .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // scene
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // texture
             .addItem(nvrhi::BindingLayoutItem::Sampler(0));
     }

@@ -859,8 +859,9 @@ namespace ignite
                 sceneData.compositeRT->Resize(width, height);
             }
 
+			FrameContext *frameContext = Renderer::GetCurrentFrameContext();
             sceneData.sceneRenderer->BeginFrame();
-            sceneData.sceneRenderer->Render(&sceneData.camera, sceneData.sceneRT, sceneData.uiRT, sceneData.compositeRT);
+            sceneData.sceneRenderer->Render(&sceneData.camera, frameContext, sceneData.sceneRT, sceneData.uiRT, sceneData.compositeRT);
         }
     }
 
@@ -5386,24 +5387,6 @@ namespace ignite
                 {
                     assetManager->ClearAssetPins(BuildAssetEditorPinOwnerTag(assetData.handle));
                 }
-            }
-        }
-
-        bool needsGpuSync = false;
-        for (const auto &assetData : m_Assets)
-        {
-            if (assetData.sceneData.sceneRenderer || assetData.sceneData.sceneRT || assetData.sceneData.uiRT || assetData.sceneData.compositeRT)
-            {
-                needsGpuSync = true;
-                break;
-            }
-        }
-
-        if (needsGpuSync)
-        {
-            if (nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice())
-            {
-                GPUUploadSync::DeviceWaitIdle(device);
             }
         }
 

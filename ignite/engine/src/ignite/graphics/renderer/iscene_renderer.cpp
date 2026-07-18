@@ -19,17 +19,14 @@
 namespace ignite
 {
     ISceneRenderer::ISceneRenderer()
+        : m_CascadedShadowMapBuffer(sizeof(CSM_GPUData), false, 1, "[SceneRenderer] CSM Buffer")
+		, m_CompositePostProcessBuffer(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer")
+		, m_DebugGridBuffer(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer")
     {
-        m_SceneBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "[SceneRenderer] Scene Buffer");
-        m_CameraBuffer = ConstantBuffer::Create(sizeof(CameraBufferData), false, 1, "[SceneRenderer] Camera buffer");
-        m_CascadedShadowMapBuffer = ConstantBuffer::Create(sizeof(CSM_GPUData), false, 1, "[SceneRenderer] CSM Buffer");
         for (int i = 0; i < NUM_CASCADES; ++i)
         {
             m_CSMPerCascadeBuffers[i] = ConstantBuffer::Create(sizeof(CSM_GPUData), false, 1, "[SceneRenderer] CSM Per-Cascade Buffer " + std::to_string(i));
         }
-
-        m_PointLightBuffer = ConstantBuffer::Create(sizeof(PointLightBufferData), false, 1, "[SceneRenderer] Point Light Buffer");
-        m_SpotLightBuffer = ConstantBuffer::Create(sizeof(SpotLightBufferData), false, 1, "[SceneRenderer] Spot Light Buffer");
 
 		static constexpr std::array screenVertices
 		{
@@ -43,7 +40,6 @@ namespace ignite
 		};
 
 		m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(screenVertices));
-		m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
 
         m_Device = DeviceManager::GetInstance()->GetDevice();
         auto cmd = m_Device->createCommandList();
@@ -161,13 +157,9 @@ namespace ignite
         }
 
         m_Has2DPreRenderCache = false;
+        m_MeshBindingSet = nullptr;
         m_SelectedEntities.clear();
 
-        m_MeshBindingSet = nullptr;
-
-        m_SceneBuffer = nullptr;
-        m_CameraBuffer = nullptr;
-        m_CascadedShadowMapBuffer = nullptr;
         for (auto &CSMPerCascadeBuffer : m_CSMPerCascadeBuffers)
         {
             CSMPerCascadeBuffer = nullptr;
