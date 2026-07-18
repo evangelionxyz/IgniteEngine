@@ -465,6 +465,50 @@ namespace ignite
 			}
 		}
 
+        static bool DrawMeshInstanceMaterial(const Ref<MeshInstance> &instance, const char *meshName)
+        {
+            bool dirty = false;
+
+			std::string materialButtonLabel = "Drop Material Here";
+			const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
+			if (materialHandle != AssetHandle(0))
+			{
+				materialButtonLabel = AssetManager::GetInstance()->GetAssetDisplayName(materialHandle);
+			}
+
+			constexpr float closeButtonWidth = 24.0f;
+			const float materialButtonWidth = ImGui::GetContentRegionAvail().x - closeButtonWidth - 4.0f;
+
+			ImGui::TextUnformatted(meshName);
+			ImGui::Button(materialButtonLabel.c_str(), ImVec2(materialButtonWidth, 0.0f));
+			if (ImGui::BeginDragDropTarget())
+			{
+				if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+				{
+					if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+					{
+						const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+						const AssetMetaData &metadata = AssetManager::GetInstance()->GetMetaData(droppedHandle);
+						if (metadata.type == AssetType::Material)
+						{
+							instance->SetMaterial(droppedHandle);
+							dirty = true;
+						}
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+
+			ImGui::SameLine();
+			if (materialHandle != AssetHandle(0) && ImGui::Button("X", ImVec2(closeButtonWidth, 0.0f)))
+			{
+				instance->SetMaterial(AssetHandle(0));
+                dirty = true;
+			}
+
+            return dirty;
+        }
+
         static AssetHandle FindFirstMeshHandleForSkeleton(AssetHandle skeletonHandle)
         {
             if (skeletonHandle == AssetHandle(0))
@@ -3483,44 +3527,14 @@ namespace ignite
 
 									ImGui::PushID(static_cast<int>(i));
                                     const std::string meshInstanceName = std::format("{} (Submesh {})", instance->GetName(), i);
-									std::string materialButtonLabel = "Drop Material Here";
-
-									const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
-									if (materialHandle != AssetHandle(0))
-									{
-										materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
-									}
-
-									ImGui::TextUnformatted(meshInstanceName.c_str());
-									ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-									if (ImGui::BeginDragDropTarget())
-									{
-										if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-										{
-											if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-											{
-												const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-												const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
-												if (metadata.type == AssetType::Material)
-												{
-													instance->SetMaterial(droppedHandle);
-													mesh->SetDirtyFlag(true);
-												}
-											}
-										}
-										ImGui::EndDragDropTarget();
-									}
-
-									if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
-									{
-										instance->SetMaterial(AssetHandle(0));
+									
+									if (DrawMeshInstanceMaterial(instance, meshInstanceName.c_str()))
 										mesh->SetDirtyFlag(true);
-									}
 
-									ImGui::Separator();
+                                    ImGui::Spacing();
+
 									ImGui::PopID();
 								}
-							
 
 								ImGui::TreePop();
 							}
@@ -3675,14 +3689,6 @@ namespace ignite
                                     const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
                                     ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                                     assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
-
-                                    ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
-                                    ImGui::TextDisabled(
-                                        "RTTex=%p | RT=%p | %ux%u",
-                                        reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
-                                        assetData.sceneData.compositeRT.get(),
-                                        assetData.sceneData.viewportWidth,
-                                        assetData.sceneData.viewportHeight);
 
                                     const glm::mat4 viewProjection = assetData.sceneData.camera.GetProjection() * assetData.sceneData.camera.GetView();
                                     const Rect viewportRect { viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
@@ -3998,7 +4004,7 @@ namespace ignite
 
                                         ImGui::TextDisabled("Skeleton Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(skeletonHandle)));
 
-                                        ImGui::SeparatorText("Material Slots");
+                                        ImGui::SeparatorText("Details");
                                         const auto &meshInstances = mesh->GetMeshInstances();
                                         if (meshInstances.empty())
                                         {
@@ -4010,47 +4016,16 @@ namespace ignite
                                             {
                                                 Ref<SkeletalMeshInstance> instance = meshInstances[i];
                                                 if (!instance)
-                                                {
                                                     continue;
-                                                }
 
                                                 ImGui::PushID(static_cast<int>(i));
                                                 const std::string meshInstanceName = std::format("{} (Submesh {})", instance->GetName(), i);
-                                                std::string materialButtonLabel = "Drop Material Here";
 
-                                                const AssetHandle materialHandle = instance->GetMaterialAssetHandle();
-                                                if (materialHandle != AssetHandle(0))
-                                                {
-                                                    materialButtonLabel = assetManager->GetAssetDisplayName(materialHandle);
-                                                }
+                                                if (DrawMeshInstanceMaterial(instance, meshInstanceName.c_str()))
+													mesh->SetDirtyFlag(true);
 
-                                                ImGui::TextUnformatted(meshInstanceName.c_str());
-                                                ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-                                                if (ImGui::BeginDragDropTarget())
-                                                {
-                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                                                    {
-                                                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                                                        {
-                                                            const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                                            const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
-                                                            if (metadata.type == AssetType::Material)
-                                                            {
-                                                                instance->SetMaterial(droppedHandle);
-                                                                mesh->SetDirtyFlag(true);
-                                                            }
-                                                        }
-                                                    }
-                                                    ImGui::EndDragDropTarget();
-                                                }
+                                                ImGui::Spacing();
 
-                                                if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
-                                                {
-                                                    instance->SetMaterial(AssetHandle(0));
-                                                    mesh->SetDirtyFlag(true);
-                                                }
-
-                                                ImGui::Separator();
                                                 ImGui::PopID();
                                             }
                                         }
