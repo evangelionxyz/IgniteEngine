@@ -12,7 +12,7 @@ namespace ignite
 	uint32_t ObjectAllocator::Allocate(nvrhi::ICommandList *cmd, const Mesh_GPUData &data)
 	{
 		const uint32_t index = m_ObjectCount++;
-		const uint32_t maxObjects = m_Buffer ? (m_Buffer->getDesc().byteSize / sizeof(Mesh_GPUData)) : 0;
+		const uint32_t maxObjects = m_Buffer ? static_cast<uint32_t>(m_Buffer->getDesc().byteSize / sizeof(Mesh_GPUData)) : 0;
 		if (index >= maxObjects)
 		{
 			static bool loggedOnce = false;
@@ -32,7 +32,7 @@ namespace ignite
 	{
 		const uint32_t index = m_BoneCount;
 		m_BoneCount += count;
-		const uint32_t maxBones = m_Buffer ? (m_Buffer->getDesc().byteSize / sizeof(glm::mat4)) : 0;
+		const uint32_t maxBones = m_Buffer ? static_cast<uint32_t>(m_Buffer->getDesc().byteSize / sizeof(glm::mat4)) : 0;
 		if (index + count > maxBones)
 		{
 			static bool loggedOnce = false;

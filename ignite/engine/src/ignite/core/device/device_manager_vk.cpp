@@ -30,6 +30,7 @@
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
 #include "ignite/graphics/bindless_system.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <SDL3/SDL_vulkan.h>
 
@@ -389,7 +390,10 @@ namespace ignite
         if (m_DeviceParameters.headlessDevice)
             return true;
 
-        BindlessSystem::FlushPendingWrites();
+        {
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+            BindlessSystem::FlushPendingWrites();
+        }
 
         while (m_FramesInFlight.size() >= m_DeviceParameters.maxFramesInFlight)
         {
@@ -397,7 +401,10 @@ namespace ignite
             m_FramesInFlight.pop();
 
             IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::WaitEventQuery");
-            m_NvrhiDevice->waitEventQuery(query);
+            {
+                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                m_NvrhiDevice->waitEventQuery(query);
+            }
 
             m_QueryPool.push_back(query);
         }
@@ -437,6 +444,7 @@ namespace ignite
         if (res == vk::Result::eSuccess)
         {
             // Schedule the wait. The actual wait operation will be submitted when the app executes any command list.
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
             m_NvrhiDevice->queueWaitForSemaphore(nvrhi::CommandQueue::Graphics, semaphore, 0);
             return true;
         }
@@ -460,15 +468,17 @@ namespace ignite
         }
         else
         {
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
             query = m_NvrhiDevice->createEventQuery();
         }
 
-        m_NvrhiDevice->resetEventQuery(query);
-        m_NvrhiDevice->setEventQuery(query, nvrhi::CommandQueue::Graphics);
-        m_FramesInFlight.push(query);
-
         {
-            IGN_PROFILE_SCOPE("DeviceManager_VK::Present::SignalSemaphore");
+            IGN_PROFILE_SCOPE("DeviceManager_VK::Present::SubmitSync");
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+            m_NvrhiDevice->resetEventQuery(query);
+            m_NvrhiDevice->setEventQuery(query, nvrhi::CommandQueue::Graphics);
+            m_FramesInFlight.push(query);
+
             m_NvrhiDevice->queueSignalSemaphore(nvrhi::CommandQueue::Graphics, semaphore, 0);
 
             // NVRHI buffers the semaphores and signals them when something is submitted to a queue.
@@ -486,7 +496,15 @@ namespace ignite
         vk::Result res;
         {
             IGN_PROFILE_SCOPE("DeviceManager_VK::Present::PresentKHR");
-            res = m_PresentQueue.presentKHR(&info);
+            if (m_PresentQueueFamily == m_GraphicsQueueFamily)
+            {
+                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                res = m_PresentQueue.presentKHR(&info);
+            }
+            else
+            {
+                res = m_PresentQueue.presentKHR(&info);
+            }
         }
         if (!(res == vk::Result::eSuccess || res == vk::Result::eErrorOutOfDateKHR))
         {
@@ -1294,6 +1312,7 @@ namespace ignite
     {
         if (m_VulkanDevice)
         {
+            std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
             m_VulkanDevice.waitIdle();
         }
 
@@ -1330,6 +1349,7 @@ namespace ignite
     {
         if (m_VulkanDevice)
         {
+            std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
             m_VulkanDevice.waitIdle();
         }
     }

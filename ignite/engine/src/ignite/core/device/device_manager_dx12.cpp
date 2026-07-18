@@ -31,6 +31,7 @@
 #include "device_manager_dx12.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/bindless_system.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <Windows.h>
 
@@ -559,6 +560,7 @@ namespace ignite
     {
         if (m_NvrhiDevice)
         {
+            std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
             m_NvrhiDevice->waitForIdle();
         }
     }
@@ -604,7 +606,10 @@ namespace ignite
         if (m_DeviceParameters.headlessDevice)
             return true;
 
-        BindlessSystem::FlushPendingWrites();
+        {
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+            BindlessSystem::FlushPendingWrites();
+        }
 
         DXGI_SWAP_CHAIN_DESC1 newSwapChainDesc;
         DXGI_SWAP_CHAIN_FULLSCREEN_DESC newFullScreenDesc;
