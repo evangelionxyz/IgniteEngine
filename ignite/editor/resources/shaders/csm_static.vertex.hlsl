@@ -8,13 +8,11 @@ StructuredBuffer<Object> g_ObjectBuffer : register(t2, space0);
 cbuffer SceneBuffer                     : register(b3, space0) { Scene scene; }
 cbuffer CascadesBuffer                  : register(b4, space0) { CascadesShadows csm; }
 
-PixelVertexInput main(VertexMeshAnim input)
+PixelVertexInput main(VertexMesh input)
 {
     PixelVertexInput pixelInput;
     
-    float4 worldPosition = mul(
-        g_ObjectBuffer[g_Push.objectIndex].transformMatrix,
-        float4(input.position, 1.0f));
+    float4 worldPosition = mul(g_ObjectBuffer[g_Push.objectIndex].transformMatrix, float4(input.position, 1.0f));
     
     pixelInput.normal = input.normal;
     pixelInput.tangent = input.tangent;

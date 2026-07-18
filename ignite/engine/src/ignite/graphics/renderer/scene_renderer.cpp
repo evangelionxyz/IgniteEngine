@@ -500,8 +500,15 @@ namespace ignite
             break;
         }
 
+		// If no directional light is found, we still need to write default cascade data to the frame context buffer
 		if (!cascadeShadow)
 		{
+            CSM_GPUData sceneCascadeData = {};
+            sceneCascadeData.cascadeIndex = -1;
+            sceneCascadeData.shadowStrength = 0.0f;
+			// Write the cascade data to the frame context buffer for use in the main scene pass
+			frameContext->csmBuffer.SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
+
             for (int i = 0; i < NUM_CASCADES; ++i)
             {
                 IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
