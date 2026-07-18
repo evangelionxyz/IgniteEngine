@@ -513,17 +513,22 @@ namespace ignite
             auto target = m_SceneRenderer->GetRenderTarget(editCamera);
             if (target)
             {
-                const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
                 const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
-                const bool framebufferNeedsResize = (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y);
                 const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
                 if (isFramebufferSizeValid)
                 {
+					const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
+					const glm::uvec2 cameraSize = editCamera->GetViewportSize();
+					const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x 
+                        || framebufferSize.y != desiredSize.y
+						|| framebufferSize.x != cameraSize.x 
+                        || framebufferSize.y != cameraSize.y;
+
                     // Resize camera
                     if (framebufferNeedsResize)
                     {
-                        m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
+                        editCamera->UpdateProjection(desiredSize.x, desiredSize.y);
                         m_State.editorResizing = true;
                     }
 
@@ -553,13 +558,18 @@ namespace ignite
                 if (target)
                 {
                     // Resize Game Viewport Framebuffer
-                    const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
                     const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
-                    const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
                     const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
                     if (isFramebufferSizeValid)
                     {
+						const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
+						const glm::uvec2 gameCameraSize = gameCamera->GetViewportSize();
+						const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x 
+                            || framebufferSize.y != desiredSize.y
+							|| framebufferSize.x != gameCameraSize.x
+                            || framebufferSize.y != gameCameraSize.y;
+
                         if (framebufferNeedsResize)
                         {
                             gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
