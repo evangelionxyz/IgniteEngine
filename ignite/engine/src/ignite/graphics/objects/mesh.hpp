@@ -173,6 +173,7 @@ namespace ignite
         glm::mat4 local = glm::mat4(1.0f);
         glm::mat4 global = glm::mat4(1.0f);
         int32_t linkedJointIndex = -1;
+        AABB localAABB;
 
         void SetName(const std::string &name) { m_Name = name; }
         void SetMaterial(const AssetHandle &assetHandle);

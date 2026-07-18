@@ -962,8 +962,6 @@ namespace ignite
 
             if (assetData.sceneData.sceneRenderer || assetData.sceneData.sceneRT || assetData.sceneData.uiRT || assetData.sceneData.compositeRT)
             {
-                nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-                GPUUploadSync::DeviceWaitIdle(device);
                 s_MaterialEditorState.erase(static_cast<uint64_t>(assetData.handle));
 
                 auto sceneRenderer = std::move(assetData.sceneData.sceneRenderer);

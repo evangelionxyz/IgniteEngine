@@ -414,54 +414,7 @@ namespace ignite
 
         m_RuntimeMaterial->UploadToGpu(cmd);
 
-        // Pipeline selection: transparent vs opaque based on the runtime material type.
-        const bool isTransparent = m_RuntimeMaterial->GetType() == MaterialType::Transparent;
-        auto &pipelineCache      = isTransparent ? transparentCache : opaqueCache;
-
-        Ref<GraphicsPipeline> geopPipeline;
-        if (auto it = pipelineCache.find(framebuffer); it != pipelineCache.end())
-        {
-            geopPipeline = it->second;
-        }
-        else
-        {
-            GraphicsPipelineParams params;
-            params.enableDepthTest   = true;
-            params.enableDepthStencil = false;
-            params.fillMode          = nvrhi::RasterFillMode::Solid;
-            params.cullMode          = nvrhi::RasterCullMode::None;
-            params.depthFunc         = nvrhi::ComparisonFunc::LessOrEqual;
-            params.enableBlend       = true;
-
-            if (isTransparent)
-            {
-                params.srcBlend       = nvrhi::BlendFactor::SrcAlpha;
-                params.destBlend      = nvrhi::BlendFactor::InvSrcAlpha;
-                params.srcBlendAlpha  = nvrhi::BlendFactor::One;
-                params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
-                params.enableDepthWrite = false;
-            }
-            else
-            {
-                params.enableDepthWrite = true;
-            }
-
-            Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
-            Ref<Shader> pixelShader  = Shader::Create(pixelShaderPath,  UMBRA_SHADER_TYPE_PIXEL,  false);
-
-            geopPipeline = GraphicsPipeline::Create();
-            geopPipeline->SetShaders({ vertexShader, pixelShader })
-                .AddBindingLayout(Renderer::GetBindingLayout(meshBindingLayout))
-                .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
-                .AddBindingLayout(BindlessSystem::GetBindingLayout())
-                .Build(framebuffer, params);
-
-            pipelineCache.clear();
-            pipelineCache[framebuffer] = geopPipeline;
-        }
-
         nvrhi::GraphicsState state;
-        state.pipeline    = geopPipeline->GetHandle();
         state.framebuffer = framebuffer;
         state.viewport    = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
@@ -498,6 +451,74 @@ namespace ignite
                     m_PointLightBuffer, m_SpotLightBuffer))
                 continue;
 
+            // Resolve material:
+            //  - Material-preview mode (m_SourceMaterial set): always use the runtime material
+            //    so the material being edited covers every mesh slot, ignoring per-instance overrides.
+            //  - Mesh-preview mode (no m_SourceMaterial): per-instance material takes priority,
+            //    with m_RuntimeMaterial as the fallback for unassigned slots.
+            Ref<Material> material;
+            if (!m_SourceMaterial)
+            {
+                const AssetHandle materialHandle = meshInstance->GetMaterialAssetHandle();
+                if (materialHandle != AssetHandle(0))
+                {
+                    material = ResolveAsset<Material>(materialHandle);
+                    if (material)
+                    {
+                        if (material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
+                            material->UploadToGpu(cmd);
+                    }
+                }
+            }
+
+            const MaterialType materialType = material ? material->GetType() : m_RuntimeMaterial->GetType();
+            const bool isTransparent = materialType == MaterialType::Transparent;
+            auto &pipelineCache = isTransparent ? transparentCache : opaqueCache;
+
+            Ref<GraphicsPipeline> geopPipeline;
+            if (auto it = pipelineCache.find(framebuffer); it != pipelineCache.end())
+            {
+                geopPipeline = it->second;
+            }
+            else
+            {
+                GraphicsPipelineParams params;
+                params.enableDepthTest   = true;
+                params.enableDepthStencil = false;
+                params.fillMode          = nvrhi::RasterFillMode::Solid;
+                params.cullMode          = nvrhi::RasterCullMode::None;
+                params.depthFunc         = nvrhi::ComparisonFunc::LessOrEqual;
+                params.enableBlend       = isTransparent;
+
+                if (isTransparent)
+                {
+                    params.srcBlend       = nvrhi::BlendFactor::SrcAlpha;
+                    params.destBlend      = nvrhi::BlendFactor::InvSrcAlpha;
+                    params.srcBlendAlpha  = nvrhi::BlendFactor::One;
+                    params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+                    params.enableDepthWrite = false;
+                }
+                else
+                {
+                    params.enableDepthWrite = true;
+                }
+
+                Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
+                Ref<Shader> pixelShader  = Shader::Create(pixelShaderPath,  UMBRA_SHADER_TYPE_PIXEL,  false);
+
+                geopPipeline = GraphicsPipeline::Create();
+                geopPipeline->SetShaders({ vertexShader, pixelShader })
+                    .AddBindingLayout(Renderer::GetBindingLayout(meshBindingLayout))
+                    .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
+                    .AddBindingLayout(BindlessSystem::GetBindingLayout())
+                    .Build(framebuffer, params);
+
+                pipelineCache.clear();
+                pipelineCache[framebuffer] = geopPipeline;
+            }
+
+            state.pipeline = geopPipeline->GetHandle();
+
             // Build per-instance GPU transform
             Mesh_GPUData gpuData;
             glm::mat4 meshTransform = meshInstance->global;
@@ -524,26 +545,6 @@ namespace ignite
             if constexpr (std::is_same_v<MeshT, SkeletalMesh>)
             {
                 meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
-            }
-
-            // Resolve material:
-            //  - Material-preview mode (m_SourceMaterial set): always use the runtime material
-            //    so the material being edited covers every mesh slot, ignoring per-instance overrides.
-            //  - Mesh-preview mode (no m_SourceMaterial): per-instance material takes priority,
-            //    with m_RuntimeMaterial as the fallback for unassigned slots.
-            Ref<Material> material;
-            if (!m_SourceMaterial)
-            {
-                const AssetHandle materialHandle = meshInstance->GetMaterialAssetHandle();
-                if (materialHandle != AssetHandle(0))
-                {
-                    material = ResolveAsset<Material>(materialHandle);
-                    if (material)
-                    {
-                        if (material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
-                            material->UploadToGpu(cmd);
-                    }
-                }
             }
 
             const nvrhi::BindingSetHandle meshBindingSet     = meshInstance->GetBindingSet();
@@ -625,6 +626,7 @@ namespace ignite
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(7)); // objectID
             layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
@@ -658,6 +660,7 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, Renderer::GetWhiteTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, Renderer::GetBlackTexture()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_CompositePostProcessBuffer->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_CompositeSampler));
 

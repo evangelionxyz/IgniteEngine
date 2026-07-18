@@ -214,7 +214,7 @@ namespace ignite
                 m_WorldEnvironment->environment->Draw(cmd, sceneFramebuffer, envPSO);
             }
 
-            ColorPass(cmd, camera, sceneFramebuffer);
+            ColorPass(cmd, camera, sceneFramebuffer, drawDebug);
             UIPass(cmd, target->widgetRT->GetFramebuffer());
 
             if (drawDebug)
@@ -647,7 +647,7 @@ namespace ignite
 		cmd->commitBarriers();
     }
 
-    void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
+    void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, bool drawDebug)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -748,6 +748,13 @@ namespace ignite
                     }
                 }
             }
+        }
+
+        // Draw debug grid directly into scene framebuffer before transparent meshes
+        if (drawDebug)
+        {
+            const auto is2D = camera->projectionType == ProjectionType::Orthographic;
+            DrawDebugGrid(cmd, framebuffer, is2D ? sceneRenderSettings.worldGrid2D : sceneRenderSettings.worldGrid3D, is2D);
         }
 
         // Transparent sub-pass: sorted back-to-front, alpha blending, no depth write
@@ -962,8 +969,6 @@ namespace ignite
 
 	void SceneRenderer::DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
 	{
-		const auto is2D = camera->projectionType == ProjectionType::Orthographic;
-		DrawDebugGrid(cmd, framebuffer, is2D ? sceneRenderSettings.worldGrid2D : sceneRenderSettings.worldGrid3D, is2D);
         DrawDebug2D(cmd, framebuffer);
         DrawDebug3D(cmd, framebuffer);
 	}
@@ -1544,7 +1549,7 @@ namespace ignite
         bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
 
         GraphicsPipelineParams params;
-        params.enableBlend = true;
+        params.enableBlend = transparent;
         params.enableDepthTest = hasDepthAttachment;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
@@ -1716,6 +1721,7 @@ namespace ignite
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(7)); // objectID
         layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
         nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
@@ -1754,6 +1760,7 @@ namespace ignite
         Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
         Ref<Texture> depth = target->sceneRT->GetDepthAttachment() ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
         Ref<Texture> debug = target->debugRT->GetColorAttachment(0) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
+        Ref<Texture> objectIDTex = target->sceneRT->GetColorAttachment(1) ? target->sceneRT->GetColorAttachment(1) : Renderer::GetBlackTexture();
 
         CompositeBindingKey key
         {
@@ -1765,6 +1772,7 @@ namespace ignite
             ssao->GetHandle(),
             depth->GetHandle(),
             debug->GetHandle(),
+            objectIDTex->GetHandle(),
             postProcessBuffer->GetHandle(),
             sampler
         };
@@ -1786,6 +1794,7 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, ssao->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, depth->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, debug->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, objectIDTex->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
 
@@ -1964,7 +1973,12 @@ namespace ignite
                     dc.vertexBuffer = primitive->vertexBuffer->GetHandle();
                     dc.indexBuffer = primitive->indexBuffer->GetHandle();
                     dc.indexCount = primitive->indexBuffer->GetCount();
-                    dc.distanceToCamera = glm::length(camera->position - glm::vec3(gpuData.transformation[3]));
+
+                    AABB localAABB = meshInstance->localAABB;
+                    AABB worldAABB = localAABB.Transform(gpuData.transformation);
+                    glm::vec3 worldCenter = worldAABB.GetCenter();
+                    dc.distanceToCamera = glm::dot(worldCenter - camera->position, camera->GetForwardDirection());
+
                     dc.isSkeletal = isSkeletal;
                     transparentDrawCalls.push_back(dc);
                 }

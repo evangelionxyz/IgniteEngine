@@ -329,6 +329,15 @@ namespace ignite
                 material->gpuData.roughnessFactor = 1.0f;
             }
 
+            if (material->gpuData.baseColorFactor.a < 1.0f)
+            {
+                material->SetType(MaterialType::Transparent);
+            }
+            else
+            {
+                material->SetType(MaterialType::Opaque);
+            }
+
             material->gpuData.metallicFactor = 0.0f;
             return material;
         }
@@ -406,6 +415,17 @@ namespace ignite
         local = node.local;
         global = node.global;
 
+        if (primitive && !primitive->vertices.empty())
+        {
+            localAABB.min = primitive->vertices[0].position;
+            localAABB.max = primitive->vertices[0].position;
+            for (const auto &v : primitive->vertices)
+            {
+                localAABB.min = glm::min(localAABB.min, v.position);
+                localAABB.max = glm::max(localAABB.max, v.position);
+            }
+        }
+
         if (!m_MeshConstantBuffer)
         {
             constexpr uint32_t maxVersion = 1;
@@ -418,6 +438,17 @@ namespace ignite
     {
         m_Name = name;
         m_Primitive = primitive;
+
+        if (primitive && !primitive->vertices.empty())
+        {
+            localAABB.min = primitive->vertices[0].position;
+            localAABB.max = primitive->vertices[0].position;
+            for (const auto &v : primitive->vertices)
+            {
+                localAABB.min = glm::min(localAABB.min, v.position);
+                localAABB.max = glm::max(localAABB.max, v.position);
+            }
+        }
 
         if (!m_MeshConstantBuffer)
         {
@@ -501,6 +532,17 @@ namespace ignite
         m_Name = name;
         m_Primitive = primitive;
 
+        if (primitive && !primitive->vertices.empty())
+        {
+            localAABB.min = primitive->vertices[0].position;
+            localAABB.max = primitive->vertices[0].position;
+            for (const auto &v : primitive->vertices)
+            {
+                localAABB.min = glm::min(localAABB.min, v.position);
+                localAABB.max = glm::max(localAABB.max, v.position);
+            }
+        }
+
         constexpr uint32_t maxVersion = 1;
         if (!m_MeshConstantBuffer)
         {
@@ -523,6 +565,17 @@ namespace ignite
 
         local = node.local;
         global = node.global;
+
+        if (primitive && !primitive->vertices.empty())
+        {
+            localAABB.min = primitive->vertices[0].position;
+            localAABB.max = primitive->vertices[0].position;
+            for (const auto &v : primitive->vertices)
+            {
+                localAABB.min = glm::min(localAABB.min, v.position);
+                localAABB.max = glm::max(localAABB.max, v.position);
+            }
+        }
 
         constexpr uint32_t maxVersion = 1;
 
@@ -766,6 +819,19 @@ namespace ignite
                 gltfMaterial.pbrMetallicRoughness.baseColorFactor[2],
                 gltfMaterial.pbrMetallicRoughness.baseColorFactor.size() > 3 ? static_cast<float>(gltfMaterial.pbrMetallicRoughness.baseColorFactor[3]) : 1.0f
             };
+
+            if (gltfMaterial.alphaMode == "BLEND")
+            {
+                material->SetType(MaterialType::Transparent);
+            }
+            else if (gltfMaterial.pbrMetallicRoughness.baseColorFactor.size() > 3 && gltfMaterial.pbrMetallicRoughness.baseColorFactor[3] < 1.0f)
+            {
+                material->SetType(MaterialType::Transparent);
+            }
+            else
+            {
+                material->SetType(MaterialType::Opaque);
+            }
 
             material->gpuData.emissiveFactor =
             {

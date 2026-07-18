@@ -486,33 +486,33 @@ namespace ignite
         if (!activeScene)
             return;
 
-		auto activeSceneRenderer = activeScene->GetSceneRenderer();
-		if (!activeSceneRenderer)
-			return;
-
         switch (signal.type)
         {
         case AssetType::Texture:
         case AssetType::Environment:
+        case AssetType::Material:
         {
-            auto onChangeFunc = [this, sceneRenderer = activeSceneRenderer, scene = activeScene, signal]() -> bool
+            auto onChangeFunc = [this, signal]() -> bool
             {
-                // Checking environment map
-                auto envMap = sceneRenderer->GetEnvironmentMapColorTexture();
-                auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
-
-                bool allMaterialsUpdated = true; // this should be true by default
-
                 const auto &assets = GetLoadedAssets();
                 for (const auto &[handle, asset] : assets)
                 {
-                    if (asset->GetAssetType() == AssetType::Material)
+                    if (asset && asset->GetAssetType() == AssetType::Material)
                     {
                         Ref<Material> material = std::static_pointer_cast<Material>(asset);
                         if (!material)
                             continue;
 
-                        auto isTextureBeingUsed = [this](AssetHandle textureHandle, Ref<Material> material) -> bool
+                        if (signal.type == AssetType::Material)
+                        {
+                            if (handle == signal.handle)
+                            {
+                                material->InvalidateBindingSet();
+                            }
+                        }
+                        else
+                        {
+                            auto isTextureBeingUsed = [this](AssetHandle textureHandle, Ref<Material> material) -> bool
                             {
                                 return textureHandle == material->baseColorTextureHandle
                                     || textureHandle == material->emissiveTextureHandle
@@ -522,21 +522,15 @@ namespace ignite
                                     || textureHandle == material->occlusionTextureHandle;
                             };
 
-                        // Reload if:
-                        //    if Environment requested
-                        // OR if Texture requested but only if there is TextureHandle inside
-                        const bool validTextureRequest = signal.type == AssetType::Texture && isTextureBeingUsed(signal.handle, material);
-                        if (signal.type == AssetType::Environment || validTextureRequest)
-                        {
-                            material->InvalidateBindingSet();
-                            if (!material->UpdateBindingSet(envMap, shadowMap))
+                            const bool validTextureRequest = (signal.type == AssetType::Texture) && isTextureBeingUsed(signal.handle, material);
+                            if (signal.type == AssetType::Environment || validTextureRequest)
                             {
-                                allMaterialsUpdated = false;
+                                material->InvalidateBindingSet();
                             }
                         }
                     }
                 }
-                return allMaterialsUpdated;
+                return true;
             };
 
             m_OnChangeCallbacks.push(std::move(onChangeFunc));
