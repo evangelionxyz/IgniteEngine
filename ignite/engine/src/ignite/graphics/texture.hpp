@@ -212,7 +212,7 @@ namespace ignite
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
         nvrhi::SamplerHandle GetSampler() const { return m_Sampler; }
-        uint32_t GetBindlessIndex() const { return m_BindlessIndex; }
+        uint32_t GetBindlessIndex() const;
 
         static void *GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device);
 

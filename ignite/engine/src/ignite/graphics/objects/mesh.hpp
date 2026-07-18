@@ -154,8 +154,8 @@ namespace ignite
             if (!indexBuffer)
                 indexBuffer = IndexBuffer::Create(sizeof(uint32_t) * indices.size());
 
-            vertexBuffer->SetData(cmd, Buffer((void *)vertices.data(), sizeof(VertexType_T) * vertices.size()));
-            indexBuffer->SetData(cmd, Buffer((void *)indices.data(), sizeof(uint32_t) * indices.size()));
+            vertexBuffer->SetData(cmd, vertices.data(), sizeof(VertexType_T) * vertices.size());
+            indexBuffer->SetData(cmd, indices.data(), sizeof(uint32_t) * indices.size());
         }
 
         void ClearPrimitivesData()

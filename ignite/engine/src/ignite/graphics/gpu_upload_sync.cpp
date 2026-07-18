@@ -5,8 +5,24 @@
 #include "gpu_upload_sync.hpp"
 #include "ignite/core/application.hpp"
 
+#include <condition_variable>
+
 namespace ignite
 {
+    namespace
+    {
+        std::mutex &GetCompletionMutex()
+        {
+            static std::mutex s_CompletionMutex;
+            return s_CompletionMutex;
+        }
+
+        std::condition_variable &GetCompletionCV()
+        {
+            static std::condition_variable s_CompletionCV;
+            return s_CompletionCV;
+        }
+    }
     std::mutex &GPUUploadSync::GetMutex()
     {
         static std::mutex s_Mutex;
@@ -90,10 +106,11 @@ namespace ignite
 
     void GPUUploadSync::WaitForCompletion()
     {
-        while (GetInProgressFlag().load())
+        std::unique_lock<std::mutex> lock(GetCompletionMutex());
+        GetCompletionCV().wait(lock, []()
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
+            return !GetInProgressFlag().load(std::memory_order_acquire);
+        });
     }
 
     GPUUploadSync::ScopedLock::ScopedLock()
@@ -103,27 +120,29 @@ namespace ignite
         // Acquire the mutex
         GetMutex().lock();
         // Set the in-progress flag
-        GetInProgressFlag() = true;
+        GetInProgressFlag().store(true, std::memory_order_release);
     }
 
     GPUUploadSync::ScopedLock::~ScopedLock()
     {
         // Clear the in-progress flag
-        GetInProgressFlag() = false;
+        GetInProgressFlag().store(false, std::memory_order_release);
         // Release the mutex
         GetMutex().unlock();
+        GetCompletionCV().notify_all();
     }
 
     void GPUUploadSync::BeginUpload()
     {
         WaitForCompletion();
         GetMutex().lock();
-        GetInProgressFlag() = true;
+        GetInProgressFlag().store(true, std::memory_order_release);
     }
 
     void GPUUploadSync::EndUpload()
     {
-        GetInProgressFlag() = false;
+        GetInProgressFlag().store(false, std::memory_order_release);
         GetMutex().unlock();
+        GetCompletionCV().notify_all();
     }
 }

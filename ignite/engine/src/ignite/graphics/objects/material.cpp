@@ -165,7 +165,7 @@ namespace ignite
         gpuData.normalTextureIndex = getBindlessIndex(normalTextureHandle, whiteIdx);
         gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);
 
-        m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(Material_GPUData)));
+        m_GPUDataBuffer->SetData(cmd, &gpuData, sizeof(Material_GPUData));
     }
 
     void Material::SetSamplerDesc(const nvrhi::SamplerDesc &desc)

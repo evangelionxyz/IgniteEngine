@@ -79,14 +79,14 @@ namespace ignite
 
             if (uploadCmd)
             {
-                batch.indexBuffer->SetData(uploadCmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+                batch.indexBuffer->SetData(uploadCmd, indices.data(), indices.size() * sizeof(uint32_t));
             }
             else
             {
                 nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                 nvrhi::CommandListHandle cmd = device->createCommandList();
                 cmd->open();
-                batch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+                batch.indexBuffer->SetData(cmd, indices.data(), indices.size() * sizeof(uint32_t));
                 cmd->close();
                 device->executeCommandList(cmd);
             }
@@ -248,13 +248,13 @@ namespace ignite
 
         m_Cmd = cmd;
 
-        m_Material2DLightingBuffer.SetData(m_Cmd, Buffer(&m_PreRenderCache->lightingData, sizeof(m_PreRenderCache->lightingData)));
+        m_Material2DLightingBuffer.SetData(m_Cmd, &m_PreRenderCache->lightingData, sizeof(m_PreRenderCache->lightingData));
 
         const nvrhi::Viewport &viewport = framebuffer->getFramebufferInfo().getViewport();
 
         if (m_PreRenderCache->circleIndexCount > 0 && !m_PreRenderCache->circleVertices.empty())
         {
-            m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache->circleVertices.data(), m_PreRenderCache->circleVertices.size() * sizeof(Vertex2DCircle)));
+            m_CircleBatch.vertexBuffer->SetData(m_Cmd, m_PreRenderCache->circleVertices.data(), m_PreRenderCache->circleVertices.size() * sizeof(Vertex2DCircle));
 
             Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0), cameraBuffer);
@@ -276,7 +276,7 @@ namespace ignite
 
         if (m_PreRenderCache->quadIndexCount > 0 && !m_PreRenderCache->quadVertices.empty())
         {
-            m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache->quadVertices.data(), m_PreRenderCache->quadVertices.size() * sizeof(Vertex2DQuad)));
+            m_QuadBatch.vertexBuffer->SetData(m_Cmd, m_PreRenderCache->quadVertices.data(), m_PreRenderCache->quadVertices.size() * sizeof(Vertex2DQuad));
 
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_PreRenderCache->quadTextureSlots,
@@ -299,7 +299,7 @@ namespace ignite
 
         if (m_PreRenderCache->textIndexCount > 0 && !m_PreRenderCache->textVertices.empty())
         {
-            m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache->textVertices.data(), m_PreRenderCache->textVertices.size() * sizeof(VertexText)));
+            m_TextBatch.vertexBuffer->SetData(m_Cmd, m_PreRenderCache->textVertices.data(), m_PreRenderCache->textVertices.size() * sizeof(VertexText));
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_PreRenderCache->textTextureSlots,
@@ -379,7 +379,7 @@ namespace ignite
         auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
-        m_QuadBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+        m_QuadBatch.indexBuffer->SetData(cmd, indices.data(), indices.size() * sizeof(uint32_t));
         cmd->close();
         device->executeCommandList(cmd);
 
@@ -443,7 +443,7 @@ namespace ignite
         auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
-        m_CircleBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+        m_CircleBatch.indexBuffer->SetData(cmd, indices.data(), indices.size() * sizeof(uint32_t));
         cmd->close();
         device->executeCommandList(cmd);
     }
@@ -488,7 +488,7 @@ namespace ignite
         auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
-        m_TextBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+        m_TextBatch.indexBuffer->SetData(cmd, indices.data(), indices.size() * sizeof(uint32_t));
         cmd->close();
         device->executeCommandList(cmd);
     }
@@ -536,7 +536,7 @@ namespace ignite
 
         if (m_Material2DLightingDirty)
         {
-            m_Material2DLightingBuffer.SetData(cmd, Buffer(&m_Material2DLightingData, sizeof(m_Material2DLightingData)));
+            m_Material2DLightingBuffer.SetData(cmd, &m_Material2DLightingData, sizeof(m_Material2DLightingData));
             m_Material2DLightingDirty = false;
         }
 
@@ -552,7 +552,7 @@ namespace ignite
         if (m_LineBatch.indexCount > 0)
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_LineBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_LineBatch.vertexBufferBase);
-            m_LineBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_LineBatch.vertexBufferBase, bufferSize));
+            m_LineBatch.vertexBuffer->SetData(m_Cmd, m_LineBatch.vertexBufferBase, bufferSize);
 
             m_Cmd->setBufferState(m_LineBatch.vertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
 
@@ -577,7 +577,7 @@ namespace ignite
         if (m_CircleBatch.indexCount > 0)
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferBase);
-            m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_CircleBatch.vertexBufferBase, bufferSize));
+            m_CircleBatch.vertexBuffer->SetData(m_Cmd, m_CircleBatch.vertexBufferBase, bufferSize);
 
             Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0), cameraBuffer);
@@ -601,7 +601,7 @@ namespace ignite
         if (m_QuadBatch.indexCount > 0)
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferBase);
-            m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
+            m_QuadBatch.vertexBuffer->SetData(m_Cmd, m_QuadBatch.vertexBufferBase, bufferSize);
 
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots,
@@ -628,7 +628,7 @@ namespace ignite
         if (m_TextBatch.indexCount > 0)
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferBase);
-            m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_TextBatch.vertexBufferBase, bufferSize));
+            m_TextBatch.vertexBuffer->SetData(m_Cmd, m_TextBatch.vertexBufferBase, bufferSize);
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
             

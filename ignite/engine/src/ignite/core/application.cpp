@@ -244,20 +244,16 @@ namespace ignite
                 IGN_PROFILE_SCOPE("RenderThread::WaitForFrameReady");
                 std::unique_lock<std::mutex> lock(m_FrameMutex);
 
-                // Wait up to 2 ms for a frame OR until a task arrives so we
-                // loop back and check m_RenderThreadHasTasks quickly.
-                m_FrameCV.wait_for(lock, std::chrono::milliseconds(2), [this] { return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load(); });
+                m_FrameCV.wait(lock, [this]
+                {
+                    return m_CurrentFrameReady.load() || m_RenderThreadHasTasks.load() || !m_RenderThreadRunning.load();
+                });
 
                 if (!m_RenderThreadRunning)
                     break;
 
                 if (!m_CurrentFrameReady.load())
-                {
-                    // No frame yet — wake the render-task CV briefly so we
-                    // re-check tasks on the next iteration without extra latency.
-                    m_RenderTaskCV.notify_one();
                     continue;
-                }
 
                 currentFrame = m_FrameCounter;
                 m_CurrentFrameReady = false;
@@ -352,11 +348,7 @@ namespace ignite
 
                 {
                     auto &queueMutex = GPUUploadSync::GetQueueMutex();
-                    std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
-                    {
-                        IGN_PROFILE_SCOPE("RenderThread::WorkerSubmit::QueueMutexWait");
-                        queueLock.lock();
-                    }
+                    std::unique_lock<std::mutex> queueLock(queueMutex);
                     {
                         IGN_PROFILE_SCOPE("RenderThread::WorkerSubmit::QueueMutexHold");
                         device->executeCommandLists(workerLists.data(), workerLists.size());
@@ -478,16 +470,7 @@ namespace ignite
                     bool frameBegan = false;
                     {
                         IGN_PROFILE_SCOPE("MainThread::BeginFrame");
-                        auto &queueMutex = GPUUploadSync::GetQueueMutex();
-                        std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
-                        {
-                            IGN_PROFILE_SCOPE("MainThread::BeginFrame::QueueMutexWait");
-                            queueLock.lock();
-                        }
-                        {
-                            IGN_PROFILE_SCOPE("MainThread::BeginFrame::QueueMutexHold");
-                            frameBegan = deviceManager->BeginFrame();
-                        }
+                        frameBegan = deviceManager->BeginFrame();
                     }
 
                     if (frameBegan)
@@ -502,17 +485,10 @@ namespace ignite
                         {
                             IGN_PROFILE_SCOPE("MainThread::WaitForRenderComplete");
                             std::unique_lock<std::mutex> lock(m_FrameMutex);
-
-                            while (!m_RenderComplete.load())
+                            m_FrameCV.wait(lock, [this]
                             {
-                                const bool signaled = m_FrameCV.wait_for(lock, std::chrono::microseconds(500), [this] 
-                                { 
-                                    return m_RenderComplete.load();
-                                });
-
-                                if (signaled)
-                                    break;
-                            }
+                                return m_RenderComplete.load() || !m_RenderThreadRunning.load();
+                            });
 
                             m_RenderComplete = false;
                         }
@@ -526,15 +502,7 @@ namespace ignite
                         bool presented = false;
                         {
                             IGN_PROFILE_SCOPE("MainThread::Present");
-                            std::unique_lock<std::mutex> queueLock(GPUUploadSync::GetQueueMutex(), std::defer_lock);
-                            {
-                                IGN_PROFILE_SCOPE("MainThread::Present::QueueMutexWait");
-                                queueLock.lock();
-                            }
-                            {
-                                IGN_PROFILE_SCOPE("MainThread::Present::QueueMutexHold");
-                                presented = deviceManager->Present();
-                            }
+                            presented = deviceManager->Present();
                         }
 
                         if (!presented)

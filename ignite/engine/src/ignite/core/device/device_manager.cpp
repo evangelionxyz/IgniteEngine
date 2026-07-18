@@ -35,6 +35,7 @@
 
 #include "device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 #include <glm/glm.hpp>
 
 namespace ignite
@@ -162,6 +163,8 @@ namespace ignite
 
         const uint32_t backBufferCount = GetBackBufferCount();
         m_SwapChainFramebuffers.resize(backBufferCount);
+
+        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
         for (uint32_t index = 0; index < backBufferCount; ++index)
         {
 		   m_SwapChainFramebuffers[index] = GetDevice()->createFramebuffer(

@@ -230,7 +230,7 @@ namespace ignite
             params.threshold = (i == 0) ? settings.threshold : 0.0f;
             params.intensity = settings.intensity;
             params.knee = settings.knee;
-            m_DownsampleParamsBuffer->SetData(cmd, Buffer(&params, sizeof(params)));
+            m_DownsampleParamsBuffer->SetData(cmd, &params, sizeof(params));
 
             auto desc = nvrhi::BindingSetDesc();
             desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, previousTexture->GetHandle()));
@@ -249,7 +249,7 @@ namespace ignite
             level.blurHorizontalRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
             BlurParams horizontalParams;
             horizontalParams.horizontal = 1;
-            m_BlurParamsBuffer->SetData(cmd, Buffer(&horizontalParams, sizeof(horizontalParams)));
+            m_BlurParamsBuffer->SetData(cmd, &horizontalParams, sizeof(horizontalParams));
 
             auto hDesc = nvrhi::BindingSetDesc();
             hDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, level.downsampledRT->GetColorAttachment(0)->GetHandle()));
@@ -262,7 +262,7 @@ namespace ignite
             level.blurVerticalRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
             BlurParams verticalParams;
             verticalParams.horizontal = 0;
-            m_BlurParamsBuffer->SetData(cmd, Buffer(&verticalParams, sizeof(verticalParams)));
+            m_BlurParamsBuffer->SetData(cmd, &verticalParams, sizeof(verticalParams));
 
             auto vDesc = nvrhi::BindingSetDesc();
             vDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, level.blurHorizontalRT->GetColorAttachment(0)->GetHandle()));
@@ -282,7 +282,7 @@ namespace ignite
 
             UpsampleParams params;
             params.radius = settings.radius * static_cast<float>(i + 1);
-            m_UpsampleParamsBuffer->SetData(cmd, Buffer(&params, sizeof(params)));
+            m_UpsampleParamsBuffer->SetData(cmd, &params, sizeof(params));
 
             auto desc = nvrhi::BindingSetDesc();
             desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, currentTexture->GetHandle()));
@@ -301,7 +301,7 @@ namespace ignite
 
             UpsampleParams params;
             params.radius = settings.radius;
-            m_UpsampleParamsBuffer->SetData(cmd, Buffer(&params, sizeof(params)));
+            m_UpsampleParamsBuffer->SetData(cmd, &params, sizeof(params));
 
             auto desc = nvrhi::BindingSetDesc();
             desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, currentTexture->GetHandle()));

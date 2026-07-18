@@ -6,6 +6,7 @@
 
 #include "ignite/core/base.hpp"
 #include "iscene_renderer.hpp"
+#include <entt/entt.hpp>
 
 #include "ignite/graphics/hash_keys.hpp"
 
@@ -57,6 +58,8 @@ namespace ignite
 
         Ref<CameraRenderTarget> GetRenderTarget(ICamera *camera);
 
+        void PreallocateGPUData(nvrhi::ICommandList *cmd, FrameContext *frameContext);
+
     private:
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug);
@@ -99,7 +102,9 @@ namespace ignite
             ICamera *camera,
             Ref<GraphicsPipeline> opaquePSO,
             std::vector<TransparentDrawCall> &transparentDrawCalls,
-            std::unordered_set<Material *> &uploadedMaterialsThisPass);
+            std::unordered_set<Material *> &uploadedMaterialsThisPass,
+            entt::entity entity = entt::null,
+            const std::string &socketName = "");
 
         template<typename MeshT>
         void DrawMeshShadow(
@@ -112,7 +117,9 @@ namespace ignite
             const std::vector<glm::mat4> &boneTransforms,
             const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
             nvrhi::GraphicsState &csmState,
-            uint32_t cascadeIndex);
+            uint32_t cascadeIndex,
+            entt::entity entity = entt::null,
+            const std::string &socketName = "");
 
         Ref<GraphicsPipeline> GetOrCreateMeshPSO(
             std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
@@ -187,6 +194,10 @@ namespace ignite
         bool m_UseGameplayWidgetMouseOverride = false;
 
         Ref<Material> m_RuntimeMaterial;
+
+        std::unordered_map<entt::entity, std::vector<uint32_t>> m_EntityObjectIndexCache;
+        std::unordered_map<entt::entity, uint32_t> m_EntityBoneOffsetCache;
+        std::map<std::pair<entt::entity, std::string>, std::vector<uint32_t>> m_SocketObjectIndexCache;
     };
 }
 
