@@ -177,6 +177,8 @@ namespace ignite
 			frameContext->cameraBuffer.SetData(cmd, Buffer(&cameraData, sizeof(cameraData)));
 			frameContext->sceneBuffer.SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
 
+            PreallocateGPUData(cmd, frameContext);
+
 			if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
 			{
 				m_WorldEnvironment->environment->WriteBuffer(cmd);
@@ -320,6 +322,191 @@ namespace ignite
         {
             std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
             m_Device->executeCommandList(cmd);
+        }
+    }
+
+    void SceneRenderer::PreallocateGPUData(nvrhi::ICommandList *cmd, FrameContext *frameContext)
+    {
+        m_EntityObjectIndexCache.clear();
+        m_EntityBoneOffsetCache.clear();
+        m_SocketObjectIndexCache.clear();
+
+        // 1. Preallocate and upload Skeletal Meshes (including bone data)
+        auto skeletalMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+        for (entt::entity e : skeletalMeshView)
+        {
+            const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, SkeletalMeshComponent>(e);
+            if (!tr.visible || smc.handle == AssetHandle(0))
+                continue;
+
+            auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+            if (!skeletalMesh)
+                continue;
+
+            glm::mat4 bones[MAX_BONES];
+            FillBoneArray(bones, smc.finalBoneTransforms);
+            uint32_t boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
+            m_EntityBoneOffsetCache[e] = boneOffset;
+
+            const auto &instances = skeletalMesh->GetMeshInstances();
+            std::vector<uint32_t> indices;
+            indices.reserve(instances.size());
+
+            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+            for (size_t idx = 0; idx < instances.size(); ++idx)
+            {
+                auto &meshInstance = instances[idx];
+                Mesh_GPUData gpuData;
+                if (idx < smc.cachedInstanceTransforms.size())
+                {
+                    gpuData = smc.cachedInstanceTransforms[idx];
+                }
+                else
+                {
+                    glm::mat4 meshTransform = meshInstance->global;
+                    if (meshInstance->linkedJointIndex >= 0 && !smc.finalBoneTransforms.empty())
+                    {
+                        const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                        if (ji < smc.finalBoneTransforms.size())
+                        {
+                            meshTransform = smc.finalBoneTransforms[ji] * meshTransform;
+                        }
+                    }
+                    gpuData.transformation = tr.world.GetMatrix() * meshTransform;
+                    gpuData.normal = smc.normalMatrix;
+                }
+                gpuData.objectID = objectID;
+                gpuData.boneOffset = boneOffset;
+
+                uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+                indices.push_back(objectIndex);
+            }
+            m_EntityObjectIndexCache[e] = indices;
+
+            // Handle socket attachments
+            if (skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+            {
+                Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
+                if (skeleton)
+                {
+                    for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                    {
+                        if (attachedMeshHandle == AssetHandle(0))
+                            continue;
+
+                        auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
+                        if (!attachedMeshAsset)
+                            continue;
+
+                        glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                        glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
+
+                        auto attachedStaticMesh = std::dynamic_pointer_cast<StaticMesh>(attachedMeshAsset);
+                        if (attachedStaticMesh)
+                        {
+                            const auto &attachedInstances = attachedStaticMesh->GetMeshInstances();
+                            std::vector<uint32_t> attachedIndices;
+                            attachedIndices.reserve(attachedInstances.size());
+
+                            for (size_t idx = 0; idx < attachedInstances.size(); ++idx)
+                            {
+                                auto &meshInstance = attachedInstances[idx];
+                                Mesh_GPUData gpuData;
+                                if (idx < smc.cachedInstanceTransforms.size())
+                                {
+                                    gpuData = smc.cachedInstanceTransforms[idx];
+                                }
+                                else
+                               {
+                                    glm::mat4 meshTransform = meshInstance->global;
+                                    gpuData.transformation = socketWorld * meshTransform;
+                                    gpuData.normal = normalMatrix;
+                                }
+                                gpuData.objectID = objectID;
+                                gpuData.boneOffset = 0;
+
+                                uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+                                attachedIndices.push_back(objectIndex);
+                            }
+                            m_SocketObjectIndexCache[std::make_pair(e, socketName)] = attachedIndices;
+                        }
+                        else
+                        {
+                            auto attachedSkeletalMesh = std::dynamic_pointer_cast<SkeletalMesh>(attachedMeshAsset);
+                            if (attachedSkeletalMesh)
+                            {
+                                const auto &attachedInstances = attachedSkeletalMesh->GetMeshInstances();
+                                std::vector<uint32_t> attachedIndices;
+                                attachedIndices.reserve(attachedInstances.size());
+
+                                for (size_t idx = 0; idx < attachedInstances.size(); ++idx)
+                                {
+                                    auto &meshInstance = attachedInstances[idx];
+                                    Mesh_GPUData gpuData;
+                                    if (idx < smc.cachedInstanceTransforms.size())
+                                    {
+                                        gpuData = smc.cachedInstanceTransforms[idx];
+                                    }
+                                    else
+                                    {
+                                        glm::mat4 meshTransform = meshInstance->global;
+                                        gpuData.transformation = socketWorld * meshTransform;
+                                        gpuData.normal = normalMatrix;
+                                    }
+                                    gpuData.objectID = objectID;
+                                    gpuData.boneOffset = 0;
+
+                                    uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+                                    attachedIndices.push_back(objectIndex);
+                                }
+                                m_SocketObjectIndexCache[std::make_pair(e, socketName)] = attachedIndices;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Preallocate and upload Static Meshes
+        auto staticMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+        for (entt::entity e : staticMeshView)
+        {
+            const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, StaticMeshComponent>(e);
+            if (!tr.visible || smc.handle == AssetHandle(0))
+                continue;
+
+            auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
+            if (!staticMesh)
+                continue;
+
+            const auto &instances = staticMesh->GetMeshInstances();
+            std::vector<uint32_t> indices;
+            indices.reserve(instances.size());
+
+            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+            for (size_t idx = 0; idx < instances.size(); ++idx)
+            {
+                auto &meshInstance = instances[idx];
+                Mesh_GPUData gpuData;
+                if (idx < smc.cachedInstanceTransforms.size())
+                {
+                    gpuData = smc.cachedInstanceTransforms[idx];
+                }
+                else
+                {
+                    glm::mat4 meshTransform = meshInstance->global;
+                    gpuData.transformation = tr.world.GetMatrix() * meshTransform;
+                    gpuData.normal = smc.normalMatrix;
+                }
+                gpuData.objectID = objectID;
+                gpuData.boneOffset = 0;
+
+                uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+                indices.push_back(objectIndex);
+            }
+            m_EntityObjectIndexCache[e] = indices;
         }
     }
 
@@ -575,7 +762,7 @@ namespace ignite
 
 						const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 						DrawMeshShadow(cmd, frameContext, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, std::vector<glm::mat4>(),
-							smc.cachedInstanceTransforms, staticState, i);
+							smc.cachedInstanceTransforms, staticState, i, e);
 					}
 				}
 
@@ -609,7 +796,7 @@ namespace ignite
 
 						const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 						DrawMeshShadow(cmd, frameContext, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                            smc.finalBoneTransforms, smc.cachedInstanceTransforms, animatedState, i);
+                            smc.finalBoneTransforms, smc.cachedInstanceTransforms, animatedState, i, e);
 
 						// --- SOCKET SYSTEM: Render attached meshes for Shadows ---
 						if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
@@ -633,13 +820,13 @@ namespace ignite
 									{
 										auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
 										DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
-											smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, i);
+											smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, i, e, socketName);
 									}
 									else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
 									{
 										auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
 										DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
-											std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, i);
+											std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, i, e, socketName);
 									}
 								}
 							}
@@ -693,7 +880,7 @@ namespace ignite
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
                 DrawMesh(cmd, frameContext, framebuffer, staticMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, 
                     smc.overrideMaterials, std::vector<glm::mat4>(), smc.cachedInstanceTransforms, 
-                    camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass);
+                    camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
                 Renderer::Stats.staticMeshCount++;
             }
         }
@@ -719,7 +906,7 @@ namespace ignite
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
                 DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, 
                     smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms, 
-                    camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass);
+                    camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
                 Renderer::Stats.skeletalMeshCount++;
 
                 // --- SOCKET SYSTEM: Render attached meshes ---
@@ -745,14 +932,14 @@ namespace ignite
                                 auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
                                 DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID, 
                                     std::unordered_map<int, AssetHandle>(), smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), 
-                                    camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass);
+                                    camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
                             }
                             else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
                             {
                                 auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
                                 DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
                                     std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), 
-                                    camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass);
+                                    camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
                             }
                         }
                     }
@@ -1889,7 +2076,7 @@ namespace ignite
         return target;
     }
 
-	template<typename MeshT>
+    template<typename MeshT>
     void SceneRenderer::DrawMesh(
         nvrhi::ICommandList *cmd,
 		FrameContext *frameContext,
@@ -1904,7 +2091,9 @@ namespace ignite
         ICamera *camera,
         Ref<GraphicsPipeline> opaquePSO,
         std::vector<TransparentDrawCall> &transparentDrawCalls,
-        std::unordered_set<Material *> &uploadedMaterialsThisPass)
+        std::unordered_set<Material *> &uploadedMaterialsThisPass,
+        entt::entity entity,
+        const std::string &socketName)
     {
         constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
 
@@ -1958,17 +2147,43 @@ namespace ignite
             
 			gpuData.objectID = objectID;
 
-            if constexpr (isSkeletal)
+            uint32_t PushConstant_ObjectIndex = 0;
+            bool foundInCache = false;
+            if (entity != entt::null)
             {
-                gpuData.boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
-            }
-            else
-            {
-                gpuData.boneOffset = 0;
+                if (!socketName.empty())
+                {
+                    auto key = std::make_pair(entity, socketName);
+                    auto cacheIt = m_SocketObjectIndexCache.find(key);
+                    if (cacheIt != m_SocketObjectIndexCache.end() && idx < cacheIt->second.size())
+                    {
+                        PushConstant_ObjectIndex = cacheIt->second[idx];
+                        foundInCache = true;
+                    }
+                }
+                else
+                {
+                    auto cacheIt = m_EntityObjectIndexCache.find(entity);
+                    if (cacheIt != m_EntityObjectIndexCache.end() && idx < cacheIt->second.size())
+                    {
+                        PushConstant_ObjectIndex = cacheIt->second[idx];
+                        foundInCache = true;
+                    }
+                }
             }
 
-			// Allocate a unique object ID for this mesh instance and store it in the GPU data
-            const uint32_t PushConstant_ObjectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+            if (!foundInCache)
+            {
+                if constexpr (isSkeletal)
+                {
+                    gpuData.boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
+                }
+                else
+                {
+                    gpuData.boneOffset = 0;
+                }
+                PushConstant_ObjectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+            }
 
 			nvrhi::BindingSetHandle meshBindingSet = frameContext->staticMeshBindingSet;
             if constexpr (isSkeletal)
@@ -2067,7 +2282,9 @@ namespace ignite
         const std::vector<glm::mat4> &boneTransforms,
         const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
         nvrhi::GraphicsState &csmState,
-        uint32_t cascadeIndex)
+        uint32_t cascadeIndex,
+        entt::entity entity,
+        const std::string &socketName)
     {
         constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
 
@@ -2113,16 +2330,43 @@ namespace ignite
                 gpuData.normal = normalMatrix;
             }
 
-            if constexpr (isSkeletal)
+            uint32_t PushConstant_ObjectIndex = 0;
+            bool foundInCache = false;
+            if (entity != entt::null)
             {
-                gpuData.boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
-            }
-            else
-            {
-                gpuData.boneOffset = 0;
+                if (!socketName.empty())
+                {
+                    auto key = std::make_pair(entity, socketName);
+                    auto cacheIt = m_SocketObjectIndexCache.find(key);
+                    if (cacheIt != m_SocketObjectIndexCache.end() && idx < cacheIt->second.size())
+                    {
+                        PushConstant_ObjectIndex = cacheIt->second[idx];
+                        foundInCache = true;
+                    }
+                }
+                else
+                {
+                    auto cacheIt = m_EntityObjectIndexCache.find(entity);
+                    if (cacheIt != m_EntityObjectIndexCache.end() && idx < cacheIt->second.size())
+                    {
+                        PushConstant_ObjectIndex = cacheIt->second[idx];
+                        foundInCache = true;
+                    }
+                }
             }
 
-			const uint32_t PushConstant_ObjectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+            if (!foundInCache)
+            {
+                if constexpr (isSkeletal)
+                {
+                    gpuData.boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
+                }
+                else
+                {
+                    gpuData.boneOffset = 0;
+                }
+                PushConstant_ObjectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+            }
 
 			nvrhi::BindingSetHandle meshBindingSet = frameContext->staticMeshCSMBindingSet[cascadeIndex];
             if constexpr (isSkeletal)
@@ -2156,18 +2400,18 @@ namespace ignite
     template void SceneRenderer::DrawMesh<StaticMesh>(
         nvrhi::ICommandList *, FrameContext *, nvrhi::IFramebuffer *, const Ref<StaticMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
         const std::unordered_map<int, AssetHandle> &, const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
-        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &);
+        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &, entt::entity, const std::string &);
 
     template void SceneRenderer::DrawMesh<SkeletalMesh>(
         nvrhi::ICommandList *, FrameContext *, nvrhi::IFramebuffer *, const Ref<SkeletalMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
         const std::unordered_map<int, AssetHandle> &, const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
-        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &);
+        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &, entt::entity, const std::string &);
 
     template void SceneRenderer::DrawMeshShadow<StaticMesh>(
         nvrhi::ICommandList *, FrameContext *, const Ref<StaticMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
-        const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &, nvrhi::GraphicsState &, uint32_t);
+        const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &, nvrhi::GraphicsState &, uint32_t, entt::entity, const std::string &);
 
     template void SceneRenderer::DrawMeshShadow<SkeletalMesh>(
         nvrhi::ICommandList *, FrameContext *, const Ref<SkeletalMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
-        const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &, nvrhi::GraphicsState &, uint32_t);
+        const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &, nvrhi::GraphicsState &, uint32_t, entt::entity, const std::string &);
 }
