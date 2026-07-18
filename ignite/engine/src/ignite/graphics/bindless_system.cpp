@@ -39,6 +39,8 @@ namespace ignite
         s_DescriptorTable = device->createDescriptorTable(s_BindlessLayout);
         LOG_ASSERT(s_DescriptorTable, "[BindlessSystem] Failed to create descriptor table");
 
+        device->resizeDescriptorTable(s_DescriptorTable, 16384);
+
         // Create empty layout and binding set for set 1 alignment
         nvrhi::BindingLayoutDesc emptyLayoutDesc;
         emptyLayoutDesc.setVisibility(nvrhi::ShaderType::All);

@@ -1301,6 +1301,8 @@ namespace ignite
                                     c.stateElapsed = 0.0f;
                                     c.stateNormalized = 0.0f;
                                     c.runtimeParams.clear();
+
+                                    isAnimatorLoaded = false;
                                 }
                             }
                         });

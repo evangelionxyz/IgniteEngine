@@ -53,6 +53,35 @@ static bool IsNvDevice(const UINT ID) { return ID == 0x10DE; }
 
 namespace ignite
 {
+    static void CALLBACK D3D12MessageCallback(D3D12_MESSAGE_CATEGORY Category, D3D12_MESSAGE_SEVERITY Severity,
+        D3D12_MESSAGE_ID ID, LPCSTR pDescription, void *pContext)
+    {
+        (void)Category;
+        (void)pContext;
+
+        if (ID == D3D12_MESSAGE_ID_UNKNOWN)
+            return;
+
+        switch (Severity)
+        {
+            case D3D12_MESSAGE_SEVERITY_CORRUPTION:
+                LOG_ASSERT(false, "[D3D12 CORRUPTION] {}", pDescription);
+                break;
+            case D3D12_MESSAGE_SEVERITY_ERROR:
+                LOG_ASSERT(false, "[D3D12 ERROR] {}", pDescription);
+                break;
+            case D3D12_MESSAGE_SEVERITY_WARNING:
+                LOG_WARN("[D3D12 WARNING] {}", pDescription);
+                break;
+            case D3D12_MESSAGE_SEVERITY_INFO:
+                LOG_INFO("[D3D12 INFO] {}", pDescription);
+                break;
+            case D3D12_MESSAGE_SEVERITY_MESSAGE:
+                LOG_INFO("[D3D12 MESSAGE] {}", pDescription);
+                break;
+        }
+    }
+
     static DeviceManager_DX12 *s_D3D12DeviceInstance = nullptr;
 
     void DescriptorHeapAllocator::Create(ID3D12Device *device, ID3D12DescriptorHeap *descriptorHeap)
@@ -275,6 +304,18 @@ namespace ignite
                 filter.DenyList.NumIDs = std::size(disableMessageIDs);
                 pInfoQueue->AddStorageFilterEntries(&filter);
             }
+
+            RefCountPtr<ID3D12InfoQueue1> pInfoQueue1;
+            if (SUCCEEDED(m_Device12->QueryInterface(IID_PPV_ARGS(&pInfoQueue1))))
+            {
+                DWORD cookie = 0;
+                pInfoQueue1->RegisterMessageCallback(
+                    D3D12MessageCallback,
+                    D3D12_MESSAGE_CALLBACK_FLAG_NONE,
+                    nullptr,
+                    &cookie
+                );
+            }
         }
 
         {
@@ -327,7 +368,7 @@ namespace ignite
         }
 
         nvrhi::d3d12::DeviceDesc deviceDesc;
-        deviceDesc.errorCB = m_DeviceParameters.messageCallback ? m_DeviceParameters.messageCallback : &DefaultMessageCallback::GetInstance();
+        deviceDesc.errorCB = &DefaultMessageCallback::GetInstance();
         deviceDesc.pDevice = m_Device12;
         deviceDesc.pGraphicsCommandQueue = m_GraphicsQueue;
         deviceDesc.pComputeCommandQueue = m_ComputeQueue;
@@ -340,6 +381,9 @@ namespace ignite
         {
             m_NvrhiDevice = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
         }
+
+        const bool hasBindless = m_NvrhiDevice->queryFeatureSupport(nvrhi::Feature::HeapDirectlyIndexed);
+        LOG_INFO("[D3D12 Device] HeapDirectlyIndexed (SM6.6 Bindless) Support: {}", hasBindless ? "ENABLED" : "DISABLED");
 
         BindlessSystem::Initialize(GetDevice());
 

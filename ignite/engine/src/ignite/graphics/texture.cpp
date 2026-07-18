@@ -839,4 +839,20 @@ namespace ignite
         memcpy(data.data(), flipped.data(), flipped.size());
     }
 
+    uint32_t Texture::GetBindlessIndex() const
+    {
+        uint32_t index = (m_BindlessIndex == 0xFFFFFFFF) ? 0 : m_BindlessIndex;
+
+        if (Renderer::GetGraphicsAPI() == nvrhi::GraphicsAPI::D3D12)
+        {
+            auto table = BindlessSystem::GetDescriptorTable();
+            if (table)
+            {
+                return index + table->getFirstDescriptorIndexInHeap();
+            }
+        }
+
+        return index;
+    }
+
 }
