@@ -176,14 +176,10 @@ namespace ignite
         Ref<Renderer2D> m_Renderer2D;
         Ref<EdgeDetection> m_EdgeDetection;
         
-        Ref<ConstantBuffer> m_CompositePostProcessBuffer;
-
-        Ref<ConstantBuffer> m_SceneBuffer;
-        Ref<ConstantBuffer> m_CameraBuffer;
-        Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
+        ConstantBuffer m_CompositePostProcessBuffer;
+        ConstantBuffer m_DebugGridBuffer;
+        ConstantBuffer m_CascadedShadowMapBuffer;
         Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];
-        Ref<ConstantBuffer> m_PointLightBuffer;
-        Ref<ConstantBuffer> m_SpotLightBuffer;
 
 		std::unordered_map<AssetResolveKey, WeakRef<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
 
@@ -192,15 +188,11 @@ namespace ignite
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         Scene_GPUData m_SceneGPUData;
+        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
 
         std::vector<uint32_t> m_SelectedEntities;
-        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
-        Ref<ConstantBuffer> m_DebugGridBuffer;
-
-        nvrhi::IDevice *m_Device = nullptr;
-        
         Ref<Scene> m_Scene;
-
+        nvrhi::IDevice *m_Device = nullptr;
         bool m_Has2DPreRenderCache = false;
         bool m_CompositeVertexBufferUploadPending = true;
     };

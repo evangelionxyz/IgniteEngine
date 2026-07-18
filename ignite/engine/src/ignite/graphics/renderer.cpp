@@ -6,6 +6,7 @@
 #include "renderer/renderer_2d.hpp"
 #include "texture.hpp"
 #include "shader.hpp"
+#include "binding_cache.hpp"
 #include "bindless_system.hpp"
 
 #include "ignite/graphics/buffers/constant_buffer.hpp"
@@ -28,18 +29,19 @@ namespace ignite
 
         m_GraphicsAPI = api;
 
-        m_Device = deviceManager->GetDevice();
+        auto device = deviceManager->GetDevice();
+
+		BindingCache::Init(device);
 
         Shader::InitShaderData();
 
 		// Create binding layouts
-		m_BindingLayouts[EBindingLayout::MESH_STATIC] = m_Device->createBindingLayout(VertexMeshStatic::GetBindingLayoutDesc());
-		m_BindingLayouts[EBindingLayout::MESH_ANIM] = m_Device->createBindingLayout(VertexMeshAnim::GetBindingLayoutDesc());
-		m_BindingLayouts[EBindingLayout::ENVIRONMENT] = m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
-		m_BindingLayouts[EBindingLayout::MATERIAL] = m_Device->createBindingLayout(Material::GetBindingLayoutDesc());
+		m_BindingLayouts[EBindingLayout::MESH_STATIC] = device->createBindingLayout(VertexMeshStatic::GetBindingLayoutDesc());
+		m_BindingLayouts[EBindingLayout::MESH_ANIM] = device->createBindingLayout(VertexMeshAnim::GetBindingLayoutDesc());
+		m_BindingLayouts[EBindingLayout::ENVIRONMENT] = device->createBindingLayout(Environment::GetBindingLayoutDesc());
+		m_BindingLayouts[EBindingLayout::MATERIAL] = device->createBindingLayout(Material::GetBindingLayoutDesc());
 
-
-        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+        nvrhi::CommandListHandle cmd = device->createCommandList();
 
         // Default textures
         {
@@ -70,14 +72,40 @@ namespace ignite
             memcpy(magentaData.data(), &magenta, texSize);
             m_MagentaTexture = Texture::Create(magentaData, textureCreateInfo, cmd);
 
+            TextureCreateInfo uintTexCI;
+            uintTexCI.format = nvrhi::Format::R32_UINT;
+            uintTexCI.dimension = nvrhi::TextureDimension::Texture2D;
+            uintTexCI.width = 1;
+            uintTexCI.height = 1;
+            uintTexCI.flip = false;
+            uintTexCI.initialState = nvrhi::ResourceStates::ShaderResource;
+            uintTexCI.keepInitialState = true;
+
+            uint32_t blackUInt = 0;
+            std::vector<uint8_t> blackUIntData(sizeof(uint32_t));
+            memcpy(blackUIntData.data(), &blackUInt, sizeof(uint32_t));
+            m_BlackUIntTexture = Texture::Create(blackUIntData, uintTexCI, cmd);
+
             cmd->close();
-            m_Device->executeCommandList(cmd);
+            device->executeCommandList(cmd);
         }
 
 		// Default materials
 		{
 			m_DefaultMaterial = CreateRef<Material>();
 		}
+
+		// Create frame contexts
+        m_MaxFramesInFlight = deviceManager->GetDeviceParameters().maxFramesInFlight;
+        m_Frames.clear();
+        m_Frames.reserve(m_MaxFramesInFlight);
+        for (uint32_t i = 0; i < m_MaxFramesInFlight; ++i)
+        {
+            m_Frames.emplace_back(device);
+            m_Frames.back().InitializeBindingSets(device,
+                m_BindingLayouts[EBindingLayout::MESH_STATIC],
+                m_BindingLayouts[EBindingLayout::MESH_ANIM]);
+        }
     }
 
 	void Renderer::Shutdown()
@@ -90,16 +118,18 @@ namespace ignite
 		m_WhiteTexture.reset();
 		m_MagentaTexture.reset();
 		m_BlackTexture.reset();
+		m_BlackUIntTexture.reset();
 
         m_DefaultMaterial.reset();
 
         m_DefaultMeshes.clear();
 		m_BindingLayouts.clear();
 
+		BindingCache::Shutdown();
 		BindlessSystem::Shutdown();
 	}
 
-    void Renderer::BeginStats()
+    void Renderer::ResetStatistics()
     {
         // 3D
         Stats.drawCallCount = 0;
@@ -117,7 +147,26 @@ namespace ignite
         Stats.pointLight2dCount = 0;
     }
 
-    nvrhi::GraphicsAPI Renderer::GetGraphicsAPI()
+	FrameContext *Renderer::GetCurrentFrameContext()
+	{
+        const uint64_t frameIndex = s_RendererInstance->m_FrameCounter % s_RendererInstance->m_MaxFramesInFlight;
+		return &s_RendererInstance->m_Frames[frameIndex];
+	}
+
+	void Renderer::BeginFrame(const uint64_t frameCounter)
+	{
+        ResetStatistics();
+
+		m_FrameCounter = frameCounter;
+
+		auto &frame = m_Frames[frameCounter % m_MaxFramesInFlight];
+        frame.objectAllocator.BeginFrame();
+        frame.objectAllocator.SetBuffer(frame.objectBuffer.GetHandle());
+        frame.boneAllocator.BeginFrame();
+        frame.boneAllocator.SetBuffer(frame.boneBuffer.GetHandle());
+	}
+
+	nvrhi::GraphicsAPI Renderer::GetGraphicsAPI()
     {
         return s_RendererInstance->m_GraphicsAPI;
     }
@@ -143,6 +192,11 @@ namespace ignite
     Ref<Texture> Renderer::GetMagentaTexture()
     {
         return s_RendererInstance->m_MagentaTexture;
+    }
+
+    Ref<Texture> Renderer::GetBlackUIntTexture()
+    {
+        return s_RendererInstance->m_BlackUIntTexture;
     }
 
 	Ref<Material> Renderer::GetDefaultMaterial()

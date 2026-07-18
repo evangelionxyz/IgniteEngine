@@ -15,12 +15,18 @@
 #define RENDER_MODE_METALLIC 3
 #define RENDER_MODE_ROUGHNESS 4
 
+struct PushConstants
+{
+    uint objectIndex;
+};
+
 struct Object
 {
     float4x4 transformMatrix;
     float4x4 normalMatrix;
     uint objectID;
-    float3 _padding;
+    uint boneOffset;
+    float2 _padding;
 };
 
 struct Camera

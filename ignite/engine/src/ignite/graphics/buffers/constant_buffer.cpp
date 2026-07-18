@@ -10,29 +10,29 @@
 
 namespace ignite
 {
-    ConstantBuffer::ConstantBuffer(const size_t size, bool isVolatile, const uint32_t maxVersion, const std::string &debugName)
-    {
-        IGN_PROFILE_FUNCTION();
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+	ConstantBuffer::ConstantBuffer(const size_t size, bool isVolatile, const uint32_t maxVersion, const std::string &debugName)
+	{
+		IGN_PROFILE_FUNCTION();
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-        nvrhi::BufferDesc cbDesc;
-        cbDesc.byteSize = size;
-        cbDesc.isConstantBuffer = true;
-        cbDesc.isVolatile = isVolatile;
-        cbDesc.initialState = nvrhi::ResourceStates::ConstantBuffer;
-        cbDesc.keepInitialState = true;
-        cbDesc.maxVersions = maxVersion;
-        cbDesc.debugName = debugName;
+		nvrhi::BufferDesc cbDesc;
+		cbDesc.byteSize = size;
+		cbDesc.isConstantBuffer = true;
+		cbDesc.isVolatile = isVolatile;
+		cbDesc.initialState = nvrhi::ResourceStates::ConstantBuffer;
+		cbDesc.keepInitialState = true;
+		cbDesc.maxVersions = maxVersion;
+		cbDesc.debugName = debugName;
 
-        m_ByteSize = size;
-        m_Handle = device->createBuffer(cbDesc);
-        LOG_ASSERT(m_Handle, "Failed to create constant buffer!");
-        if (m_Handle)
-        {
-            IGN_PROFILE_ALLOC_N(m_Handle.Get(), size, "GPU Constant Buffer");
-            Renderer::Stats.gpuConstantBufferBytes += size;
-        }
-    }
+		m_ByteSize = size;
+		m_Handle = device->createBuffer(cbDesc);
+		LOG_ASSERT(m_Handle, "Failed to create constant buffer!");
+		if (m_Handle)
+		{
+			IGN_PROFILE_ALLOC_N(m_Handle.Get(), size, "GPU Constant Buffer");
+			Renderer::Stats.gpuConstantBufferBytes += size;
+		}
+	}
 
     ConstantBuffer::~ConstantBuffer()
     {

@@ -71,11 +71,12 @@ namespace ignite
 	struct DebugGridBindingKey
 	{
 		nvrhi::IBindingLayout *layout = nullptr;
+		nvrhi::IBuffer *cameraBuffer = nullptr;
 		nvrhi::IBuffer *gridBuffer = nullptr;
 
 		bool operator==(const DebugGridBindingKey &other) const noexcept
 		{
-			return layout == other.layout && gridBuffer == other.gridBuffer;
+			return layout == other.layout && cameraBuffer == other.cameraBuffer && gridBuffer == other.gridBuffer;
 		}
 	};
 
@@ -83,7 +84,7 @@ namespace ignite
 	{
 		size_t operator()(const DebugGridBindingKey &k) const noexcept
 		{
-			return Hashing::HashCombineAll(k.layout, k.gridBuffer);
+			return Hashing::HashCombineAll(k.layout, k.cameraBuffer, k.gridBuffer);
 		}
 	};
 
@@ -97,6 +98,7 @@ namespace ignite
 		nvrhi::ITexture *ssaoTex = nullptr;
 		nvrhi::ITexture *depthTex = nullptr;
 		nvrhi::ITexture *debugTex = nullptr;
+		nvrhi::ITexture *objectIDTex = nullptr;
 		nvrhi::IBuffer *postProcessBuffer = nullptr;
 		nvrhi::ISampler *sampler = nullptr;
 
@@ -105,7 +107,8 @@ namespace ignite
 			return layout == other.layout && sceneTex == other.sceneTex
 				&& uiTex == other.uiTex && edgeTex == other.edgeTex && bloomTex == other.bloomTex
 				&& ssaoTex == other.ssaoTex && depthTex == other.depthTex && debugTex == other.debugTex
-				&& postProcessBuffer == other.postProcessBuffer && sampler == other.sampler;
+				&& objectIDTex == other.objectIDTex && postProcessBuffer == other.postProcessBuffer 
+				&& sampler == other.sampler;
 		}
 	};
 
@@ -115,7 +118,7 @@ namespace ignite
 		{
 			return Hashing::HashCombineAll(k.layout, k.sceneTex, k.uiTex, 
 				k.edgeTex, k.bloomTex, k.ssaoTex, k.depthTex, k.debugTex, 
-                k.postProcessBuffer, k.sampler);
+				k.objectIDTex, k.postProcessBuffer, k.sampler);
 		}
 	};
 

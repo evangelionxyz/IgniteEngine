@@ -27,9 +27,8 @@ namespace ignite
         Environment();
     	virtual ~Environment() override;
 
-        void Draw(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &gp);
-
-        bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer);
+        void Draw(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &gp,
+            const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &sceneBuffer);
 
         void LoadTexture(const std::string &filepath);
         void SetTexture(const Ref<Texture> &texture);
@@ -50,8 +49,6 @@ namespace ignite
 
         std::array<glm::vec3, 24> m_Vertices;
         std::array<uint32_t, 36> m_Indices;
-
-        nvrhi::BindingSetHandle m_BindingSet;
     };
 }
 

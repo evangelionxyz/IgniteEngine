@@ -33,22 +33,23 @@ namespace ignite
         void SetPreviewWidget(const Ref<WidgetCanvas> &widget);
         void SetPreviewMouseState(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
-        void Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT);
+        void Render(ICamera *camera, FrameContext *frameContext, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT);
 
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const override;
 
     private:
         void SyncRuntimeMaterialFromSource();
 
-        void DrawEnvironment(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
-        void DrawPreviewStaticMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
-        void DrawPreviewSkeletalMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
+        void DrawEnvironment(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
+        void DrawPreviewStaticMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
+        void DrawPreviewSkeletalMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
 
         template<typename MeshT>
         void DrawPreviewMeshImpl(
             const Ref<MeshT>           &mesh,
             nvrhi::ICommandList        *cmd,
             nvrhi::IFramebuffer        *framebuffer,
+            FrameContext               *frameContext,
             const char                 *vertexShaderPath,
             const char                 *pixelShaderPath,
             EBindingLayout              meshBindingLayout,
@@ -90,7 +91,6 @@ namespace ignite
         bool     m_EnvironmentTextureLoadAttempted = false;
 
         Scene_GPUData m_SceneGPUData;
-        CSM_GPUData   m_CSMGPUData;
     };
 }
 #endif

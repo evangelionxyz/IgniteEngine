@@ -55,12 +55,13 @@ namespace ignite
 				.setRegisterSpace(0) // set 0
 				.setRegisterSpaceIsDescriptorSet(true)
 				.setVisibility(nvrhi::ShaderType::All)
-				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))  // Camera
-				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1))  // Object
-				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2))  // Scene
-				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3))  // CSM
-				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4))  // PointLight
-				.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(5)); // SpotLight
+				.addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(uint32_t)))  // Push Constants - Object Index
+				.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))  // Camera
+                .addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2))  // Object
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3))  // Scene
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(4))  // CSM
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(5))  // PointLight
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(6)); // SpotLight
 		}
     };
 
@@ -81,13 +82,14 @@ namespace ignite
                 .setRegisterSpace(0) // set 0
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))  // Camera
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1))  // Object
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2))  // Skeleton
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3))  // Scene
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4))  // CSM
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(5))  // PointLight
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(6)); // SpotLight
+                .addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(uint32_t)))  // Push Constants - Object Index
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))  // Camera
+                .addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2))  // Object
+                .addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3))  // Skeleton
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(4))  // Scene
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(5))  // CSM
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(6))  // PointLight
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(7)); // SpotLight
         }
     };
 

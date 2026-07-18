@@ -629,6 +629,8 @@ namespace ignite
             }
         }
 
+        FrameContext *frameContext = Renderer::GetCurrentFrameContext();
+
         // Render to Edit Viewport
         if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
@@ -645,7 +647,7 @@ namespace ignite
                         m_EditorPlayCamera.position = cc.camera.position;
                         {
                             IGN_PROFILE_SCOPE("SceneRenderer::RenderPlayToEditorViewport");
-                            m_SceneRenderer->Render(&m_EditorPlayCamera, false);
+                            m_SceneRenderer->Render(&m_EditorPlayCamera, frameContext, false);
                         }
                         break;
                     }
@@ -654,7 +656,7 @@ namespace ignite
                 case ESceneState::Stop:
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
-                    m_SceneRenderer->Render(editCamera, true); // enable draw debug
+                    m_SceneRenderer->Render(editCamera, frameContext, true); // enable draw debug
                     break;
                 }
             }
@@ -669,7 +671,7 @@ namespace ignite
                 ICamera *gameCamera = &cc.camera;
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
-                    m_SceneRenderer->Render(gameCamera, false); // disable draw debug
+                    m_SceneRenderer->Render(gameCamera, frameContext, false); // disable draw debug
                 }
             }
         }
@@ -1160,9 +1162,6 @@ namespace ignite
             AssetManager::GetInstance()->UnloadUnusedAssets();
         }
         
-        // Force a brief wait to allow cleanup
-        m_Device->waitForIdle();
-        
         // Create new editor scene
         m_EditorScene = CreateRef<Scene>(m_ActiveProject.get(), "New Scene");
 
@@ -1224,12 +1223,6 @@ namespace ignite
         {
             // Clear active scene references before loading new one
             SetActiveScene(nullptr);
-            
-            // Wait for GPU
-            if (m_Device)
-            {
-                m_Device->waitForIdle();
-            }
             
             // Reset old scene
             m_EditorScene.reset();
@@ -1640,12 +1633,6 @@ namespace ignite
 
                                     // Clear active scene references
                                     SetActiveScene(nullptr);
-
-                                    // Wait for GPU
-                                    if (m_Device)
-                                    {
-                                        m_Device->waitForIdle();
-                                    }
 
                                     // Reset old scene
                                     m_EditorScene.reset();

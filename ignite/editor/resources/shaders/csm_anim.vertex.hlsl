@@ -1,11 +1,13 @@
+#include "include/binding_helpers.hlsli"
 #include "include/scene.hlsli"
 #include "include/shadow.hlsli"
 
-cbuffer CameraBuffer   : register(b0, space0) { Camera camera; }
-cbuffer ObjectBuffer   : register(b1, space0) { Object object; }
-cbuffer SkeletonBuffer : register(b2, space0) { Skeleton skeleton; }
-cbuffer SceneBuffer    : register(b3, space0) { Scene scene; }
-cbuffer CascadesBuffer : register(b4, space0) { CascadesShadows csm; }
+DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0
+cbuffer CameraBuffer                    : register(b1, space0) { Camera camera; }
+StructuredBuffer<Object> g_ObjectBuffer : register(t2, space0);
+StructuredBuffer<float4x4> g_Bones      : register(t3, space0);
+cbuffer SceneBuffer                     : register(b4, space0) { Scene scene; }
+cbuffer CascadesBuffer                  : register(b5, space0) { CascadesShadows csm; }
 
 float4 SkinPosition(VertexMeshAnim input)
 {
@@ -23,7 +25,8 @@ float4 SkinPosition(VertexMeshAnim input)
         const uint bone = min(input.boneIDs[i], (uint)(MAX_BONES - 1));
         if (weight > 0.0f)
         {
-            skinned += mul(skeleton.boneTransforms[bone], float4(input.position, 1.0f)) * weight;
+            uint globalBoneIdx = g_ObjectBuffer[g_Push.objectIndex].boneOffset + bone;
+            skinned += mul(g_Bones[globalBoneIdx], float4(input.position, 1.0f)) * weight;
         }
     }
 
@@ -44,7 +47,7 @@ PixelVertexInput main(VertexMeshAnim input)
     PixelVertexInput pixelInput;
 
     float4 localPosition = SkinPosition(input);
-    float4 worldPosition = mul(object.transformMatrix, localPosition);
+    float4 worldPosition = mul(g_ObjectBuffer[g_Push.objectIndex].transformMatrix, localPosition);
 
     pixelInput.normal = input.normal;
     pixelInput.tangent = input.tangent;

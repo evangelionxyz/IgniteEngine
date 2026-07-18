@@ -67,7 +67,8 @@ namespace ignite
         void UIRenderFileTree(FileTreeNode *node);
         void UIRenderFileButton(const ignite::Path &item);
         void UIRenderNavigationBar();
-        void UIShowAssetAddContext();
+		void UIRenderContextMenu();
+		void UIRenderPopupModals();
 
         void PruneMissingNodes(uint32_t nodeIndex, const ignite::Path &basePath);
         void PruneMissingNodesAlt(uint32_t nodeIndex, const ignite::Path &basePath);
@@ -144,7 +145,6 @@ namespace ignite
         std::vector<ignite::Path> m_ActiveDragItems;
         std::vector<ignite::Path> m_PendingDragDropSources;
         ignite::Path m_PendingDragDropTargetDirectory;
-        ignite::Path m_PopupTargetPath; // target file/folder for rename/delete
         char m_PopupInputBuffer[1024] = { 0 }; // used for create/rename names
     };
 }

@@ -19,7 +19,8 @@ namespace ignite
 		glm::mat4 transformation;
 		glm::mat4 normal;
         uint32_t objectID = 0xFFFFFFFFu;
-		glm::vec3 _padding = glm::vec3(0.0f);
+        uint32_t boneOffset = 0;
+		glm::vec2 _padding = glm::vec2(0.0f);
 	};
 
 	struct Scene_GPUData

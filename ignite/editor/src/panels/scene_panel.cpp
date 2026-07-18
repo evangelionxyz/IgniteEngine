@@ -672,6 +672,7 @@ namespace ignite
                         ImGui::SameLine();
                         if (ImGui::Button("X##ClearWidget"))
                         {
+                            assetManager->RemoveAssetPin(c.widgetHandle, std::string(kActiveSceneAssetOwner));
                             c.widgetHandle = AssetHandle(0);
                             c.dirty = true;
                         }
@@ -696,10 +697,8 @@ namespace ignite
                     }
                 }
 
-
-
                 // Fog
-                UI::DrawFloatControl("Fog Density", &c.fogDensity, 0.001f, 0.0f, FLT_MAX);
+                UI::DrawFloatControl("Fog Density", &c.fogDensity, 0.00001f, 0.0f, FLT_MAX);
                 if (c.fogDensity > 0.0f)
                 {
                     UI::DrawColorVec4("Fog Color", c.fogColor);
@@ -735,6 +734,7 @@ namespace ignite
                             ImGui::SameLine();
                             if (ImGui::Button("X"))
                             {
+                                AssetManager::GetInstance()->RemoveAssetPin(c.hdrHandle, std::string(kActiveSceneAssetOwner));
                                 c.hdrHandle = AssetHandle(0);
                                 c.dirtyEnvironment = true;
                                 c.gpuInitialized = false;
@@ -863,6 +863,7 @@ namespace ignite
                             if (ImGui::Button("X"))
                             {
                                 Sprite2DComponent before = c;
+                                assetManager->RemoveAssetPin(c.materialHandle, std::string(kActiveSceneAssetOwner));
                                 c.materialHandle = AssetHandle(0);
                                 CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                             }
@@ -921,6 +922,7 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::Button("X##ClearTexture"))
                                 {
+                                    assetManager->RemoveAssetPin(c.handle, std::string(kActiveSceneAssetOwner));
                                     c.handle = AssetHandle(0);
                                 }
                             }
@@ -1074,6 +1076,7 @@ namespace ignite
                         ImGui::SameLine();
                         if (ImGui::Button("X"))
                         {
+                            assetManager->RemoveAssetPin(c.handle, std::string(kActiveSceneAssetOwner));
                             c.handle = AssetHandle(0); // reset the mesh
                         }
                     }
@@ -1182,6 +1185,7 @@ namespace ignite
                         ImGui::SameLine();
                         if (ImGui::Button("X"))
                         {
+                            assetManager->RemoveAssetPin(c.handle, std::string(kActiveSceneAssetOwner));
                             c.handle = AssetHandle(0); // reset the mesh
                         }
                     }
@@ -1290,6 +1294,7 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::Button("X"))
                                 {
+                                    assetManager->RemoveAssetPin(c.runtimeAnimatorHandle, std::string(kActiveSceneAssetOwner));
                                     sm->SetAnimator(AssetHandle(0)); // reset animator
                                     c.runtimeAnimatorHandle = AssetHandle(0);
                                     c.currentStateName.clear();
@@ -1858,6 +1863,7 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::Button("X##ClearTextFont"))
                                 {
+                                    assetManager->RemoveAssetPin(c.fontHandle, std::string(kActiveSceneAssetOwner));
                                     c.fontHandle = AssetHandle(0);
                                 }
                             }
@@ -1941,6 +1947,7 @@ namespace ignite
                             ImGui::SameLine();
                             if (ImGui::Button("X"))
                             {
+                                assetManager->RemoveAssetPin(c.handle, std::string(kActiveSceneAssetOwner));
                                 c.handle = AssetHandle(0);
                             }
                         }
