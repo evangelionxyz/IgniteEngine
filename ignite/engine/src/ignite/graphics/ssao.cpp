@@ -205,7 +205,7 @@ namespace ignite
         params.params = glm::vec4(settings.aoRadius, settings.aoBias, settings.aoPower, 0.0f);
         params.noiseScale = glm::vec4(static_cast<float>(m_Width) / 4.0f, static_cast<float>(m_Height) / 4.0f, 0.0f, 0.0f);
 
-        m_SSAOParamsBuffer->SetData(cmd, Buffer(&params, sizeof(params)));
+        m_SSAOParamsBuffer->SetData(cmd, &params, sizeof(params));
 
         cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
         cmd->commitBarriers();
@@ -236,7 +236,7 @@ namespace ignite
             blurParams.nearPlane = camera->nearPlane;
             blurParams.farPlane = camera->farPlane;
             blurParams.depthSharpness = 10.0f; // bilateral edge sharpness
-            m_BlurParamsBuffer->SetData(cmd, Buffer(&blurParams, sizeof(blurParams)));
+            m_BlurParamsBuffer->SetData(cmd, &blurParams, sizeof(blurParams));
 
             cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
             cmd->setTextureState(m_BlurTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
@@ -267,7 +267,7 @@ namespace ignite
             blurParams.nearPlane = camera->nearPlane;
             blurParams.farPlane = camera->farPlane;
             blurParams.depthSharpness = 10.0f;
-            m_BlurParamsBuffer->SetData(cmd, Buffer(&blurParams, sizeof(blurParams)));
+            m_BlurParamsBuffer->SetData(cmd, &blurParams, sizeof(blurParams));
 
             cmd->setTextureState(m_BlurTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
             cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);

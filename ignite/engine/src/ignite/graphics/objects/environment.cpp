@@ -103,8 +103,8 @@ namespace ignite
 	void Environment::WriteBuffer(nvrhi::ICommandList *cmd)
     {
         // write buffers
-        m_VertexBuffer->SetData(cmd, Buffer(m_Vertices.data(), sizeof(m_Vertices)));
-        m_IndexBuffer->SetData(cmd, Buffer(m_Indices.data(), sizeof(uint32_t) * m_Indices.size()));
+        m_VertexBuffer->SetData(cmd, m_Vertices.data(), sizeof(m_Vertices));
+        m_IndexBuffer->SetData(cmd, m_Indices.data(), sizeof(uint32_t) * m_Indices.size());
     }
 
     Ref<Environment> Environment::Create()

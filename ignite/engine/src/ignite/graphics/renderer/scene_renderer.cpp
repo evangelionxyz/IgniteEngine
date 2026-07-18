@@ -174,8 +174,11 @@ namespace ignite
             // IMPORTANT!!!!
 			// Write frame context buffers before using it
 			CameraBufferData cameraData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-			frameContext->cameraBuffer.SetData(cmd, Buffer(&cameraData, sizeof(cameraData)));
-			frameContext->sceneBuffer.SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
+            {
+				IGN_PROFILE_SCOPE("SceneRenderer::WriteFrameData");
+			    frameContext->cameraBuffer.SetData(cmd, &cameraData, sizeof(cameraData));
+			    frameContext->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(m_SceneGPUData));
+            }
 
             PreallocateGPUData(cmd, frameContext);
 
@@ -327,6 +330,8 @@ namespace ignite
 
     void SceneRenderer::PreallocateGPUData(nvrhi::ICommandList *cmd, FrameContext *frameContext)
     {
+        IGN_PROFILE_FUNCTION();
+
         m_EntityObjectIndexCache.clear();
         m_EntityBoneOffsetCache.clear();
         m_SocketObjectIndexCache.clear();
@@ -512,6 +517,8 @@ namespace ignite
 
     void SceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
     {
+		IGN_PROFILE_FUNCTION();
+
         ISceneRenderer::ResizeFramebuffer(camera, width, height);
 
         // Differentiate resizing between edit-viewport and game-viewport post-processing instances
@@ -607,7 +614,7 @@ namespace ignite
             }
 
             m_SceneGPUData.numPointLights = pointLightCount;
-			frameContext->pointLightBuffer.SetData(cmd, Buffer(&pointLightData, sizeof(PointLight_GPUData)));
+			frameContext->pointLightBuffer.SetData(cmd, &pointLightData, sizeof(PointLight_GPUData));
         }
 
         // Collect spot lights
@@ -639,7 +646,7 @@ namespace ignite
             }
 
             m_SceneGPUData.numSpotLights = spotLightCount;
-			frameContext->spotLightBuffer.SetData(cmd, Buffer(&spotLightData, sizeof(SpotLight_GPUData)));
+			frameContext->spotLightBuffer.SetData(cmd, &spotLightData, sizeof(SpotLight_GPUData));
         }
 
         glm::vec3 sunDirection =
@@ -694,14 +701,14 @@ namespace ignite
             sceneCascadeData.cascadeIndex = -1;
             sceneCascadeData.shadowStrength = 0.0f;
 			// Write the cascade data to the frame context buffer for use in the main scene pass
-			frameContext->csmBuffer.SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
+			frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
 
             for (int i = 0; i < NUM_CASCADES; ++i)
             {
                 IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
                 CSM_GPUData cascadeGpuData = {};
                 cascadeGpuData.cascadeIndex = i;
-                frameContext->csmPerCascadeBuffers[i].SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
+                frameContext->csmPerCascadeBuffers[i].SetData(cmd, &cascadeGpuData, sizeof(cascadeGpuData));
                 m_CascadedShadowMap->BeginCascade(cmd, i, frameContext->frameIndexInFlight);
             }
 		}
@@ -714,7 +721,7 @@ namespace ignite
 			sceneCascadeData.cascadeIndex = -1;
 
 			// Write the cascade data to the frame context buffer for use in the main scene pass
-			frameContext->csmBuffer.SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
+			frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
 
 			for (int i = 0; i < NUM_CASCADES; ++i)
 			{
@@ -722,7 +729,7 @@ namespace ignite
 
 				CSM_GPUData cascadeGpuData = sceneCascadeData;
 				cascadeGpuData.cascadeIndex = i;
-				frameContext->csmPerCascadeBuffers[i].SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
+				frameContext->csmPerCascadeBuffers[i].SetData(cmd, &cascadeGpuData, sizeof(cascadeGpuData));
 
 				// Clear the specific array layer for this cascade
 				m_CascadedShadowMap->BeginCascade(cmd, i, frameContext->frameIndexInFlight);
@@ -1214,7 +1221,7 @@ namespace ignite
 		gpuData.settings1 = glm::vec4(is2D ? 1.0f : 0.0f, style.enableXAxis ? 1.0f : 0.0f, style.enableYAxis ? 1.0f : 0.0f, style.enableZAxis ? 1.0f : 0.0f);
 
         // Set buffer data before bind it
-		m_DebugGridBuffer.SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+		m_DebugGridBuffer.SetData(cmd, &gpuData, sizeof(gpuData));
 
         // Bind buffer
         Ref<GraphicsPipeline> gridPipeline = GetDebugGridPSO(framebuffer);
@@ -1582,7 +1589,7 @@ namespace ignite
             }
         }
 
-        m_CompositePostProcessBuffer.SetData(cmd, Buffer(&m_PostProcessingSettings, sizeof(m_PostProcessingSettings)));
+        m_CompositePostProcessBuffer.SetData(cmd, &m_PostProcessingSettings, sizeof(m_PostProcessingSettings));
         cmd->setBufferState(m_CompositePostProcessBuffer.GetHandle(), nvrhi::ResourceStates::ConstantBuffer);
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePSO(compositeFramebuffer, nvrhi::RasterFillMode::Solid);

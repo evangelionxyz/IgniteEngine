@@ -220,19 +220,19 @@ namespace ignite
         }
 
         CameraBufferData cameraBufferData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-        frameContext->cameraBuffer.SetData(cmd, Buffer(&cameraBufferData, sizeof(CameraBufferData)));
-        frameContext->sceneBuffer.SetData(cmd, Buffer(&m_SceneGPUData, sizeof(Scene_GPUData)));
+        frameContext->cameraBuffer.SetData(cmd, &cameraBufferData, sizeof(CameraBufferData));
+        frameContext->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(Scene_GPUData));
         {
 		    // Cascaded Shadow Map — disabled in preview (shadowStrength = 0)
             CSM_GPUData csmGpuData = {};
             csmGpuData.cascadeIndex = -1;
             csmGpuData.shadowStrength = 0.0f;
-            frameContext->csmBuffer.SetData(cmd, Buffer(&csmGpuData, sizeof(csmGpuData)));
+            frameContext->csmBuffer.SetData(cmd, &csmGpuData, sizeof(csmGpuData));
 
 			PointLightBufferData pointLightData = {};
 			SpotLightBufferData spotLightData = {};
-			frameContext->pointLightBuffer.SetData(cmd, Buffer(&pointLightData, sizeof(pointLightData)));
-			frameContext->spotLightBuffer.SetData(cmd, Buffer(&spotLightData, sizeof(spotLightData)));
+			frameContext->pointLightBuffer.SetData(cmd, &pointLightData, sizeof(pointLightData));
+			frameContext->spotLightBuffer.SetData(cmd, &spotLightData, sizeof(spotLightData));
         }
 		
         uiRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
@@ -635,7 +635,7 @@ namespace ignite
     void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
     {
 		// Set the post-processing parameters based on the current settings on asset editor panel
-        m_CompositePostProcessBuffer.SetData(cmd, Buffer(&this->m_PostProcessingSettings, sizeof(this->m_PostProcessingSettings)));
+        m_CompositePostProcessBuffer.SetData(cmd, &this->m_PostProcessingSettings, sizeof(this->m_PostProcessingSettings));
 
         Ref<GraphicsPipeline> pipeline;
         if (auto it = m_CompositePipelineCache.find(framebuffer); it != m_CompositePipelineCache.end())

@@ -44,7 +44,7 @@ namespace ignite
         m_Device = DeviceManager::GetInstance()->GetDevice();
         auto cmd = m_Device->createCommandList();
         cmd->open();
-		m_CompositeVertexBuffer->SetData(cmd, Buffer((void *)screenVertices.data(), sizeof(screenVertices)));
+		m_CompositeVertexBuffer->SetData(cmd, (void *)screenVertices.data(), sizeof(screenVertices));
 		m_CompositeVertexBufferUploadPending = false;
         cmd->close();
 
@@ -54,6 +54,8 @@ namespace ignite
 
 	void ISceneRenderer::EnsureSceneEnvironmentMap()
 	{
+		IGN_PROFILE_FUNCTION();
+
 		if (!m_WorldEnvironment)
 		{
 			m_WorldEnvironment = m_Scene->GetActiveWorldEnvironment();
@@ -96,6 +98,8 @@ namespace ignite
 
     void ISceneRenderer::FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms)
     {
+		IGN_PROFILE_FUNCTION();
+
         const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
         if (boneCount > 0)
         {

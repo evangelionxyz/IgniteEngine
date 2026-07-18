@@ -758,10 +758,10 @@ namespace ignite
         if (m_QuadBatch.indexCount > 0)
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferBase);
-            m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
+            m_QuadBatch.vertexBuffer->SetData(m_Cmd, m_QuadBatch.vertexBufferBase, bufferSize);
 
             const size_t indexBufferSize = reinterpret_cast<uint8_t *>(m_QuadIndicesPtr) - reinterpret_cast<uint8_t *>(m_QuadIndicesBase);
-            m_QuadBatch.indexBuffer->SetData(m_Cmd, Buffer(m_QuadIndicesBase, indexBufferSize));
+            m_QuadBatch.indexBuffer->SetData(m_Cmd, m_QuadIndicesBase, indexBufferSize);
 
             Ref<GraphicsPipeline> gp = GetWidgetQuadPipelineForFB(framebuffer);
             nvrhi::BindingSetHandle bindingSet = GetWidgetBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots, m_CameraBuffer);
@@ -786,7 +786,7 @@ namespace ignite
         if (m_TextBatch.indexCount > 0)
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferBase);
-            m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_TextBatch.vertexBufferBase, bufferSize));
+            m_TextBatch.vertexBuffer->SetData(m_Cmd, m_TextBatch.vertexBufferBase, bufferSize);
 
             Ref<GraphicsPipeline> gp = GetWidgetTextPipelineForFB(framebuffer);
             nvrhi::BindingSetHandle bindingSet = GetWidgetBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, m_CameraBuffer);
@@ -812,7 +812,7 @@ namespace ignite
     void WidgetRenderer::Render(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb)
     {
         CameraBufferData cameraData = { m_Projection, glm::mat4(1.0f), {0.0f, 0.0f, 0.0f, 1.0f} };
-        m_CameraBuffer->SetData(cmd, Buffer(&cameraData, sizeof(cameraData)));
+        m_CameraBuffer->SetData(cmd, &cameraData, sizeof(cameraData));
 
         Begin(cmd);
         RenderWidgetItems();
@@ -966,7 +966,7 @@ namespace ignite
         auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
-        m_TextBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+        m_TextBatch.indexBuffer->SetData(cmd, indices.data(), indices.size() * sizeof(uint32_t));
         cmd->close();
         device->executeCommandList(cmd);
     }

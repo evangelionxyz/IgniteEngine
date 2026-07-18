@@ -44,10 +44,9 @@ namespace ignite
         }
     }
     
-	void ConstantBuffer::SetData(nvrhi::ICommandList *cmd, Buffer buffer, const size_t offset)
+	void ConstantBuffer::SetData(nvrhi::ICommandList *cmd, void *data, size_t dataSize, const size_t offset)
     {
-        IGN_PROFILE_SCOPE("ConstantBuffer::SetData");
-        cmd->writeBuffer(m_Handle, buffer.Data(), buffer.Size(), offset);
+        cmd->writeBuffer(m_Handle, data, dataSize, offset);
     }
 
     Ref<ConstantBuffer> ConstantBuffer::Create(const size_t size, bool isVolatile, const uint32_t maxVersion, const std::string &debugName)

@@ -42,10 +42,9 @@ namespace ignite
         }
     }
 
-	void VertexBuffer::SetData(nvrhi::ICommandList *cmd, const Buffer buffer, const size_t offset) const
+	void VertexBuffer::SetData(nvrhi::ICommandList *cmd, void *data, size_t dataSize, const size_t offset) const
     {
-        IGN_PROFILE_SCOPE("VertexBuffer::SetData");
-        cmd->writeBuffer(m_Handle, buffer.Data(), buffer.Size(), offset);
+        cmd->writeBuffer(m_Handle, data, dataSize, offset);
     }
 
     Ref<VertexBuffer> VertexBuffer::Create(size_t size, const std::string &debugName)
