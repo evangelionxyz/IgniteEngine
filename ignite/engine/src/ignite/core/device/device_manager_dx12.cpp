@@ -601,6 +601,9 @@ namespace ignite
 
     bool DeviceManager_DX12::BeginFrame()
     {
+        if (m_DeviceParameters.headlessDevice)
+            return true;
+
         BindlessSystem::FlushPendingWrites();
 
         DXGI_SWAP_CHAIN_DESC1 newSwapChainDesc;

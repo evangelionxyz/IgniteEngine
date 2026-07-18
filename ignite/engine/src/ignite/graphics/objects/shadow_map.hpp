@@ -51,13 +51,13 @@ namespace ignite
 		~CascadedShadowMap();
 
         void Resize(ShadowMapQuality quality);
-        void BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex);
+        void BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex, uint32_t frameIndex = 0);
 
-		nvrhi::IFramebuffer* GetCascadeFramebuffer(int cascadeIndex) const;
+		nvrhi::IFramebuffer* GetCascadeFramebuffer(int cascadeIndex, uint32_t frameIndex = 0) const;
 		Ref<ConstantBuffer> GetGPUDataBuffer() const { return m_GPUDataBuffer; }
 		Ref<ConstantBuffer> GetModelGPUDataBuffer() const { return m_ModelGPUDataBuffer; }
 
-		Ref<Texture> GetDepthTexture() const;
+		Ref<Texture> GetDepthTexture(uint32_t frameIndex = 0) const;
 
 		CSM_GPUData& GetGPUData() { return m_GPUData; }
 		nvrhi::SamplerHandle GetDepthSampler() { return m_DepthSampler; }
@@ -69,8 +69,8 @@ namespace ignite
 		void CreatePipeline(nvrhi::IFramebuffer *framebuffer);
 		void CreateCascadeFramebuffers();
 
-	    Ref<Texture> m_DepthTexture;
-		std::array<nvrhi::FramebufferHandle, NUM_CASCADES> m_CascadeFramebuffers;
+	    std::vector<Ref<Texture>> m_DepthTextures;
+		std::vector<std::array<nvrhi::FramebufferHandle, NUM_CASCADES>> m_CascadeFramebuffers;
 
 		Ref<ConstantBuffer> m_GPUDataBuffer;
 		Ref<ConstantBuffer> m_ModelGPUDataBuffer;

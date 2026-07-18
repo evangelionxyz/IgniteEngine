@@ -391,6 +391,17 @@ namespace ignite
 
         BindlessSystem::FlushPendingWrites();
 
+        while (m_FramesInFlight.size() >= m_DeviceParameters.maxFramesInFlight)
+        {
+            auto query = m_FramesInFlight.front();
+            m_FramesInFlight.pop();
+
+            IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::WaitEventQuery");
+            m_NvrhiDevice->waitEventQuery(query);
+
+            m_QueryPool.push_back(query);
+        }
+
         const auto &semaphore = m_AcquireSemaphores[m_AcquireSemaphoreIndex];
 
         vk::Result res;
@@ -440,17 +451,6 @@ namespace ignite
 
         IGN_PROFILE_FUNCTION();
         const auto &semaphore = m_PresentSemaphores[m_PresentSemaphoreIndex];
-
-        while (m_FramesInFlight.size() >= m_DeviceParameters.maxFramesInFlight)
-        {
-            auto query = m_FramesInFlight.front();
-            m_FramesInFlight.pop();
-
-            IGN_PROFILE_SCOPE("DeviceManager_VK::Present::WaitEventQuery");
-            m_NvrhiDevice->waitEventQuery(query);
-
-            m_QueryPool.push_back(query);
-        }
 
         nvrhi::EventQueryHandle query;
         if (!m_QueryPool.empty())

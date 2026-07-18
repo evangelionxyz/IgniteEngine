@@ -160,6 +160,7 @@ namespace ignite
 		m_FrameCounter = frameCounter;
 
 		auto &frame = m_Frames[frameCounter % m_MaxFramesInFlight];
+		frame.frameIndexInFlight = static_cast<uint32_t>(frameCounter % m_MaxFramesInFlight);
         frame.objectAllocator.BeginFrame();
         frame.objectAllocator.SetBuffer(frame.objectBuffer.GetHandle());
         frame.boneAllocator.BeginFrame();

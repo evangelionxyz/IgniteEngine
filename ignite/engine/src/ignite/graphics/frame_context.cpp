@@ -4,12 +4,25 @@
 #include "frame_context.hpp"
 #include "ignite/scene/icamera.hpp"
 
+#include "ignite/core/logger.hpp"
+
 namespace ignite
 {
 
 	uint32_t ObjectAllocator::Allocate(nvrhi::ICommandList *cmd, const Mesh_GPUData &data)
 	{
 		const uint32_t index = m_ObjectCount++;
+		const uint32_t maxObjects = m_Buffer ? (m_Buffer->getDesc().byteSize / sizeof(Mesh_GPUData)) : 0;
+		if (index >= maxObjects)
+		{
+			static bool loggedOnce = false;
+			if (!loggedOnce)
+			{
+				LOG_ERROR("[ObjectAllocator] Overflow! Allocated: {}, Max: {}. Skipping GPU write to prevent corruption.", index + 1, maxObjects);
+				loggedOnce = true;
+			}
+			return maxObjects > 0 ? (maxObjects - 1) : 0;
+		}
 		cmd->writeBuffer(m_Buffer, &data, sizeof(data),
 			index * sizeof(Mesh_GPUData));
 		return index;
@@ -19,6 +32,17 @@ namespace ignite
 	{
 		const uint32_t index = m_BoneCount;
 		m_BoneCount += count;
+		const uint32_t maxBones = m_Buffer ? (m_Buffer->getDesc().byteSize / sizeof(glm::mat4)) : 0;
+		if (index + count > maxBones)
+		{
+			static bool loggedOnce = false;
+			if (!loggedOnce)
+			{
+				LOG_ERROR("[BoneAllocator] Overflow! Allocated: {}, Max: {}. Skipping GPU write to prevent corruption.", index + count, maxBones);
+				loggedOnce = true;
+			}
+			return 0;
+		}
 		cmd->writeBuffer(m_Buffer, bones,
 			count * sizeof(glm::mat4),  // data size
 			index * sizeof(glm::mat4)); // data offset
@@ -68,8 +92,8 @@ namespace ignite
 			ConstantBuffer(sizeof(CSM_GPUData), true, 16, "CSM Cascade 3 Buffer")
 		}
 	{
-		objectBuffer.Initialize(1024, device);
-		boneBuffer.Initialize(1024 * MAX_BONES, device);
+		objectBuffer.Initialize(16384, device);
+		boneBuffer.Initialize(4096 * MAX_BONES, device);
 	}
 
 	void FrameContext::InitializeBindingSets(nvrhi::IDevice *device, nvrhi::IBindingLayout *staticLayout, nvrhi::IBindingLayout *animLayout)

@@ -69,21 +69,26 @@ namespace ignite
 		CreateCascadeFramebuffers();
 	}
 
-	void CascadedShadowMap::BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex)
+	void CascadedShadowMap::BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex, uint32_t frameIndex)
 	{
 		IGN_PROFILE_FUNCTION();
 
 		// Clear depth for the entire texture (all layers) on first cascade
 		if (cascadeIndex == 0)
 		{
-			nvrhi::TextureSubresourceSet subresources = nvrhi::AllSubresources;
-			cmd->clearDepthStencilTexture(m_DepthTexture->GetHandle(), subresources, true, 1.0f, false, 0);
+			if (frameIndex < m_DepthTextures.size() && m_DepthTextures[frameIndex])
+			{
+				nvrhi::TextureSubresourceSet subresources = nvrhi::AllSubresources;
+				cmd->clearDepthStencilTexture(m_DepthTextures[frameIndex]->GetHandle(), subresources, true, 1.0f, false, 0);
+			}
 		}
 	}
 
-	Ref<Texture> CascadedShadowMap::GetDepthTexture() const
+	Ref<Texture> CascadedShadowMap::GetDepthTexture(uint32_t frameIndex) const
 	{
-		return m_DepthTexture;
+		if (frameIndex < m_DepthTextures.size())
+			return m_DepthTextures[frameIndex];
+		return nullptr;
 	}
 
 	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance)
@@ -266,10 +271,10 @@ namespace ignite
 		}
 	}
 
-	nvrhi::IFramebuffer *CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex) const
+	nvrhi::IFramebuffer *CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex, uint32_t frameIndex) const
 	{
-		if (cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES)
-			return m_CascadeFramebuffers[cascadeIndex];
+		if (frameIndex < m_CascadeFramebuffers.size() && cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES)
+			return m_CascadeFramebuffers[frameIndex][cascadeIndex];
 		return nullptr;
 	}
 
@@ -278,36 +283,42 @@ namespace ignite
 		IGN_PROFILE_FUNCTION();
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+		uint32_t maxFrames = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
 
-	    constexpr nvrhi::Format depthFormat = nvrhi::Format::D32;
+		m_DepthTextures.resize(maxFrames);
+		m_CascadeFramebuffers.resize(maxFrames);
 
-	    TextureCreateInfo depthCI;
-	    // depthCI.debugName = "Cascaded Shadow Map Depth";
-	    depthCI.width = m_Resolution;
-	    depthCI.height = m_Resolution;
-		depthCI.isRenderTarget = true;
-	    depthCI.mipLevels = 1;
-	    depthCI.arraySize = NUM_CASCADES;
-	    depthCI.format = depthFormat;
-	    depthCI.dimension = nvrhi::TextureDimension::Texture2DArray;
-		depthCI.initialState = nvrhi::ResourceStates::DepthWrite;
-		depthCI.keepInitialState = true;
-
-	    m_DepthTexture = Texture::Create(depthCI);
-
-		// Create a framebuffer for each cascade layer
-		for (int i = 0; i < NUM_CASCADES; ++i)
+		for (uint32_t f = 0; f < maxFrames; ++f)
 		{
-		    // Create framebuffer
-			auto fbDesc = nvrhi::FramebufferDesc();
-			nvrhi::FramebufferAttachment depthAttachment;
-			depthAttachment.texture = m_DepthTexture->GetHandle();
-			depthAttachment.subresources = nvrhi::TextureSubresourceSet(0, 1, i, 1); // mip 0, array layer i
-			depthAttachment.format = nvrhi::Format::D32;
+			constexpr nvrhi::Format depthFormat = nvrhi::Format::D32;
 
-			fbDesc.setDepthAttachment(depthAttachment);
-			m_CascadeFramebuffers[i] = device->createFramebuffer(fbDesc);
-			LOG_ASSERT(m_CascadeFramebuffers[i], "Failed to create cascade framebuffer for layer {}", i);
+			TextureCreateInfo depthCI;
+			depthCI.width = m_Resolution;
+			depthCI.height = m_Resolution;
+			depthCI.isRenderTarget = true;
+			depthCI.mipLevels = 1;
+			depthCI.arraySize = NUM_CASCADES;
+			depthCI.format = depthFormat;
+			depthCI.dimension = nvrhi::TextureDimension::Texture2DArray;
+			depthCI.initialState = nvrhi::ResourceStates::DepthWrite;
+			depthCI.keepInitialState = true;
+
+			m_DepthTextures[f] = Texture::Create(depthCI);
+
+			// Create a framebuffer for each cascade layer
+			for (int i = 0; i < NUM_CASCADES; ++i)
+			{
+				// Create framebuffer
+				auto fbDesc = nvrhi::FramebufferDesc();
+				nvrhi::FramebufferAttachment depthAttachment;
+				depthAttachment.texture = m_DepthTextures[f]->GetHandle();
+				depthAttachment.subresources = nvrhi::TextureSubresourceSet(0, 1, i, 1); // mip 0, array layer i
+				depthAttachment.format = nvrhi::Format::D32;
+
+				fbDesc.setDepthAttachment(depthAttachment);
+				m_CascadeFramebuffers[f][i] = device->createFramebuffer(fbDesc);
+				LOG_ASSERT(m_CascadeFramebuffers[f][i], "Failed to create cascade framebuffer for layer {}", i);
+			}
 		}
 	}
 }

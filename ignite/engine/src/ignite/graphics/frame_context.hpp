@@ -81,6 +81,8 @@ namespace ignite
 		ConstantBuffer csmPerCascadeBuffers[NUM_CASCADES];
 		nvrhi::BindingSetHandle staticMeshCSMBindingSet[NUM_CASCADES];
 		nvrhi::BindingSetHandle animatedMeshCSMBindingSet[NUM_CASCADES];
+
+		uint32_t frameIndexInFlight = 0;
 	};
 }
 

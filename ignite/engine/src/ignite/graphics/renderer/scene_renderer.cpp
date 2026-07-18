@@ -515,7 +515,7 @@ namespace ignite
                 CSM_GPUData cascadeGpuData = {};
                 cascadeGpuData.cascadeIndex = i;
                 frameContext->csmPerCascadeBuffers[i].SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
-                m_CascadedShadowMap->BeginCascade(cmd, i);
+                m_CascadedShadowMap->BeginCascade(cmd, i, frameContext->frameIndexInFlight);
             }
 		}
         else
@@ -538,9 +538,9 @@ namespace ignite
 				frameContext->csmPerCascadeBuffers[i].SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
 
 				// Clear the specific array layer for this cascade
-				m_CascadedShadowMap->BeginCascade(cmd, i);
+				m_CascadedShadowMap->BeginCascade(cmd, i, frameContext->frameIndexInFlight);
 
-				nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i);
+				nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i, frameContext->frameIndexInFlight);
 				nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
 
 				Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
@@ -650,7 +650,7 @@ namespace ignite
 			
         }
 
-		cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+		cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
 		cmd->commitBarriers();
     }
 
@@ -1420,7 +1420,8 @@ namespace ignite
 
     Ref<Texture> SceneRenderer::GetCascadedShadowMapDepthTexture() const
     {
-        return m_CascadedShadowMap ? m_CascadedShadowMap->GetDepthTexture() : nullptr;
+        FrameContext *frameContext = Renderer::GetCurrentFrameContext();
+        return m_CascadedShadowMap ? m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight) : nullptr;
     }
 
     Ref<CascadedShadowMap> SceneRenderer::GetCascadedShadowMap()
