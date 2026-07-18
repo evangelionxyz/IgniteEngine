@@ -394,7 +394,7 @@ namespace ignite
         params.destBlendAlpha = nvrhi::BlendFactor::Zero;
 
         params.enableDepthClip = true;
-        params.enableDepthClip = true;
+        params.enableScissor = true;
 
         params.enableDepthTest = false;
         params.enableDepthWrite = true;

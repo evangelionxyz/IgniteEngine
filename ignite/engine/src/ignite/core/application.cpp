@@ -352,11 +352,7 @@ namespace ignite
 
                 {
                     auto &queueMutex = GPUUploadSync::GetQueueMutex();
-                    std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
-                    {
-                        IGN_PROFILE_SCOPE("RenderThread::WorkerSubmit::QueueMutexWait");
-                        queueLock.lock();
-                    }
+                    std::unique_lock<std::mutex> queueLock(queueMutex);
                     {
                         IGN_PROFILE_SCOPE("RenderThread::WorkerSubmit::QueueMutexHold");
                         device->executeCommandLists(workerLists.data(), workerLists.size());

@@ -551,14 +551,16 @@ namespace ignite
 
     void SkeletalMesh::SetSkeleton(AssetHandle skeletonHandle)
     {
-        m_SkeletonHandle = handle;
-        AssetManager::GetInstance()->AddAssetPin(skeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)skeletonHandle));
+        m_SkeletonHandle = skeletonHandle;
+		if (skeletonHandle != AssetHandle(0))
+            AssetManager::GetInstance()->AddAssetPin(skeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)skeletonHandle));
     }
 
     void SkeletalMesh::SetAnimator(AssetHandle animatorHandle)
     {
-        m_AnimatorHandle = handle;
-        AssetManager::GetInstance()->AddAssetPin(animatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)animatorHandle));
+        m_AnimatorHandle = animatorHandle;
+        if (animatorHandle != AssetHandle(0))
+            AssetManager::GetInstance()->AddAssetPin(animatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)animatorHandle));
     }
 
     bool SkeletalMesh::Serialize(const ignite::Path &filepath)
