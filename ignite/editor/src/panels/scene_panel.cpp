@@ -3073,8 +3073,8 @@ namespace ignite
                 {
                     if (activeSceneRenderer)
                     {
-                        const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
-                        const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
+                        const auto localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
+                        const auto localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
                         activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
                     }
                     
@@ -3094,7 +3094,20 @@ namespace ignite
                                     }
                                 }
                             }
-                            SetSelectedEntity(targetSelection);
+
+							if (targetSelection == GetSelectedEntity())
+							{
+								// If the target selection is already selected, and the user is not holding Shift, deselect it.
+								if (!m_EditorLayer->GetState().multiSelect)
+								{
+									SetSelectedEntity(Entity{});
+									SetGizmoOperation(GizmoOperation::NONE);
+								}
+							}
+							else
+							{
+								SetSelectedEntity(targetSelection);
+							}
                         }
                         else // invalid entity
                         {
@@ -3161,7 +3174,19 @@ namespace ignite
                                                 }
                                             }
 
-                                            SetSelectedEntity(targetSelection);
+											if (targetSelection == GetSelectedEntity())
+											{
+												// If the target selection is already selected, and the user is not holding Shift, deselect it.
+                                                if (!m_EditorLayer->GetState().multiSelect)
+                                                {
+												    SetSelectedEntity(Entity{});
+												    SetGizmoOperation(GizmoOperation::NONE);
+                                                }
+											}
+                                            else
+                                            {
+                                                SetSelectedEntity(targetSelection);
+                                            }
                                         }
                                         else if (!m_EditorLayer->GetState().multiSelect)
                                         {
