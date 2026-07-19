@@ -2327,6 +2327,34 @@ namespace ignite
             fmtBytes(stats.textVerticesSize + stats.textIndicesSize, memBuf, sizeof(memBuf));
             ImGui::Text("Text VB+IB: %s", memBuf);
 
+            ImGui::Spacing();
+            ImGui::SeparatorText("Active Graphics Pipelines");
+            if (stats.pipelineCounts.empty())
+            {
+                ImGui::Text("None");
+            }
+            else
+            {
+                for (const auto& [name, count] : stats.pipelineCounts)
+                {
+                    ImGui::Text("%s: %zu", name.c_str(), count);
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("Active Binding Sets");
+            if (stats.bindingSetCounts.empty())
+            {
+                ImGui::Text("None");
+            }
+            else
+            {
+                for (const auto& [name, count] : stats.bindingSetCounts)
+                {
+                    ImGui::Text("%s: %zu", name.c_str(), count);
+                }
+            }
+
             ImGui::TreePop();
         }
 
@@ -2342,7 +2370,7 @@ namespace ignite
                 ImGui::TreePop();
             }
 
-            if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 if (ImGui::TreeNodeEx("Sampling"))
                 {

@@ -1163,7 +1163,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_quad.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_quad.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Quad Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .AddBindingLayout(BindlessSystem::GetDummyLayout())
@@ -1214,7 +1214,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Text Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .AddBindingLayout(BindlessSystem::GetDummyLayout())
@@ -1260,7 +1260,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_circle.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_circle.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Circle Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params);
@@ -1298,7 +1298,7 @@ namespace ignite
         params.primitiveType = nvrhi::PrimitiveType::LineList;
         params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Line Pipeline");
         nvrhi::BindingLayoutDesc bindingLayoutDesc;
         bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
         bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));

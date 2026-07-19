@@ -254,7 +254,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/widget.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/widget.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("Widget Quad Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .AddBindingLayout(BindlessSystem::GetDummyLayout())
@@ -301,7 +301,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/widget_msdf_font.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/widget_msdf_font.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("Widget Text Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .AddBindingLayout(BindlessSystem::GetDummyLayout())

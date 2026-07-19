@@ -215,4 +215,45 @@ namespace ignite
         return s_RendererInstance->m_DefaultMeshes[type];
 	}
 
+    static std::mutex s_StatsMutex;
+
+    void Renderer::IncrementPipelineCount(const std::string& name)
+    {
+        std::lock_guard<std::mutex> lock(s_StatsMutex);
+        Stats.pipelineCounts[name]++;
+    }
+
+    void Renderer::DecrementPipelineCount(const std::string& name)
+    {
+        std::lock_guard<std::mutex> lock(s_StatsMutex);
+        auto it = Stats.pipelineCounts.find(name);
+        if (it != Stats.pipelineCounts.end())
+        {
+            if (it->second > 0)
+                it->second--;
+            if (it->second == 0)
+                Stats.pipelineCounts.erase(it);
+        }
+    }
+
+    void Renderer::IncrementBindingSetCount(const std::string& name)
+    {
+        std::lock_guard<std::mutex> lock(s_StatsMutex);
+        Stats.bindingSetCounts[name]++;
+    }
+
+    void Renderer::DecrementBindingSetCount(const std::string& name)
+    {
+        std::lock_guard<std::mutex> lock(s_StatsMutex);
+        auto it = Stats.bindingSetCounts.find(name);
+        if (it != Stats.bindingSetCounts.end())
+        {
+            if (it->second > 0)
+                it->second--;
+            if (it->second == 0)
+                Stats.bindingSetCounts.erase(it);
+        }
+    }
+
 }
+

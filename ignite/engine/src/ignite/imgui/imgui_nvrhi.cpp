@@ -400,7 +400,7 @@ namespace ignite
         params.enableDepthWrite = true;
         params.enableDepthStencil = false;
 
-        Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create();
+        Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create("ImGui Pipeline");
         pipeline->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params);

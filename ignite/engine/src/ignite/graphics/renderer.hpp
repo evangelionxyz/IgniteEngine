@@ -9,6 +9,8 @@
 #include "frame_context.hpp"
 
 #include <string>
+#include <unordered_map>
+#include <mutex>
 
 namespace ignite
 {
@@ -67,6 +69,10 @@ namespace ignite
         size_t gpuVertexBufferBytes = 0;   // sum of all live VertexBuffer allocations
         size_t gpuIndexBufferBytes = 0;    // sum of all live IndexBuffer allocations
         size_t gpuConstantBufferBytes = 0; // sum of all live ConstantBuffer allocations
+
+        // Live pipeline and binding set tracking
+        std::unordered_map<std::string, size_t> pipelineCounts;
+        std::unordered_map<std::string, size_t> bindingSetCounts;
     };
 
     class IGN_API Renderer : public Subsystem
@@ -91,6 +97,11 @@ namespace ignite
 
         static nvrhi::GraphicsAPI GetGraphicsAPI();
         static nvrhi::BindingLayoutHandle GetBindingLayout(EBindingLayout type);
+
+        static void IncrementPipelineCount(const std::string& name);
+        static void DecrementPipelineCount(const std::string& name);
+        static void IncrementBindingSetCount(const std::string& name);
+        static void DecrementBindingSetCount(const std::string& name);
 
         static RendererStats Stats;
 

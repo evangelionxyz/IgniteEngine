@@ -359,7 +359,7 @@ namespace ignite
             Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
             Ref<Shader> pixelShader  = Shader::Create("resources/shaders/skybox.pixel.hlsl",  UMBRA_SHADER_TYPE_PIXEL,  false);
 
-            envPipeline = GraphicsPipeline::Create();
+            envPipeline = GraphicsPipeline::Create("Asset Preview Environment Pipeline");
             envPipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT))
                 .Build(framebuffer, params);
@@ -513,7 +513,7 @@ namespace ignite
                 Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
                 Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
 
-                geopPipeline = GraphicsPipeline::Create();
+                geopPipeline = GraphicsPipeline::Create("Asset Preview Mesh Pipeline");
                 geopPipeline->SetShaders({ vertexShader, pixelShader })
                     .AddBindingLayout(Renderer::GetBindingLayout(meshBindingLayout))
                     .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
@@ -695,7 +695,7 @@ namespace ignite
             Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
             Ref<Shader> pixelShader  = Shader::Create("resources/shaders/composite.pixel.hlsl",  UMBRA_SHADER_TYPE_PIXEL,  false);
 
-            pipeline = GraphicsPipeline::Create();
+            pipeline = GraphicsPipeline::Create("Asset Preview Composite Pipeline");
             pipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(m_CompositeBindingLayout)
                 .Build(framebuffer, params);

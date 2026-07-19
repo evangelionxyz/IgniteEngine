@@ -43,6 +43,7 @@ namespace ignite
 
             // Three framebuffers for high quality bloom
             Ref<RenderTarget> downsampledRT; // Downsampled result
+			Ref<RenderTarget> upsampledRT; // Upsampled result
             Ref<RenderTarget> blurHorizontalRT; // Horizonal blur result
             Ref<RenderTarget> blurVerticalRT; // Final vertial blur result
         };

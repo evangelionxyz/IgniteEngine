@@ -158,17 +158,15 @@ namespace ignite
             Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler);
         
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
+		std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);
+		std::vector<Ref<SSAO>> GetOrCreateSSAOs(ICamera *camera);
 
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
 
         std::unordered_map<ICamera *, Ref<CameraRenderTarget>> m_RenderTargets;
-
-        Ref<Bloom> m_EditorBloom;
-        Ref<Bloom> m_GameplayBloom;
-
-        Ref<SSAO> m_EditorSSAO;
-        Ref<SSAO> m_GameplaySSAO;
+        std::unordered_map<ICamera *, std::vector<Ref<Bloom>>> m_Blooms;
+		std::unordered_map<ICamera *, std::vector<Ref<SSAO>>> m_SSAOs;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentAnimatedPSOCache;

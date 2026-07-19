@@ -44,7 +44,10 @@ namespace ignite {
     class GraphicsPipeline
     {
     public:
-        GraphicsPipeline() = default;
+        GraphicsPipeline(const std::string& name = "Graphics Pipeline");
+        ~GraphicsPipeline();
+
+        const std::string& GetName() const { return m_Name; }
 
         GraphicsPipeline &AddBindingLayout(const nvrhi::BindingLayoutHandle &layout);
         GraphicsPipeline &SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile = false);
@@ -70,11 +73,12 @@ namespace ignite {
             return nullptr;
         }
 
-        static Ref<GraphicsPipeline> Create();
+        static Ref<GraphicsPipeline> Create(const std::string& name = "Graphics Pipeline");
 
         GraphicsPipelineParams &GetParams() { return m_Params; }
 
     private:
+        std::string m_Name;
         nvrhi::GraphicsPipelineHandle m_Handle;
         std::vector<Ref<Shader>> m_Shaders;
         nvrhi::InputLayoutHandle m_InputLayout;

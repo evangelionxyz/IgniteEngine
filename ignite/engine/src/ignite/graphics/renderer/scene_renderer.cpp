@@ -78,15 +78,6 @@ namespace ignite
         m_EdgeDetection = EdgeDetection::Create();
 		m_EdgeDetection->CreatePipeline();
 
-        {
-            constexpr uint32_t ssaoResolution = 1920;
-            m_EditorBloom = CreateRef<Bloom>(ssaoResolution, ssaoResolution);
-            m_EditorSSAO = CreateRef<SSAO>(ssaoResolution, ssaoResolution);
-
-            m_GameplayBloom = CreateRef<Bloom>(ssaoResolution, ssaoResolution);
-            m_GameplaySSAO = CreateRef<SSAO>(ssaoResolution, ssaoResolution);
-        }
-
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
         m_RuntimeMaterial   = CreateRef<Material>();
     }
@@ -154,6 +145,10 @@ namespace ignite
         m_EntityObjectIndexCache.clear();
         m_EntityBoneOffsetCache.clear();
         m_SocketObjectIndexCache.clear();
+
+        m_Blooms.clear();
+        m_SSAOs.clear();
+
         BindingCache::Clear();
         WidgetRenderer::ClearCache();
 
@@ -341,27 +336,25 @@ namespace ignite
             Ref<Texture> bloomTexture = nullptr;
             if (postProcessing.enableBloom)
             {
-                // Use distinct Bloom instances for game/edit to prevent texture resizing ping-pong
-                Ref<Bloom> bloomInstance = isGameCamera ? m_GameplayBloom : m_EditorBloom;
-                bloomInstance->settings.intensity = postProcessing.bloomIntensity;
-                bloomInstance->settings.knee = postProcessing.bloomKnee;
-                bloomInstance->settings.radius = postProcessing.bloomRadius;
-                bloomInstance->settings.threshold = postProcessing.bloomThreshold;
-                bloomInstance->settings.iterations = postProcessing.bloomIterations;
-                
-                IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
-
-                bloomInstance->Resize(width, height);
-                bloomInstance->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
-                bloomTexture = bloomInstance->GetBloomTexture();
+				IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
+				const auto &blooms = GetOrCreateBlooms(camera);
+				Ref<Bloom> bloomInstance = blooms[frameContext->frameIndexInFlight];
+				bloomInstance->settings.intensity = postProcessing.bloomIntensity;
+				bloomInstance->settings.knee = postProcessing.bloomKnee;
+				bloomInstance->settings.radius = postProcessing.bloomRadius;
+				bloomInstance->settings.threshold = postProcessing.bloomThreshold;
+				bloomInstance->settings.iterations = postProcessing.bloomIterations;
+				bloomInstance->Resize(width, height);
+				bloomInstance->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+				bloomTexture = bloomInstance->GetBloomTexture();
             }
 
             Ref<Texture> ssaoTexture = nullptr;
             if (postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::HBAOPass", 0x404040FF);
-                // Use distinct SSAO instances for game/edit to prevent texture resizing ping-pong
-                Ref<SSAO> ssaoInstance = isGameCamera ? m_GameplaySSAO : m_EditorSSAO;
+				const auto &SSAOs = GetOrCreateSSAOs(camera);
+                Ref<SSAO> ssaoInstance = SSAOs[frameContext->frameIndexInFlight];
                 ssaoInstance->Resize(width, height);
                 ssaoInstance->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
                 ssaoTexture = ssaoInstance->GetAOTexture();
@@ -618,45 +611,56 @@ namespace ignite
         const uint32_t renderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(width) * postProcessing.renderScale)));
         const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(height) * postProcessing.renderScale)));
 
-        if (isGameCamera)
+		m_CompositeBindingSetCache.clear();
+		m_DebugGridBindingSetCache.clear();
+
+		// Resize Bloom and SSAO instances for the specific camera
         {
-            if (m_GameplayBloom)
-                m_GameplayBloom->Resize(renderWidth, renderHeight);
-
-            if (m_GameplaySSAO)
-                m_GameplaySSAO->Resize(renderWidth, renderHeight);
-        }
-        else
-        {
-            if (m_EditorBloom)
-                m_EditorBloom->Resize(renderWidth, renderHeight);
-
-            if (m_EditorSSAO)
-                m_EditorSSAO->Resize(renderWidth, renderHeight);
-        }
-
-        m_CompositeBindingSetCache.clear();
-        m_DebugGridBindingSetCache.clear();
-
-        // Render targets
-        auto it = m_RenderTargets.find(camera);
-        if (it != m_RenderTargets.end())
-        {
-            auto target = it->second;
-
-            target->sceneRT->Resize(renderWidth, renderHeight);
-            target->widgetRT->Resize(width, height);
-            target->compositeRT->Resize(width, height);
-            for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
+		    auto it = m_Blooms.find(camera);
+            if (it != m_Blooms.end())
             {
-                if (historyRT)
-                    historyRT->Resize(width, height);
+				for (auto &bloom : it->second)
+				{
+					if (bloom)
+						bloom->Resize(renderWidth, renderHeight);
+				}
             }
-            target->taaHistoryValid = false;
-
-            target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
-            target->debugRT->Resize(renderWidth, renderHeight);
         }
+
+		{
+			auto it = m_SSAOs.find(camera);
+			if (it != m_SSAOs.end())
+			{
+				for (auto &ssao : it->second)
+				{
+					if (ssao)
+						ssao->Resize(renderWidth, renderHeight);
+				}
+			}
+		}
+
+        {
+			// Render targets
+			auto it = m_RenderTargets.find(camera);
+			if (it != m_RenderTargets.end())
+			{
+				auto target = it->second;
+
+				target->sceneRT->Resize(renderWidth, renderHeight);
+				target->widgetRT->Resize(width, height);
+				target->compositeRT->Resize(width, height);
+				for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
+				{
+					if (historyRT)
+						historyRT->Resize(width, height);
+				}
+				target->taaHistoryValid = false;
+
+				target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+				target->debugRT->Resize(renderWidth, renderHeight);
+			}
+        }
+        
     }
 
     void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext)
@@ -1814,7 +1818,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/infinite_grid.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/infinite_grid.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
-        auto gp = GraphicsPipeline::Create();
+        auto gp = GraphicsPipeline::Create("Infinite Grid Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params);
@@ -1892,7 +1896,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, true);
         Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, true);
 
-        auto gp = GraphicsPipeline::Create();
+        auto gp = GraphicsPipeline::Create("Mesh Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
             .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
@@ -1926,7 +1930,7 @@ namespace ignite
 		Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
 		Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
 
-		Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create();
+		Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create("CSM Shadow Pipeline");
 		pipeline->SetShaders({ vertexShader, pixelShader })
 			.AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
 			.Build(framebuffer, params);
@@ -1969,7 +1973,6 @@ namespace ignite
             EBindingLayout::MESH_STATIC, true);
 	}
 
-
 	Ref<GraphicsPipeline> SceneRenderer::GetAnimatedCSMPSO()
 	{
         nvrhi::IFramebuffer *framebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(0);
@@ -2011,7 +2014,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
-        auto gp = GraphicsPipeline::Create();
+        auto gp = GraphicsPipeline::Create("Skybox Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT))
             .Build(framebuffer, params);
@@ -2065,7 +2068,7 @@ namespace ignite
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
-        auto gp = GraphicsPipeline::Create();
+        auto gp = GraphicsPipeline::Create("Composite Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params);
@@ -2197,7 +2200,47 @@ namespace ignite
         return target;
     }
 
-    template<typename MeshT>
+	std::vector<Ref<Bloom>> SceneRenderer::GetOrCreateBlooms(ICamera *camera)
+	{
+		constexpr uint32_t resolution = 1080;
+
+        auto it = m_Blooms.find(camera);
+        if (it != m_Blooms.end())
+			return it->second;
+
+		const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
+		std::vector<Ref<Bloom>> blooms(maxFrame);
+        for (uint32_t i = 0; i < maxFrame; ++i)
+        {
+            Ref<Bloom> bloom = CreateRef<Bloom>(resolution, resolution);
+            blooms[i] = bloom;
+        }
+
+		m_Blooms.emplace(camera, blooms);
+        return blooms;
+	}
+
+	std::vector<Ref<SSAO>> SceneRenderer::GetOrCreateSSAOs(ICamera *camera)
+	{
+		constexpr uint32_t resolution = 1080;
+
+		auto it = m_SSAOs.find(camera);
+        if (it != m_SSAOs.end())
+			return it->second;
+
+		const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
+		std::vector<Ref<SSAO>> SSAOs(maxFrame);
+		for (uint32_t i = 0; i < maxFrame; ++i)
+		{
+			Ref<SSAO> ssao = CreateRef<SSAO>(resolution, resolution);
+			SSAOs[i] = ssao;
+		}
+
+		m_SSAOs.emplace(camera, SSAOs);
+		return SSAOs;
+	}
+
+	template<typename MeshT>
     void SceneRenderer::DrawMesh(
         nvrhi::ICommandList *cmd,
 		FrameContext *frameContext,

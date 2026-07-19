@@ -689,7 +689,7 @@ namespace ignite
                 UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
 
                 // Fog
-                UI::DrawFloatControl("Fog Density", &c.fogDensity, 0.00001f, 0.0f, FLT_MAX);
+                UI::DrawFloatControl("Fog Density", &c.fogDensity, 0.01f, 0.0f, FLT_MAX);
                 if (c.fogDensity > 0.0f)
                 {
                     UI::DrawColorVec4("Fog Color", c.fogColor);
@@ -772,15 +772,15 @@ namespace ignite
 
                     UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &c.shadowResolution);
 
-                    if (auto sceneRenderer = m_Scene->GetSceneRenderer())
-                    {
-                        auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
-                        if (shadowMap)
-                        {
-                            ImTextureID texId = (ImTextureID)shadowMap->GetHandle().Get();
-                            ImGui::Image(texId, { 256, 256 });
-                        }
-                    }
+                    // if (auto sceneRenderer = m_Scene->GetSceneRenderer())
+                    // {
+                    //     auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
+                    //     if (shadowMap)
+                    //     {
+                    //         ImTextureID texId = (ImTextureID)shadowMap->GetHandle().Get();
+                    //         ImGui::Image(texId, { 256, 256 });
+                    //     }
+                    // }
                 }
             });
 
