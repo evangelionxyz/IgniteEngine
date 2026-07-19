@@ -10,9 +10,9 @@
 #include "ignite/asset/asset.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/renderer/asset_scene_renderer.hpp"
-#include "ignite/core/input/asset_signal.hpp"
-#include "ignite/core/signal_bus.hpp"
 #include "ignite/core/input/mouse_event.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
 
 namespace ignite
 {

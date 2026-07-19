@@ -1088,7 +1088,7 @@ namespace ignite
                     if (sm)
                     {
                         // Override Materials
-                        if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
+                        if (ImGui::CollapsingHeader("Override Materials"))
                         {
                             const auto &instances = sm->GetMeshInstances();
                             for (size_t i = 0; i < instances.size(); ++i)

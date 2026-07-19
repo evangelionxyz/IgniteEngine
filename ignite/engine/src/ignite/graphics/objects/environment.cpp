@@ -14,7 +14,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/signal_bus.hpp"
-#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
 
 #include <stb_image.h>
 

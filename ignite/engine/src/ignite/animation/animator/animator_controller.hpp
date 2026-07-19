@@ -48,6 +48,8 @@ namespace ignite
 
         virtual ~AnimatorController() override;
 
+        static Ref<AnimatorController> Clone(const Ref<AnimatorController> &other);
+
         void SetSkeletonHandle(const AssetHandle &skeletonHandle);
         const AssetHandle &GetSkeletonHandle() const { return m_SkeletonHandle; }
 

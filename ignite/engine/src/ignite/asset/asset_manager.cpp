@@ -79,10 +79,10 @@ namespace ignite
 		s_AssetManagerInstance = this;
 
 		m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
-			[this](const AssetChangeSignal &signal)
-			{
-				OnAssetChangeSignal(signal);
-			});
+		[this](const AssetChangeSignal &signal)
+		{
+			OnAssetChangeSignal(signal);
+		});
 	}
 
 	void AssetManager::Shutdown()
@@ -488,6 +488,10 @@ namespace ignite
 
         switch (signal.type)
         {
+        case AssetType::AnimatorController:
+        {
+            break;
+        }
         case AssetType::Texture:
         case AssetType::Environment:
         case AssetType::Material:

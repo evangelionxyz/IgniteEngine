@@ -8,7 +8,7 @@
 #include "ignite/core/logger.hpp"
 #include "ignite/core/subsystem.hpp"
 #include "ignite/core/signal_bus.hpp"
-#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
 #include "asset_worker.hpp"
 
 #include <map>

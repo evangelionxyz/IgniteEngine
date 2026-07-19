@@ -36,6 +36,21 @@ namespace ignite
 		AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("animatorcontroller.{}.{}", (uint64_t)handle, (uint64_t)m_SkeletonHandle));
 	}
 
+	Ref<AnimatorController> AnimatorController::Clone(const Ref<AnimatorController> &other)
+	{
+        Ref<AnimatorController> cloneAnim = CreateRef<AnimatorController>(*other);
+        
+        // Copy and create asset pin
+        // for skeleton and states
+        cloneAnim->SetSkeletonHandle(other->GetSkeletonHandle());
+		for (auto &state : cloneAnim->states)
+		{
+            // re assign to add asset pin
+            state.SetAnimationHandle(state.GetAnimationAssetHandle());
+		}
+        return cloneAnim;
+	}
+
 	void AnimatorController::SetSkeletonHandle(const AssetHandle &skeletonHandle)
 	{
 		m_SkeletonHandle = skeletonHandle;

@@ -6,9 +6,9 @@
 
 #include "ipanel.hpp"
 
-#include "ignite/core/input/asset_signal.hpp"
-#include "ignite/core/signal_bus.hpp"
 #include "ignite/asset/asset_importer.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
 
 #include <queue>
 #include <vector>

@@ -6,9 +6,9 @@
 
 #include "ignite/core/base.hpp"
 #include "iscene_renderer.hpp"
-#include <entt/entt.hpp>
-
 #include "ignite/graphics/hash_keys.hpp"
+
+#include "ignite/scene/entity.hpp"
 
 namespace ignite
 {
