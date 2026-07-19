@@ -79,10 +79,10 @@ namespace ignite
 		s_AssetManagerInstance = this;
 
 		m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
-			[this](const AssetChangeSignal &signal)
-			{
-				OnAssetChangeSignal(signal);
-			});
+		[this](const AssetChangeSignal &signal)
+		{
+			OnAssetChangeSignal(signal);
+		});
 	}
 
 	void AssetManager::Shutdown()
@@ -244,8 +244,9 @@ namespace ignite
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
-		std::unique_lock lock(m_AssetMutex);
+		LOG_ASSERT(handle != AssetHandle(0), "[Asset Manager] Invalid asset handle");
 
+		std::unique_lock lock(m_AssetMutex);
         m_AssetRegistry[handle] = metadata;
 
         if (!metadata.filepath.empty())
@@ -488,6 +489,10 @@ namespace ignite
 
         switch (signal.type)
         {
+        case AssetType::AnimatorController:
+        {
+            break;
+        }
         case AssetType::Texture:
         case AssetType::Environment:
         case AssetType::Material:

@@ -18,14 +18,13 @@ cbuffer DownsampleParams : register(b0)
 float3 Prefilter(float3 color)
 {
     float brightness = max(max(color.r, color.g), color.b);
-    float k = threshold * knee + 1e-4f;
-    float soft = saturate((brightness - threshold + k) / (2.0f * k));
-    soft = soft * soft * (3.0f - 2.0f * soft);
 
-    float contribution = max(brightness - threshold, 0.0f) * soft;
-    contribution /= max(brightness, 1e-4f);
+    // Soft knee
+    float rq = clamp(brightness - threshold + knee, 0.0f, 2.0f * knee);
+    rq = (rq * rq) / (4.0f * knee + 1e-4f);
 
-    return color * contribution * intensity;
+    float weight = max(rq, brightness - threshold) / max(brightness, 1e-4f);
+    return color * saturate(weight);
 }
 
 float4 main(VSOutput input) : SV_Target
@@ -34,24 +33,27 @@ float4 main(VSOutput input) : SV_Target
     sourceTexture.GetDimensions(width, height);
     float2 texel = 1.0f / float2(width, height);
 
+    // Only prefilter on level 0 (threshold != 0), pass through on deeper levels
+    // The C++ side already sets threshold=0 for i>0, so Prefilter becomes a no-op there.
+
     float3 sum = float3(0.0f, 0.0f, 0.0f);
 
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb * 0.125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb) * 0.125f;
 
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-0.5f, -0.5f), 0.0f).rgb * 0.125f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 0.5f, -0.5f), 0.0f).rgb * 0.125f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-0.5f,  0.5f), 0.0f).rgb * 0.125f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 0.5f,  0.5f), 0.0f).rgb * 0.125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-0.5f, -0.5f), 0.0f).rgb) * 0.125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 0.5f, -0.5f), 0.0f).rgb) * 0.125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-0.5f,  0.5f), 0.0f).rgb) * 0.125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 0.5f,  0.5f), 0.0f).rgb) * 0.125f;
 
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-1.0f,  0.0f), 0.0f).rgb * 0.0625f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 1.0f,  0.0f), 0.0f).rgb * 0.0625f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 0.0f, -1.0f), 0.0f).rgb * 0.0625f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 0.0f,  1.0f), 0.0f).rgb * 0.0625f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-1.0f,  0.0f), 0.0f).rgb) * 0.0625f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 1.0f,  0.0f), 0.0f).rgb) * 0.0625f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 0.0f, -1.0f), 0.0f).rgb) * 0.0625f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 0.0f,  1.0f), 0.0f).rgb) * 0.0625f;
 
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-1.0f, -1.0f), 0.0f).rgb * 0.03125f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 1.0f, -1.0f), 0.0f).rgb * 0.03125f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-1.0f,  1.0f), 0.0f).rgb * 0.03125f;
-    sum += sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 1.0f,  1.0f), 0.0f).rgb * 0.03125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-1.0f, -1.0f), 0.0f).rgb) * 0.03125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 1.0f, -1.0f), 0.0f).rgb) * 0.03125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2(-1.0f,  1.0f), 0.0f).rgb) * 0.03125f;
+    sum += Prefilter(sourceTexture.SampleLevel(linearSampler, input.uv + texel * float2( 1.0f,  1.0f), 0.0f).rgb) * 0.03125f;
 
-    return float4(Prefilter(sum), 1.0f);
+    return float4(sum * intensity, 1.0f);
 }

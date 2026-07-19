@@ -100,9 +100,20 @@ namespace ignite
         LOG_ASSERT(m_Handle, "Failed to create graphics pipeline");
     }
 
-    Ref<GraphicsPipeline> GraphicsPipeline::Create()
+    GraphicsPipeline::GraphicsPipeline(const std::string& name)
+        : m_Name(name)
     {
-        return CreateRef<GraphicsPipeline>();
+        Renderer::IncrementPipelineCount(m_Name);
+    }
+
+    GraphicsPipeline::~GraphicsPipeline()
+    {
+        Renderer::DecrementPipelineCount(m_Name);
+    }
+
+    Ref<GraphicsPipeline> GraphicsPipeline::Create(const std::string& name)
+    {
+        return CreateRef<GraphicsPipeline>(name);
     }
 
 }

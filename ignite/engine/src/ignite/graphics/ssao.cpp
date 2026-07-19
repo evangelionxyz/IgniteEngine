@@ -50,8 +50,8 @@ namespace ignite
         m_RepeatSampler = device->createSampler(repeatSamplerDesc);
 
         constexpr uint32_t kSSAOCBVersions = 512;
-        m_SSAOParamsBuffer = ConstantBuffer::Create(sizeof(SSAOParams), true, kSSAOCBVersions, "SSAO Params");
-        m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kSSAOCBVersions, "SSAO Blur Params");
+        m_SSAOParamsBuffer = ConstantBuffer::Create(sizeof(SSAOParams), true, kSSAOCBVersions, "HBAO Params");
+        m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kSSAOCBVersions, "HBAO Blur Params");
 
         m_AOComputeShader = Shader::Create("resources/shaders/ssao.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
         m_BlurComputeShader = Shader::Create("resources/shaders/ssao_blur.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
@@ -128,7 +128,7 @@ namespace ignite
         info.keepInitialState = true;
         info.bindless = false;
 
-        m_NoiseTexture = Texture::Create(pixelData, info, pool, "SSAO Noise");
+        m_NoiseTexture = Texture::Create(pixelData, info, pool, "HBAO Noise");
         
         pool->close();
         device->executeCommandList(pool);
@@ -136,7 +136,7 @@ namespace ignite
 
     void SSAO::CreateTextures(uint32_t width, uint32_t height)
     {
-        IGN_PROFILE_SCOPE_COLOR("SSAO::CreateTextures", 0x404040FF);
+        IGN_PROFILE_SCOPE_COLOR("HBAO::CreateTextures", 0x404040FF);
         m_Width = std::max(width / 2, 1u); // Half resolution optimization
         m_Height = std::max(height / 2, 1u);
 
@@ -169,7 +169,7 @@ namespace ignite
             return;
         }
 
-        IGN_PROFILE_SCOPE_COLOR("SSAO::EnsurePipelines", 0x404040FF);
+        IGN_PROFILE_SCOPE_COLOR("HBAO::EnsurePipelines", 0x404040FF);
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         auto buildComputePipeline = [&](Ref<Shader> computeShader, nvrhi::BindingLayoutHandle bindingLayout) -> nvrhi::ComputePipelineHandle
@@ -192,7 +192,7 @@ namespace ignite
         EnsurePipelines();
         if (!m_AOComputePipeline || !m_BlurComputePipeline) return;
 
-        IGN_PROFILE_SCOPE_COLOR("SSAO::Build", 0x404040FF);
+        IGN_PROFILE_SCOPE_COLOR("HBAO::Build", 0x404040FF);
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // ===================================================================

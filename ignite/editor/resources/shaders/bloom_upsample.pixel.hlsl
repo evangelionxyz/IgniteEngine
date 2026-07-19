@@ -47,16 +47,14 @@ float4 main(VSOutput input) : SV_Target
     for (int i = 0; i < 9; ++i)
     {
         float2 sampleUV = saturate(input.uv + offsets[i]);
-        float3 sampleColor = lowResTexture.SampleLevel(linearSampler, sampleUV, 0.0f).rgb;
-        sampleColor = clamp(sampleColor, 0.0f, 100.0f);
+        float3 sampleColor = max(lowResTexture.SampleLevel(linearSampler, sampleUV, 0.0f).rgb, 0.0f);
         sum += sampleColor * weights[i];
     }
 
     float3 upsampled = sum / 16.0f;
 
-    float3 highRes = highResTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb;
-    highRes = clamp(highRes, 0.0f, 100.0f);
+    float3 highRes = max(highResTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb, 0.0f);
 
-    float3 result = clamp(upsampled + highRes, 0.0f, 100.0f);
+    float3 result = upsampled + highRes;
     return float4(result, 1.0f);
 }

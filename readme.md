@@ -56,6 +56,7 @@ now, lets build.
 ## Preview
 
 <div style='display:flex;flex-direction:column;width:80%;margin:auto; gap:12px'>
+  <img src="ignite/editor/resources/examples/image_09.png">
   <img src="ignite/editor/resources/examples/image_08.png">
   <img src="ignite/editor/resources/examples/image_01.png">
   <img src="ignite/editor/resources/examples/image_05.png">

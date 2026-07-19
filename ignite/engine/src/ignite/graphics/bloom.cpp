@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -22,14 +22,14 @@ namespace ignite
         downsampleLayout.visibility = nvrhi::ShaderType::All;
         downsampleLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
         downsampleLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-        downsampleLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+        downsampleLayout.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
         m_DownsampleLayout = device->createBindingLayout(downsampleLayout);
 
         nvrhi::BindingLayoutDesc blurLayout;
         blurLayout.visibility = nvrhi::ShaderType::All;
         blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
         blurLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-        blurLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+        blurLayout.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
         m_BlurLayout = device->createBindingLayout(blurLayout);
 
         nvrhi::BindingLayoutDesc upsampleLayout;
@@ -37,7 +37,7 @@ namespace ignite
         upsampleLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
         upsampleLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1));
         upsampleLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-        upsampleLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+        upsampleLayout.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
         m_UpsampleLayout = device->createBindingLayout(upsampleLayout);
 
         auto samplerDesc = nvrhi::SamplerDesc();
@@ -45,13 +45,12 @@ namespace ignite
         samplerDesc.setAllFilters(true);
         m_Sampler = device->createSampler(samplerDesc);
 
-        constexpr uint32_t kBloomCBVersions = 512;
-        m_DownsampleParamsBuffer = ConstantBuffer::Create(sizeof(DownsampleParams), true, kBloomCBVersions, "Bloom Downsample Params");
-        m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kBloomCBVersions, "Bloom Blur Params");
-        m_UpsampleParamsBuffer = ConstantBuffer::Create(sizeof(UpsampleParams), true, kBloomCBVersions, "Bloom Upsample Params");
+        constexpr uint32_t kBloomCBVersions = 1;
+		m_DownsampleParamsBuffer = ConstantBuffer::Create(sizeof(DownsampleParams), false, kBloomCBVersions, "Bloom Downsample Params");
+        m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), false, kBloomCBVersions, "Bloom Blur Params");
+        m_UpsampleParamsBuffer = ConstantBuffer::Create(sizeof(UpsampleParams), false, kBloomCBVersions, "Bloom Upsample Params");
 
         m_FullscreenVertexShader = Shader::Create("resources/shaders/bloom_fullscreen.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-
         m_DownsamplePixelShader = Shader::Create("resources/shaders/bloom_downsample.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
         m_BlurPixelShader = Shader::Create("resources/shaders/bloom_blur.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
         m_UpsamplePixelShader = Shader::Create("resources/shaders/bloom_upsample.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
@@ -83,7 +82,7 @@ namespace ignite
         RenderTargetCreateInfo levelRTInfo;
         levelRTInfo.attachments =
         {
-            FramebufferAttachments{ "[Bloom Color]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }
+            FramebufferAttachments{ "[Bloom Color]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget }
         };
 
         for (int i = 0; i < 8; ++i)
@@ -100,6 +99,7 @@ namespace ignite
             levelRTInfo.width = w;
             levelRTInfo.height = h;
             level.downsampledRT = RenderTarget::Create(levelRTInfo, "[Bloom Downsample RT]");
+            level.upsampledRT = RenderTarget::Create(levelRTInfo, "[Bloom Upsample RT]");
             level.blurHorizontalRT = RenderTarget::Create(levelRTInfo, "[Bloom Blur Horizontal RT]");
             level.blurVerticalRT = RenderTarget::Create(levelRTInfo, "[Bloom Blur Vertical RT]");
 
@@ -116,7 +116,7 @@ namespace ignite
             finalRTInfo.height = static_cast<uint32_t>(m_Levels.front().height);
             finalRTInfo.attachments =
             {
-                FramebufferAttachments{ "[Bloom Final]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }
+                FramebufferAttachments{ "[Bloom Final]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget }
             };
 
             m_FinalRT = RenderTarget::Create(finalRTInfo, "[Bloom Final RT]");
@@ -217,10 +217,11 @@ namespace ignite
         }
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        const size_t maxLevels = static_cast<size_t>(std::clamp(settings.iterations, 1, static_cast<int>(m_Levels.size())));
+        const auto maxLevels = static_cast<size_t>(std::clamp(settings.iterations, 1, static_cast<int>(m_Levels.size())));
 
         Ref<Texture> previousTexture = sourceTexture;
 
+        // Downsample the source texture to create the bloom levels
         for (size_t i = 0; i < maxLevels; ++i)
         {
             Level &level = m_Levels[i];
@@ -228,7 +229,7 @@ namespace ignite
 
             DownsampleParams params;
             params.threshold = (i == 0) ? settings.threshold : 0.0f;
-            params.intensity = settings.intensity;
+            params.intensity = 1.0f;
             params.knee = settings.knee;
             m_DownsampleParamsBuffer->SetData(cmd, &params, sizeof(params));
 
@@ -239,9 +240,16 @@ namespace ignite
             nvrhi::BindingSetHandle bindingSet = device->createBindingSet(desc, m_DownsampleLayout);
 
             DrawFullscreen(cmd, level.downsampledRT->GetFramebuffer(), m_DownsamplePipeline, bindingSet, fullscreenVertexBuffer);
+
+            // Transition the downsampled render target to shader resource state for the next pass
+            cmd->setTextureState(level.downsampledRT->GetColorAttachment(0)->GetHandle(),
+                nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->commitBarriers();
+
             previousTexture = level.downsampledRT->GetColorAttachment(0);
         }
 
+        // Apply horizontal and vertical blur to each level
         for (size_t i = 0; i < maxLevels; ++i)
         {
             Level &level = m_Levels[i];
@@ -249,6 +257,7 @@ namespace ignite
             level.blurHorizontalRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
             BlurParams horizontalParams;
             horizontalParams.horizontal = 1;
+            horizontalParams.radius = settings.radius;
             m_BlurParamsBuffer->SetData(cmd, &horizontalParams, sizeof(horizontalParams));
 
             auto hDesc = nvrhi::BindingSetDesc();
@@ -259,9 +268,15 @@ namespace ignite
 
             DrawFullscreen(cmd, level.blurHorizontalRT->GetFramebuffer(), m_BlurPipeline, hBindingSet, fullscreenVertexBuffer);
 
+            // Transition the horizontal blur render target to shader resource state for the vertical blur pass
+            cmd->setTextureState(level.blurHorizontalRT->GetColorAttachment(0)->GetHandle(),
+                nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->commitBarriers();
+
             level.blurVerticalRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
             BlurParams verticalParams;
             verticalParams.horizontal = 0;
+            verticalParams.radius = settings.radius;
             m_BlurParamsBuffer->SetData(cmd, &verticalParams, sizeof(verticalParams));
 
             auto vDesc = nvrhi::BindingSetDesc();
@@ -271,13 +286,19 @@ namespace ignite
             nvrhi::BindingSetHandle vBindingSet = device->createBindingSet(vDesc, m_BlurLayout);
 
             DrawFullscreen(cmd, level.blurVerticalRT->GetFramebuffer(), m_BlurPipeline, vBindingSet, fullscreenVertexBuffer);
+
+            // Transition the horizontal blur render target to shader resource state for the vertical blur pass
+            cmd->setTextureState(level.blurHorizontalRT->GetColorAttachment(0)->GetHandle(),
+                nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->commitBarriers();
         }
 
+        // Upsample and combine the blurred levels back together
         Ref<Texture> currentTexture = m_Levels[maxLevels - 1].blurVerticalRT->GetColorAttachment(0);
         for (int i = static_cast<int>(maxLevels) - 2; i >= 0; --i)
         {
             Level &level = m_Levels[static_cast<size_t>(i)];
-            Ref<RenderTarget> output = (i == 0) ? m_FinalRT : level.blurHorizontalRT;
+            Ref<RenderTarget> output = (i == 0) ? m_FinalRT : level.upsampledRT;
             output->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
 
             UpsampleParams params;
@@ -292,6 +313,12 @@ namespace ignite
             nvrhi::BindingSetHandle bindingSet = device->createBindingSet(desc, m_UpsampleLayout);
 
             DrawFullscreen(cmd, output->GetFramebuffer(), m_UpsamplePipeline, bindingSet, fullscreenVertexBuffer);
+
+            // Transition the output render target to shader resource state for the next pass
+            cmd->setTextureState(output->GetColorAttachment(0)->GetHandle(),
+                nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->commitBarriers();
+
             currentTexture = output->GetColorAttachment(0);
         }
 
@@ -311,21 +338,18 @@ namespace ignite
             nvrhi::BindingSetHandle bindingSet = device->createBindingSet(desc, m_UpsampleLayout);
 
             DrawFullscreen(cmd, m_FinalRT->GetFramebuffer(), m_UpsamplePipeline, bindingSet, fullscreenVertexBuffer);
+
+            // Transition the final render target to shader resource state for the next pass
+            cmd->setTextureState(m_FinalRT->GetColorAttachment(0)->GetHandle(),
+                nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->commitBarriers();
         }
     }
 
     void Bloom::Resize(uint32_t width, uint32_t height)
     {
-        if (width == 0 || height == 0)
-        {
+        if (width == 0 || height == 0 || (m_Width == width && m_Height == height))
             return;
-        }
-
-        if (m_Width == width && m_Height == height)
-        {
-            return;
-        }
-
         CreateRenderTargets(width, height);
     }
 

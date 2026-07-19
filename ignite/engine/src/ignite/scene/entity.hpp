@@ -4,11 +4,10 @@
 #ifndef IGN_ENTITY_HPP
 #define IGN_ENTITY_HPP
 
-#include "ignite/core/base.hpp"
 #include "component.hpp"
-
+#include "ignite/core/base.hpp"
 #include "scene.hpp"
-#include "ignite/core/types.hpp"
+
 #include <entt/entt.hpp>
 
 namespace ignite

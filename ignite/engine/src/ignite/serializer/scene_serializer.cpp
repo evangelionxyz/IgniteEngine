@@ -202,6 +202,12 @@ namespace ignite
                             sr.AddKeyValue("AoBias", pp.aoBias);
                             sr.AddKeyValue("AoIntensity", pp.aoIntensity);
                             sr.AddKeyValue("AoPower", pp.aoPower);
+
+							sr.AddKeyValue("TAA", pp.taaProperties.enable);
+							sr.AddKeyValue("TAABlendFactor", pp.taaProperties.blendFactor);
+							sr.AddKeyValue("MSAA", pp.msaaProperties.enable);
+							sr.AddKeyValue("MSAASampleCount", pp.msaaProperties.sampleCount);
+							sr.AddKeyValue("TonemapMode", static_cast<int>(pp.tonemapMode));
                         }
                         sr.EndMap();
                     }
@@ -538,9 +544,6 @@ namespace ignite
                         sr.AddKeyValue("Exposure", comp.exposure);
                         sr.AddKeyValue("Gamma", comp.gamma);
                         sr.AddKeyValue("Ambient", comp.ambient);
-
-                        sr.AddKeyValue("TonemapMode", static_cast<int>(comp.tonemapMode));
-                        
                         sr.AddKeyValue("FogDensity", comp.fogDensity);
                         sr.AddKeyValue("FogColor", comp.fogColor);
                         sr.AddKeyValue("FogStart", comp.fogStart);
@@ -800,6 +803,13 @@ namespace ignite
                     if (auto n = ppNode["AoBias"]) pp.aoBias = n.as<float>();
                     if (auto n = ppNode["AoIntensity"]) pp.aoIntensity = n.as<float>();
                     if (auto n = ppNode["AoPower"]) pp.aoPower = n.as<float>();
+
+
+					if (auto n = ppNode["TAA"]) pp.taaProperties.enable = n.as<bool>();
+					if (auto n = ppNode["TAABlendFactor"]) pp.taaProperties.blendFactor = n.as<float>();
+					if (auto n = ppNode["MSAA"]) pp.msaaProperties.enable = n.as<bool>();
+					if (auto n = ppNode["MSAASampleCount"]) pp.msaaProperties.sampleCount = n.as<int>();
+					if (auto n = ppNode["TonemapMode"]) pp.tonemapMode = static_cast<TonemapMode>(n.as<int>());
                 }
 
                 comp.camera.UpdateView();
@@ -1093,10 +1103,6 @@ namespace ignite
                 if (node["Ambient"])
                 {
                     world.ambient = node["Ambient"].as<float>();
-                }
-                if (node["TonemapMode"])
-                {
-                    world.tonemapMode = static_cast<TonemapMode>(node["TonemapMode"].as<int>());
                 }
                 if (node["FogDensity"])
                 {

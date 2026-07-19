@@ -8,7 +8,7 @@
 #include "ignite/core/logger.hpp"
 #include "ignite/core/subsystem.hpp"
 #include "ignite/core/signal_bus.hpp"
-#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
 #include "asset_worker.hpp"
 
 #include <map>
@@ -54,6 +54,8 @@ namespace ignite
         template<typename T = Asset>
         void AssignAsset(AssetHandle handle, const Ref<T> &asset)
         {
+			LOG_ASSERT(handle != AssetHandle(0), "[Asset Manager] Invalid asset handle");
+
             if (asset && std::is_base_of_v<Asset, T>)
             {
                 Ref<Asset> oldAsset;

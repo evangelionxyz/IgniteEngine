@@ -4,19 +4,6 @@
 #ifndef IGN_ASSET_SIGNAL_HPP
 #define IGN_ASSET_SIGNAL_HPP
 
-// -------------------------------------------------------------------------
-// Asset Signals
-//
-// These are plain structs used with SignalBus for internal engine
-// notifications about asset system state changes.
-//
-// They replace the old Event-derived asset event classes that were incorrectly
-// routed through the Application::OnEvent / Layer stack pipeline.
-//
-// Emit via:   SignalBus::Emit(AssetChangeSignal{ handle, type });
-// Subscribe:  SignalBus::Subscribe<AssetChangeSignal>([this](const auto& s){…});
-// -------------------------------------------------------------------------
-
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/path.hpp"
 

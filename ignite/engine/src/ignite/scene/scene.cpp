@@ -1,25 +1,16 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
-
-#include "scene.hpp"
-#include <entt/entt.hpp>
+#include "entity.hpp"
 
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/audio/fmod_audio.hpp"
-
-#include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/renderer_2d.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/physics/3d/jolt/jolt_physics.hpp"
-#include "ignite/math/math.hpp"
 #include "ignite/math/transform.hpp"
-#include "scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
-
-#include "entity.hpp"
-
 #include "ignite/core/application.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/animation_2d.hpp"
@@ -27,21 +18,13 @@
 #include "ignite/animation/animator/animator_controller_2d.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/ui/widget_canvas.hpp"
-
 #include "ignite/core/profiler/profiler.hpp"
+#include "scene_manager.hpp"
 
 namespace ignite
 {
     namespace
     {
-        Ref<AnimatorController> CloneAnimatorController(const Ref<AnimatorController> &source)
-        {
-            if (!source)
-                return nullptr;
-
-            return CreateRef<AnimatorController>(*source);
-        }
-
         AnimParam *FindAnimParam(std::vector<AnimParam> &params, const std::string &name)
         {
             auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
@@ -90,21 +73,6 @@ namespace ignite
                     controllerParam.strVal = runtimeParam->strVal;
                 }
             }
-        }
-
-        void ResetMeshAnimatorRuntime(SkeletalMeshComponent &meshComp)
-        {
-            meshComp.currentStateName.clear();
-            meshComp.stateElapsed = 0.0f;
-            meshComp.stateNormalized = 0.0f;
-        }
-
-        AssetHandle ResolveMeshAnimatorSourceHandle(const SkeletalMeshComponent &meshComp, const Ref<SkeletalMesh> &mesh)
-        {
-            if (meshComp.runtimeAnimatorHandle != AssetHandle(0))
-                return meshComp.runtimeAnimatorHandle;
-
-            return mesh ? mesh->GetAnimatorHandle() : AssetHandle(0);
         }
 
         FMOD::DSP *CreateAudioSourceDsp(const AudioSourceComponent::DspSettings &settings)
@@ -212,33 +180,36 @@ namespace ignite
         m_JoltScene = new JoltScene();
 
 		m_AssetManager = AssetManager::GetInstance();
+
+		m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
+		[this](const AssetChangeSignal &signal)
+		{
+			OnAssetChangeSignal(signal);
+		});
     }
 
     Scene::~Scene()
     {
-        // Stop physics simulations first
-        if (m_Physics2D)
-        {
-			m_Physics2D = nullptr;
-        }
-
+        // Remove signal
+		SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
+        m_AssetChangeToken = kInvalidSignalToken;
+        
+        // Stop physics simulations
         if (m_JoltScene)
-        {
             delete m_JoltScene;
-			m_JoltScene = nullptr;
-        }
+        m_JoltScene = nullptr;
+		m_Physics2D = nullptr;
 
         // Clear all entities from registry before deletion
         if (registry)
         {
             registry->clear();
             delete registry;
-            registry = nullptr;
         }
+        registry = nullptr;
 
         // Clear entity map
         entities.clear();
-
         m_AssetManager = nullptr;
         m_Project = nullptr;
     }
@@ -292,9 +263,9 @@ namespace ignite
             script.runtimeScriptInstance = ScriptEngine::GetInstance()->OnCreateEntityInstance(instanceID, script.className);
         });
 
-        registry->view<SkeletalMeshComponent>().each([](entt::entity, SkeletalMeshComponent &meshComp)
+        registry->view<SkeletalMeshComponent>().each([](entt::entity, SkeletalMeshComponent &smc)
         {
-            ResetMeshAnimatorRuntime(meshComp);
+            smc.ResetAnimatorRuntime();
         });
 
         m_SharedAnimatorRuntime.clear();
@@ -666,7 +637,29 @@ namespace ignite
         return handles;
     }
 
-    void Scene::UpdateAnimations(float deltaTime)
+	void Scene::OnAssetChangeSignal(const AssetChangeSignal &signal)
+	{
+        switch (signal.type)
+        {
+        case AssetType::AnimatorController:
+        {
+			auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
+            for (auto ent : skeletalMeshView)
+            {
+                auto &smc = skeletalMeshView.get<SkeletalMeshComponent>(ent);
+                
+                // Reset
+                if (smc.runtimeAnimatorHandle == signal.handle)
+                {
+                    smc.runtimeAnimatorInstance.reset();
+                }
+            }
+            break;
+        }
+        }
+	}
+
+	void Scene::UpdateAnimations(float deltaTime)
     {
         auto skeletalMeshView = registry->view<TransformComponent, SkeletalMeshComponent>();
         std::unordered_set<AssetHandle> updatedSharedHandles;
@@ -678,23 +671,29 @@ namespace ignite
                 continue;
 
             auto mesh = m_AssetManager->GetAsset<SkeletalMesh>(smc.handle);
-            if (mesh)
-            {
-                const auto worldMatrix = tr.world.GetMatrix();
-                smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-                smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
-            }
+            
+            if (!mesh)
+                continue;
+            
+			const auto worldMatrix = tr.world.GetMatrix();
+			smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+			smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
 
-            AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(smc, mesh);
+            AssetHandle sourceAnimatorHandle = mesh->GetAnimatorHandle();
+			if (smc.runtimeAnimatorHandle != AssetHandle(0))
+				sourceAnimatorHandle = smc.runtimeAnimatorHandle;
+
+            // If source animator 0, reset
             if (sourceAnimatorHandle == AssetHandle(0))
             {
                 smc.runtimeAnimatorInstance.reset();
                 smc.runtimeParams.clear();
                 smc.finalBoneTransforms.clear();
-                ResetMeshAnimatorRuntime(smc);
+                smc.ResetAnimatorRuntime();
                 continue;
             }
 
+            // Set the runtime animator handle
             smc.runtimeAnimatorHandle = sourceAnimatorHandle;
 
             Ref<AnimatorController> animController = nullptr;
@@ -707,11 +706,11 @@ namespace ignite
                     Ref<AnimatorController> sourceController = m_AssetManager->GetAsset<AnimatorController>(sourceAnimatorHandle);
                     if (sourceController)
                     {
-                        smc.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
+                        smc.runtimeAnimatorInstance = AnimatorController::Clone(sourceController);
                         if (smc.runtimeAnimatorInstance)
                         {
                             smc.runtimeParams.clear();
-                            ResetMeshAnimatorRuntime(smc);
+                            smc.ResetAnimatorRuntime();
                         }
                     }
                 }

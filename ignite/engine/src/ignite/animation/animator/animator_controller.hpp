@@ -19,6 +19,24 @@ namespace ignite
         std::string name;
         glm::vec2 editorPos = glm::vec2(100.0f, 100.0f);
 
+        AnimState() = default;
+        AnimState(const AnimState &other)
+            : name(other.name), editorPos(other.editorPos), m_UUID(), m_AnimHandle(other.m_AnimHandle)
+        {
+        }
+
+        AnimState &operator=(const AnimState &other)
+        {
+            if (this != &other)
+            {
+                name = other.name;
+                editorPos = other.editorPos;
+                m_UUID = UUID();
+                m_AnimHandle = other.m_AnimHandle;
+            }
+            return *this;
+        }
+
         void SetAnimationHandle(const AssetHandle &animationHandle);
 		const AssetHandle &GetAnimationAssetHandle() const { return m_AnimHandle; }
 
@@ -47,6 +65,8 @@ namespace ignite
         std::vector<AnimState> states;
 
         virtual ~AnimatorController() override;
+
+        static Ref<AnimatorController> Clone(const Ref<AnimatorController> &other);
 
         void SetSkeletonHandle(const AssetHandle &skeletonHandle);
         const AssetHandle &GetSkeletonHandle() const { return m_SkeletonHandle; }

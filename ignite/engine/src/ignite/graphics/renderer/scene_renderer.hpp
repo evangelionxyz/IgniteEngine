@@ -6,9 +6,9 @@
 
 #include "ignite/core/base.hpp"
 #include "iscene_renderer.hpp"
-#include <entt/entt.hpp>
-
 #include "ignite/graphics/hash_keys.hpp"
+
+#include "ignite/scene/entity.hpp"
 
 namespace ignite
 {
@@ -17,10 +17,14 @@ namespace ignite
 
 	struct CameraRenderTarget
 	{
-		Ref<RenderTarget> sceneRT;
+		Ref<RenderTarget> sceneRT;         // MSAA render target (sampleCount > 1) or regular
+		Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
 		Ref<RenderTarget> widgetRT;
 		Ref<RenderTarget> compositeRT;
 		Ref<RenderTarget> debugRT;
+        Ref<RenderTarget> taaHistoryRT[3];
+        bool taaHistoryValid = false;
+        int msaaSampleCount = 1;           // Tracks the current MSAA sample count (1 = no MSAA)
 	};
 
     class IGN_API SceneRenderer : public ISceneRenderer
@@ -65,7 +69,7 @@ namespace ignite
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug);
         void UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
 		void DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
-        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr);
+        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false);
 
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D);
         void DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebufferm, FrameContext *frameContext);
@@ -153,20 +157,18 @@ namespace ignite
 
         nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &gridBuffer);
         nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler);
+            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler, bool useResolvedScene = false);
         
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
+		std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);
+		std::vector<Ref<SSAO>> GetOrCreateSSAOs(ICamera *camera);
 
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
 
         std::unordered_map<ICamera *, Ref<CameraRenderTarget>> m_RenderTargets;
-
-        Ref<Bloom> m_EditorBloom;
-        Ref<Bloom> m_GameplayBloom;
-
-        Ref<SSAO> m_EditorSSAO;
-        Ref<SSAO> m_GameplaySSAO;
+        std::unordered_map<ICamera *, std::vector<Ref<Bloom>>> m_Blooms;
+		std::unordered_map<ICamera *, std::vector<Ref<SSAO>>> m_SSAOs;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentAnimatedPSOCache;
@@ -194,6 +196,8 @@ namespace ignite
         bool m_UseGameplayWidgetMouseOverride = false;
 
         Ref<Material> m_RuntimeMaterial;
+
+        uint64_t m_TAAFrameIndex = 0;
 
         std::unordered_map<entt::entity, std::vector<uint32_t>> m_EntityObjectIndexCache;
         std::unordered_map<entt::entity, uint32_t> m_EntityBoneOffsetCache;

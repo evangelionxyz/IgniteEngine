@@ -34,6 +34,13 @@ namespace ignite
         g_BindingCacheData.device = nullptr;
 	}
 
+    void BindingCache::Clear()
+    {
+        g_BindingCacheData.mutex.lock();
+        g_BindingCacheData.bindingSets.clear();
+        g_BindingCacheData.mutex.unlock();
+    }
+
 	nvrhi::BindingSetHandle BindingCache::GetCachedBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout)
     {
         size_t hash = 0;
@@ -106,14 +113,13 @@ namespace ignite
 		nvrhi::hash_combine(hash, desc);
 		nvrhi::hash_combine(hash, layout);
 
-		g_BindingCacheData.mutex.lock_shared();
+		g_BindingCacheData.mutex.lock();
 
-		nvrhi::BindingSetHandle result;
 		auto it = g_BindingCacheData.bindingSets.find(hash);
 		if (it != g_BindingCacheData.bindingSets.end())
-			it = g_BindingCacheData.bindingSets.erase(it);
+			g_BindingCacheData.bindingSets.erase(it);
 
-		g_BindingCacheData.mutex.unlock_shared();
+		g_BindingCacheData.mutex.unlock();
 	}
 
 }

@@ -10,17 +10,13 @@
 #include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/uuid.hpp"
-#include "ignite/asset/asset.hpp"
-#include "ignite/math/aabb.hpp"
-
 #include "ignite/animation/animator/animator_controller.hpp"
-
-#include "ignite/graphics/buffers/constant_buffer.hpp"
-#include "ignite/graphics/gpu_data.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
+#include "ignite/asset/asset.hpp"
 
 #include <unordered_map>
 #include <unordered_set>
-#include <type_traits>
 
 namespace ignite
 {
@@ -102,6 +98,7 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
+        void OnAssetChangeSignal(const AssetChangeSignal &signal);
         void UpdateAnimations(float deltaTime);
 
     private:
@@ -115,6 +112,7 @@ namespace ignite
         uint32_t m_ViewportWidth;
         uint32_t m_ViewportHeight;
         uint64_t m_StepFrame = 0;
+        SignalToken m_AssetChangeToken = kInvalidSignalToken;
         ESceneState m_State = ESceneState::Stop;
         
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;

@@ -292,7 +292,7 @@ namespace ignite
             m_WidgetRenderer->Render(cmd, uiRT->GetFramebuffer());
         }
 
-        CompositePass(cmd, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
+        CompositePass(cmd, camera, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
         cmd->close();
 
         {
@@ -359,7 +359,7 @@ namespace ignite
             Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
             Ref<Shader> pixelShader  = Shader::Create("resources/shaders/skybox.pixel.hlsl",  UMBRA_SHADER_TYPE_PIXEL,  false);
 
-            envPipeline = GraphicsPipeline::Create();
+            envPipeline = GraphicsPipeline::Create("Asset Preview Environment Pipeline");
             envPipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT))
                 .Build(framebuffer, params);
@@ -513,7 +513,7 @@ namespace ignite
                 Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
                 Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
 
-                geopPipeline = GraphicsPipeline::Create();
+                geopPipeline = GraphicsPipeline::Create("Asset Preview Mesh Pipeline");
                 geopPipeline->SetShaders({ vertexShader, pixelShader })
                     .AddBindingLayout(Renderer::GetBindingLayout(meshBindingLayout))
                     .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
@@ -632,10 +632,34 @@ namespace ignite
     // ---------------------------------------------------------------------------
     // CompositePass
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
+    void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
     {
-		// Set the post-processing parameters based on the current settings on asset editor panel
-        m_CompositePostProcessBuffer.SetData(cmd, &this->m_PostProcessingSettings, sizeof(this->m_PostProcessingSettings));
+        m_PostProcessingData.flags.x = 0.0f;
+        m_PostProcessingData.flags.y = m_PostProcessing.bloomIntensity;
+        m_PostProcessingData.flags.z = m_PostProcessing.enableVignette ? 1.0f : 0.0f;
+        m_PostProcessingData.flags.w = m_PostProcessing.enableChromAb ? 1.0f : 0.0f;
+		m_PostProcessingData.tonemapMode = static_cast<int>(m_PostProcessing.tonemapMode);
+        m_PostProcessingData.vignetteParams = glm::vec4(
+            m_PostProcessing.vignetteRadius,
+            glm::max(m_PostProcessing.vignetteSoftness, 0.001f),
+            m_PostProcessing.vignetteIntensity,
+            m_PostProcessing.chromAbAmount
+        );
+        m_PostProcessingData.chromAbParams = glm::vec4(m_PostProcessing.chromAbRadial, 0.0f, m_PostProcessing.aoIntensity, 0.0f);
+        m_PostProcessingData.vignetteColor = glm::vec4(m_PostProcessing.vignetteColor, 1.0f);
+        m_PostProcessingData.taaParams = glm::vec4(0.0f);
+        m_PostProcessingData.enableDOF = camera && camera->lens.enabledDOF ? 1 : 0;
+        if (camera)
+        {
+            m_PostProcessingData.projectionInv = glm::inverse(camera->GetProjection());
+            m_PostProcessingData.focalLength = camera->lens.focalLength;
+            m_PostProcessingData.focalDistance = camera->lens.focalDistance;
+            m_PostProcessingData.fStop = camera->lens.fStop;
+            m_PostProcessingData.focusRange = camera->lens.focusRange;
+            m_PostProcessingData.blurAmount = camera->lens.blurAmount;
+        }
+
+        m_CompositePostProcessBuffer.SetData(cmd, &m_PostProcessingData, sizeof(m_PostProcessingData));
 
         Ref<GraphicsPipeline> pipeline;
         if (auto it = m_CompositePipelineCache.find(framebuffer); it != m_CompositePipelineCache.end())
@@ -654,6 +678,7 @@ namespace ignite
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(7)); // objectID
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(8)); // TAA history
             layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
@@ -670,7 +695,7 @@ namespace ignite
             Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
             Ref<Shader> pixelShader  = Shader::Create("resources/shaders/composite.pixel.hlsl",  UMBRA_SHADER_TYPE_PIXEL,  false);
 
-            pipeline = GraphicsPipeline::Create();
+            pipeline = GraphicsPipeline::Create("Asset Preview Composite Pipeline");
             pipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(m_CompositeBindingLayout)
                 .Build(framebuffer, params);
@@ -688,6 +713,7 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, Renderer::GetBlackUIntTexture()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(8, Renderer::GetBlackTexture()->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_CompositePostProcessBuffer.GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_CompositeSampler));
 

@@ -215,70 +215,66 @@ namespace ignite
     {
         Layer::OnUpdate(deltaTime);
 
-        for (int i = static_cast<int>(m_ContentBrowserPanels.size()) - 1; i >= 0; --i)
+        // use int, to prevent unsigned values
+        for (int i = (int)m_ContentBrowserPanels.size() - 1; i >= 0; --i)
         {
-            ContentBrowserPanel *panel = m_ContentBrowserPanels[static_cast<size_t>(i)];
+            ContentBrowserPanel *panel = m_ContentBrowserPanels[(size_t)i];
             if (panel == nullptr)
             {
                 m_ContentBrowserPanels.erase(m_ContentBrowserPanels.begin() + i);
                 continue;
             }
 
+            // Remove closed content browser
             if (!panel->IsOpen())
             {
                 if (m_ContentBrowserPanelsPendingRemoval.insert(panel).second)
                 {
-                    Application::SubmitToMainThread([this, panel]()
+                    auto it = std::ranges::find(m_ContentBrowserPanels, panel);
+                    if (it != m_ContentBrowserPanels.end())
                     {
-                        auto it = std::find(m_ContentBrowserPanels.begin(), m_ContentBrowserPanels.end(), panel);
-                        if (it != m_ContentBrowserPanels.end())
-                        {
-                            Application::GetInstance()->PopLayer(panel);
-                            m_ContentBrowserPanels.erase(it);
-                        }
-
-                        m_ContentBrowserPanelsPendingRemoval.erase(panel);
-                    });
+                        // Erase first then pop the layer
+                        it = m_ContentBrowserPanels.erase(it);
+                        Application::GetInstance()->PopLayer(panel);
+                    }
+                    m_ContentBrowserPanelsPendingRemoval.erase(panel);
                 }
             }
         }
 
-        if (m_ContentBrowserPanels.empty() && m_PendingContentBrowserPanelsToAdd == 0 && m_ContentBrowserPanelsPendingRemoval.empty())
         {
-            m_PendingContentBrowserPanelsToAdd = 1;
-        }
-
-        m_ContentBrowserPanel = nullptr;
-        for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
-        {
-            if (panel && panel->IsOpen())
+            // Reopen the content browser if we accidentally close the last one
+            if (m_ContentBrowserPanels.empty() && m_PendingContentBrowserPanelsToAdd == 0 && m_ContentBrowserPanelsPendingRemoval.empty())
             {
-                m_ContentBrowserPanel = panel;
-                break;
+                m_PendingContentBrowserPanelsToAdd = 1;
             }
-        }
 
-        while (m_PendingContentBrowserPanelsToAdd > 0 && GetOpenContentBrowserCount() < 4)
-        {
-            Application::SubmitToMainThread([this]()
+            m_ContentBrowserPanel = nullptr;
+            for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
+            {
+                if (panel && panel->IsOpen())
+                {
+                    m_ContentBrowserPanel = panel;
+                    break;
+                }
+            }
+
+            while (m_PendingContentBrowserPanelsToAdd > 0 && GetOpenContentBrowserCount() < 4)
             {
                 AddContentBrowserPanel();
-            });
-            --m_PendingContentBrowserPanelsToAdd;
-        }
+                --m_PendingContentBrowserPanelsToAdd;
+            }
 
-        for (ContentBrowserPanel *contentBrowserPanel : m_ContentBrowserPanels)
-        {
-            if (contentBrowserPanel && contentBrowserPanel->IsOpen())
+            for (ContentBrowserPanel *contentBrowserPanel : m_ContentBrowserPanels)
             {
-                contentBrowserPanel->OnUpdate(deltaTime);
+                if (contentBrowserPanel && contentBrowserPanel->IsOpen())
+                {
+                    contentBrowserPanel->OnUpdate(deltaTime);
+                }
             }
         }
-
-        if (m_ActiveProject)
-        {
-            AssetManager::GetInstance()->OnUpdate(deltaTime);
-        }
+        
+        AssetManager::GetInstance()->OnUpdate(deltaTime);
 
         // update panels
         if (m_ActiveScene)
@@ -513,20 +509,20 @@ namespace ignite
             auto target = m_SceneRenderer->GetRenderTarget(editCamera);
             if (target)
             {
-                const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
                 const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
-                const bool framebufferNeedsResize = (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y);
                 const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
                 if (isFramebufferSizeValid)
                 {
+                    const glm::uvec2 cameraSize = editCamera->GetViewportSize();
+                    const bool framebufferNeedsResize = desiredSize.x != cameraSize.x || desiredSize.y != cameraSize.y;
                     // Resize camera
-                    if (framebufferNeedsResize)
+                    if (framebufferNeedsResize || m_State.editorRequestToResize)
                     {
-                        m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
+                        editCamera->UpdateProjection(desiredSize.x, desiredSize.y);
                         m_State.editorResizing = true;
+                        m_State.editorRequestToResize = false;
                     }
-
                     // Resize framebuffer when in stable frame
                     if (m_State.editorResizing)
                     {
@@ -539,7 +535,6 @@ namespace ignite
                     }
                 }
             }
-            
         }
 
         // Resizing game-play camera (Game Viewport)
@@ -553,19 +548,20 @@ namespace ignite
                 if (target)
                 {
                     // Resize Game Viewport Framebuffer
-                    const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
                     const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
-                    const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
                     const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
                     if (isFramebufferSizeValid)
                     {
-                        if (framebufferNeedsResize)
+                        const glm::uvec2 gameCameraSize = gameCamera->GetViewportSize();
+                        const bool framebufferNeedsResize = desiredSize.x != gameCameraSize.x || desiredSize.y != gameCameraSize.y;
+
+                        if (framebufferNeedsResize || m_State.gameplayRequestToResize)
                         {
                             gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
                             m_State.gameplayResizing = true;
+                            m_State.gameplayRequestToResize = false;
                         }
-
                         if (m_State.gameplayResizing)
                         {
                             if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
@@ -723,7 +719,7 @@ namespace ignite
                         const std::tm local_tm = Timestep::GetLocalTime();
 
                         std::ostringstream oss;
-                        oss << std::put_time(&local_tm, "igite_ss %D-%H-%M-%S");
+                        oss << std::put_time(&local_tm, "screenshot-ignite-%D-%H-%M-%S");
                         std::string filename = oss.str();
                         stringutils::ReplaceWith(filename, "/", "-");
 
@@ -1079,7 +1075,7 @@ namespace ignite
             return;
         }
 
-		// Update asset pins in the project for the new scene
+        // Update asset pins in the project for the new scene
         if (m_ActiveProject)
         {
             std::unordered_set<AssetHandle> referencedHandles;
@@ -1268,29 +1264,29 @@ namespace ignite
         if (!m_ActiveProject)
             return;
 
-		SaveProject();
+        SaveProject();
 
         // Stop scene
-		if (m_EditorScene) m_EditorScene->OnStop();
-		m_ActiveScene->OnStop();
+        if (m_EditorScene) m_EditorScene->OnStop();
+        m_ActiveScene->OnStop();
 
         SetActiveScene(nullptr);
 
-		m_EditorScene.reset();
-		m_ActiveScene.reset();
+        m_EditorScene.reset();
+        m_ActiveScene.reset();
 
-		if (m_AssetEditorPanel)
-		{
-			m_AssetEditorPanel->CloseAllAssetEditors();
-		}
+        if (m_AssetEditorPanel)
+        {
+            m_AssetEditorPanel->CloseAllAssetEditors();
+        }
 
         AssetManager::GetInstance()->Reset();
 
-		// Reset everything
-		m_ActiveProject.reset();
-		m_CurrentProjectFilepath.clear();
-		m_CurrentSceneFilePath.clear();
-		m_CurrentSceneHandle = AssetHandle(0);
+        // Reset everything
+        m_ActiveProject.reset();
+        m_CurrentProjectFilepath.clear();
+        m_CurrentSceneFilePath.clear();
+        m_CurrentSceneHandle = AssetHandle(0);
     }
 
     void EditorLayer::OpenProject(const ignite::Path &filepath)
@@ -2278,7 +2274,7 @@ namespace ignite
         }
 
         // Render Stats
-        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed))
         {
             const auto &stats = Renderer::Stats;
 
@@ -2331,33 +2327,104 @@ namespace ignite
             fmtBytes(stats.textVerticesSize + stats.textIndicesSize, memBuf, sizeof(memBuf));
             ImGui::Text("Text VB+IB: %s", memBuf);
 
+            ImGui::Spacing();
+            ImGui::SeparatorText("Active Graphics Pipelines");
+            if (stats.pipelineCounts.empty())
+            {
+                ImGui::Text("None");
+            }
+            else
+            {
+                for (const auto& [name, count] : stats.pipelineCounts)
+                {
+                    ImGui::Text("%s: %zu", name.c_str(), count);
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("Active Binding Sets");
+            if (stats.bindingSetCounts.empty())
+            {
+                ImGui::Text("None");
+            }
+            else
+            {
+                for (const auto& [name, count] : stats.bindingSetCounts)
+                {
+                    ImGui::Text("%s: %zu", name.c_str(), count);
+                }
+            }
+
             ImGui::TreePop();
         }
 
         // Scene Render
         if (ImGui::TreeNodeEx("Settings Render", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::SeparatorText("Visibility");
-            UI::DrawCheckbox("Bounding Box", &m_SceneRenderer->sceneRenderSettings.showBoundingBox);
-            UI::DrawCheckbox("Physics Collider", &m_SceneRenderer->sceneRenderSettings.showPhysicsCollider);
-
-            ImGui::SeparatorText("Scene Render");
-            static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
-            static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
-            static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
-
-            int renderMode = m_SceneRenderer->GetRenderMode();
-            if (UI::DrawComboBox("Render Mode", renderModeLabels, IM_ARRAYSIZE(renderModeLabels), &renderMode))
-            {
-                m_SceneRenderer->SetRenderMode(renderMode);
-            }
-
-            int debugShadow = m_SceneRenderer->GetDebugShadowMode();
-            if (UI::DrawComboBox("CSM Debug", debugShadowLabels, IM_ARRAYSIZE(debugShadowLabels), &debugShadow))
-            {
-                m_SceneRenderer->SetDebugShadowMode(debugShadow);
-            }
+            auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
             
+            if (ImGui::TreeNodeEx("Visibility"))
+            {
+                UI::DrawCheckbox("Bounding Box", &renderSettings.showBoundingBox);
+                UI::DrawCheckbox("Physics Collider", &renderSettings.showPhysicsCollider);
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (ImGui::TreeNodeEx("Sampling"))
+                {
+                    if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        UI::DrawCheckbox("Enable", &renderSettings.taaProperties.enable);
+                        UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
+                        ImGui::TreePop();
+                    }
+
+                    if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        UI::DrawCheckbox("Enable", &renderSettings.msaaProperties.enable);
+                        UI::DrawIntControl("Samples", &renderSettings.msaaProperties.sampleCount, 1, 1, 16);
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::TreePop();
+                }
+
+				if (ImGui::TreeNodeEx("Internal Render scale"))
+				{
+                    UI::DrawFloatControl("Factor", &renderSettings.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
+					if (UI::DrawButtonWithColumn("", "Apply"))
+					{
+						m_State.gameplayRequestToResize = true;
+						m_State.editorRequestToResize = true;
+					}
+					ImGui::TreePop();
+				}
+
+                if (ImGui::TreeNodeEx("Shading"))
+                {
+                    static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
+                    static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
+                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
+                    int renderMode = m_SceneRenderer->GetRenderMode();
+                    if (UI::DrawComboBox("Render Mode", renderModeLabels, IM_ARRAYSIZE(renderModeLabels), &renderMode))
+                    {
+                        m_SceneRenderer->SetRenderMode(renderMode);
+                    }
+
+                    int debugShadow = m_SceneRenderer->GetDebugShadowMode();
+                    if (UI::DrawComboBox("CSM Debug", debugShadowLabels, IM_ARRAYSIZE(debugShadowLabels), &debugShadow))
+                    {
+                        m_SceneRenderer->SetDebugShadowMode(debugShadow);
+                    }
+
+                    ImGui::TreePop();
+                }
+                
+                ImGui::TreePop();
+            }
+
             ImGui::TreePop();
         }
 

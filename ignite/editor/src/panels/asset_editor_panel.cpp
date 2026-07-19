@@ -364,97 +364,92 @@ namespace ignite
 				// Post Processing Settings
 				if (ImGui::TreeNodeEx("Post Processing"))
 				{
-					auto &postProcessing = assetData.sceneData.sceneRenderer->GetPostProcessingSettings();
+					auto &pp = assetData.sceneData.sceneRenderer->GetPostProcessingSettings();
+					auto &lens = assetData.sceneData.camera.lens;
 
-					// Bloom Settings
-					if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen))
+					if (ImGui::TreeNodeEx("Anti Aliasing"))
 					{
-						bool enableBloom = (postProcessing.flags.x > 0.5f);
-						if (UI::DrawCheckbox("Enable Bloom", &enableBloom))
+						if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
 						{
-							postProcessing.flags.x = enableBloom ? 1.0f : 0.0f;
+							UI::DrawCheckbox("Enable", &pp.taaProperties.enable);
+							UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
+							ImGui::TreePop();
 						}
-						UI::DrawFloatControl("Bloom Intensity", &postProcessing.flags.y, 0.025f, 0.0f, 100.0f, 1.0f);
-						ImGui::TreePop();
-					}
 
-					// Vignette Settings
-					if (ImGui::TreeNodeEx("Vignette", ImGuiTreeNodeFlags_DefaultOpen))
-					{
-						bool enableVignette = (postProcessing.flags.z > 0.5f);
-						if (UI::DrawCheckbox("Enable Vignette", &enableVignette))
+						if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
 						{
-							postProcessing.flags.z = enableVignette ? 1.0f : 0.0f;
+							UI::DrawCheckbox("Enable", &pp.msaaProperties.enable);
+							UI::DrawIntControl("Samples", &pp.msaaProperties.sampleCount, 1, 1, 16);
+							ImGui::TextDisabled("Requires resolved MSAA render targets in this preview path.");
+							ImGui::TreePop();
 						}
-						UI::DrawFloatControl("Vignette Radius", &postProcessing.vignetteParams.x, 0.005f, 0.0f, 2.0f, 1.0f);
-						UI::DrawFloatControl("Vignette Softness", &postProcessing.vignetteParams.y, 0.005f, 0.0f, 2.0f, 0.5f);
-						UI::DrawFloatControl("Vignette Intensity", &postProcessing.vignetteParams.z, 0.005f, 0.0f, 2.0f, 0.5f);
-						UI::DrawColorVec4("Vignette Color", postProcessing.vignetteColor);
-						ImGui::TreePop();
-					}
 
-					// Chromatic Aberration
-					if (ImGui::TreeNodeEx("Chromatic Aberration", ImGuiTreeNodeFlags_DefaultOpen))
-					{
-						bool enableChromAb = (postProcessing.flags.w > 0.5f);
-						if (UI::DrawCheckbox("Enable Chromatic Aberration", &enableChromAb))
-						{
-							postProcessing.flags.w = enableChromAb ? 1.0f : 0.0f;
-						}
-						UI::DrawFloatControl("ChromAb Amount", &postProcessing.vignetteParams.w, 0.005f, 0.0f, 5.0f, 1.0f);
-						UI::DrawFloatControl("ChromAb Radial", &postProcessing.chromAbParams.x, 0.005f, 0.0f, 5.0f, 1.0f);
-						ImGui::TreePop();
-					}
-
-					// SSAO
-					if (ImGui::TreeNodeEx("SSAO", ImGuiTreeNodeFlags_DefaultOpen))
-					{
-						bool enableSSAO = (postProcessing.chromAbParams.y > 0.5f);
-						if (UI::DrawCheckbox("Enable SSAO", &enableSSAO))
-						{
-							postProcessing.chromAbParams.y = enableSSAO ? 1.0f : 0.0f;
-						}
-						UI::DrawFloatControl("SSAO Intensity", &postProcessing.chromAbParams.z, 0.025f, 0.0f, 10.0f, 1.0f);
+						UI::DrawFloatControl("Render Scale", &pp.renderScale, 0.01f, 0.25f, 1.0f, 1.0f);
 						ImGui::TreePop();
 					}
 
 					// Tonemapping & Color correction
-					if (ImGui::TreeNodeEx("Color Correction", ImGuiTreeNodeFlags_DefaultOpen))
+					if (ImGui::TreeNodeEx("Color Correction"))
 					{
 						const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "Filmic" };
-						int currentTonemap = postProcessing.tonemapMode;
+						int currentTonemap = static_cast<int>(pp.tonemapMode);
 						if (UI::DrawComboBox("Tonemap Mode", tonemapModes, std::size(tonemapModes), &currentTonemap))
 						{
-							postProcessing.tonemapMode = currentTonemap;
+							pp.tonemapMode = static_cast<TonemapMode>(currentTonemap);
 						}
-						UI::DrawFloatControl("Exposure", &postProcessing.exposure, 0.025f, 0.0f, 10.0f, 1.0f);
-						UI::DrawFloatControl("Gamma", &postProcessing.gamma, 0.025f, 0.1f, 5.0f, 2.2f);
+						// TODO: Add these controls back in when we have a proper color grading system
+						// UI::DrawFloatControl("Exposure", &pp.exposure, 0.025f, 0.0f, 10.0f, 1.0f);
+						// UI::DrawFloatControl("Gamma", &pp.gamma, 0.025f, 0.1f, 5.0f, 2.2f);
 						ImGui::TreePop();
 					}
 
-					// Depth of Field (DOF)
+					if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						UI::DrawCheckbox("Enable Bloom", &pp.enableBloom);
+						UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.025f, 0.0f, 100.0f, 1.0f);
+						UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f, 0.85f);
+						UI::DrawFloatControl("Bloom Knee", &pp.bloomKnee, 0.01f, 0.0f, 10.0f, 0.5f);
+						UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f, 1.0f);
+						UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16);
+						ImGui::TreePop();
+					}
+
+					if (ImGui::TreeNodeEx("Vignette", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						UI::DrawCheckbox("Enable Vignette", &pp.enableVignette);
+						UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.005f, 0.0f, 2.0f, 1.0f);
+						UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.005f, 0.0f, 2.0f, 0.5f);
+						UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.005f, 0.0f, 2.0f, 0.5f);
+						UI::DrawColorVec3("Vignette Color", pp.vignetteColor);
+						ImGui::TreePop();
+					}
+
+					if (ImGui::TreeNodeEx("Chromatic Aberration", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb);
+						UI::DrawFloatControl("ChromAb Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f, 0.001f);
+						UI::DrawFloatControl("ChromAb Radial", &pp.chromAbRadial, 0.005f, 0.0f, 5.0f, 1.0f);
+						ImGui::TreePop();
+					}
+
+					if (ImGui::TreeNodeEx("HBAO", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						UI::DrawCheckbox("Enable HBAO", &pp.enableSSAO);
+						UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f, 1.2f);
+						UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 0.5f, 0.03f);
+						UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.025f, 0.0f, 10.0f, 1.0f);
+						UI::DrawFloatControl("AO Power", &pp.aoPower, 0.025f, 0.0f, 5.0f, 1.35f);
+						ImGui::TreePop();
+					}
+
 					if (ImGui::TreeNodeEx("Depth of Field", ImGuiTreeNodeFlags_DefaultOpen))
 					{
-						bool enableDOF = (postProcessing.enableDOF != 0);
-						if (UI::DrawCheckbox("Enable DOF", &enableDOF))
-						{
-							postProcessing.enableDOF = enableDOF ? 1 : 0;
-						}
-						UI::DrawFloatControl("Focal Length", &postProcessing.focalLength, 0.5f, 1.0f, 500.0f, 120.0f);
-						UI::DrawFloatControl("Focal Distance", &postProcessing.focalDistance, 0.05f, 0.1f, 100.0f, 5.5f);
-						UI::DrawFloatControl("fStop", &postProcessing.fStop, 0.05f, 0.1f, 22.0f, 1.4f);
-						UI::DrawFloatControl("Focus Range", &postProcessing.focusRange, 0.05f, 0.1f, 100.0f, 5.0f);
-						UI::DrawFloatControl("Blur Amount", &postProcessing.blurAmount, 0.025f, 0.0f, 10.0f, 1.0f);
-						ImGui::TreePop();
-					}
-
-					// Fog Settings
-					if (ImGui::TreeNodeEx("Fog", ImGuiTreeNodeFlags_DefaultOpen))
-					{
-						UI::DrawFloatControl("Fog Density", &postProcessing.fogDensity, 0.005f, 0.0f, 1.0f, 0.0f);
-						UI::DrawFloatControl("Fog Start", &postProcessing.fogStart, 0.5f, 0.0f, 1000.0f, 10.0f);
-						UI::DrawFloatControl("Fog End", &postProcessing.fogEnd, 0.5f, 0.0f, 5000.0f, 100.0f);
-						UI::DrawColorVec4("Fog Color", postProcessing.fogColor);
+						UI::DrawCheckbox("Enable DOF", &lens.enabledDOF);
+						UI::DrawFloatControl("Focal Length", &lens.focalLength, 0.5f, 1.0f, 500.0f, 120.0f);
+						UI::DrawFloatControl("Focal Distance", &lens.focalDistance, 0.05f, 0.1f, 100.0f, 5.5f);
+						UI::DrawFloatControl("fStop", &lens.fStop, 0.05f, 0.1f, 22.0f, 1.4f);
+						UI::DrawFloatControl("Focus Range", &lens.focusRange, 0.05f, 0.1f, 100.0f, 5.0f);
+						UI::DrawFloatControl("Blur Amount", &lens.blurAmount, 0.025f, 0.0f, 10.0f, 1.0f);
 						ImGui::TreePop();
 					}
 
@@ -5195,12 +5190,11 @@ namespace ignite
                     it->sceneData.uiRT = uiRT;
                     it->sceneData.compositeRT = compositeRT;
                     it->sceneData.sceneRenderer = CreateRef<AssetSceneRenderer>();
-
                     if (it->sceneData.sceneRenderer)
                     {
 					    // Set tonemapping to Filmic for asset preview
 					    auto &postProcessing = it->sceneData.sceneRenderer->GetPostProcessingSettings();
-					    postProcessing.tonemapMode = static_cast<int>(TonemapMode::Filmic);
+					    postProcessing.tonemapMode = TonemapMode::Filmic;
                     }
                 }
             });
@@ -5253,8 +5247,6 @@ namespace ignite
     // :EVENTS
     void AssetEditorPanel::OnEvent(Event &event)
     {
-        // Asset open/create signals are now received via SignalBus (subscribed in OnAttach).
-        // Only true input events remain here.
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<MouseScrolledEvent>(BIND_CLASS_EVENT_FN(AssetEditorPanel::OnMouseScrollEvent));
     }
@@ -5378,18 +5370,13 @@ namespace ignite
 
     void AssetEditorPanel::CloseAllAssetEditors()
     {
-        if (m_EditorLayer && m_EditorLayer->GetActiveProject())
-        {
-            auto assetManager = AssetManager::GetInstance();
-            if (assetManager)
-            {
-                for (const auto &assetData : m_Assets)
-                {
-                    assetManager->ClearAssetPins(BuildAssetEditorPinOwnerTag(assetData.handle));
-                }
-            }
-        }
-
+		if (auto assetManager = AssetManager::GetInstance())
+		{
+			for (const auto &assetData : m_Assets)
+			{
+				assetManager->ClearAssetPins(BuildAssetEditorPinOwnerTag(assetData.handle));
+			}
+		}
         m_Assets.clear();
     }
 }

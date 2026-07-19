@@ -40,13 +40,25 @@ namespace ignite
         bool rightButtonDown = false;
     };
 
+    struct TAAProperties
+    {
+        bool enable = false;
+        float blendFactor = 0.08f; // Current-frame weight; lower is smoother, higher is more responsive
+    };
+
+    struct MSAAProperties
+    {
+        bool enable = false;
+        int sampleCount = 4; // Requested MSAA sample count for compatible render paths
+    };
+
     struct PostProcessing
     {
         // Toggles
         bool enableVignette = false;
         bool enableChromAb = false;
         bool enableBloom = false;
-        bool enableSSAO = false; // Screen space ambient occlusion
+        bool enableSSAO = false; // HBAO-compatible ambient occlusion toggle
         bool debugSSAO = false; // Visualize raw AO buffer
 
         // Bloom
@@ -66,11 +78,19 @@ namespace ignite
         float chromAbAmount = 0.001f;
         float chromAbRadial = 0.1f;
 
-        // SSAO params
-        float aoRadius = 0.25f;     // view-space hemisphere radius in world units
-        float aoBias = 0.015f;      // depth bias to prevent self-occlusion (~5% of radius)
+        // HBAO params
+        float aoRadius = 1.2f;      // view-space horizon radius in world units
+        float aoBias = 0.03f;       // tangent bias to reduce self-occlusion
         float aoIntensity = 1.0f;   // blend strength when applied in post (1.0 = natural)
-        float aoPower = 1.5f;       // curve/power for contrast
+        float aoPower = 1.35f;      // curve/power for contrast
+
+		// Anti-aliasing 
+		TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
+		MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
+		float renderScale = 1.0f;      // Internal scene resolution scale, composite remains native size
+
+		// Tonemapping
+		TonemapMode tonemapMode = TonemapMode::Reinhard;
     };
 
     struct CameraLens
@@ -84,7 +104,6 @@ namespace ignite
         float gamma = 1.1f;
         bool enabledDOF = false;
     };
-
 
     class IGN_API ICamera
     {
@@ -143,7 +162,7 @@ namespace ignite
     protected:
         glm::mat4 m_View = glm::mat4(1.0f);
         glm::mat4 m_Projection = glm::mat4(1.0f);
-		glm::uvec2 m_ViewportSize;
+        glm::uvec2 m_ViewportSize;
     };
 }
 

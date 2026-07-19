@@ -5,7 +5,7 @@
 #define IGN_ASSET_IMPORTER_HPP
 
 #include "ignite/asset/asset.hpp"
-#include "ignite/scene/entity.hpp"
+#include "ignite/scene/component.hpp"
 
 #include <functional>
 
