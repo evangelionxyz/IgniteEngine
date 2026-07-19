@@ -5253,8 +5253,6 @@ namespace ignite
     // :EVENTS
     void AssetEditorPanel::OnEvent(Event &event)
     {
-        // Asset open/create signals are now received via SignalBus (subscribed in OnAttach).
-        // Only true input events remain here.
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<MouseScrolledEvent>(BIND_CLASS_EVENT_FN(AssetEditorPanel::OnMouseScrollEvent));
     }
@@ -5378,18 +5376,13 @@ namespace ignite
 
     void AssetEditorPanel::CloseAllAssetEditors()
     {
-        if (m_EditorLayer && m_EditorLayer->GetActiveProject())
-        {
-            auto assetManager = AssetManager::GetInstance();
-            if (assetManager)
-            {
-                for (const auto &assetData : m_Assets)
-                {
-                    assetManager->ClearAssetPins(BuildAssetEditorPinOwnerTag(assetData.handle));
-                }
-            }
-        }
-
+		if (auto assetManager = AssetManager::GetInstance())
+		{
+			for (const auto &assetData : m_Assets)
+			{
+				assetManager->ClearAssetPins(BuildAssetEditorPinOwnerTag(assetData.handle));
+			}
+		}
         m_Assets.clear();
     }
 }

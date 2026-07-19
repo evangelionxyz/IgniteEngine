@@ -25,25 +25,19 @@ namespace ignite
 {
     namespace
     {
-        std::string ToLower(std::string value)
-        {
-            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            return value;
-        }
-
         bool IsMeshImportDialogFile(const ignite::Path &filepath)
         {
-            return GetAssetTypeFromExtension(ToLower(filepath.extension().string())) == AssetType::Mesh;
+            return GetAssetTypeFromExtension(stringutils::ToLower(filepath.extension().string())) == AssetType::Mesh;
         }
 
         bool IsTextureImportDialogFile(const ignite::Path &filepath)
         {
-            return GetAssetTypeFromExtension(ToLower(filepath.extension().string())) == AssetType::Texture;
+            return GetAssetTypeFromExtension(stringutils::ToLower(filepath.extension().string())) == AssetType::Texture;
         }
 
         bool IsFontImportDialogFile(const ignite::Path &filepath)
         {
-            return GetAssetTypeFromExtension(ToLower(filepath.extension().string())) == AssetType::Font;
+            return GetAssetTypeFromExtension(stringutils::ToLower(filepath.extension().string())) == AssetType::Font;
         }
 
         bool IsPathWithin(const std::filesystem::path &path, const std::filesystem::path &base)
