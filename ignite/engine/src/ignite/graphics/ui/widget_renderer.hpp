@@ -47,6 +47,7 @@ namespace ignite
         uint32_t GetOrInsertFontTexture(const Ref<Texture> &texture);
 
         static Ref<WidgetRenderer> Create(uint32_t width, uint32_t height);
+        static void ClearCache();
 
         const uint32_t &GetWidth() { return m_Width; }
         const uint32_t &GetHeight() { return m_Height; }

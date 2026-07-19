@@ -212,6 +212,13 @@ namespace ignite
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_WidgetTextPSOCache;
     static std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> s_WidgetBindingSetCache;
 
+    void WidgetRenderer::ClearCache()
+    {
+        s_WidgetQuadPSOCache.clear();
+        s_WidgetTextPSOCache.clear();
+        s_WidgetBindingSetCache.clear();
+    }
+
     static Ref<GraphicsPipeline> GetWidgetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer)
     {
         auto key = MakeFramebufferKey(framebuffer);

@@ -136,11 +136,31 @@ namespace ignite
 
         m_Scene = scene;
         m_AnimatedPSOCache.clear();
+        m_TransparentAnimatedPSOCache.clear();
+        m_AnimatedCSMPSOCache.clear();
+        m_StaticPSOCache.clear();
+        m_TransparentStaticPSOCache.clear();
+        m_StaticCSMPSOCache.clear();
         m_EnvironmentPSOCache.clear();
         m_CompositePSOCache.clear();
         m_DebugGridPSOCache.clear();
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
+        {
+            GPUUploadSync::DeviceWaitIdle(device);
+        }
+        m_RenderTargets.clear();
+        m_EntityObjectIndexCache.clear();
+        m_EntityBoneOffsetCache.clear();
+        m_SocketObjectIndexCache.clear();
+        BindingCache::Clear();
+        WidgetRenderer::ClearCache();
+
+        if (m_RuntimeMaterial)
+        {
+            m_RuntimeMaterial->InvalidateBindingSet();
+        }
 
         if (m_Renderer2D)
         {

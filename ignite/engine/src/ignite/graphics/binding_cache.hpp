@@ -12,6 +12,7 @@ namespace ignite
     public:
         static void Init(nvrhi::IDevice *device);
         static void Shutdown();
+        static void Clear();
 
         static nvrhi::BindingSetHandle GetCachedBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout);
         static nvrhi::BindingSetHandle GetOrCreateBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout);
