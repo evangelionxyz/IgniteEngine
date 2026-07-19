@@ -54,6 +54,8 @@ namespace ignite
         template<typename T = Asset>
         void AssignAsset(AssetHandle handle, const Ref<T> &asset)
         {
+			LOG_ASSERT(handle != AssetHandle(0), "[Asset Manager] Invalid asset handle");
+
             if (asset && std::is_base_of_v<Asset, T>)
             {
                 Ref<Asset> oldAsset;

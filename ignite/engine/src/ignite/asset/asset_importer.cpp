@@ -823,6 +823,7 @@ namespace ignite
         if (asset)
         {
             asset->handle = handle;
+            asset->SetSkeletonHandle(asset->GetSkeletonHandle());
             asset->SetReadyFlag(true);
             asset->SetDirtyFlag(false);
         }

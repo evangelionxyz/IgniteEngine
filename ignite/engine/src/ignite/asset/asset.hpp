@@ -259,7 +259,8 @@ namespace ignite
     public:
         using MetaSerializer = std::function<void(Serializer &)>;
 
-        AssetHandle handle;
+        // TODO: Please check this
+        AssetHandle handle = AssetHandle(0);
 
         virtual ~Asset() = default;
 

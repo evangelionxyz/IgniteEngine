@@ -27,7 +27,8 @@ namespace ignite
 	void AnimState::SetAnimationHandle(const AssetHandle &animationHandle)
 	{
         m_AnimHandle = animationHandle;
-        AssetManager::GetInstance()->AddAssetPin(m_AnimHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
+		if (m_AnimHandle != AssetHandle(0) || m_UUID != UUID(0))
+            AssetManager::GetInstance()->AddAssetPin(m_AnimHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
 	}
 
 	AnimatorController::~AnimatorController()
@@ -39,6 +40,7 @@ namespace ignite
 	Ref<AnimatorController> AnimatorController::Clone(const Ref<AnimatorController> &other)
 	{
         Ref<AnimatorController> cloneAnim = CreateRef<AnimatorController>(*other);
+        cloneAnim->handle = AssetHandle();
         
         // Copy and create asset pin
         // for skeleton and states
@@ -54,7 +56,8 @@ namespace ignite
 	void AnimatorController::SetSkeletonHandle(const AssetHandle &skeletonHandle)
 	{
 		m_SkeletonHandle = skeletonHandle;
-		AssetManager::GetInstance()->AddAssetPin(m_SkeletonHandle, std::format("animatorcontroller.{}.{}", (uint64_t)handle, (uint64_t)m_SkeletonHandle));
+		if (handle != AssetHandle(0) || m_SkeletonHandle != AssetHandle(0))
+		    AssetManager::GetInstance()->AddAssetPin(m_SkeletonHandle, std::format("animatorcontroller.{}.{}", (uint64_t)handle, (uint64_t)m_SkeletonHandle));
 	}
 
 	std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
@@ -236,7 +239,8 @@ namespace ignite
 
         auto ctrl = CreateRef<AnimatorController>();
         if (auto n = node["DefaultState"]) ctrl->defaultState = n.as<std::string>();
-        if (auto n = node["SkeletonHandle"]) ctrl->SetSkeletonHandle(AssetHandle(n.as<uint64_t>()));
+        // if (auto n = node["SkeletonHandle"]) ctrl->SetSkeletonHandle(AssetHandle(n.as<uint64_t>()));
+        if (auto n = node["SkeletonHandle"]) ctrl->m_SkeletonHandle = AssetHandle(n.as<uint64_t>());
 
         if (YAML::Node statesNode = node["States"]; statesNode && statesNode.IsSequence())
         {

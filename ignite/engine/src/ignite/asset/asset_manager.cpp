@@ -244,8 +244,9 @@ namespace ignite
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
-		std::unique_lock lock(m_AssetMutex);
+		LOG_ASSERT(handle != AssetHandle(0), "[Asset Manager] Invalid asset handle");
 
+		std::unique_lock lock(m_AssetMutex);
         m_AssetRegistry[handle] = metadata;
 
         if (!metadata.filepath.empty())
