@@ -340,9 +340,6 @@ namespace ignite
         float gamma = 2.2f;
         float ambient = 0.5f;
 
-        // Tonemap
-        TonemapMode tonemapMode = TonemapMode::Reinhard;
-
         // Fog
         float fogDensity = 0.0f;
         glm::vec4 fogColor = glm::vec4(0.5f, 0.6f, 0.7f, 1.0f);

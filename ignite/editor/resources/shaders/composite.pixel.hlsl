@@ -14,6 +14,7 @@ Texture2D ssaoTexture : register(t4);
 Texture2D depthTexture : register(t5);
 Texture2D debugTexture : register(t6);
 Texture2D<uint> objectIDTexture : register(t7);
+Texture2D taaHistoryTexture : register(t8);
 
 SamplerState linearSampler : register(s0);
 
@@ -42,6 +43,8 @@ cbuffer CompositePostProcess : register(b0)
     float fogStart;
     float fogEnd;
     float padding_fog;
+
+    float4 taaParams; // x=enableTAA, y=currentFrameWeight, z=historyValid
 
     float4x4 projectionInv;
 }
@@ -215,6 +218,12 @@ float4 main(VSOutput input) : SV_Target
 
     // Apply tonemapping
     float3 tonemappedScene = ApplyTonemap(sceneColor, tonemapMode, exposure, gamma);
+
+    if (taaParams.x > 0.5f && taaParams.z > 0.5f)
+    {
+        float3 historyColor = taaHistoryTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb;
+        tonemappedScene = lerp(historyColor, tonemappedScene, saturate(taaParams.y));
+    }
 
     float4 uiColor = uiTexture.SampleLevel(linearSampler, input.uv, 0.0f);
     float4 edgeColor = edgeDetection.SampleLevel(linearSampler, input.uv, 0.0f);

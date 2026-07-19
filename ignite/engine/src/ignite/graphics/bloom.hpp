@@ -19,8 +19,8 @@ namespace ignite
         int iterations = 6;        // More levels for higher quality
         float threshold = 1.0f;    // HDR threshold
         float knee = 0.5f;         // Soft knee for smooth transition
-        float radius = 1.0f;       // Blur radius multiplier
-        float intensity = 5.0f;    // Final bloom intensity
+        float radius = 1.25f;      // Blur radius multiplier
+        float intensity = 1.5f;    // Final composite intensity
     };
 
     class Bloom
@@ -58,7 +58,8 @@ namespace ignite
         struct BlurParams
         {
             int horizontal = 1;
-            float _padding[3] = { 0.0f, 0.0f, 0.0f };
+            float radius = 1.0f;
+            float _padding[2] = { 0.0f, 0.0f };
         };
 
         struct UpsampleParams

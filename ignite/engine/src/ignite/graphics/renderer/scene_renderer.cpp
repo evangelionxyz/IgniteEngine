@@ -41,13 +41,36 @@ namespace ignite
         return buf;
     }();
 
+    static float Halton(uint32_t index, uint32_t base)
+    {
+        float result = 0.0f;
+        float fraction = 1.0f / static_cast<float>(base);
+        while (index > 0)
+        {
+            result += static_cast<float>(index % base) * fraction;
+            index /= base;
+            fraction /= static_cast<float>(base);
+        }
+        return result;
+    }
+
+    static glm::vec2 GetTAAJitter(uint64_t frameIndex, uint32_t width, uint32_t height)
+    {
+        if (width == 0 || height == 0)
+            return glm::vec2(0.0f);
+
+        const uint32_t haltonIndex = static_cast<uint32_t>(frameIndex % 8u) + 1u;
+        const glm::vec2 halton = glm::vec2(Halton(haltonIndex, 2), Halton(haltonIndex, 3));
+        return (halton * 2.0f - 1.0f) / glm::vec2(static_cast<float>(width), static_cast<float>(height));
+    }
+
     // ===============================
     // Scene Renderer Implementation
     // ===============================
     SceneRenderer::SceneRenderer()
     {
         auto compositeSamplerDesc = nvrhi::SamplerDesc();
-        compositeSamplerDesc.setAllFilters(false);
+        compositeSamplerDesc.setAllFilters(true);
         compositeSamplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
         m_CompositeSampler = m_Device->createSampler(compositeSamplerDesc);
 
@@ -164,13 +187,26 @@ namespace ignite
             if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
             {
                 const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                postProcessing = cc.camera.postProcessing;
-                cameraLens = cc.camera.lens;
+				postProcessing = cc.camera.postProcessing;
+				cameraLens = cc.camera.lens;
             }
 
+            postProcessing.taaProperties.enable = postProcessing.taaProperties.enable || sceneRenderSettings.taaProperties.enable;
+            postProcessing.taaProperties.blendFactor = sceneRenderSettings.taaProperties.enable ? sceneRenderSettings.taaProperties.blendFactor : postProcessing.taaProperties.blendFactor;
+            postProcessing.msaaProperties.enable = postProcessing.msaaProperties.enable || sceneRenderSettings.msaaProperties.enable;
+            postProcessing.msaaProperties.sampleCount = sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : postProcessing.msaaProperties.sampleCount;
+            postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
+
             // IMPORTANT!!!!
-			// Write frame context buffers before using it
-			CameraBufferData cameraData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
+            // Write frame context buffers before using it
+            glm::mat4 projection = camera->GetProjection();
+            if (postProcessing.taaProperties.enable)
+            {
+                const glm::vec2 jitter = GetTAAJitter(m_TAAFrameIndex, target->sceneRT->GetWidth(), target->sceneRT->GetHeight());
+                projection[2][0] += jitter.x;
+                projection[2][1] += jitter.y;
+            }
+            CameraBufferData cameraData = { projection, camera->GetView(), glm::vec4(camera->position, 1.0f) };
             {
 				IGN_PROFILE_SCOPE("SceneRenderer::WriteFrameData");
 			    frameContext->cameraBuffer.SetData(cmd, &cameraData, sizeof(cameraData));
@@ -303,7 +339,7 @@ namespace ignite
             Ref<Texture> ssaoTexture = nullptr;
             if (postProcessing.enableSSAO)
             {
-                IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
+                IGN_PROFILE_SCOPE_COLOR("SceneRenderer::HBAOPass", 0x404040FF);
                 // Use distinct SSAO instances for game/edit to prevent texture resizing ping-pong
                 Ref<SSAO> ssaoInstance = isGameCamera ? m_GameplaySSAO : m_EditorSSAO;
                 ssaoInstance->Resize(width, height);
@@ -314,6 +350,22 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
                 CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture);
+            }
+
+            if (postProcessing.taaProperties.enable && target->taaHistoryRT[frameContext->frameIndexInFlight])
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::TAAHistoryCopy");
+                Ref<Texture> compositeColor = target->compositeRT->GetColorAttachment(0);
+                Ref<Texture> historyColor = target->taaHistoryRT[frameContext->frameIndexInFlight]->GetColorAttachment(0);
+                cmd->setTextureState(compositeColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::CopySource);
+                cmd->setTextureState(historyColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
+                cmd->commitBarriers();
+                cmd->copyTexture(historyColor->GetHandle(), nvrhi::TextureSlice(), compositeColor->GetHandle(), nvrhi::TextureSlice());
+                cmd->setTextureState(historyColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->setTextureState(compositeColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->commitBarriers();
+                target->taaHistoryValid = true;
+                ++m_TAAFrameIndex;
             }
 
             cmd->close();
@@ -532,37 +584,58 @@ namespace ignite
             }
         }
 
+        PostProcessing postProcessing = camera ? camera->postProcessing : PostProcessing{};
+        if (isGameCamera && m_Scene)
+        {
+            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+            {
+                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                postProcessing = cc.camera.postProcessing;
+            }
+        }
+        postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
+
+        const uint32_t renderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(width) * postProcessing.renderScale)));
+        const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(height) * postProcessing.renderScale)));
+
         if (isGameCamera)
         {
             if (m_GameplayBloom)
-                m_GameplayBloom->Resize(width, height);
+                m_GameplayBloom->Resize(renderWidth, renderHeight);
 
             if (m_GameplaySSAO)
-                m_GameplaySSAO->Resize(width, height);
+                m_GameplaySSAO->Resize(renderWidth, renderHeight);
         }
         else
         {
             if (m_EditorBloom)
-                m_EditorBloom->Resize(width, height);
+                m_EditorBloom->Resize(renderWidth, renderHeight);
 
             if (m_EditorSSAO)
-                m_EditorSSAO->Resize(width, height);
+                m_EditorSSAO->Resize(renderWidth, renderHeight);
         }
 
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
 
+        // Render targets
         auto it = m_RenderTargets.find(camera);
         if (it != m_RenderTargets.end())
         {
             auto target = it->second;
 
-            target->sceneRT->Resize(width, height);
+            target->sceneRT->Resize(renderWidth, renderHeight);
             target->widgetRT->Resize(width, height);
             target->compositeRT->Resize(width, height);
+            for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
+            {
+                if (historyRT)
+                    historyRT->Resize(width, height);
+            }
+            target->taaHistoryValid = false;
 
             target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
-            target->debugRT->Resize(width, height);
+            target->debugRT->Resize(renderWidth, renderHeight);
         }
     }
 
@@ -1544,54 +1617,64 @@ namespace ignite
 		// Setup Post Processing settings
         if (camera)
         {
-            m_PostProcessingSettings.flags.x = (postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
-            m_PostProcessingSettings.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
-            m_PostProcessingSettings.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
-            m_PostProcessingSettings.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
-            m_PostProcessingSettings.vignetteParams = glm::vec4(
+            m_PostProcessingData.flags.x = (postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
+            m_PostProcessingData.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
+            m_PostProcessingData.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
+            m_PostProcessingData.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
+			m_PostProcessingData.tonemapMode = static_cast<int>(postProcessing.tonemapMode);
+            m_PostProcessingData.vignetteParams = glm::vec4(
                 postProcessing.vignetteRadius,
                 glm::max(postProcessing.vignetteSoftness, 0.001f),
                 postProcessing.vignetteIntensity,
-                postProcessing.chromAbAmount
+                postProcessing.chromAbAmount);
+            m_PostProcessingData.chromAbParams.x = postProcessing.chromAbRadial;
+            m_PostProcessingData.chromAbParams.y = (postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
+            m_PostProcessingData.chromAbParams.z = postProcessing.aoIntensity;
+            m_PostProcessingData.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
+            const bool enableTAA = postProcessing.taaProperties.enable && target->taaHistoryValid;
+            m_PostProcessingData.taaParams = glm::vec4(
+                enableTAA ? 1.0f : 0.0f,
+                glm::clamp(postProcessing.taaProperties.blendFactor, 0.01f, 1.0f),
+                target->taaHistoryValid ? 1.0f : 0.0f, 0.0f
             );
-            m_PostProcessingSettings.chromAbParams.x = postProcessing.chromAbRadial;
-            m_PostProcessingSettings.chromAbParams.y = (postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
-            m_PostProcessingSettings.chromAbParams.z = postProcessing.aoIntensity;
-            m_PostProcessingSettings.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
-            m_PostProcessingSettings.projectionInv = glm::inverse(camera->GetProjection());
-            m_PostProcessingSettings.enableDOF = lens.enabledDOF ? 1 : 0;
-            m_PostProcessingSettings.focalLength = lens.focalLength;
-            m_PostProcessingSettings.focalDistance = lens.focalDistance;
-            m_PostProcessingSettings.fStop = lens.fStop;
-            m_PostProcessingSettings.focusRange = lens.focusRange;
-            m_PostProcessingSettings.blurAmount = lens.blurAmount;
+            m_PostProcessingData.projectionInv = glm::inverse(camera->GetProjection());
+            m_PostProcessingData.enableDOF = lens.enabledDOF ? 1 : 0;
+            m_PostProcessingData.focalLength = lens.focalLength;
+            m_PostProcessingData.focalDistance = lens.focalDistance;
+            m_PostProcessingData.fStop = lens.fStop;
+            m_PostProcessingData.focusRange = lens.focusRange;
+            m_PostProcessingData.blurAmount = lens.blurAmount;
 
             if (m_WorldEnvironment)
             {
-                m_PostProcessingSettings.tonemapMode = static_cast<int>(m_WorldEnvironment->tonemapMode);
-                m_PostProcessingSettings.exposure = m_WorldEnvironment->exposure;
-                m_PostProcessingSettings.gamma = m_WorldEnvironment->gamma;
+                m_PostProcessingData.exposure = m_WorldEnvironment->exposure;
+                m_PostProcessingData.gamma = m_WorldEnvironment->gamma;
 
-                m_PostProcessingSettings.fogColor = m_WorldEnvironment->fogColor;
-                m_PostProcessingSettings.fogDensity = m_WorldEnvironment->fogDensity;
-                m_PostProcessingSettings.fogStart = m_WorldEnvironment->fogStart;
-                m_PostProcessingSettings.fogEnd = m_WorldEnvironment->fogEnd;
+                m_PostProcessingData.fogColor = m_WorldEnvironment->fogColor;
+                m_PostProcessingData.fogDensity = m_WorldEnvironment->fogDensity;
+                m_PostProcessingData.fogStart = m_WorldEnvironment->fogStart;
+                m_PostProcessingData.fogEnd = m_WorldEnvironment->fogEnd;
             }
             else
             {
-                m_PostProcessingSettings.tonemapMode = 0; // Reinhard
-                m_PostProcessingSettings.exposure = 1.1f;
-                m_PostProcessingSettings.gamma = 2.2f;
-                m_PostProcessingSettings.fogDensity = 0.0f;
+                m_PostProcessingData.tonemapMode = 0; // Reinhard
+                m_PostProcessingData.exposure = 1.1f;
+                m_PostProcessingData.gamma = 2.2f;
+                m_PostProcessingData.fogDensity = 0.0f;
             }
         }
 
-        m_CompositePostProcessBuffer.SetData(cmd, &m_PostProcessingSettings, sizeof(m_PostProcessingSettings));
+        m_CompositePostProcessBuffer.SetData(cmd, &m_PostProcessingData, sizeof(m_PostProcessingData));
         cmd->setBufferState(m_CompositePostProcessBuffer.GetHandle(), nvrhi::ResourceStates::ConstantBuffer);
+
+        const uint32_t previousHistoryIndex = (frameContext->frameIndexInFlight + 2u) % 3u;
+        Ref<Texture> taaHistoryTexture = target->taaHistoryRT[previousHistoryIndex]
+            ? target->taaHistoryRT[previousHistoryIndex]->GetColorAttachment(0)
+            : Renderer::GetBlackTexture();
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePSO(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
         nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), target, 
-            edgeTexture, bloomTexture, ssaoTexture, m_CompositePostProcessBuffer.GetHandle(), m_CompositeSampler.Get());
+            edgeTexture, bloomTexture, ssaoTexture, taaHistoryTexture, m_CompositePostProcessBuffer.GetHandle(), m_CompositeSampler.Get());
 
         cmd->setBufferState(m_CompositeVertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
 
@@ -1942,6 +2025,7 @@ namespace ignite
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(7)); // objectID
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(8)); // TAA history
         layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
         nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
@@ -1974,11 +2058,12 @@ namespace ignite
     }
 
 	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-		Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler)
+			Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler)
     {
         Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
         Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
         Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
+        Ref<Texture> taaHistory = taaHistoryTexture ? taaHistoryTexture : Renderer::GetBlackTexture();
         Ref<Texture> depth = target->sceneRT->GetDepthAttachment() ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
         Ref<Texture> debug = target->debugRT->GetColorAttachment(0) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
         Ref<Texture> objectIDTex = target->sceneRT->GetColorAttachment(1) ? target->sceneRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture();
@@ -1994,6 +2079,7 @@ namespace ignite
             depth->GetHandle(),
             debug->GetHandle(),
             objectIDTex->GetHandle(),
+            taaHistory->GetHandle(),
             postProcessBuffer,
             sampler
         };
@@ -2016,6 +2102,7 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, depth->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, debug->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, objectIDTex->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(8, taaHistory->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
 
@@ -2041,7 +2128,7 @@ namespace ignite
         sceneRTCreateInfo.attachments =
         {
             FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget}, // HDR Main Color
             FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
         };
 
@@ -2063,6 +2150,16 @@ namespace ignite
         };
 
         target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
+
+        RenderTargetCreateInfo taaHistoryRTCreateInfo = {};
+        taaHistoryRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[TAA History Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::ShaderResource }
+        };
+        for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
+        {
+            historyRT = RenderTarget::Create(taaHistoryRTCreateInfo, "[Scene Renderer] TAA History RT");
+        }
 
         m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
 

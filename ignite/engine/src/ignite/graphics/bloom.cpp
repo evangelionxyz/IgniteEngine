@@ -83,7 +83,7 @@ namespace ignite
         RenderTargetCreateInfo levelRTInfo;
         levelRTInfo.attachments =
         {
-            FramebufferAttachments{ "[Bloom Color]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }
+            FramebufferAttachments{ "[Bloom Color]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget }
         };
 
         for (int i = 0; i < 8; ++i)
@@ -116,7 +116,7 @@ namespace ignite
             finalRTInfo.height = static_cast<uint32_t>(m_Levels.front().height);
             finalRTInfo.attachments =
             {
-                FramebufferAttachments{ "[Bloom Final]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }
+                FramebufferAttachments{ "[Bloom Final]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget }
             };
 
             m_FinalRT = RenderTarget::Create(finalRTInfo, "[Bloom Final RT]");
@@ -228,7 +228,7 @@ namespace ignite
 
             DownsampleParams params;
             params.threshold = (i == 0) ? settings.threshold : 0.0f;
-            params.intensity = settings.intensity;
+            params.intensity = 1.0f;
             params.knee = settings.knee;
             m_DownsampleParamsBuffer->SetData(cmd, &params, sizeof(params));
 
@@ -249,6 +249,7 @@ namespace ignite
             level.blurHorizontalRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
             BlurParams horizontalParams;
             horizontalParams.horizontal = 1;
+            horizontalParams.radius = settings.radius;
             m_BlurParamsBuffer->SetData(cmd, &horizontalParams, sizeof(horizontalParams));
 
             auto hDesc = nvrhi::BindingSetDesc();
@@ -262,6 +263,7 @@ namespace ignite
             level.blurVerticalRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
             BlurParams verticalParams;
             verticalParams.horizontal = 0;
+            verticalParams.radius = settings.radius;
             m_BlurParamsBuffer->SetData(cmd, &verticalParams, sizeof(verticalParams));
 
             auto vDesc = nvrhi::BindingSetDesc();

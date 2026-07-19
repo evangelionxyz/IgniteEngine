@@ -61,6 +61,9 @@ namespace ignite
             bool gameplayResizing = false;
             bool editorPlayResizing = false;
 
+            bool editorRequestToResize = false;
+            bool gameplayRequestToResize = false;
+
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
             ProjectInfo projectCreateInfo;
 

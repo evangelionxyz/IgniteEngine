@@ -22,10 +22,11 @@ float3 Prefilter(float3 color)
     float soft = saturate((brightness - threshold + k) / (2.0f * k));
     soft = soft * soft * (3.0f - 2.0f * soft);
 
-    float contribution = max(brightness - threshold, 0.0f) * soft;
+    float hard = max(brightness - threshold, 0.0f);
+    float contribution = max(hard, soft * soft * k);
     contribution /= max(brightness, 1e-4f);
 
-    return color * contribution * intensity;
+    return color * saturate(contribution) * intensity;
 }
 
 float4 main(VSOutput input) : SV_Target

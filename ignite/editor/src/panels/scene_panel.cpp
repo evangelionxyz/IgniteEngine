@@ -688,15 +688,6 @@ namespace ignite
                 UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 0.0f, FLT_MAX);
                 UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
 
-                {
-                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
-                    int tonemapIndex = static_cast<int>(c.tonemapMode);
-                    if (UI::DrawComboBox("Tonemap", tonemapLabels, IM_ARRAYSIZE(tonemapLabels), &tonemapIndex))
-                    {
-                        c.tonemapMode = static_cast<TonemapMode>(tonemapIndex);
-                    }
-                }
-
                 // Fog
                 UI::DrawFloatControl("Fog Density", &c.fogDensity, 0.00001f, 0.0f, FLT_MAX);
                 if (c.fogDensity > 0.0f)
@@ -1621,58 +1612,114 @@ namespace ignite
                     }
                 }
 
-                ImGui::SeparatorText("Post Processing");
-                auto &pp = c.camera.postProcessing;
+				if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					auto &pp = c.camera.postProcessing;
 
-                // Depth of Field
-                c.dirty |= UI::DrawCheckbox("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
-                if (c.camera.lens.enabledDOF)
-                {
-                    c.dirty |= UI::DrawFloatControl("Focal Length", &c.camera.lens.focalLength, 0.1f, 0.0f, FLT_MAX).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Focal Distance", &c.camera.lens.focalDistance, 0.05f, 0.0f, FLT_MAX).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("fStop", &c.camera.lens.fStop, 0.05f, 0.0f, FLT_MAX).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Focus Range", &c.camera.lens.focusRange, 0.05f, 0.0f, FLT_MAX).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Blur Amount", &c.camera.lens.blurAmount, 0.05f, 0.0f, FLT_MAX).isItemEdited;
-                }
+					if (ImGui::TreeNodeEx("Anti aliasing"))
+					{
+						if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
+						{
+							c.dirty |= UI::DrawCheckbox("Enable", &pp.taaProperties.enable);
+							c.dirty |= UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
+							ImGui::TreePop();
+						}
 
-                // Bloom
-                c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
-                if (pp.enableBloom)
-                {
-                    c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Bloom Knee", &pp.bloomKnee, 0.01f, 0.0f, 10.0f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
-                    c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
-                }
+						if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
+						{
+                            c.dirty |= UI::DrawCheckbox("Enable", &pp.msaaProperties.enable);
+                            c.dirty |= UI::DrawIntControl("Samples", &pp.msaaProperties.sampleCount, 1, 1, 16);
+							ImGui::TreePop();
+						}
 
-                // Vignette
-                c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
-                if (pp.enableVignette)
-                {
-                    c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
-                }
+						ImGui::TreePop();
+					}
 
-                // Chromatic Aberration
-                c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
-                if (pp.enableChromAb)
-                {
-                    c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
-                }
+					if (ImGui::TreeNodeEx("Render scale"))
+					{
+						c.dirty |= UI::DrawFloatControl("Factor", &pp.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
+						if (UI::DrawButtonWithColumn("", "Apply"))
+						{
+							m_EditorLayer->m_State.gameplayRequestToResize = true;
+                            m_EditorLayer->m_State.editorRequestToResize = true;
+						}
+						ImGui::TreePop();
+					}
 
-                // SSAO
-                c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
-                if (pp.enableSSAO)
-                {
-                    c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 0.5f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
-                    c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
-                }
+					if (ImGui::TreeNodeEx("Post Processing"))
+					{
+						// Tonemapping & Color correction
+						if (ImGui::TreeNodeEx("Color Correction", ImGuiTreeNodeFlags_DefaultOpen))
+						{
+							const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "Filmic" };
+							int currentTonemap = static_cast<int>(pp.tonemapMode);
+							if (UI::DrawComboBox("Tonemap Mode", tonemapModes, std::size(tonemapModes), &currentTonemap))
+							{
+								pp.tonemapMode = static_cast<TonemapMode>(currentTonemap);
+                                c.dirty = true;
+							}
+							// TODO: Add these controls back in when we have a proper color grading system
+							// c.dirty |= UI::DrawFloatControl("Exposure", &pp.exposure, 0.025f, 0.0f, 10.0f, 1.0f);
+							// c.dirty |= UI::DrawFloatControl("Gamma", &pp.gamma, 0.025f, 0.1f, 5.0f, 2.2f);
+
+							ImGui::TreePop();
+						}
+
+						// Depth of Field
+						c.dirty |= UI::DrawCheckbox("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
+						if (c.camera.lens.enabledDOF)
+						{
+							c.dirty |= UI::DrawFloatControl("Focal Length", &c.camera.lens.focalLength, 0.1f, 0.0f, FLT_MAX).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Focal Distance", &c.camera.lens.focalDistance, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("fStop", &c.camera.lens.fStop, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Focus Range", &c.camera.lens.focusRange, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Blur Amount", &c.camera.lens.blurAmount, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+						}
+
+						// Bloom
+						c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
+						if (pp.enableBloom)
+						{
+							c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Bloom Knee", &pp.bloomKnee, 0.01f, 0.0f, 10.0f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
+							c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
+						}
+
+						// Vignette
+						c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
+						if (pp.enableVignette)
+						{
+							c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
+						}
+
+						// Chromatic Aberration
+						c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
+						if (pp.enableChromAb)
+						{
+							c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
+						}
+
+						// SSAO
+						c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
+						if (pp.enableSSAO)
+						{
+							c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 0.5f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
+						}
+
+						ImGui::TreePop();
+					}
+
+					ImGui::TreePop();
+				}
 
                 if (c.dirty && m_Data.sceneViewportGameplayVisible)
                 {

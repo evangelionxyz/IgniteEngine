@@ -57,6 +57,10 @@ namespace ignite
         bool showBoundingBox = false;
         bool showPhysicsCollider = true;
 
+        TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
+        MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
+        float renderScale = 1.0f;
+
         SceneRenderSettings()
         {
             worldGrid2D.enableZAxis = false;
@@ -101,6 +105,8 @@ namespace ignite
         float fogEnd = 100.0f;
         float padding_fog = 0.0f;
 
+        glm::vec4 taaParams = glm::vec4(0.0f); // x=enableTAA, y=currentFrameWeight, z=historyValid
+
         glm::mat4 projectionInv = glm::mat4(1.0f);
     };
 
@@ -118,45 +124,46 @@ namespace ignite
         int GetDebugShadowMode() const { return m_SceneGPUData.debugShadow; }
         void SetDebugShadowMode(int debugShadow) { m_SceneGPUData.debugShadow = debugShadow; }
 
-		CompositePostProcess_GPUData &GetPostProcessingSettings() { return m_PostProcessingSettings; }
+        PostProcessing &GetPostProcessingSettings() { return m_PostProcessing; }
+        const PostProcessing &GetPostProcessingSettings() const { return m_PostProcessing; }
 
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap();
 
-		template<typename T>
-		Ref<T> ResolveAsset(AssetHandle handle)
-		{
+        template<typename T>
+        Ref<T> ResolveAsset(AssetHandle handle)
+        {
             auto assetManager = AssetManager::GetInstance();
-			if (!assetManager || handle == AssetHandle(0))
-				return nullptr;
+            if (!assetManager || handle == AssetHandle(0))
+                return nullptr;
 
-			if (auto project = assetManager->LockActiveProject())
-			{
-				AssetResolveKey key{ assetManager->LockActiveProject().get(), handle };
-				auto it = m_ResolvedAssetsCache.find(key);
-				if (it != m_ResolvedAssetsCache.end())
-				{
-					if (Ref<Asset> cached = it->second.lock())
-					{
-						return cached->As<T>();
-					}
-					m_ResolvedAssetsCache.erase(it);
-				}
-
-				Ref<T> asset = assetManager->GetAsset<T>(handle);
-                if (asset)
+            if (auto project = assetManager->LockActiveProject())
+            {
+                AssetResolveKey key{ assetManager->LockActiveProject().get(), handle };
+                auto it = m_ResolvedAssetsCache.find(key);
+                if (it != m_ResolvedAssetsCache.end())
                 {
-					m_ResolvedAssetsCache.emplace(key, asset);
+                    if (Ref<Asset> cached = it->second.lock())
+                    {
+                        return cached->As<T>();
+                    }
+                    m_ResolvedAssetsCache.erase(it);
                 }
 
-				return asset;
-			}
+                Ref<T> asset = assetManager->GetAsset<T>(handle);
+                if (asset)
+                {
+                    m_ResolvedAssetsCache.emplace(key, asset);
+                }
 
-			return nullptr;
-		}
+                return asset;
+            }
 
-		SceneRenderSettings sceneRenderSettings;
+            return nullptr;
+        }
+
+        SceneRenderSettings sceneRenderSettings;
 
     protected:
         static void FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms);
@@ -166,7 +173,7 @@ namespace ignite
             const std::unordered_map<int, AssetHandle> &overrideMaterials,
             AssetHandle defaultMaterialHandle);
 
-		void EnsureSceneEnvironmentMap();
+        void EnsureSceneEnvironmentMap();
 
         Ref<CascadedShadowMap> m_CascadedShadowMap;
 
@@ -181,10 +188,11 @@ namespace ignite
         ConstantBuffer m_CascadedShadowMapBuffer;
         Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];
 
-		std::unordered_map<AssetResolveKey, WeakRef<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
+        std::unordered_map<AssetResolveKey, WeakRef<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
 
-		WorldEnvironment *m_WorldEnvironment = nullptr;
-		CompositePostProcess_GPUData m_PostProcessingSettings;
+        WorldEnvironment *m_WorldEnvironment = nullptr;
+        PostProcessing m_PostProcessing;
+        CompositePostProcess_GPUData m_PostProcessingData;
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         Scene_GPUData m_SceneGPUData;

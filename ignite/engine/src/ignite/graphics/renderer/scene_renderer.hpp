@@ -21,6 +21,8 @@ namespace ignite
 		Ref<RenderTarget> widgetRT;
 		Ref<RenderTarget> compositeRT;
 		Ref<RenderTarget> debugRT;
+        Ref<RenderTarget> taaHistoryRT[3];
+        bool taaHistoryValid = false;
 	};
 
     class IGN_API SceneRenderer : public ISceneRenderer
@@ -153,7 +155,7 @@ namespace ignite
 
         nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &gridBuffer);
         nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler);
+            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler);
         
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
 
@@ -194,6 +196,8 @@ namespace ignite
         bool m_UseGameplayWidgetMouseOverride = false;
 
         Ref<Material> m_RuntimeMaterial;
+
+        uint64_t m_TAAFrameIndex = 0;
 
         std::unordered_map<entt::entity, std::vector<uint32_t>> m_EntityObjectIndexCache;
         std::unordered_map<entt::entity, uint32_t> m_EntityBoneOffsetCache;

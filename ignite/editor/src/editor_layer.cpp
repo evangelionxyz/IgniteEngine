@@ -230,14 +230,14 @@ namespace ignite
             {
                 if (m_ContentBrowserPanelsPendingRemoval.insert(panel).second)
                 {
-					auto it = std::ranges::find(m_ContentBrowserPanels, panel);
-					if (it != m_ContentBrowserPanels.end())
-					{
+                    auto it = std::ranges::find(m_ContentBrowserPanels, panel);
+                    if (it != m_ContentBrowserPanels.end())
+                    {
                         // Erase first then pop the layer
-						it = m_ContentBrowserPanels.erase(it);
-						Application::GetInstance()->PopLayer(panel);
-					}
-					m_ContentBrowserPanelsPendingRemoval.erase(panel);
+                        it = m_ContentBrowserPanels.erase(it);
+                        Application::GetInstance()->PopLayer(panel);
+                    }
+                    m_ContentBrowserPanelsPendingRemoval.erase(panel);
                 }
             }
         }
@@ -259,22 +259,22 @@ namespace ignite
                 }
             }
 
-			while (m_PendingContentBrowserPanelsToAdd > 0 && GetOpenContentBrowserCount() < 4)
-			{
-				AddContentBrowserPanel();
-				--m_PendingContentBrowserPanelsToAdd;
-			}
+            while (m_PendingContentBrowserPanelsToAdd > 0 && GetOpenContentBrowserCount() < 4)
+            {
+                AddContentBrowserPanel();
+                --m_PendingContentBrowserPanelsToAdd;
+            }
 
-			for (ContentBrowserPanel *contentBrowserPanel : m_ContentBrowserPanels)
-			{
-				if (contentBrowserPanel && contentBrowserPanel->IsOpen())
-				{
-					contentBrowserPanel->OnUpdate(deltaTime);
-				}
-			}
+            for (ContentBrowserPanel *contentBrowserPanel : m_ContentBrowserPanels)
+            {
+                if (contentBrowserPanel && contentBrowserPanel->IsOpen())
+                {
+                    contentBrowserPanel->OnUpdate(deltaTime);
+                }
+            }
         }
         
-		AssetManager::GetInstance()->OnUpdate(deltaTime);
+        AssetManager::GetInstance()->OnUpdate(deltaTime);
 
         // update panels
         if (m_ActiveScene)
@@ -514,20 +514,15 @@ namespace ignite
 
                 if (isFramebufferSizeValid)
                 {
-					const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
-					const glm::uvec2 cameraSize = editCamera->GetViewportSize();
-					const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x 
-                        || framebufferSize.y != desiredSize.y
-						|| framebufferSize.x != cameraSize.x 
-                        || framebufferSize.y != cameraSize.y;
-
+                    const glm::uvec2 cameraSize = editCamera->GetViewportSize();
+                    const bool framebufferNeedsResize = desiredSize.x != cameraSize.x || desiredSize.y != cameraSize.y;
                     // Resize camera
-                    if (framebufferNeedsResize)
+                    if (framebufferNeedsResize || m_State.editorRequestToResize)
                     {
                         editCamera->UpdateProjection(desiredSize.x, desiredSize.y);
                         m_State.editorResizing = true;
+                        m_State.editorRequestToResize = false;
                     }
-
                     // Resize framebuffer when in stable frame
                     if (m_State.editorResizing)
                     {
@@ -540,7 +535,6 @@ namespace ignite
                     }
                 }
             }
-            
         }
 
         // Resizing game-play camera (Game Viewport)
@@ -559,19 +553,15 @@ namespace ignite
 
                     if (isFramebufferSizeValid)
                     {
-						const glm::uvec2 framebufferSize = target->compositeRT->GetSize();
-						const glm::uvec2 gameCameraSize = gameCamera->GetViewportSize();
-						const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x 
-                            || framebufferSize.y != desiredSize.y
-							|| framebufferSize.x != gameCameraSize.x
-                            || framebufferSize.y != gameCameraSize.y;
+                        const glm::uvec2 gameCameraSize = gameCamera->GetViewportSize();
+                        const bool framebufferNeedsResize = desiredSize.x != gameCameraSize.x || desiredSize.y != gameCameraSize.y;
 
-                        if (framebufferNeedsResize)
+                        if (framebufferNeedsResize || m_State.gameplayRequestToResize)
                         {
                             gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
                             m_State.gameplayResizing = true;
+                            m_State.gameplayRequestToResize = false;
                         }
-
                         if (m_State.gameplayResizing)
                         {
                             if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
@@ -1085,7 +1075,7 @@ namespace ignite
             return;
         }
 
-		// Update asset pins in the project for the new scene
+        // Update asset pins in the project for the new scene
         if (m_ActiveProject)
         {
             std::unordered_set<AssetHandle> referencedHandles;
@@ -1274,29 +1264,29 @@ namespace ignite
         if (!m_ActiveProject)
             return;
 
-		SaveProject();
+        SaveProject();
 
         // Stop scene
-		if (m_EditorScene) m_EditorScene->OnStop();
-		m_ActiveScene->OnStop();
+        if (m_EditorScene) m_EditorScene->OnStop();
+        m_ActiveScene->OnStop();
 
         SetActiveScene(nullptr);
 
-		m_EditorScene.reset();
-		m_ActiveScene.reset();
+        m_EditorScene.reset();
+        m_ActiveScene.reset();
 
-		if (m_AssetEditorPanel)
-		{
-			m_AssetEditorPanel->CloseAllAssetEditors();
-		}
+        if (m_AssetEditorPanel)
+        {
+            m_AssetEditorPanel->CloseAllAssetEditors();
+        }
 
         AssetManager::GetInstance()->Reset();
 
-		// Reset everything
-		m_ActiveProject.reset();
-		m_CurrentProjectFilepath.clear();
-		m_CurrentSceneFilePath.clear();
-		m_CurrentSceneHandle = AssetHandle(0);
+        // Reset everything
+        m_ActiveProject.reset();
+        m_CurrentProjectFilepath.clear();
+        m_CurrentSceneFilePath.clear();
+        m_CurrentSceneHandle = AssetHandle(0);
     }
 
     void EditorLayer::OpenProject(const ignite::Path &filepath)
@@ -2284,7 +2274,7 @@ namespace ignite
         }
 
         // Render Stats
-        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed))
         {
             const auto &stats = Renderer::Stats;
 
@@ -2343,27 +2333,70 @@ namespace ignite
         // Scene Render
         if (ImGui::TreeNodeEx("Settings Render", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::SeparatorText("Visibility");
-            UI::DrawCheckbox("Bounding Box", &m_SceneRenderer->sceneRenderSettings.showBoundingBox);
-            UI::DrawCheckbox("Physics Collider", &m_SceneRenderer->sceneRenderSettings.showPhysicsCollider);
-
-            ImGui::SeparatorText("Scene Render");
-            static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
-            static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
-            static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
-
-            int renderMode = m_SceneRenderer->GetRenderMode();
-            if (UI::DrawComboBox("Render Mode", renderModeLabels, IM_ARRAYSIZE(renderModeLabels), &renderMode))
-            {
-                m_SceneRenderer->SetRenderMode(renderMode);
-            }
-
-            int debugShadow = m_SceneRenderer->GetDebugShadowMode();
-            if (UI::DrawComboBox("CSM Debug", debugShadowLabels, IM_ARRAYSIZE(debugShadowLabels), &debugShadow))
-            {
-                m_SceneRenderer->SetDebugShadowMode(debugShadow);
-            }
+            auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
             
+            if (ImGui::TreeNodeEx("Visibility"))
+            {
+                UI::DrawCheckbox("Bounding Box", &renderSettings.showBoundingBox);
+                UI::DrawCheckbox("Physics Collider", &renderSettings.showPhysicsCollider);
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (ImGui::TreeNodeEx("Sampling"))
+                {
+                    if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        UI::DrawCheckbox("Enable", &renderSettings.taaProperties.enable);
+                        UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
+                        ImGui::TreePop();
+                    }
+
+                    if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        UI::DrawCheckbox("Enable", &renderSettings.msaaProperties.enable);
+                        UI::DrawIntControl("Samples", &renderSettings.msaaProperties.sampleCount, 1, 1, 16);
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::TreePop();
+                }
+
+				if (ImGui::TreeNodeEx("Internal Render scale"))
+				{
+                    UI::DrawFloatControl("Factor", &renderSettings.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
+					if (UI::DrawButtonWithColumn("", "Apply"))
+					{
+						m_State.gameplayRequestToResize = true;
+						m_State.editorRequestToResize = true;
+					}
+					ImGui::TreePop();
+				}
+
+                if (ImGui::TreeNodeEx("Shading"))
+                {
+                    static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
+                    static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
+                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
+                    int renderMode = m_SceneRenderer->GetRenderMode();
+                    if (UI::DrawComboBox("Render Mode", renderModeLabels, IM_ARRAYSIZE(renderModeLabels), &renderMode))
+                    {
+                        m_SceneRenderer->SetRenderMode(renderMode);
+                    }
+
+                    int debugShadow = m_SceneRenderer->GetDebugShadowMode();
+                    if (UI::DrawComboBox("CSM Debug", debugShadowLabels, IM_ARRAYSIZE(debugShadowLabels), &debugShadow))
+                    {
+                        m_SceneRenderer->SetDebugShadowMode(debugShadow);
+                    }
+
+                    ImGui::TreePop();
+                }
+                
+                ImGui::TreePop();
+            }
+
             ImGui::TreePop();
         }
 
