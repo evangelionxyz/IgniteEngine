@@ -22,14 +22,14 @@ namespace ignite
         downsampleLayout.visibility = nvrhi::ShaderType::All;
         downsampleLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
         downsampleLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-        downsampleLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+        downsampleLayout.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
         m_DownsampleLayout = device->createBindingLayout(downsampleLayout);
 
         nvrhi::BindingLayoutDesc blurLayout;
         blurLayout.visibility = nvrhi::ShaderType::All;
         blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
         blurLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-        blurLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+        blurLayout.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
         m_BlurLayout = device->createBindingLayout(blurLayout);
 
         nvrhi::BindingLayoutDesc upsampleLayout;
@@ -37,7 +37,7 @@ namespace ignite
         upsampleLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
         upsampleLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1));
         upsampleLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-        upsampleLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+        upsampleLayout.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
         m_UpsampleLayout = device->createBindingLayout(upsampleLayout);
 
         auto samplerDesc = nvrhi::SamplerDesc();
@@ -45,10 +45,10 @@ namespace ignite
         samplerDesc.setAllFilters(true);
         m_Sampler = device->createSampler(samplerDesc);
 
-        constexpr uint32_t kBloomCBVersions = 16;
-        m_DownsampleParamsBuffer = ConstantBuffer::Create(sizeof(DownsampleParams), true, kBloomCBVersions, "Bloom Downsample Params");
-        m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kBloomCBVersions, "Bloom Blur Params");
-        m_UpsampleParamsBuffer = ConstantBuffer::Create(sizeof(UpsampleParams), true, kBloomCBVersions, "Bloom Upsample Params");
+        constexpr uint32_t kBloomCBVersions = 1;
+		m_DownsampleParamsBuffer = ConstantBuffer::Create(sizeof(DownsampleParams), false, kBloomCBVersions, "Bloom Downsample Params");
+        m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), false, kBloomCBVersions, "Bloom Blur Params");
+        m_UpsampleParamsBuffer = ConstantBuffer::Create(sizeof(UpsampleParams), false, kBloomCBVersions, "Bloom Upsample Params");
 
         m_FullscreenVertexShader = Shader::Create("resources/shaders/bloom_fullscreen.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
         m_DownsamplePixelShader = Shader::Create("resources/shaders/bloom_downsample.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);

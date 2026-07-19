@@ -282,6 +282,29 @@ namespace ignite
 
             cmd->commitBarriers();
 
+            // MSAA resolve: if the scene was rendered with multiple samples, resolve to a
+            // single-sample texture so post-processing passes can sample it normally.
+            const bool msaaActive = target->msaaSampleCount > 1 && target->sceneResolvedRT;
+            if (msaaActive)
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::MSAAResolve");
+                Ref<Texture> msaaColor  = target->sceneRT->GetColorAttachment(0);
+                Ref<Texture> msaaObjID  = target->sceneRT->GetColorAttachment(1);
+                Ref<Texture> resolvedColor = target->sceneResolvedRT->GetColorAttachment(0);
+                Ref<Texture> resolvedObjID = target->sceneResolvedRT->GetColorAttachment(1);
+
+                cmd->setTextureState(resolvedColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveDest);
+                cmd->setTextureState(resolvedObjID->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveDest);
+                cmd->commitBarriers();
+
+                cmd->resolveTexture(resolvedColor->GetHandle(), nvrhi::TextureSubresourceSet(), msaaColor->GetHandle(), nvrhi::TextureSubresourceSet());
+                cmd->resolveTexture(resolvedObjID->GetHandle(), nvrhi::TextureSubresourceSet(), msaaObjID->GetHandle(), nvrhi::TextureSubresourceSet());
+
+                cmd->setTextureState(resolvedColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->setTextureState(resolvedObjID->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->commitBarriers();
+            }
+
 			const auto width = target->sceneRT->GetWidth();
 			const auto height = target->sceneRT->GetHeight();
 
@@ -311,7 +334,10 @@ namespace ignite
                     m_EdgeDetection->CreateOutputTexture(width, height);
                 }
 
-                m_EdgeDetection->UpdateBindingSet(target->sceneRT->GetColorAttachment(0), target->sceneRT->GetColorAttachment(1), target->sceneRT->GetDepthAttachment());
+                // Use the resolved (single-sample) color and object-ID textures for edge detection
+                Ref<Texture> edgeColorSrc  = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
+                Ref<Texture> edgeObjIDSrc  = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(1) : target->sceneRT->GetColorAttachment(1);
+                m_EdgeDetection->UpdateBindingSet(edgeColorSrc, edgeObjIDSrc, target->sceneRT->GetDepthAttachment());
 
                 constexpr uint32_t kMaxSelectedIDs = 100;
                 const uint32_t selectedCount = static_cast<uint32_t>(std::min(m_SelectedEntities.size(), static_cast<size_t>(kMaxSelectedIDs)));
@@ -345,7 +371,9 @@ namespace ignite
 				bloomInstance->settings.threshold = postProcessing.bloomThreshold;
 				bloomInstance->settings.iterations = postProcessing.bloomIterations;
 				bloomInstance->Resize(width, height);
-				bloomInstance->Build(cmd, target->sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+				// Bloom reads from the resolved (single-sample) texture
+				Ref<Texture> bloomSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
+				bloomInstance->Build(cmd, bloomSrc, m_CompositeVertexBuffer);
 				bloomTexture = bloomInstance->GetBloomTexture();
             }
 
@@ -362,7 +390,7 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture);
+                CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive);
             }
 
             if (postProcessing.taaProperties.enable && target->taaHistoryRT[frameContext->frameIndexInFlight])
@@ -647,6 +675,8 @@ namespace ignite
 				auto target = it->second;
 
 				target->sceneRT->Resize(renderWidth, renderHeight);
+				if (target->sceneResolvedRT)
+					target->sceneResolvedRT->Resize(renderWidth, renderHeight);
 				target->widgetRT->Resize(width, height);
 				target->compositeRT->Resize(width, height);
 				for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
@@ -1632,7 +1662,7 @@ namespace ignite
 
     void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext,
         Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing,
-        Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
+        Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, bool msaaResolved)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -1698,7 +1728,7 @@ namespace ignite
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePSO(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
         nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), target, 
-            edgeTexture, bloomTexture, ssaoTexture, taaHistoryTexture, m_CompositePostProcessBuffer.GetHandle(), m_CompositeSampler.Get());
+            edgeTexture, bloomTexture, ssaoTexture, taaHistoryTexture, m_CompositePostProcessBuffer.GetHandle(), m_CompositeSampler.Get(), msaaResolved);
 
         cmd->setBufferState(m_CompositeVertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
 
@@ -2081,7 +2111,7 @@ namespace ignite
     }
 
 	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-			Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler)
+			Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler, bool useResolvedScene)
     {
         Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
         Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
@@ -2089,12 +2119,18 @@ namespace ignite
         Ref<Texture> taaHistory = taaHistoryTexture ? taaHistoryTexture : Renderer::GetBlackTexture();
         Ref<Texture> depth = target->sceneRT->GetDepthAttachment() ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
         Ref<Texture> debug = target->debugRT->GetColorAttachment(0) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
-        Ref<Texture> objectIDTex = target->sceneRT->GetColorAttachment(1) ? target->sceneRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture();
+
+        // When MSAA is active use the resolved single-sample textures for the composite pass
+        const bool hasResolved = useResolvedScene && target->sceneResolvedRT;
+        Ref<Texture> sceneColor = (hasResolved ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0));
+        Ref<Texture> objectIDTex = hasResolved
+            ? (target->sceneResolvedRT->GetColorAttachment(1) ? target->sceneResolvedRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture())
+            : (target->sceneRT->GetColorAttachment(1) ? target->sceneRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture());
 
         CompositeBindingKey key
         {
             bindingLayout,
-            target->sceneRT->GetColorAttachment(0)->GetHandle(),
+            sceneColor->GetHandle(),
             target->widgetRT->GetColorAttachment(0)->GetHandle(),
             edge->GetHandle(),
             bloom->GetHandle(),
@@ -2117,7 +2153,7 @@ namespace ignite
 
         // Composite Binding set
         auto bindingSetDesc = nvrhi::BindingSetDesc();
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, target->sceneRT->GetColorAttachment(0)->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneColor->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, target->widgetRT->GetColorAttachment(0)->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, edge->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, bloom->GetHandle()));
@@ -2145,9 +2181,18 @@ namespace ignite
 
         Ref<CameraRenderTarget> target = CreateRef<CameraRenderTarget>();
 
+        // Determine MSAA sample count from camera or scene settings
+        const PostProcessing &pp = camera->postProcessing;
+        const bool msaaEnabled = pp.msaaProperties.enable || sceneRenderSettings.msaaProperties.enable;
+        const int sampleCount = msaaEnabled
+            ? (sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : pp.msaaProperties.sampleCount)
+            : 1;
+        target->msaaSampleCount = sampleCount;
+
         // =========================================
         // Create Render Targets
         RenderTargetCreateInfo sceneRTCreateInfo = {};
+        sceneRTCreateInfo.sampleCount = sampleCount;
         sceneRTCreateInfo.attachments =
         {
             FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
@@ -2156,6 +2201,19 @@ namespace ignite
         };
 
         target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
+
+        // If MSAA is active, create a single-sample resolve target that downstream passes (bloom, composite) read from
+        if (sampleCount > 1)
+        {
+            RenderTargetCreateInfo resolvedRTCreateInfo = {};
+            resolvedRTCreateInfo.sampleCount = 1;
+            resolvedRTCreateInfo.attachments =
+            {
+                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::ShaderResource },
+                FramebufferAttachments{ "[Scene Resolved ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::ShaderResource }
+            };
+            target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
+        }
 
         // Widget RT
         RenderTargetCreateInfo widgetRTCreateInfo = {};

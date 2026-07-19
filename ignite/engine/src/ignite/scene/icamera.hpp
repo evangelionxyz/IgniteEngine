@@ -43,7 +43,7 @@ namespace ignite
     struct TAAProperties
     {
         bool enable = false;
-        float blendFactor = 0.4825f; // Current-frame weight; lower is smoother, higher is more responsive
+        float blendFactor = 0.08f; // Current-frame weight; lower is smoother, higher is more responsive
     };
 
     struct MSAAProperties

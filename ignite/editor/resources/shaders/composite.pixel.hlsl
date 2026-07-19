@@ -222,7 +222,34 @@ float4 main(VSOutput input) : SV_Target
     if (taaParams.x > 0.5f && taaParams.z > 0.5f)
     {
         float3 historyColor = taaHistoryTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb;
-        tonemappedScene = lerp(historyColor, tonemappedScene, saturate(taaParams.y));
+
+        // Neighborhood color clamping: build a 3x3 AABB in tonemapped space and clamp
+        // the history into it. This kills ghosting when the camera moves without needing
+        // motion vectors.
+        float2 sceneTexelSize;
+        sceneTexture.GetDimensions(sceneTexelSize.x, sceneTexelSize.y);
+        sceneTexelSize = 1.0f / sceneTexelSize;
+
+        float3 neighborMin = tonemappedScene;
+        float3 neighborMax = tonemappedScene;
+
+        [unroll]
+        for (int ny = -1; ny <= 1; ++ny)
+        {
+            [unroll]
+            for (int nx = -1; nx <= 1; ++nx)
+            {
+                if (nx == 0 && ny == 0) continue;
+                float2 nUV = saturate(input.uv + float2(nx, ny) * sceneTexelSize);
+                float3 nColor = ApplyTonemap(SampleSceneWithChromAb(nUV), tonemapMode, exposure, gamma);
+                neighborMin = min(neighborMin, nColor);
+                neighborMax = max(neighborMax, nColor);
+            }
+        }
+
+        // Clamp history into the current-frame neighborhood before blending
+        float3 clampedHistory = clamp(historyColor, neighborMin, neighborMax);
+        tonemappedScene = lerp(clampedHistory, tonemappedScene, saturate(taaParams.y));
     }
 
     float4 uiColor = uiTexture.SampleLevel(linearSampler, input.uv, 0.0f);
