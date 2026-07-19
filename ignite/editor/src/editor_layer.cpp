@@ -215,70 +215,66 @@ namespace ignite
     {
         Layer::OnUpdate(deltaTime);
 
-        for (int i = static_cast<int>(m_ContentBrowserPanels.size()) - 1; i >= 0; --i)
+        // use int, to prevent unsigned values
+        for (int i = (int)m_ContentBrowserPanels.size() - 1; i >= 0; --i)
         {
-            ContentBrowserPanel *panel = m_ContentBrowserPanels[static_cast<size_t>(i)];
+            ContentBrowserPanel *panel = m_ContentBrowserPanels[(size_t)i];
             if (panel == nullptr)
             {
                 m_ContentBrowserPanels.erase(m_ContentBrowserPanels.begin() + i);
                 continue;
             }
 
+            // Remove closed content browser
             if (!panel->IsOpen())
             {
                 if (m_ContentBrowserPanelsPendingRemoval.insert(panel).second)
                 {
-                    Application::SubmitToMainThread([this, panel]()
-                    {
-                        auto it = std::find(m_ContentBrowserPanels.begin(), m_ContentBrowserPanels.end(), panel);
-                        if (it != m_ContentBrowserPanels.end())
-                        {
-                            Application::GetInstance()->PopLayer(panel);
-                            m_ContentBrowserPanels.erase(it);
-                        }
-
-                        m_ContentBrowserPanelsPendingRemoval.erase(panel);
-                    });
+					auto it = std::ranges::find(m_ContentBrowserPanels, panel);
+					if (it != m_ContentBrowserPanels.end())
+					{
+                        // Erase first then pop the layer
+						it = m_ContentBrowserPanels.erase(it);
+						Application::GetInstance()->PopLayer(panel);
+					}
+					m_ContentBrowserPanelsPendingRemoval.erase(panel);
                 }
             }
         }
 
-        if (m_ContentBrowserPanels.empty() && m_PendingContentBrowserPanelsToAdd == 0 && m_ContentBrowserPanelsPendingRemoval.empty())
         {
-            m_PendingContentBrowserPanelsToAdd = 1;
-        }
-
-        m_ContentBrowserPanel = nullptr;
-        for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
-        {
-            if (panel && panel->IsOpen())
+            // Reopen the content browser if we accidentally close the last one
+            if (m_ContentBrowserPanels.empty() && m_PendingContentBrowserPanelsToAdd == 0 && m_ContentBrowserPanelsPendingRemoval.empty())
             {
-                m_ContentBrowserPanel = panel;
-                break;
+                m_PendingContentBrowserPanelsToAdd = 1;
             }
-        }
 
-        while (m_PendingContentBrowserPanelsToAdd > 0 && GetOpenContentBrowserCount() < 4)
-        {
-            Application::SubmitToMainThread([this]()
+            m_ContentBrowserPanel = nullptr;
+            for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
             {
-                AddContentBrowserPanel();
-            });
-            --m_PendingContentBrowserPanelsToAdd;
-        }
-
-        for (ContentBrowserPanel *contentBrowserPanel : m_ContentBrowserPanels)
-        {
-            if (contentBrowserPanel && contentBrowserPanel->IsOpen())
-            {
-                contentBrowserPanel->OnUpdate(deltaTime);
+                if (panel && panel->IsOpen())
+                {
+                    m_ContentBrowserPanel = panel;
+                    break;
+                }
             }
-        }
 
-        if (m_ActiveProject)
-        {
-            AssetManager::GetInstance()->OnUpdate(deltaTime);
+			while (m_PendingContentBrowserPanelsToAdd > 0 && GetOpenContentBrowserCount() < 4)
+			{
+				AddContentBrowserPanel();
+				--m_PendingContentBrowserPanelsToAdd;
+			}
+
+			for (ContentBrowserPanel *contentBrowserPanel : m_ContentBrowserPanels)
+			{
+				if (contentBrowserPanel && contentBrowserPanel->IsOpen())
+				{
+					contentBrowserPanel->OnUpdate(deltaTime);
+				}
+			}
         }
+        
+		AssetManager::GetInstance()->OnUpdate(deltaTime);
 
         // update panels
         if (m_ActiveScene)
@@ -733,7 +729,7 @@ namespace ignite
                         const std::tm local_tm = Timestep::GetLocalTime();
 
                         std::ostringstream oss;
-                        oss << std::put_time(&local_tm, "igite_ss %D-%H-%M-%S");
+                        oss << std::put_time(&local_tm, "screenshot-ignite-%D-%H-%M-%S");
                         std::string filename = oss.str();
                         stringutils::ReplaceWith(filename, "/", "-");
 
