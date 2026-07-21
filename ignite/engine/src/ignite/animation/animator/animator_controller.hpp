@@ -16,12 +16,16 @@ namespace ignite
 
     struct IGN_API AnimState
     {
+        enum class MotionType : uint8_t { SkeletalAnimation, BlendSpace };
+
         std::string name;
         glm::vec2 editorPos = glm::vec2(100.0f, 100.0f);
 
         AnimState() = default;
         AnimState(const AnimState &other)
-            : name(other.name), editorPos(other.editorPos), m_UUID(), m_AnimHandle(other.m_AnimHandle)
+            : name(other.name), editorPos(other.editorPos)
+            , m_MotionType(other.m_MotionType), m_MotionHandle(other.m_MotionHandle)
+			, m_UUID(other.m_UUID)
         {
         }
 
@@ -32,19 +36,25 @@ namespace ignite
                 name = other.name;
                 editorPos = other.editorPos;
                 m_UUID = UUID();
-                m_AnimHandle = other.m_AnimHandle;
+                m_MotionType = other.m_MotionType;
+                m_MotionHandle = other.m_MotionHandle;
             }
             return *this;
         }
 
-        void SetAnimationHandle(const AssetHandle &animationHandle);
-		const AssetHandle &GetAnimationAssetHandle() const { return m_AnimHandle; }
+		~AnimState();
 
-        ~AnimState();
+        void SetAnimationHandle(const AssetHandle &animationHandle);
+        void SetBlendSpaceHandle(const AssetHandle &blendSpaceHandle);
+        void SetMotion(MotionType type, const AssetHandle &motionHandle);
+        MotionType GetMotionType() const { return m_MotionType; }
+        const AssetHandle &GetMotionHandle() const { return m_MotionHandle; }
+		const AssetHandle &GetAnimationAssetHandle() const { return m_MotionHandle; }
 
     private:
         UUID m_UUID;
-        AssetHandle m_AnimHandle = AssetHandle(0); // Skeletal Animation
+        MotionType m_MotionType = MotionType::SkeletalAnimation;
+        AssetHandle m_MotionHandle = AssetHandle(0);
     };
 
     struct IGN_API AnimatorControllerRuntime
@@ -52,6 +62,16 @@ namespace ignite
         std::string currentStateName;
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
+        float previousStateNormalized = 0.0f;
+
+        // Transition blending state
+        bool isTransitioning = false;
+        std::string transitionTargetState;
+        float transitionDuration = 0.0f;
+        float transitionElapsed = 0.0f;
+
+        AssetHandle eventSourceAnimation = AssetHandle(0);
+        std::vector<uint32_t> triggeredEventIndices;
 
         std::vector<Transform> localPoses;
         std::vector<Transform> globalPoses;
@@ -73,6 +93,7 @@ namespace ignite
 
         // Returns new state name if a transition fires, else empty string.
         std::string EvaluateTransitions(const std::string &currentState, float normalizedTime) const;
+        const AnimTransition *FindMatchingTransition(const std::string &currentState, float normalizedTime) const;
 
         // Convenience accessors
         AnimState *FindState(const std::string &name);

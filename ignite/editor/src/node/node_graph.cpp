@@ -40,9 +40,10 @@ namespace ignite::UI
         canvas.size.y = std::max(canvas.size.y, 120.0f);
         canvas.drawList = ImGui::GetWindowDrawList();
 
+		// Draw background and grid
         const ImVec2 screenEnd = Add(canvas.screenPos, canvas.size);
         canvas.drawList->AddRectFilled(canvas.screenPos, screenEnd, style.backgroundColor, style.cornerRounding);
-        canvas.drawList->AddRect(canvas.screenPos, screenEnd, style.borderColor, style.cornerRounding, 0, 1.5f);
+        canvas.drawList->AddRect(canvas.screenPos, screenEnd, style.borderColor, style.cornerRounding, ImDrawFlags_None, 1.5f);
 
         const float scaledGrid = std::max(style.gridStep * state.zoom, 8.0f);
         for (float x = std::fmod(state.pan.x, scaledGrid); x < canvas.size.x; x += scaledGrid)

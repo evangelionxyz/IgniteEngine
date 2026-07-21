@@ -726,12 +726,13 @@ namespace ignite
 
         Ref<Asset> asset;
 
+        bool isValidType = false;
         AssetMetaData getterMetadata = metadata;
         switch (getterMetadata.type)
         {
             case AssetType::Invalid:
             {
-                LOG_ERROR("[Asset Manager] Invalid asset type!");
+                LOG_ASSERT(false, "[Asset Manager] Invalid asset type!");
                 return nullptr;
             }
 
@@ -742,6 +743,7 @@ namespace ignite
             case AssetType::Font:
             case AssetType::Material:
             case AssetType::Material2D:
+            case AssetType::BlendSpace:
             case AssetType::Widget:
             case AssetType::Animation2D:
             case AssetType::SpriteSheet:
@@ -750,11 +752,14 @@ namespace ignite
             case AssetType::AnimatorController2D:
             case AssetType::ScriptableObject:
             {
+                isValidType = true;
+
                 asset = AssetImporter::Import(handle, getterMetadata, this);
                 {
                     std::unique_lock lock(m_AssetMutex);
                     if (m_LoadedAssets.contains(handle))
                     {
+                        isValidType = true;
                         return m_LoadedAssets[handle];
                     }
                 }
@@ -765,6 +770,8 @@ namespace ignite
             case AssetType::Scene:
             case AssetType::Texture:
             {
+                isValidType = true;
+
                 if (getterMetadata.type == AssetType::Texture)
                 {
 					if (auto project = LockActiveProject())
@@ -789,6 +796,7 @@ namespace ignite
                     std::unique_lock lock(m_AssetMutex);
                     if (m_LoadedAssets.contains(handle))
                     {
+                        isValidType = true;
                         return m_LoadedAssets[handle];
                     }
                 }
@@ -797,11 +805,7 @@ namespace ignite
             }
         }
 
-        if (asset && asset->GetAssetType() != AssetType::Texture)
-        {
-            asset->SetReadyFlag(true);
-        }
-
+		LOG_ASSERT(isValidType, "[Asset Manager] Failed to import asset, please check the AssetType: {}", getterMetadata.filepath.generic_string());
         return asset;
     }
 }

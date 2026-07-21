@@ -104,8 +104,8 @@ namespace ignite
         AssetEditorPanel *m_AssetEditorPanel;
         AssetManager *m_AssetManager = nullptr;
 
-        int m_ThumbnailSize = 96;
-        int m_LastThumbnailSize = 96;
+        int m_ThumbnailSize = 72;
+        int m_LastThumbnailSize = 72;
 
         ignite::Path m_BaseDirectory;
         ignite::Path m_CurrentDirectory;

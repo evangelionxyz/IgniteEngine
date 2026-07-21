@@ -200,6 +200,7 @@ namespace ignite
         if (asset)
         {
             asset->handle = handle;
+			asset->SetSkeletonAssetHandle(asset->GetSkeletonAssetHandle());
             asset->SetReadyFlag(true);
         }
         return asset;

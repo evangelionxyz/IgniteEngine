@@ -101,6 +101,7 @@ namespace ignite
         void UISkeletonEditor(AssetEditorData &assetData);
         void UISkeletalAnimationEditor(AssetEditorData &assetData);
         void UIAnimatorControllerEditor(AssetEditorData &assetData);
+        void UIBlendSpaceEditor(AssetEditorData &assetData);
         void UITextureEditor(AssetEditorData &assetData);
         void UIMaterialEditor(AssetEditorData &assetData);
 

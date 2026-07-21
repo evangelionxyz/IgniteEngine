@@ -44,6 +44,7 @@ namespace ignite
 
         bool  hasExitTime = false;
         float exitTime = 1.0f; // normalized [0..1]
+        float transitionDuration = 0.2f; // transition cross-fade duration in seconds
     };
 
     class IGN_API Animator

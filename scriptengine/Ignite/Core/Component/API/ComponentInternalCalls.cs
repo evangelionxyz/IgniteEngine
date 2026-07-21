@@ -207,6 +207,18 @@ public static class ComponentInternalCalls
     private static CoreNativeAPI.Funcs.GetFloatFn? s_CapsuleColliderGetHeight;
     private static CoreNativeAPI.Funcs.SetFloatFn? s_CapsuleColliderSetHeight;
 
+    // AnimatorComponent
+    private static ComponentNativeAPI.Funcs.AnimatorSetFloatFn? s_AnimatorSetFloat;
+    private static ComponentNativeAPI.Funcs.AnimatorGetFloatFn? s_AnimatorGetFloat;
+    private static ComponentNativeAPI.Funcs.AnimatorSetIntFn? s_AnimatorSetInt;
+    private static ComponentNativeAPI.Funcs.AnimatorGetIntFn? s_AnimatorGetInt;
+    private static ComponentNativeAPI.Funcs.AnimatorSetBoolFn? s_AnimatorSetBool;
+    private static ComponentNativeAPI.Funcs.AnimatorGetBoolFn? s_AnimatorGetBool;
+    private static ComponentNativeAPI.Funcs.AnimatorSetStringFn? s_AnimatorSetString;
+    private static ComponentNativeAPI.Funcs.AnimatorGetStringFn? s_AnimatorGetString;
+    private static ComponentNativeAPI.Funcs.AnimatorSetStateFn? s_AnimatorSetState;
+    private static ComponentNativeAPI.Funcs.AnimatorGetCurrentStateNameFn? s_AnimatorGetCurrentStateName;
+
     public static void Initialize(ulong apiPtr)
     {
         if (apiPtr == 0)
@@ -413,7 +425,108 @@ public static class ComponentInternalCalls
         s_CapsuleColliderGetHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CapsuleColliderComponent_GetHeight);
         s_CapsuleColliderSetHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CapsuleColliderComponent_SetHeight);
 
+        // AnimatorComponent
+        s_AnimatorSetFloat = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorSetFloatFn>(api.AnimatorComponent_SetFloat);
+        s_AnimatorGetFloat = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorGetFloatFn>(api.AnimatorComponent_GetFloat);
+        s_AnimatorSetInt = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorSetIntFn>(api.AnimatorComponent_SetInt);
+        s_AnimatorGetInt = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorGetIntFn>(api.AnimatorComponent_GetInt);
+        s_AnimatorSetBool = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorSetBoolFn>(api.AnimatorComponent_SetBool);
+        s_AnimatorGetBool = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorGetBoolFn>(api.AnimatorComponent_GetBool);
+        s_AnimatorSetString = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorSetStringFn>(api.AnimatorComponent_SetString);
+        s_AnimatorGetString = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorGetStringFn>(api.AnimatorComponent_GetString);
+        s_AnimatorSetState = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorSetStateFn>(api.AnimatorComponent_SetState);
+        s_AnimatorGetCurrentStateName = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorGetCurrentStateNameFn>(api.AnimatorComponent_GetCurrentStateName);
+
         s_Initialized = true;
+    }
+
+    internal static void AnimatorComponent_SetFloat(ulong entityID, string paramName, float value)
+    {
+        EnsureInitialized();
+        IntPtr paramNamePtr = Marshal.StringToHGlobalAnsi(paramName);
+        try { s_AnimatorSetFloat?.Invoke(entityID, paramNamePtr, value); }
+        finally { Marshal.FreeHGlobal(paramNamePtr); }
+    }
+
+    internal static void AnimatorComponent_GetFloat(ulong entityID, string paramName, out float result)
+    {
+        EnsureInitialized();
+        result = 0.0f;
+        IntPtr paramNamePtr = Marshal.StringToHGlobalAnsi(paramName);
+        try { s_AnimatorGetFloat?.Invoke(entityID, paramNamePtr, out result); }
+        finally { Marshal.FreeHGlobal(paramNamePtr); }
+    }
+
+    internal static void AnimatorComponent_SetInt(ulong entityID, string paramName, int value)
+    {
+        EnsureInitialized();
+        IntPtr paramNamePtr = Marshal.StringToHGlobalAnsi(paramName);
+        try { s_AnimatorSetInt?.Invoke(entityID, paramNamePtr, value); }
+        finally { Marshal.FreeHGlobal(paramNamePtr); }
+    }
+
+    internal static void AnimatorComponent_GetInt(ulong entityID, string paramName, out int result)
+    {
+        EnsureInitialized();
+        result = 0;
+        IntPtr paramNamePtr = Marshal.StringToHGlobalAnsi(paramName);
+        try { s_AnimatorGetInt?.Invoke(entityID, paramNamePtr, out result); }
+        finally { Marshal.FreeHGlobal(paramNamePtr); }
+    }
+
+    internal static void AnimatorComponent_SetBool(ulong entityID, string paramName, bool value)
+    {
+        EnsureInitialized();
+        IntPtr paramNamePtr = Marshal.StringToHGlobalAnsi(paramName);
+        try { s_AnimatorSetBool?.Invoke(entityID, paramNamePtr, value); }
+        finally { Marshal.FreeHGlobal(paramNamePtr); }
+    }
+
+    internal static void AnimatorComponent_GetBool(ulong entityID, string paramName, out bool result)
+    {
+        EnsureInitialized();
+        result = false;
+        IntPtr paramNamePtr = Marshal.StringToHGlobalAnsi(paramName);
+        try { s_AnimatorGetBool?.Invoke(entityID, paramNamePtr, out result); }
+        finally { Marshal.FreeHGlobal(paramNamePtr); }
+    }
+
+    internal static void AnimatorComponent_SetString(ulong entityID, string paramName, string value)
+    {
+        EnsureInitialized();
+        IntPtr paramNamePtr = Marshal.StringToHGlobalAnsi(paramName);
+        IntPtr valPtr = Marshal.StringToHGlobalAnsi(value);
+        try { s_AnimatorSetString?.Invoke(entityID, paramNamePtr, valPtr); }
+        finally { Marshal.FreeHGlobal(paramNamePtr); Marshal.FreeHGlobal(valPtr); }
+    }
+
+    internal static string AnimatorComponent_GetString(ulong entityID, string paramName)
+    {
+        EnsureInitialized();
+        IntPtr paramNamePtr = Marshal.StringToHGlobalAnsi(paramName);
+        IntPtr resPtr = IntPtr.Zero;
+        try
+        {
+            s_AnimatorGetString?.Invoke(entityID, paramNamePtr, out resPtr);
+            return resPtr != IntPtr.Zero ? Marshal.PtrToStringAnsi(resPtr) ?? string.Empty : string.Empty;
+        }
+        finally { Marshal.FreeHGlobal(paramNamePtr); }
+    }
+
+    internal static void AnimatorComponent_SetState(ulong entityID, string stateName)
+    {
+        EnsureInitialized();
+        IntPtr stateNamePtr = Marshal.StringToHGlobalAnsi(stateName);
+        try { s_AnimatorSetState?.Invoke(entityID, stateNamePtr); }
+        finally { Marshal.FreeHGlobal(stateNamePtr); }
+    }
+
+    internal static string AnimatorComponent_GetCurrentStateName(ulong entityID)
+    {
+        EnsureInitialized();
+        IntPtr resPtr = IntPtr.Zero;
+        s_AnimatorGetCurrentStateName?.Invoke(entityID, out resPtr);
+        return resPtr != IntPtr.Zero ? Marshal.PtrToStringAnsi(resPtr) ?? string.Empty : string.Empty;
     }
 
     private static void EnsureInitialized()

@@ -15,6 +15,17 @@
 
 namespace ignite
 {
+    struct IGN_API AnimationTimelineEvent
+    {
+        enum class Action : uint8_t { Audio, ScriptCallback };
+
+        float normalizedTime = 0.0f;
+        std::string name = "Event";
+        Action action = Action::ScriptCallback;
+        AssetHandle audioHandle = AssetHandle(0);       // optional one-shot override
+        AssetHandle callbackAsset = AssetHandle(0);     // AnimationTimelineCallback .ixso
+    };
+
     class IGN_API AnimationChannel
     {
     public:
@@ -39,6 +50,7 @@ namespace ignite
         float timeInSeconds = 0.0f;
         bool isPlaying = false;
         std::unordered_map<int, AnimationChannel> channels;
+        std::vector<AnimationTimelineEvent> timelineEvents;
 
         virtual bool Serialize(const ignite::Path &filepath) override;
         static Ref<SkeletalAnimation> Deserialize(const ignite::Path &filepath);

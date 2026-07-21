@@ -3,8 +3,12 @@
 #include "ignite_pch.hpp"
 
 #include "blend_space.hpp"
-
 #include "ignite/core/logger.hpp"
+#include "ignite/serializer/serializer.hpp"
+#include "ignite/asset/asset_manager.hpp"
+
+#include <algorithm>
+#include <cmath>
 
 #pragma warning(push)
 #pragma warning(disable : 4275 4251)
@@ -13,39 +17,163 @@
 
 namespace ignite
 {
-    bool BlendSpace::Serialize(const ignite::Path &filepath)
-    {
-        YAML::Emitter out;
-        out << YAML::BeginMap;
-        out << YAML::Key << "BlendSpace" << YAML::Value << YAML::BeginMap;
-        out << YAML::Key << "Name" << YAML::Value << name;
-        out << YAML::Key << "SkeletonHandle" << YAML::Value << static_cast<uint64_t>(skeletonHandle);
-        out << YAML::Key << "AxisXName" << YAML::Value << axisXName;
-        out << YAML::Key << "AxisYName" << YAML::Value << axisYName;
-        out << YAML::Key << "AxisMin" << YAML::Value << YAML::Flow << YAML::BeginSeq << axisMin.x << axisMin.y << YAML::EndSeq;
-        out << YAML::Key << "AxisMax" << YAML::Value << YAML::Flow << YAML::BeginSeq << axisMax.x << axisMax.y << YAML::EndSeq;
+	// ------------------------------------
+	// Blend Space Sample struct
+	BlendSpaceSample::~BlendSpaceSample()
+	{
+		if (m_AnimationHandle != AssetHandle(0))
+			AssetManager::GetInstance()->RemoveAssetPin(m_AnimationHandle, std::format("blendspace.sample.{}.{}",
+				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
+	}
 
-        out << YAML::Key << "Samples" << YAML::Value << YAML::BeginSeq;
+	void BlendSpaceSample::SetAnimationHandle(const AssetHandle &animationHandle)
+	{
+		if (m_AnimationHandle != AssetHandle(0))
+			AssetManager::GetInstance()->RemoveAssetPin(m_AnimationHandle, std::format("blendspace.sample.{}.{}",
+				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
+
+        m_AnimationHandle = animationHandle;
+		if (m_AnimationHandle != AssetHandle(0))
+			AssetManager::GetInstance()->AddAssetPin(m_AnimationHandle, std::format("blendspace.sample.{}.{}",
+				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
+	}
+
+	// ------------------------------------
+	// Blend Space Weight struct
+	BlendSpaceWeight::~BlendSpaceWeight()
+	{
+		if (m_AnimationHandle != AssetHandle(0))
+			AssetManager::GetInstance()->RemoveAssetPin(m_AnimationHandle, std::format("blendspace.weight.{}.{}",
+				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
+	}
+
+	void BlendSpaceWeight::SetAnimationHandle(const AssetHandle &animationHandle)
+	{
+		if (m_AnimationHandle != AssetHandle(0))
+			AssetManager::GetInstance()->RemoveAssetPin(m_AnimationHandle, std::format("blendspace.weight.{}.{}",
+				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
+
+        m_AnimationHandle = animationHandle;
+		if (m_AnimationHandle != AssetHandle(0))
+			AssetManager::GetInstance()->AddAssetPin(m_AnimationHandle, std::format("blendspace.weight.{}.{}",
+				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
+	}
+
+	// ------------------------------------
+    // Blend Space class
+	BlendSpace::~BlendSpace()
+	{
+		if (m_SkeletonHandle != AssetHandle(0))
+			AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("blendspace.{}.{}",
+                static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
+	}
+
+	glm::vec2 BlendSpace::ClampInput(const glm::vec2 &input) const
+    {
+        return glm::clamp(input, glm::min(axisMin, axisMax), glm::max(axisMin, axisMax));
+    }
+
+	void BlendSpace::SetSkeletonAssetHandle(AssetHandle skeletonHandle)
+	{
+		if (m_SkeletonHandle != AssetHandle(0))
+			AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("blendspace.{}.{}",
+				static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
+
+        m_SkeletonHandle = skeletonHandle;
+        if (m_SkeletonHandle != AssetHandle(0) && handle != AssetHandle(0))
+            AssetManager::GetInstance()->AddAssetPin(m_SkeletonHandle, std::format("blendspace.{}.{}",
+                static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
+	}
+
+	glm::vec2 BlendSpace::NormalizePosition(const glm::vec2 &pos) const
+	{
+		const float rangeX = axisMax.x - axisMin.x;
+		const float rangeY = axisMax.y - axisMin.y;
+
+		const float normX = (rangeX > 0.0001f) ? (pos.x - axisMin.x) / rangeX : 0.0f;
+		const float normY = (rangeY > 0.0001f) ? (pos.y - axisMin.y) / rangeY : 0.0f;
+
+		return glm::vec2(normX, normY);
+	}
+
+	std::vector<BlendSpaceWeight> BlendSpace::Evaluate(const glm::vec2 &input) const
+    {
+        struct Candidate
+        {
+            const BlendSpaceSample *sample;
+            float distanceSq;
+        };
+
+        std::vector<Candidate> candidates;
+        
+        const glm::vec2 clamped = ClampInput(input);
+        const glm::vec2 normInput = NormalizePosition(clamped);
+
         for (const BlendSpaceSample &sample : samples)
         {
-            out << YAML::BeginMap;
-            out << YAML::Key << "AnimationHandle" << YAML::Value << static_cast<uint64_t>(sample.animationHandle);
-            out << YAML::Key << "Position" << YAML::Value << YAML::Flow << YAML::BeginSeq << sample.position.x << sample.position.y << YAML::EndSeq;
-            out << YAML::EndMap;
+            if (sample.GetAnimationAssetHandle() == AssetHandle(0))
+                continue;
+
+            const glm::vec2 normSamplePos = NormalizePosition(sample.position);
+            const float distanceSq = glm::dot(normSamplePos - normInput, normSamplePos - normInput);
+            if (distanceSq <= 0.000001f)
+            {
+                return { BlendSpaceWeight{sample.GetAnimationAssetHandle(), 1.0f} };
+            }
+            candidates.push_back({ &sample, distanceSq });
         }
-        out << YAML::EndSeq;
 
-        out << YAML::EndMap;
-        out << YAML::EndMap;
+        if (candidates.empty())
+            return {};
 
-        std::ofstream file(filepath);
-        if (!file.is_open())
+        // Three contributors are enough for a 2D pose blend and keep distant
+        // samples from affecting a local transition.
+        std::ranges::sort(candidates, {}, &Candidate::distanceSq);
+        candidates.resize(std::min<size_t>(3, candidates.size()));
+
+        float total = 0.0f;
+        std::vector<BlendSpaceWeight> result;
+        result.reserve(candidates.size());
+        for (const Candidate &candidate : candidates)
         {
-            LOG_ERROR("[BlendSpace] Failed to open file for writing: {}", filepath.string());
-            return false;
+            const float weight = 1.0f / std::max(candidate.distanceSq, 0.000001f);
+            result.push_back( BlendSpaceWeight{ candidate.sample->GetAnimationAssetHandle(), weight});
+            total += weight;
         }
 
-        file << out.c_str();
+        for (BlendSpaceWeight &weight : result)
+            weight.weight /= total;
+        return result;
+    }
+
+    bool BlendSpace::Serialize(const ignite::Path &filepath)
+    {
+        Serializer sr(filepath);
+
+        sr.BeginMap();
+
+        sr.BeginMap("BlendSpace");
+        sr.AddKeyValue("SkeletonHandle", static_cast<uint64_t>(m_SkeletonHandle));
+        sr.AddKeyValue("AxisXName", axisXName);
+        sr.AddKeyValue("AxisYName", axisYName);
+        sr.AddKeyValue("AxisMin", axisMin);
+        sr.AddKeyValue("AxisMax", axisMax);
+
+        sr.BeginSequence("Samples");
+        for (auto &sample : samples)
+        {
+            sr.BeginMap();
+            sr.AddKeyValue("AnimationHandle", static_cast<uint64_t>(sample.GetAnimationAssetHandle()));
+            sr.AddKeyValue("Position", sample.position);
+            sr.EndMap();
+        }
+        sr.EndSequence();
+
+        sr.EndMap();
+
+        sr.EndMap();
+        sr.Serialize();
+
         SetDirtyFlag(false);
         return true;
     }
@@ -53,49 +181,39 @@ namespace ignite
     Ref<BlendSpace> BlendSpace::Deserialize(const ignite::Path &filepath)
     {
         if (!ignite::Path::exists(filepath))
-        {
             return nullptr;
-        }
 
         YAML::Node root = YAML::LoadFile(filepath.string());
         YAML::Node node = root["BlendSpace"];
         if (!node)
-        {
             return nullptr;
-        }
 
-        Ref<BlendSpace> blendSpace = CreateRef<BlendSpace>();
-        if (auto n = node["Name"]) blendSpace->name = n.as<std::string>();
-        if (auto n = node["SkeletonHandle"]) blendSpace->skeletonHandle = AssetHandle(n.as<uint64_t>());
+        Ref<BlendSpace> blendSpace = BlendSpace::Create();
+        if (auto n = node["SkeletonHandle"]) blendSpace->SetSkeletonAssetHandle(AssetHandle(n.as<uint64_t>()));
         if (auto n = node["AxisXName"]) blendSpace->axisXName = n.as<std::string>();
         if (auto n = node["AxisYName"]) blendSpace->axisYName = n.as<std::string>();
-        if (auto n = node["AxisMin"]; n && n.IsSequence() && n.size() == 2)
-        {
-            blendSpace->axisMin = glm::vec2(n[0].as<float>(), n[1].as<float>());
-        }
+        if (auto n = node["AxisMin"]) blendSpace->axisMin = n.as<glm::vec2>();
+        if (auto n = node["AxisMax"]) blendSpace->axisMax = n.as<glm::vec2>();
 
-        if (auto n = node["AxisMax"]; n && n.IsSequence() && n.size() == 2)
+        if (YAML::Node samplesNode = node["Samples"])
         {
-            blendSpace->axisMax = glm::vec2(n[0].as<float>(), n[1].as<float>());
-        }
-
-        if (YAML::Node samplesNode = node["Samples"]; samplesNode && samplesNode.IsSequence())
-        {
+			// Reserve space for samples to avoid multiple allocations prevent destroying the sample's animation handle pinning
+            blendSpace->samples.reserve(samplesNode.size());
             for (const auto &sampleNode : samplesNode)
             {
-                BlendSpaceSample sample;
-                if (auto n = sampleNode["AnimationHandle"]) sample.animationHandle = AssetHandle(n.as<uint64_t>());
-                if (auto n = sampleNode["Position"]; n && n.IsSequence() && n.size() == 2)
-                {
-                    sample.position = glm::vec2(n[0].as<float>(), n[1].as<float>());
-                }
-
-                blendSpace->samples.push_back(sample);
+                BlendSpaceSample &sample = blendSpace->samples.emplace_back();
+                if (auto n = sampleNode["AnimationHandle"]) sample.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
+                if (auto n = sampleNode["Position"]) sample.position = n.as<glm::vec2>();
             }
         }
 
         blendSpace->SetDirtyFlag(false);
-        blendSpace->SetReadyFlag(true);
         return blendSpace;
     }
+
+	Ref<BlendSpace> BlendSpace::Create()
+	{
+		return CreateRef<BlendSpace>();
+	}
+
 }

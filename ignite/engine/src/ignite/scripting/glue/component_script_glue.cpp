@@ -469,6 +469,16 @@ namespace ignite
 
                 s_EntityHasComponentFuncs[nativeTypeName] = hasComponentFunc;
                 s_EntityAddComponentFuncs[nativeTypeName] = addComponentFunc;
+
+                if (nativeTypeName == "SkeletalMeshComponent")
+                {
+                    s_EntityHasComponentFuncs["AnimatorComponent"] = hasComponentFunc;
+                    s_EntityHasComponentFuncs["Ignite.AnimatorComponent"] = hasComponentFunc;
+                    s_EntityHasComponentFuncs["Animator"] = hasComponentFunc;
+                    s_EntityAddComponentFuncs["AnimatorComponent"] = addComponentFunc;
+                    s_EntityAddComponentFuncs["Ignite.AnimatorComponent"] = addComponentFunc;
+                    s_EntityAddComponentFuncs["Animator"] = addComponentFunc;
+                }
             }()), ...);
         }
 
@@ -3261,6 +3271,225 @@ namespace ignite
             }
         }
 
+        static void AnimatorComponent_SetFloat(uint64_t entityID, const char *paramName, float value)
+        {
+            if (!paramName)
+                return;
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
+                return;
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            if (smc.runtimeAnimatorInstance)
+                smc.runtimeAnimatorInstance->SetParamFloat(paramName, value);
+            
+            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            if (it != smc.runtimeParams.end())
+            {
+                it->floatVal = value;
+            }
+            else
+            {
+                smc.runtimeParams.push_back({ paramName, "", value, 0, false, AnimParam::Type::Float });
+            }
+        }
+
+        static void AnimatorComponent_GetFloat(uint64_t entityID, const char *paramName, float *result)
+        {
+            if (!result || !paramName)
+                return;
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
+                return;
+            
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            if (smc.runtimeAnimatorInstance)
+            {
+                if (const AnimParam *p = smc.runtimeAnimatorInstance->GetParam(paramName))
+                {
+                    *result = p->floatVal;
+                    return;
+                }
+            }
+            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            if (it != smc.runtimeParams.end()) *result = it->floatVal;
+        }
+
+        static void AnimatorComponent_SetInt(uint64_t entityID, const char *paramName, int32_t value)
+        {
+            if (!paramName)
+                return;
+            
+            Entity entity = GetEntityByID(entityID);
+            
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
+                return;
+            
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            if (smc.runtimeAnimatorInstance)
+            {
+                smc.runtimeAnimatorInstance->SetParamInt(paramName, value);
+            }
+
+            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            if (it != smc.runtimeParams.end())
+            {
+                it->intVal = value;
+            }
+            else
+            {
+                smc.runtimeParams.push_back({ paramName, "", 0.0f, value, false, AnimParam::Type::Int });
+            }
+        }
+
+        static void AnimatorComponent_GetInt(uint64_t entityID, const char *paramName, int32_t *result)
+        {
+            if (!result || !paramName)
+                return;
+
+            *result = 0;
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
+                return;
+            
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            if (smc.runtimeAnimatorInstance)
+            {
+                if (const AnimParam *p = smc.runtimeAnimatorInstance->GetParam(paramName))
+                {
+                    *result = p->intVal;
+                    return;
+                }
+            }
+
+            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            if (it != smc.runtimeParams.end())
+            {
+                *result = it->intVal;
+            }
+        }
+
+        static void AnimatorComponent_SetBool(uint64_t entityID, const char *paramName, bool value)
+        {
+            if (!paramName)
+                return;
+            
+            Entity entity = GetEntityByID(entityID);
+
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
+                return;
+
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            if (smc.runtimeAnimatorInstance)
+            {
+                smc.runtimeAnimatorInstance->SetParamBool(paramName, value);
+            }
+
+            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            if (it != smc.runtimeParams.end())
+            {
+                it->boolVal = value;
+            }
+            else
+            {
+                smc.runtimeParams.push_back({ paramName, "", 0.0f, 0, value, AnimParam::Type::Bool });
+            }
+        }
+
+        static void AnimatorComponent_GetBool(uint64_t entityID, const char *paramName, bool *result)
+        {
+            if (!result || !paramName) return;
+            *result = false;
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
+                return;
+
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            if (smc.runtimeAnimatorInstance)
+            {
+                if (const AnimParam *p = smc.runtimeAnimatorInstance->GetParam(paramName))
+                {
+                    *result = p->boolVal;
+                    return;
+                }
+            }
+
+            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            if (it != smc.runtimeParams.end())
+            {
+                *result = it->boolVal;
+            }
+        }
+
+        static void AnimatorComponent_SetString(uint64_t entityID, const char *paramName, const char *value)
+        {
+            if (!paramName || !value)
+                return;
+            
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
+                return;
+            
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            if (smc.runtimeAnimatorInstance)
+                smc.runtimeAnimatorInstance->SetParamString(paramName, value);
+            
+            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            if (it != smc.runtimeParams.end())
+            {
+                it->strVal = value;
+            }
+            else 
+            {
+                smc.runtimeParams.push_back({ paramName, value, 0.0f, 0, false, AnimParam::Type::String });
+            }
+        }
+
+        static void AnimatorComponent_GetString(uint64_t entityID, const char *paramName, const char **result)
+        {
+            if (!result || !paramName) return;
+            *result = "";
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>()) return;
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            if (smc.runtimeAnimatorInstance)
+            {
+                if (const AnimParam *p = smc.runtimeAnimatorInstance->GetParam(paramName))
+                {
+                    *result = p->strVal.c_str();
+                    return;
+                }
+            }
+            auto it = std::find_if(smc.runtimeParams.begin(), smc.runtimeParams.end(), [&](const AnimParam &p) { return p.name == paramName; });
+            if (it != smc.runtimeParams.end()) *result = it->strVal.c_str();
+        }
+
+        static void AnimatorComponent_SetState(uint64_t entityID, const char *stateName)
+        {
+            if (!stateName) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>()) return;
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            smc.currentStateName = stateName;
+            smc.stateElapsed = 0.0f;
+            smc.stateNormalized = 0.0f;
+        }
+
+        static void AnimatorComponent_GetCurrentStateName(uint64_t entityID, const char **result)
+        {
+            if (!result) return;
+            *result = "";
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>()) return;
+            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+            *result = smc.currentStateName.c_str();
+        }
+
         static const ComponentScriptGlueAPI s_ComponentScriptGlueAPI =
         {
             &Scene_GetScreenToWorldRay,
@@ -3461,7 +3690,18 @@ namespace ignite
             &CapsuleColliderComponent_GetRadius,
             &CapsuleColliderComponent_SetRadius,
             &CapsuleColliderComponent_GetHeight,
-            &CapsuleColliderComponent_SetHeight
+            &CapsuleColliderComponent_SetHeight,
+
+            &AnimatorComponent_SetFloat,
+            &AnimatorComponent_GetFloat,
+            &AnimatorComponent_SetInt,
+            &AnimatorComponent_GetInt,
+            &AnimatorComponent_SetBool,
+            &AnimatorComponent_GetBool,
+            &AnimatorComponent_SetString,
+            &AnimatorComponent_GetString,
+            &AnimatorComponent_SetState,
+            &AnimatorComponent_GetCurrentStateName
         };
     }
 

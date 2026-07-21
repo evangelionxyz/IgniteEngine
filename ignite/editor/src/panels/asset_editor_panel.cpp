@@ -11,6 +11,7 @@
 #include "ext/editor_ui.hpp"
 #include "animation_timeline.hpp"
 #include "editors/animator_editor.hpp"
+#include "editors/blend_space_editor.hpp"
 #include "editors/widget_editor.hpp"
 #include "editors/scriptable_object_editor.hpp"
 #include "ignite/animation/animator/animator.hpp"
@@ -139,6 +140,7 @@ namespace ignite
         static std::unordered_map<uint64_t, TextureEditorState> s_TextureEditorState;
         static std::unordered_map<uint64_t, SpriteSheetEditorState> s_SpriteSheetEditorState;
         static std::unordered_map<uint64_t, Animation2DEditorState> s_Anim2DEditorState;
+        static std::unordered_map<uint64_t, BlendSpaceEditorState> s_BlendSpaceEditorState;
 
         static Gizmo s_SkeletonPreviewGizmo;
 
@@ -922,6 +924,11 @@ namespace ignite
                     UIAnimatorControllerEditor(assetData);
                     break;
                 }
+                case AssetType::BlendSpace:
+                {
+                    UIBlendSpaceEditor(assetData);
+                    break;
+                }
                 case AssetType::Material:
                 {
                     UIMaterialEditor(assetData);
@@ -1204,7 +1211,6 @@ namespace ignite
                     Ref<BlendSpace> asset = createdAsset->As<BlendSpace>();
                     if (asset)
                     {
-                        asset->name = finalAssetName;
                         created = asset->Serialize(fullAssetPath);
                         if (created)
                         {
@@ -3432,6 +3438,39 @@ namespace ignite
         assetData.requestFocus = false;
     }
 
+    void AssetEditorPanel::UIBlendSpaceEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1200.0f, 800.0f), ImVec2(520.0f, 500.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<BlendSpace> blendSpace = assetData.asset->As<BlendSpace>())
+                    {
+                        auto assetManager = AssetManager::GetInstance();
+                        BlendSpaceEditorState &state = s_BlendSpaceEditorState[static_cast<uint64_t>(blendSpace->handle)];
+                        BlendSpaceEditor::DrawBlendSpaceEditor(blendSpace, assetManager, state);
+                    }
+                    else
+                    {
+                        ImGui::Text("Invalid asset!");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        UIAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
 	void AssetEditorPanel::UIStaticMeshEditor(AssetEditorData &assetData)
 	{
 		bool isOpen = assetData.isOpen;
@@ -5105,7 +5144,8 @@ namespace ignite
         // Only some asset type can use scene renderer
         const AssetType assetType = assetData.metadata.type;
         if (assetType != AssetType::Material && assetType != AssetType::Mesh && assetType != AssetType::StaticMesh
-            && assetType != AssetType::SkeletalMesh && assetType != AssetType::Skeleton && assetType != AssetType::Widget)
+            && assetType != AssetType::SkeletalMesh && assetType != AssetType::Skeleton && assetType != AssetType::Widget
+            && assetType != AssetType::AnimatorController && assetType != AssetType::BlendSpace)
         {
             return;
         }

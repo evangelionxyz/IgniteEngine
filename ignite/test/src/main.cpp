@@ -14,6 +14,8 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scene/component.hpp"
+#include "ignite/animation/blend_space.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -26,8 +28,150 @@
 using namespace ignite;
 
 // -------------------------------------------------
-// Serializer and Deserializer test for InputMapping
+// BlendSpace 2D Evaluation & Serialization Tests
 // -------------------------------------------------
+
+TEST(BlendSpace, 2DEvaluationAndSerialization)
+{
+    ignite::Path filepath = "test-resources/temp/test_blendspace.bs2d";
+    if (!ignite::Path::exists(filepath.parent_path()))
+    {
+        ignite::Path::create_directories(filepath.parent_path());
+    }
+
+    Ref<BlendSpace> bs = BlendSpace::Create();
+    bs->axisXName = "Direction";
+    bs->axisYName = "Speed";
+    bs->axisMin = glm::vec2(-180.0f, 0.0f);
+    bs->axisMax = glm::vec2(180.0f, 10.0f);
+
+    BlendSpaceSample s1;
+    s1.position = glm::vec2(0.0f, 0.0f);
+    s1.SetAnimationHandle(AssetHandle(101));
+
+    BlendSpaceSample s2;
+    s2.position = glm::vec2(0.0f, 10.0f);
+    s2.SetAnimationHandle(AssetHandle(102));
+
+    BlendSpaceSample s3;
+    s3.position = glm::vec2(-180.0f, 5.0f);
+    s3.SetAnimationHandle(AssetHandle(103));
+
+    BlendSpaceSample s4;
+    s4.position = glm::vec2(180.0f, 5.0f);
+    s4.SetAnimationHandle(AssetHandle(104));
+
+    bs->samples.reserve(4);
+    bs->samples.push_back(s1);
+    bs->samples.push_back(s2);
+    bs->samples.push_back(s3);
+    bs->samples.push_back(s4);
+
+    // Test input clamping
+    glm::vec2 clamped = bs->ClampInput(glm::vec2(-250.0f, 15.0f));
+    EXPECT_FLOAT_EQ(clamped.x, -180.0f);
+    EXPECT_FLOAT_EQ(clamped.y, 10.0f);
+
+    // Test exact sample point evaluation
+    auto exactWeights = bs->Evaluate(glm::vec2(0.0f, 0.0f));
+    ASSERT_FALSE(exactWeights.empty());
+    EXPECT_EQ(exactWeights[0].GetAnimationAssetHandle(), AssetHandle(101));
+    EXPECT_FLOAT_EQ(exactWeights[0].weight, 1.0f);
+
+    // Test midpoint evaluation weights sum to 1
+    auto midWeights = bs->Evaluate(glm::vec2(0.0f, 5.0f));
+    ASSERT_FALSE(midWeights.empty());
+    float sumWeights = 0.0f;
+    for (const auto &w : midWeights)
+    {
+        sumWeights += w.weight;
+    }
+    EXPECT_NEAR(sumWeights, 1.0f, 0.001f);
+
+    // Test serialization
+    ASSERT_TRUE(bs->Serialize(filepath));
+
+    // Test deserialization
+    Ref<BlendSpace> loadedBs = BlendSpace::Deserialize(filepath);
+    ASSERT_NE(loadedBs, nullptr);
+    EXPECT_EQ(loadedBs->axisXName, "Direction");
+    EXPECT_EQ(loadedBs->axisYName, "Speed");
+    EXPECT_FLOAT_EQ(loadedBs->axisMin.x, -180.0f);
+    EXPECT_FLOAT_EQ(loadedBs->axisMin.y, 0.0f);
+    EXPECT_FLOAT_EQ(loadedBs->axisMax.x, 180.0f);
+    EXPECT_FLOAT_EQ(loadedBs->axisMax.y, 10.0f);
+    EXPECT_EQ(loadedBs->samples.size(), 4);
+    EXPECT_EQ(loadedBs->samples[0].GetAnimationAssetHandle(), AssetHandle(101));
+    EXPECT_EQ(loadedBs->samples[1].GetAnimationAssetHandle(), AssetHandle(102));
+}
+
+TEST(BlendSpace, NormalizedMultiSampleEvaluation)
+{
+    Ref<BlendSpace> bs = BlendSpace::Create();
+    bs->axisXName = "Direction";
+    bs->axisYName = "Speed";
+    bs->axisMin = glm::vec2(-180.0f, 0.0f);
+    bs->axisMax = glm::vec2(180.0f, 1.0f);
+
+    // Idle samples at Y = 0
+    BlendSpaceSample idle1; idle1.position = glm::vec2(-180.0f, 0.0f); idle1.SetAnimationHandle(AssetHandle(201));
+    BlendSpaceSample idle2; idle2.position = glm::vec2(0.0f, 0.0f);    idle2.SetAnimationHandle(AssetHandle(202));
+    BlendSpaceSample idle3; idle3.position = glm::vec2(180.0f, 0.0f);  idle3.SetAnimationHandle(AssetHandle(203));
+
+    // Running samples at Y = 1
+    BlendSpaceSample run1; run1.position = glm::vec2(-180.0f, 1.0f); run1.SetAnimationHandle(AssetHandle(301));
+    BlendSpaceSample run2; run2.position = glm::vec2(0.0f, 1.0f);    run2.SetAnimationHandle(AssetHandle(302));
+    BlendSpaceSample run3; run3.position = glm::vec2(180.0f, 1.0f);  run3.SetAnimationHandle(AssetHandle(303));
+
+    bs->samples = { idle1, idle2, idle3, run1, run2, run3 };
+
+    // Case 1: X = -180, Y = 0 -> 100% idle1 (201)
+    auto weightsExact = bs->Evaluate(glm::vec2(-180.0f, 0.0f));
+    ASSERT_EQ(weightsExact.size(), 1);
+    EXPECT_EQ(weightsExact[0].GetAnimationAssetHandle(), AssetHandle(201));
+    EXPECT_FLOAT_EQ(weightsExact[0].weight, 1.0f);
+
+    // Case 2: X = -90, Y = 0 -> ONLY idle samples (201, 202, 203) contribute
+    auto weightsMid = bs->Evaluate(glm::vec2(-90.0f, 0.0f));
+    ASSERT_FALSE(weightsMid.empty());
+    for (const auto &w : weightsMid)
+    {
+        uint64_t handleVal = static_cast<uint64_t>(w.GetAnimationAssetHandle());
+        EXPECT_TRUE(handleVal == 201 || handleVal == 202 || handleVal == 203);
+    }
+}
+
+// -------------------------------------------------
+// AnimatorController Parameter & Motion Evaluation Tests
+// -------------------------------------------------
+
+TEST(AnimatorController, BlendSpaceParameterEvaluation)
+{
+    Ref<AnimatorController> controller = AnimatorController::Create();
+    controller->params.push_back({ .name = "Direction", .floatVal = 0.0f, .type = AnimParam::Type::Float });
+    controller->params.push_back({ .name = "Speed", .floatVal = 0.0f, .type = AnimParam::Type::Float });
+
+    controller->SetParamFloat("Direction", -180.0f);
+    controller->SetParamFloat("Speed", 5.0f);
+
+    const AnimParam *dirParam = controller->GetParam("Direction");
+    const AnimParam *speedParam = controller->GetParam("Speed");
+
+    ASSERT_NE(dirParam, nullptr);
+    ASSERT_NE(speedParam, nullptr);
+    EXPECT_FLOAT_EQ(dirParam->floatVal, -180.0f);
+    EXPECT_FLOAT_EQ(speedParam->floatVal, 5.0f);
+
+    AnimState blendState;
+    blendState.name = "WalkRunBlendSpace";
+    blendState.SetMotion(AnimState::MotionType::BlendSpace, AssetHandle(505));
+    controller->states.push_back(blendState);
+    controller->defaultState = "WalkRunBlendSpace";
+
+    EXPECT_EQ(controller->states.size(), 1);
+    EXPECT_EQ(controller->states[0].GetMotionType(), AnimState::MotionType::BlendSpace);
+    EXPECT_EQ(controller->states[0].GetMotionHandle(), AssetHandle(505));
+}
 
 TEST(InputSerializer, SerializeDeserialize)
 {
@@ -342,6 +486,134 @@ public class ActionTest : Entity
     // Release Key
     InputSystem::GetActiveSystem()->SetKey(Key::Space, false);
     EXPECT_FALSE(InputSystem::IsActionPressed("Jump"));
+}
+
+// -------------------------------------------------
+// Animator C# Scripting Integration Test
+// -------------------------------------------------
+TEST(EngineTests, AnimatorScriptingIntegration)
+{
+    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    ignite::Path projectDir = testResourcesRoot / "temp/AnimatorScriptProject";
+
+    if (ignite::Path::exists(projectDir))
+    {
+        std::filesystem::remove_all(projectDir.string());
+    }
+    ignite::Path::create_directories(projectDir);
+
+    ProjectInfo info;
+    info.name = "AnimatorScriptProject";
+    info.filepath = projectDir / "AnimatorScriptProject.ixproj";
+    info.rootDirectory = projectDir;
+    info.assetDirectory = "Assets";
+    info.scriptsDirectory = "Scripts";
+    info.assetRegistryFilepath = "AssetRegistry.ixreg";
+    info.configuration = ProjectConfiguration::Debug;
+
+    Ref<Project> project = Project::Create(info);
+    ASSERT_NE(project, nullptr);
+
+    project->InitScriptEngine();
+
+    // Create C# script AnimationTest.cs
+    ignite::Path scriptFilepath = project->GetScriptsDirectory() / "AnimationTest.cs";
+    {
+        std::ofstream out(scriptFilepath.generic_string());
+        out << R"(using Ignite;
+using System;
+
+namespace AnimatorScriptProject;
+
+public class AnimationTest : Entity
+{
+    private AnimatorComponent _animator;
+
+    public override void OnCreate()
+    {
+        _animator = AddComponent<AnimatorComponent>();
+    }
+
+    public override void OnUpdate(float deltaTime)
+    {
+        if (_animator != null)
+        {
+            _animator.SetFloat("Speed", 5.0f);
+            _animator.SetFloat("Direction", -90.0f);
+            _animator.SetBool("IsMoving", true);
+            _animator.SetInt("StateIndex", 2);
+            _animator.SetString("StateName", "Running");
+            _animator.SetState("WalkRunState");
+        }
+    }
+}
+)";
+        out.close();
+        project->RegenerateCSharpProject();
+    }
+
+    auto scriptEngine = project->GetScriptEngine();
+    ASSERT_NE(scriptEngine, nullptr);
+
+    auto startTime = std::chrono::steady_clock::now();
+    while (!scriptEngine->IsReady())
+    {
+        Application::GetInstance()->ProcessMainThreadSubmissions();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (std::chrono::steady_clock::now() - startTime > std::chrono::seconds(30))
+        {
+            break;
+        }
+    }
+    ASSERT_TRUE(scriptEngine->IsReady());
+
+    Ref<Scene> scene = Scene::Create(project.get(), "TestScene");
+    scriptEngine->SetSceneContext(scene.get());
+
+    Entity entity = SceneManager::CreateEntity(scene.get(), "TestPlayer", EntityType_Node);
+    uint64_t entityID = static_cast<uint64_t>(entity.GetUUID());
+
+    auto &meshComp = entity.AddComponent<SkeletalMeshComponent>();
+    Ref<AnimatorController> controller = AnimatorController::Create();
+    controller->params = {
+        { .name = "Speed", .floatVal = 0.0f, .type = AnimParam::Type::Float },
+        { .name = "Direction", .floatVal = 0.0f, .type = AnimParam::Type::Float },
+        { .name = "IsMoving", .boolVal = false, .type = AnimParam::Type::Bool },
+        { .name = "StateIndex", .intVal = 0, .type = AnimParam::Type::Int },
+        { .name = "StateName", .strVal = "", .type = AnimParam::Type::String }
+    };
+
+    AnimState blendState;
+    blendState.name = "WalkRunState";
+    blendState.SetMotion(AnimState::MotionType::BlendSpace, AssetHandle(888));
+    controller->states.push_back(blendState);
+    controller->defaultState = "WalkRunState";
+
+    meshComp.runtimeAnimatorInstance = controller;
+    meshComp.runtimeParams = controller->params;
+
+    auto scriptInstance = scriptEngine->OnCreateEntityInstance(entityID, "AnimatorScriptProject.AnimationTest");
+    ASSERT_NE(scriptInstance, nullptr);
+
+    scriptInstance->InvokeOnUpdate(0.016f);
+
+    const AnimParam *speed = controller->GetParam("Speed");
+    const AnimParam *direction = controller->GetParam("Direction");
+    const AnimParam *isMoving = controller->GetParam("IsMoving");
+    const AnimParam *stateIndex = controller->GetParam("StateIndex");
+    const AnimParam *stateName = controller->GetParam("StateName");
+
+    ASSERT_NE(speed, nullptr);
+    ASSERT_NE(direction, nullptr);
+    ASSERT_NE(isMoving, nullptr);
+    ASSERT_NE(stateIndex, nullptr);
+    ASSERT_NE(stateName, nullptr);
+
+    EXPECT_FLOAT_EQ(speed->floatVal, 5.0f);
+    EXPECT_FLOAT_EQ(direction->floatVal, -90.0f);
+    EXPECT_TRUE(isMoving->boolVal);
+    EXPECT_EQ(stateIndex->intVal, 2);
+    EXPECT_EQ(stateName->strVal, "Running");
 }
 
 // -------------------------------------------------
