@@ -3955,8 +3955,6 @@ namespace ignite
                                             skeleton = meshEditorState.cachedSkeleton;
                                         }
 
-                                        ImGui::TextDisabled("Skeleton Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(skeletonHandle)));
-
                                         ImGui::SeparatorText("Details");
                                         const auto &meshInstances = mesh->GetMeshInstances();
                                         if (meshInstances.empty())
@@ -4386,14 +4384,6 @@ namespace ignite
                                 ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                                 assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
 
-                                ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
-                                ImGui::TextDisabled(
-                                    "RTTex=%p | RT=%p | %ux%u",
-                                    reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
-                                    assetData.sceneData.compositeRT.get(),
-                                    assetData.sceneData.viewportWidth,
-                                    assetData.sceneData.viewportHeight);
-
                                 const glm::mat4 viewProjection = assetData.sceneData.camera.GetProjection() * assetData.sceneData.camera.GetView();
                                 const Rect viewportRect { viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
                                 const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == skeleton->joints.size();
@@ -4597,7 +4587,6 @@ namespace ignite
                             {
                                 previewState.cachedPreviewMesh.reset();
                             }
-                            ImGui::TextDisabled("Preview Mesh Handle: %llu", static_cast<uint64_t>(previewState.previewMeshHandle));
 
                             ImGui::Separator();
                             const std::string previewAnimLabel = assetManager->GetAssetDisplayName(previewState.previewAnimationHandle);
@@ -4609,7 +4598,6 @@ namespace ignite
                                     assetManager->AddAssetPin(previewState.previewAnimationHandle, BuildAssetEditorPinOwnerTag(previewState.previewAnimationHandle));
                                 }
                             }
-                            ImGui::TextDisabled("Preview Animation Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(previewState.previewAnimationHandle)));
 
                             if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
                             {
