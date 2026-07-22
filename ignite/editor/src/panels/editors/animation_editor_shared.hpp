@@ -17,11 +17,27 @@
 #include <string>
 #include <vector>
 
+namespace ignite
+{
+    class Gizmo;
+}
+
 namespace ignite::UI
 {
     struct AnimPreviewViewport
     {
         static void Draw(EditorSceneData &sceneData, float deltaTime);
+
+        static void DrawOverlay(
+            EditorSceneData &sceneData,
+            const Ref<Skeleton> &skeleton,
+            const std::vector<glm::mat4> *previewGlobalTransforms,
+            int32_t &selectedJoint,
+            int32_t &selectedSocket,
+            int gizmoTarget,
+            Gizmo &gizmo,
+            bool &isDirty
+        );
     };
 
     struct AnimTimelineTrack
@@ -29,7 +45,14 @@ namespace ignite::UI
         // Draw base timeline with optional event markers from SkeletalAnimation and NotifyCallbacks
         static void Draw(ImDrawList *dl, float tlHeight, float totalDuration, float *playbackTime, bool *isPlaying,
             const std::vector<AnimationTimelineEvent> *sourceEvents = nullptr, const std::vector<AnimNotifyCallback> *notifyCallbacks = nullptr,
-            int *selectedCallbackIndex = nullptr, const char *emptyMessage = "No animation assigned");
+            int *selectedCallbackIndex = nullptr, int *selectedEventIndex = nullptr, const char *emptyMessage = "No animation assigned");
+
+        static void Draw(ImDrawList *dl, float tlHeight, float totalDuration, float *playbackTime, bool *isPlaying,
+            const std::vector<AnimationTimelineEvent> *sourceEvents, const std::vector<AnimNotifyCallback> *notifyCallbacks,
+            int *selectedCallbackIndex, const char *emptyMessage)
+        {
+            Draw(dl, tlHeight, totalDuration, playbackTime, isPlaying, sourceEvents, notifyCallbacks, selectedCallbackIndex, nullptr, emptyMessage);
+        }
     };
 
     struct SkeletonBodyPartSelector

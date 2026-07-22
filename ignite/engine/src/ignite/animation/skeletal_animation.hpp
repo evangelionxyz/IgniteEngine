@@ -22,8 +22,30 @@ namespace ignite
         float normalizedTime = 0.0f;
         std::string name = "Event";
         Action action = Action::ScriptCallback;
-        AssetHandle audioHandle = AssetHandle(0);       // optional one-shot override
-        AssetHandle callbackAsset = AssetHandle(0);     // AnimationTimelineCallback .ixso
+
+        AnimationTimelineEvent();
+        ~AnimationTimelineEvent();
+
+        AnimationTimelineEvent(const AnimationTimelineEvent &other);
+        AnimationTimelineEvent &operator=(const AnimationTimelineEvent &other);
+
+        AnimationTimelineEvent(AnimationTimelineEvent &&other) noexcept;
+        AnimationTimelineEvent &operator=(AnimationTimelineEvent &&other) noexcept;
+
+        void SetAudioHandle(const AssetHandle &handle);
+        const AssetHandle &GetAudioHandle() const { return m_AudioHandle; }
+
+        void SetCallbackAsset(const AssetHandle &handle);
+        const AssetHandle &GetCallbackAsset() const { return m_CallbackAsset; }
+
+        const UUID &GetUUID() const { return m_UUID; }
+
+    private:
+        void UnpinAssets();
+
+        UUID m_UUID;
+        AssetHandle m_AudioHandle = AssetHandle(0);
+        AssetHandle m_CallbackAsset = AssetHandle(0);
     };
 
     class IGN_API AnimationChannel

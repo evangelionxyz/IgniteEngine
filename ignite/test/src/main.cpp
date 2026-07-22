@@ -639,7 +639,7 @@ public class AnimationTest : Entity
     }
     ASSERT_TRUE(scriptEngine->IsReady());
 
-    Ref<Scene> scene = Scene::Create(project.get(), "TestScene");
+    Ref<Scene> scene = Scene::Create(project.get());
     scriptEngine->SetSceneContext(scene.get());
 
     Entity entity = SceneManager::CreateEntity(scene.get(), "TestPlayer", EntityType_Node);
@@ -733,8 +733,8 @@ TEST(SceneTransition, BasicTransition)
     ASSERT_NE(assetManager, nullptr);
 	assetManager->SetActiveProject(project);
 
-    Ref<Scene> sceneA = Scene::Create(project.get(), "SceneA");
-    Ref<Scene> sceneB = Scene::Create(project.get(), "SceneB");
+    Ref<Scene> sceneA = Scene::Create(project.get());
+    Ref<Scene> sceneB = Scene::Create(project.get());
 
     AssetHandle sceneAHandle(101);
     AssetHandle sceneBHandle(102);
@@ -775,7 +775,7 @@ TEST(SceneTransition, BasicTransition)
         LOG_INFO("DEBUG basic: active scene at end: {}, running state sceneA: {}, running state activeScene: {}", (void *)activeScene.get(), (int)sceneA->GetState(), (int)activeScene->GetState());
 
         EXPECT_NE(activeScene, sceneA);
-        EXPECT_EQ(activeScene->name, "SceneB");
+        EXPECT_EQ(activeScene->handle, sceneB->handle);
         EXPECT_TRUE(activeScene->IsRunning());
         EXPECT_FALSE(sceneA->IsRunning());
     }
@@ -823,8 +823,8 @@ TEST(SceneTransition, SharedAssetPinned)
     ASSERT_NE(assetManager, nullptr);
 	assetManager->SetActiveProject(project);
 
-    Ref<Scene> sceneA = Scene::Create(project.get(), "SceneA");
-    Ref<Scene> sceneB = Scene::Create(project.get(), "SceneB");
+    Ref<Scene> sceneA = Scene::Create(project.get());
+    Ref<Scene> sceneB = Scene::Create(project.get());
 
     AssetHandle sceneAHandle(201);
     AssetHandle sceneBHandle(202);
@@ -912,7 +912,7 @@ TEST(SceneTransition, InvalidHandleRejected)
     ASSERT_TRUE(scriptEngine->IsReady());
 
     LOG_INFO("DEBUG: Creating sceneA");
-    Ref<Scene> sceneA = Scene::Create(project.get(), "SceneA");
+    Ref<Scene> sceneA = Scene::Create(project.get());
     LOG_INFO("DEBUG: Setting active scene to A");
     project->SetActiveScene(sceneA);
 

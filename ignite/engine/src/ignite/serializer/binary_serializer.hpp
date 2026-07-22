@@ -708,8 +708,8 @@ namespace ignite
                 AppendRaw(buffer, action);
                 uint32_t nameSize = 0;
                 AppendString(buffer, event.name, nameSize);
-                AppendRaw(buffer, static_cast<uint64_t>(event.audioHandle));
-                AppendRaw(buffer, static_cast<uint64_t>(event.callbackAsset));
+                AppendRaw(buffer, static_cast<uint64_t>(event.GetAudioHandle()));
+                AppendRaw(buffer, static_cast<uint64_t>(event.GetCallbackAsset()));
             }
 
             // Write to file
@@ -844,8 +844,8 @@ namespace ignite
                     if (!ReadRaw(inFile, &audioHandle) || !ReadRaw(inFile, &callbackHandle))
                         throw std::runtime_error("Corrupt animation timeline event handles");
                     event.action = static_cast<AnimationTimelineEvent::Action>(action);
-                    event.audioHandle = AssetHandle(audioHandle);
-                    event.callbackAsset = AssetHandle(callbackHandle);
+                    event.SetAudioHandle(AssetHandle(audioHandle));
+                    event.SetCallbackAsset(AssetHandle(callbackHandle));
                     event.normalizedTime = std::clamp(event.normalizedTime, 0.0f, 1.0f);
                     anim->timelineEvents.push_back(std::move(event));
                 }

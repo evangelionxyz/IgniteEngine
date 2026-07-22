@@ -1136,6 +1136,7 @@ namespace ignite
     {
         if (m_EditorScene)
         {
+			AssetManager::GetInstance()->RemoveAssetPin(m_CurrentSceneHandle, std::string(kActiveSceneAssetOwner));
             m_EditorScene->OnStop();
         }
 
@@ -1159,7 +1160,7 @@ namespace ignite
         }
         
         // Create new editor scene
-        m_EditorScene = CreateRef<Scene>(m_ActiveProject.get(), "New Scene");
+        m_EditorScene = Scene::Create(m_ActiveProject.get());
 
         // Set as active scene
         SetActiveScene(m_EditorScene);
@@ -1206,8 +1207,10 @@ namespace ignite
         if (m_CurrentSceneHandle == openSceneHandle)
             return;
 
-        m_CurrentSceneHandle = openSceneHandle;
+		AssetManager::GetInstance()->RemoveAssetPin(m_CurrentSceneHandle, std::string(kActiveSceneAssetOwner));
+		AssetManager::GetInstance()->AddAssetPin(openSceneHandle, std::string(kActiveSceneAssetOwner));
 
+        m_CurrentSceneHandle = openSceneHandle;
         if (m_EditorScene)
         {
             m_EditorScene->OnStop();
@@ -1678,14 +1681,14 @@ namespace ignite
 
                 // AssetWorker::SubmitJob([this, filepath]()
                 Application::SubmitToMainThread([this, filepath]()
-                    {
-                        SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
-                        serializer.Serialize(filepath);
+                {
+                    SaveScene(filepath);
+                    LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
+                    RefreshContentBrowsers();
 
-                        LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
-
-                        RefreshContentBrowsers();
-                    });
+                    const AssetHandle sceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
+                    AssetManager::GetInstance()->AddAssetPin(m_CurrentSceneHandle, std::string(kActiveSceneAssetOwner));
+                });
             }
             else if (payload.metadata.type == AssetType::Project)
             {

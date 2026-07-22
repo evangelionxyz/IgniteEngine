@@ -38,7 +38,6 @@ namespace ignite
 
         sr.BeginMap("Scene"); // scene file header
         sr.AddKeyValue<uint32_t>("Version", Application::GetVersion());
-        sr.AddKeyValue<std::string>("Title", m_Scene->name);
         sr.BeginSequence("Entities");
 
         // Sort by name first: copy map contents into a vector for sorting
@@ -718,8 +717,7 @@ namespace ignite
         if (!sceneNode)
             return nullptr;
 
-        std::string title = sceneNode["Title"].as<std::string>();
-        Ref<Scene> desScene = Scene::Create(project, title);
+        Ref<Scene> desScene = Scene::Create(project);
 
         // Open commandlist for asset deserialization
         auto device = DeviceManager::GetInstance()->GetDevice();

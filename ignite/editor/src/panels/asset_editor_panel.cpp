@@ -13,6 +13,7 @@
 #include "editors/animator_editor.hpp"
 #include "editors/blend_space_editor.hpp"
 #include "editors/animation_editor.hpp"
+#include "editors/animation_editor_shared.hpp"
 #include "editors/animation_montage.hpp"
 #include "editors/widget_editor.hpp"
 #include "editors/scriptable_object_editor.hpp"
@@ -26,6 +27,7 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/asset/asset_importer.hpp"
+#include "ignite/audio/fmod_sound.hpp"
 
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_container.hpp"
@@ -125,6 +127,7 @@ namespace ignite
             int gizmoTarget = 0;
             bool playing = false;
             bool loop = false;
+            bool retryLoadMesh = true;
         };
 
         struct MeshEditorState
@@ -544,43 +547,34 @@ namespace ignite
                 else if (skeleton)
                 {
                     SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[static_cast<uint64_t>(skeleton->handle)];
-                    const std::string pinTag = std::format("SkeletonPreviewMesh_{}", static_cast<uint64_t>(skeleton->handle));
 
                     if (assetData.metadata.type == AssetType::SkeletalAnimation)
                     {
                         AnimationEditorState &animState = s_SkeletalAnimationEditorState[static_cast<uint64_t>(assetData.handle)];
                         if (animState.previewMeshHandle != AssetHandle(0) && animState.previewMeshHandle != previewState.previewMeshHandle)
                         {
-                            const AssetHandle oldH = previewState.previewMeshHandle;
                             previewState.previewMeshHandle = animState.previewMeshHandle;
                             previewState.cachedPreviewMesh.reset();
-                            if (oldH != previewState.previewMeshHandle)
-                            {
-                                if (oldH != AssetHandle(0)) assetManager->RemoveAssetPin(oldH, pinTag);
-                                if (previewState.previewMeshHandle != AssetHandle(0)) assetManager->AddAssetPin(previewState.previewMeshHandle, pinTag);
-                            }
                         }
-                        else if (previewState.previewMeshHandle != AssetHandle(0) && animState.previewMeshHandle != previewState.previewMeshHandle)
+                        else if (previewState.previewMeshHandle != AssetHandle(0) && animState.previewMeshHandle != AssetHandle(0) && 
+                            animState.previewMeshHandle != previewState.previewMeshHandle)
                         {
                             animState.previewMeshHandle = previewState.previewMeshHandle;
                         }
+                        else
+                        {
+                            previewState.previewMeshHandle = AssetHandle(0);
+							previewState.cachedPreviewMesh.reset();
+                        }
                     }
 
-                    if (previewState.previewMeshHandle == AssetHandle(0))
+                    if (previewState.previewMeshHandle == AssetHandle(0) && previewState.retryLoadMesh)
                     {
-                        bool retry = false;
-                        const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(skeleton->handle, &retry);
+                        const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(skeleton->handle, &previewState.retryLoadMesh);
                         if (matchedMeshHandle != AssetHandle(0))
                         {
-                            const AssetHandle oldH = previewState.previewMeshHandle;
                             previewState.previewMeshHandle = matchedMeshHandle;
                             previewState.cachedPreviewMesh.reset();
-                            if (oldH != matchedMeshHandle)
-                            {
-                                if (oldH != AssetHandle(0)) assetManager->RemoveAssetPin(oldH, pinTag);
-                                if (matchedMeshHandle != AssetHandle(0)) assetManager->AddAssetPin(matchedMeshHandle, pinTag);
-                            }
-
                             if (assetData.metadata.type == AssetType::SkeletalAnimation)
                             {
                                 s_SkeletalAnimationEditorState[static_cast<uint64_t>(assetData.handle)].previewMeshHandle = matchedMeshHandle;
@@ -628,24 +622,90 @@ namespace ignite
             SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[static_cast<uint64_t>(skeleton->handle)];
 
             Ref<SkeletalAnimation> previewAnimation = nullptr;
-            if (previewState.previewAnimationHandle != AssetHandle(0))
+            float activePlaybackTime = 0.0f;
+            float prevPlaybackTime = 0.0f;
+            bool isPlaying = false;
+
+            if (assetData.metadata.type == AssetType::SkeletalAnimation)
             {
-                previewAnimation = assetManager->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
+                Ref<SkeletalAnimation> currentAnim = assetData.asset->As<SkeletalAnimation>();
+                AnimationEditorState &animState = s_SkeletalAnimationEditorState[static_cast<uint64_t>(assetData.handle)];
+                if (currentAnim && currentAnim->duration > 0.0f)
+                {
+                    previewAnimation = currentAnim;
+                    isPlaying = animState.playing;
+                    prevPlaybackTime = animState.timeSeconds;
+                    if (animState.playing)
+                    {
+                        animState.timeSeconds += deltaTime;
+                        const float animDurationSec = currentAnim->duration / std::max(currentAnim->ticksPerSeconds, 0.0001f);
+                        if (animState.loop)
+                        {
+                            animState.timeSeconds = std::fmod(animState.timeSeconds, std::max(animDurationSec, 0.0001f));
+                        }
+                        else
+                        {
+                            animState.timeSeconds = std::min(animState.timeSeconds, animDurationSec);
+                        }
+                    }
+                    activePlaybackTime = animState.timeSeconds;
+                }
+            }
+            else
+            {
+                if (previewState.previewAnimationHandle != AssetHandle(0))
+                {
+                    previewAnimation = assetManager->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
+                }
+
+                if (previewAnimation && previewAnimation->duration > 0.0f)
+                {
+                    isPlaying = previewState.playing;
+                    prevPlaybackTime = previewState.timeSeconds;
+                    if (previewState.playing)
+                    {
+                        previewState.timeSeconds += deltaTime;
+                        const float animDurationSec = previewAnimation->duration / std::max(previewAnimation->ticksPerSeconds, 0.0001f);
+                        if (previewState.loop)
+                        {
+                            previewState.timeSeconds = std::fmod(previewState.timeSeconds, std::max(animDurationSec, 0.0001f));
+                        }
+                        else
+                        {
+                            previewState.timeSeconds = std::min(previewState.timeSeconds, animDurationSec);
+                        }
+                    }
+                    activePlaybackTime = previewState.timeSeconds;
+                }
             }
 
-            if (previewAnimation && previewAnimation->duration > 0.0f)
+            if (isPlaying && previewAnimation && previewAnimation->duration > 0.0f)
             {
-                if (previewState.playing)
+                const float animDurationSec = previewAnimation->duration / std::max(previewAnimation->ticksPerSeconds, 0.0001f);
+                if (animDurationSec > 0.0f)
                 {
-                    previewState.timeSeconds += deltaTime;
-                    const float animDurationSec = previewAnimation->duration / std::max(previewAnimation->ticksPerSeconds, 0.0001f);
-                    if (previewState.loop)
+                    const float prevNorm = prevPlaybackTime / animDurationSec;
+                    const float currNorm = activePlaybackTime / animDurationSec;
+
+                    for (const auto &evt : previewAnimation->timelineEvents)
                     {
-                        previewState.timeSeconds = std::fmod(previewState.timeSeconds, std::max(animDurationSec, 0.0001f));
-                    }
-                    else
-                    {
-                        previewState.timeSeconds = std::min(previewState.timeSeconds, animDurationSec);
+                        bool triggered = false;
+                        if (currNorm >= prevNorm)
+                        {
+                            triggered = (evt.normalizedTime >= prevNorm && evt.normalizedTime <= currNorm && prevNorm != currNorm);
+                        }
+                        else
+                        {
+                            triggered = (evt.normalizedTime >= prevNorm || evt.normalizedTime <= currNorm);
+                        }
+
+                        if (triggered && evt.action == AnimationTimelineEvent::Action::Audio && evt.GetAudioHandle() != AssetHandle(0))
+                        {
+                            if (auto sound = assetManager->GetAsset<FmodSound>(evt.GetAudioHandle()))
+                            {
+                                sound->Play();
+                            }
+                        }
                     }
                 }
             }
@@ -656,7 +716,7 @@ namespace ignite
 
             const bool hasPreviewAnimation = previewAnimation && previewAnimation->duration > 0.0f;
             const float timeInTicks = hasPreviewAnimation
-                ? previewState.timeSeconds * std::max(previewAnimation->ticksPerSeconds, 0.0001f)
+                ? activePlaybackTime * std::max(previewAnimation->ticksPerSeconds, 0.0001f)
                 : 0.0f;
 
             for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
@@ -4306,243 +4366,164 @@ namespace ignite
 
                         if (ImGui::BeginChild("##skeleton_left_list", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
                         {
-                            ImGui::TextUnformatted("Skeleton Tree");
-                            ImGui::Separator();
-
-                            std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
+                            if (ImGui::BeginTabBar("##skeleton_left_tabs"))
                             {
-                                if (jointId < 0 || jointId >= static_cast<int32_t>(skeleton->joints.size()))
+                                if (ImGui::BeginTabItem("Skeleton Tree"))
                                 {
-                                    return;
-                                }
-
-                                const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
-                                const bool isSelected = selectedJoint == jointId;
-                                const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
-
-                                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
-                                if (!hasChildren)
-                                {
-                                    flags |= ImGuiTreeNodeFlags_Leaf;
-                                }
-                                if (isSelected)
-                                {
-                                    flags |= ImGuiTreeNodeFlags_Selected;
-                                }
-
-                                const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
-                                if (ImGui::IsItemClicked())
-                                {
-                                    selectedJoint = jointId;
-                                }
-
-                                if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
-                                {
-                                    if (!ImGui::IsItemVisible())
+                                    std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
                                     {
-                                        ImGui::SetScrollHereY(0.5f);
-                                    }
+                                        if (jointId < 0 || jointId >= static_cast<int32_t>(skeleton->joints.size()))
+                                        {
+                                            return;
+                                        }
 
-                                    lastAutoScrolledJoint = selectedJoint;
-                                }
+                                        const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
+                                        const bool isSelected = selectedJoint == jointId;
+                                        const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
 
-                                if (opened)
-                                {
-                                    for (int32_t childJointId : children[static_cast<size_t>(jointId)])
+                                        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+                                        if (!hasChildren)
+                                        {
+                                            flags |= ImGuiTreeNodeFlags_Leaf;
+                                        }
+                                        if (isSelected)
+                                        {
+                                            flags |= ImGuiTreeNodeFlags_Selected;
+                                        }
+
+                                        const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
+                                        if (ImGui::IsItemClicked())
+                                        {
+                                            selectedJoint = jointId;
+                                        }
+
+                                        if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
+                                        {
+                                            if (!ImGui::IsItemVisible())
+                                            {
+                                                ImGui::SetScrollHereY(0.5f);
+                                            }
+
+                                            lastAutoScrolledJoint = selectedJoint;
+                                        }
+
+                                        if (opened)
+                                        {
+                                            for (int32_t childJointId : children[static_cast<size_t>(jointId)])
+                                            {
+                                                drawJointNode(childJointId);
+                                            }
+                                            ImGui::TreePop();
+                                        }
+                                    };
+
+                                    for (const Joint &joint : skeleton->joints)
                                     {
-                                        drawJointNode(childJointId);
+                                        if (joint.parentJointId == -1)
+                                        {
+                                            drawJointNode(joint.id);
+                                        }
                                     }
-                                    ImGui::TreePop();
+                                    ImGui::EndTabItem();
                                 }
-                            };
 
-                            for (const Joint &joint : skeleton->joints)
-                            {
-                                if (joint.parentJointId == -1)
+                                if (ImGui::BeginTabItem("Body Parts"))
                                 {
-                                    drawJointNode(joint.id);
+                                    static std::unordered_map<uint64_t, std::vector<int32_t>> s_SkeletonMaskedJoints;
+                                    auto &maskedJoints = s_SkeletonMaskedJoints[key];
+                                    bool bodyPartDirty = false;
+                                    UI::SkeletonBodyPartSelector::Draw(skeleton, maskedJoints, bodyPartDirty);
+                                    ImGui::EndTabItem();
                                 }
+
+                                ImGui::EndTabBar();
                             }
                         }
                         ImGui::EndChild();
 
                         ImGui::SameLine();
 
-                        if (ImGui::BeginChild("##skeleton_preview_view", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
+                        if (ImGui::BeginChild("##skeleton_preview_view", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
                         {
-                            ImGui::TextUnformatted("Mesh + Skeleton Preview");
-                            ImGui::Separator();
+                            const ImVec2 centerRegion = ImGui::GetContentRegionAvail();
+                            constexpr float minViewportH = 120.0f;
+                            constexpr float minTimelineH = 90.0f;
+                            constexpr float splitterH = 4.0f;
 
-                            const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-                            assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
-                            assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+                            float maxTimelineH = std::max(minTimelineH, centerRegion.y - minViewportH - splitterH);
+                            previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineH, maxTimelineH);
+                            float viewportH = std::max(minViewportH, centerRegion.y - previewState.animationTimelineHeight - splitterH - ImGui::GetFrameHeight());
 
-                            Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-                            if (previewTexture && previewTexture->GetHandle())
+                            if (ImGui::BeginChild("##skeleton_viewport_child", ImVec2(0.0f, viewportH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
                             {
-                                const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-                                ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
-                                assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
-
-                                const glm::mat4 viewProjection = assetData.sceneData.camera.GetProjection() * assetData.sceneData.camera.GetView();
-                                const Rect viewportRect { viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
-                                const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == skeleton->joints.size();
-
-                                auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
-                                {
-                                    if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewState.previewGlobalTransforms.size()))
-                                    {
-                                        return previewState.previewGlobalTransforms[static_cast<size_t>(jointId)];
-                                    }
-                                    return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
-                                };
-
-                                const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
-                                const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
-                                const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
-                                const bool previewViewportFocused = assetData.sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-
-                                bool isPreviewGizmoManipulating = false;
-                                bool isPreviewGizmoHovered = false;
-
-                                if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
-                                {
-                                    GizmoInfo gizmoInfo;
-                                    gizmoInfo.cameraView = assetData.sceneData.camera.GetView();
-                                    gizmoInfo.cameraProjection = assetData.sceneData.camera.GetProjection();
-                                    gizmoInfo.cameraType = assetData.sceneData.camera.projectionType;
-                                    gizmoInfo.snapValue = 0.05f;
-                                    gizmoInfo.isSnapping = false;
-                                    gizmoInfo.viewRect = viewportRect;
-
-                                    s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
-                                    s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                                    s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
-
-                                    glm::mat4 gizmoTransform = glm::mat4(1.0f);
-                                    if (useSocketGizmo)
-                                    {
-                                        const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                                        const glm::mat4 socketLocal = socket.local.GetMatrix();
-                                        if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                                        {
-                                            gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
-                                        }
-                                        else
-                                        {
-                                            gizmoTransform = socketLocal;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        gizmoTransform = getJointGlobal(selectedJoint);
-                                    }
-
-                                    s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
-                                    isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
-                                    isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
-
-                                    if (isPreviewGizmoManipulating)
-                                    {
-                                        if (useSocketGizmo)
-                                        {
-                                            JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                                            glm::mat4 parentWorld = glm::mat4(1.0f);
-                                            if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                                            {
-                                                parentWorld = getJointGlobal(socket.parentJointId);
-                                            }
-
-                                            const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
-                                            glm::vec3 localTranslation, localEuler, localScale;
-                                            Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                            socket.local = Transform(localTranslation, glm::quat(localEuler), localScale);
-                                        }
-                                        else if (hasSelectedJoint)
-                                        {
-                                            Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
-                                            glm::mat4 parentWorld = glm::mat4(1.0f);
-                                            if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                                            {
-                                                parentWorld = getJointGlobal(joint.parentJointId);
-                                            }
-
-                                            const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
-                                            glm::vec3 localTranslation, localEuler, localScale;
-                                            Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                            joint.defaultTransform = Transform(localTranslation, glm::quat(localEuler), localScale);
-                                            joint.localTransform = joint.defaultTransform.GetMatrix();
-                                        }
-
-                                        skeleton->SetDirtyFlag(true);
-                                    }
-                                }
-
-                                if (assetData.sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
-                                    && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
-                                {
-                                    const ImVec2 mousePos = ImGui::GetMousePos();
-                                    int32_t pickedJoint = -1;
-                                    float bestDistanceSq = 64.0f;
-
-                                    for (const Joint &joint : skeleton->joints)
-                                    {
-                                        ImVec2 jointPos;
-                                        if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
-                                        {
-                                            continue;
-                                        }
-
-                                        const float dx = jointPos.x - mousePos.x;
-                                        const float dy = jointPos.y - mousePos.y;
-                                        const float distanceSq = dx * dx + dy * dy;
-                                        if (distanceSq < bestDistanceSq)
-                                        {
-                                            bestDistanceSq = distanceSq;
-                                            pickedJoint = joint.id;
-                                        }
-                                    }
-
-                                    if (pickedJoint >= 0)
-                                    {
-                                        selectedJoint = pickedJoint;
-                                    }
-                                }
-
-                                ImDrawList *drawList = ImGui::GetWindowDrawList();
-                                for (const Joint &joint : skeleton->joints)
-                                {
-                                    if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(skeleton->joints.size()))
-                                    {
-                                        continue;
-                                    }
-
-                                    const Joint &parent = skeleton->joints[static_cast<size_t>(joint.parentJointId)];
-
-                                    ImVec2 childPos, parentPos;
-                                    if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
-                                        && Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
-                                    {
-                                        const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
-                                        drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
-                                    }
-                                }
-
-                                for (const Joint &joint : skeleton->joints)
-                                {
-                                    ImVec2 jointPos;
-                                    if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
-                                    {
-                                        const bool selected = joint.id == selectedJoint;
-                                        drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
-                                    }
-                                }
+                                UI::AnimPreviewViewport::Draw(assetData.sceneData, Application::GetDeltaTime());
+                                bool skeletonDirty = false;
+                                UI::AnimPreviewViewport::DrawOverlay(
+                                    assetData.sceneData,
+                                    skeleton,
+                                    &previewState.previewGlobalTransforms,
+                                    selectedJoint,
+                                    selectedSocket,
+                                    previewState.gizmoTarget,
+                                    s_SkeletonPreviewGizmo,
+                                    skeletonDirty
+                                );
                             }
-                            else
+                            ImGui::EndChild();
+
+                            // Vertical splitter
                             {
-                                ImGui::Dummy(viewportSize);
-                                assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
+                                
+                                ImGui::BeginChild("##skeleton_tl_splitter", { 0.0f, splitterH });
+                                ImGui::Button("##skeleton_tl_splitter_btn", ImVec2(-1.0f, -1.0f));
+                                
+                                if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+
+                                if (ImGui::IsItemActive())
+                                {
+                                    previewState.animationTimelineHeight -= ImGui::GetIO().MouseDelta.y;
+                                    previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineH, maxTimelineH);
+                                }
+                                ImGui::PopStyleColor(3);
+                                ImGui::EndChild();
                             }
+
+                            // Timeline
+                            if (ImGui::BeginChild("##skeleton_timeline_area", { 0.0f, previewState.animationTimelineHeight }, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar))
+                            {
+                                Ref<SkeletalAnimation> previewAnimation = nullptr;
+                                if (previewState.previewAnimationHandle != AssetHandle(0))
+                                {
+                                    previewAnimation = assetManager->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
+                                }
+                                const float totalDuration = (previewAnimation && previewAnimation->duration > 0.0f)
+                                    ? previewAnimation->duration / std::max(previewAnimation->ticksPerSeconds, 0.0001f)
+                                    : 0.0f;
+
+                                if (ImGui::BeginChild("##skeleton_playback", { 0.0f, 30.0f }))
+                                {
+                                    UI::AnimPlaybackControls::Draw(previewState.playing, previewState.loop, previewState.timeSeconds, totalDuration, previewAnimation != nullptr);
+                                }
+                                ImGui::EndChild();
+
+                                ImGui::Spacing();
+
+                                if (ImGui::BeginChild("##skeleton_timeline_track", { 0.0f, 0.0f }))
+                                {
+                                    std::vector<AnimationTimelineEvent> *srcEvents = (previewAnimation && !previewAnimation->timelineEvents.empty())
+                                        ? &previewAnimation->timelineEvents : nullptr;
+
+                                    UI::AnimTimelineTrack::Draw(ImGui::GetWindowDrawList(),
+                                        std::max(40.0f, ImGui::GetContentRegionAvail().y), totalDuration, &previewState.timeSeconds,
+                                        &previewState.playing, srcEvents, nullptr, nullptr, nullptr, "Assign a preview animation");
+                                }
+                                ImGui::EndChild();
+                            }
+                            ImGui::EndChild();
                         }
                         ImGui::EndChild();
 
@@ -4583,14 +4564,14 @@ namespace ignite
                             ImGui::SeparatorText("Joint Sockets");
 
                             const std::string previewMeshLabel = assetManager->GetAssetDisplayName(previewState.previewMeshHandle);
-                            if (UI::DrawAssetDropTarget("Preview Mesh", previewMeshLabel.c_str(), { AssetType::Mesh, AssetType::SkeletalMesh }, &previewState.previewMeshHandle, assetManager))
+                            if (UI::DrawAssetDropTarget("Mesh", previewMeshLabel.c_str(), { AssetType::Mesh, AssetType::SkeletalMesh }, &previewState.previewMeshHandle, assetManager))
                             {
                                 previewState.cachedPreviewMesh.reset();
                             }
 
                             ImGui::Separator();
                             const std::string previewAnimLabel = assetManager->GetAssetDisplayName(previewState.previewAnimationHandle);
-                            if (UI::DrawAssetDropTarget("Preview Animation", previewAnimLabel.c_str(), { AssetType::SkeletalAnimation }, &previewState.previewAnimationHandle, assetManager))
+                            if (UI::DrawAssetDropTarget("Animation", previewAnimLabel.c_str(), { AssetType::SkeletalAnimation }, &previewState.previewAnimationHandle, assetManager))
                             {
                                 if (previewState.previewAnimationHandle != AssetHandle(0))
                                 {
@@ -4599,18 +4580,7 @@ namespace ignite
                                 }
                             }
 
-                            if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
-                            {
-                                previewState.playing = !previewState.playing;
-                            }
-                            ImGui::SameLine();
-                            if (ImGui::Button("Stop"))
-                            {
-                                previewState.playing = false;
-                                previewState.timeSeconds = 0.0f;
-                            }
-                            ImGui::SameLine();
-                            ImGui::Checkbox("Loop", &previewState.loop);
+                            ImGui::Spacing();
 
                             if (ImGui::Button("Add Socket") && selectedJoint >= 0)
                             {

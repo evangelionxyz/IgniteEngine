@@ -9,9 +9,13 @@
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/core/logger.hpp"
 
+#include "states.hpp"
+#include "ignite/math/math.hpp"
+#include "ignite/imgui/gizmo.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <algorithm>
+#include <cstring>
 #include <format>
 
 namespace ignite
@@ -33,20 +37,6 @@ namespace ignite
         const float totalDuration = (animation->duration > 0.0f)
             ? animation->duration / std::max(animation->ticksPerSeconds, 0.0001f)
             : 0.0f;
-
-        // Advance playback
-        if (state.playing && totalDuration > 0.0f)
-        {
-            state.timeSeconds += deltaTime;
-            if (state.loop)
-            {
-                state.timeSeconds = std::fmod(state.timeSeconds, std::max(totalDuration, 0.0001f));
-            }
-            else
-            {
-                state.timeSeconds = std::min(state.timeSeconds, totalDuration);
-            }
-        }
 
         // Layout
         const ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -77,16 +67,6 @@ namespace ignite
                 animation->SetSkeletonHandle(skeletonHandle);
                 animation->SetDirtyFlag(true);
 			}
-
-            ImGui::Spacing();
-
-            // Preview Mesh drag and drop target button
-            AssetHandle previewMeshHandle = state.previewMeshHandle;
-            const std::string previewMeshLabel = assetManager->GetAssetDisplayName(previewMeshHandle);
-            if (UI::DrawAssetDropTarget("Preview Mesh", previewMeshLabel.c_str(), { AssetType::Mesh, AssetType::SkeletalMesh }, &previewMeshHandle, assetManager))
-            {
-                state.previewMeshHandle = previewMeshHandle;
-            }
 
             ImGui::Spacing();
 
@@ -176,6 +156,43 @@ namespace ignite
             if (ImGui::BeginChild("##anim_viewport", { 0.0f, viewportH }, ImGuiChildFlags_Borders))
             {
                 UI::AnimPreviewViewport::Draw(sceneData, deltaTime);
+
+                std::vector<glm::mat4> animGlobalTransforms;
+                const std::vector<glm::mat4> *poseTransforms = nullptr;
+                if (skeleton && !skeleton->joints.empty())
+                {
+                    const size_t jointCount = skeleton->joints.size();
+                    animGlobalTransforms.resize(jointCount, glm::mat4(1.0f));
+
+                    const float ticksPerSec = std::max(animation->ticksPerSeconds, 0.0001f);
+                    const float timeInTicks = state.timeSeconds * ticksPerSec;
+
+                    for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
+                    {
+                        const Joint &joint = skeleton->joints[jointIndex];
+                        glm::mat4 local = joint.defaultTransform.GetMatrix();
+                        if (animation->channels.contains(static_cast<int>(jointIndex)))
+                        {
+                            local = animation->channels[static_cast<int>(jointIndex)].Calculate(timeInTicks, joint.defaultTransform).GetMatrix();
+                        }
+
+                        if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(jointCount))
+                        {
+                            animGlobalTransforms[jointIndex] = local;
+                        }
+                        else
+                        {
+                            animGlobalTransforms[jointIndex] = animGlobalTransforms[static_cast<size_t>(joint.parentJointId)] * local;
+                        }
+                    }
+                    poseTransforms = &animGlobalTransforms;
+                }
+
+                static Gizmo s_AnimEditorGizmo;
+                int32_t dummySocket = -1;
+                bool isDirty = false;
+
+                UI::AnimPreviewViewport::DrawOverlay(sceneData, skeleton, poseTransforms, state.selectedJoint, dummySocket, 0, s_AnimEditorGizmo, isDirty);
             }
             ImGui::EndChild();
 
@@ -215,11 +232,38 @@ namespace ignite
                 // Timeline with source animation events
                 if (ImGui::BeginChild("##anim_timeline", { 0.0f, 0.0f }))
                 {
-                    const std::vector<AnimationTimelineEvent> *srcEvents = (!animation->timelineEvents.empty()) ? &animation->timelineEvents : nullptr;
-
                     UI::AnimTimelineTrack::Draw(ImGui::GetWindowDrawList(),
                         std::max(54.0f, ImGui::GetContentRegionAvail().y), totalDuration, &state.timeSeconds,
-                        &state.playing, srcEvents, nullptr, nullptr, "Select an animation");
+                        &state.playing, &animation->timelineEvents, nullptr, nullptr, &state.selectedEventIndex, "Select an animation");
+
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                            {
+                                AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                AssetMetaData meta = assetManager->GetMetaData(droppedHandle);
+                                if (meta.type == AssetType::Audio)
+                                {
+                                    const float mouseX = ImGui::GetMousePos().x;
+                                    const ImVec2 tlPos = ImGui::GetItemRectMin();
+                                    const float tlWidth = ImGui::GetItemRectSize().x;
+                                    const float normTime = (tlWidth > 0.0f) ? std::clamp((mouseX - tlPos.x) / tlWidth, 0.0f, 1.0f) : 0.0f;
+
+                                    AnimationTimelineEvent evt;
+                                    evt.action = AnimationTimelineEvent::Action::Audio;
+                                    evt.SetAudioHandle(droppedHandle);
+                                    evt.normalizedTime = normTime;
+                                    evt.name = assetManager->GetAssetDisplayName(droppedHandle);
+                                    animation->timelineEvents.push_back(evt);
+                                    state.selectedEventIndex = static_cast<int>(animation->timelineEvents.size()) - 1;
+                                    animation->SetDirtyFlag(true);
+                                }
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
                 }
                 ImGui::EndChild();
             }
@@ -229,11 +273,21 @@ namespace ignite
 
         ImGui::SameLine();
 
-        // ==== Right Column: Keyframe Inspector ====
+        // ==== Right Column: Keyframe & Event Inspector ====
         ImGui::BeginChild("##anim_right", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
         {
-            ImGui::TextUnformatted("Keyframe Inspector");
+            ImGui::TextUnformatted("Inspector");
             ImGui::Separator();
+
+			// Preview Mesh drag and drop target button
+			AssetHandle previewMeshHandle = state.previewMeshHandle;
+			const std::string previewMeshLabel = assetManager->GetAssetDisplayName(previewMeshHandle);
+			if (UI::DrawAssetDropTarget("Mesh", previewMeshLabel.c_str(), { AssetType::Mesh, AssetType::SkeletalMesh }, &previewMeshHandle, assetManager))
+			{
+				state.previewMeshHandle = previewMeshHandle;
+			}
+
+			ImGui::Spacing();
 
             if (state.selectedJoint >= 0 && animation->channels.contains(state.selectedJoint))
             {
@@ -277,7 +331,7 @@ namespace ignite
                             }
                         }
 
-                        if (ImGui::BeginChild("##kf_list", ImVec2(0.0f, 200.0f), ImGuiChildFlags_Borders))
+                        if (ImGui::BeginChild("##kf_list", ImVec2(0.0f, 150.0f), ImGuiChildFlags_Borders))
                         {
                             for (int i = 0; i < static_cast<int>(keys.frames.size()); ++i)
                             {
@@ -349,6 +403,69 @@ namespace ignite
             else
             {
                 ImGui::TextDisabled("Select a joint with animation data to inspect keyframes.");
+            }
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("Timeline Events");
+            if (!animation->timelineEvents.empty())
+            {
+                if (state.selectedEventIndex >= static_cast<int>(animation->timelineEvents.size()))
+                {
+                    state.selectedEventIndex = -1;
+                }
+
+                if (ImGui::BeginChild("##event_list", ImVec2(0.0f, 100.0f), ImGuiChildFlags_Borders))
+                {
+                    for (int i = 0; i < static_cast<int>(animation->timelineEvents.size()); ++i)
+                    {
+                        auto &evt = animation->timelineEvents[i];
+                        bool isSelected = (state.selectedEventIndex == i);
+                        std::string label = std::format("{} ({:.2f})##evt_{}", evt.name, evt.normalizedTime, i);
+                        if (ImGui::Selectable(label.c_str(), isSelected))
+                        {
+                            state.selectedEventIndex = i;
+                        }
+                    }
+                }
+                ImGui::EndChild();
+
+                if (state.selectedEventIndex >= 0 && state.selectedEventIndex < static_cast<int>(animation->timelineEvents.size()))
+                {
+                    auto &evt = animation->timelineEvents[static_cast<size_t>(state.selectedEventIndex)];
+                    ImGui::SeparatorText("Selected Event");
+
+                    char nameBuf[256] {};
+                    std::strncpy(nameBuf, evt.name.c_str(), sizeof(nameBuf) - 1);
+                    if (ImGui::InputText("Event Name", nameBuf, sizeof(nameBuf)))
+                    {
+                        evt.name = nameBuf;
+                        animation->SetDirtyFlag(true);
+                    }
+
+                    if (ImGui::DragFloat("Normalized Time", &evt.normalizedTime, 0.005f, 0.0f, 1.0f))
+                    {
+                        animation->SetDirtyFlag(true);
+                    }
+
+                    AssetHandle currentAudioH = evt.GetAudioHandle();
+                    const std::string audioLabel = assetManager->GetAssetDisplayName(currentAudioH);
+                    if (UI::DrawAssetDropTarget("Audio Asset", audioLabel.c_str(), { AssetType::Audio }, &currentAudioH, assetManager))
+                    {
+                        evt.SetAudioHandle(currentAudioH);
+                        animation->SetDirtyFlag(true);
+                    }
+
+                    if (ImGui::Button("Delete Event"))
+                    {
+                        animation->timelineEvents.erase(animation->timelineEvents.begin() + state.selectedEventIndex);
+                        state.selectedEventIndex = -1;
+                        animation->SetDirtyFlag(true);
+                    }
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("No events on timeline. Drag sound here.");
             }
 
             ImGui::Spacing();

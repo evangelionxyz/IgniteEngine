@@ -195,45 +195,10 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         ImGui::Begin("Hierarchy");
-        ImGui::Button(m_Scene->name.c_str(), { ImGui::GetContentRegionAvail().x, 0.0f });
 
-        // target drop
-        if (ImGui::BeginDragDropTarget())
-        {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
-            {
-                const size_t count = payload->DataSize / sizeof(UUID);
-                const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+        auto assetManager = AssetManager::GetInstance();
 
-                for (size_t i = 0; i < count; ++i)
-                {
-                    const UUID uuid = droppedUUIDs[i];
-                    Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
-
-                    if (!droppedEntity)
-                        continue;
-
-                    // check if src entity has parent
-                    auto &idComp = droppedEntity.GetComponent<IDComponent>();
-                    if (idComp.parent != UUID(0))
-                    {
-                        UUID oldParent = idComp.parent;
-                        // current parent should be removed
-                        Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
-                        parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
-                        idComp.parent = UUID(0);
-
-                        // Record for undo — re-parenting to root (UUID 0)
-                        CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
-                            m_Scene, droppedEntity.GetUUID(), oldParent, UUID(0)));
-                    }
-                }
-            }
-
-            ImGui::EndDragDropTarget();
-        }
-
-        ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_NoClip | ImGuiTableFlags_PadOuterX
+        const ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_NoClip | ImGuiTableFlags_PadOuterX
             | ImGuiTableFlags_NoPadInnerX | ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_Resizable;
 
         if (ImGui::BeginTable("entity_hierarchy_table", 1, tableFlags))
@@ -247,18 +212,59 @@ namespace ignite
             ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.000f, 0.243f, 0.408f, 1.000f });
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
-            std::vector<Entity> rootEntities;
-            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
-            {
-                if (id.parent == UUID(0))
-                {
-                    rootEntities.emplace_back(e, m_Scene);
-                }
-            });
+            // Root tree node
+            const auto sceneName = assetManager->GetAssetDisplayName(m_Scene->handle);
+			const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
+                | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns;
 
-            for (const Entity &entity : rootEntities)
+            if (ImGui::TreeNodeEx(sceneName.c_str(), treeFlags))
             {
-                RenderEntityNode(entity);
+				// target drop
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+					{
+						const size_t count = payload->DataSize / sizeof(UUID);
+						const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+
+						for (size_t i = 0; i < count; ++i)
+						{
+							const UUID uuid = droppedUUIDs[i];
+							Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
+
+							if (!droppedEntity)
+								continue;
+
+							// check if src entity has parent
+							auto &idComp = droppedEntity.GetComponent<IDComponent>();
+							if (idComp.parent != UUID(0))
+							{
+								UUID oldParent = idComp.parent;
+								// current parent should be removed
+								Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
+								parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
+								idComp.parent = UUID(0);
+
+								// Record for undo — re-parenting to root (UUID 0)
+								CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
+									m_Scene, droppedEntity.GetUUID(), oldParent, UUID(0)));
+							}
+						}
+					}
+
+					ImGui::EndDragDropTarget();
+				}
+
+				std::vector<Entity> rootEntities;
+				m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
+					{
+						if (id.parent == UUID(0))
+							rootEntities.emplace_back(e, m_Scene);
+					});
+
+				for (const Entity &entity : rootEntities)
+					RenderEntityNode(entity);
+                ImGui::TreePop();
             }
 
             ImGui::PopStyleVar();
@@ -273,7 +279,6 @@ namespace ignite
 
             ImGui::EndTable();
         }
-
         ImGui::End();
     }
 
@@ -410,29 +415,27 @@ namespace ignite
             ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         }
 
-        ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
+		ImGui::TableNextRow();
+		ImGui::TableNextColumn();
+
+        const ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
             | ImGuiTreeNodeFlags_OpenOnDoubleClick
             | ImGuiTreeNodeFlags_SpanAvailWidth
             | ImGuiTreeNodeFlags_OpenOnArrow
             | ImGuiTreeNodeFlags_LabelSpanAllColumns;
 
-        const intptr_t imguiPushId = static_cast<intptr_t>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-
+        const auto imguiPushId = static_cast<intptr_t>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, { 0.435f, 0.287f, 0.000f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_Header, { 0.000f, 0.305f, 0.453f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, { 0.780f, 0.520f, 0.000f, 1.000f });
         
-        const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(imguiPushId), flags, "%s", idComp.name.c_str());
-
+        const bool opened = ImGui::TreeNodeEx((void *)imguiPushId, flags, "%s", idComp.name.c_str());
         if (isSelected && entity.GetUUID() == m_TrackingSelectedEntity && s_LastAutoScrolledTarget != m_TrackingSelectedEntity)
         {
             if (!ImGui::IsItemVisible())
             {
                 ImGui::SetScrollHereY(0.5f);
             }
-
             s_LastAutoScrolledTarget = m_TrackingSelectedEntity;
         }
         

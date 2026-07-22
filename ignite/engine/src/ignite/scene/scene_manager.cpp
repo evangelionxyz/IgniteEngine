@@ -557,7 +557,7 @@ namespace ignite
     Ref<Scene> SceneManager::Copy(Ref<Scene> &other)
     {
         // create new scene with other's name
-        Ref<Scene> newScene = CreateRef<Scene>(other->GetProject(), other->name);
+        Ref<Scene> newScene = CreateRef<Scene>(other->GetProject());
 
         // create source and destination registry
         auto srcRegistry = other->registry;
@@ -588,7 +588,7 @@ namespace ignite
         // copy scene extra data
         newScene->handle = other->handle;
 
-        // Do not copy entities (it is created when creating entity)
+        // Do not copy entities (it will be created when creating entity)
         // newScene->entities = other->entities;
         
         // Do not copy registered comps
@@ -603,14 +603,6 @@ namespace ignite
             mr.mesh->CreateBuffers();
             mr.mesh->WriteVertexBuffer(static_cast<uint32_t>(e));
         }*/
-
-        if (auto* deviceManager = DeviceManager::GetInstance())
-        {
-            if (deviceManager->GetDevice())
-            {
-                deviceManager->WaitForIdle();
-            }
-        }
 
         return newScene;
     }

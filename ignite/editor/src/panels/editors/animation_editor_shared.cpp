@@ -4,6 +4,8 @@
 #include "animation_editor_shared.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/asset/asset_manager.hpp"
+#include "ignite/imgui/gizmo.hpp"
+#include "ignite/math/math.hpp"
 #include <imgui_internal.h>
 #include <format>
 
@@ -11,6 +13,9 @@ namespace ignite::UI
 {
 	void UI::AnimPreviewViewport::Draw(EditorSceneData &sceneData, float deltaTime)
 	{
+		ImGui::TextUnformatted("Viewport");
+		ImGui::Separator();
+
 		const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
 		sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
 		sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
@@ -29,9 +34,201 @@ namespace ignite::UI
 		}
 	}
 
-
-	void AnimTimelineTrack::Draw(ImDrawList *dl, float tlHeight, float totalDuration, float *playbackTime, bool *isPlaying, const std::vector<AnimationTimelineEvent> *sourceEvents /*= nullptr*/, const std::vector<AnimNotifyCallback> *notifyCallbacks /*= nullptr*/, int *selectedCallbackIndex /*= nullptr*/, const char *emptyMessage /*= "No animation assigned"*/)
+	void UI::AnimPreviewViewport::DrawOverlay(
+		EditorSceneData &sceneData,
+		const Ref<Skeleton> &skeleton,
+		const std::vector<glm::mat4> *previewGlobalTransforms,
+		int32_t &selectedJoint,
+		int32_t &selectedSocket,
+		int gizmoTarget,
+		Gizmo &gizmo,
+		bool &isDirty)
 	{
+		if (!skeleton)
+			return;
+
+		const ImVec2 viewportPos = ImGui::GetItemRectMin();
+		const ImVec2 viewportSize = ImGui::GetItemRectSize();
+
+		if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+			return;
+
+		const glm::mat4 viewProjection = sceneData.camera.GetProjection() * sceneData.camera.GetView();
+		const Rect viewportRect{ viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
+
+		const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
+		const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
+		const bool useSocketGizmo = (gizmoTarget == 1) && hasSelectedSocket;
+		const bool previewViewportFocused = sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+		const bool hasPreviewPose = previewGlobalTransforms && previewGlobalTransforms->size() == skeleton->joints.size();
+
+		auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
+		{
+			if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewGlobalTransforms->size()))
+			{
+				return (*previewGlobalTransforms)[static_cast<size_t>(jointId)];
+			}
+			if (jointId >= 0 && jointId < static_cast<int32_t>(skeleton->joints.size()))
+			{
+				return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
+			}
+			static const glm::mat4 identity(1.0f);
+			return identity;
+		};
+
+		bool isPreviewGizmoManipulating = false;
+		bool isPreviewGizmoHovered = false;
+
+		if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
+		{
+			GizmoInfo gizmoInfo;
+			gizmoInfo.cameraView = sceneData.camera.GetView();
+			gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
+			gizmoInfo.cameraType = sceneData.camera.projectionType;
+			gizmoInfo.snapValue = 0.05f;
+			gizmoInfo.isSnapping = false;
+			gizmoInfo.viewRect = viewportRect;
+
+			gizmo.SetInfo(gizmoInfo);
+			gizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
+			gizmo.SetMode(ImGuizmo::MODE::LOCAL);
+
+			glm::mat4 gizmoTransform = glm::mat4(1.0f);
+			if (useSocketGizmo)
+			{
+				const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+				const glm::mat4 socketLocal = socket.local.GetMatrix();
+				if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+				{
+					gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
+				}
+				else
+				{
+					gizmoTransform = socketLocal;
+				}
+			}
+			else
+			{
+				gizmoTransform = getJointGlobal(selectedJoint);
+			}
+
+			gizmo.Manipulate(gizmoTransform);
+			isPreviewGizmoManipulating = gizmo.IsManipulating();
+			isPreviewGizmoHovered = gizmo.IsHovered();
+
+			if (isPreviewGizmoManipulating)
+			{
+				if (useSocketGizmo)
+				{
+					JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+					glm::mat4 parentWorld = glm::mat4(1.0f);
+					if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+					{
+						parentWorld = getJointGlobal(socket.parentJointId);
+					}
+
+					const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+					glm::vec3 localTranslation, localEuler, localScale;
+					Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+					socket.local.translation = localTranslation;
+					socket.local.rotation = glm::quat(localEuler);
+					socket.local.scale = localScale;
+				}
+				else if (hasSelectedJoint)
+				{
+					Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
+					glm::mat4 parentWorld = glm::mat4(1.0f);
+					if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+					{
+						parentWorld = getJointGlobal(joint.parentJointId);
+					}
+
+					const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+					glm::vec3 localTranslation, localEuler, localScale;
+					Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+					joint.defaultTransform.translation = localTranslation;
+					joint.defaultTransform.rotation = glm::quat(localEuler);
+					joint.defaultTransform.scale = localScale;
+					joint.localTransform = joint.defaultTransform.GetMatrix();
+				}
+
+				isDirty = true;
+				skeleton->SetDirtyFlag(true);
+			}
+		}
+
+		if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
+		{
+			const ImVec2 mousePos = ImGui::GetMousePos();
+			int32_t pickedJoint = -1;
+			float bestDistanceSq = 64.0f;
+
+			for (const Joint &joint : skeleton->joints)
+			{
+				ImVec2 jointPos;
+				if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+				{
+					continue;
+				}
+
+				const float dx = jointPos.x - mousePos.x;
+				const float dy = jointPos.y - mousePos.y;
+				const float distanceSq = dx * dx + dy * dy;
+				if (distanceSq < bestDistanceSq)
+				{
+					bestDistanceSq = distanceSq;
+					pickedJoint = joint.id;
+				}
+			}
+
+			if (pickedJoint >= 0)
+			{
+				selectedJoint = pickedJoint;
+			}
+		}
+
+		ImDrawList *drawList = ImGui::GetWindowDrawList();
+		for (const Joint &joint : skeleton->joints)
+		{
+			if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(skeleton->joints.size()))
+			{
+				continue;
+			}
+
+			const Joint &parent = skeleton->joints[static_cast<size_t>(joint.parentJointId)];
+
+			ImVec2 childPos, parentPos;
+			if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
+				&& Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
+			{
+				const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
+				drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
+			}
+		}
+
+		for (const Joint &joint : skeleton->joints)
+		{
+			ImVec2 jointPos;
+			if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+			{
+				const bool selected = joint.id == selectedJoint;
+				drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
+			}
+		}
+	}
+
+
+	void AnimTimelineTrack::Draw(ImDrawList *dl, float tlHeight, float totalDuration, float *playbackTime, bool *isPlaying, const std::vector<AnimationTimelineEvent> *sourceEvents /*= nullptr*/, const std::vector<AnimNotifyCallback> *notifyCallbacks /*= nullptr*/, int *selectedCallbackIndex /*= nullptr*/, int *selectedEventIndex /*= nullptr*/, const char *emptyMessage /*= "No animation assigned"*/)
+	{
+		static int s_DraggingEventIndex = -1;
+		static int s_DraggingCallbackIndex = -1;
+
+		if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		{
+			s_DraggingEventIndex = -1;
+			s_DraggingCallbackIndex = -1;
+		}
+
 		const float rulerHeight = 16.0f;
 		const float laneHeight = 18.0f;
 		const ImVec2 tlPos = ImGui::GetCursorScreenPos();
@@ -83,31 +280,61 @@ namespace ignite::UI
 		dl->AddLine({ tlPos.x, tlPos.y + rulerHeight }, { tlPos.x + tlWidth, tlPos.y + rulerHeight }, IM_COL32(70, 70, 80, 255));
 
 		float currentLaneY = tlPos.y + rulerHeight + 2.0f;
+		bool clickedOnAnyMarker = false;
 
-		// Source animation events lane (read-only)
+		// Source animation events lane (editable)
 		if (sourceEvents && !sourceEvents->empty())
 		{
 			dl->AddText(ImVec2(tlPos.x + 4.0f, currentLaneY), IM_COL32(180, 180, 200, 200), "Src Events");
-			for (const auto &event : *sourceEvents)
+			for (int i = 0; i < static_cast<int>(sourceEvents->size()); ++i)
 			{
+				const auto &event = (*sourceEvents)[i];
 				float eventX = tlPos.x + event.normalizedTime * tlWidth;
-				ImU32 color = (event.action == AnimationTimelineEvent::Action::Audio)
-					? IM_COL32(100, 200, 255, 255) : IM_COL32(255, 200, 80, 255);
+				bool isSelected = (selectedEventIndex && *selectedEventIndex == i);
 
+				ImU32 color = (event.action == AnimationTimelineEvent::Action::Audio)
+					? (isSelected ? IM_COL32(140, 230, 255, 255) : IM_COL32(100, 200, 255, 255))
+					: (isSelected ? IM_COL32(255, 230, 120, 255) : IM_COL32(255, 200, 80, 255));
+
+				const float size = isSelected ? 7.0f : 5.0f;
 				// Diamond marker
 				dl->AddQuadFilled(
-					ImVec2(eventX, currentLaneY + 4.0f),
-					ImVec2(eventX + 5.0f, currentLaneY + laneHeight * 0.5f + 4.0f),
-					ImVec2(eventX, currentLaneY + laneHeight + 4.0f),
-					ImVec2(eventX - 5.0f, currentLaneY + laneHeight * 0.5f + 4.0f),
+					ImVec2(eventX, currentLaneY + 4.0f - (size - 5.0f)),
+					ImVec2(eventX + size, currentLaneY + laneHeight * 0.5f + 4.0f),
+					ImVec2(eventX, currentLaneY + laneHeight + 4.0f + (size - 5.0f)),
+					ImVec2(eventX - size, currentLaneY + laneHeight * 0.5f + 4.0f),
 					color);
 
-				// Tooltip
-				ImVec2 markerMin(eventX - 6.0f, currentLaneY + 2.0f);
-				ImVec2 markerMax(eventX + 6.0f, currentLaneY + laneHeight + 6.0f);
+				if (isSelected)
+				{
+					dl->AddQuad(
+						ImVec2(eventX, currentLaneY + 4.0f - (size - 5.0f)),
+						ImVec2(eventX + size, currentLaneY + laneHeight * 0.5f + 4.0f),
+						ImVec2(eventX, currentLaneY + laneHeight + 4.0f + (size - 5.0f)),
+						ImVec2(eventX - size, currentLaneY + laneHeight * 0.5f + 4.0f),
+						IM_COL32(255, 255, 255, 255), 1.5f);
+				}
+
+				// Click to select & drag to move
+				ImVec2 markerMin(eventX - 7.0f, currentLaneY + 2.0f);
+				ImVec2 markerMax(eventX + 7.0f, currentLaneY + laneHeight + 6.0f);
 				if (ImGui::IsMouseHoveringRect(markerMin, markerMax))
 				{
 					ImGui::SetTooltip("%s (%.2f)", event.name.c_str(), event.normalizedTime);
+					if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+					{
+						clickedOnAnyMarker = true;
+						s_DraggingEventIndex = i;
+						s_DraggingCallbackIndex = -1;
+						if (selectedEventIndex) *selectedEventIndex = i;
+						if (selectedCallbackIndex) *selectedCallbackIndex = -1;
+					}
+				}
+
+				if (s_DraggingEventIndex == i && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+				{
+					const float mouseX = ImGui::GetMousePos().x;
+					const_cast<AnimationTimelineEvent &>(event).normalizedTime = std::clamp((mouseX - tlPos.x) / tlWidth, 0.0f, 1.0f);
 				}
 			}
 			currentLaneY += laneHeight + 4.0f;
@@ -135,13 +362,32 @@ namespace ignite::UI
 				if (ImGui::IsMouseHoveringRect(markerMin, markerMax))
 				{
 					ImGui::SetTooltip("%s (%.3f)", cb.callbackName.c_str(), cb.timestep);
-					if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && selectedCallbackIndex)
+					if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 					{
-						*selectedCallbackIndex = i;
+						clickedOnAnyMarker = true;
+						s_DraggingCallbackIndex = i;
+						s_DraggingEventIndex = -1;
+						if (selectedCallbackIndex) *selectedCallbackIndex = i;
+						if (selectedEventIndex) *selectedEventIndex = -1;
 					}
+				}
+
+				if (s_DraggingCallbackIndex == i && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+				{
+					const float mouseX = ImGui::GetMousePos().x;
+					const_cast<AnimNotifyCallback &>(cb).timestep = std::clamp((mouseX - tlPos.x) / tlWidth, 0.0f, 1.0f);
 				}
 			}
 			currentLaneY += laneHeight + 4.0f;
+		}
+
+		// Deselect markers if clicking empty timeline space
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && isHovered && !clickedOnAnyMarker)
+		{
+			s_DraggingEventIndex = -1;
+			s_DraggingCallbackIndex = -1;
+			if (selectedEventIndex) *selectedEventIndex = -1;
+			if (selectedCallbackIndex) *selectedCallbackIndex = -1;
 		}
 
 		// Playhead line
@@ -149,8 +395,8 @@ namespace ignite::UI
 		dl->AddLine(ImVec2(phX, tlPos.y), ImVec2(phX, tlPos.y + actualHeight), IM_COL32(255, 100, 60, 230), 2.0f);
 		dl->AddTriangleFilled(ImVec2(phX - 5, tlPos.y), ImVec2(phX + 5, tlPos.y), ImVec2(phX, tlPos.y + 10), IM_COL32(255, 100, 60, 230));
 
-		// Scrubbing
-		if ((isHovered || isActive) && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		// Scrubbing (only if not dragging a marker)
+		if ((isHovered || isActive) && ImGui::IsMouseDown(ImGuiMouseButton_Left) && s_DraggingEventIndex < 0 && s_DraggingCallbackIndex < 0)
 		{
 			const float mx = std::clamp(ImGui::GetMousePos().x - tlPos.x, 0.0f, tlWidth);
 			*playbackTime = (mx / tlWidth) * totalDuration;
@@ -259,8 +505,7 @@ namespace ignite::UI
 			}
 		}
 	}
-
-
+	
 	void AnimPlaybackControls::Draw(bool &playing, bool &loop, float &timeSeconds, float totalDuration, bool enabled /*= true*/)
 	{
 		ImGui::BeginDisabled(!enabled);

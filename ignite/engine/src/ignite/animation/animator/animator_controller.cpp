@@ -8,6 +8,7 @@
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/blend_space.hpp"
+#include "ignite/audio/fmod_sound.hpp"
 #include "ignite/core/logger.hpp"
 
 #pragma warning(push)
@@ -433,6 +434,39 @@ namespace ignite
         else
         {
             runtime.stateNormalized = 0.0f;
+        }
+
+        // Trigger Animation Events (e.g., Audio actions)
+        const float prevNorm = runtime.previousStateNormalized;
+        const float currNorm = runtime.stateNormalized;
+        for (const auto &contrib : sourceContribs)
+        {
+            if (!contrib.first)
+                continue;
+
+            for (const auto &evt : contrib.first->timelineEvents)
+            {
+                bool triggered = false;
+                if (currNorm >= prevNorm)
+                {
+                    triggered = (evt.normalizedTime >= prevNorm && evt.normalizedTime <= currNorm && prevNorm != currNorm);
+                }
+                else
+                {
+                    triggered = (evt.normalizedTime >= prevNorm || evt.normalizedTime <= currNorm);
+                }
+
+                if (triggered)
+                {
+                    if (evt.action == AnimationTimelineEvent::Action::Audio && evt.GetAudioHandle() != AssetHandle(0))
+                    {
+                        if (auto sound = assetManager->GetAsset<FmodSound>(evt.GetAudioHandle()))
+                        {
+                            sound->Play();
+                        }
+                    }
+                }
+            }
         }
 
         // State Transition Handling

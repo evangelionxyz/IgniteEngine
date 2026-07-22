@@ -43,7 +43,7 @@ namespace ignite
     {
     public:
         Scene();
-        explicit Scene(Project *project, const std::string &name);
+        explicit Scene(Project *project);
 
         ~Scene();
 
@@ -71,7 +71,6 @@ namespace ignite
 
         Ref<WidgetCanvas> GetRootWidget();
 
-        std::string name;
         entt::registry *registry;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
         
@@ -81,7 +80,7 @@ namespace ignite
 		inline bool IsPlaying() const { return m_State == ESceneState::Play; }
         inline bool IsRunning() const { return m_State == ESceneState::Play || m_State == ESceneState::Simulate; }
         
-        static Ref<Scene> Create(Project *project, const std::string &name);
+        static Ref<Scene> Create(Project *project);
         
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
         Environment *GetEnvironment();

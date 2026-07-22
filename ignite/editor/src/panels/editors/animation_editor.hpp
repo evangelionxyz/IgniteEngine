@@ -23,6 +23,7 @@ namespace ignite
         int selectedJoint = -1;
         int selectedKeyframeType = 0;   // 0=Translation, 1=Rotation, 2=Scale
         int selectedKeyframeIndex = -1;
+        int selectedEventIndex = -1;
         bool playing = false;
         bool loop = false;
     };

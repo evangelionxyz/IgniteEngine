@@ -172,8 +172,8 @@ namespace ignite
         // m_Ready = false;
     }
 
-    Scene::Scene(Project *project, const std::string &_name)
-        : m_Project(project), name(_name), m_SceneRenderer(nullptr)
+    Scene::Scene(Project *project)
+        : m_Project(project), m_SceneRenderer(nullptr)
         , m_ViewportWidth(1280), m_ViewportHeight(720)
     {
         registry = new entt::registry();
@@ -536,9 +536,9 @@ namespace ignite
         }
     }
 
-    Ref<Scene> Scene::Create(Project *project, const std::string &name)
+    Ref<Scene> Scene::Create(Project *project)
     {
-        return CreateRef<Scene>(project, name);
+        return CreateRef<Scene>(project);
     }
 
     Environment *Scene::GetEnvironment()
