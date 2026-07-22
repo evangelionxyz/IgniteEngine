@@ -10,6 +10,11 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 
+namespace ignite::UI
+{
+    struct AssetEditorData;
+}
+
 namespace ignite
 {
     // Drag-and-drop payload type for the toolbox panel
@@ -35,7 +40,7 @@ namespace ignite
         static bool DrawWidgetLabel(class WidgetLabel *label, AssetManager *assetManager);
         static bool DrawWidgetImage(class WidgetImage *image, AssetManager *assetManager);
         // Moved UI: full widget editor window for AssetEditorPanel to call
-        static void UIWidgetEditor(class AssetEditorData &assetData, class EditorLayer *editorLayer);
+        static void UIWidgetEditor(UI::AssetEditorData &assetData, class EditorLayer *editorLayer);
     };
 }
 

@@ -5,9 +5,9 @@
 #include "states.hpp"
 #include "ext/editor_ui.hpp"
 #include "ignite/asset/asset_manager.hpp"
+#include "panels/asset_editor_data.hpp"
 
 #include "editor_layer.hpp"
-#include "panels/asset_editor_panel.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/texture.hpp"
 
@@ -750,7 +750,7 @@ namespace ignite
         return dirty;
     }
 
-    void WidgetEditor::UIWidgetEditor(AssetEditorData &assetData, EditorLayer *editorLayer)
+    void WidgetEditor::UIWidgetEditor(UI::AssetEditorData &assetData, EditorLayer *editorLayer)
     {
         if (!assetData.asset || !assetData.asset->IsReady())
         {
@@ -758,7 +758,7 @@ namespace ignite
             assetData.asset = assetManager ? assetManager->GetAsset(assetData.handle) : nullptr;
             if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
             {
-                ImGui::Text("Loading asset...");
+                UI::DrawCenteredText("Loading asset...");
                 return;
             }
         }
@@ -767,7 +767,7 @@ namespace ignite
         {
 			auto assetManager = AssetManager::GetInstance();
 
-            EditorSceneData &sceneData = assetData.sceneData;
+            UI::EditorSceneData &sceneData = assetData.sceneData;
 
             widget->CreateRoot(sceneData.viewportWidth > 0 ? sceneData.viewportWidth : 1280, sceneData.viewportHeight > 0 ? sceneData.viewportHeight : 720);
             if (widget->GetRoot() && widget->GetRoot()->name.empty())

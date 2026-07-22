@@ -24,6 +24,8 @@
 
 #include "ignite/physics/3d/jolt/jolt_physics.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
+#include "ignite/animation/animation_montage.hpp"
+#include "ignite/asset/asset_manager.hpp"
 
 #include <glm/gtx/quaternion.hpp>
 
@@ -3490,6 +3492,59 @@ namespace ignite
             *result = smc.currentStateName.c_str();
         }
 
+        static int32_t AnimationMontage_GetNotifyCallbackCount(uint64_t montageHandle)
+        {
+            if (auto *am = AssetManager::GetInstance())
+            {
+                if (auto montage = am->GetAsset<AnimationMontage>(AssetHandle(montageHandle)))
+                {
+                    return static_cast<int32_t>(montage->GetNotifyCallbacks().size());
+                }
+            }
+            return 0;
+        }
+
+        static bool AnimationMontage_GetNotifyCallbackAt(uint64_t montageHandle, int32_t index, float *outTimestep, uint8_t *outActionType, const char **outName)
+        {
+            if (auto *am = AssetManager::GetInstance())
+            {
+                if (auto montage = am->GetAsset<AnimationMontage>(AssetHandle(montageHandle)))
+                {
+                    const auto &cbs = montage->GetNotifyCallbacks();
+                    if (index >= 0 && index < static_cast<int32_t>(cbs.size()))
+                    {
+                        if (outTimestep) *outTimestep = cbs[index].timestep;
+                        if (outActionType) *outActionType = static_cast<uint8_t>(cbs[index].actionType);
+                        if (outName) *outName = cbs[index].callbackName.c_str();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        static void AnimationMontage_AddNotifyCallback(uint64_t montageHandle, float timestep, uint8_t actionType, const char *name)
+        {
+            if (auto *am = AssetManager::GetInstance())
+            {
+                if (auto montage = am->GetAsset<AnimationMontage>(AssetHandle(montageHandle)))
+                {
+                    montage->AddNotifyCallback(timestep, static_cast<AnimationTimelineEvent::Action>(actionType), name ? name : "");
+                }
+            }
+        }
+
+        static void AnimationMontage_RemoveNotifyCallback(uint64_t montageHandle, int32_t index)
+        {
+            if (auto *am = AssetManager::GetInstance())
+            {
+                if (auto montage = am->GetAsset<AnimationMontage>(AssetHandle(montageHandle)))
+                {
+                    montage->RemoveNotifyCallback(static_cast<size_t>(index));
+                }
+            }
+        }
+
         static const ComponentScriptGlueAPI s_ComponentScriptGlueAPI =
         {
             &Scene_GetScreenToWorldRay,
@@ -3701,7 +3756,12 @@ namespace ignite
             &AnimatorComponent_SetString,
             &AnimatorComponent_GetString,
             &AnimatorComponent_SetState,
-            &AnimatorComponent_GetCurrentStateName
+            &AnimatorComponent_GetCurrentStateName,
+
+            &AnimationMontage_GetNotifyCallbackCount,
+            &AnimationMontage_GetNotifyCallbackAt,
+            &AnimationMontage_AddNotifyCallback,
+            &AnimationMontage_RemoveNotifyCallback
         };
     }
 

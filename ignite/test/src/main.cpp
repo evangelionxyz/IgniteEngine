@@ -15,6 +15,7 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/animation/blend_space.hpp"
+#include "ignite/animation/animation_montage.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include <string>
 #include <filesystem>
@@ -171,6 +172,77 @@ TEST(AnimatorController, BlendSpaceParameterEvaluation)
     EXPECT_EQ(controller->states.size(), 1);
     EXPECT_EQ(controller->states[0].GetMotionType(), AnimState::MotionType::BlendSpace);
     EXPECT_EQ(controller->states[0].GetMotionHandle(), AssetHandle(505));
+}
+
+// -------------------------------------------------
+// AnimationMontage Notify Callback & Serialization Tests
+// -------------------------------------------------
+
+TEST(AnimationMontage, NotifyCallbackSerializationAndCompat)
+{
+    ignite::Path filepath = "test-resources/temp/test_montage_v2.montage";
+    if (!ignite::Path::exists(filepath.parent_path()))
+    {
+        ignite::Path::create_directories(filepath.parent_path());
+    }
+
+    Ref<AnimationMontage> montage = CreateRef<AnimationMontage>();
+    montage->name = "ComboAttackMontage";
+    montage->SetAnimationHandle(AssetHandle(301));
+    montage->SetSkeletonHandle(AssetHandle(401));
+
+    montage->AddNotif("HitWindow", 0.2f, 0.6f);
+    montage->AddNotifyCallback(0.35f, AnimationTimelineEvent::Action::ScriptCallback, "OnHitBoxActive");
+    montage->AddNotifyCallback(0.70f, AnimationTimelineEvent::Action::Audio, "OnSlashSound");
+    montage->SetMaskedJoints({ 1, 2, 3, 5, 8 });
+
+    ASSERT_TRUE(montage->Serialize(filepath));
+
+    Ref<AnimationMontage> loaded = AnimationMontage::Deserialize(filepath);
+    ASSERT_NE(loaded, nullptr);
+    EXPECT_EQ(loaded->name, "ComboAttackMontage");
+    EXPECT_EQ(loaded->GetAnimationHandle(), AssetHandle(301));
+    EXPECT_EQ(loaded->GetSkeletonHandle(), AssetHandle(401));
+
+    EXPECT_EQ(loaded->GetAnimNotifies().size(), 1);
+    EXPECT_EQ(loaded->GetNotifyCallbacks().size(), 2);
+
+    EXPECT_FLOAT_EQ(loaded->GetNotifyCallbacks()[0].timestep, 0.35f);
+    EXPECT_EQ(loaded->GetNotifyCallbacks()[0].actionType, AnimationTimelineEvent::Action::ScriptCallback);
+    EXPECT_EQ(loaded->GetNotifyCallbacks()[0].callbackName, "OnHitBoxActive");
+
+    EXPECT_FLOAT_EQ(loaded->GetNotifyCallbacks()[1].timestep, 0.70f);
+    EXPECT_EQ(loaded->GetNotifyCallbacks()[1].actionType, AnimationTimelineEvent::Action::Audio);
+    EXPECT_EQ(loaded->GetNotifyCallbacks()[1].callbackName, "OnSlashSound");
+
+    EXPECT_EQ(loaded->GetMaskedJoints().size(), 5);
+    EXPECT_EQ(loaded->GetMaskedJoints()[0], 1);
+    EXPECT_EQ(loaded->GetMaskedJoints()[3], 5);
+}
+
+TEST(AnimationMontage, NotifyCallbackTimestepTrigger)
+{
+    AnimNotifyCallback cb(0.50f, AnimationTimelineEvent::Action::ScriptCallback, "OnStepTrigger");
+
+    // Before trigger
+    cb.OnUpdate(0.40f);
+    EXPECT_FALSE(cb.IsActive());
+    EXPECT_FALSE(cb.JustTriggered());
+
+    // At trigger timestep
+    cb.OnUpdate(0.50f);
+    EXPECT_TRUE(cb.IsActive());
+    EXPECT_TRUE(cb.JustTriggered());
+
+    // Stay at trigger timestep (second frame)
+    cb.OnUpdate(0.50f);
+    EXPECT_TRUE(cb.IsActive());
+    EXPECT_FALSE(cb.JustTriggered());
+
+    // After trigger
+    cb.OnUpdate(0.60f);
+    EXPECT_FALSE(cb.IsActive());
+    EXPECT_FALSE(cb.JustTriggered());
 }
 
 TEST(InputSerializer, SerializeDeserialize)

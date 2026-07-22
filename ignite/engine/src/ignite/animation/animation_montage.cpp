@@ -5,6 +5,7 @@
 #include "animation_montage.hpp"
 
 #include "ignite/core/logger.hpp"
+#include "ignite/asset/asset_manager.hpp"
 
 #pragma warning(push)
 #pragma warning(disable : 4275 4251)
@@ -47,16 +48,69 @@ namespace ignite
         return AnimNotif {};
     }
 
+    void AnimationMontage::AddNotifyCallback(float timestep, AnimationTimelineEvent::Action actionType, const std::string &callbackName)
+    {
+        m_NotifyCallbacks.emplace_back(timestep, actionType, callbackName);
+        SetDirtyFlag(true);
+    }
+
+    void AnimationMontage::RemoveNotifyCallback(size_t index)
+    {
+        if (index < m_NotifyCallbacks.size())
+        {
+            m_NotifyCallbacks.erase(m_NotifyCallbacks.begin() + static_cast<ptrdiff_t>(index));
+            SetDirtyFlag(true);
+        }
+    }
+
+    void AnimationMontage::SetAnimationHandle(AssetHandle animationHandle)
+    {
+        if (m_AnimationHandle == animationHandle)
+            return;
+
+        // Pin tracking
+        if (auto *am = AssetManager::GetInstance())
+        {
+            const std::string ownerTag = std::format("montage.{}", static_cast<uint64_t>(handle));
+            if (m_AnimationHandle != AssetHandle(0))
+                am->RemoveAssetPin(m_AnimationHandle, ownerTag);
+            if (animationHandle != AssetHandle(0))
+                am->AddAssetPin(animationHandle, ownerTag);
+        }
+
+        m_AnimationHandle = animationHandle;
+    }
+
+    void AnimationMontage::SetSkeletonHandle(AssetHandle skeletonHandle)
+    {
+        if (m_SkeletonHandle == skeletonHandle)
+            return;
+
+        // Pin tracking
+        if (auto *am = AssetManager::GetInstance())
+        {
+            const std::string ownerTag = std::format("montage.skel.{}", static_cast<uint64_t>(handle));
+            if (m_SkeletonHandle != AssetHandle(0))
+                am->RemoveAssetPin(m_SkeletonHandle, ownerTag);
+            if (skeletonHandle != AssetHandle(0))
+                am->AddAssetPin(skeletonHandle, ownerTag);
+        }
+
+        m_SkeletonHandle = skeletonHandle;
+    }
+
     bool AnimationMontage::Serialize(const ignite::Path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
         out << YAML::Key << "AnimationMontage" << YAML::Value << YAML::BeginMap;
+        out << YAML::Key << "Version" << YAML::Value << 2;
         out << YAML::Key << "Name" << YAML::Value << name;
         out << YAML::Key << "AnimationHandle" << YAML::Value << static_cast<uint64_t>(m_AnimationHandle);
         out << YAML::Key << "SkeletonHandle" << YAML::Value << static_cast<uint64_t>(m_SkeletonHandle);
-        out << YAML::Key << "Notifies" << YAML::Value << YAML::BeginSeq;
 
+        // Range-based notifies
+        out << YAML::Key << "Notifies" << YAML::Value << YAML::BeginSeq;
         for (const auto &[notifyName, notify] : m_Notifies)
         {
             out << YAML::BeginMap;
@@ -65,8 +119,29 @@ namespace ignite
             out << YAML::Key << "EndTime" << YAML::Value << notify.endTime;
             out << YAML::EndMap;
         }
-
         out << YAML::EndSeq;
+
+        // Timestep-based notify callbacks (v2)
+        out << YAML::Key << "NotifyCallbacks" << YAML::Value << YAML::BeginSeq;
+        for (const auto &cb : m_NotifyCallbacks)
+        {
+            out << YAML::BeginMap;
+            out << YAML::Key << "Timestep" << YAML::Value << cb.timestep;
+            out << YAML::Key << "ActionType" << YAML::Value << static_cast<uint32_t>(cb.actionType);
+            out << YAML::Key << "CallbackName" << YAML::Value << cb.callbackName;
+            out << YAML::Key << "AudioHandle" << YAML::Value << static_cast<uint64_t>(cb.audioHandle);
+            out << YAML::EndMap;
+        }
+        out << YAML::EndSeq;
+
+        // Body part mask (v2)
+        out << YAML::Key << "MaskedJoints" << YAML::Value << YAML::BeginSeq;
+        for (int32_t jointIdx : m_MaskedJoints)
+        {
+            out << jointIdx;
+        }
+        out << YAML::EndSeq;
+
         out << YAML::EndMap;
         out << YAML::EndMap;
 
@@ -108,10 +183,13 @@ namespace ignite
         }
 
         Ref<AnimationMontage> montage = CreateRef<AnimationMontage>();
+        int version = 1;
+        if (auto n = node["Version"]) version = n.as<int>();
         if (auto n = node["Name"]) montage->name = n.as<std::string>();
         if (auto n = node["AnimationHandle"]) montage->m_AnimationHandle = AssetHandle(n.as<uint64_t>());
         if (auto n = node["SkeletonHandle"]) montage->m_SkeletonHandle = AssetHandle(n.as<uint64_t>());
 
+        // Range-based notifies (all versions)
         if (YAML::Node notifiesNode = node["Notifies"]; notifiesNode && notifiesNode.IsSequence())
         {
             for (const auto &notifyNode : notifiesNode)
@@ -126,6 +204,34 @@ namespace ignite
                 if (!notifyName.empty())
                 {
                     montage->m_Notifies[notifyName] = notify;
+                }
+            }
+        }
+
+        // Timestep-based notify callbacks (v2+, backward compatible)
+        if (version >= 2)
+        {
+            if (YAML::Node callbacksNode = node["NotifyCallbacks"]; callbacksNode && callbacksNode.IsSequence())
+            {
+                montage->m_NotifyCallbacks.reserve(callbacksNode.size());
+                for (const auto &cbNode : callbacksNode)
+                {
+                    AnimNotifyCallback cb;
+                    if (auto n = cbNode["Timestep"]) cb.timestep = n.as<float>();
+                    if (auto n = cbNode["ActionType"]) cb.actionType = static_cast<AnimationTimelineEvent::Action>(n.as<uint32_t>());
+                    if (auto n = cbNode["CallbackName"]) cb.callbackName = n.as<std::string>();
+                    if (auto n = cbNode["AudioHandle"]) cb.audioHandle = AssetHandle(n.as<uint64_t>());
+                    montage->m_NotifyCallbacks.push_back(std::move(cb));
+                }
+            }
+
+            // Body part mask (v2+)
+            if (YAML::Node maskedNode = node["MaskedJoints"]; maskedNode && maskedNode.IsSequence())
+            {
+                montage->m_MaskedJoints.reserve(maskedNode.size());
+                for (const auto &jointNode : maskedNode)
+                {
+                    montage->m_MaskedJoints.push_back(jointNode.as<int32_t>());
                 }
             }
         }

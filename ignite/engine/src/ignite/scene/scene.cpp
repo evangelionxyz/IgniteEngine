@@ -168,6 +168,8 @@ namespace ignite
         , m_ViewportWidth(0)
         , m_ViewportHeight(0)
     {
+		// Waiting for m_UsedAssets to be loaded by AssetManager
+        // m_Ready = false;
     }
 
     Scene::Scene(Project *project, const std::string &_name)
@@ -186,6 +188,9 @@ namespace ignite
 		{
 			OnAssetChangeSignal(signal);
 		});
+
+        // Waiting for m_UsedAssets to be loaded by AssetManager
+        // m_Ready = false;
     }
 
     Scene::~Scene()
@@ -197,6 +202,7 @@ namespace ignite
         // Stop physics simulations
         if (m_JoltScene)
             delete m_JoltScene;
+
         m_JoltScene = nullptr;
 		m_Physics2D = nullptr;
 

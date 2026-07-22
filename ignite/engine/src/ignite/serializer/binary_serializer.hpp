@@ -821,7 +821,7 @@ namespace ignite
             uint64_t skeletonHandle = 0;
             if (ReadRaw(inFile, &skeletonHandle) && skeletonHandle != 0)
             {
-                anim->SetSkeletonHandle(UUID(skeletonHandle));
+                anim->SetSkeletonHandle(AssetHandle(skeletonHandle));
             }
 
             constexpr uint32_t kTimelineEventMagic = 0x544E5645; // "EVNT"

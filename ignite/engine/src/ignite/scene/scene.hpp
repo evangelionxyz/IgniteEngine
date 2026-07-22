@@ -114,6 +114,8 @@ namespace ignite
         uint64_t m_StepFrame = 0;
         SignalToken m_AssetChangeToken = kInvalidSignalToken;
         ESceneState m_State = ESceneState::Stop;
+
+        // std::vector<AssetHandle> m_UsedAssets;
         
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
         std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;

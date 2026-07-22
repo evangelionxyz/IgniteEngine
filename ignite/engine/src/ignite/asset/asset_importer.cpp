@@ -771,7 +771,7 @@ namespace ignite
         if (asset)
         {
             asset->handle = handle;
-            asset->SetReadyFlag(true);
+            asset->SetSkeletonHandle(asset->GetSkeletonHandle());
         }
         return asset;
     }

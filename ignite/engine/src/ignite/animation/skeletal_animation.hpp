@@ -44,6 +44,8 @@ namespace ignite
     public:
         SkeletalAnimation() = default;
 
+        ~SkeletalAnimation();
+
         std::string name;
         float duration = 0;
         float ticksPerSeconds = 1.0f;
@@ -55,14 +57,14 @@ namespace ignite
         virtual bool Serialize(const ignite::Path &filepath) override;
         static Ref<SkeletalAnimation> Deserialize(const ignite::Path &filepath);
 
-        void SetSkeletonHandle(UUID skeletonHandle);
-        UUID GetSkeletonHandle() const { return m_SkeletonHandle; }
+        void SetSkeletonHandle(const AssetHandle &skeletonHandle);
+        const AssetHandle &GetSkeletonHandle() const { return m_SkeletonHandle; }
 
         static AssetType GetStaticType() { return AssetType::SkeletalAnimation; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
     
     private:
-        UUID m_SkeletonHandle = UUID(0);
+        AssetHandle m_SkeletonHandle = AssetHandle(0);
     };
 }
 

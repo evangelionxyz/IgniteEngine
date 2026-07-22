@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "skeletal_animation.hpp"
+#include "ignite/asset/asset_manager.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -24,7 +25,14 @@ namespace ignite
         return tr;
     }
 
-    bool SkeletalAnimation::Serialize(const ignite::Path &filepath)
+	SkeletalAnimation::~SkeletalAnimation()
+	{
+		if (m_SkeletonHandle != AssetHandle(0))
+			AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle,
+				std::format("skeletal-animtion.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
+	}
+
+	bool SkeletalAnimation::Serialize(const ignite::Path &filepath)
 	{
 		BinarySerializer::SerializeSkeletalAnimation(this, filepath);
         SetDirtyFlag(false);
@@ -36,8 +44,15 @@ namespace ignite
         return BinarySerializer::DeserializeSkeletalAnimation(filepath);
 	}
 
-    void SkeletalAnimation::SetSkeletonHandle(UUID skeletonHandle)
+    void SkeletalAnimation::SetSkeletonHandle(const AssetHandle &skeletonHandle)
     {
+        if (m_SkeletonHandle != AssetHandle(0))
+            AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle,
+                std::format("skeletal-animtion.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
+
         m_SkeletonHandle = skeletonHandle;
+		if (m_SkeletonHandle != AssetHandle(0) && handle != AssetHandle(0))
+			AssetManager::GetInstance()->AddAssetPin(m_SkeletonHandle,
+				std::format("skeletal-animtion.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
     }
 }

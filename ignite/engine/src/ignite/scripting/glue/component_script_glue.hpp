@@ -229,6 +229,12 @@ namespace ignite
         void (*AnimatorComponent_GetString)(uint64_t entityID, const char *paramName, const char **result);
         void (*AnimatorComponent_SetState)(uint64_t entityID, const char *stateName);
         void (*AnimatorComponent_GetCurrentStateName)(uint64_t entityID, const char **result);
+
+        // AnimationMontage
+        int32_t (*AnimationMontage_GetNotifyCallbackCount)(uint64_t montageHandle);
+        bool (*AnimationMontage_GetNotifyCallbackAt)(uint64_t montageHandle, int32_t index, float *outTimestep, uint8_t *outActionType, const char **outName);
+        void (*AnimationMontage_AddNotifyCallback)(uint64_t montageHandle, float timestep, uint8_t actionType, const char *name);
+        void (*AnimationMontage_RemoveNotifyCallback)(uint64_t montageHandle, int32_t index);
     };
 
     class ComponentScriptGlue

@@ -2,6 +2,7 @@
 
 #include "pch.hpp"
 #include "blend_space_editor.hpp"
+#include "ext/editor_ui.hpp"
 #include "states.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scene/scene.hpp"
@@ -36,32 +37,11 @@ namespace ignite
 
         // Skeleton Handle
         AssetHandle skeletonHandle = blendSpace->GetSkeletonAssetHandle();
-        std::string skeletonLabel = skeletonHandle == AssetHandle(0) ? "Drop Skeleton" : assetManager->GetAssetDisplayName(skeletonHandle);
-        ImGui::Button(skeletonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-        if (ImGui::BeginDragDropTarget())
+        std::string skeletonLabel = assetManager->GetAssetDisplayName(skeletonHandle);
+        if (UI::DrawAssetDropTarget("Skeleton", skeletonLabel.c_str(), { AssetType::Skeleton }, &skeletonHandle, assetManager))
         {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-            {
-                if (payload->DataSize == sizeof(AssetHandle))
-                {
-                    AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                    if (assetManager->GetMetaData(handle).type == AssetType::Skeleton)
-                    {
-                        blendSpace->SetSkeletonAssetHandle(handle);
-                        blendSpace->SetDirtyFlag(true);
-                    }
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
-
-        if (skeletonHandle != AssetHandle(0))
-        {
-            if (ImGui::Button("Clear Skeleton", ImVec2(-1.0f, 0.0f)))
-            {
-                blendSpace->SetSkeletonAssetHandle(AssetHandle(0));
-                blendSpace->SetDirtyFlag(true);
-            }
+            blendSpace->SetSkeletonAssetHandle(skeletonHandle);
+            blendSpace->SetDirtyFlag(true);
         }
 
         ImGui::Spacing();
@@ -176,32 +156,11 @@ namespace ignite
             ImGui::Text("Sample #%d Details", state.selectedSample);
 
             AssetHandle animHandle = selected.GetAnimationAssetHandle();
-            std::string animLabel = animHandle == AssetHandle(0) ? "Drop Animation Clip" : assetManager->GetAssetDisplayName(animHandle);
-            ImGui::Button(animLabel.c_str(), ImVec2(-1.0f, 0.0f));
-            if (ImGui::BeginDragDropTarget())
+            std::string animLabel = assetManager->GetAssetDisplayName(animHandle);
+            if (UI::DrawAssetDropTarget("Animation Clip", animLabel.c_str(), { AssetType::SkeletalAnimation }, &animHandle, assetManager))
             {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                {
-                    if (payload->DataSize == sizeof(AssetHandle))
-                    {
-                        AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                        if (assetManager->GetMetaData(handle).type == AssetType::SkeletalAnimation)
-                        {
-                            selected.SetAnimationHandle(handle);
-                            blendSpace->SetDirtyFlag(true);
-                        }
-                    }
-                }
-                ImGui::EndDragDropTarget();
-            }
-
-            if (animHandle != AssetHandle(0))
-            {
-                if (ImGui::Button("Clear Clip", ImVec2(-1.0f, 0.0f)))
-                {
-                    selected.SetAnimationHandle(AssetHandle(0));
-                    blendSpace->SetDirtyFlag(true);
-                }
+                selected.SetAnimationHandle(animHandle);
+                blendSpace->SetDirtyFlag(true);
             }
 
             glm::vec2 pos = selected.position;

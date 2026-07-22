@@ -272,17 +272,12 @@ namespace ignite
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
     {
-        if (handle == AssetHandle(0))
-        {
-            return "None";
-        }
+		if (!IsAssetHandleValid(handle))
+			return "Invalid";
 
         const AssetMetaData &metadata = GetMetaData(handle);
         if (!metadata.filepath.empty())
-        {
             return metadata.filepath.filename().string();
-        }
-
         return std::format("Handle {}", static_cast<uint64_t>(handle));
     }
 

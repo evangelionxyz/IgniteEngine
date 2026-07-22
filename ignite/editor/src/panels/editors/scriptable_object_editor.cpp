@@ -9,7 +9,6 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/scene.hpp"
-#include "panels/asset_editor_panel.hpp"
 #include "editor_layer.hpp"
 #include "ext/editor_ui.hpp"
 #include "states.hpp"

@@ -21,6 +21,7 @@ namespace ignite
     class MouseScrolledEvent;
     class MouseMovedEvent;
     class JoystickConnectionEvent;
+    class KeyPressedEvent;
     class EditorLayer;
 
     class ScenePanel final : public IPanel

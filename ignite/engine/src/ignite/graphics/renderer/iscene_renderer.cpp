@@ -42,13 +42,13 @@ namespace ignite
 		m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(screenVertices));
 
         m_Device = DeviceManager::GetInstance()->GetDevice();
+		std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
         auto cmd = m_Device->createCommandList();
         cmd->open();
 		m_CompositeVertexBuffer->SetData(cmd, (void *)screenVertices.data(), sizeof(screenVertices));
 		m_CompositeVertexBufferUploadPending = false;
         cmd->close();
 
-		std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
         m_Device->executeCommandList(cmd);
     }
 

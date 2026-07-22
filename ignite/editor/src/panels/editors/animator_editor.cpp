@@ -2,6 +2,7 @@
 
 #include "pch.hpp"
 #include "animator_editor.hpp"
+#include "ext/editor_ui.hpp"
 #include "states.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/blend_space.hpp"
@@ -235,28 +236,11 @@ namespace ignite
             animator->SetDirtyFlag(true);
         }
 
-        std::string skeletonLabel = animator->GetSkeletonHandle()== AssetHandle(0) ? "Drop Skeleton Here" : assetManager->GetAssetDisplayName(animator->GetSkeletonHandle());
-        ImGui::Button(skeletonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-        if (ImGui::BeginDragDropTarget())
+        AssetHandle skeletonHandle = animator->GetSkeletonHandle();
+        std::string skeletonLabel = assetManager->GetAssetDisplayName(skeletonHandle);
+        if (UI::DrawAssetDropTarget("Skeleton", skeletonLabel.c_str(), { AssetType::Skeleton }, &skeletonHandle, assetManager))
         {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-            {
-                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                {
-                    const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                    if (assetManager->GetMetaData(handle).type == AssetType::Skeleton)
-                    {
-                        animator->SetSkeletonHandle(handle);
-                        animator->SetDirtyFlag(true);
-                    }
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
-
-        if (animator->GetSkeletonHandle() != AssetHandle(0) && ImGui::Button("Clear Skeleton##ac_clear_skel", ImVec2(-1.0f, 0.0f)))
-        {
-            animator->SetSkeletonHandle(AssetHandle(0));
+            animator->SetSkeletonHandle(skeletonHandle);
             animator->SetDirtyFlag(true);
         }
 
@@ -683,34 +667,23 @@ namespace ignite
                 animator->SetDirtyFlag(true);
             }
 
-            std::string motionLabel = state.GetMotionHandle() == AssetHandle(0) ? "Drop Animation or Blend Space" : assetManager->GetAssetDisplayName(state.GetMotionHandle());
-            ImGui::Button(motionLabel.c_str(), ImVec2(-1.0f, 0.0f));
-            if (ImGui::BeginDragDropTarget())
+            AssetHandle motionHandle = state.GetMotionHandle();
+            std::string motionLabel = assetManager->GetAssetDisplayName(motionHandle);
+            if (UI::DrawAssetDropTarget("Motion", motionLabel.c_str(), { AssetType::SkeletalAnimation, AssetType::BlendSpace }, &motionHandle, assetManager))
             {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                const AssetType type = assetManager->GetMetaData(motionHandle).type;
+                if (type == AssetType::SkeletalAnimation)
                 {
-                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                    {
-                        const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                        const AssetType type = assetManager->GetMetaData(handle).type;
-                        if (type == AssetType::SkeletalAnimation)
-                        {
-                            state.SetAnimationHandle(handle);
-                            animator->SetDirtyFlag(true);
-                        }
-                        else if (type == AssetType::BlendSpace)
-                        {
-                            state.SetBlendSpaceHandle(handle);
-                            animator->SetDirtyFlag(true);
-                        }
-                    }
+                    state.SetAnimationHandle(motionHandle);
                 }
-                ImGui::EndDragDropTarget();
-            }
-
-            if (state.GetMotionHandle() != AssetHandle(0) && ImGui::Button("Clear Motion##ac_clear_anim", ImVec2(-1.0f, 0.0f)))
-            {
-                state.SetMotion(AnimState::MotionType::SkeletalAnimation, AssetHandle(0));
+                else if (type == AssetType::BlendSpace)
+                {
+                    state.SetBlendSpaceHandle(motionHandle);
+                }
+                else if (motionHandle == AssetHandle(0))
+                {
+                    state.SetMotion(AnimState::MotionType::SkeletalAnimation, AssetHandle(0));
+                }
                 animator->SetDirtyFlag(true);
             }
             if (ImGui::Button("Make Default##ac_make_default", ImVec2(-1.0f, 0.0f)))
