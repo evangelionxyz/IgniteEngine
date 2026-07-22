@@ -273,7 +273,7 @@ namespace ignite
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
     {
 		if (!IsAssetHandleValid(handle))
-			return "Invalid";
+			return "None";
 
         const AssetMetaData &metadata = GetMetaData(handle);
         if (!metadata.filepath.empty())
@@ -746,6 +746,7 @@ namespace ignite
             case AssetType::AnimatorController:
             case AssetType::AnimatorController2D:
             case AssetType::ScriptableObject:
+            case AssetType::Prefab:
             {
                 isValidType = true;
 

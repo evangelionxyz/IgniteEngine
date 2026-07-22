@@ -11,6 +11,7 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/animation_montage.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
+#include "ignite/scene/prefab.hpp"
 #include "ignite/scripting/script_engine.hpp"
 
 #include "ignite/core/signal_bus.hpp"
@@ -587,10 +588,44 @@ namespace ignite
                             }
                         }
 
-                        ImGui::SetCursorPosY(cursorStartY + static_cast<float>(rowCount) * rowHeight);
-                        ImGui::Dummy(ImVec2(1.0f, 0.0f));
-                    }
+                        ImGui::SetCursorPosY(cursorStartY);
+                        const ImVec2 remainingSize = ImGui::GetContentRegionMax();
+                        ImGui::Dummy(ImVec2(remainingSize.x, std::max(remainingSize.y, 50.0f)));
 
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                            {
+                                const size_t count = payload->DataSize / sizeof(UUID);
+                                const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+                                Scene *activeScene = m_EditorLayer ? m_EditorLayer->GetActiveScene().get() : nullptr;
+                                Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+
+                                if (activeScene && project)
+                                {
+                                    for (size_t i = 0; i < count; ++i)
+                                    {
+                                        Entity entity = SceneManager::GetEntity(activeScene, droppedUUIDs[i]);
+                                        if (entity.IsValid())
+                                        {
+                                            std::string entityName = entity.GetName();
+                                            if (entityName.empty()) entityName = "Prefab";
+                                            ignite::Path targetPath = BuildUniqueSiblingPath(m_CurrentDirectory / (entityName + ".ixprefab"));
+
+                                            Ref<Prefab> prefab = Prefab::CreateFromEntity(entity, activeScene, project);
+                                            if (prefab && prefab->Serialize(targetPath))
+                                            {
+                                                m_AssetManager->ImportAsset(targetPath);
+                                                RefreshFiles();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                    }
+                    
                     // ==== Context menu ====
                     UIRenderContextMenu();
                 }
@@ -657,6 +692,11 @@ namespace ignite
                 if (ImGui::MenuItem("C# Script"))
                 {
                     m_ShowCreateScriptModal = true;
+                }
+
+                if (ImGui::MenuItem("Prefab"))
+                {
+                    CreateNewPrefab();
                 }
 
                 if (ImGui::MenuItem("Sprite Sheet"))
@@ -1778,6 +1818,25 @@ namespace ignite
             Application::SubmitToMainThread([this]() { RefreshFiles(); });
         }
         return true;
+    }
+
+    void ContentBrowserPanel::CreateNewPrefab()
+    {
+        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+        if (!project)
+            return;
+
+        ignite::Path targetPath = BuildUniqueSiblingPath(m_CurrentDirectory / "NewPrefab.ixprefab");
+        Ref<Prefab> prefab = CreateRef<Prefab>(project);
+
+        Entity rootEntity = SceneManager::CreateEntity(prefab->GetPrefabScene().get(), "NewPrefab", EntityType_Node);
+        prefab->SetRootEntityUUID(rootEntity.GetUUID());
+
+        if (prefab->Serialize(targetPath))
+        {
+            m_AssetManager->ImportAsset(targetPath);
+            RefreshFiles();
+        }
     }
 
     void ContentBrowserPanel::UpdateSelection(const ignite::Path &filepath)

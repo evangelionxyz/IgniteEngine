@@ -28,6 +28,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/entity.hpp"
+#include "ignite/scene/prefab.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/scene/entity_destroy_command.hpp"
 #include "ignite/scene/entity_rename_command.hpp"
@@ -213,9 +214,10 @@ namespace ignite
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
             // Root tree node
-            const auto sceneName = assetManager->GetAssetDisplayName(m_Scene->handle);
+            
+            const auto sceneName = m_EditorLayer->IsInPrefabIsolation() ? "Prefab" : assetManager->GetAssetDisplayName(m_Scene->handle);
 			const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
-                | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns;
+                | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns | ImGuiTreeNodeFlags_DefaultOpen;
 
             if (ImGui::TreeNodeEx(sceneName.c_str(), treeFlags))
             {
@@ -3107,15 +3109,59 @@ namespace ignite
                 }
 
                 {
+                    if (m_EditorLayer && m_EditorLayer->IsInPrefabIsolation())
+                    {
+                        const char *backText = "< Back to Scene";
+                        const ImVec2 textSize = ImGui::CalcTextSize(backText);
+
+                        const float paddingX = 16.0f;
+                        const float paddingY = 6.0f;
+                        const float buttonWidth = textSize.x + paddingX * 2.0f;
+                        const float buttonHeight = textSize.y + paddingY * 2.0f;
+
+                        const ImVec2 bannerMin = { canvasPos.x + (canvasSize.x - buttonWidth) * 0.5f, canvasPos.y + 10.0f };
+                        const ImVec2 bannerMax = { bannerMin.x + buttonWidth, bannerMin.y + buttonHeight };
+
+                        // Interactive region via InvisibleButton
+                        ImGui::SetCursorScreenPos(bannerMin);
+                        ImGui::InvisibleButton("##BackToScenePrefabBtn", ImVec2(buttonWidth, buttonHeight));
+
+                        const bool isHovered = ImGui::IsItemHovered();
+                        const bool isActive = ImGui::IsItemActive();
+
+                        if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+                        {
+                            m_EditorLayer->ExitPrefabIsolation(true);
+                        }
+
+                        // Dynamic colors based on interaction state
+                        const ImU32 bgColor = isActive ? IM_COL32(25, 25, 25, 250) : (isHovered ? IM_COL32(50, 50, 50, 180) : IM_COL32(15, 15, 15, 180));
+                        const ImU32 borderColor = isHovered ? IM_COL32(255, 255, 128, 240) : IM_COL32(255, 128, 0, 220);
+
+                        // Subtle outer shadow
+                        drawList->AddRectFilled({ bannerMin.x - 1.0f, bannerMin.y - 1.0f }, { bannerMax.x + 1.0f, bannerMax.y + 1.0f }, IM_COL32(0, 0, 0, isHovered ? 90 : 60), 7.0f);
+
+                        // Rounded banner background
+                        drawList->AddRectFilled(bannerMin, bannerMax, bgColor, 6.0f);
+
+                        // Border outline
+                        drawList->AddRect(bannerMin, bannerMax, borderColor, 6.0f, 0, 1.5f);
+
+                        // Centered text inside the banner
+                        const ImVec2 textPos = { bannerMin.x + paddingX, bannerMin.y + paddingY };
+                        drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), backText);
+                    }
+
                     constexpr float padding = 18.0f;
                     float yPosition = 6.0f;
+
                     const float fps = ImGui::GetIO().Framerate;
                     std::string statusStr = std::format("FPS {:.5}", fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
+                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
 
                     yPosition += padding;
                     statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
                 }
 
                 // Mouse picking from viewport object-id attachment (on mouse down only)
@@ -3265,6 +3311,19 @@ namespace ignite
                                     {
                                         const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
                                         m_EditorLayer->OpenScene(filepath);
+                                    }
+                                    else if (metadata.type == AssetType::Prefab)
+                                    {
+                                        Ref<Prefab> prefab = AssetManager::GetInstance()->GetAssetImmediate<Prefab>(*handle);
+                                        if (prefab)
+                                        {
+                                            Entity instantiated = Prefab::Instantiate(prefab, m_Scene);
+                                            if (instantiated.IsValid())
+                                            {
+                                                m_SelectedEntities.clear();
+                                                m_SelectedEntities[instantiated.GetUUID()] = instantiated;
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -3778,7 +3837,6 @@ namespace ignite
     {
         // TOOLBAR: 
         constexpr ImVec2 buttonSize = { 28.0f, 28.0f };
-
         static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
         int cameraModeIndex = 0;
         switch (m_EditorCamera.GetNavigationMode())
@@ -3793,7 +3851,8 @@ namespace ignite
         ImGui::SetNextItemWidth(96.0f);
         if (ImGui::Combo("##camera_mode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
         {
-            const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
+            const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit :
+                (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
             const auto previousMode = m_EditorCamera.GetNavigationMode();
 
             if (previousMode == EditorCamera::NavigationMode::Mode2D)

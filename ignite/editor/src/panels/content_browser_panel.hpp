@@ -80,6 +80,7 @@ namespace ignite
         void CompactTree();
 
         void DragDropSource(const ignite::Path &filepath);
+        void CreateNewPrefab();
         bool DuplicateItem(const ignite::Path &filepath);
         bool MoveOrCopyPathToDirectory(const ignite::Path &sourcePath, const ignite::Path &targetDirectory, bool moveItem);
         bool MoveOrCopySelectionToDirectory(const ignite::Path &targetDirectory, bool moveItem);

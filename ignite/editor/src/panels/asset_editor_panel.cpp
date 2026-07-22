@@ -5037,6 +5037,12 @@ namespace ignite
             return false;
         }
 
+        if (metadata.type == AssetType::Prefab)
+        {
+            m_EditorLayer->EnterPrefabIsolation(handle);
+            return true;
+        }
+
         // Check if the asset window is already open.
         auto it = std::ranges::find(m_Assets, handle, &UI::AssetEditorData::handle);
         if (it != m_Assets.end())

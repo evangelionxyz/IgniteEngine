@@ -28,6 +28,7 @@ namespace ignite
     class AnimatorController;
     class AnimatorController2D;
     class Scene;
+    class Prefab;
     class Font;
     class WidgetCanvas;
     class ScriptableObject;
@@ -99,6 +100,7 @@ namespace ignite
         static Ref<AnimatorController2D> ImportAnimatorController2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
 
         static Ref<ScriptableObject> ImportScriptableObject(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
+        static Ref<Prefab> ImportPrefab(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo &createInfo, AssetManager *assetManager);

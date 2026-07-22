@@ -13,6 +13,7 @@
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
+#include "ignite/scene/prefab.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/core/platform_utils.hpp"
@@ -1081,6 +1082,13 @@ namespace ignite
             std::unordered_set<AssetHandle> referencedHandles;
             if (scene)
                 referencedHandles = scene->CollectReferencedAssetHandles();
+
+            if (m_InPrefabIsolationMode && m_MainSceneBeforeIsolation)
+            {
+                auto mainSceneHandles = m_MainSceneBeforeIsolation->CollectReferencedAssetHandles();
+                referencedHandles.insert(mainSceneHandles.begin(), mainSceneHandles.end());
+            }
+
             AssetManager::GetInstance()->ReplaceAssetPins(std::string(kActiveSceneAssetOwner), referencedHandles);
         }
 
@@ -1114,6 +1122,72 @@ namespace ignite
         m_SceneRenderer->SetActiveScene(scene);
 
         GameUISystem::SetSceneContext(scene.get());
+    }
+
+    void EditorLayer::EnterPrefabIsolation(AssetHandle prefabHandle)
+    {
+        if (m_InPrefabIsolationMode)
+        {
+            ExitPrefabIsolation(true);
+        }
+
+        auto assetManager = AssetManager::GetInstance();
+        if (!assetManager)
+            return;
+
+        Ref<Prefab> prefab = assetManager->GetAssetImmediate<Prefab>(prefabHandle);
+        if (!prefab || !prefab->GetPrefabScene())
+        {
+            LOG_ERROR("[Editor] Failed to load prefab for isolation editing!");
+            return;
+        }
+
+        m_MainSceneBeforeIsolation = m_ActiveScene;
+        m_EditingPrefab = prefab;
+        m_EditingPrefabHandle = prefabHandle;
+        m_InPrefabIsolationMode = true;
+
+        assetManager->AddAssetPin(prefabHandle, "editor.prefab-edit");
+
+        SetActiveScene(prefab->GetPrefabScene());
+
+        SetStatusText(fmt::format("Editing Prefab: {}", assetManager->GetAssetDisplayName(prefabHandle)));
+    }
+
+    void EditorLayer::ExitPrefabIsolation(bool save)
+    {
+        if (!m_InPrefabIsolationMode)
+            return;
+
+        auto assetManager = AssetManager::GetInstance();
+        if (save && m_EditingPrefab && m_EditingPrefabHandle != AssetHandle(0))
+        {
+            const auto &meta = assetManager->GetMetaData(m_EditingPrefabHandle);
+            if (!meta.filepath.empty())
+            {
+                auto project = m_ActiveProject;
+                ignite::Path fullPath = project ? project->GetProjectFilepath(meta.filepath) : meta.filepath;
+                m_EditingPrefab->Serialize(fullPath);
+                SetStatusText(fmt::format("Saved Prefab: {}", meta.filepath.filename().string()));
+            }
+        }
+
+        if (assetManager && m_EditingPrefabHandle != AssetHandle(0))
+        {
+            assetManager->RemoveAssetPin(m_EditingPrefabHandle, "editor.prefab-edit");
+        }
+
+        Ref<Scene> previousMainScene = m_MainSceneBeforeIsolation;
+
+        m_InPrefabIsolationMode = false;
+        m_EditingPrefab = nullptr;
+        m_EditingPrefabHandle = AssetHandle(0);
+        m_MainSceneBeforeIsolation = nullptr;
+
+        if (previousMainScene)
+        {
+            SetActiveScene(previousMainScene);
+        }
     }
 
     void EditorLayer::RefreshContentBrowsers()
@@ -1267,6 +1341,11 @@ namespace ignite
         if (!m_ActiveProject)
             return;
 
+        if (IsInPrefabIsolation())
+        {
+            ExitPrefabIsolation(true);
+        }
+
         SaveProject();
 
         // Stop scene
@@ -1288,7 +1367,12 @@ namespace ignite
         // Reset everything
         m_ActiveProject.reset();
         m_CurrentProjectFilepath.clear();
+		m_MainSceneBeforeIsolation.reset();
+		m_EditingPrefab.reset();
+		m_InPrefabIsolationMode = false;
         m_CurrentSceneFilePath.clear();
+
+        m_EditingPrefabHandle = AssetHandle(0);
         m_CurrentSceneHandle = AssetHandle(0);
     }
 
@@ -1771,6 +1855,12 @@ namespace ignite
         ImGui::SameLine(ImGui::GetWindowWidth() - 220);
         if (ImGui::Button("Create", ImVec2(100, 0)))
         {
+            // Close current project before creating new one
+            if (m_ActiveProject)
+            {
+                CloseCurrentProject();
+            }
+
             AssetWorker::SubmitJob([this]()
             {
                 // sanitize name
@@ -2006,17 +2096,23 @@ namespace ignite
                     "Material", 
                     "StaticMesh", 
                     "SkeletalMesh", 
+                    "SkeletalAnimation", 
+                    "BlendSpace", 
+                    "Prefab", 
                     "Audio", 
                     "Skeleton"
                 };
 
                 const AssetType typeValues[] = {
-                    AssetType::Invalid, 
-                    AssetType::Scene, 
+                    AssetType::Invalid,
+                    AssetType::Scene,
                     AssetType::Texture,
-                    AssetType::Material, 
+                    AssetType::Material,
                     AssetType::StaticMesh,
-                    AssetType::SkeletalMesh, 
+                    AssetType::SkeletalMesh,
+                    AssetType::SkeletalAnimation,
+                    AssetType::BlendSpace,
+                    AssetType::Prefab,
                     AssetType::Audio, 
                     AssetType::Skeleton
                 };

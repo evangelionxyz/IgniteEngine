@@ -56,6 +56,7 @@ namespace ignite
 
         Animation2D,          // .anim2d  - single 2D animation clip
         AnimatorController2D, // .ac2d    - 2D animator state machine
+        Prefab,               // .ixprefab - engine prefab asset
     };
 
     static inline std::string AssetTypeToString(AssetType type)
@@ -89,6 +90,7 @@ namespace ignite
             case ignite::AssetType::Animation2D: return "Animation2D";
             case ignite::AssetType::AnimatorController: return "AnimatorController";
             case ignite::AssetType::AnimatorController2D: return "AnimatorController2D";
+            case ignite::AssetType::Prefab: return "Prefab";
             case ignite::AssetType::Invalid:
             default: return "Invalid";
         }
@@ -124,6 +126,7 @@ namespace ignite
         if (typeStr == "Animation2D")  return AssetType::Animation2D;
         if (typeStr == "AnimatorController")  return AssetType::AnimatorController;
         if (typeStr == "AnimatorController2D")  return AssetType::AnimatorController2D;
+        if (typeStr == "Prefab") return AssetType::Prefab;
         if (typeStr == "ScriptableObject")       return AssetType::ScriptableObject;
         return AssetType::Invalid;
     }
@@ -136,6 +139,7 @@ namespace ignite
         { ".wdgt", AssetType::Widget },
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
+        { ".ixprefab", AssetType::Prefab },
         { ".ixso", AssetType::ScriptableObject },
         
         // Textures
@@ -198,6 +202,7 @@ namespace ignite
         case AssetType::LocomotionController: return ".ixloco";
         case AssetType::InputMapping: return ".ixinput";
         case AssetType::Scene: return ".ixscene";
+        case AssetType::Prefab: return ".ixprefab";
         case AssetType::Project: return ".ixproj";
         case AssetType::SpriteSheet: return ".ixsp";
         case AssetType::Material: return ".ixmat";

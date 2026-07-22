@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 #include "scene_manager.hpp"
 #include "scene.hpp"
+#include "prefab.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
@@ -705,5 +706,57 @@ namespace ignite
         assetManager->ClearAssetPins("scene_transition");
 
         LOG_INFO("[Scene Manager] Successfully transitioned to scene {}", project->GetAssetDisplayName(nextSceneHandle));
+    }
+
+    Entity SceneManager::CloneEntityTree(Scene *destScene, Scene *srcScene, Entity srcRoot)
+    {
+        if (!destScene || !srcScene || !srcRoot.IsValid())
+            return { entt::null, nullptr };
+
+        const IDComponent &srcID = srcRoot.GetComponent<IDComponent>();
+
+        Entity destEntity = SceneManager::CreateEntity(destScene, srcID.name, srcID.type);
+
+        SceneManager::CopyComponentIfExists(AllComponents{}, destEntity, srcRoot);
+
+        IDComponent &destID = destEntity.GetComponent<IDComponent>();
+
+        for (UUID childUUID : srcID.children)
+        {
+            Entity srcChild = SceneManager::GetEntity(srcScene, childUUID);
+            if (srcChild.IsValid())
+            {
+                Entity destChild = CloneEntityTree(destScene, srcScene, srcChild);
+                if (destChild.IsValid())
+                {
+                    destID.AddChild(destChild.GetUUID());
+                    destChild.GetComponent<IDComponent>().parent = destID.uuid;
+                }
+            }
+        }
+
+        return destEntity;
+    }
+
+    Entity SceneManager::InstantiatePrefab(Scene *scene, const Ref<Prefab> &prefab)
+    {
+        if (!scene || !prefab || !prefab->GetPrefabScene())
+            return { entt::null, nullptr };
+
+        UUID rootUUID = prefab->GetRootEntityUUID();
+        Entity prefabRoot = SceneManager::GetEntity(prefab->GetPrefabScene().get(), rootUUID);
+        if (!prefabRoot.IsValid())
+        {
+            if (!prefab->GetPrefabScene()->entities.empty())
+            {
+                prefabRoot = { prefab->GetPrefabScene()->entities.begin()->second, prefab->GetPrefabScene().get() };
+            }
+        }
+
+        if (!prefabRoot.IsValid())
+            return { entt::null, nullptr };
+
+        Entity instanceRoot = CloneEntityTree(scene, prefab->GetPrefabScene().get(), prefabRoot);
+        return instanceRoot;
     }
 } // namespace ignite

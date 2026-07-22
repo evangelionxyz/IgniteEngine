@@ -40,8 +40,10 @@ namespace ignite
     {
         if (m_MotionHandle != AssetHandle(0))
             AssetManager::GetInstance()->RemoveAssetPin(m_MotionHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MotionHandle));
+
         m_MotionType = type;
         m_MotionHandle = motionHandle;
+        
         if (m_MotionHandle != AssetHandle(0))
             AssetManager::GetInstance()->AddAssetPin(m_MotionHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MotionHandle));
     }
@@ -264,22 +266,23 @@ namespace ignite
 
         auto ctrl = CreateRef<AnimatorController>();
         if (auto n = node["DefaultState"]) ctrl->defaultState = n.as<std::string>();
-        // if (auto n = node["SkeletonHandle"]) ctrl->SetSkeletonHandle(AssetHandle(n.as<uint64_t>()));
         if (auto n = node["SkeletonHandle"]) ctrl->m_SkeletonHandle = AssetHandle(n.as<uint64_t>());
 
         if (YAML::Node statesNode = node["States"]; statesNode && statesNode.IsSequence())
         {
 			// Preallocate states vector to avoid multiple reallocations - destruction of AnimState objects can be expensive due to asset pin management.
             ctrl->states.reserve(statesNode.size());
-
             for (const auto &sn : statesNode)
             {
                 AnimState &s = ctrl->states.emplace_back();
                 if (auto n = sn["Name"]) s.name = n.as<std::string>();
+
                 const auto type = sn["MotionType"] && sn["MotionType"].as<std::string>() == "BlendSpace"
                     ? AnimState::MotionType::BlendSpace : AnimState::MotionType::SkeletalAnimation;
+
                 if (auto n = sn["MotionHandle"]) s.SetMotion(type, AssetHandle(n.as<uint64_t>()));
                 else if (auto n = sn["AnimHandle"]) s.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
+
                 if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
                     s.editorPos = { n[0].as<float>(), n[1].as<float>() };
             }
