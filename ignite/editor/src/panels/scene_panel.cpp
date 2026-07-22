@@ -3135,8 +3135,8 @@ namespace ignite
                         }
 
                         // Dynamic colors based on interaction state
-                        const ImU32 bgColor = isActive ? IM_COL32(25, 25, 25, 250) : (isHovered ? IM_COL32(50, 50, 50, 180) : IM_COL32(15, 15, 15, 180));
-                        const ImU32 borderColor = isHovered ? IM_COL32(255, 255, 128, 240) : IM_COL32(255, 128, 0, 220);
+                        const ImU32 bgColor = isActive ? IM_COL32(25, 25, 25, 255) : (isHovered ? IM_COL32(82, 63, 25, 255) : IM_COL32(15, 15, 15, 180));
+                        const ImU32 borderColor = isHovered ? IM_COL32(255, 200, 128, 240) : IM_COL32(255, 128, 0, 220);
 
                         // Subtle outer shadow
                         drawList->AddRectFilled({ bannerMin.x - 1.0f, bannerMin.y - 1.0f }, { bannerMax.x + 1.0f, bannerMax.y + 1.0f }, IM_COL32(0, 0, 0, isHovered ? 90 : 60), 7.0f);
@@ -3902,23 +3902,49 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        auto drawGizmoBtn = [&](const std::string &iconName, bool active)
+        auto drawGizmoBtn = [&](const std::string &iconName, const ImVec2 &buttonSize, bool active)
         {
+			const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
+
+            auto dl = ImGui::GetWindowDrawList();
+
             ImTextureID texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
+            ImGui::PushID(texID);
+
+            const float padding = 4.0f;
+            const float buttonWidth = buttonSize.x + padding;
+            const float buttonHeight = buttonSize.y + padding;
+            
+            const ImVec2 buttonMin = { canvasPos.x, canvasPos.y };
+            const ImVec2 buttonMax = { buttonMin.x + buttonWidth, buttonMin.y + buttonHeight };
+
+            ImGui::SetCursorScreenPos(buttonMin);
+            ImGui::InvisibleButton((const char *)texID, ImVec2(buttonWidth, buttonHeight));
+
+            const bool isHovered = ImGui::IsItemHovered();
+            const bool isClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
 
             const auto colors = ImGui::GetStyle().Colors;
-            ImVec4 tint = active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-            ImVec4 bg = active ? colors[ImGuiCol_ButtonActive] : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-            return ImGui::ImageButton(iconName.c_str(), texID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bg, tint);
+			const ImU32 bgColor = active ? IM_COL32(82, 63, 25, 255) : (isHovered ? IM_COL32(82, 63, 25, 255) : IM_COL32(0, 0, 0, 0));
+			const ImU32 borderColor = active ? IM_COL32(255, 128, 0, 220) : (isHovered ? IM_COL32(255, 200, 128, 240) : IM_COL32(0, 0, 0, 0));
+            
+            // Rounded background
+            dl->AddRectFilled(buttonMin, buttonMax, bgColor, 6.0f);
+            dl->AddRect(buttonMin, buttonMax, borderColor, 3.0f);
+
+            dl->AddImage(texID, buttonMin, buttonMax);
+            ImGui::PopID();
+
+            return isClicked;
         };
 
-        if (drawGizmoBtn("picking", m_Data.gizmoOp == GizmoOperation::NONE)) SetGizmoOperation(GizmoOperation::NONE);
+        if (drawGizmoBtn("picking", buttonSize, m_Data.gizmoOp == GizmoOperation::NONE)) SetGizmoOperation(GizmoOperation::NONE);
         ImGui::SameLine();
-        if (drawGizmoBtn("translate", m_Data.gizmoOp == GizmoOperation::TRANSLATE)) SetGizmoOperation(GizmoOperation::TRANSLATE);
+        if (drawGizmoBtn("translate", buttonSize, m_Data.gizmoOp == GizmoOperation::TRANSLATE)) SetGizmoOperation(GizmoOperation::TRANSLATE);
         ImGui::SameLine();
-        if (drawGizmoBtn("rotate", m_Data.gizmoOp == GizmoOperation::ROTATE)) SetGizmoOperation(GizmoOperation::ROTATE);
+        if (drawGizmoBtn("rotate", buttonSize, m_Data.gizmoOp == GizmoOperation::ROTATE)) SetGizmoOperation(GizmoOperation::ROTATE);
         ImGui::SameLine();
-        if (drawGizmoBtn("scale", m_Data.gizmoOp == GizmoOperation::SCALE)) SetGizmoOperation(GizmoOperation::SCALE);
+        if (drawGizmoBtn("scale", buttonSize, m_Data.gizmoOp == GizmoOperation::SCALE)) SetGizmoOperation(GizmoOperation::SCALE);
 
         if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
         {
@@ -3934,10 +3960,10 @@ namespace ignite
         ImGui::Spacing();
         ImGui::SameLine();
 
-        bool isLocal = m_Gizmo.GetMode() == ImGuizmo::LOCAL;
-        if (drawGizmoBtn("transform_local", isLocal)) m_Gizmo.SetMode(ImGuizmo::LOCAL);
+        const bool isLocal = m_Gizmo.GetMode() == ImGuizmo::LOCAL;
+        if (drawGizmoBtn("transform_local", buttonSize, isLocal)) m_Gizmo.SetMode(ImGuizmo::LOCAL);
         ImGui::SameLine();
-        if (drawGizmoBtn("transform_world", !isLocal)) m_Gizmo.SetMode(ImGuizmo::WORLD);
+        if (drawGizmoBtn("transform_world", buttonSize, !isLocal)) m_Gizmo.SetMode(ImGuizmo::WORLD);
 
         ImGui::PopStyleVar(2);
 
