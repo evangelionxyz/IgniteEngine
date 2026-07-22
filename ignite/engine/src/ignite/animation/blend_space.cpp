@@ -126,23 +126,37 @@ namespace ignite
         if (candidates.empty())
             return {};
 
-        // Three contributors are enough for a 2D pose blend and keep distant
-        // samples from affecting a local transition.
-        std::ranges::sort(candidates, {}, &Candidate::distanceSq);
-        candidates.resize(std::min<size_t>(3, candidates.size()));
-
         float total = 0.0f;
         std::vector<BlendSpaceWeight> result;
         result.reserve(candidates.size());
         for (const Candidate &candidate : candidates)
         {
-            const float weight = 1.0f / std::max(candidate.distanceSq, 0.000001f);
-            result.push_back( BlendSpaceWeight{ candidate.sample->GetAnimationAssetHandle(), weight});
+            // Smooth Shepard inverse-distance-squared weighting (exponent 2 on distanceSq).
+            // This provides smooth continuous weight transitions without hard-cutoff jumps when crossing grid boundaries.
+            const float distSq = std::max(candidate.distanceSq, 0.000001f);
+            const float weight = 1.0f / (distSq * distSq);
+            result.push_back(BlendSpaceWeight{ candidate.sample->GetAnimationAssetHandle(), weight });
             total += weight;
         }
 
-        for (BlendSpaceWeight &weight : result)
-            weight.weight /= total;
+        if (total > 0.0f)
+        {
+            for (BlendSpaceWeight &weight : result)
+                weight.weight /= total;
+        }
+
+        // Prune negligible weights (< 0.001) and renormalize to maintain performance
+        std::erase_if(result, [](const BlendSpaceWeight &w) { return w.weight < 0.001f; });
+        float remainingTotal = 0.0f;
+        for (const auto &w : result)
+            remainingTotal += w.weight;
+
+        if (remainingTotal > 0.0f)
+        {
+            for (auto &w : result)
+                w.weight /= remainingTotal;
+        }
+
         return result;
     }
 

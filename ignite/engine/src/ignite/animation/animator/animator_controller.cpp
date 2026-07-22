@@ -425,11 +425,20 @@ namespace ignite
 
         runtime.previousStateNormalized = runtime.stateNormalized;
         runtime.stateElapsed += deltaTime;
-        Ref<SkeletalAnimation> mainAnimation = sourceContribs.front().first;
-        const float durationSeconds = mainAnimation->ticksPerSeconds > 0.0f ? (mainAnimation->duration / mainAnimation->ticksPerSeconds) : 0.0f;
-        if (durationSeconds > 0.0f)
+        
+        // Calculate effective weighted duration of current motion
+        float effectiveDuration = 0.0f;
+        for (const auto &[anim, weight] : sourceContribs)
         {
-            runtime.stateNormalized = std::fmod(runtime.stateElapsed, durationSeconds) / durationSeconds;
+            const float durSec = anim->ticksPerSeconds > 0.0f ? (anim->duration / anim->ticksPerSeconds) : 0.0f;
+            effectiveDuration += durSec * weight;
+        }
+
+        if (effectiveDuration > 0.0001f)
+        {
+            runtime.stateNormalized = std::fmod(runtime.stateNormalized + (deltaTime / effectiveDuration), 1.0f);
+            if (runtime.stateNormalized < 0.0f)
+                runtime.stateNormalized += 1.0f;
         }
         else
         {
@@ -476,9 +485,9 @@ namespace ignite
             if (runtime.transitionDuration > 0.0001f && runtime.transitionElapsed >= runtime.transitionDuration)
             {
                 runtime.currentStateName = runtime.transitionTargetState;
-                runtime.stateElapsed = runtime.transitionElapsed;
-                runtime.stateNormalized = 0.0f;
-                runtime.previousStateNormalized = 0.0f;
+                runtime.stateElapsed = 0.0f;
+                // Preserve phase synchronization when transition finishes
+                runtime.previousStateNormalized = runtime.stateNormalized;
                 runtime.isTransitioning = false;
                 runtime.transitionTargetState.clear();
                 runtime.transitionElapsed = 0.0f;
@@ -506,8 +515,7 @@ namespace ignite
                     {
                         runtime.currentStateName = matchingTr->toState;
                         runtime.stateElapsed = 0.0f;
-                        runtime.stateNormalized = 0.0f;
-                        runtime.previousStateNormalized = 0.0f;
+                        runtime.previousStateNormalized = runtime.stateNormalized;
                         state = nextState;
                         if (!resolveMotion(state, sourceContribs))
                             return false;
@@ -607,9 +615,7 @@ namespace ignite
             Transform poseSource = evaluatePoseFromContribs(sourceContribs, runtime.stateNormalized);
             if (runtime.isTransitioning && !targetContribs.empty())
             {
-                Ref<SkeletalAnimation> targetAnim = targetContribs.front().first;
-                const float targetDurSec = targetAnim->ticksPerSeconds > 0.0f ? (targetAnim->duration / targetAnim->ticksPerSeconds) : 0.0f;
-                const float targetNormTime = targetDurSec > 0.0f ? std::fmod(runtime.transitionElapsed, targetDurSec) / targetDurSec : 0.0f;
+                const float targetNormTime = runtime.stateNormalized;
                 Transform poseTarget = evaluatePoseFromContribs(targetContribs, targetNormTime);
 
                 glm::quat rotA = poseSource.rotation;
