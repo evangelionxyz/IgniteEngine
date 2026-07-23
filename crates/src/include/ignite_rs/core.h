@@ -10,6 +10,8 @@
 #include "core_utils.h"
 #include "asset.h"
 #include "serial.h"
+#include "ecs.h"
+#include "project.h"
 #include <stdint.h>
 #include <stdbool.h>
 

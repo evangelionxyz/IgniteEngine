@@ -85,6 +85,7 @@ name = "ignite_ecs"
 version = "0.1.0"
 dependencies = [
  "ignite_asset",
+ "serde",
 ]
 
 [[package]]
@@ -92,6 +93,8 @@ name = "ignite_project"
 version = "0.1.0"
 dependencies = [
  "ignite_asset",
+ "ignite_ecs",
+ "serde",
 ]
 
 [[package]]

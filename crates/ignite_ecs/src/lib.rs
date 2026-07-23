@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-// Placeholder for ECS & Scene abstractions (Phase 4)
-pub fn ecs_placeholder() -> bool {
-    true
-}
+pub mod entity;
+pub mod components;
+pub mod scene;
+
+pub use entity::*;
+pub use components::*;
+pub use scene::*;

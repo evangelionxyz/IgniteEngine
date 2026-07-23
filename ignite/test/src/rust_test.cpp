@@ -331,3 +331,76 @@ TEST(RustInterop, Phase3BinarySerialization)
     ASSERT_NE(ptr, nullptr);
     EXPECT_GT(len, 0u);
 }
+
+// -------------------------------------------------
+// Phase 4: ECS & Scene FFI Tests
+// -------------------------------------------------
+
+TEST(RustInterop, Phase4EcsSceneLifecycle)
+{
+    uint64_t sceneHandle = ignite_rs_scene_create("TestScene_Rust");
+    EXPECT_NE(sceneHandle, 0u);
+
+    uint64_t entityId = ignite_rs_scene_create_entity(sceneHandle, "PlayerEntity");
+    EXPECT_NE(entityId, 0u);
+
+    char nameBuf[64] = {0};
+    IgniteResult nameRes = ignite_rs_entity_get_name(sceneHandle, entityId, nameBuf, sizeof(nameBuf));
+    EXPECT_EQ(nameRes, IgniteResult_Ok);
+    EXPECT_STREQ(nameBuf, "PlayerEntity");
+
+    float pos[3] = { 1.0f, 2.0f, 3.0f };
+    float rot[3] = { 0.0f, 0.0f, 0.0f };
+    float scale[3] = { 1.0f, 1.0f, 1.0f };
+
+    IgniteResult setTransformRes = ignite_rs_entity_set_transform(sceneHandle, entityId, pos, rot, scale);
+    EXPECT_EQ(setTransformRes, IgniteResult_Ok);
+
+    float outPos[3] = {0};
+    float outRot[3] = {0};
+    float outScale[3] = {0};
+    IgniteResult getTransformRes = ignite_rs_entity_get_transform(sceneHandle, entityId, outPos, outRot, outScale);
+    EXPECT_EQ(getTransformRes, IgniteResult_Ok);
+    EXPECT_FLOAT_EQ(outPos[0], 1.0f);
+    EXPECT_FLOAT_EQ(outPos[1], 2.0f);
+    EXPECT_FLOAT_EQ(outPos[2], 3.0f);
+
+    EXPECT_EQ(ignite_rs_scene_destroy_entity(sceneHandle, entityId), IgniteResult_Ok);
+    EXPECT_EQ(ignite_rs_scene_destroy(sceneHandle), IgniteResult_Ok);
+}
+
+// -------------------------------------------------
+// Phase 5: Project Management & MochiSharp Scripting Bridge FFI Tests
+// -------------------------------------------------
+
+static int g_ScriptTickCount = 0;
+static void MockMochiSharpScriptTick(float dt)
+{
+    g_ScriptTickCount++;
+}
+
+TEST(RustInterop, Phase5ProjectAndScriptingBridge)
+{
+    // Test Rust Project Creation FFI
+    uint64_t projHandle = ignite_rs_project_create("DemoProject", "D:/Projects/Demo");
+    EXPECT_NE(projHandle, 0u);
+
+    char projName[64] = {0};
+    EXPECT_EQ(ignite_rs_project_get_name(projHandle, projName, sizeof(projName)), IgniteResult_Ok);
+    EXPECT_STREQ(projName, "DemoProject");
+
+    char assetDir[256] = {0};
+    EXPECT_EQ(ignite_rs_project_get_asset_directory(projHandle, assetDir, sizeof(assetDir)), IgniteResult_Ok);
+    EXPECT_NE(strstr(assetDir, "Assets"), nullptr);
+
+    EXPECT_EQ(ignite_rs_project_destroy(projHandle), IgniteResult_Ok);
+
+    // Test MochiSharp C# Scripting Bridge Callback FFI
+    g_ScriptTickCount = 0;
+    EXPECT_EQ(ignite_rs_script_register_tick_callback(MockMochiSharpScriptTick), IgniteResult_Ok);
+    EXPECT_TRUE(ignite_rs_script_trigger_tick(0.016f));
+    EXPECT_EQ(g_ScriptTickCount, 1);
+
+    EXPECT_EQ(ignite_rs_script_unregister_tick_callback(), IgniteResult_Ok);
+    EXPECT_FALSE(ignite_rs_script_trigger_tick(0.016f));
+}

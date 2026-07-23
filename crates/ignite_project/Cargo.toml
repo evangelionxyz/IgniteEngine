@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 ignite_asset = { path = "../ignite_asset" }
+ignite_ecs = { path = "../ignite_ecs" }
+serde = { workspace = true }
