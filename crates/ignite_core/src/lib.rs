@@ -2,11 +2,14 @@
 
 pub mod core;
 pub mod engine;
+pub mod frame;
 pub mod ffi;
 
 pub use core::*;
 pub use engine::*;
+pub use frame::*;
 pub use ffi::*;
+
 
 // Re-export sub-crates for convenience
 pub use ignite_asset as asset;

@@ -18,6 +18,7 @@
 
 #include "ignite_rs/core.h"
 #include "ignite_rs/log.h"
+#include "ignite_rs/frame.h"
 
 #include "command.hpp"
 #include <nvrhi/utils.h>
@@ -480,6 +481,9 @@ namespace ignite
             m_DeltaTime = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
             IGN_PROFILE_PLOT("Delta Time (s)", m_DeltaTime);
 
+            // Notify Rust engine of frame start (updates Rust-side timing and frame counter)
+            ignite_rs_engine_begin_frame(m_DeltaTime);
+
             ProcessMainThreadSubmissions();
 
             if (m_CreateInfo.useAudio)
@@ -542,6 +546,9 @@ namespace ignite
                 }
             }
             
+            // Flush Rust-side deferred operations before frame ends
+            ignite_rs_engine_end_frame();
+
             // call this at lease once per frame!
             device->runGarbageCollection();
 

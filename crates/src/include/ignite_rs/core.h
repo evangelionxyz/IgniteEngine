@@ -12,6 +12,7 @@
 #include "serial.h"
 #include "ecs.h"
 #include "project.h"
+#include "frame.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -27,6 +28,9 @@ bool ignite_rs_engine_init(void);
 bool ignite_rs_engine_shutdown(void);
 bool ignite_rs_engine_is_initialized(void);
 
+// Engine Version (packed as major << 22 | minor << 12 | patch)
+uint32_t ignite_rs_engine_get_version(void);
+
 // UUID
 uint64_t ignite_uuid_new(void);
 uint64_t ignite_uuid_from_u64(uint64_t value);
@@ -36,3 +40,4 @@ uint64_t ignite_uuid_from_u64(uint64_t value);
 #endif
 
 #endif
+

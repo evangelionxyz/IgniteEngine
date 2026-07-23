@@ -44,8 +44,8 @@ namespace ignite
         Environment,
         Anim2D,
         Skeleton,
-        Mesh, // .mesh (.fbx, .gltf, .glb)
-        StaticMesh, // .mesh - engine specific
+        Mesh,         // .fbx, .gltf, .glb
+        StaticMesh,   // .mesh - engine specific
         SkeletalMesh, // .skmesh - engine specific
 		InputMapping, // .ixinput - engine specific
         Scene,
@@ -57,6 +57,16 @@ namespace ignite
         Animation2D,          // .anim2d  - single 2D animation clip
         AnimatorController2D, // .ac2d    - 2D animator state machine
         Prefab,               // .ixprefab - engine prefab asset
+    };
+
+    enum class AssetState
+    {
+        Unloaded = 0,
+        Queued = 1,
+        Loading = 2,
+        Ready = 3,
+        Dirty = 4,
+        Unloading = 5
     };
 
     static inline std::string AssetTypeToString(AssetType type)

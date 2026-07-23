@@ -41,6 +41,7 @@ namespace ignite
         void Reset();
 
         void SetActiveProject(const Ref<Project> &project);
+        void SyncFromRust();
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
 
@@ -234,6 +235,7 @@ namespace ignite
         std::queue<std::function<bool()>> m_OnChangeCallbacks;
 
         SignalToken m_AssetChangeToken = kInvalidSignalToken;
+        uint64_t m_LastSyncedRustVersion = 0;
     };
 }
 

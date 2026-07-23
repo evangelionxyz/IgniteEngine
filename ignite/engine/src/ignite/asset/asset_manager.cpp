@@ -132,6 +132,7 @@ namespace ignite
 
 		m_Project.reset();
 		m_AssetHandleByPath.clear();
+		m_LastSyncedRustVersion = 0;
 	}
 
 	void AssetManager::SetActiveProject(const Ref<Project> &project)
@@ -248,30 +249,10 @@ namespace ignite
 		LOG_ASSERT(handle != AssetHandle(0), "[Asset Manager] Invalid asset handle");
 
 		std::unique_lock lock(m_AssetMutex);
-        m_AssetRegistry[handle] = metadata;
-
-        if (!metadata.filepath.empty())
-        {
-			// Remove any previous entries for this handle in the path map
-			for (auto it = m_AssetHandleByPath.begin(); it != m_AssetHandleByPath.end();)
-			{
-                if (it->second == handle)
-                {
-					it = m_AssetHandleByPath.erase(it);
-                    break;
-                }
-                else
-                {
-					++it;
-                }
-			}
-
-            const ignite::Path absoluteMetadataPath = LockActiveProject()->GetProjectFilepath(metadata.filepath);
-            m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
-        }
 
         // Sync metadata with Rust AssetManager backend
-        ignite_rs_asset_assign_metadata(static_cast<uint64_t>(handle), metadata.filepath.generic_string().c_str(), static_cast<AssetType_RS>(metadata.type));
+        ignite_rs_asset_assign_metadata(static_cast<uint64_t>(handle),
+            metadata.filepath.generic_string().c_str(), static_cast<AssetType_RS>(metadata.type));
     }
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
@@ -290,18 +271,6 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         
         std::unique_lock lock(m_AssetMutex);
-
-        auto it = m_AssetRegistry.find(handle);
-        if (it != m_AssetRegistry.end())
-        {
-            if (!it->second.filepath.empty())
-            {
-                const auto absoluteMetadataPath = std::filesystem::absolute(LockActiveProject()->GetProjectFilepath(it->second.filepath).string());
-                m_AssetHandleByPath.erase(absoluteMetadataPath.generic_string());
-            }
-
-            m_AssetRegistry.erase(it);
-        }
 
         // Sync removal with Rust AssetManager backend
         ignite_rs_asset_remove_metadata(static_cast<uint64_t>(handle));
@@ -464,8 +433,51 @@ namespace ignite
         return owners;
     }
 
+    void AssetManager::SyncFromRust()
+    {
+        const uint64_t rustVersion = ignite_rs_asset_get_registry_version();
+        if (rustVersion == m_LastSyncedRustVersion)
+            return;
+
+        const size_t count = ignite_rs_asset_get_registry_count();
+        if (count == 0)
+        {
+            m_LastSyncedRustVersion = rustVersion;
+            return;
+        }
+
+        std::vector<IgniteAssetRegistryEntryFFI> entries(count);
+        const size_t fetched = ignite_rs_asset_get_registry_snapshot(entries.data(), count);
+
+        std::unique_lock lock(m_AssetMutex);
+        auto activeProject = LockActiveProject();
+        for (size_t i = 0; i < fetched; ++i)
+        {
+            const AssetHandle handle = AssetHandle(entries[i].handle);
+            if (handle == AssetHandle(0))
+                continue;
+
+            AssetMetaData metadata;
+            metadata.filepath = entries[i].filepath;
+            metadata.type = static_cast<AssetType>(entries[i].asset_type);
+
+            m_AssetRegistry[handle] = metadata;
+
+            if (!metadata.filepath.empty())
+            {
+                const ignite::Path absoluteMetadataPath = activeProject ? activeProject->GetProjectFilepath(metadata.filepath) : metadata.filepath;
+                m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
+            }
+        }
+
+        m_LastSyncedRustVersion = rustVersion;
+    }
+
     void AssetManager::OnUpdate(float deltaTime)
     {
+        // Sync metadata registry from Rust source of truth
+        SyncFromRust();
+
 		// Call each frame
 		assetUnloadTimer += deltaTime;
 		constexpr float kUnloadInterval = 10.0f;
@@ -646,6 +658,7 @@ namespace ignite
 
     const AssetMetaData &AssetManager::GetMetaData(AssetHandle handle) const
     {
+        ignite_rs_asset_get_metadata(handle, )
         if (m_AssetRegistry.contains(handle))
         {
             return m_AssetRegistry.at(handle);
