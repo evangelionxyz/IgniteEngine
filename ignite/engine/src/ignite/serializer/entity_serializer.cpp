@@ -88,10 +88,9 @@ namespace ignite
         }
     }
 
-    static void DeserializeScriptFieldValue(const YAML::Node &fieldsNode, const std::string &name, const ScriptField &fieldDef, ScriptInstanceField &outField)
+    static void DeserializeScriptFieldValue(const YAML::Node &fieldNode, const std::string &name, const ScriptField &fieldDef, ScriptInstanceField &outField)
     {
-        if (!fieldsNode[name]) return;
-        const auto &valueNode = fieldsNode[name];
+        const auto &valueNode = fieldNode["Value"];
 
         outField.field = fieldDef;
         try
@@ -1160,17 +1159,24 @@ namespace ignite
                         std::unordered_map<std::string, ScriptInstanceField> instanceFields;
                         const auto &classFields = scriptClass->GetFields();
 
-                        for (auto it = fieldsNode.begin(); it != fieldsNode.end(); ++it)
+                        for (YAML::Node fieldNode : fieldsNode)
                         {
-                            std::string fieldName = it->first.as<std::string>();
-                            if (classFields.contains(fieldName))
+                            if (auto name = fieldNode["Name"])
                             {
-                                const ScriptField &fieldDef = classFields.at(fieldName);
-                                ScriptInstanceField instanceField;
-                                DeserializeScriptFieldValue(fieldsNode, fieldName, fieldDef, instanceField);
-                                instanceFields[fieldName] = instanceField;
+                                for (auto it = fieldsNode.begin(); it != fieldsNode.end(); ++it)
+                                {
+                                    std::string fieldName = name.as<std::string>();
+                                    if (classFields.contains(fieldName))
+                                    {
+                                        const ScriptField &fieldDef = classFields.at(fieldName);
+                                        ScriptInstanceField instanceField;
+                                        DeserializeScriptFieldValue(fieldNode, fieldName, fieldDef, instanceField);
+                                        instanceFields[fieldName] = instanceField;
+                                    }
+                                }
                             }
                         }
+                        
 
                         scriptClass->InsertInstanceFields(desEntity.GetUUID(), instanceFields);
                     }

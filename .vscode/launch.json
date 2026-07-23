@@ -3,43 +3,64 @@
     "configurations": [
         {
             "name": "Launch Ignite.Editor (Debug)",
-            "type": "cppdbg",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/Debug/Ignite.Editor.exe",
             "cwd": "${workspaceFolder}/ignite/editor",
             "externalConsole": true,
             "stopAtEntry": false,
-            "MIMode": "gdb",
-            "miDebuggerPath": "",
-            "windows": {
-                "type": "cppvsdbg"
-            },
             "preLaunchTask": "Build Editor (Debug)"
         },
         {
+            "name": "Attach C# (.NET Core)",
+            "type": "coreclr",
+            "request": "attach",
+            "processName": "Ignite.Editor.exe",
+            "justMyCode": false,
+            "symbolOptions": {
+                "searchPaths": [
+                    "${workspaceFolder}/bin/Debug"
+                ],
+                "searchMicrosoftSymbolServer": false
+            },
+            "sourceFileMap": {
+                "d:\\Dev\\Ignite": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Attach C# (Pick Process)",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}",
+            "justMyCode": false,
+            "symbolOptions": {
+                "searchPaths": [
+                    "${workspaceFolder}/bin/Debug"
+                ],
+                "searchMicrosoftSymbolServer": false
+            },
+            "sourceFileMap": {
+                "d:\\Dev\\Ignite": "${workspaceFolder}"
+            }
+        },
+        {
             "name": "Launch Ignite.Editor (Release)",
-            "type": "cppdbg",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/Release/Ignite.Editor.exe",
             "cwd": "${workspaceFolder}/ignite/editor",
             "externalConsole": true,
             "stopAtEntry": false,
-            "windows": {
-                "type": "cppvsdbg"
-            },
             "preLaunchTask": "Build Editor (Release)"
         },
         {
             "name": "Launch Ignite.Test (Debug)",
-            "type": "cppdbg",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/Debug/Ignite.Test.exe",
             "cwd": "${workspaceFolder}/ignite/test",
             "externalConsole": true,
             "stopAtEntry": false,
-            "windows": {
-                "type": "cppvsdbg"
-            },
             "preLaunchTask": "Build Test (Debug)"
         }
     ]

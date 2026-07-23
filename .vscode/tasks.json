@@ -19,6 +19,16 @@
             "problemMatcher": "$msCompile"
         },
         {
+            "label": "Run Editor (No Debugger)",
+            "type": "shell",
+            "command": "${workspaceFolder}/bin/Debug/Ignite.Editor.exe",
+            "options": {
+                "cwd": "${workspaceFolder}/ignite/editor"
+            },
+            "dependsOn": "Build Editor (Debug)",
+            "problemMatcher": []
+        },
+        {
             "label": "Build Editor (Release)",
             "type": "shell",
             "command": "msbuild IGN.slnx /t:Ignite_Editor /p:Configuration=Release /p:Platform=\"x64\"",

@@ -105,5 +105,6 @@
         "xmemory": "cpp",
         "xtr1common": "cpp",
         "xtree": "cpp"
-    }
+    },
+    "dotnet.defaultSolution": "disable"
 }
