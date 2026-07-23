@@ -1,16 +1,71 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "cmake",
-			"label": "CMake: build",
-			"command": "build",
-			"targets": [
-				"IgniteEditorV2"
-			],
-			"preset": "windows-vs2022-Debug",
-			"group": "build",
-			"problemMatcher": [],
-		}
-	]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Generate Solutions (Premake5)",
+            "type": "shell",
+            "command": "premake5 vs2026 --file=scripts/premake5.lua",
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build Editor (Debug)",
+            "type": "shell",
+            "command": "msbuild IGN.slnx /t:Ignite_Editor /p:Configuration=Debug /p:Platform=\"x64\"",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build Editor (Release)",
+            "type": "shell",
+            "command": "msbuild IGN.slnx /t:Ignite_Editor /p:Configuration=Release /p:Platform=\"x64\"",
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build Test (Debug)",
+            "type": "shell",
+            "command": "msbuild IGN.slnx /t:Ignite_Test /p:Configuration=Debug /p:Platform=\"x64\"",
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build Solution (Debug)",
+            "type": "shell",
+            "command": "msbuild IGN.slnx /t:Build /p:Configuration=Debug /p:Platform=\"x64\"",
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build Solution (Release)",
+            "type": "shell",
+            "command": "msbuild IGN.slnx /t:Build /p:Configuration=Release /p:Platform=\"x64\"",
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Cargo Build (Debug)",
+            "type": "shell",
+            "command": "cargo build --manifest-path crates/Cargo.toml",
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo Build (Release)",
+            "type": "shell",
+            "command": "cargo build --manifest-path crates/Cargo.toml --release",
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Build C# ScriptEngine",
+            "type": "shell",
+            "command": "dotnet build scriptengine/Ignite.ScriptEngine.csproj -c Debug",
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        }
+    ]
 }

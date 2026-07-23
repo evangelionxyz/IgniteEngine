@@ -1,5 +1,16 @@
 {
+    "rust-analyzer.linkedProjects": [
+        "${workspaceFolder}/crates/Cargo.toml"
+    ],
+    "dotnet.preferCSharpExtension": true,
+    "cmake.ignoreCMakeListsMissing": true,
     "files.associations": {
+        "*.lua": "lua",
+        "*.scene": "yaml",
+        "*.ac": "yaml",
+        "*.ac2d": "yaml",
+        "*.anim2d": "yaml",
+        "*.ixinput": "yaml",
         "xstring": "cpp",
         "xutility": "cpp",
         "chrono": "cpp",
@@ -94,9 +105,5 @@
         "xmemory": "cpp",
         "xtr1common": "cpp",
         "xtree": "cpp"
-    },
-    "dotnet.preferCSharpExtension": true,
-    "cmake.ignoreCMakeListsMissing": true,
-    "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": []
+    }
 }

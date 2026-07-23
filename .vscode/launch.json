@@ -1,30 +1,46 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch IgniteEditorV2",
-            "type":"cppdbg",
-            "request":"launch",
-            "program": "${workspaceRoot}/build/windows-vs2022/bin/Debug/IgniteEditorV2.exe",
-            "cwd": "${fileDirname}",
-            "externalConsole": false,
-            "args": [
-                ""
-            ],
+            "name": "Launch Ignite.Editor (Debug)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Debug/Ignite.Editor.exe",
+            "cwd": "${workspaceFolder}/ignite/editor",
+            "externalConsole": true,
+            "stopAtEntry": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "",
+            "windows": {
+                "type": "cppvsdbg"
+            },
+            "preLaunchTask": "Build Editor (Debug)"
         },
         {
-            "name": "Launch IgniteEditor",
-            "type":"cppdbg",
-            "request":"launch",
-            "program": "${workspaceRoot}/build/windows-vs2022/bin/Debug/IgniteEditor.exe",
-            "cwd": "${fileDirname}",
-            "externalConsole": false,
-            "args": [
-                ""
-            ],
+            "name": "Launch Ignite.Editor (Release)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Release/Ignite.Editor.exe",
+            "cwd": "${workspaceFolder}/ignite/editor",
+            "externalConsole": true,
+            "stopAtEntry": false,
+            "windows": {
+                "type": "cppvsdbg"
+            },
+            "preLaunchTask": "Build Editor (Release)"
+        },
+        {
+            "name": "Launch Ignite.Test (Debug)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Debug/Ignite.Test.exe",
+            "cwd": "${workspaceFolder}/ignite/test",
+            "externalConsole": true,
+            "stopAtEntry": false,
+            "windows": {
+                "type": "cppvsdbg"
+            },
+            "preLaunchTask": "Build Test (Debug)"
         }
     ]
 }
