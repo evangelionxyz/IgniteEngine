@@ -28,6 +28,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/entity.hpp"
+#include "ignite/scene/prefab.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/scene/entity_destroy_command.hpp"
 #include "ignite/scene/entity_rename_command.hpp"
@@ -195,45 +196,10 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         ImGui::Begin("Hierarchy");
-        ImGui::Button(m_Scene->name.c_str(), { ImGui::GetContentRegionAvail().x, 0.0f });
 
-        // target drop
-        if (ImGui::BeginDragDropTarget())
-        {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
-            {
-                const size_t count = payload->DataSize / sizeof(UUID);
-                const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+        auto assetManager = AssetManager::GetInstance();
 
-                for (size_t i = 0; i < count; ++i)
-                {
-                    const UUID uuid = droppedUUIDs[i];
-                    Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
-
-                    if (!droppedEntity)
-                        continue;
-
-                    // check if src entity has parent
-                    auto &idComp = droppedEntity.GetComponent<IDComponent>();
-                    if (idComp.parent != UUID(0))
-                    {
-                        UUID oldParent = idComp.parent;
-                        // current parent should be removed
-                        Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
-                        parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
-                        idComp.parent = UUID(0);
-
-                        // Record for undo — re-parenting to root (UUID 0)
-                        CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
-                            m_Scene, droppedEntity.GetUUID(), oldParent, UUID(0)));
-                    }
-                }
-            }
-
-            ImGui::EndDragDropTarget();
-        }
-
-        ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_NoClip | ImGuiTableFlags_PadOuterX
+        const ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_NoClip | ImGuiTableFlags_PadOuterX
             | ImGuiTableFlags_NoPadInnerX | ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_Resizable;
 
         if (ImGui::BeginTable("entity_hierarchy_table", 1, tableFlags))
@@ -247,18 +213,64 @@ namespace ignite
             ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.000f, 0.243f, 0.408f, 1.000f });
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
-            std::vector<Entity> rootEntities;
-            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
-            {
-                if (id.parent == UUID(0))
-                {
-                    rootEntities.emplace_back(e, m_Scene);
-                }
-            });
+            // Root tree node
+            
+            const auto sceneName = m_EditorLayer->IsInPrefabIsolation() ? "Prefab" : assetManager->GetAssetDisplayName(m_Scene->handle);
+			const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
+                | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns | ImGuiTreeNodeFlags_DefaultOpen;
 
-            for (const Entity &entity : rootEntities)
+            if (ImGui::TreeNodeEx(sceneName.c_str(), treeFlags))
             {
-                RenderEntityNode(entity);
+				// target drop
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+					{
+						const size_t count = payload->DataSize / sizeof(UUID);
+						const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+
+						for (size_t i = 0; i < count; ++i)
+						{
+							const UUID uuid = droppedUUIDs[i];
+							Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
+
+							if (!droppedEntity)
+								continue;
+
+							// check if src entity has parent
+							auto &idComp = droppedEntity.GetComponent<IDComponent>();
+							if (idComp.parent != UUID(0))
+							{
+								UUID oldParent = idComp.parent;
+								// current parent should be removed
+								Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
+								parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
+								idComp.parent = UUID(0);
+
+								// Record for undo — re-parenting to root (UUID 0)
+								CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
+									m_Scene, droppedEntity.GetUUID(), oldParent, UUID(0)));
+							}
+						}
+					}
+
+					ImGui::EndDragDropTarget();
+				}
+
+				std::vector<Entity> rootEntities;
+				m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
+					{
+						if (id.parent == UUID(0))
+							rootEntities.emplace_back(e, m_Scene);
+					});
+
+				for (const Entity &entity : rootEntities)
+					RenderEntityNode(entity);
+
+                // Add some extra space at the bottom
+                ImGui::Dummy(ImVec2(-1.0f, 32.0f));
+
+                ImGui::TreePop();
             }
 
             ImGui::PopStyleVar();
@@ -273,7 +285,6 @@ namespace ignite
 
             ImGui::EndTable();
         }
-
         ImGui::End();
     }
 
@@ -410,29 +421,27 @@ namespace ignite
             ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         }
 
-        ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
+		ImGui::TableNextRow();
+		ImGui::TableNextColumn();
+
+        const ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
             | ImGuiTreeNodeFlags_OpenOnDoubleClick
             | ImGuiTreeNodeFlags_SpanAvailWidth
             | ImGuiTreeNodeFlags_OpenOnArrow
             | ImGuiTreeNodeFlags_LabelSpanAllColumns;
 
-        const intptr_t imguiPushId = static_cast<intptr_t>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-
+        const auto imguiPushId = static_cast<intptr_t>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, { 0.435f, 0.287f, 0.000f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_Header, { 0.000f, 0.305f, 0.453f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, { 0.780f, 0.520f, 0.000f, 1.000f });
         
-        const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(imguiPushId), flags, "%s", idComp.name.c_str());
-
+        const bool opened = ImGui::TreeNodeEx((void *)imguiPushId, flags, "%s", idComp.name.c_str());
         if (isSelected && entity.GetUUID() == m_TrackingSelectedEntity && s_LastAutoScrolledTarget != m_TrackingSelectedEntity)
         {
             if (!ImGui::IsItemVisible())
             {
                 ImGui::SetScrollHereY(0.5f);
             }
-
             s_LastAutoScrolledTarget = m_TrackingSelectedEntity;
         }
         
@@ -2911,6 +2920,12 @@ namespace ignite
                 m_IsFocused = ImGui::IsWindowFocused();
                 m_IsHovered = ImGui::IsWindowHovered();
 
+                if (m_EditorLayer && m_EditorLayer->IsInPrefabIsolation())
+                {
+                    if (UI::DrawButton("Back to scene", { 96.0f, 28.0f }))
+                        m_EditorLayer->ExitPrefabIsolation(true);
+                }
+
                 // Calculating Scene Viewport location
                 const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
                 const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
@@ -2953,6 +2968,16 @@ namespace ignite
 
                 ImDrawList *drawList = ImGui::GetWindowDrawList();
 
+				// if (m_SceneFocused && mouseWantsFocus)
+				{
+					const char *bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
+					const ImVec2 textSize = ImGui::CalcTextSize(bannerText);
+					const ImVec2 bannerSize = ImVec2{ textSize.x + 24.0f, textSize.y + 8.0f };
+					const ImVec2 bannerCursor = { canvasPos.x + (canvasSize.x - bannerSize.x) * 0.5f, canvasPos.y + 10.0f };
+					//ImGui::SetCursorScreenPos(bannerCursor);
+					UI::DrawBannerText(bannerText, { 124.0f, 200.0f });
+				}
+
                 // Click inside the viewport to (re-)focus in Play or Simulate modes
                 // Only allow focusing if the scene is not already focused and the cooldown has expired
                 // This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
@@ -2965,27 +2990,6 @@ namespace ignite
                         InputSystem::SetCursorMode(CursorMode::Disabled);
                         InputSystem::SetMouseToCenter();
                     }
-                }
-
-                if (m_SceneFocused && mouseWantsFocus)
-                {
-                    const char* bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
-                    ImVec2 textSize = ImGui::CalcTextSize(bannerText);
-                    
-                    float bannerWidth = textSize.x + 24.0f;
-                    float bannerHeight = textSize.y + 12.0f;
-                    
-                    ImVec2 bannerMin = { canvasPos.x + (canvasSize.x - bannerWidth) * 0.5f, canvasPos.y + 10.0f };
-                    ImVec2 bannerMax = { bannerMin.x + bannerWidth, bannerMin.y + bannerHeight };
-                    
-                    // Draw a rounded semi-transparent dark banner
-                    drawList->AddRectFilled(bannerMin, bannerMax, ImColor(15, 15, 15, 180), 6.0f);
-                    // Draw border
-                    drawList->AddRect(bannerMin, bannerMax, ImColor(255, 128, 0, 220), 6.0f, 0, 1.5f);
-                    
-                    // Draw text centered inside the banner
-                    ImVec2 textPos = { bannerMin.x + 12.0f, bannerMin.y + 6.0f };
-                    drawList->AddText(textPos, ImColor(255, 255, 255, 255), bannerText);
                 }
 
                 Entity clickedIconEntity = {};
@@ -3106,13 +3110,14 @@ namespace ignite
                 {
                     constexpr float padding = 18.0f;
                     float yPosition = 6.0f;
+
                     const float fps = ImGui::GetIO().Framerate;
                     std::string statusStr = std::format("FPS {:.5}", fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
+                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
 
                     yPosition += padding;
                     statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
                 }
 
                 // Mouse picking from viewport object-id attachment (on mouse down only)
@@ -3262,6 +3267,19 @@ namespace ignite
                                     {
                                         const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
                                         m_EditorLayer->OpenScene(filepath);
+                                    }
+                                    else if (metadata.type == AssetType::Prefab)
+                                    {
+                                        Ref<Prefab> prefab = AssetManager::GetInstance()->GetAssetImmediate<Prefab>(*handle);
+                                        if (prefab)
+                                        {
+                                            Entity instantiated = Prefab::Instantiate(prefab, m_Scene);
+                                            if (instantiated.IsValid())
+                                            {
+                                                m_SelectedEntities.clear();
+                                                m_SelectedEntities[instantiated.GetUUID()] = instantiated;
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -3593,7 +3611,7 @@ namespace ignite
             }
             else
             {
-                ImGui::Text("No Scene");
+                UI::DrawCenteredText("No Scene");
             }
         }
 
@@ -3775,7 +3793,6 @@ namespace ignite
     {
         // TOOLBAR: 
         constexpr ImVec2 buttonSize = { 28.0f, 28.0f };
-
         static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
         int cameraModeIndex = 0;
         switch (m_EditorCamera.GetNavigationMode())
@@ -3790,7 +3807,8 @@ namespace ignite
         ImGui::SetNextItemWidth(96.0f);
         if (ImGui::Combo("##camera_mode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
         {
-            const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
+            const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit :
+                (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
             const auto previousMode = m_EditorCamera.GetNavigationMode();
 
             if (previousMode == EditorCamera::NavigationMode::Mode2D)
@@ -3840,23 +3858,19 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        auto drawGizmoBtn = [&](const std::string &iconName, bool active)
+        auto drawGizmoBtn = [&](const std::string &iconName, const ImVec2 &buttonSize, bool active)
         {
-            ImTextureID texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
-
-            const auto colors = ImGui::GetStyle().Colors;
-            ImVec4 tint = active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-            ImVec4 bg = active ? colors[ImGuiCol_ButtonActive] : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-            return ImGui::ImageButton(iconName.c_str(), texID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bg, tint);
+            const auto texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
+            return UI::DrawSelectImageButton(iconName.c_str(), texID, buttonSize, active);;
         };
 
-        if (drawGizmoBtn("picking", m_Data.gizmoOp == GizmoOperation::NONE)) SetGizmoOperation(GizmoOperation::NONE);
+        if (drawGizmoBtn("picking", buttonSize, m_Data.gizmoOp == GizmoOperation::NONE)) SetGizmoOperation(GizmoOperation::NONE);
         ImGui::SameLine();
-        if (drawGizmoBtn("translate", m_Data.gizmoOp == GizmoOperation::TRANSLATE)) SetGizmoOperation(GizmoOperation::TRANSLATE);
+        if (drawGizmoBtn("translate", buttonSize, m_Data.gizmoOp == GizmoOperation::TRANSLATE)) SetGizmoOperation(GizmoOperation::TRANSLATE);
         ImGui::SameLine();
-        if (drawGizmoBtn("rotate", m_Data.gizmoOp == GizmoOperation::ROTATE)) SetGizmoOperation(GizmoOperation::ROTATE);
+        if (drawGizmoBtn("rotate", buttonSize, m_Data.gizmoOp == GizmoOperation::ROTATE)) SetGizmoOperation(GizmoOperation::ROTATE);
         ImGui::SameLine();
-        if (drawGizmoBtn("scale", m_Data.gizmoOp == GizmoOperation::SCALE)) SetGizmoOperation(GizmoOperation::SCALE);
+        if (drawGizmoBtn("scale", buttonSize, m_Data.gizmoOp == GizmoOperation::SCALE)) SetGizmoOperation(GizmoOperation::SCALE);
 
         if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
         {
@@ -3872,10 +3886,10 @@ namespace ignite
         ImGui::Spacing();
         ImGui::SameLine();
 
-        bool isLocal = m_Gizmo.GetMode() == ImGuizmo::LOCAL;
-        if (drawGizmoBtn("transform_local", isLocal)) m_Gizmo.SetMode(ImGuizmo::LOCAL);
+        const bool isLocal = m_Gizmo.GetMode() == ImGuizmo::LOCAL;
+        if (drawGizmoBtn("transform_local", buttonSize, isLocal)) m_Gizmo.SetMode(ImGuizmo::LOCAL);
         ImGui::SameLine();
-        if (drawGizmoBtn("transform_world", !isLocal)) m_Gizmo.SetMode(ImGuizmo::WORLD);
+        if (drawGizmoBtn("transform_world", buttonSize, !isLocal)) m_Gizmo.SetMode(ImGuizmo::WORLD);
 
         ImGui::PopStyleVar(2);
 
@@ -3901,11 +3915,10 @@ namespace ignite
 
         const bool isScenePlaying = m_Scene && m_Scene->IsPlaying();
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-        ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
+        const auto scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
 
         ImGui::SameLine();
-        ImVec4 bgColPlay = isScenePlaying ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        if (ImGui::ImageButton("##PlayButton", scenePlayStopID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bgColPlay))
+        if (UI::DrawImageButton("##PlayButton", scenePlayStopID, buttonSize))
         {
             if (isScenePlaying)
             {
@@ -3937,11 +3950,10 @@ namespace ignite
 
         const bool isSceneSimulate = m_Scene && m_Scene->IsSimulating();
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-        ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
+        const auto sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
 
         ImGui::SameLine();
-        ImVec4 bgColSim = isSceneSimulate ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        if (ImGui::ImageButton("##SimulateButton", sceneSimulateID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bgColSim))
+        if (UI::DrawImageButton("##SimulateButton", sceneSimulateID, buttonSize))
         {
             if (isSceneSimulate)
             {

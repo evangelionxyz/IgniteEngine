@@ -105,6 +105,12 @@ namespace ignite
 
         void SetActiveScene(const Ref<Scene> &scene);
 
+        void EnterPrefabIsolation(AssetHandle prefabHandle);
+        void ExitPrefabIsolation(bool save = true);
+        bool IsInPrefabIsolation() const { return m_InPrefabIsolationMode; }
+        Ref<Prefab> GetEditingPrefab() const { return m_EditingPrefab; }
+        AssetHandle GetEditingPrefabHandle() const { return m_EditingPrefabHandle; }
+
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
         Ref<Project> GetActiveProject() const { return m_ActiveProject; }
 
@@ -150,6 +156,10 @@ namespace ignite
 
         Ref<Scene> m_ActiveScene;
         Ref<Scene> m_EditorScene;
+        Ref<Scene> m_MainSceneBeforeIsolation;
+        Ref<Prefab> m_EditingPrefab;
+        AssetHandle m_EditingPrefabHandle = AssetHandle(0);
+        bool m_InPrefabIsolationMode = false;
         Ref<Project> m_ActiveProject;
         EditorState m_State;
 

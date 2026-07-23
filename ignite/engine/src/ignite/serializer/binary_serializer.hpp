@@ -695,6 +695,23 @@ namespace ignite
 
             AppendRaw(buffer, (uint64_t)anim->GetSkeletonHandle());
 
+            // Optional trailing event chunk. Older readers safely ignore it and
+            // older files simply end after the skeleton handle.
+            constexpr uint32_t kTimelineEventMagic = 0x544E5645; // "EVNT"
+            AppendRaw(buffer, kTimelineEventMagic);
+            const uint32_t eventCount = static_cast<uint32_t>(anim->timelineEvents.size());
+            AppendRaw(buffer, eventCount);
+            for (const AnimationTimelineEvent &event : anim->timelineEvents)
+            {
+                AppendRaw(buffer, event.normalizedTime);
+                const uint8_t action = static_cast<uint8_t>(event.action);
+                AppendRaw(buffer, action);
+                uint32_t nameSize = 0;
+                AppendString(buffer, event.name, nameSize);
+                AppendRaw(buffer, static_cast<uint64_t>(event.GetAudioHandle()));
+                AppendRaw(buffer, static_cast<uint64_t>(event.GetCallbackAsset()));
+            }
+
             // Write to file
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
@@ -804,7 +821,34 @@ namespace ignite
             uint64_t skeletonHandle = 0;
             if (ReadRaw(inFile, &skeletonHandle) && skeletonHandle != 0)
             {
-                anim->SetSkeletonHandle(UUID(skeletonHandle));
+                anim->SetSkeletonHandle(AssetHandle(skeletonHandle));
+            }
+
+            constexpr uint32_t kTimelineEventMagic = 0x544E5645; // "EVNT"
+            uint32_t eventMagic = 0;
+            if (ReadRaw(inFile, &eventMagic) && eventMagic == kTimelineEventMagic)
+            {
+                uint32_t eventCount = 0;
+                if (!ReadRaw(inFile, &eventCount) || eventCount > 65536)
+                    throw std::runtime_error("Corrupt animation timeline event data");
+                anim->timelineEvents.reserve(eventCount);
+                for (uint32_t i = 0; i < eventCount; ++i)
+                {
+                    AnimationTimelineEvent event;
+                    uint8_t action = 0;
+                    uint32_t nameSize = 0;
+                    uint64_t audioHandle = 0, callbackHandle = 0;
+                    if (!ReadRaw(inFile, &event.normalizedTime) || !ReadRaw(inFile, &action) || !ReadRaw(inFile, &nameSize))
+                        throw std::runtime_error("Corrupt animation timeline event entry");
+                    event.name = ReadString(inFile, nameSize);
+                    if (!ReadRaw(inFile, &audioHandle) || !ReadRaw(inFile, &callbackHandle))
+                        throw std::runtime_error("Corrupt animation timeline event handles");
+                    event.action = static_cast<AnimationTimelineEvent::Action>(action);
+                    event.SetAudioHandle(AssetHandle(audioHandle));
+                    event.SetCallbackAsset(AssetHandle(callbackHandle));
+                    event.normalizedTime = std::clamp(event.normalizedTime, 0.0f, 1.0f);
+                    anim->timelineEvents.push_back(std::move(event));
+                }
             }
 
             inFile.close();

@@ -11,10 +11,11 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/animation_montage.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
+#include "ignite/scene/prefab.hpp"
 #include "ignite/scripting/script_engine.hpp"
-
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/signals/asset_signal.hpp"
+#include "ext/editor_ui.hpp"
 
 #include <format>
 #include <algorithm>
@@ -184,8 +185,8 @@ namespace ignite
         cmd->open();
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
-    	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-    	createInfo.keepInitialState = true;
+        createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        createInfo.keepInitialState = true;
         createInfo.bindless = false;
 
         s_SharedIcons["scene"] = Texture::Create("resources/ui/editor/ic_editor_scene.png", createInfo, cmd);
@@ -215,8 +216,8 @@ namespace ignite
         app->SubmitWorkerCommandList(cmd);
     }
 
-	ContentBrowserPanel::~ContentBrowserPanel()
-	{
+    ContentBrowserPanel::~ContentBrowserPanel()
+    {
         if (m_EditorLayer)
         {
             if (m_EditorLayer->m_ContentBrowserPanel == this)
@@ -232,7 +233,7 @@ namespace ignite
         }
 
         m_AssetManager = nullptr;
-	}
+    }
 
     void ContentBrowserPanel::ReleaseSharedResources()
     {
@@ -314,7 +315,7 @@ namespace ignite
 
         DragDropSource(fullPath);
 
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && ImGui::IsItemHovered())
         {
             UpdateSelection(fullPath);
             m_SelectedFileTree = fullPath;
@@ -443,7 +444,7 @@ namespace ignite
 
                     DragDropSource(assetDir);
 
-                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+                    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && ImGui::IsItemHovered())
                     {
                         UpdateSelection(assetDir);
                         m_SelectedFileTree = assetDir;
@@ -546,7 +547,7 @@ namespace ignite
 
                         if (node->children.empty())
                         {
-                            ImGui::Text("This folder is empty");
+                            UI::DrawCenteredText("Empty folder");
                         }
 
                         const float spacing = 12.0f;
@@ -587,19 +588,53 @@ namespace ignite
                             }
                         }
 
-                        ImGui::SetCursorPosY(cursorStartY + static_cast<float>(rowCount) * rowHeight);
-                        ImGui::Dummy(ImVec2(1.0f, 0.0f));
-                    }
+                        ImGui::SetCursorPosY(cursorStartY);
+                        const ImVec2 remainingSize = ImGui::GetContentRegionMax();
+                        ImGui::Dummy(ImVec2(remainingSize.x, std::max(remainingSize.y, 50.0f)));
 
-					// ==== Context menu ====
-					UIRenderContextMenu();
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                            {
+                                const size_t count = payload->DataSize / sizeof(UUID);
+                                const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+                                Scene *activeScene = m_EditorLayer ? m_EditorLayer->GetActiveScene().get() : nullptr;
+                                Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+
+                                if (activeScene && project)
+                                {
+                                    for (size_t i = 0; i < count; ++i)
+                                    {
+                                        Entity entity = SceneManager::GetEntity(activeScene, droppedUUIDs[i]);
+                                        if (entity.IsValid())
+                                        {
+                                            std::string entityName = entity.GetName();
+                                            if (entityName.empty()) entityName = "Prefab";
+                                            ignite::Path targetPath = BuildUniqueSiblingPath(m_CurrentDirectory / (entityName + ".ixprefab"));
+
+                                            Ref<Prefab> prefab = Prefab::CreateFromEntity(entity, activeScene, project);
+                                            if (prefab && prefab->Serialize(targetPath))
+                                            {
+                                                m_AssetManager->ImportAsset(targetPath);
+                                                RefreshFiles();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                    }
+                    
+                    // ==== Context menu ====
+                    UIRenderContextMenu();
                 }
 
                 ImGui::EndChild();
             }
 
-			// ==== Popup modals ====
-			UIRenderPopupModals();
+            // ==== Popup modals ====
+            UIRenderPopupModals();
         }
 
         ImGui::End();
@@ -642,536 +677,546 @@ namespace ignite
         }
     }
 
-	void ContentBrowserPanel::UIRenderContextMenu()
-	{
-		if (ImGui::BeginPopupContextWindow("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
-		{
-			if (ImGui::BeginMenu("Create"))
-			{
-				if (ImGui::MenuItem("New Folder"))
-				{
-					// show create folder modal
-					m_ShowCreateFolderModal = true;
-				}
+    void ContentBrowserPanel::UIRenderContextMenu()
+    {
+        if (ImGui::BeginPopupContextWindow("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
+        {
+            if (ImGui::BeginMenu("Create"))
+            {
+                if (ImGui::MenuItem("New Folder"))
+                {
+                    // show create folder modal
+                    m_ShowCreateFolderModal = true;
+                }
 
-				if (ImGui::MenuItem("C# Script"))
-				{
-					m_ShowCreateScriptModal = true;
-				}
+                if (ImGui::MenuItem("C# Script"))
+                {
+                    m_ShowCreateScriptModal = true;
+                }
 
-				if (ImGui::MenuItem("Sprite Sheet"))
-				{
-					DispatchCreateAssetEditorEvent(AssetType::SpriteSheet, m_CurrentDirectory);
-				}
+                if (ImGui::MenuItem("Prefab"))
+                {
+                    CreateNewPrefab();
+                }
 
-				if (ImGui::MenuItem("Widget"))
-				{
-					DispatchCreateAssetEditorEvent(AssetType::Widget, m_CurrentDirectory);
-				}
+                if (ImGui::MenuItem("Sprite Sheet"))
+                {
+                    DispatchCreateAssetEditorEvent(AssetType::SpriteSheet, m_CurrentDirectory);
+                }
 
-				if (ImGui::BeginMenu("Animation"))
-				{
-					if (ImGui::MenuItem("Animator Controller"))
-					{
-						DispatchCreateAssetEditorEvent(AssetType::AnimatorController, m_CurrentDirectory);
-					}
+                if (ImGui::MenuItem("Widget"))
+                {
+                    DispatchCreateAssetEditorEvent(AssetType::Widget, m_CurrentDirectory);
+                }
 
-					if (ImGui::MenuItem("Animation 2D"))
-					{
-						DispatchCreateAssetEditorEvent(AssetType::Animation2D, m_CurrentDirectory);
-					}
+                if (ImGui::BeginMenu("Animation"))
+                {
+                    if (ImGui::MenuItem("Blend Space 2D"))
+                    {
+                        DispatchCreateAssetEditorEvent(AssetType::BlendSpace, m_CurrentDirectory);
+                    }
 
-					if (ImGui::MenuItem("Animator Controller 2D"))
-					{
-						DispatchCreateAssetEditorEvent(AssetType::AnimatorController2D, m_CurrentDirectory);
-					}
+                    if (ImGui::MenuItem("Animator Controller"))
+                    {
+                        DispatchCreateAssetEditorEvent(AssetType::AnimatorController, m_CurrentDirectory);
+                    }
 
-					ImGui::EndMenu();
-				}
+                    if (ImGui::MenuItem("Animation 2D"))
+                    {
+                        DispatchCreateAssetEditorEvent(AssetType::Animation2D, m_CurrentDirectory);
+                    }
 
-				if (ImGui::BeginMenu("Material"))
-				{
-					if (ImGui::MenuItem("Material2D"))
-					{
-						DispatchCreateAssetEditorEvent(AssetType::Material2D, m_CurrentDirectory);
-					}
+                    if (ImGui::MenuItem("Animator Controller 2D"))
+                    {
+                        DispatchCreateAssetEditorEvent(AssetType::AnimatorController2D, m_CurrentDirectory);
+                    }
 
-					if (ImGui::MenuItem("Material"))
-					{
-						DispatchCreateAssetEditorEvent(AssetType::Material, m_CurrentDirectory);
-					}
+                    ImGui::EndMenu();
+                }
 
-					ImGui::EndMenu();
-				}
+                if (ImGui::BeginMenu("Material"))
+                {
+                    if (ImGui::MenuItem("Material2D"))
+                    {
+                        DispatchCreateAssetEditorEvent(AssetType::Material2D, m_CurrentDirectory);
+                    }
 
-				// ----- Scriptable Object submenu (dynamic, from [CreateAssetMenu]) -----
-				{
-					ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
-					const auto *menuEntries = scriptEngine
-						? &scriptEngine->GetScriptableObjectMenuEntries()
-						: nullptr;
+                    if (ImGui::MenuItem("Material"))
+                    {
+                        DispatchCreateAssetEditorEvent(AssetType::Material, m_CurrentDirectory);
+                    }
 
-					if (menuEntries && !menuEntries->empty())
-					{
-						ImGui::Separator();
-						if (ImGui::BeginMenu("Scriptable Object"))
-						{
-							for (const auto &entry : *menuEntries)
-							{
-								const std::string &label = entry.menuName.empty() ? entry.className : entry.menuName;
-								if (ImGui::MenuItem(label.c_str()))
-								{
-									m_PendingScriptableObjectClassName = entry.className;
-									m_PendingScriptableObjectFileName = entry.fileName;
-									strncpy(m_PopupInputBuffer, entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
-									// strncpy_s(m_PopupInputBuffer, sizeof(m_PopupInputBuffer), entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
-									m_ShowCreateScriptableObjectModal = true;
-								}
-							}
-							ImGui::EndMenu();
-						}
-					}
-				}
+                    ImGui::EndMenu();
+                }
 
-				ImGui::EndMenu();
-			}
+                // ----- Scriptable Object submenu (dynamic, from [CreateAssetMenu]) -----
+                {
+                    ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
+                    const auto *menuEntries = scriptEngine
+                        ? &scriptEngine->GetScriptableObjectMenuEntries()
+                        : nullptr;
 
-			// Open file dialog to import assets into the current directory
-			if (ImGui::BeginMenu("Import"))
-			{
-				if (ImGui::MenuItem("Import to this current directory"))
-				{
-					SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
-						Application::GetInstance()->GetWindow()->GetWindowHandle(),
-						kExtFilters, IM_ARRAYSIZE(kExtFilters),
-						nullptr, true
-					);
-				}
-				ImGui::EndMenu();
-			}
+                    if (menuEntries && !menuEntries->empty())
+                    {
+                        ImGui::Separator();
+                        if (ImGui::BeginMenu("Scriptable Object"))
+                        {
+                            for (const auto &entry : *menuEntries)
+                            {
+                                const std::string &label = entry.menuName.empty() ? entry.className : entry.menuName;
+                                if (ImGui::MenuItem(label.c_str()))
+                                {
+                                    m_PendingScriptableObjectClassName = entry.className;
+                                    m_PendingScriptableObjectFileName = entry.fileName;
+                                    strncpy(m_PopupInputBuffer, entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                    // strncpy_s(m_PopupInputBuffer, sizeof(m_PopupInputBuffer), entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                    m_ShowCreateScriptableObjectModal = true;
+                                }
+                            }
+                            ImGui::EndMenu();
+                        }
+                    }
+                }
 
-			if (ImGui::BeginMenu("Thumbnail Size"))
-			{
-				if (ImGui::MenuItem("Small")) m_ThumbnailSize = 64;
-				if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 96;
-				if (ImGui::MenuItem("Large")) m_ThumbnailSize = 124;
-				ImGui::EndMenu();
-			}
+                ImGui::EndMenu();
+            }
+
+            // Open file dialog to import assets into the current directory
+            if (ImGui::BeginMenu("Import"))
+            {
+                if (ImGui::MenuItem("Import to this current directory"))
+                {
+                    SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                        Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                        kExtFilters, IM_ARRAYSIZE(kExtFilters),
+                        nullptr, true
+                    );
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Thumbnail Size"))
+            {
+                if (ImGui::MenuItem("Small")) m_ThumbnailSize = 64;
+                if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 72;
+                if (ImGui::MenuItem("Large")) m_ThumbnailSize = 96;
+                ImGui::EndMenu();
+            }
 
 #ifdef PLATFORM_WINDOWS
-			if (ImGui::MenuItem("Open in File Explorer"))
-			{
-				std::string command = std::format("explorer {}", m_CurrentDirectory.string());
-				std::system(command.c_str());
-			}
+            if (ImGui::MenuItem("Open in File Explorer"))
+            {
+                std::string command = std::format("explorer {}", m_CurrentDirectory.string());
+                std::system(command.c_str());
+            }
 #endif
-			ImGui::EndPopup();
-		}
-	}
+            ImGui::EndPopup();
+        }
+    }
 
-	void ContentBrowserPanel::UIRenderPopupModals()
-	{
-		// Create Folder Modal
-		if (m_ShowCreateFolderModal)
-		{
-			ImGui::OpenPopup("Create Folder");
-			m_ShowCreateFolderModal = false;
-		}
+    void ContentBrowserPanel::UIRenderPopupModals()
+    {
+        // Create Folder Modal
+        if (m_ShowCreateFolderModal)
+        {
+            ImGui::OpenPopup("Create Folder");
+            m_ShowCreateFolderModal = false;
+        }
 
-		if (ImGui::BeginPopupModal("Create Folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-		{
-			ImGui::Text("Create folder in: %s", m_CurrentDirectory.generic_string().c_str());
-			ImGui::Spacing();
-			const bool submitByEnter = ImGui::InputText("Folder Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+        if (ImGui::BeginPopupModal("Create Folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Create folder in: %s", m_CurrentDirectory.generic_string().c_str());
+            ImGui::Spacing();
+            const bool submitByEnter = ImGui::InputText("Folder Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
-			ImGui::Separator();
-			if (submitByEnter || ImGui::Button("Create"))
-			{
-				std::string name = m_PopupInputBuffer;
-				if (!name.empty())
-				{
-					ignite::Path newPath = m_CurrentDirectory / name;
-					if (!ignite::Path::exists(newPath))
-					{
-						std::error_code ec;
-						std::filesystem::create_directory(newPath.string(), ec);
-						if (!ec)
-						{
-							Application::SubmitToMainThread([this]() { RefreshFiles(); });
-						}
-					}
-				}
-				// clear
-				m_PopupInputBuffer[0] = '\0';
-				ImGui::CloseCurrentPopup();
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Cancel"))
-			{
-				m_PopupInputBuffer[0] = '\0';
-				ImGui::CloseCurrentPopup();
-			}
-			ImGui::EndPopup();
-		}
+            ImGui::Separator();
+            if (submitByEnter || ImGui::Button("Create"))
+            {
+                std::string name = m_PopupInputBuffer;
+                if (!name.empty())
+                {
+                    ignite::Path newPath = m_CurrentDirectory / name;
+                    if (!ignite::Path::exists(newPath))
+                    {
+                        std::error_code ec;
+                        std::filesystem::create_directory(newPath.string(), ec);
+                        if (!ec)
+                        {
+                            Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                        }
+                    }
+                }
+                // clear
+                m_PopupInputBuffer[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel"))
+            {
+                m_PopupInputBuffer[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
 
-		// Create C# Script Modal
-		if (m_ShowCreateScriptModal)
-		{
-			ImGui::OpenPopup("Create C# Script");
-			m_ShowCreateScriptModal = false;
-		}
+        // Create C# Script Modal
+        if (m_ShowCreateScriptModal)
+        {
+            ImGui::OpenPopup("Create C# Script");
+            m_ShowCreateScriptModal = false;
+        }
 
-		if (ImGui::BeginPopupModal("Create C# Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-		{
-			ImGui::Text("Create script in: %s", m_CurrentDirectory.generic_string().c_str());
-			ImGui::Spacing();
-			const bool submitByEnter = ImGui::InputText("Script Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+        if (ImGui::BeginPopupModal("Create C# Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Create script in: %s", m_CurrentDirectory.generic_string().c_str());
+            ImGui::Spacing();
+            const bool submitByEnter = ImGui::InputText("Script Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
-			ImGui::Separator();
-			if (submitByEnter || ImGui::Button("Create"))
-			{
-				std::string name = m_PopupInputBuffer;
-				if (!name.empty())
-				{
-					if (!name.ends_with(".cs")) name += ".cs";
-					ignite::Path newPath = m_CurrentDirectory / name;
-					if (!ignite::Path::exists(newPath))
-					{
-						m_EditorLayer->GetActiveProject()->CreateCSharpScript(newPath);
-						Application::SubmitToMainThread([this]() { RefreshFiles(); });
-					}
-				}
-				m_PopupInputBuffer[0] = '\0';
-				ImGui::CloseCurrentPopup();
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Cancel"))
-			{
-				m_PopupInputBuffer[0] = '\0';
-				ImGui::CloseCurrentPopup();
-			}
-			ImGui::EndPopup();
-		}
+            ImGui::Separator();
+            if (submitByEnter || ImGui::Button("Create"))
+            {
+                std::string name = m_PopupInputBuffer;
+                if (!name.empty())
+                {
+                    if (!name.ends_with(".cs")) name += ".cs";
+                    ignite::Path newPath = m_CurrentDirectory / name;
+                    if (!ignite::Path::exists(newPath))
+                    {
+                        m_EditorLayer->GetActiveProject()->CreateCSharpScript(newPath);
+                        Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                    }
+                }
+                m_PopupInputBuffer[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel"))
+            {
+                m_PopupInputBuffer[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
 
-		// Create Scriptable Object Modal
-		if (m_ShowCreateScriptableObjectModal)
-		{
-			ImGui::OpenPopup("Create Scriptable Object");
-			m_ShowCreateScriptableObjectModal = false;
-		}
+        // Create Scriptable Object Modal
+        if (m_ShowCreateScriptableObjectModal)
+        {
+            ImGui::OpenPopup("Create Scriptable Object");
+            m_ShowCreateScriptableObjectModal = false;
+        }
 
-		if (ImGui::BeginPopupModal("Create Scriptable Object", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-		{
-			ImGui::Text("Class: %s", m_PendingScriptableObjectClassName.c_str());
-			ImGui::Text("Location: %s", m_CurrentDirectory.generic_string().c_str());
-			ImGui::Spacing();
-			const bool submitByEnter = ImGui::InputText("Asset Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+        if (ImGui::BeginPopupModal("Create Scriptable Object", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Class: %s", m_PendingScriptableObjectClassName.c_str());
+            ImGui::Text("Location: %s", m_CurrentDirectory.generic_string().c_str());
+            ImGui::Spacing();
+            const bool submitByEnter = ImGui::InputText("Asset Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
-			ImGui::Separator();
-			if (submitByEnter || ImGui::Button("Create"))
-			{
-				const std::string assetName = m_PopupInputBuffer;
-				if (!assetName.empty() && !m_PendingScriptableObjectClassName.empty())
-				{
-					m_EditorLayer->GetActiveProject()->CreateScriptableObject(
-						m_PendingScriptableObjectClassName,
-						assetName,
-						m_CurrentDirectory);
+            ImGui::Separator();
+            if (submitByEnter || ImGui::Button("Create"))
+            {
+                const std::string assetName = m_PopupInputBuffer;
+                if (!assetName.empty() && !m_PendingScriptableObjectClassName.empty())
+                {
+                    m_EditorLayer->GetActiveProject()->CreateScriptableObject(
+                        m_PendingScriptableObjectClassName,
+                        assetName,
+                        m_CurrentDirectory);
 
-					Application::SubmitToMainThread([this]() { RefreshFiles(); });
-				}
-				m_PopupInputBuffer[0] = '\0';
-				m_PendingScriptableObjectClassName.clear();
-				m_PendingScriptableObjectFileName.clear();
-				ImGui::CloseCurrentPopup();
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Cancel"))
-			{
-				m_PopupInputBuffer[0] = '\0';
-				m_PendingScriptableObjectClassName.clear();
-				m_PendingScriptableObjectFileName.clear();
-				ImGui::CloseCurrentPopup();
-			}
-			ImGui::EndPopup();
-		}
+                    Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                }
+                m_PopupInputBuffer[0] = '\0';
+                m_PendingScriptableObjectClassName.clear();
+                m_PendingScriptableObjectFileName.clear();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel"))
+            {
+                m_PopupInputBuffer[0] = '\0';
+                m_PendingScriptableObjectClassName.clear();
+                m_PendingScriptableObjectFileName.clear();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
 
-		// Rename Modal
-		if (m_ShowRenameModal)
-		{
-			ImGui::OpenPopup("Rename Item");
-			m_ShowRenameModal = false;
-		}
+        // Rename Modal
+        if (m_ShowRenameModal)
+        {
+            ImGui::OpenPopup("Rename Item");
+            m_ShowRenameModal = false;
+        }
 
-		if (ImGui::BeginPopupModal("Rename Item", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-		{
+        if (ImGui::BeginPopupModal("Rename Item", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
             if (!m_SelectedItems.empty())
             {
-				// ONLY Support renaming a single item for now
-				// TODO: Support renaming multiple items at once (e.g., "NewName (1)", "NewName (2)", etc.)
-				auto &itemPath = m_SelectedItems.front();
+                // ONLY Support renaming a single item for now
+                // TODO: Support renaming multiple items at once (e.g., "NewName (1)", "NewName (2)", etc.)
+                auto &itemPath = m_SelectedItems.front();
 
-				ImGui::Text("Rename: %s", itemPath.filename().generic_string().c_str());
-				ImGui::Spacing();
-				const bool submitByEnter = ImGui::InputText("New Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+                ImGui::Text("Rename: %s", itemPath.filename().generic_string().c_str());
+                ImGui::Spacing();
+                const bool submitByEnter = ImGui::InputText("New Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
-				ImGui::Separator();
-				const bool submitByButton = ImGui::Button("Rename");
-				if (submitByEnter || submitByButton)
-				{
-					std::string newName = m_PopupInputBuffer;
-					if (!newName.empty())
-					{
-						ignite::Path target = itemPath;
-						const bool isDirectory = ignite::Path::is_directory(target);
-						if (!isDirectory && !target.extension().empty())
-						{
-							ignite::Path proposed(newName);
-							newName = proposed.stem().string();
-							if (!newName.empty())
-							{
-								newName += target.extension().string();
-							}
-						}
+                ImGui::Separator();
+                const bool submitByButton = ImGui::Button("Rename");
+                if (submitByEnter || submitByButton)
+                {
+                    std::string newName = m_PopupInputBuffer;
+                    if (!newName.empty())
+                    {
+                        ignite::Path target = itemPath;
+                        const bool isDirectory = ignite::Path::is_directory(target);
+                        if (!isDirectory && !target.extension().empty())
+                        {
+                            ignite::Path proposed(newName);
+                            newName = proposed.stem().string();
+                            if (!newName.empty())
+                            {
+                                newName += target.extension().string();
+                            }
+                        }
 
-						ignite::Path dest = target.parent_path() / newName;
+                        ignite::Path dest = target.parent_path() / newName;
 
-						std::error_code ec;
-						std::filesystem::rename(target.string(), dest.string(), ec);
-						if (!ec)
-						{
-							// Keep metadata/settings pair in sync.
-							const ignite::Path targetMeta = target.string() + ".meta";
-							const ignite::Path destMeta = dest.string() + ".meta";
-							if (ignite::Path::exists(targetMeta))
-							{
-								std::error_code ecMetaRename;
-								std::filesystem::rename(targetMeta.string(), destMeta.string(), ecMetaRename);
-							}
+                        std::error_code ec;
+                        std::filesystem::rename(target.string(), dest.string(), ec);
+                        if (!ec)
+                        {
+                            // Keep metadata/settings pair in sync.
+                            const ignite::Path targetMeta = target.string() + ".meta";
+                            const ignite::Path destMeta = dest.string() + ".meta";
+                            if (ignite::Path::exists(targetMeta))
+                            {
+                                std::error_code ecMetaRename;
+                                std::filesystem::rename(targetMeta.string(), destMeta.string(), ecMetaRename);
+                            }
 
-							Project *project = m_EditorLayer->GetActiveProject().get();
-							if (project && m_AssetManager)
-							{
-								const ignite::Path oldRelativePath = project->GetProjectFilepath(target);
-								const ignite::Path newRelativePath = project->GetProjectFilepath(dest);
+                            Project *project = m_EditorLayer->GetActiveProject().get();
+                            if (project && m_AssetManager)
+                            {
+                                const ignite::Path oldRelativePath = project->GetProjectFilepath(target);
+                                const ignite::Path newRelativePath = project->GetProjectFilepath(dest);
 
-								if (isDirectory)
-								{
-									auto &registry = m_AssetManager->GetAssetAssetRegistry();
-									for (const auto &[handle, metadata] : registry)
-									{
-										if (handle == AssetHandle(0) || metadata.filepath.empty() || !IsPathWithin(metadata.filepath.string(), oldRelativePath.string()))
-										{
-											continue;
-										}
+                                if (isDirectory)
+                                {
+                                    auto &registry = m_AssetManager->GetAssetAssetRegistry();
+                                    for (const auto &[handle, metadata] : registry)
+                                    {
+                                        if (handle == AssetHandle(0) || metadata.filepath.empty() || !IsPathWithin(metadata.filepath.string(), oldRelativePath.string()))
+                                        {
+                                            continue;
+                                        }
 
-										AssetMetaData updatedMetadata = metadata;
-										updatedMetadata.filepath = RebasePath(metadata.filepath.string(), oldRelativePath.string(), newRelativePath.string());
-										m_AssetManager->AssignMetaData(handle, updatedMetadata);
-									}
-								}
-								else
-								{
-									const AssetHandle existingHandle = m_AssetManager->GetAssetHandle(oldRelativePath);
-									if (existingHandle != AssetHandle(0))
-									{
-										AssetMetaData metadata = m_AssetManager->GetMetaData(existingHandle);
-										metadata.filepath = newRelativePath;
-										m_AssetManager->AssignMetaData(existingHandle, metadata);
-									}
-								}
-							}
+                                        AssetMetaData updatedMetadata = metadata;
+                                        updatedMetadata.filepath = RebasePath(metadata.filepath.string(), oldRelativePath.string(), newRelativePath.string());
+                                        m_AssetManager->AssignMetaData(handle, updatedMetadata);
+                                    }
+                                }
+                                else
+                                {
+                                    const AssetHandle existingHandle = m_AssetManager->GetAssetHandle(oldRelativePath);
+                                    if (existingHandle != AssetHandle(0))
+                                    {
+                                        AssetMetaData metadata = m_AssetManager->GetMetaData(existingHandle);
+                                        metadata.filepath = newRelativePath;
+                                        m_AssetManager->AssignMetaData(existingHandle, metadata);
+                                    }
+                                }
+                            }
 
-							Application::SubmitToMainThread([this]() { RefreshFiles(); });
-						}
-					}
-					m_PopupInputBuffer[0] = '\0';
-					ImGui::CloseCurrentPopup();
-				}
+                            Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                        }
+                    }
+                    m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
 
-				ImGui::SameLine();
-				if (ImGui::Button("Cancel"))
-				{
-					m_PopupInputBuffer[0] = '\0';
-					ImGui::CloseCurrentPopup();
-				}
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                {
+                    m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
             }
-			
-			ImGui::EndPopup();
-		}
+            
+            ImGui::EndPopup();
+        }
 
-		// Delete Confirmation Modal
-		if (m_ShowDeleteModal)
-		{
-			ImGui::OpenPopup("Delete Item");
-			m_ShowDeleteModal = false;
-		}
+        // Delete Confirmation Modal
+        if (m_ShowDeleteModal)
+        {
+            ImGui::OpenPopup("Delete Item");
+            m_ShowDeleteModal = false;
+        }
 
-		if (ImGui::BeginPopupModal("Delete Item", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-		{
+        if (ImGui::BeginPopupModal("Delete Item", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
             const size_t itemCount = m_SelectedItems.size();
 
             ImGui::Text("Are you sure you want to delete: %zu item(s) ?", itemCount);
-			ImGui::Spacing();
-			ImGui::Separator();
+            ImGui::Spacing();
+            ImGui::Separator();
 
-			for (const auto &item : m_SelectedItems)
-			{
+            for (const auto &item : m_SelectedItems)
+            {
                 const auto filename = item.filename().generic_string();
-				ImGui::Text("%s", filename.c_str());
-			}
+                ImGui::Text("%s", filename.c_str());
+            }
 
             ImGui::Spacing();
             ImGui::Separator();
 
-			if (ImGui::Button("Delete"))
-			{
-				bool genCSProjectRequested = false;
+            if (ImGui::Button("Delete"))
+            {
+                bool genCSProjectRequested = false;
 
                 for (const auto &itemPath : m_SelectedItems)
                 {
-					std::error_code ec;
-					if (ignite::Path::is_directory(itemPath))
-					{
-						auto project = m_EditorLayer->GetActiveProject();
+                    std::error_code ec;
+                    if (ignite::Path::is_directory(itemPath))
+                    {
+                        auto project = m_EditorLayer->GetActiveProject();
 
-						if (project && m_AssetManager)
-						{
-							for (const auto &entry : std::filesystem::recursive_directory_iterator(itemPath.string()))
-							{
-								if (!entry.is_regular_file())
-									continue;
+                        if (project && m_AssetManager)
+                        {
+                            for (const auto &entry : std::filesystem::recursive_directory_iterator(itemPath.string()))
+                            {
+                                if (!entry.is_regular_file())
+                                    continue;
 
-								const ignite::Path &filePath = entry.path().string();
+                                const ignite::Path &filePath = entry.path().string();
 
-								const ignite::Path relativePath = project->GetProjectFilepath(filePath);
-								const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
+                                const ignite::Path relativePath = project->GetProjectFilepath(filePath);
+                                const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
 
-								if (handle != AssetHandle(0))
-								{
-									m_AssetManager->UnloadAsset(handle);
-									m_AssetManager->RemoveAsset(handle);
-								}
+                                if (handle != AssetHandle(0))
+                                {
+                                    m_AssetManager->UnloadAsset(handle);
+                                    m_AssetManager->RemoveAsset(handle);
+                                }
 
-								// Also remove .meta from asset system if needed
-								if (filePath.extension() != ".meta")
-								{
-									ignite::Path metaPath = filePath.string() + ".meta";
-									if (ignite::Path::exists(metaPath))
-									{
-										const ignite::Path metaRelative = project->GetProjectFilepath(metaPath);
-										const AssetHandle metaHandle = m_AssetManager->GetAssetHandle(metaRelative);
+                                // Also remove .meta from asset system if needed
+                                if (filePath.extension() != ".meta")
+                                {
+                                    ignite::Path metaPath = filePath.string() + ".meta";
+                                    if (ignite::Path::exists(metaPath))
+                                    {
+                                        const ignite::Path metaRelative = project->GetProjectFilepath(metaPath);
+                                        const AssetHandle metaHandle = m_AssetManager->GetAssetHandle(metaRelative);
 
-										if (metaHandle != AssetHandle(0))
-										{
-											m_AssetManager->UnloadAsset(metaHandle);
-											m_AssetManager->RemoveAsset(metaHandle);
-										}
-									}
-								}
-							}
-						}
+                                        if (metaHandle != AssetHandle(0))
+                                        {
+                                            m_AssetManager->UnloadAsset(metaHandle);
+                                            m_AssetManager->RemoveAsset(metaHandle);
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-						std::filesystem::remove_all(itemPath.string(), ec);
-					}
-					else
-					{
-						std::filesystem::remove(itemPath.string(), ec);
+                        std::filesystem::remove_all(itemPath.string(), ec);
+                    }
+                    else
+                    {
+                        std::filesystem::remove(itemPath.string(), ec);
 
-						const ignite::Path metaPath = itemPath.string() + ".meta";
-						if (ignite::Path::exists(metaPath))
-						{
-							std::error_code metaEc;
-							std::filesystem::remove(metaPath.string(), metaEc);
-						}
+                        const ignite::Path metaPath = itemPath.string() + ".meta";
+                        if (ignite::Path::exists(metaPath))
+                        {
+                            std::error_code metaEc;
+                            std::filesystem::remove(metaPath.string(), metaEc);
+                        }
 
-						Project *project = m_EditorLayer->GetActiveProject().get();
-						if (project && m_AssetManager)
-						{
-							const ignite::Path relativePath = project->GetProjectFilepath(itemPath);
-							const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
-							if (handle != AssetHandle(0))
-							{
-								m_AssetManager->UnloadAsset(handle);
-								m_AssetManager->RemoveAsset(handle);
-							}
-						}
-					}
+                        Project *project = m_EditorLayer->GetActiveProject().get();
+                        if (project && m_AssetManager)
+                        {
+                            const ignite::Path relativePath = project->GetProjectFilepath(itemPath);
+                            const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
+                            if (handle != AssetHandle(0))
+                            {
+                                m_AssetManager->UnloadAsset(handle);
+                                m_AssetManager->RemoveAsset(handle);
+                            }
+                        }
+                    }
 
-					if (!ec)
-					{
-						if (itemPath.extension().string() == ".cs")
-						{
+                    if (!ec)
+                    {
+                        if (itemPath.extension().string() == ".cs")
+                        {
                             genCSProjectRequested = true;
-						}
-					}
+                        }
+                    }
                 }
 
-				if (genCSProjectRequested)
-				{
-					m_EditorLayer->GetActiveProject()->RegenerateCSharpProject();
-				}
+                if (genCSProjectRequested)
+                {
+                    m_EditorLayer->GetActiveProject()->RegenerateCSharpProject();
+                }
 
-				Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                Application::SubmitToMainThread([this]() { RefreshFiles(); });
 
-				ImGui::CloseCurrentPopup();
-			}
+                ImGui::CloseCurrentPopup();
+            }
 
-			ImGui::SameLine();
-			if (ImGui::Button("Cancel"))
-			{
-				ImGui::CloseCurrentPopup();
-			}
-			ImGui::EndPopup();
-		}
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel"))
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
 
-		if (m_ShowMoveCopyPopup)
-		{
-			ImGui::OpenPopup("Move/Copy Item");
-			m_ShowMoveCopyPopup = false;
-		}
+        if (m_ShowMoveCopyPopup)
+        {
+            ImGui::OpenPopup("Move/Copy Item");
+            m_ShowMoveCopyPopup = false;
+        }
 
-		if (ImGui::BeginPopup("Move/Copy Item"))
-		{
-			const size_t sourceCount = m_PendingDragDropSources.size();
-			if (sourceCount == 1)
-			{
-				ImGui::Text("%s", m_PendingDragDropSources.front().filename().generic_string().c_str());
-			}
-			else
-			{
-				ImGui::Text("%zu items", sourceCount);
-			}
+        if (ImGui::BeginPopup("Move/Copy Item"))
+        {
+            const size_t sourceCount = m_PendingDragDropSources.size();
+            if (sourceCount == 1)
+            {
+                ImGui::Text("%s", m_PendingDragDropSources.front().filename().generic_string().c_str());
+            }
+            else
+            {
+                ImGui::Text("%zu items", sourceCount);
+            }
 
-			ImGui::TextDisabled("to %s", m_PendingDragDropTargetDirectory.filename().generic_string().c_str());
-			ImGui::Separator();
+            ImGui::TextDisabled("to %s", m_PendingDragDropTargetDirectory.filename().generic_string().c_str());
+            ImGui::Separator();
 
-			if (ImGui::MenuItem("Move"))
-			{
-				MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, true);
-				m_PendingDragDropSources.clear();
-				m_PendingDragDropTargetDirectory.clear();
-				ImGui::CloseCurrentPopup();
-			}
+            if (ImGui::MenuItem("Move"))
+            {
+                MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, true);
+                m_PendingDragDropSources.clear();
+                m_PendingDragDropTargetDirectory.clear();
+                ImGui::CloseCurrentPopup();
+            }
 
-			if (ImGui::MenuItem("Copy"))
-			{
-				MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, false);
-				m_PendingDragDropSources.clear();
-				m_PendingDragDropTargetDirectory.clear();
-				ImGui::CloseCurrentPopup();
-			}
+            if (ImGui::MenuItem("Copy"))
+            {
+                MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, false);
+                m_PendingDragDropSources.clear();
+                m_PendingDragDropTargetDirectory.clear();
+                ImGui::CloseCurrentPopup();
+            }
 
-			ImGui::EndPopup();
-		}
-		else if (!m_PendingDragDropSources.empty())
-		{
-			m_PendingDragDropSources.clear();
-			m_PendingDragDropTargetDirectory.clear();
-		}
-	}
+            ImGui::EndPopup();
+        }
+        else if (!m_PendingDragDropSources.empty())
+        {
+            m_PendingDragDropSources.clear();
+            m_PendingDragDropTargetDirectory.clear();
+        }
+    }
 
-	void ContentBrowserPanel::RefreshEntryPathList()
+    void ContentBrowserPanel::RefreshEntryPathList()
     {
         if (!m_PathEntryList.empty())
         {
@@ -1373,7 +1418,7 @@ namespace ignite
         const bool isHovered = ImGui::IsItemHovered();
         const bool isSelected = std::ranges::find(m_SelectedItems, path) != m_SelectedItems.end();
 
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && ImGui::IsItemHovered())
         {
             UpdateSelection(path);
             m_SelectedFileTree = path;
@@ -1381,7 +1426,7 @@ namespace ignite
 
         const ImU32 buttonColor = (isActive
             ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
-            : (isHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : ImGui::GetColorU32(ImGuiCol_Button)));
+            : (isHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : 0x0));
 
         drawList->AddRectFilled(buttonMin, buttonMax, buttonColor, ImGui::GetStyle().FrameRounding);
 
@@ -1489,30 +1534,30 @@ namespace ignite
 
             // Actions
             {
-				// Rename
-				if (ImGui::MenuItem("Rename"))
-				{
-					// prefill buffer with filename
-					std::string fname = ignite::Path::is_directory(path) ? path.filename().generic_string() : path.stem().generic_string();
-					std::strncpy(m_PopupInputBuffer, fname.c_str(), sizeof(m_PopupInputBuffer) - 1);
-					m_ShowRenameModal = true;
-				}
+                // Rename
+                if (ImGui::MenuItem("Rename"))
+                {
+                    // prefill buffer with filename
+                    std::string fname = ignite::Path::is_directory(path) ? path.filename().generic_string() : path.stem().generic_string();
+                    std::strncpy(m_PopupInputBuffer, fname.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                    m_ShowRenameModal = true;
+                }
 
-				if (!isDirectory && ImGui::MenuItem("Duplicate"))
-				{
+                if (!isDirectory && ImGui::MenuItem("Duplicate"))
+                {
                     // TODO: Implement duplicate for multiple items
-					DuplicateItem(path);
-				}
+                    DuplicateItem(path);
+                }
 
-				// Delete
-				if (ImGui::MenuItem("Delete"))
-				{
-					m_ShowDeleteModal = true;
-				}
+                // Delete
+                if (ImGui::MenuItem("Delete"))
+                {
+                    m_ShowDeleteModal = true;
+                }
             }
             
 
-			// Special actions for certain asset types
+            // Special actions for certain asset types
             if (!isDirectory)
             {
                 switch (itemAssetType)
@@ -1581,7 +1626,7 @@ namespace ignite
 
                                         if (DispatchOpenAssetEditorEvent(montageHandle, montageMetaData))
                                         {
-											Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                                            Application::SubmitToMainThread([this]() { RefreshFiles(); });
                                         }
                                     }
                                 }
@@ -1770,9 +1815,28 @@ namespace ignite
 
         if (DispatchOpenAssetEditorEvent(duplicateHandle, duplicateMetadata))
         {
-			Application::SubmitToMainThread([this]() { RefreshFiles(); });
+            Application::SubmitToMainThread([this]() { RefreshFiles(); });
         }
         return true;
+    }
+
+    void ContentBrowserPanel::CreateNewPrefab()
+    {
+        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+        if (!project)
+            return;
+
+        ignite::Path targetPath = BuildUniqueSiblingPath(m_CurrentDirectory / "NewPrefab.ixprefab");
+        Ref<Prefab> prefab = CreateRef<Prefab>(project);
+
+        Entity rootEntity = SceneManager::CreateEntity(prefab->GetPrefabScene().get(), "NewPrefab", EntityType_Node);
+        prefab->SetRootEntityUUID(rootEntity.GetUUID());
+
+        if (prefab->Serialize(targetPath))
+        {
+            m_AssetManager->ImportAsset(targetPath);
+            RefreshFiles();
+        }
     }
 
     void ContentBrowserPanel::UpdateSelection(const ignite::Path &filepath)
@@ -1894,14 +1958,14 @@ namespace ignite
             return false;
         }
 
-		// Prevent moving/copying a directory into one of its child directories
+        // Prevent moving/copying a directory into one of its child directories
         if (ignite::Path::is_directory(sourcePath) && IsPathWithin(targetDirectory.string(), sourcePath.string()))
         {
             LOG_WARN("[Content Browser] Cannot move/copy '{}' into one of its child directories '{}'.", sourcePath.generic_string(), targetDirectory.generic_string());
             return false;
         }
 
-		// Check if the source and target directories are the same
+        // Check if the source and target directories are the same
         std::error_code equivalentError;
         const bool sameDirectory = std::filesystem::equivalent(sourcePath.parent_path().string(), targetDirectory.string(), equivalentError);
         if (!equivalentError && sameDirectory && moveItem)
@@ -1909,7 +1973,7 @@ namespace ignite
             return false;
         }
 
-		// Determine the destination path and ensure it is unique
+        // Determine the destination path and ensure it is unique
         ignite::Path destinationPath = targetDirectory / sourcePath.filename();
         if (ignite::Path::exists(destinationPath))
         {
@@ -1917,7 +1981,7 @@ namespace ignite
         }
 
 
-		// Perform the move or copy operation
+        // Perform the move or copy operation
         const bool sourceIsDirectory = ignite::Path::is_directory(sourcePath);
         const ignite::Path oldRelativePath = project->GetProjectRelativeFilepath(sourcePath);
         const ignite::Path newRelativePath = project->GetProjectRelativeFilepath(destinationPath);
@@ -1926,7 +1990,7 @@ namespace ignite
         // - MOVE
         if (moveItem)
         {
-			// Move the source path to the destination path
+            // Move the source path to the destination path
             std::filesystem::rename(sourcePath.string(), destinationPath.string(), ec);
             if (ec)
             {
@@ -1934,20 +1998,20 @@ namespace ignite
                 return false;
             }
 
-			// Move the sidecar metadata/settings if present
+            // Move the sidecar metadata/settings if present
             if (sourceIsDirectory)
             {
                 auto &registry = m_AssetManager->GetAssetAssetRegistry();
                 for (const auto &[assetHandle, metadata] : registry)
                 {
-					// Update the metadata for assets that are within the moved directory
+                    // Update the metadata for assets that are within the moved directory
                     if (assetHandle == AssetHandle(0) || metadata.filepath.empty() || !IsPathWithin(metadata.filepath.string(), oldRelativePath.string()))
                     {
                         continue;
                     }
 
-					auto rebasedPath = RebasePath(metadata.filepath.string(), oldRelativePath.string(), newRelativePath.string());
-					LOG_WARN("[Content Browser] AssetHandle {} metadata updated:", static_cast<uint64_t>(assetHandle));
+                    auto rebasedPath = RebasePath(metadata.filepath.string(), oldRelativePath.string(), newRelativePath.string());
+                    LOG_WARN("[Content Browser] AssetHandle {} metadata updated:", static_cast<uint64_t>(assetHandle));
                     LOG_TRACE("[Content Browser]\tOld Filepath: '{}'", metadata.filepath.generic_string());
                     LOG_TRACE("[Content Browser]\tNew Filepath: '{}'", rebasedPath);
 
@@ -1958,7 +2022,7 @@ namespace ignite
             }
             else
             {
-				// Move the sidecar metadata/settings if present
+                // Move the sidecar metadata/settings if present
                 const ignite::Path sourceMetaPath = sourcePath.string() + ".meta";
                 const ignite::Path destinationMetaPath = destinationPath.string() + ".meta";
                 if (ignite::Path::exists(sourceMetaPath))
@@ -2039,7 +2103,7 @@ namespace ignite
         if (changed)
         {
             m_EditorLayer->SaveProject();
-			Application::SubmitToMainThread([this]() { RefreshFiles(); });
+            Application::SubmitToMainThread([this]() { RefreshFiles(); });
         }
 
         return changed;
@@ -2051,13 +2115,12 @@ namespace ignite
 
         const ImGuiStyle &style = ImGui::GetStyle();
 
-        const auto navbarBtSize = ImVec2(32.0f, 24.0f);
-        const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
-
-        if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarHeight), ImGuiChildFlags_Borders))
+        const auto navbarBtSize = ImVec2(38.0f, 32.0f);
+        // const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
+        if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarBtSize.y), ImGuiChildFlags_Borders))
         {
             ImTextureID arrow = (ImTextureID)s_SharedIcons["arrow"]->GetHandle().Get();
-            if (ImGui::ImageButton("##bw_arrow", arrow, navbarBtSize))
+            if (UI::DrawImageButton("##bw_arrow", arrow, navbarBtSize))
             {
                 if (!m_BackwardPathStack.empty())
                 {
@@ -2075,8 +2138,8 @@ namespace ignite
                 }
             }
 
-            ImGui::SameLine();
-            if (ImGui::ImageButton("##fw_arrow", arrow, navbarBtSize, {1.0f, 0.0f}, { 0.0f, 1.0f }))
+            ImGui::SameLine(0.0f, 4.0f);
+            if (UI::DrawImageButton("##fw_arrow", arrow, navbarBtSize, {1.0f, 0.0f}, { 0.0f, 1.0f }))
             {
                 if (!m_ForwardPathStack.empty())
                 {
@@ -2094,10 +2157,9 @@ namespace ignite
                 }
             }
 
-            ImGui::SameLine();
-
+            ImGui::SameLine(0.0f, 4.0f);
             ImTextureID refreshBt = (ImTextureID)s_SharedIcons["roll"]->GetHandle().Get();
-            if (ImGui::ImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
+            if (UI::DrawImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
             {
                 m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
                 PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
@@ -2403,7 +2465,7 @@ namespace ignite
             payload.status = FileStatus::Pending;
             payload.type = ImportType::Import;
             payload.metadata.filepath = std::string(*file);
-			payload.metadata.type = GetAssetTypeFromExtension(ignite::Path(*file).extension().string());
+            payload.metadata.type = GetAssetTypeFromExtension(ignite::Path(*file).extension().string());
             filePayloads.emplace_back(payload);
         }
 

@@ -1,0 +1,9 @@
+[package]
+name = "ignite_project"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ignite_asset = { path = "../ignite_asset" }
+ignite_ecs = { path = "../ignite_ecs" }
+serde = { workspace = true }

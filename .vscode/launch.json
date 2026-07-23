@@ -1,30 +1,67 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch IgniteEditorV2",
-            "type":"cppdbg",
-            "request":"launch",
-            "program": "${workspaceRoot}/build/windows-vs2022/bin/Debug/IgniteEditorV2.exe",
-            "cwd": "${fileDirname}",
+            "name": "Launch Ignite.Editor (Debug)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Debug/Ignite.Editor.exe",
+            "cwd": "${workspaceFolder}/ignite/editor",
             "externalConsole": false,
-            "args": [
-                ""
-            ],
+            "stopAtEntry": false,
+            "preLaunchTask": "Build Editor (Debug)"
         },
         {
-            "name": "Launch IgniteEditor",
-            "type":"cppdbg",
-            "request":"launch",
-            "program": "${workspaceRoot}/build/windows-vs2022/bin/Debug/IgniteEditor.exe",
-            "cwd": "${fileDirname}",
+            "name": "Attach C# (.NET Core)",
+            "type": "coreclr",
+            "request": "attach",
+            "processName": "Ignite.Editor.exe",
+            "justMyCode": false,
+            "symbolOptions": {
+                "searchPaths": [
+                    "${workspaceFolder}/bin/Debug"
+                ],
+                "searchMicrosoftSymbolServer": false
+            },
+            "sourceFileMap": {
+                "d:\\Dev\\Ignite": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Attach C# (Pick Process)",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}",
+            "justMyCode": false,
+            "symbolOptions": {
+                "searchPaths": [
+                    "${workspaceFolder}/bin/Debug"
+                ],
+                "searchMicrosoftSymbolServer": false
+            },
+            "sourceFileMap": {
+                "d:\\Dev\\Ignite": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Launch Ignite.Editor (Release)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Release/Ignite.Editor.exe",
+            "cwd": "${workspaceFolder}/ignite/editor",
             "externalConsole": false,
-            "args": [
-                ""
-            ],
+            "stopAtEntry": false,
+            "preLaunchTask": "Build Editor (Release)"
+        },
+        {
+            "name": "Launch Ignite.Test (Debug)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Debug/Ignite.Test.exe",
+            "cwd": "${workspaceFolder}/ignite/test",
+            "externalConsole": false,
+            "stopAtEntry": false,
+            "preLaunchTask": "Build Test (Debug)"
         }
     ]
 }

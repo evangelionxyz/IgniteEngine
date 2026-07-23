@@ -13,7 +13,7 @@ namespace ignite::UI
         float minZoom = 0.35f;
         float maxZoom = 2.5f;
         float gridStep = 32.0f;
-        float cornerRounding = 10.0f;
+        float cornerRounding = 0.0f;
         ImU32 backgroundColor = IM_COL32(24, 27, 33, 255);
         ImU32 borderColor = IM_COL32(58, 64, 74, 255);
         ImU32 gridColor = IM_COL32(44, 49, 58, 180);

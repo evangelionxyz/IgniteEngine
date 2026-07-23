@@ -12,6 +12,7 @@
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 
+#include "ignite_rs/core.h"
 #include <fbxsdk.h>
 
 namespace ignite
@@ -268,21 +269,19 @@ namespace ignite
             const ignite::Path absoluteMetadataPath = LockActiveProject()->GetProjectFilepath(metadata.filepath);
             m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
         }
+
+        // Sync metadata with Rust AssetManager backend
+        ignite_rs_asset_assign_metadata(static_cast<uint64_t>(handle), metadata.filepath.generic_string().c_str(), static_cast<AssetType_RS>(metadata.type));
     }
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
     {
-        if (handle == AssetHandle(0))
-        {
-            return "None";
-        }
+		if (!IsAssetHandleValid(handle))
+			return "None";
 
         const AssetMetaData &metadata = GetMetaData(handle);
         if (!metadata.filepath.empty())
-        {
             return metadata.filepath.filename().string();
-        }
-
         return std::format("Handle {}", static_cast<uint64_t>(handle));
     }
 
@@ -303,6 +302,9 @@ namespace ignite
 
             m_AssetRegistry.erase(it);
         }
+
+        // Sync removal with Rust AssetManager backend
+        ignite_rs_asset_remove_metadata(static_cast<uint64_t>(handle));
     }
 
     void AssetManager::LoadAssetAsync(AssetHandle handle)
@@ -327,6 +329,7 @@ namespace ignite
         if (ownedAssets.insert(handle).second)
         {
             ++m_AssetPinCounts[handle];
+            ignite_rs_asset_pin(static_cast<uint64_t>(handle));
         }
     }
 
@@ -368,6 +371,8 @@ namespace ignite
         {
             --pinIt->second;
         }
+
+        ignite_rs_asset_unpin(static_cast<uint64_t>(handle));
     }
 
     void AssetManager::ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles)
@@ -726,12 +731,13 @@ namespace ignite
 
         Ref<Asset> asset;
 
+        bool isValidType = false;
         AssetMetaData getterMetadata = metadata;
         switch (getterMetadata.type)
         {
             case AssetType::Invalid:
             {
-                LOG_ERROR("[Asset Manager] Invalid asset type!");
+                LOG_ASSERT(false, "[Asset Manager] Invalid asset type!");
                 return nullptr;
             }
 
@@ -742,6 +748,7 @@ namespace ignite
             case AssetType::Font:
             case AssetType::Material:
             case AssetType::Material2D:
+            case AssetType::BlendSpace:
             case AssetType::Widget:
             case AssetType::Animation2D:
             case AssetType::SpriteSheet:
@@ -749,12 +756,16 @@ namespace ignite
             case AssetType::AnimatorController:
             case AssetType::AnimatorController2D:
             case AssetType::ScriptableObject:
+            case AssetType::Prefab:
             {
+                isValidType = true;
+
                 asset = AssetImporter::Import(handle, getterMetadata, this);
                 {
                     std::unique_lock lock(m_AssetMutex);
                     if (m_LoadedAssets.contains(handle))
                     {
+                        isValidType = true;
                         return m_LoadedAssets[handle];
                     }
                 }
@@ -765,6 +776,8 @@ namespace ignite
             case AssetType::Scene:
             case AssetType::Texture:
             {
+                isValidType = true;
+
                 if (getterMetadata.type == AssetType::Texture)
                 {
 					if (auto project = LockActiveProject())
@@ -789,6 +802,7 @@ namespace ignite
                     std::unique_lock lock(m_AssetMutex);
                     if (m_LoadedAssets.contains(handle))
                     {
+                        isValidType = true;
                         return m_LoadedAssets[handle];
                     }
                 }
@@ -797,11 +811,7 @@ namespace ignite
             }
         }
 
-        if (asset && asset->GetAssetType() != AssetType::Texture)
-        {
-            asset->SetReadyFlag(true);
-        }
-
+		LOG_ASSERT(isValidType, "[Asset Manager] Failed to import asset, please check the AssetType: {}", getterMetadata.filepath.generic_string());
         return asset;
     }
 }

@@ -217,6 +217,24 @@ namespace ignite
         void (*CapsuleColliderComponent_SetRadius)(uint64_t entityID, float value);
         void (*CapsuleColliderComponent_GetHeight)(uint64_t entityID, float *result);
         void (*CapsuleColliderComponent_SetHeight)(uint64_t entityID, float value);
+
+        // AnimatorComponent (SkeletalMeshComponent / AnimatorController)
+        void (*AnimatorComponent_SetFloat)(uint64_t entityID, const char *paramName, float value);
+        void (*AnimatorComponent_GetFloat)(uint64_t entityID, const char *paramName, float *result);
+        void (*AnimatorComponent_SetInt)(uint64_t entityID, const char *paramName, int32_t value);
+        void (*AnimatorComponent_GetInt)(uint64_t entityID, const char *paramName, int32_t *result);
+        void (*AnimatorComponent_SetBool)(uint64_t entityID, const char *paramName, bool value);
+        void (*AnimatorComponent_GetBool)(uint64_t entityID, const char *paramName, bool *result);
+        void (*AnimatorComponent_SetString)(uint64_t entityID, const char *paramName, const char *value);
+        void (*AnimatorComponent_GetString)(uint64_t entityID, const char *paramName, const char **result);
+        void (*AnimatorComponent_SetState)(uint64_t entityID, const char *stateName);
+        void (*AnimatorComponent_GetCurrentStateName)(uint64_t entityID, const char **result);
+
+        // AnimationMontage
+        int32_t (*AnimationMontage_GetNotifyCallbackCount)(uint64_t montageHandle);
+        bool (*AnimationMontage_GetNotifyCallbackAt)(uint64_t montageHandle, int32_t index, float *outTimestep, uint8_t *outActionType, const char **outName);
+        void (*AnimationMontage_AddNotifyCallback)(uint64_t montageHandle, float timestep, uint8_t actionType, const char *name);
+        void (*AnimationMontage_RemoveNotifyCallback)(uint64_t montageHandle, int32_t index);
     };
 
     class ComponentScriptGlue

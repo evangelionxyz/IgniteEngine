@@ -67,7 +67,6 @@ def run():
     else:
         dp.install_fbx_sdk(DOWNLOADS_DIR)
 
-    dp.build_sdl3()
     premake_binary = dp.install_premake5(DOWNLOADS_DIR)
 
     # Always generate project files regardless of whether deps were freshly installed.

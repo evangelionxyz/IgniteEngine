@@ -128,12 +128,14 @@ namespace ignite
                         std::stringstream ss;
                         ss << std::this_thread::get_id();
                         unsigned long long threadId = std::stoull(ss.str());
-                        LOG_TRACE("[Asset Manager] Asset loaded on worker thread [{0}]: {1} ({2})", threadId, static_cast<uint64_t>(handle), metadata.filepath.generic_string());
+                        LOG_TRACE("[Asset Manager] Asset loaded on worker thread [{0}]: {1} ({2})",
+                            threadId, static_cast<uint64_t>(handle), metadata.filepath.generic_string());
                     }
                 }
                 catch (const std::exception &e)
                 {
-                    LOG_ERROR("[Asset Manager] Failed to import asset {} \"{}\": {}", static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
+                    LOG_ASSERT(false, "[Asset Manager] Failed to import asset {} \"{}\": {}",
+                        static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
                 }
 
                 {

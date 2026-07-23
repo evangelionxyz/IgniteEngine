@@ -49,6 +49,9 @@ if not FBX_SDK_PATH then
 end
 print("FBX_SDK path: " .. tostring(FBX_SDK_PATH))
 
+-- SDL3 Dir
+SDL3_SOURCE_DIR = "%{wks.location}/thirdparty/SDL3"
+
 --includedirs
 IncludeDir                          = {}
 IncludeDir["ASSIMP"]                = "%{THIRDPARTY_DIR}/ASSIMP/include"

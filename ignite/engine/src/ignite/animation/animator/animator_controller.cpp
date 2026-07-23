@@ -7,6 +7,8 @@
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/blend_space.hpp"
+#include "ignite/audio/fmod_sound.hpp"
 #include "ignite/core/logger.hpp"
 
 #pragma warning(push)
@@ -21,15 +23,30 @@ namespace ignite
 {
     AnimState::~AnimState()
     {
-		AssetManager::GetInstance()->RemoveAssetPin(m_AnimHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
+		AssetManager::GetInstance()->RemoveAssetPin(m_MotionHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MotionHandle));
     }
 
 	void AnimState::SetAnimationHandle(const AssetHandle &animationHandle)
 	{
-        m_AnimHandle = animationHandle;
-		if (m_AnimHandle != AssetHandle(0) || m_UUID != UUID(0))
-            AssetManager::GetInstance()->AddAssetPin(m_AnimHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
+		SetMotion(MotionType::SkeletalAnimation, animationHandle);
 	}
+
+    void AnimState::SetBlendSpaceHandle(const AssetHandle &blendSpaceHandle)
+    {
+        SetMotion(MotionType::BlendSpace, blendSpaceHandle);
+    }
+
+    void AnimState::SetMotion(MotionType type, const AssetHandle &motionHandle)
+    {
+        if (m_MotionHandle != AssetHandle(0))
+            AssetManager::GetInstance()->RemoveAssetPin(m_MotionHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MotionHandle));
+
+        m_MotionType = type;
+        m_MotionHandle = motionHandle;
+        
+        if (m_MotionHandle != AssetHandle(0))
+            AssetManager::GetInstance()->AddAssetPin(m_MotionHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MotionHandle));
+    }
 
 	AnimatorController::~AnimatorController()
 	{
@@ -48,7 +65,7 @@ namespace ignite
 		for (auto &state : cloneAnim->states)
 		{
             // re assign to add asset pin
-            state.SetAnimationHandle(state.GetAnimationAssetHandle());
+			state.SetMotion(state.GetMotionType(), state.GetMotionHandle());
 		}
         return cloneAnim;
 	}
@@ -61,6 +78,12 @@ namespace ignite
 	}
 
 	std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
+    {
+        const AnimTransition *matching = FindMatchingTransition(currentState, normalizedTime);
+        return matching ? matching->toState : std::string{};
+    }
+
+    const AnimTransition *AnimatorController::FindMatchingTransition(const std::string &currentState, float normalizedTime) const
     {
         for (const auto &tr : transitions)
         {
@@ -102,10 +125,10 @@ namespace ignite
             }
 
             if (allPass)
-                return tr.toState;
+                return &tr;
         }
 
-        return {};
+        return nullptr;
     }
 
     AnimState *AnimatorController::FindState(const std::string &name)
@@ -133,6 +156,9 @@ namespace ignite
         {
             out << YAML::BeginMap;
             out << YAML::Key << "Name" << YAML::Value << s.name;
+            out << YAML::Key << "MotionType" << YAML::Value << (s.GetMotionType() == AnimState::MotionType::BlendSpace ? "BlendSpace" : "SkeletalAnimation");
+            out << YAML::Key << "MotionHandle" << YAML::Value << static_cast<uint64_t>(s.GetMotionHandle());
+            // Keep this field for older tools which only understand clips.
             out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.GetAnimationAssetHandle());
             out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << s.editorPos.x << s.editorPos.y << YAML::EndSeq;
             out << YAML::EndMap;
@@ -165,6 +191,7 @@ namespace ignite
             out << YAML::Key << "To" << YAML::Value << tr.toState;
             out << YAML::Key << "HasExitTime" << YAML::Value << tr.hasExitTime;
             out << YAML::Key << "ExitTime" << YAML::Value << tr.exitTime;
+            out << YAML::Key << "TransitionDuration" << YAML::Value << tr.transitionDuration;
 
             out << YAML::Key << "Conditions" << YAML::Value << YAML::BeginSeq;
             for (const auto &cond : tr.conditions)
@@ -239,16 +266,23 @@ namespace ignite
 
         auto ctrl = CreateRef<AnimatorController>();
         if (auto n = node["DefaultState"]) ctrl->defaultState = n.as<std::string>();
-        // if (auto n = node["SkeletonHandle"]) ctrl->SetSkeletonHandle(AssetHandle(n.as<uint64_t>()));
         if (auto n = node["SkeletonHandle"]) ctrl->m_SkeletonHandle = AssetHandle(n.as<uint64_t>());
 
         if (YAML::Node statesNode = node["States"]; statesNode && statesNode.IsSequence())
         {
+			// Preallocate states vector to avoid multiple reallocations - destruction of AnimState objects can be expensive due to asset pin management.
+            ctrl->states.reserve(statesNode.size());
             for (const auto &sn : statesNode)
             {
                 AnimState &s = ctrl->states.emplace_back();
                 if (auto n = sn["Name"]) s.name = n.as<std::string>();
-                if (auto n = sn["AnimHandle"]) s.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
+
+                const auto type = sn["MotionType"] && sn["MotionType"].as<std::string>() == "BlendSpace"
+                    ? AnimState::MotionType::BlendSpace : AnimState::MotionType::SkeletalAnimation;
+
+                if (auto n = sn["MotionHandle"]) s.SetMotion(type, AssetHandle(n.as<uint64_t>()));
+                else if (auto n = sn["AnimHandle"]) s.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
+
                 if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
                     s.editorPos = { n[0].as<float>(), n[1].as<float>() };
             }
@@ -256,6 +290,7 @@ namespace ignite
 
         if (YAML::Node paramsNode = node["Params"]; paramsNode && paramsNode.IsSequence())
         {
+            ctrl->params.reserve(paramsNode.size());
             for (const auto &pn : paramsNode)
             {
                 AnimParam p;
@@ -285,6 +320,7 @@ namespace ignite
                 if (auto n = tn["To"]) tr.toState = n.as<std::string>();
                 if (auto n = tn["HasExitTime"]) tr.hasExitTime = n.as<bool>();
                 if (auto n = tn["ExitTime"]) tr.exitTime = n.as<float>();
+                if (auto n = tn["TransitionDuration"]) tr.transitionDuration = n.as<float>();
 
                 if (YAML::Node condsNode = tn["Conditions"]; condsNode && condsNode.IsSequence())
                 {
@@ -323,14 +359,12 @@ namespace ignite
         }
 
         ctrl->SetDirtyFlag(false);
-        ctrl->SetReadyFlag(true);
         return ctrl;
     }
 
     Ref<AnimatorController> AnimatorController::Create()
     {
         auto ctrl = CreateRef<AnimatorController>();
-        ctrl->SetReadyFlag(true);
         return ctrl;
     }
 
@@ -359,47 +393,169 @@ namespace ignite
             runtime.stateNormalized = 0.0f;
         }
 
-		const AssetHandle animHandle = state ? state->GetAnimationAssetHandle() : AssetHandle(0);
-        if (!state || animHandle == AssetHandle(0))
-            return false;
-
-        Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(animHandle);
-
-        if (!animation || animation->duration <= 0.0f)
-            return false;
-
-        runtime.stateElapsed += deltaTime;
-        const float durationSeconds = animation->ticksPerSeconds > 0.0f ? (animation->duration / animation->ticksPerSeconds) : 0.0f;
-        if (durationSeconds > 0.0f)
+        auto resolveMotion = [&](const AnimState *motionState, std::vector<std::pair<Ref<SkeletalAnimation>, float>> &outContrib) -> bool
         {
-            runtime.stateNormalized = std::fmod(runtime.stateElapsed, durationSeconds) / durationSeconds;
+            outContrib.clear();
+            if (!motionState || motionState->GetMotionHandle() == AssetHandle(0))
+                return false;
+
+            if (motionState->GetMotionType() == AnimState::MotionType::SkeletalAnimation)
+            {
+                Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(motionState->GetMotionHandle());
+                if (animation) outContrib.emplace_back(animation, 1.0f);
+            }
+            else
+            {
+                Ref<BlendSpace> blendSpace = assetManager->GetAsset<BlendSpace>(motionState->GetMotionHandle());
+                if (!blendSpace) return false;
+                const AnimParam *x = GetParam(blendSpace->axisXName);
+                const AnimParam *y = GetParam(blendSpace->axisYName);
+                const glm::vec2 input(x && x->type == AnimParam::Type::Float ? x->floatVal : 0.0f,
+                    y && y->type == AnimParam::Type::Float ? y->floatVal : 0.0f);
+                for (const BlendSpaceWeight &weight : blendSpace->Evaluate(input))
+                {
+                    Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(weight.GetAnimationAssetHandle());
+                    if (animation && animation->duration > 0.0f)
+                        outContrib.emplace_back(animation, weight.weight);
+                }
+            }
+            return !outContrib.empty();
+        };
+
+        std::vector<std::pair<Ref<SkeletalAnimation>, float>> sourceContribs;
+        if (!resolveMotion(state, sourceContribs))
+            return false;
+
+        runtime.previousStateNormalized = runtime.stateNormalized;
+        runtime.stateElapsed += deltaTime;
+        
+        // Calculate effective weighted duration of current motion
+        float effectiveDuration = 0.0f;
+        for (const auto &[anim, weight] : sourceContribs)
+        {
+            const float durSec = anim->ticksPerSeconds > 0.0f ? (anim->duration / anim->ticksPerSeconds) : 0.0f;
+            effectiveDuration += durSec * weight;
+        }
+
+        if (effectiveDuration > 0.0001f)
+        {
+            runtime.stateNormalized = std::fmod(runtime.stateNormalized + (deltaTime / effectiveDuration), 1.0f);
+            if (runtime.stateNormalized < 0.0f)
+                runtime.stateNormalized += 1.0f;
         }
         else
         {
             runtime.stateNormalized = 0.0f;
         }
 
-        const std::string nextStateName = EvaluateTransitions(runtime.currentStateName, runtime.stateNormalized);
-        if (!nextStateName.empty() && nextStateName != runtime.currentStateName)
+        // Trigger Animation Events (e.g., Audio actions)
+        const float prevNorm = runtime.previousStateNormalized;
+        const float currNorm = runtime.stateNormalized;
+        for (const auto &contrib : sourceContribs)
         {
-            if (const AnimState *nextState = FindState(nextStateName); nextState && nextState->GetAnimationAssetHandle() != AssetHandle(0))
-            {
-                runtime.currentStateName = nextStateName;
-                runtime.stateElapsed = 0.0f;
-                runtime.stateNormalized = 0.0f;
+            if (!contrib.first)
+                continue;
 
-                state = nextState;
-                animation = assetManager->GetAsset<SkeletalAnimation>(animHandle);
-                
-                if (!animation || animation->duration <= 0.0f)
-                    return false;
+            for (const auto &evt : contrib.first->timelineEvents)
+            {
+                bool triggered = false;
+                if (currNorm >= prevNorm)
+                {
+                    triggered = (evt.normalizedTime >= prevNorm && evt.normalizedTime <= currNorm && prevNorm != currNorm);
+                }
+                else
+                {
+                    triggered = (evt.normalizedTime >= prevNorm || evt.normalizedTime <= currNorm);
+                }
+
+                if (triggered)
+                {
+                    if (evt.action == AnimationTimelineEvent::Action::Audio && evt.GetAudioHandle() != AssetHandle(0))
+                    {
+                        if (auto sound = assetManager->GetAsset<FmodSound>(evt.GetAudioHandle()))
+                        {
+                            sound->Play();
+                        }
+                    }
+                }
             }
         }
 
-        const float animTime = std::fmod(runtime.stateElapsed * animation->ticksPerSeconds, animation->duration);
-        const size_t jointCount = skeleton->joints.size();
+        // State Transition Handling
+        if (runtime.isTransitioning)
+        {
+            runtime.transitionElapsed += deltaTime;
+            if (runtime.transitionDuration > 0.0001f && runtime.transitionElapsed >= runtime.transitionDuration)
+            {
+                runtime.currentStateName = runtime.transitionTargetState;
+                runtime.stateElapsed = 0.0f;
+                // Preserve phase synchronization when transition finishes
+                runtime.previousStateNormalized = runtime.stateNormalized;
+                runtime.isTransitioning = false;
+                runtime.transitionTargetState.clear();
+                runtime.transitionElapsed = 0.0f;
 
-        // Allocate transforms
+                state = FindState(runtime.currentStateName);
+                if (!resolveMotion(state, sourceContribs))
+                    return false;
+            }
+        }
+        else
+        {
+            const AnimTransition *matchingTr = FindMatchingTransition(runtime.currentStateName, runtime.stateNormalized);
+            if (matchingTr && matchingTr->toState != runtime.currentStateName)
+            {
+                if (const AnimState *nextState = FindState(matchingTr->toState); nextState && nextState->GetMotionHandle() != AssetHandle(0))
+                {
+                    if (matchingTr->transitionDuration > 0.0001f)
+                    {
+                        runtime.isTransitioning = true;
+                        runtime.transitionTargetState = matchingTr->toState;
+                        runtime.transitionDuration = matchingTr->transitionDuration;
+                        runtime.transitionElapsed = 0.0f;
+                    }
+                    else
+                    {
+                        runtime.currentStateName = matchingTr->toState;
+                        runtime.stateElapsed = 0.0f;
+                        runtime.previousStateNormalized = runtime.stateNormalized;
+                        state = nextState;
+                        if (!resolveMotion(state, sourceContribs))
+                            return false;
+                    }
+                }
+            }
+        }
+
+        // Evaluate target motion if transitioning
+        std::vector<std::pair<Ref<SkeletalAnimation>, float>> targetContribs;
+        if (runtime.isTransitioning)
+        {
+            const AnimState *targetState = FindState(runtime.transitionTargetState);
+            resolveMotion(targetState, targetContribs);
+        }
+
+        // Timeline events are evaluated from dominant clip
+        runtime.triggeredEventIndices.clear();
+        runtime.eventSourceAnimation = AssetHandle(0);
+        if (!sourceContribs.empty())
+        {
+            const Ref<SkeletalAnimation> &eventAnimation = sourceContribs.front().first;
+            runtime.eventSourceAnimation = eventAnimation->handle;
+            const float previous = runtime.previousStateNormalized;
+            const float current = runtime.stateNormalized;
+            for (uint32_t i = 0; i < static_cast<uint32_t>(eventAnimation->timelineEvents.size()); ++i)
+            {
+                const float marker = eventAnimation->timelineEvents[i].normalizedTime;
+                const bool crossed = current >= previous
+                    ? (marker > previous && marker <= current)
+                    : (marker > previous || marker <= current);
+                if (crossed)
+                    runtime.triggeredEventIndices.push_back(i);
+            }
+        }
+
+        const size_t jointCount = skeleton->joints.size();
         if (runtime.localPoses.size() != jointCount)
         {
             runtime.localPoses.resize(jointCount);
@@ -407,21 +563,81 @@ namespace ignite
             runtime.finalTransforms.resize(jointCount);
         }
 
-        // Set default local poses
         for (size_t i = 0; i < jointCount; ++i)
         {
-            const Joint &joint = skeleton->joints[i];
-            runtime.localPoses[i] = joint.defaultTransform;
+            runtime.localPoses[i] = skeleton->joints[i].defaultTransform;
         }
 
-        // Apply animation channels to per-instance local poses
-        for (auto &[jointIndex, channel] : animation->channels)
+        const float blendAlpha = runtime.isTransitioning && runtime.transitionDuration > 0.0001f
+            ? std::clamp(runtime.transitionElapsed / runtime.transitionDuration, 0.0f, 1.0f)
+            : 0.0f;
+
+        // Calculate joint local poses (with transition cross-fading if active)
+        for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
         {
             const Joint &joint = skeleton->joints[jointIndex];
-            runtime.localPoses[jointIndex] = channel.Calculate(animTime, joint.defaultTransform);
+
+            auto evaluatePoseFromContribs = [&](const std::vector<std::pair<Ref<SkeletalAnimation>, float>> &contribs, float normTime) -> Transform
+            {
+                glm::vec3 translation(0.0f), scale(0.0f);
+                glm::quat rotationSum(0.0f, 0.0f, 0.0f, 0.0f);
+                glm::quat referenceRotation = joint.defaultTransform.rotation;
+                bool hasReference = false;
+
+                for (const auto &[sampleAnimation, weight] : contribs)
+                {
+                    const float sampleTime = std::fmod(normTime * sampleAnimation->duration, sampleAnimation->duration);
+                    Transform pose = joint.defaultTransform;
+                    if (const auto channel = sampleAnimation->channels.find(static_cast<int>(jointIndex)); channel != sampleAnimation->channels.end())
+                        pose = channel->second.Calculate(sampleTime, joint.defaultTransform);
+
+                    glm::quat rotation = pose.rotation;
+                    if (hasReference && glm::dot(referenceRotation, rotation) < 0.0f)
+                        rotation = -rotation;
+                    else if (!hasReference)
+                    {
+                        referenceRotation = rotation;
+                        hasReference = true;
+                    }
+                    translation += pose.translation * weight;
+                    scale += pose.scale * weight;
+                    rotationSum.w += rotation.w * weight;
+                    rotationSum.x += rotation.x * weight;
+                    rotationSum.y += rotation.y * weight;
+                    rotationSum.z += rotation.z * weight;
+                }
+
+                if (glm::length(rotationSum) > 0.000001f)
+                    rotationSum = glm::normalize(rotationSum);
+                else
+                    rotationSum = joint.defaultTransform.rotation;
+
+                return Transform{ translation, rotationSum, scale };
+            };
+
+            Transform poseSource = evaluatePoseFromContribs(sourceContribs, runtime.stateNormalized);
+            if (runtime.isTransitioning && !targetContribs.empty())
+            {
+                const float targetNormTime = runtime.stateNormalized;
+                Transform poseTarget = evaluatePoseFromContribs(targetContribs, targetNormTime);
+
+                glm::quat rotA = poseSource.rotation;
+                glm::quat rotB = poseTarget.rotation;
+                if (glm::dot(rotA, rotB) < 0.0f) rotB = -rotB;
+
+                Transform blended;
+                blended.translation = glm::mix(poseSource.translation, poseTarget.translation, blendAlpha);
+                blended.rotation = glm::normalize(glm::slerp(rotA, rotB, blendAlpha));
+                blended.scale = glm::mix(poseSource.scale, poseTarget.scale, blendAlpha);
+                runtime.localPoses[jointIndex] = blended;
+            }
+            else
+            {
+                runtime.localPoses[jointIndex] = poseSource;
+            }
         }
 
-        // Compute per-instance global poses using read-only skeleton hierarchy
+        // Compute global poses
         for (size_t i = 0; i < jointCount; ++i)
         {
             const Joint &joint = skeleton->joints[i];
@@ -439,7 +655,7 @@ namespace ignite
             }
         }
 
-        // Compute GPU-ready final transforms: globalPose -> mat4 * inverseBindPose
+        // Compute GPU-ready final transforms
         for (size_t i = 0; i < jointCount; ++i)
         {
             runtime.finalTransforms[i] = runtime.globalPoses[i].GetMatrix() * skeleton->joints[i].inverseBindPose;

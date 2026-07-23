@@ -33,6 +33,7 @@
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_canvas.hpp"
 #include "ignite/scene/scene.hpp"
+#include "ignite/scene/prefab.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/graphics/font.hpp"
 #include "ignite/scripting/scriptable_object.hpp"
@@ -43,6 +44,7 @@ namespace ignite
     {
         { AssetType::Audio, AssetImporter::ImportAudio },
         { AssetType::Scene, AssetImporter::ImportScene },
+        { AssetType::Prefab, AssetImporter::ImportPrefab },
         { AssetType::Texture, [](AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager) { 
                     return AssetImporter::ImportTexture(handle, metadata, assetManager); 
                 }},
@@ -200,6 +202,7 @@ namespace ignite
         if (asset)
         {
             asset->handle = handle;
+			asset->SetSkeletonAssetHandle(asset->GetSkeletonAssetHandle());
             asset->SetReadyFlag(true);
         }
         return asset;
@@ -770,7 +773,7 @@ namespace ignite
         if (asset)
         {
             asset->handle = handle;
-            asset->SetReadyFlag(true);
+            asset->SetSkeletonHandle(asset->GetSkeletonHandle());
         }
         return asset;
     }
@@ -958,5 +961,17 @@ namespace ignite
             sound->handle = handle;
         }
         return sound;
+    }
+
+    Ref<Prefab> AssetImporter::ImportPrefab(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        Ref<Project> project = assetManager ? assetManager->LockActiveProject() : nullptr;
+        Ref<Prefab> prefab = Prefab::Deserialize(metadata.filepath, project.get());
+        if (prefab)
+        {
+            prefab->handle = handle;
+            prefab->SetReadyFlag(true);
+        }
+        return prefab;
     }
 }

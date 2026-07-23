@@ -4,9 +4,11 @@
 #define IGN_HASHING_HPP
 
 #include "base.hpp"
+#include "ignite_rs/core_utils.h"
 #include <vector>
 #include <cstdint>
 #include <functional>
+#include <unordered_map>
 
 namespace ignite
 {
@@ -15,8 +17,7 @@ namespace ignite
 		// Hashing functions for various types
 		static inline void HashCombine(std::size_t &seed, std::size_t hash)
 		{
-			constexpr std::size_t magic_number = 0x9e3779b9;
-			seed ^= hash + magic_number + (seed << 6) + (seed >> 2);
+			seed = static_cast<std::size_t>(ignite_rs_hash_combine(static_cast<uint64_t>(seed), static_cast<uint64_t>(hash)));
 		}
 
 		template<typename... Args>

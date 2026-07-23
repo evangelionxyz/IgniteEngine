@@ -1,15 +1,14 @@
-//Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 #ifndef ANIMATION_PANEL_HPP
 #define ANIMATION_PANEL_HPP
 
 #include "ipanel.hpp"
-#include "editor_camera.hpp"
+#include "asset_editor_data.hpp"
+
 #include "ignite/core/path.hpp"
 #include "ignite/asset/asset.hpp"
-#include "ignite/graphics/render_target.hpp"
-#include "ignite/graphics/renderer/asset_scene_renderer.hpp"
 #include "ignite/core/input/mouse_event.hpp"
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/signals/asset_signal.hpp"
@@ -32,31 +31,14 @@ namespace ignite
     class Skeleton;
     class Mesh;
 
-    struct EditorSceneData
-    {
-        Ref<AssetSceneRenderer> sceneRenderer;
-        EditorCamera camera;
-        Ref<RenderTarget> sceneRT;
-        Ref<RenderTarget> uiRT;
-        Ref<RenderTarget> compositeRT;
-        uint32_t viewportWidth = 512;
-        uint32_t viewportHeight = 512;
-        bool viewportVisible = false;
-        bool viewportHovered = false;
-    };
-
-    struct AssetEditorData
-    {
-        Ref<Asset> asset;
-        AssetMetaData metadata;
-        AssetHandle handle;
-        EditorSceneData sceneData;
-        AssetHandle previewEnvTexHandle = AssetHandle(0);
-        std::string windowTitle;
-        bool isOpen = true;
-        bool requestFocus = false;
-        bool showUnsavedClosePopup = false;
-    };
+	struct CreateAssetRequest
+	{
+		Ref<Asset> asset;
+		AssetType type = AssetType::Invalid;
+		ignite::Path targetDirectory;
+		char nameBuffer[256] = "NewAsset";
+		bool open = false;
+	};
 
 	class AssetEditorPanel : public IPanel
     {
@@ -78,41 +60,34 @@ namespace ignite
         bool OnMouseScrollEvent(MouseScrolledEvent &event);
         void CloseAllAssetEditors();
 
-        struct CreateAssetRequest
-        {
-            Ref<Asset> asset;
-            AssetType type = AssetType::Invalid;
-            ignite::Path targetDirectory;
-            char nameBuffer[256] = "NewAsset";
-            bool open = false;
-        };
+        bool DrawAssetEditorHeader(UI::AssetEditorData &assetData);
+        bool BeginAssetEditorWindow(UI::AssetEditorData &assetData, bool &isOpen, const ImVec2 &windowSize, const ImVec2 &minWindowSize, ImGuiWindowFlags flags);
 
-        bool DrawAssetEditorHeader(AssetEditorData &assetData);
-        bool BeginAssetEditorWindow(AssetEditorData &assetData, bool &isOpen, const ImVec2 &windowSize, const ImVec2 &minWindowSize, ImGuiWindowFlags flags);
-        void UIAssetEditorClosePopup(AssetEditorData &assetData, bool &isOpen);
+        void UIAssetEditorClosePopup(UI::AssetEditorData &assetData, bool &isOpen);
 
-        void UIWidgetEditor(AssetEditorData &assetData);
-        void UIMaterial2DEditor(AssetEditorData &assetData);
-        void UISpriteSheet2DEditor(AssetEditorData &assetData);
-        void UIAnimation2DEditor(AssetEditorData &assetData);
-        void UIAnimatorController2DEditor(AssetEditorData &assetData);
-        void UIStaticMeshEditor(AssetEditorData &assetData);
-        void UISkeletalMeshEditor(AssetEditorData &assetData);
-        void UISkeletonEditor(AssetEditorData &assetData);
-        void UISkeletalAnimationEditor(AssetEditorData &assetData);
-        void UIAnimatorControllerEditor(AssetEditorData &assetData);
-        void UITextureEditor(AssetEditorData &assetData);
-        void UIMaterialEditor(AssetEditorData &assetData);
+        void UIWidgetEditor(UI::AssetEditorData &assetData);
+        void UIMaterial2DEditor(UI::AssetEditorData &assetData);
+        void UISpriteSheet2DEditor(UI::AssetEditorData &assetData);
+        void UIAnimation2DEditor(UI::AssetEditorData &assetData);
+        void UIAnimatorController2DEditor(UI::AssetEditorData &assetData);
+        void UIStaticMeshEditor(UI::AssetEditorData &assetData);
+        void UISkeletalMeshEditor(UI::AssetEditorData &assetData);
+        void UISkeletonEditor(UI::AssetEditorData &assetData);
+        void UISkeletalAnimationEditor(UI::AssetEditorData &assetData);
+        void UIAnimationMontageEditor(UI::AssetEditorData &assetData);
+        void UIAnimatorControllerEditor(UI::AssetEditorData &assetData);
+        void UIBlendSpaceEditor(UI::AssetEditorData &assetData);
+        void UITextureEditor(UI::AssetEditorData &assetData);
+        void UIMaterialEditor(UI::AssetEditorData &assetData);
 
-        void UIScriptableObjectEditor(AssetEditorData &assetData);
+        void UIScriptableObjectEditor(UI::AssetEditorData &assetData);
 
-        bool SaveAsset(AssetEditorData &assetData);
+        bool SaveAsset(UI::AssetEditorData &assetData);
         void UICreateAssetPopup();
-        void InitializeSceneData(AssetEditorData &assetData);
-        void UpdateSceneCamera(EditorSceneData &sceneData, float deltaTime);
+        void InitializeSceneData(UI::AssetEditorData &assetData);
         ignite::Path BuildUniqueAssetPath(const ignite::Path &baseDirectory, const std::string &baseName, const std::string &extension) const;
 
-        std::vector<AssetEditorData> m_Assets;
+        std::vector<UI::AssetEditorData> m_Assets;
         CreateAssetRequest m_CreateRequest;
 
         SignalToken m_OpenSignalToken   = kInvalidSignalToken;

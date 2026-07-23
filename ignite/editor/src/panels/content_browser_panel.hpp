@@ -80,6 +80,7 @@ namespace ignite
         void CompactTree();
 
         void DragDropSource(const ignite::Path &filepath);
+        void CreateNewPrefab();
         bool DuplicateItem(const ignite::Path &filepath);
         bool MoveOrCopyPathToDirectory(const ignite::Path &sourcePath, const ignite::Path &targetDirectory, bool moveItem);
         bool MoveOrCopySelectionToDirectory(const ignite::Path &targetDirectory, bool moveItem);
@@ -104,8 +105,8 @@ namespace ignite
         AssetEditorPanel *m_AssetEditorPanel;
         AssetManager *m_AssetManager = nullptr;
 
-        int m_ThumbnailSize = 96;
-        int m_LastThumbnailSize = 96;
+        int m_ThumbnailSize = 72;
+        int m_LastThumbnailSize = 72;
 
         ignite::Path m_BaseDirectory;
         ignite::Path m_CurrentDirectory;

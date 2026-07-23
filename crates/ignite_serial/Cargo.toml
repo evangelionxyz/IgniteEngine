@@ -1,0 +1,10 @@
+[package]
+name = "ignite_serial"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ignite_asset = { path = "../ignite_asset" }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+bincode = { workspace = true }

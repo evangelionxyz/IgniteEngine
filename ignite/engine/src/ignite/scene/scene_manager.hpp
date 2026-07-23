@@ -31,6 +31,8 @@
 
 namespace ignite
 {
+    class Prefab;
+
     class IGN_API SceneManager
     {
     public:
@@ -51,6 +53,8 @@ namespace ignite
         static Entity GetEntity(Scene *scene, UUID uuid);
         static Entity GetEntity(Scene *scene, const std::string &name);
         static Entity DuplicateEntity(Scene *scene, Entity entity, bool addToParent = true);
+        static Entity CloneEntityTree(Scene *destScene, Scene *srcScene, Entity srcRoot);
+        static Entity InstantiatePrefab(Scene *scene, const Ref<Prefab> &prefab);
 
         static bool AddChild(Scene *scene, Entity destination, Entity source);
         static bool ChildExists(Scene *scene, Entity destination, Entity source);

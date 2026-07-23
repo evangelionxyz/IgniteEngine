@@ -29,20 +29,22 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "ignite_rs/core_utils.h"
 
 namespace ignite::stringutils
 {
     inline bool EndsWith(std::string_view const &value, std::string_view const &ending)
     {
-        if (ending.size() > value.size())
-            return false;
-        return std::equal(ending.rbegin(), ending.rend(), value.rbegin(), value.rend());
+        std::string v(value);
+        std::string e(ending);
+        return ignite_rs_string_ends_with(v.c_str(), e.c_str());
     }
 
     static std::string ToLower(const std::string &str)
     {
-        std::string result = str;
-        std::ranges::transform(result, result.begin(), ::tolower);
+        std::string result(str.size(), '\0');
+        size_t len = ignite_rs_string_to_lower(str.c_str(), result.data(), result.size() + 1);
+        result.resize(len);
         return result;
     }
 
@@ -57,9 +59,10 @@ namespace ignite::stringutils
 
     inline std::string Trim(const std::string &s)
     {
-        const auto begin = s.find_first_not_of(" \t");
-        const auto end = s.find_last_not_of(" \t");
-        return (begin == std::string::npos) ? "" : s.substr(begin, end - begin + 1);
+        std::string result(s.size(), '\0');
+        size_t len = ignite_rs_string_trim(s.c_str(), result.data(), result.size() + 1);
+        result.resize(len);
+        return result;
     }
 
     inline std::vector<std::string> SplitString(const std::string &str, char delimiter)

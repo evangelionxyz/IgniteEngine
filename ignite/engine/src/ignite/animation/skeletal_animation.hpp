@@ -15,6 +15,39 @@
 
 namespace ignite
 {
+    struct IGN_API AnimationTimelineEvent
+    {
+        enum class Action : uint8_t { Audio, ScriptCallback };
+
+        float normalizedTime = 0.0f;
+        std::string name = "Event";
+        Action action = Action::ScriptCallback;
+
+        AnimationTimelineEvent();
+        ~AnimationTimelineEvent();
+
+        AnimationTimelineEvent(const AnimationTimelineEvent &other);
+        AnimationTimelineEvent &operator=(const AnimationTimelineEvent &other);
+
+        AnimationTimelineEvent(AnimationTimelineEvent &&other) noexcept;
+        AnimationTimelineEvent &operator=(AnimationTimelineEvent &&other) noexcept;
+
+        void SetAudioHandle(const AssetHandle &handle);
+        const AssetHandle &GetAudioHandle() const { return m_AudioHandle; }
+
+        void SetCallbackAsset(const AssetHandle &handle);
+        const AssetHandle &GetCallbackAsset() const { return m_CallbackAsset; }
+
+        const UUID &GetUUID() const { return m_UUID; }
+
+    private:
+        void UnpinAssets();
+
+        UUID m_UUID;
+        AssetHandle m_AudioHandle = AssetHandle(0);
+        AssetHandle m_CallbackAsset = AssetHandle(0);
+    };
+
     class IGN_API AnimationChannel
     {
     public:
@@ -33,24 +66,27 @@ namespace ignite
     public:
         SkeletalAnimation() = default;
 
+        ~SkeletalAnimation();
+
         std::string name;
         float duration = 0;
         float ticksPerSeconds = 1.0f;
         float timeInSeconds = 0.0f;
         bool isPlaying = false;
         std::unordered_map<int, AnimationChannel> channels;
+        std::vector<AnimationTimelineEvent> timelineEvents;
 
         virtual bool Serialize(const ignite::Path &filepath) override;
         static Ref<SkeletalAnimation> Deserialize(const ignite::Path &filepath);
 
-        void SetSkeletonHandle(UUID skeletonHandle);
-        UUID GetSkeletonHandle() const { return m_SkeletonHandle; }
+        void SetSkeletonHandle(const AssetHandle &skeletonHandle);
+        const AssetHandle &GetSkeletonHandle() const { return m_SkeletonHandle; }
 
         static AssetType GetStaticType() { return AssetType::SkeletalAnimation; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
     
     private:
-        UUID m_SkeletonHandle = UUID(0);
+        AssetHandle m_SkeletonHandle = AssetHandle(0);
     };
 }
 

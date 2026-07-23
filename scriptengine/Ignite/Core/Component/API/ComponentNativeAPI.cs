@@ -211,6 +211,18 @@ public static class ComponentNativeAPI
         public IntPtr CapsuleColliderComponent_SetRadius;
         public IntPtr CapsuleColliderComponent_GetHeight;
         public IntPtr CapsuleColliderComponent_SetHeight;
+
+        // AnimatorComponent
+        public IntPtr AnimatorComponent_SetFloat;
+        public IntPtr AnimatorComponent_GetFloat;
+        public IntPtr AnimatorComponent_SetInt;
+        public IntPtr AnimatorComponent_GetInt;
+        public IntPtr AnimatorComponent_SetBool;
+        public IntPtr AnimatorComponent_GetBool;
+        public IntPtr AnimatorComponent_SetString;
+        public IntPtr AnimatorComponent_GetString;
+        public IntPtr AnimatorComponent_SetState;
+        public IntPtr AnimatorComponent_GetCurrentStateName;
     }
 
     public struct Funcs
@@ -391,5 +403,36 @@ public static class ComponentNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void RigidbodyMoveKinematicFn(ulong entityID, ref NativeObject.Vector3 targetPosition, ref NativeObject.Vector3 targetRotation, float deltaTime);
+
+        // AnimatorComponent delegates
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorSetFloatFn(ulong entityID, IntPtr paramName, float value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorGetFloatFn(ulong entityID, IntPtr paramName, out float result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorSetIntFn(ulong entityID, IntPtr paramName, int value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorGetIntFn(ulong entityID, IntPtr paramName, out int result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorSetBoolFn(ulong entityID, IntPtr paramName, bool value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorGetBoolFn(ulong entityID, IntPtr paramName, out bool result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorSetStringFn(ulong entityID, IntPtr paramName, IntPtr value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorGetStringFn(ulong entityID, IntPtr paramName, out IntPtr result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorSetStateFn(ulong entityID, IntPtr stateName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AnimatorGetCurrentStateNameFn(ulong entityID, out IntPtr result);
     }
 }

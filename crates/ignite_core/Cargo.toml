@@ -1,0 +1,15 @@
+[package]
+name = "ignite_core"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ignite_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+ignite_asset = { path = "../ignite_asset" }
+ignite_ecs = { path = "../ignite_ecs" }
+ignite_serial = { path = "../ignite_serial" }
+ignite_project = { path = "../ignite_project" }
+rand = { workspace = true }

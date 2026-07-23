@@ -24,6 +24,7 @@ project "Ignite.Engine"
         "src",
         "src/ignite",
         "%{wks.location}/ignite/ignite.renderer/src",
+        "%{wks.location}/crates/src/include",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -77,6 +78,8 @@ project "Ignite.Engine"
         "tracy",
         "MochiSharp.Native",
         "UmbraShaderCompiler",
+
+        "ignite_core.dll.lib", -- rust based
     }
 
     defines {
@@ -88,6 +91,33 @@ project "Ignite.Engine"
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
     }
+
+    -- build rust and SDL
+    filter "configurations:Debug or Debug-Profiling"
+        libdirs { "%{wks.location}/crates/target/debug" }
+        prebuildcommands {
+            -- Configure and Build SDL
+            'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
+
+            -- Build Rust
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
+        }
+
+    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
+        libdirs { "%{wks.location}/crates/target/release" }
+        prebuildcommands {
+            -- Configure and Build SDL
+            'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
+            
+            -- Build Rust
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}")
+        }
+
+    filter {}
 
     --linux
     filter "system:linux"
@@ -133,9 +163,9 @@ project "Ignite.Engine"
         -- Set rpath to $ORIGIN so the binary finds .so files next to itself
         linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
         postbuildcommands {
-            '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13" "%{cfg.targetdir}"'
+            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}")
         }
 
     --windows
@@ -180,23 +210,23 @@ project "Ignite.Engine"
         }
 
         postbuildcommands {
-            '{COPYFILE} "%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll" "%{cfg.targetdir}"',
+            copy_file("%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll", "%{cfg.targetdir}"),
 
-            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/deflate.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenJPH/lib/win32/openjph.0.26.dll" "%{cfg.targetdir}"',
+            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/deflate.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/OpenJPH/lib/win32/openjph.0.26.dll", "%{cfg.targetdir}"),
 
-            '{COPYFILE} "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll" "%{cfg.targetdir}"',
+            copy_file("%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll", "%{cfg.targetdir}"),
 
             -- Copying dotnet libraries
-            '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/hostfxr.dll\" "%{cfg.targetdir}\"'
+            copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/hostfxr.dll", "%{cfg.targetdir}")
         }
 
         filter "configurations:Debug"
@@ -241,12 +271,12 @@ project "Ignite.Engine"
                 "%{Library.FBX_ALEMBIC_DEBUG}"
             }
             postbuildcommands {
-                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
+                copy_file("%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
             }
 
 
@@ -255,9 +285,9 @@ project "Ignite.Engine"
             links { "fmodL" }
             linkoptions { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}/libfbxsdk.a" }
             postbuildcommands {
-                '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13" "%{cfg.targetdir}"'
+                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13", "%{cfg.targetdir}")
             }
 
 
@@ -303,12 +333,12 @@ project "Ignite.Engine"
                 "%{Library.FBX_ALEMBIC}"
             }
             postbuildcommands {
-                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
+                copy_file("%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
             }
             
 
@@ -356,12 +386,12 @@ project "Ignite.Engine"
                 "%{Library.FBX_ALEMBIC}"
             }
             postbuildcommands {
-                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
-                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
+                copy_file("%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
             }
 
         filter { "system:linux", "configurations:Shipping or Shipping-Profiling" }

@@ -2,8 +2,10 @@
 
 #include "pch.hpp"
 #include "animator_editor.hpp"
+#include "ext/editor_ui.hpp"
 #include "states.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/blend_space.hpp"
 #include "ignite/asset/asset_manager.hpp"
 
 #include <algorithm>
@@ -38,23 +40,26 @@ namespace ignite
             return std::format("{} {}", cleanBase, suffix);
         }
 
-        static void CreateAnimatorStateFromAnimation(const Ref<AnimatorController> &animator, AssetManager *assetManager, AnimatorControllerEditorState &ui,
-            AssetHandle animationHandle, const ImVec2 &worldPos)
+        static void CreateAnimatorStateFromMotion(const Ref<AnimatorController> &animator, AssetManager *assetManager, AnimatorControllerEditorState &ui,
+            AssetHandle motionHandle, const ImVec2 &worldPos)
         {
-            if (!animator || !assetManager || animationHandle == AssetHandle(0))
+            if (!animator || !assetManager || motionHandle == AssetHandle(0))
             {
                 return;
             }
 
-            const AssetMetaData &metadata = assetManager->GetMetaData(animationHandle);
-            if (metadata.type != AssetType::SkeletalAnimation)
-            {
+            const AssetMetaData &metadata = assetManager->GetMetaData(motionHandle);
+            AnimState::MotionType type;
+            if (metadata.type == AssetType::SkeletalAnimation)
+                type = AnimState::MotionType::SkeletalAnimation;
+            else if (metadata.type == AssetType::BlendSpace)
+                type = AnimState::MotionType::BlendSpace;
+            else
                 return;
-            }
 
             AnimState state;
             state.name = BuildUniqueStateName(animator, metadata.filepath.stem().string());
-            state.SetAnimationHandle(animationHandle);
+            state.SetMotion(type, motionHandle);
             state.editorPos = glm::vec2(worldPos.x, worldPos.y);
             animator->states.push_back(state);
             ui.selectedState = static_cast<int>(animator->states.size()) - 1;
@@ -69,10 +74,17 @@ namespace ignite
 
             if (animator->GetSkeletonHandle() == AssetHandle(0))
             {
-                Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(animationHandle);
-                if (animation)
+                if (type == AnimState::MotionType::SkeletalAnimation)
                 {
-                    animator->SetSkeletonHandle(animation->GetSkeletonHandle());
+                    Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(motionHandle);
+                    if (animation)
+                        animator->SetSkeletonHandle(animation->GetSkeletonHandle());
+                }
+                else
+                {
+                    Ref<BlendSpace> blendSpace = assetManager->GetAsset<BlendSpace>(motionHandle);
+                    if (blendSpace)
+                        animator->SetSkeletonHandle(blendSpace->GetSkeletonAssetHandle());
                 }
             }
 
@@ -224,28 +236,11 @@ namespace ignite
             animator->SetDirtyFlag(true);
         }
 
-        std::string skeletonLabel = animator->GetSkeletonHandle()== AssetHandle(0) ? "Drop Skeleton Here" : assetManager->GetAssetDisplayName(animator->GetSkeletonHandle());
-        ImGui::Button(skeletonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-        if (ImGui::BeginDragDropTarget())
+        AssetHandle skeletonHandle = animator->GetSkeletonHandle();
+        std::string skeletonLabel = assetManager->GetAssetDisplayName(skeletonHandle);
+        if (UI::DrawAssetDropTarget("Skeleton", skeletonLabel.c_str(), { AssetType::Skeleton }, &skeletonHandle, assetManager))
         {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-            {
-                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                {
-                    const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                    if (assetManager->GetMetaData(handle).type == AssetType::Skeleton)
-                    {
-                        animator->SetSkeletonHandle(handle);
-                        animator->SetDirtyFlag(true);
-                    }
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
-
-        if (animator->GetSkeletonHandle() != AssetHandle(0) && ImGui::Button("Clear Skeleton##ac_clear_skel", ImVec2(-1.0f, 0.0f)))
-        {
-            animator->SetSkeletonHandle(AssetHandle(0));
+            animator->SetSkeletonHandle(skeletonHandle);
             animator->SetDirtyFlag(true);
         }
 
@@ -287,7 +282,8 @@ namespace ignite
                 ui.anyStateSelected = false;
             }
 
-            ImGui::TextDisabled("%s", assetManager->GetAssetDisplayName(state.GetAnimationAssetHandle()).c_str());
+            ImGui::TextDisabled("%s: %s", state.GetMotionType() == AnimState::MotionType::BlendSpace ? "Blend Space" : "Animation",
+                assetManager->GetAssetDisplayName(state.GetMotionHandle()).c_str());
             ImGui::Separator();
         }
         ImGui::EndChild();
@@ -313,10 +309,11 @@ namespace ignite
                 if (payload->Data && payload->DataSize == sizeof(AssetHandle) && payload->IsDelivery())
                 {
                     const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                    if (assetManager->GetMetaData(handle).type == AssetType::SkeletalAnimation)
+                    const AssetType type = assetManager->GetMetaData(handle).type;
+                    if (type == AssetType::SkeletalAnimation || type == AssetType::BlendSpace)
                     {
                         const ImVec2 dropWorldPos = UI::NodeGraph::ToWorld(canvas, ImGui::GetIO().MousePos);
-                        CreateAnimatorStateFromAnimation(animator, assetManager, ui, handle, ImVec2(dropWorldPos.x - nodeSize.x * 0.5f, dropWorldPos.y - nodeSize.y * 0.5f));
+                        CreateAnimatorStateFromMotion(animator, assetManager, ui, handle, ImVec2(dropWorldPos.x - nodeSize.x * 0.5f, dropWorldPos.y - nodeSize.y * 0.5f));
                     }
                 }
             }
@@ -500,7 +497,7 @@ namespace ignite
 
             const std::string title = state.name.empty() ? std::format("State {}", i + 1) : state.name;
             canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 12.0f * ui.graphState.zoom), IM_COL32(235, 239, 245, 255), title.c_str());
-            canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 34.0f * ui.graphState.zoom), IM_COL32(167, 176, 190, 255), assetManager->GetAssetDisplayName(state.GetAnimationAssetHandle()).c_str());
+            canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 34.0f * ui.graphState.zoom), IM_COL32(167, 176, 190, 255), assetManager->GetAssetDisplayName(state.GetMotionHandle()).c_str());
             if (isDefault)
             {
                 canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 52.0f * ui.graphState.zoom), IM_COL32(255, 196, 92, 255), "Default");
@@ -670,28 +667,23 @@ namespace ignite
                 animator->SetDirtyFlag(true);
             }
 
-            std::string animationLabel = state.GetAnimationAssetHandle() == AssetHandle(0) ? "Drop Skeletal Animation" : assetManager->GetAssetDisplayName(state.GetAnimationAssetHandle());
-            ImGui::Button(animationLabel.c_str(), ImVec2(-1.0f, 0.0f));
-            if (ImGui::BeginDragDropTarget())
+            AssetHandle motionHandle = state.GetMotionHandle();
+            std::string motionLabel = assetManager->GetAssetDisplayName(motionHandle);
+            if (UI::DrawAssetDropTarget("Motion", motionLabel.c_str(), { AssetType::SkeletalAnimation, AssetType::BlendSpace }, &motionHandle, assetManager))
             {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                const AssetType type = assetManager->GetMetaData(motionHandle).type;
+                if (type == AssetType::SkeletalAnimation)
                 {
-                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                    {
-                        const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                        if (assetManager->GetMetaData(handle).type == AssetType::SkeletalAnimation)
-                        {
-                            state.SetAnimationHandle(handle);
-                            animator->SetDirtyFlag(true);
-                        }
-                    }
+                    state.SetAnimationHandle(motionHandle);
                 }
-                ImGui::EndDragDropTarget();
-            }
-
-            if (state.GetAnimationAssetHandle() != AssetHandle(0) && ImGui::Button("Clear Animation##ac_clear_anim", ImVec2(-1.0f, 0.0f)))
-            {
-                state.SetAnimationHandle(AssetHandle(0));
+                else if (type == AssetType::BlendSpace)
+                {
+                    state.SetBlendSpaceHandle(motionHandle);
+                }
+                else if (motionHandle == AssetHandle(0))
+                {
+                    state.SetMotion(AnimState::MotionType::SkeletalAnimation, AssetHandle(0));
+                }
                 animator->SetDirtyFlag(true);
             }
             if (ImGui::Button("Make Default##ac_make_default", ImVec2(-1.0f, 0.0f)))
@@ -764,6 +756,7 @@ namespace ignite
         if (DrawAnimatorStateCombo("To##ac_tr_to", animator->states, transition.toState)) animator->SetDirtyFlag(true);
         if (ImGui::Checkbox("Has Exit Time##ac_tr_exit", &transition.hasExitTime)) animator->SetDirtyFlag(true);
         if (transition.hasExitTime && ImGui::DragFloat("Exit Time##ac_tr_exit_v", &transition.exitTime, 0.01f, 0.0f, 1.0f)) animator->SetDirtyFlag(true);
+        if (ImGui::DragFloat("Transition Duration (s)##ac_tr_dur", &transition.transitionDuration, 0.05f, 0.0f, 10.0f)) animator->SetDirtyFlag(true);
     }
 
     void AnimatorEditor::DrawAnimatorControllerConditions(const Ref<AnimatorController> &animator, AnimatorControllerEditorState &ui)

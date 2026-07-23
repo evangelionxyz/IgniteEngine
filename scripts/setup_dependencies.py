@@ -167,7 +167,7 @@ def install_premake5(target_directory):
     if platform.system() == "Linux":
         premake_binary.chmod(premake_binary.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-    print("\nPremake Installed\n")
+    print("Premake Installed")
     return premake_binary
 
 
@@ -426,35 +426,3 @@ expect {
     print(f"FBX SDK (Linux) installed at: {detected}")
     return detected
 
-
-def build_sdl3():
-    """Build the SDL3 submodule using CMake."""
-    print("Building SDL3 from source using CMake...")
-    root_dir = Path(__file__).resolve().parent.parent
-    sdl_dir = root_dir / "thirdparty" / "SDL3"
-    build_dir = sdl_dir / "build"
-    
-    configure_args = [
-        "cmake",
-        "-S", str(sdl_dir),
-        "-B", str(build_dir),
-        "-DSDL_SHARED=ON",
-        "-DSDL_STATIC=OFF",
-        "-DSDL_TESTS=OFF",
-        "-DSDL_TEST_LIBRARY=OFF",
-        "-DCMAKE_BUILD_TYPE=Release"
-    ]
-    
-    build_args = [
-        "cmake",
-        "--build", str(build_dir),
-        "--config", "Release"
-    ]
-    
-    try:
-        subprocess.run(configure_args, check=True)
-        subprocess.run(build_args, check=True)
-        print("SDL3 build completed successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"SDL3 build failed: {e}")
-        raise e

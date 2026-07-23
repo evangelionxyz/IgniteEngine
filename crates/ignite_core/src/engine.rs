@@ -1,0 +1,64 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
+use ignite_asset::AssetManager;
+use std::sync::Mutex;
+
+use crate::{IgniteLogLevel, log_internal};
+
+#[repr(C)]
+pub struct IgniteEngine {
+    pub asset_manager: AssetManager,
+}
+
+impl IgniteEngine {
+    pub fn new() -> Self {
+        Self {
+            asset_manager: AssetManager::new(),
+        }
+    }
+}
+
+impl Default for IgniteEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+static ENGINE_INSTANCE: Mutex<Option<IgniteEngine>> = Mutex::new(None);
+
+pub fn init_engine() -> bool {
+    let mut lock = match ENGINE_INSTANCE.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if lock.is_none() {
+        *lock = Some(IgniteEngine::new());
+        log_internal(IgniteLogLevel::Warn, "Rust engine intialized");
+        true
+    } else {
+        log_internal(IgniteLogLevel::Error, "Failed to initialize Rust engine");
+        false
+    }
+}
+
+pub fn shutdown_engine() -> bool {
+    let mut lock = match ENGINE_INSTANCE.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if lock.is_some() {
+        *lock = None;
+        log_internal(IgniteLogLevel::Warn, "Rust engine shutdown");
+        true
+    } else {
+        false
+    }
+}
+
+pub fn is_engine_initialized() -> bool {
+    let lock = match ENGINE_INSTANCE.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    lock.is_some()
+}

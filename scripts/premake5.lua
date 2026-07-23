@@ -22,10 +22,38 @@ workspace "IGN"
 
     include "thirdparty_scripts/thirdparty.lua"
 
+-- Helper functions to copy files / directories only if source is newer
+function copy_file(src, dst)
+    if os.ishost("windows") then
+        local src_win = src:gsub("/", "\\")
+        local dst_win = dst:gsub("/", "\\")
+        if not dst_win:match("%.%w+$") and not dst_win:sub(-1):find("\\") then
+            dst_win = dst_win .. "\\"
+        end
+        return string.format('xcopy /D /Y "%s" "%s"', src_win, dst_win)
+    else
+        return string.format('cp -u "%s" "%s"', src, dst)
+    end
+end
+
+function copy_dir(src, dst)
+    if os.ishost("windows") then
+        local src_win = src:gsub("/", "\\")
+        local dst_win = dst:gsub("/", "\\")
+        if not dst_win:sub(-1):find("\\") then
+            dst_win = dst_win .. "\\"
+        end
+        return string.format('xcopy /D /Y /S /E /I "%s" "%s"', src_win, dst_win)
+    else
+        return string.format('cp -ur "%s" "%s"', src, dst)
+    end
+end
+
     include "../ignite/editor/ignite.editor.lua"
     include "../ignite/engine/ignite.engine.lua"
     include "../ignite/test/ignite.test.lua"
     include "../scriptengine/ignite.scriptengine.lua"
+    include "../crates/ignite_rs.lua"
     include "mochisharp-native.lua"
     include "mochisharp-managed.lua"
 
@@ -102,8 +130,8 @@ premake.override(premake.action, "call", function(base, name)
                 if f then
                     f:write("<Project>\n")
                     f:write("  <PropertyGroup>\n")
-                    f:write("    <BaseOutputPath>$(SolutionDir)Bin</BaseOutputPath>\n")
-                    f:write("    <IntermediateOutputPath>$(SolutionDir)Bin/objs/$(MSBuildProjectName)/</IntermediateOutputPath>\n")
+                    f:write("    <BaseOutputPath>$(MSBuildThisFileDirectory)../bin</BaseOutputPath>\n")
+                    f:write("    <IntermediateOutputPath>$(MSBuildThisFileDirectory)../bin/objs/$(MSBuildProjectName)/</IntermediateOutputPath>\n")
                     f:write("    <DebugType>pdbonly</DebugType>\n")
                     f:write("    <Nullable>enable</Nullable>\n")
                     f:write("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>\n")
