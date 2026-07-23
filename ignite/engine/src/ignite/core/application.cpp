@@ -16,12 +16,29 @@
 #include "input/input_system.hpp"
 #include "ignite/asset/asset_manager.hpp"
 
+#include "ignite_rs/core.h"
+#include "ignite_rs/log.h"
+
 #include "command.hpp"
 #include <nvrhi/utils.h>
 
 namespace ignite
 {
     static Application *s_AppInstance = nullptr;
+
+    static void IgniteRustLogCallback(IgniteLogLevel level, const char *message)
+    {
+        if (message)
+        {
+            switch (level)
+            {
+                case IgniteLogLevel_Error: LOG_ERROR("[Rust] {}", message); break;
+                case IgniteLogLevel_Info: LOG_INFO("[Rust] {}", message); break;
+                case IgniteLogLevel_Warn: LOG_WARN("[Rust] {}", message); break;
+                case IgniteLogLevel_Trace: LOG_TRACE("[Rust] {}", message); break;
+            }
+        }
+    }
 
     Application::~Application()
     {
@@ -41,6 +58,8 @@ namespace ignite
             delete *it;
         }
 
+        ignite_rs_engine_shutdown();
+
 		// Destroy subsystems in reverse order
 		for (auto it = m_Subsystems.rbegin(); it != m_Subsystems.rend(); ++it)
 		{
@@ -52,6 +71,8 @@ namespace ignite
         // destroy device
         DeviceManager::GetInstance()->Destroy();
         m_Window->Destroy();
+
+		ignite_rs_log_unregister_callback();
     }
 
     Application::Application(const ApplicationCreateInfo &createInfo)
@@ -109,6 +130,16 @@ namespace ignite
         m_Window->SetIcon("resources/ignite-icon256px.png");
 
         InputSystem::SetWindow(m_Window.get());
+
+        {
+            // Initialize Rust back-end
+            const int testConnResult = ignite_rs_test_connection();
+            const IgniteResult res = ignite_rs_log_register_callback(IgniteRustLogCallback);
+            LOG_ASSERT(res == IgniteResult_Ok, "[Application] Failed to initalize Rust Log Callback");
+
+            const bool initialized = ignite_rs_engine_init();
+            LOG_ASSERT(initialized, "[Application] Rust backend Failed to initialized");
+        }
 
 		// Create subsystems
 		m_AssetManager = (AssetManager *)AddSubsystem(new AssetManager());

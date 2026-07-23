@@ -4,23 +4,23 @@ use ignite_asset::UUID;
 use crate::engine::{init_engine, is_engine_initialized, shutdown_engine};
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rust_test_connection() -> i32 {
+pub extern "C" fn ignite_rs_test_connection() -> i32 {
     0x52555354 // RUST in hexadecimal
 }
 
 // Ignite Engine Lifecycle
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_engine_rs_init() -> bool {
+pub extern "C" fn ignite_rs_engine_init() -> bool {
     init_engine()
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_engine_rs_shutdown() -> bool {
+pub extern "C" fn ignite_rs_engine_shutdown() -> bool {
     shutdown_engine()
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_engine_rs_is_initialized() -> bool {
+pub extern "C" fn ignite_rs_engine_is_initialized() -> bool {
     is_engine_initialized()
 }
 

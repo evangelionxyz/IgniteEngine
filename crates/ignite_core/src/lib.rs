@@ -1,8 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+pub mod core;
 pub mod engine;
 pub mod ffi;
 
+pub use core::*;
 pub use engine::*;
 pub use ffi::*;
 

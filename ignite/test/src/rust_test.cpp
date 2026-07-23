@@ -12,7 +12,7 @@
 
 TEST(RustInterop, TestConnection)
 {
-    int connectionResult = ignite_rust_test_connection();
+    int connectionResult = ignite_rs_test_connection();
     EXPECT_EQ(connectionResult, 0x52555354); // RUST magic number
 }
 
@@ -30,18 +30,24 @@ TEST(RustInterop, ResultProtocol)
 
 TEST(RustInterop, EngineLifecycle)
 {
-    // Test initializing Rust engine singleton
-    bool initResult = ignite_engine_rs_init();
-    EXPECT_TRUE(initResult);
-    EXPECT_TRUE(ignite_engine_rs_is_initialized());
+    // The engine is initialized by Application startup
+    bool isInit = ignite_rs_engine_is_initialized();
+    if (!isInit)
+    {
+        EXPECT_TRUE(ignite_rs_engine_init());
+        EXPECT_TRUE(ignite_rs_engine_is_initialized());
+    }
 
-    // Calling init again should return false (already initialized)
-    EXPECT_FALSE(ignite_engine_rs_init());
+    // Calling init again when already initialized should return false
+    EXPECT_FALSE(ignite_rs_engine_init());
 
-    // Shutdown
-    bool shutdownResult = ignite_engine_rs_shutdown();
-    EXPECT_TRUE(shutdownResult);
-    EXPECT_FALSE(ignite_engine_rs_is_initialized());
+    // Test shutdown and re-initialization
+    EXPECT_TRUE(ignite_rs_engine_shutdown());
+    EXPECT_FALSE(ignite_rs_engine_is_initialized());
+
+    // Re-initialize for Application lifetime
+    EXPECT_TRUE(ignite_rs_engine_init());
+    EXPECT_TRUE(ignite_rs_engine_is_initialized());
 }
 
 TEST(RustInterop, AssetHandleAndTypes)
@@ -166,4 +172,61 @@ TEST(RustInterop, MemoryBoundary)
     EXPECT_EQ(ignite_test_alloc_buffer(bufferSize, fillValue, nullptr, &ptr), IgniteResult_ErrNullPointer);
     EXPECT_EQ(ignite_test_alloc_buffer(bufferSize, fillValue, &handle, nullptr), IgniteResult_ErrNullPointer);
     EXPECT_EQ(ignite_test_alloc_buffer(0, fillValue, &handle, &ptr), IgniteResult_ErrInvalidParam);
+}
+
+// -------------------------------------------------
+// Phase 1: Core Utilities FFI Tests
+// -------------------------------------------------
+
+TEST(RustInterop, Phase1StringUtils)
+{
+    EXPECT_TRUE(ignite_rs_string_ends_with("texture.png", ".png"));
+    EXPECT_FALSE(ignite_rs_string_ends_with("texture.png", ".jpg"));
+    EXPECT_FALSE(ignite_rs_string_ends_with(nullptr, ".png"));
+    EXPECT_FALSE(ignite_rs_string_ends_with("texture.png", nullptr));
+
+    char lowerBuf[64] = {0};
+    size_t lowerLen = ignite_rs_string_to_lower("IGNITE ENGINE 2026", lowerBuf, sizeof(lowerBuf));
+    EXPECT_EQ(lowerLen, 18u);
+    EXPECT_STREQ(lowerBuf, "ignite engine 2026");
+
+    char trimBuf[64] = {0};
+    size_t trimLen = ignite_rs_string_trim("   Hello Ignite   \t", trimBuf, sizeof(trimBuf));
+    EXPECT_EQ(trimLen, 12u);
+    EXPECT_STREQ(trimBuf, "Hello Ignite");
+}
+
+TEST(RustInterop, Phase1Hashing)
+{
+    uint64_t hash1 = ignite_rs_hash_string("Ignite");
+    uint64_t hash2 = ignite_rs_hash_string("Ignite");
+    uint64_t hash3 = ignite_rs_hash_string("Engine");
+
+    EXPECT_NE(hash1, 0u);
+    EXPECT_EQ(hash1, hash2);
+    EXPECT_NE(hash1, hash3);
+    EXPECT_EQ(ignite_rs_hash_string(nullptr), 0u);
+
+    uint64_t combined = ignite_rs_hash_combine(100, 200);
+    EXPECT_NE(combined, 100u);
+    EXPECT_NE(combined, 200u);
+}
+
+TEST(RustInterop, Phase1Timers)
+{
+    uint64_t timerId = ignite_rs_timer_create();
+    EXPECT_NE(timerId, 0u);
+
+    float elapsed = ignite_rs_timer_elapsed_seconds(timerId);
+    EXPECT_GE(elapsed, 0.0f);
+
+    EXPECT_TRUE(ignite_rs_timer_reset(timerId));
+    EXPECT_TRUE(ignite_rs_timer_destroy(timerId));
+    EXPECT_FALSE(ignite_rs_timer_destroy(timerId)); // Already destroyed
+}
+
+TEST(RustInterop, Phase1SignalBus)
+{
+    EXPECT_EQ(ignite_rs_signal_publish("on_test_signal", nullptr, 0), IgniteResult_Ok);
+    EXPECT_EQ(ignite_rs_signal_publish(nullptr, nullptr, 0), IgniteResult_ErrNullPointer);
 }

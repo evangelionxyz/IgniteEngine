@@ -7,7 +7,7 @@ use crate::ffi::result_ffi::IgniteResult;
 static ALLOCATED_BUFFERS: Mutex<Option<HashMap<u64, Vec<u8>>>> = Mutex::new(None);
 static NEXT_BUFFER_HANDLE: Mutex<u64> = Mutex::new(1);
 
-/// Test helper for Option A memory boundary verification:
+/// Test helper for memory boundary verification:
 /// Rust allocates a CPU buffer and stores it, returning an opaque handle and raw data pointer to C++.
 /// C++ accesses the data but NEVER frees the pointer directly. C++ must call `ignite_test_free_buffer(handle)`.
 #[unsafe(no_mangle)]

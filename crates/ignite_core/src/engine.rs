@@ -3,6 +3,8 @@
 use ignite_asset::AssetManager;
 use std::sync::Mutex;
 
+use crate::{IgniteLogLevel, log_internal};
+
 #[repr(C)]
 pub struct IgniteEngine {
     pub asset_manager: AssetManager,
@@ -31,8 +33,10 @@ pub fn init_engine() -> bool {
     };
     if lock.is_none() {
         *lock = Some(IgniteEngine::new());
+        log_internal(IgniteLogLevel::Warn, "Rust engine intialized");
         true
     } else {
+        log_internal(IgniteLogLevel::Error, "Failed to initialize Rust engine");
         false
     }
 }
@@ -44,6 +48,7 @@ pub fn shutdown_engine() -> bool {
     };
     if lock.is_some() {
         *lock = None;
+        log_internal(IgniteLogLevel::Warn, "Rust engine shutdown");
         true
     } else {
         false

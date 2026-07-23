@@ -7,6 +7,7 @@
 #include "result.h"
 #include "log.h"
 #include "memory.h"
+#include "core_utils.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -15,12 +16,12 @@ extern "C" {
 #endif
 
 // FFI Exported Functions
-int32_t ignite_rust_test_connection(void);
+int32_t ignite_rs_test_connection(void);
 
 // Engine Lifecycle
-bool ignite_engine_rs_init(void);
-bool ignite_engine_rs_shutdown(void);
-bool ignite_engine_rs_is_initialized(void);
+bool ignite_rs_engine_init(void);
+bool ignite_rs_engine_shutdown(void);
+bool ignite_rs_engine_is_initialized(void);
 
 // UUID
 uint64_t ignite_uuid_new(void);
