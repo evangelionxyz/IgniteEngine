@@ -50,6 +50,14 @@ jobs:
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v3
 
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: crates
+
       - name: Cache SDK downloads
         uses: actions/cache@v4
         with:
