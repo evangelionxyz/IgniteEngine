@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 use std::collections::HashMap;
-use crate::asset::{AssetHandle};
-use crate::asset::asset::{AssetMetaData};
+use crate::{AssetHandle, AssetMetaData};
 
 pub type AssetRegistry = HashMap<AssetHandle, AssetMetaData>;
 
@@ -16,6 +15,12 @@ impl AssetManager {
     pub fn new() -> Self {
         let asset_registry = AssetRegistry::new();
         Self { asset_registry }
+    }
+}
+
+impl Default for AssetManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

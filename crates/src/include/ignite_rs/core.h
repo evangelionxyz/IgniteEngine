@@ -4,6 +4,9 @@
 #ifndef IGN_RS_CORE_H
 #define IGN_RS_CORE_H
 
+#include "result.h"
+#include "log.h"
+#include "memory.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -28,4 +31,3 @@ uint64_t ignite_uuid_from_u64(uint64_t value);
 #endif
 
 #endif
-

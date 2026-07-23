@@ -1,11 +1,13 @@
-[package]
-name = "ignite_core"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "2"
+members = [
+    "ignite_core",
+    "ignite_asset",
+    "ignite_ecs",
+    "ignite_serial",
+    "ignite_project",
+]
+default-members = ["ignite_core"]
 
-[lib]
-name = "ignite_core"
-crate-type = ["cdylib"]
-
-[dependencies]
+[workspace.dependencies]
 rand = "0.10.2"

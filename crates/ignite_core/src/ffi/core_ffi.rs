@@ -1,14 +1,14 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-use crate::core::UUID;
-use crate::core::engine::{init_engine, shutdown_engine, is_engine_initialized};
+use ignite_asset::UUID;
+use crate::engine::{init_engine, is_engine_initialized, shutdown_engine};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ignite_rust_test_connection() -> i32 {
     0x52555354 // RUST in hexadecimal
 }
 
-// Ignite Engine
+// Ignite Engine Lifecycle
 #[unsafe(no_mangle)]
 pub extern "C" fn ignite_engine_rs_init() -> bool {
     init_engine()
@@ -34,5 +34,3 @@ pub extern "C" fn ignite_uuid_new() -> u64 {
 pub extern "C" fn ignite_uuid_from_u64(value: u64) -> u64 {
     UUID::from_u64(value).0
 }
-
-

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-use crate::asset::AssetManager;
+use ignite_asset::AssetManager;
 use std::sync::Mutex;
 
 #[repr(C)]
@@ -57,4 +57,3 @@ pub fn is_engine_initialized() -> bool {
     };
     lock.is_some()
 }
-

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 use std::os::raw::c_char;
-use crate::asset::{AssetHandle, AssetType};
+use ignite_asset::{AssetHandle, AssetType};
 
 // Asset
 #[unsafe(no_mangle)]

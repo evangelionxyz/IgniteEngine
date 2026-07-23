@@ -41,10 +41,42 @@ dependencies = [
 ]
 
 [[package]]
-name = "ignite_core"
+name = "ignite_asset"
 version = "0.1.0"
 dependencies = [
  "rand",
+]
+
+[[package]]
+name = "ignite_core"
+version = "0.1.0"
+dependencies = [
+ "ignite_asset",
+ "ignite_ecs",
+ "ignite_project",
+ "ignite_serial",
+ "rand",
+]
+
+[[package]]
+name = "ignite_ecs"
+version = "0.1.0"
+dependencies = [
+ "ignite_asset",
+]
+
+[[package]]
+name = "ignite_project"
+version = "0.1.0"
+dependencies = [
+ "ignite_asset",
+]
+
+[[package]]
+name = "ignite_serial"
+version = "0.1.0"
+dependencies = [
+ "ignite_asset",
 ]
 
 [[package]]

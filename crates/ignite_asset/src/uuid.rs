@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-use rand::{RngExt};
+use rand::RngExt;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

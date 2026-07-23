@@ -1,12 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 use std::fmt;
-use crate::core::*;
 
-// AssetHandle types
-pub type AssetHandle = UUID;
-
-#[repr(u32)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AssetType {
     Invalid = 0,
