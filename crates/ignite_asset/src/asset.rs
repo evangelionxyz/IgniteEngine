@@ -1,12 +1,13 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 use std::fmt;
+use serde::{Serialize, Deserialize};
 use crate::{UUID, AssetType};
 
 pub type AssetHandle = UUID;
 
 #[repr(C)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Asset {
     pub handle: AssetHandle,
     pub asset_type: AssetType,
@@ -42,8 +43,17 @@ impl fmt::Display for Asset {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AssetMetaData {
     pub filepath: String,
     pub asset_type: AssetType,
+}
+
+impl AssetMetaData {
+    pub fn new(filepath: impl Into<String>, asset_type: AssetType) -> Self {
+        Self {
+            filepath: filepath.into(),
+            asset_type,
+        }
+    }
 }

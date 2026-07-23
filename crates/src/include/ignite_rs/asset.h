@@ -4,8 +4,10 @@
 #ifndef IGN_RS_ASSET_H
 #define IGN_RS_ASSET_H
 
+#include "result.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,10 +51,21 @@ typedef enum AssetType_RS
     AssetType_RS_Prefab,
 } AssetType_RS;
 
-// FFI Exported Functions
+// Handle Primitives
 uint64_t ignite_asset_handle_create(uint64_t id);
 bool ignite_asset_handle_is_valid(uint64_t handle);
 const char* ignite_asset_type_to_string(AssetType_RS asset_type);
+
+// Metadata & Asset Registry FFI
+IgniteResult ignite_rs_asset_assign_metadata(uint64_t handle, const char* path, AssetType_RS asset_type);
+IgniteResult ignite_rs_asset_get_metadata(uint64_t handle, char* out_path_buf, size_t max_len, AssetType_RS* out_type);
+IgniteResult ignite_rs_asset_remove_metadata(uint64_t handle);
+
+// Asset Pinning & Lifetime Tracking FFI (Rule 13 & 14)
+IgniteResult ignite_rs_asset_pin(uint64_t handle);
+IgniteResult ignite_rs_asset_unpin(uint64_t handle);
+bool ignite_rs_asset_is_pinned(uint64_t handle);
+uint32_t ignite_rs_asset_get_pin_count(uint64_t handle);
 
 #ifdef __cplusplus
 }

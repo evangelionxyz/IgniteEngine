@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 ignite_asset = { path = "../ignite_asset" }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+bincode = { workspace = true }

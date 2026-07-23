@@ -8,6 +8,8 @@
 #include "log.h"
 #include "memory.h"
 #include "core_utils.h"
+#include "asset.h"
+#include "serial.h"
 #include <stdint.h>
 #include <stdbool.h>
 

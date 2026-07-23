@@ -1,9 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 use std::fmt;
+use serde::{Serialize, Deserialize};
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AssetType {
     Invalid = 0,
     Metadata,

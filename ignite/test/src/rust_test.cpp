@@ -230,3 +230,104 @@ TEST(RustInterop, Phase1SignalBus)
     EXPECT_EQ(ignite_rs_signal_publish("on_test_signal", nullptr, 0), IgniteResult_Ok);
     EXPECT_EQ(ignite_rs_signal_publish(nullptr, nullptr, 0), IgniteResult_ErrNullPointer);
 }
+
+// -------------------------------------------------
+// Phase 2: Asset System & Pinning FFI Tests
+// -------------------------------------------------
+
+TEST(RustInterop, Phase2AssetRegistryAndMetadata)
+{
+    const uint64_t handle = 0xABCD12345678ULL;
+    const char* path = "Assets/Textures/player.png";
+
+    // Assign metadata in Rust asset registry
+    IgniteResult assignRes = ignite_rs_asset_assign_metadata(handle, path, AssetType_RS_Texture);
+    EXPECT_EQ(assignRes, IgniteResult_Ok);
+
+    // Retrieve metadata
+    char outBuf[128] = {0};
+    AssetType_RS outType = AssetType_RS_Invalid;
+    IgniteResult getRes = ignite_rs_asset_get_metadata(handle, outBuf, sizeof(outBuf), &outType);
+    EXPECT_EQ(getRes, IgniteResult_Ok);
+    EXPECT_STREQ(outBuf, path);
+    EXPECT_EQ(outType, AssetType_RS_Texture);
+
+    // Remove metadata
+    IgniteResult removeRes = ignite_rs_asset_remove_metadata(handle);
+    EXPECT_EQ(removeRes, IgniteResult_Ok);
+
+    // Get after remove should return ErrNotFound
+    EXPECT_EQ(ignite_rs_asset_get_metadata(handle, outBuf, sizeof(outBuf), &outType), IgniteResult_ErrNotFound);
+}
+
+TEST(RustInterop, Phase2AssetPinningRefCounting)
+{
+    const uint64_t validHandle = 0x999988887777ULL;
+    const uint64_t invalidHandle = 0ULL; // AssetHandle(0) must never be pinned (Rule 13)
+
+    // Rule 13: Pinning handle 0 should return ErrInvalidHandle
+    EXPECT_EQ(ignite_rs_asset_pin(invalidHandle), IgniteResult_ErrInvalidHandle);
+    EXPECT_FALSE(ignite_rs_asset_is_pinned(invalidHandle));
+    EXPECT_EQ(ignite_rs_asset_get_pin_count(invalidHandle), 0u);
+
+    // Pinning valid handle
+    EXPECT_EQ(ignite_rs_asset_pin(validHandle), IgniteResult_Ok);
+    EXPECT_TRUE(ignite_rs_asset_is_pinned(validHandle));
+    EXPECT_EQ(ignite_rs_asset_get_pin_count(validHandle), 1u);
+
+    // Increment pin count
+    EXPECT_EQ(ignite_rs_asset_pin(validHandle), IgniteResult_Ok);
+    EXPECT_EQ(ignite_rs_asset_get_pin_count(validHandle), 2u);
+
+    // Decrement pin count
+    EXPECT_EQ(ignite_rs_asset_unpin(validHandle), IgniteResult_Ok);
+    EXPECT_EQ(ignite_rs_asset_get_pin_count(validHandle), 1u);
+
+    // Final unpin removes pin
+    EXPECT_EQ(ignite_rs_asset_unpin(validHandle), IgniteResult_Ok);
+    EXPECT_FALSE(ignite_rs_asset_is_pinned(validHandle));
+    EXPECT_EQ(ignite_rs_asset_get_pin_count(validHandle), 0u);
+
+    // Unpin when not pinned returns ErrNotFound
+    EXPECT_EQ(ignite_rs_asset_unpin(validHandle), IgniteResult_ErrNotFound);
+}
+
+// -------------------------------------------------
+// Phase 3: Serialization FFI Tests (serde & bincode)
+// -------------------------------------------------
+
+TEST(RustInterop, Phase3YamlSerialization)
+{
+    const uint64_t handle = 0x555544443333ULL;
+    const char* path = "Assets/Scenes/Level1.ixscene";
+
+    char yamlBuf[256] = {0};
+    IgniteResult serRes = ignite_rs_serialize_metadata_yaml(handle, path, AssetType_RS_Scene, yamlBuf, sizeof(yamlBuf));
+    EXPECT_EQ(serRes, IgniteResult_Ok);
+    EXPECT_NE(strstr(yamlBuf, "filepath"), nullptr);
+    EXPECT_NE(strstr(yamlBuf, "Scene"), nullptr);
+
+    // Deserialize back from YAML
+    char outPathBuf[256] = {0};
+    AssetType_RS outType = AssetType_RS_Invalid;
+    IgniteResult deserRes = ignite_rs_deserialize_metadata_yaml(yamlBuf, outPathBuf, sizeof(outPathBuf), &outType);
+    EXPECT_EQ(deserRes, IgniteResult_Ok);
+    EXPECT_STREQ(outPathBuf, path);
+    EXPECT_EQ(outType, AssetType_RS_Scene);
+}
+
+TEST(RustInterop, Phase3BinarySerialization)
+{
+    const uint64_t handle = 0x777766665555ULL;
+    const char* path = "Assets/Models/knight.mesh";
+
+    uint64_t bufHandle = 0;
+    const uint8_t* ptr = nullptr;
+    size_t len = 0;
+
+    IgniteResult serRes = ignite_rs_serialize_metadata_binary(handle, path, AssetType_RS_Mesh, &bufHandle, &ptr, &len);
+    EXPECT_EQ(serRes, IgniteResult_Ok);
+    EXPECT_NE(bufHandle, 0u);
+    ASSERT_NE(ptr, nullptr);
+    EXPECT_GT(len, 0u);
+}
