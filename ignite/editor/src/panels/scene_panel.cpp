@@ -266,6 +266,10 @@ namespace ignite
 
 				for (const Entity &entity : rootEntities)
 					RenderEntityNode(entity);
+
+                // Add some extra space at the bottom
+                ImGui::Dummy(ImVec2(-1.0f, 32.0f));
+
                 ImGui::TreePop();
             }
 
@@ -2916,6 +2920,12 @@ namespace ignite
                 m_IsFocused = ImGui::IsWindowFocused();
                 m_IsHovered = ImGui::IsWindowHovered();
 
+                if (m_EditorLayer && m_EditorLayer->IsInPrefabIsolation())
+                {
+                    if (UI::DrawButton("Back to scene", { 96.0f, 28.0f }))
+                        m_EditorLayer->ExitPrefabIsolation(true);
+                }
+
                 // Calculating Scene Viewport location
                 const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
                 const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
@@ -2958,6 +2968,16 @@ namespace ignite
 
                 ImDrawList *drawList = ImGui::GetWindowDrawList();
 
+				// if (m_SceneFocused && mouseWantsFocus)
+				{
+					const char *bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
+					const ImVec2 textSize = ImGui::CalcTextSize(bannerText);
+					const ImVec2 bannerSize = ImVec2{ textSize.x + 24.0f, textSize.y + 8.0f };
+					const ImVec2 bannerCursor = { canvasPos.x + (canvasSize.x - bannerSize.x) * 0.5f, canvasPos.y + 10.0f };
+					//ImGui::SetCursorScreenPos(bannerCursor);
+					UI::DrawBannerText(bannerText, { 124.0f, 200.0f });
+				}
+
                 // Click inside the viewport to (re-)focus in Play or Simulate modes
                 // Only allow focusing if the scene is not already focused and the cooldown has expired
                 // This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
@@ -2970,27 +2990,6 @@ namespace ignite
                         InputSystem::SetCursorMode(CursorMode::Disabled);
                         InputSystem::SetMouseToCenter();
                     }
-                }
-
-                if (m_SceneFocused && mouseWantsFocus)
-                {
-                    const char* bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
-                    ImVec2 textSize = ImGui::CalcTextSize(bannerText);
-                    
-                    float bannerWidth = textSize.x + 24.0f;
-                    float bannerHeight = textSize.y + 12.0f;
-                    
-                    ImVec2 bannerMin = { canvasPos.x + (canvasSize.x - bannerWidth) * 0.5f, canvasPos.y + 10.0f };
-                    ImVec2 bannerMax = { bannerMin.x + bannerWidth, bannerMin.y + bannerHeight };
-                    
-                    // Draw a rounded semi-transparent dark banner
-                    drawList->AddRectFilled(bannerMin, bannerMax, ImColor(15, 15, 15, 180), 6.0f);
-                    // Draw border
-                    drawList->AddRect(bannerMin, bannerMax, ImColor(255, 128, 0, 220), 6.0f, 0, 1.5f);
-                    
-                    // Draw text centered inside the banner
-                    ImVec2 textPos = { bannerMin.x + 12.0f, bannerMin.y + 6.0f };
-                    drawList->AddText(textPos, ImColor(255, 255, 255, 255), bannerText);
                 }
 
                 Entity clickedIconEntity = {};
@@ -3109,49 +3108,6 @@ namespace ignite
                 }
 
                 {
-                    if (m_EditorLayer && m_EditorLayer->IsInPrefabIsolation())
-                    {
-                        const char *backText = "< Back to Scene";
-                        const ImVec2 textSize = ImGui::CalcTextSize(backText);
-
-                        const float paddingX = 16.0f;
-                        const float paddingY = 6.0f;
-                        const float buttonWidth = textSize.x + paddingX * 2.0f;
-                        const float buttonHeight = textSize.y + paddingY * 2.0f;
-
-                        const ImVec2 bannerMin = { canvasPos.x + (canvasSize.x - buttonWidth) * 0.5f, canvasPos.y + 10.0f };
-                        const ImVec2 bannerMax = { bannerMin.x + buttonWidth, bannerMin.y + buttonHeight };
-
-                        // Interactive region via InvisibleButton
-                        ImGui::SetCursorScreenPos(bannerMin);
-                        ImGui::InvisibleButton("##BackToScenePrefabBtn", ImVec2(buttonWidth, buttonHeight));
-
-                        const bool isHovered = ImGui::IsItemHovered();
-                        const bool isActive = ImGui::IsItemActive();
-
-                        if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-                        {
-                            m_EditorLayer->ExitPrefabIsolation(true);
-                        }
-
-                        // Dynamic colors based on interaction state
-                        const ImU32 bgColor = isActive ? IM_COL32(25, 25, 25, 255) : (isHovered ? IM_COL32(82, 63, 25, 255) : IM_COL32(15, 15, 15, 180));
-                        const ImU32 borderColor = isHovered ? IM_COL32(255, 200, 128, 240) : IM_COL32(255, 128, 0, 220);
-
-                        // Subtle outer shadow
-                        drawList->AddRectFilled({ bannerMin.x - 1.0f, bannerMin.y - 1.0f }, { bannerMax.x + 1.0f, bannerMax.y + 1.0f }, IM_COL32(0, 0, 0, isHovered ? 90 : 60), 7.0f);
-
-                        // Rounded banner background
-                        drawList->AddRectFilled(bannerMin, bannerMax, bgColor, 6.0f);
-
-                        // Border outline
-                        drawList->AddRect(bannerMin, bannerMax, borderColor, 6.0f, 0, 1.5f);
-
-                        // Centered text inside the banner
-                        const ImVec2 textPos = { bannerMin.x + paddingX, bannerMin.y + paddingY };
-                        drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), backText);
-                    }
-
                     constexpr float padding = 18.0f;
                     float yPosition = 6.0f;
 
@@ -3655,7 +3611,7 @@ namespace ignite
             }
             else
             {
-                ImGui::Text("No Scene");
+                UI::DrawCenteredText("No Scene");
             }
         }
 
@@ -3904,38 +3860,8 @@ namespace ignite
 
         auto drawGizmoBtn = [&](const std::string &iconName, const ImVec2 &buttonSize, bool active)
         {
-			const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
-
-            auto dl = ImGui::GetWindowDrawList();
-
-            ImTextureID texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
-            ImGui::PushID(texID);
-
-            const float padding = 4.0f;
-            const float buttonWidth = buttonSize.x + padding;
-            const float buttonHeight = buttonSize.y + padding;
-            
-            const ImVec2 buttonMin = { canvasPos.x, canvasPos.y };
-            const ImVec2 buttonMax = { buttonMin.x + buttonWidth, buttonMin.y + buttonHeight };
-
-            ImGui::SetCursorScreenPos(buttonMin);
-            ImGui::InvisibleButton((const char *)texID, ImVec2(buttonWidth, buttonHeight));
-
-            const bool isHovered = ImGui::IsItemHovered();
-            const bool isClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
-
-            const auto colors = ImGui::GetStyle().Colors;
-			const ImU32 bgColor = active ? IM_COL32(82, 63, 25, 255) : (isHovered ? IM_COL32(82, 63, 25, 255) : IM_COL32(0, 0, 0, 0));
-			const ImU32 borderColor = active ? IM_COL32(255, 128, 0, 220) : (isHovered ? IM_COL32(255, 200, 128, 240) : IM_COL32(0, 0, 0, 0));
-            
-            // Rounded background
-            dl->AddRectFilled(buttonMin, buttonMax, bgColor, 6.0f);
-            dl->AddRect(buttonMin, buttonMax, borderColor, 3.0f);
-
-            dl->AddImage(texID, buttonMin, buttonMax);
-            ImGui::PopID();
-
-            return isClicked;
+            const auto texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
+            return UI::DrawSelectImageButton(iconName.c_str(), texID, buttonSize, active);;
         };
 
         if (drawGizmoBtn("picking", buttonSize, m_Data.gizmoOp == GizmoOperation::NONE)) SetGizmoOperation(GizmoOperation::NONE);
@@ -3989,11 +3915,10 @@ namespace ignite
 
         const bool isScenePlaying = m_Scene && m_Scene->IsPlaying();
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-        ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
+        const auto scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
 
         ImGui::SameLine();
-        ImVec4 bgColPlay = isScenePlaying ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        if (ImGui::ImageButton("##PlayButton", scenePlayStopID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bgColPlay))
+        if (UI::DrawImageButton("##PlayButton", scenePlayStopID, buttonSize))
         {
             if (isScenePlaying)
             {
@@ -4025,11 +3950,10 @@ namespace ignite
 
         const bool isSceneSimulate = m_Scene && m_Scene->IsSimulating();
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-        ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
+        const auto sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
 
         ImGui::SameLine();
-        ImVec4 bgColSim = isSceneSimulate ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        if (ImGui::ImageButton("##SimulateButton", sceneSimulateID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bgColSim))
+        if (UI::DrawImageButton("##SimulateButton", sceneSimulateID, buttonSize))
         {
             if (isSceneSimulate)
             {

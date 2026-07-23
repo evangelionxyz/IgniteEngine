@@ -210,31 +210,6 @@ namespace ignite::UI
 
     static float defColWidth = 128.0f;
 
-    static State DrawButton(const char *text, bool *value = nullptr)
-    {
-        State state;
-
-        ImGui::PushID((void *)&text);
-
-        float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-        float lineWidth = GImGui->FontSize + GImGui->Style.FramePadding.x * (ImGui::CalcTextSize(text).x / 4.0f);
-        ImVec2 btSize = ImVec2(lineWidth, lineHeight);
-
-        const bool ret = ImGui::Button(text, btSize);
-        if (ret)
-        {
-            state.isItemEdited = true;
-            state.isItemDeactivatedAfterEdit = true;
-        }
-        State::Check(state);
-
-        if (value)
-            *value = ret;
-
-        ImGui::PopID();
-        return state;
-    }
-
     static State DrawButtonWithColumn(const char *label, const char *text, bool *value = nullptr, std::function<void()> func = std::function<void()>(), float &coloumnWidth = defColWidth)
     {
         State state;
@@ -827,7 +802,6 @@ namespace ignite::UI
         return state;
     }
 
-    void DrawCenteredText(const char *text, uint32_t color = 0xFFFFFFFF);
 
     template<typename TOnChanged>
     inline void DrawTexturePreviewDropTarget(const char *label, AssetHandle &textureHandle, TOnChanged &&onChanged)
@@ -927,6 +901,14 @@ namespace ignite::UI
     bool DrawAssetDropTarget(const std::string &title, const std::string &buttonLabel,
         const std::initializer_list<AssetType> &supportedTypes, AssetHandle *outHandle, AssetManager *assetManager,
         const char *dropSource = DND_PAYLOAD_CONTENT_BROWSER_ITEM);
+
+    bool DrawButton(const char *label, const ImVec2 &size);
+    bool DrawImageButton(const char *strId, ImTextureID texID, const ImVec2 &size, const ImVec2 &uv0 = ImVec2(0, 0), const ImVec2 &uv1 = ImVec2(1, 1));
+    bool DrawSelectImageButton(const char *strId, ImTextureID texID, const ImVec2 &size, bool active, const ImVec2 &uv0 = ImVec2(0, 0), const ImVec2 &uv1 = ImVec2(1, 1));
+
+	void DrawCenteredText(const char *text, uint32_t color = 0xFFFFFFFF);
+
+    void DrawBannerText(const char *text, const ImVec2 &size);
 }
 
 #endif

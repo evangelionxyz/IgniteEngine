@@ -13,9 +13,9 @@
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/scene/prefab.hpp"
 #include "ignite/scripting/script_engine.hpp"
-
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/signals/asset_signal.hpp"
+#include "ext/editor_ui.hpp"
 
 #include <format>
 #include <algorithm>
@@ -547,7 +547,7 @@ namespace ignite
 
                         if (node->children.empty())
                         {
-                            ImGui::Text("This folder is empty");
+                            UI::DrawCenteredText("Empty folder");
                         }
 
                         const float spacing = 12.0f;
@@ -2115,13 +2115,12 @@ namespace ignite
 
         const ImGuiStyle &style = ImGui::GetStyle();
 
-        const auto navbarBtSize = ImVec2(32.0f, 24.0f);
-        const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
-
-        if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarHeight), ImGuiChildFlags_Borders))
+        const auto navbarBtSize = ImVec2(38.0f, 32.0f);
+        // const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
+        if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarBtSize.y), ImGuiChildFlags_Borders))
         {
             ImTextureID arrow = (ImTextureID)s_SharedIcons["arrow"]->GetHandle().Get();
-            if (ImGui::ImageButton("##bw_arrow", arrow, navbarBtSize))
+            if (UI::DrawImageButton("##bw_arrow", arrow, navbarBtSize))
             {
                 if (!m_BackwardPathStack.empty())
                 {
@@ -2139,8 +2138,8 @@ namespace ignite
                 }
             }
 
-            ImGui::SameLine();
-            if (ImGui::ImageButton("##fw_arrow", arrow, navbarBtSize, {1.0f, 0.0f}, { 0.0f, 1.0f }))
+            ImGui::SameLine(0.0f, 4.0f);
+            if (UI::DrawImageButton("##fw_arrow", arrow, navbarBtSize, {1.0f, 0.0f}, { 0.0f, 1.0f }))
             {
                 if (!m_ForwardPathStack.empty())
                 {
@@ -2158,10 +2157,9 @@ namespace ignite
                 }
             }
 
-            ImGui::SameLine();
-
+            ImGui::SameLine(0.0f, 4.0f);
             ImTextureID refreshBt = (ImTextureID)s_SharedIcons["roll"]->GetHandle().Get();
-            if (ImGui::ImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
+            if (UI::DrawImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
             {
                 m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
                 PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
