@@ -92,7 +92,7 @@ project "Ignite.Test"
             'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"'
         }
         postbuildcommands {
-            '{COPYFILE} "%{wks.location}/crates/target/debug/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"'
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}")
         }
 
     filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
@@ -101,7 +101,7 @@ project "Ignite.Test"
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"'
         }
         postbuildcommands {
-            '{COPYFILE} "%{wks.location}/crates/target/release/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"'
+            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}")
         }
 
     filter {}

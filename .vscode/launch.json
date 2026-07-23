@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/Debug/Ignite.Editor.exe",
             "cwd": "${workspaceFolder}/ignite/editor",
-            "externalConsole": true,
+            "externalConsole": false,
             "stopAtEntry": false,
             "preLaunchTask": "Build Editor (Debug)"
         },
@@ -49,7 +49,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/Release/Ignite.Editor.exe",
             "cwd": "${workspaceFolder}/ignite/editor",
-            "externalConsole": true,
+            "externalConsole": false,
             "stopAtEntry": false,
             "preLaunchTask": "Build Editor (Release)"
         },
@@ -59,7 +59,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/Debug/Ignite.Test.exe",
             "cwd": "${workspaceFolder}/ignite/test",
-            "externalConsole": true,
+            "externalConsole": false,
             "stopAtEntry": false,
             "preLaunchTask": "Build Test (Debug)"
         }
