@@ -24,6 +24,7 @@ project "Ignite.Engine"
         "src",
         "src/ignite",
         "%{wks.location}/ignite/ignite.renderer/src",
+        "%{wks.location}/crates/src/include",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -77,6 +78,8 @@ project "Ignite.Engine"
         "tracy",
         "MochiSharp.Native",
         "UmbraShaderCompiler",
+
+        "ignite_core.dll.lib", -- rust based
     }
 
     defines {
@@ -88,6 +91,27 @@ project "Ignite.Engine"
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
     }
+
+    -- build rust
+    filter "configurations:Debug or Debug-Profiling"
+        libdirs { "%{wks.location}/crates/target/debug" }
+        prebuildcommands {
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"'
+        }
+        postbuildcommands {
+            '{COPYFILE} "%{wks.location}/crates/target/debug/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"'
+        }
+
+    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
+        libdirs { "%{wks.location}/crates/target/release" }
+        prebuildcommands {
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"'
+        }
+        postbuildcommands {
+            '{COPYFILE} "%{wks.location}/crates/target/release/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"'
+        }
+
+    filter {}
 
     --linux
     filter "system:linux"

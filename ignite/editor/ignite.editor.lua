@@ -35,11 +35,14 @@ project "Ignite.Editor"
         "freetype",
         "tracy",
         "MochiSharp.Native",
+
+        "ignite_core.dll.lib", -- rust based
     }
 
     includedirs {
         "src",
         "%{wks.location}/ignite/engine/src",
+        "%{wks.location}/crates/src/include",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -82,6 +85,27 @@ project "Ignite.Editor"
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
     }
+
+    -- build rust
+    filter "configurations:Debug or Debug-Profiling"
+        libdirs { "%{wks.location}/crates/target/debug" }
+        prebuildcommands {
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"'
+        }
+        postbuildcommands {
+            '{COPYFILE} "%{wks.location}/crates/target/debug/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"'
+        }
+
+    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
+        libdirs { "%{wks.location}/crates/target/release" }
+        prebuildcommands {
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"'
+        }
+        postbuildcommands {
+            '{COPYFILE} "%{wks.location}/crates/target/release/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"'
+        }
+
+    filter {}
 
     postbuildcommands {
         '{COPYDIR} "%{prj.location}/resources" "%{cfg.targetdir}/resources"',

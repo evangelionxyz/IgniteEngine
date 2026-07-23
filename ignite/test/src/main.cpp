@@ -17,6 +17,7 @@
 #include "ignite/animation/blend_space.hpp"
 #include "ignite/animation/animation_montage.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
+
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -24,6 +25,7 @@
 #include <thread>
 #include <format>
 
+#include "rust_test.hpp"
 #include <gtest/gtest.h>
 
 using namespace ignite;
@@ -31,7 +33,6 @@ using namespace ignite;
 // -------------------------------------------------
 // BlendSpace 2D Evaluation & Serialization Tests
 // -------------------------------------------------
-
 TEST(BlendSpace, 2DEvaluationAndSerialization)
 {
     ignite::Path filepath = "test-resources/temp/test_blendspace.bs2d";
