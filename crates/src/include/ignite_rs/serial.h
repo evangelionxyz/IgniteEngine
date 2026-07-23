@@ -19,6 +19,9 @@ IgniteResult ignite_rs_serialize_metadata_yaml(uint64_t handle, const char* path
 IgniteResult ignite_rs_deserialize_metadata_yaml(const char* yaml_str, char* out_path_buf, size_t max_len, AssetType_RS* out_type);
 IgniteResult ignite_rs_serialize_metadata_binary(uint64_t handle, const char* path, AssetType_RS asset_type, uint64_t* out_handle, const uint8_t** out_ptr, size_t* out_len);
 
+// Asset Registry (.ixreg) File Loader FFI
+size_t ignite_rs_load_asset_registry_file(const char* file_path);
+
 #ifdef __cplusplus
 }
 #endif

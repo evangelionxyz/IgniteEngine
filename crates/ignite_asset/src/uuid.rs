@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[repr(transparent)]
+#[serde(transparent)]
 pub struct UUID(pub u64);
 
 impl UUID {

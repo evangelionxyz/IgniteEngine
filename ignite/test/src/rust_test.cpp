@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include <string>
+#include <filesystem>
 
 // -------------------------------------------------
 // Rust FFI Interop & Engine Lifecycle Tests
@@ -403,4 +404,45 @@ TEST(RustInterop, Phase5ProjectAndScriptingBridge)
 
     EXPECT_EQ(ignite_rs_script_unregister_tick_callback(), IgniteResult_Ok);
     EXPECT_FALSE(ignite_rs_script_trigger_tick(0.016f));
+}
+
+// -------------------------------------------------
+// FPS Game Test Case (.ixreg) Asset Registry Deserialization
+// -------------------------------------------------
+
+TEST(RustInterop, FpsGameAssetRegistryRoundtrip)
+{
+    std::filesystem::path targetFile = "fps_game_test_case/AssetRegistry.ixreg";
+    if (!std::filesystem::exists(targetFile))
+    {
+        targetFile = "D:/Dev/Ignite/Bin/Debug/fps_game_test_case/AssetRegistry.ixreg";
+    }
+    if (!std::filesystem::exists(targetFile))
+    {
+        targetFile = "../../Bin/Debug/fps_game_test_case/AssetRegistry.ixreg";
+    }
+
+    std::filesystem::path absPath = std::filesystem::absolute(targetFile);
+    std::string pathStr = absPath.generic_string();
+
+    // Load and deserialize the entire 28.6KB FPS Game AssetRegistry.ixreg in Rust
+    size_t loadedCount = ignite_rs_load_asset_registry_file(pathStr.c_str());
+    EXPECT_GT(loadedCount, 0u);
+
+    // Verify specific entries deserialized accurately from fps_game_test_case
+    // Material 18 handle: 42972961298889726
+    const uint64_t material18Handle = 42972961298889726ULL;
+    char outPath[256] = {0};
+    AssetType_RS outType = AssetType_RS_Invalid;
+    EXPECT_EQ(ignite_rs_asset_get_metadata(material18Handle, outPath, sizeof(outPath), &outType), IgniteResult_Ok);
+    EXPECT_STREQ(outPath, "Assets/StaticMeshes/Sponza/Material_18.ixmat");
+    EXPECT_EQ(outType, AssetType_RS_Material);
+
+    // StaticMesh Sponza handle: 1801218881103323832
+    const uint64_t sponzaMeshHandle = 1801218881103323832ULL;
+    memset(outPath, 0, sizeof(outPath));
+    outType = AssetType_RS_Invalid;
+    EXPECT_EQ(ignite_rs_asset_get_metadata(sponzaMeshHandle, outPath, sizeof(outPath), &outType), IgniteResult_Ok);
+    EXPECT_STREQ(outPath, "Assets/StaticMeshes/Sponza/Sponza.mesh");
+    EXPECT_EQ(outType, AssetType_RS_StaticMesh);
 }

@@ -92,22 +92,28 @@ project "Ignite.Engine"
         "JPH_OBJECT_STREAM",
     }
 
-    -- build rust
+    -- build rust and SDL
     filter "configurations:Debug or Debug-Profiling"
         libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
-            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"'
-        }
-        postbuildcommands {
-            '{COPYFILE} "%{wks.location}/crates/target/debug/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"'
+            -- Configure and Build SDL
+            'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
+
+            -- Build Rust
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            '{COPYFILE} "%{wks.location}/crates/target/debug/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"',
         }
 
     filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
         libdirs { "%{wks.location}/crates/target/release" }
         prebuildcommands {
-            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"'
-        }
-        postbuildcommands {
+            -- Configure and Build SDL
+            'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
+            
+            -- Build Rust
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
             '{COPYFILE} "%{wks.location}/crates/target/release/ignite_core.dll" "%{cfg.targetdir}/ignite_core.dll"'
         }
 

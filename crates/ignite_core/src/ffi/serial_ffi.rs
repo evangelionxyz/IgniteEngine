@@ -4,9 +4,12 @@ use std::os::raw::c_char;
 use std::ffi::CStr;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::fs;
 use ignite_asset::{AssetMetaData, AssetType};
 use ignite_serial as serial;
 use crate::ffi::result_ffi::IgniteResult;
+use crate::ffi::asset_manager_ffi::ignite_rs_asset_assign_metadata;
+use crate::ffi::log_ffi::{log_internal, IgniteLogLevel};
 
 static SERIAL_BUFFERS: Mutex<Option<HashMap<u64, Vec<u8>>>> = Mutex::new(None);
 static NEXT_SERIAL_HANDLE: Mutex<u64> = Mutex::new(1);
@@ -114,6 +117,48 @@ pub extern "C" fn ignite_rs_serialize_metadata_binary(
                 IgniteResult::Ok
             }
             Err(_) => IgniteResult::ErrOperationFailed,
+        }
+    }
+}
+
+/// Loads and parses an `.ixreg` YAML asset registry file in Rust,
+/// registering all deserialized metadata directly into the Rust AssetManager!
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_rs_load_asset_registry_file(file_path_ptr: *const c_char) -> usize {
+    if file_path_ptr.is_null() {
+        return 0;
+    }
+    unsafe {
+        let file_path = match CStr::from_ptr(file_path_ptr).to_str() {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
+        let yaml_str = match fs::read_to_string(file_path) {
+            Ok(s) => s,
+            Err(e) => {
+                log_internal(IgniteLogLevel::Warn, &format!("[Rust Serializer] Failed to read asset registry file '{}': {}", file_path, e));
+                return 0;
+            }
+        };
+        match serial::AssetRegistryFile::from_yaml(&yaml_str) {
+            Ok(reg_file) => {
+                let mut count = 0;
+                for item in reg_file.registry.assets {
+                    let path_c = match std::ffi::CString::new(item.filepath) {
+                        Ok(c) => c,
+                        Err(_) => continue,
+                    };
+                    if ignite_rs_asset_assign_metadata(item.handle.into(), path_c.as_ptr(), item.asset_type) == IgniteResult::Ok {
+                        count += 1;
+                    }
+                }
+                log_internal(IgniteLogLevel::Info, &format!("[Rust Serializer] Successfully loaded {} asset entries from '{}'", count, file_path));
+                count
+            }
+            Err(err) => {
+                log_internal(IgniteLogLevel::Error, &format!("[Rust Serializer] YAML parse error in '{}': {}", file_path, err));
+                0
+            }
         }
     }
 }
