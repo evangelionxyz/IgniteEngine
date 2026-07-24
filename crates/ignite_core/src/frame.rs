@@ -8,7 +8,7 @@ pub type DeferredCallback = Box<dyn FnOnce() + Send>;
 /// Per-frame context holding timing, frame count, and deferred work queues.
 /// Owned by `IgniteEngine` and updated each frame via `begin_frame` / `end_frame`.
 #[derive(Default)]
-pub struct FrameContext {
+pub struct FrameData {
     /// Current frame's delta time in seconds
     pub delta_time: f32,
     /// Accumulated total time since engine init in seconds
@@ -21,7 +21,7 @@ pub struct FrameContext {
     deferred_queue: VecDeque<DeferredCallback>,
 }
 
-impl FrameContext {
+impl FrameData {
     pub fn new() -> Self {
         Self {
             delta_time: 0.0,
@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_frame_context_lifecycle() {
-        let mut ctx = FrameContext::new();
+        let mut ctx = FrameData::new();
         assert_eq!(ctx.frame_count, 0);
         assert!(!ctx.in_frame);
 
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_deferred_callbacks() {
-        let mut ctx = FrameContext::new();
+        let mut ctx = FrameData::new();
         let counter = Arc::new(AtomicU32::new(0));
 
         ctx.begin_frame(0.016);
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_frame_context_reset() {
-        let mut ctx = FrameContext::new();
+        let mut ctx = FrameData::new();
         ctx.begin_frame(0.016);
         ctx.begin_frame(0.016);
         ctx.defer(Box::new(|| {}));

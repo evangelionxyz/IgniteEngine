@@ -103,6 +103,7 @@ project "Ignite.Engine"
             -- Build Rust
             'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
             copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
     filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
@@ -114,7 +115,8 @@ project "Ignite.Engine"
             
             -- Build Rust
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
-            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}")
+            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
     filter {}

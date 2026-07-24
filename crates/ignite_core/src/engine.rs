@@ -3,7 +3,7 @@
 use ignite_asset::AssetManager;
 use std::sync::{Mutex, OnceLock};
 
-use crate::frame::FrameContext;
+use crate::frame::FrameData;
 use crate::{IgniteLogLevel, log_internal};
 
 /// Engine version encoded as (major << 22 | minor << 12 | patch)
@@ -20,14 +20,14 @@ pub const ENGINE_VERSION: u32 = make_version(ENGINE_VERSION_MAJOR, ENGINE_VERSIO
 
 pub struct IgniteEngine {
     pub asset_manager: AssetManager,
-    pub frame: FrameContext,
+    pub frame: FrameData,
 }
 
 impl IgniteEngine {
     pub fn new() -> Self {
         Self {
             asset_manager: AssetManager::new(),
-            frame: FrameContext::new(),
+            frame: FrameData::new(),
         }
     }
 }
