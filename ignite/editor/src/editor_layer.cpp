@@ -1424,7 +1424,8 @@ namespace ignite
         if (m_EditorScene)
             m_EditorScene->OnStop();
 
-        m_ActiveScene->OnStop();
+        if (m_ActiveScene)
+            m_ActiveScene->OnStop();
         SetActiveScene(m_EditorScene);
     }
 
