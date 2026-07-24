@@ -74,82 +74,82 @@ namespace ignite
         return !it->second->IsReady();
     }
 
-	void AssetManager::Init()
-	{
-		LOG_WARN("[Asset Manager] Initialized");
-		s_AssetManagerInstance = this;
+    void AssetManager::Init()
+    {
+        LOG_WARN("[Asset Manager] Initialized");
+        s_AssetManagerInstance = this;
 
-		m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
-		[this](const AssetChangeSignal &signal)
-		{
-			OnAssetChangeSignal(signal);
-		});
-	}
+        m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
+            [this](const AssetChangeSignal &signal)
+            {
+                OnAssetChangeSignal(signal);
+            });
+    }
 
-	void AssetManager::Shutdown()
-	{
-		SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
-		m_AssetChangeToken = kInvalidSignalToken;
-		if (m_FbxSdkManager)
-		{
-			m_FbxSdkManager->Destroy();
-			m_FbxSdkManager = nullptr;
-		}
+    void AssetManager::Shutdown()
+    {
+        SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
+        m_AssetChangeToken = kInvalidSignalToken;
+        if (m_FbxSdkManager)
+        {
+            m_FbxSdkManager->Destroy();
+            m_FbxSdkManager = nullptr;
+        }
 
         Reset();
-		s_AssetManagerInstance = nullptr;
+        s_AssetManagerInstance = nullptr;
 
-		LOG_WARN("[Asset Manager] Shutdown");
-	}
+        LOG_WARN("[Asset Manager] Shutdown");
+    }
 
-	void AssetManager::Reset()
-	{
+    void AssetManager::Reset()
+    {
         IGN_PROFILE_FUNCTION();
 
-		if (auto *device = DeviceManager::GetInstance()->GetDevice())
-		{
-			GPUUploadSync::DeviceWaitIdle(device);
-		}
-
-		decltype(m_LoadedAssets) OLD_LoadedAssets;
-		decltype(m_PinnedAssetsByOwner) OLD_PinnedAssetsByOwner;
-		decltype(m_AssetPinCounts) OLD_AssetPinCounts;
-		decltype(m_LoadingAssets) OLD_LoadingAssets;
-		decltype(m_AssetRegistry) OLD_AssetRegistry;
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
-			std::unique_lock lock(m_AssetMutex);
-			OLD_LoadedAssets.swap(m_LoadedAssets);
-			OLD_PinnedAssetsByOwner.swap(m_PinnedAssetsByOwner);
-			OLD_AssetPinCounts.swap(m_AssetPinCounts);
-			OLD_LoadingAssets.swap(m_LoadingAssets);
-			OLD_AssetRegistry.swap(m_AssetRegistry);
-		}
+            GPUUploadSync::DeviceWaitIdle(device);
+        }
 
-		OLD_LoadedAssets.clear();
-		OLD_PinnedAssetsByOwner.clear();
-		OLD_AssetPinCounts.clear();
-		OLD_AssetRegistry.clear();
+        decltype(m_LoadedAssets) OLD_LoadedAssets;
+        decltype(m_PinnedAssetsByOwner) OLD_PinnedAssetsByOwner;
+        decltype(m_AssetPinCounts) OLD_AssetPinCounts;
+        decltype(m_LoadingAssets) OLD_LoadingAssets;
+        decltype(m_AssetRegistry) OLD_AssetRegistry;
+        {
+            std::unique_lock lock(m_AssetMutex);
+            OLD_LoadedAssets.swap(m_LoadedAssets);
+            OLD_PinnedAssetsByOwner.swap(m_PinnedAssetsByOwner);
+            OLD_AssetPinCounts.swap(m_AssetPinCounts);
+            OLD_LoadingAssets.swap(m_LoadingAssets);
+            OLD_AssetRegistry.swap(m_AssetRegistry);
+        }
 
-		m_Project.reset();
-		m_AssetHandleByPath.clear();
-		m_LastSyncedRustVersion = 0;
-	}
+        OLD_LoadedAssets.clear();
+        OLD_PinnedAssetsByOwner.clear();
+        OLD_AssetPinCounts.clear();
+        OLD_AssetRegistry.clear();
 
-	void AssetManager::SetActiveProject(const Ref<Project> &project)
-	{
+        m_Project.reset();
+        m_AssetHandleByPath.clear();
+        m_LastSyncedRustVersion = 0;
+    }
+
+    void AssetManager::SetActiveProject(const Ref<Project> &project)
+    {
         if (m_Project.lock() == project)
             return;
 
         Reset();
-		m_Project = project;
-	}
+        m_Project = project;
+    }
 
-	AssetManager *AssetManager::GetInstance()
-	{
+    AssetManager *AssetManager::GetInstance()
+    {
         return s_AssetManagerInstance;
-	}
+    }
 
-	fbxsdk::FbxManager *AssetManager::GetOrCreateFbxSdkManager()
+    fbxsdk::FbxManager *AssetManager::GetOrCreateFbxSdkManager()
     {
         if (!m_FbxSdkManager)
         {
@@ -172,7 +172,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        // Invalid 
+        // Invalid
         if (GetAssetTypeFromExtension(filepath.extension().generic_string()) == AssetType::Invalid)
         {
             LOG_ERROR("[Asset Manager] Invalid asset type '{}'", filepath.generic_string());
@@ -210,7 +210,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        // Invalid 
+        // Invalid
         if (GetAssetTypeFromExtension(filepath.extension().generic_string()) == AssetType::Invalid)
         {
             LOG_ERROR("[Asset Manager] Invalid asset type '{}'", filepath.generic_string());
@@ -246,19 +246,19 @@ namespace ignite
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
-		LOG_ASSERT(handle != AssetHandle(0), "[Asset Manager] Invalid asset handle");
+        LOG_ASSERT(handle != AssetHandle(0), "[Asset Manager] Invalid asset handle");
 
-		std::unique_lock lock(m_AssetMutex);
+        std::unique_lock lock(m_AssetMutex);
 
         // Sync metadata with Rust AssetManager backend
         ignite_rs_asset_assign_metadata(static_cast<uint64_t>(handle),
-            metadata.filepath.generic_string().c_str(), static_cast<AssetType_RS>(metadata.type));
+                                        metadata.filepath.generic_string().c_str(), static_cast<AssetType_RS>(metadata.type));
     }
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
     {
-		if (!IsAssetHandleValid(handle))
-			return "None";
+        if (!IsAssetHandleValid(handle))
+            return "None";
 
         const AssetMetaData &metadata = GetMetaData(handle);
         if (!metadata.filepath.empty())
@@ -269,7 +269,7 @@ namespace ignite
     void AssetManager::RemoveAsset(AssetHandle handle)
     {
         IGN_PROFILE_FUNCTION();
-        
+
         std::unique_lock lock(m_AssetMutex);
 
         // Sync removal with Rust AssetManager backend
@@ -478,14 +478,14 @@ namespace ignite
         // Sync metadata registry from Rust source of truth
         SyncFromRust();
 
-		// Call each frame
-		assetUnloadTimer += deltaTime;
-		constexpr float kUnloadInterval = 10.0f;
-		if (assetUnloadTimer >= kUnloadInterval)
-		{
-			assetUnloadTimer = 0.0f;
-			UnloadUnusedAssets();
-		}
+        // Call each frame
+        assetUnloadTimer += deltaTime;
+        constexpr float kUnloadInterval = 10.0f;
+        if (assetUnloadTimer >= kUnloadInterval)
+        {
+            assetUnloadTimer = 0.0f;
+            UnloadUnusedAssets();
+        }
 
         // Call each frame
         if (!m_OnChangeCallbacks.empty())
@@ -506,58 +506,53 @@ namespace ignite
 
         switch (signal.type)
         {
-        case AssetType::AnimatorController:
-        {
-            break;
-        }
-        case AssetType::Texture:
-        case AssetType::Environment:
-        case AssetType::Material:
-        {
-            auto onChangeFunc = [this, signal]() -> bool
+            case AssetType::AnimatorController:
             {
-                const auto &assets = GetLoadedAssets();
-                for (const auto &[handle, asset] : assets)
-                {
-                    if (asset && asset->GetAssetType() == AssetType::Material)
+                break;
+            }
+            case AssetType::Texture:
+            case AssetType::Environment:
+            case AssetType::Material:
+            {
+                auto onChangeFunc = [this, signal]() -> bool
                     {
-                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                        if (!material)
-                            continue;
-
-                        if (signal.type == AssetType::Material)
+                        const auto &assets = GetLoadedAssets();
+                        for (const auto &[handle, asset] : assets)
                         {
-                            if (handle == signal.handle)
+                            if (asset && asset->GetAssetType() == AssetType::Material)
                             {
-                                material->InvalidateBindingSet();
+                                Ref<Material> material = std::static_pointer_cast<Material>(asset);
+                                if (!material)
+                                    continue;
+
+                                if (signal.type == AssetType::Material)
+                                {
+                                    if (handle == signal.handle)
+                                    {
+                                        material->InvalidateBindingSet();
+                                    }
+                                }
+                                else
+                                {
+                                    auto isTextureBeingUsed = [this](AssetHandle textureHandle, Ref<Material> material) -> bool
+                                        {
+                                            return textureHandle == material->baseColorTextureHandle || textureHandle == material->emissiveTextureHandle || textureHandle == material->metallicTextureHandle || textureHandle == material->roughnessTextureHandle || textureHandle == material->normalTextureHandle || textureHandle == material->occlusionTextureHandle;
+                                        };
+
+                                    const bool validTextureRequest = (signal.type == AssetType::Texture) && isTextureBeingUsed(signal.handle, material);
+                                    if (signal.type == AssetType::Environment || validTextureRequest)
+                                    {
+                                        material->InvalidateBindingSet();
+                                    }
+                                }
                             }
                         }
-                        else
-                        {
-                            auto isTextureBeingUsed = [this](AssetHandle textureHandle, Ref<Material> material) -> bool
-                            {
-                                return textureHandle == material->baseColorTextureHandle
-                                    || textureHandle == material->emissiveTextureHandle
-                                    || textureHandle == material->metallicTextureHandle
-                                    || textureHandle == material->roughnessTextureHandle
-                                    || textureHandle == material->normalTextureHandle
-                                    || textureHandle == material->occlusionTextureHandle;
-                            };
+                        return true;
+                    };
 
-                            const bool validTextureRequest = (signal.type == AssetType::Texture) && isTextureBeingUsed(signal.handle, material);
-                            if (signal.type == AssetType::Environment || validTextureRequest)
-                            {
-                                material->InvalidateBindingSet();
-                            }
-                        }
-                    }
-                }
-                return true;
-            };
-
-            m_OnChangeCallbacks.push(std::move(onChangeFunc));
-            break;
-        }
+                m_OnChangeCallbacks.push(std::move(onChangeFunc));
+                break;
+            }
         }
     }
 
@@ -571,19 +566,19 @@ namespace ignite
         }
 
         std::unique_lock lock(m_AssetMutex);
-        
+
         auto it = m_LoadedAssets.find(handle);
         if (it != m_LoadedAssets.end())
         {
             // LOG_DEBUG("[Asset Manager] Unloading asset: {}", static_cast<uint64_t>(handle));
-            
+
             // Release lock before GPU sync to avoid blocking other threads
             Ref<Asset> asset = it->second;
             m_LoadedAssets.erase(it);
             lock.unlock();
-            
+
             // Wait for GPU to ensure asset is not in use (outside lock)
-            if (auto* device = DeviceManager::GetInstance()->GetDevice())
+            if (auto *device = DeviceManager::GetInstance()->GetDevice())
             {
                 GPUUploadSync::DeviceWaitIdle(device);
             }
@@ -635,12 +630,12 @@ namespace ignite
             {
                 GPUUploadSync::DeviceWaitIdle(deviceManager->GetDevice());
             }
-            
+
             assetsToDestroy.clear();
             LOG_DEBUG("[Asset Manager] Unused assets unloaded. Remaining: {}", m_LoadedAssets.size());
         }
     }
-    
+
     AssetType AssetManager::GetAssetType(AssetHandle handle) const
     {
         return GetMetaData(handle).type;
@@ -658,7 +653,6 @@ namespace ignite
 
     const AssetMetaData &AssetManager::GetMetaData(AssetHandle handle) const
     {
-        ignite_rs_asset_get_metadata(handle, )
         if (m_AssetRegistry.contains(handle))
         {
             return m_AssetRegistry.at(handle);
@@ -705,7 +699,7 @@ namespace ignite
         static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 64 * 1024 * 1024; // 512 MB
 
         const uint64_t size = GetAssetFileSize(metadata);
-        
+
         struct ThrottleGuard
         {
             AssetManager *manager;
@@ -718,15 +712,14 @@ namespace ignite
                 {
                     std::unique_lock<std::mutex> lock(manager->m_ThrottleMutex);
                     manager->m_ThrottleCV.wait(lock, [&]()
-                    {
+                                               {
                         const bool signaled = manager->m_ActiveLoadBytes == 0 || (manager->m_ActiveLoadBytes + size <= MAX_CONCURRENT_LOAD_BYTES);
                         if (!signaled)
                         {
                             LOG_WARN("[Throttle Guard] Throttling asset loading {} bytes, max concurent load bytes: {} bytes",
                                 manager->m_ActiveLoadBytes + size, MAX_CONCURRENT_LOAD_BYTES);
                         }
-                        return signaled;
-                    });
+                        return signaled; });
                     manager->m_ActiveLoadBytes += size;
                 }
             }
@@ -748,83 +741,83 @@ namespace ignite
         AssetMetaData getterMetadata = metadata;
         switch (getterMetadata.type)
         {
-            case AssetType::Invalid:
-            {
-                LOG_ASSERT(false, "[Asset Manager] Invalid asset type!");
-                return nullptr;
-            }
-
-            case AssetType::Audio:
-            case AssetType::Mesh:
-            case AssetType::StaticMesh:
-            case AssetType::SkeletalMesh:
-            case AssetType::Font:
-            case AssetType::Material:
-            case AssetType::Material2D:
-            case AssetType::BlendSpace:
-            case AssetType::Widget:
-            case AssetType::Animation2D:
-            case AssetType::SpriteSheet:
-            case AssetType::SkeletalAnimation:
-            case AssetType::AnimatorController:
-            case AssetType::AnimatorController2D:
-            case AssetType::ScriptableObject:
-            case AssetType::Prefab:
-            {
-                isValidType = true;
-
-                asset = AssetImporter::Import(handle, getterMetadata, this);
-                {
-                    std::unique_lock lock(m_AssetMutex);
-                    if (m_LoadedAssets.contains(handle))
-                    {
-                        isValidType = true;
-                        return m_LoadedAssets[handle];
-                    }
-                }
-                AssignAsset(handle, asset);
-                break;
-            }
-            case AssetType::Skeleton:
-            case AssetType::Scene:
-            case AssetType::Texture:
-            {
-                isValidType = true;
-
-                if (getterMetadata.type == AssetType::Texture)
-                {
-					if (auto project = LockActiveProject())
-					{
-					    AssetMetaData textureMetadata = getterMetadata;
-                        textureMetadata.filepath = project->GetProjectFilepath(getterMetadata.filepath);
-                        TextureCreateInfo createInfo = Texture::GetDefaultCreateInfo(getterMetadata);
-                        if (!Texture::LoadCreateInfoFile(Texture::GetMetaPath(project.get(), getterMetadata), createInfo))
-                        {
-                            Texture::LoadCreateInfoFile(Texture::GetLegacyMetaPath(project.get(), getterMetadata), createInfo);
-                        }
-
-						asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
-					}
-                }
-                else
-                {
-                    asset = AssetImporter::Import(handle, getterMetadata, this);
-                }
-
-                {
-                    std::unique_lock lock(m_AssetMutex);
-                    if (m_LoadedAssets.contains(handle))
-                    {
-                        isValidType = true;
-                        return m_LoadedAssets[handle];
-                    }
-                }
-                AssignAsset(handle, asset);
-                break;
-            }
+        case AssetType::Invalid:
+        {
+            LOG_ASSERT(false, "[Asset Manager] Invalid asset type!");
+            return nullptr;
         }
 
-		LOG_ASSERT(isValidType, "[Asset Manager] Failed to import asset, please check the AssetType: {}", getterMetadata.filepath.generic_string());
+        case AssetType::Audio:
+        case AssetType::Mesh:
+        case AssetType::StaticMesh:
+        case AssetType::SkeletalMesh:
+        case AssetType::Font:
+        case AssetType::Material:
+        case AssetType::Material2D:
+        case AssetType::BlendSpace:
+        case AssetType::Widget:
+        case AssetType::Animation2D:
+        case AssetType::SpriteSheet:
+        case AssetType::SkeletalAnimation:
+        case AssetType::AnimatorController:
+        case AssetType::AnimatorController2D:
+        case AssetType::ScriptableObject:
+        case AssetType::Prefab:
+        {
+            isValidType = true;
+
+            asset = AssetImporter::Import(handle, getterMetadata, this);
+            {
+                std::unique_lock lock(m_AssetMutex);
+                if (m_LoadedAssets.contains(handle))
+                {
+                    isValidType = true;
+                    return m_LoadedAssets[handle];
+                }
+            }
+            AssignAsset(handle, asset);
+            break;
+        }
+        case AssetType::Skeleton:
+        case AssetType::Scene:
+        case AssetType::Texture:
+        {
+            isValidType = true;
+
+            if (getterMetadata.type == AssetType::Texture)
+            {
+                if (auto project = LockActiveProject())
+                {
+                    AssetMetaData textureMetadata = getterMetadata;
+                    textureMetadata.filepath = project->GetProjectFilepath(getterMetadata.filepath);
+                    TextureCreateInfo createInfo = Texture::GetDefaultCreateInfo(getterMetadata);
+                    if (!Texture::LoadCreateInfoFile(Texture::GetMetaPath(project.get(), getterMetadata), createInfo))
+                    {
+                        Texture::LoadCreateInfoFile(Texture::GetLegacyMetaPath(project.get(), getterMetadata), createInfo);
+                    }
+
+                    asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
+                }
+            }
+            else
+            {
+                asset = AssetImporter::Import(handle, getterMetadata, this);
+            }
+
+            {
+                std::unique_lock lock(m_AssetMutex);
+                if (m_LoadedAssets.contains(handle))
+                {
+                    isValidType = true;
+                    return m_LoadedAssets[handle];
+                }
+            }
+            AssignAsset(handle, asset);
+            break;
+        }
+        }
+
+        LOG_ASSERT(isValidType, "[Asset Manager] Failed to import asset, please check the AssetType: {}", getterMetadata.filepath.generic_string());
         return asset;
     }
 }
