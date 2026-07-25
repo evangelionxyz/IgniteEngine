@@ -101,7 +101,7 @@ local function writeMixedDebuggerUserFile(prj, wksLocation)
 
         f:write(string.format("  <PropertyGroup Condition=\"%s\">\n", condition))
         f:write("    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n")
-        f:write("    <LocalDebuggerDebuggerType>NativeWithManagedCore</LocalDebuggerDebuggerType>\n")
+        --f:write("    <LocalDebuggerDebuggerType>NativeWithManagedCore</LocalDebuggerDebuggerType>\n")
         f:write("    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>\n")
         f:write(string.format("    <LocalDebuggerSymbolPath>%s</LocalDebuggerSymbolPath>\n", symPath))
         f:write("  </PropertyGroup>\n")

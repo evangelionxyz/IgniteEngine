@@ -31,13 +31,33 @@ namespace ignite
 
     AnimParam *Animator::GetParam(const std::string &name)
     {
-        auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
-        return it != params.end() ? &(*it) : nullptr;
+        auto it = params.find(name);
+        if (it != params.end())
+            return &it->second;
+        return nullptr;
     }
 
     const AnimParam *Animator::GetParam(const std::string &name) const
     {
-        auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
-        return it != params.end() ? &(*it) : nullptr;
+		auto it = params.find(name);
+		if (it != params.end())
+			return &it->second;
+		return nullptr;
     }
+
+	AnimParam *Animator::FindAnimParam(std::unordered_map<std::string, AnimParam> &params, const std::string &name)
+	{
+		auto it = params.find(name);
+		if (it != params.end())
+			return &it->second;
+		return nullptr;
+	}
+
+	const AnimParam *Animator::FindAnimParam(const std::unordered_map<std::string, AnimParam> &params, const std::string &name)
+	{
+		auto it = params.find(name);
+		if (it != params.end())
+			return &it->second;
+		return nullptr;
+	}
 }

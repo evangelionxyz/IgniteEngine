@@ -447,7 +447,7 @@ namespace ignite
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
         AssetHandle runtimeAnimatorHandle = AssetHandle(0);
-        std::vector<AnimParam> runtimeParams;
+        std::unordered_map<std::string, AnimParam> runtimeParams;
         Ref<AnimatorController> runtimeAnimatorInstance = nullptr; // runtime-only for unique animator mode
         std::vector<glm::mat4> finalBoneTransforms; // per-entity GPU-ready bone transforms
         std::vector<Mesh_GPUData> cachedInstanceTransforms; // cached transforms per sub-mesh instance

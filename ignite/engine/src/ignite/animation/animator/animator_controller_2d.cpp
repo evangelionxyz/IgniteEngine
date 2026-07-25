@@ -93,7 +93,7 @@ namespace ignite
 
         // Params
         out << YAML::Key << "Params" << YAML::Value << YAML::BeginSeq;
-        for (const auto &p : params)
+        for (const auto &[paramName, p] : params)
         {
             out << YAML::BeginMap;
             out << YAML::Key << "Name" << YAML::Value << p.name;
@@ -230,7 +230,7 @@ namespace ignite
                     default: break;
                     }
                 }
-                ctrl->params.push_back(p);
+                ctrl->params.emplace(p.name, p);
             }
         }
 

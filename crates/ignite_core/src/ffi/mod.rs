@@ -10,6 +10,7 @@ pub mod asset_manager_ffi;
 pub mod serial_ffi;
 pub mod ecs_ffi;
 pub mod project_ffi;
+pub mod frame_ffi;
 
 pub use core_ffi::*;
 pub use asset_ffi::*;
@@ -21,3 +22,5 @@ pub use asset_manager_ffi::*;
 pub use serial_ffi::*;
 pub use ecs_ffi::*;
 pub use project_ffi::*;
+pub use frame_ffi::*;
+

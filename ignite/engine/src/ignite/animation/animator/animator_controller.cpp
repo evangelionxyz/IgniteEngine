@@ -62,7 +62,7 @@ namespace ignite
         // Copy and create asset pin
         // for skeleton and states
         cloneAnim->SetSkeletonHandle(other->GetSkeletonHandle());
-		for (auto &state : cloneAnim->states)
+		for (auto &[name, state] : cloneAnim->states)
 		{
             // re assign to add asset pin
 			state.SetMotion(state.GetMotionType(), state.GetMotionHandle());
@@ -133,14 +133,18 @@ namespace ignite
 
     AnimState *AnimatorController::FindState(const std::string &name)
     {
-        auto it = std::find_if(states.begin(), states.end(), [&name](const AnimState &s) { return s.name == name; });
-        return it != states.end() ? &(*it) : nullptr;
+        auto it = states.find(name);
+        if (it != states.end())
+            return &it->second;
+        return nullptr;
     }
 
     const AnimState *AnimatorController::FindState(const std::string &name) const
     {
-        auto it = std::find_if(states.begin(), states.end(), [&name](const AnimState &s) { return s.name == name; });
-        return it != states.end() ? &(*it) : nullptr;
+		auto it = states.find(name);
+		if (it != states.end())
+			return &it->second;
+		return nullptr;
     }
 
     bool AnimatorController::Serialize(const ignite::Path &filepath)
@@ -152,31 +156,31 @@ namespace ignite
         out << YAML::Key << "SkeletonHandle" << YAML::Value << static_cast<uint64_t>(GetSkeletonHandle());
 
         out << YAML::Key << "States" << YAML::Value << YAML::BeginSeq;
-        for (const auto &s : states)
+        for (const auto &[name, state] : states)
         {
             out << YAML::BeginMap;
-            out << YAML::Key << "Name" << YAML::Value << s.name;
-            out << YAML::Key << "MotionType" << YAML::Value << (s.GetMotionType() == AnimState::MotionType::BlendSpace ? "BlendSpace" : "SkeletalAnimation");
-            out << YAML::Key << "MotionHandle" << YAML::Value << static_cast<uint64_t>(s.GetMotionHandle());
-            // Keep this field for older tools which only understand clips.
-            out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.GetAnimationAssetHandle());
-            out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << s.editorPos.x << s.editorPos.y << YAML::EndSeq;
+            out << YAML::Key << "Name" << YAML::Value << name;
+            out << YAML::Key << "MotionType" << YAML::Value << (state.GetMotionType() == AnimState::MotionType::BlendSpace ? "BlendSpace" : "SkeletalAnimation");
+            out << YAML::Key << "MotionHandle" << YAML::Value << static_cast<uint64_t>(state.GetMotionHandle());
+            // Keep this field for older tools which only understand clipstate.
+            out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(state.GetAnimationAssetHandle());
+            out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << state.editorPos.x << state.editorPos.y << YAML::EndSeq;
             out << YAML::EndMap;
         }
         out << YAML::EndSeq;
 
         out << YAML::Key << "Params" << YAML::Value << YAML::BeginSeq;
-        for (const auto &p : params)
+        for (const auto &[name, param] : params)
         {
             out << YAML::BeginMap;
-            out << YAML::Key << "Name" << YAML::Value << p.name;
-            out << YAML::Key << "Type" << YAML::Value << anim_utils::ParamTypeToStr(p.type);
-            switch (p.type)
+            out << YAML::Key << "Name" << YAML::Value << name;
+            out << YAML::Key << "Type" << YAML::Value << anim_utils::ParamTypeToStr(param.type);
+            switch (param.type)
             {
-                case AnimParam::Type::Float: out << YAML::Key << "Value" << YAML::Value << p.floatVal; break;
-                case AnimParam::Type::Int: out << YAML::Key << "Value" << YAML::Value << p.intVal; break;
-                case AnimParam::Type::Bool: out << YAML::Key << "Value" << YAML::Value << p.boolVal; break;
-                case AnimParam::Type::String: out << YAML::Key << "Value" << YAML::Value << p.strVal; break;
+                case AnimParam::Type::Float: out << YAML::Key << "Value" << YAML::Value << param.floatVal; break;
+                case AnimParam::Type::Int: out << YAML::Key << "Value" << YAML::Value << param.intVal; break;
+                case AnimParam::Type::Bool: out << YAML::Key << "Value" << YAML::Value << param.boolVal; break;
+                case AnimParam::Type::String: out << YAML::Key << "Value" << YAML::Value << param.strVal; break;
                 default: break;
             }
             out << YAML::EndMap;
@@ -274,17 +278,19 @@ namespace ignite
             ctrl->states.reserve(statesNode.size());
             for (const auto &sn : statesNode)
             {
-                AnimState &s = ctrl->states.emplace_back();
-                if (auto n = sn["Name"]) s.name = n.as<std::string>();
+                AnimState state;
+                if (auto n = sn["Name"]) state.name = n.as<std::string>();
 
                 const auto type = sn["MotionType"] && sn["MotionType"].as<std::string>() == "BlendSpace"
                     ? AnimState::MotionType::BlendSpace : AnimState::MotionType::SkeletalAnimation;
 
-                if (auto n = sn["MotionHandle"]) s.SetMotion(type, AssetHandle(n.as<uint64_t>()));
-                else if (auto n = sn["AnimHandle"]) s.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
+                if (auto n = sn["MotionHandle"]) state.SetMotion(type, AssetHandle(n.as<uint64_t>()));
+                else if (auto n = sn["AnimHandle"]) state.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
 
                 if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
-                    s.editorPos = { n[0].as<float>(), n[1].as<float>() };
+                    state.editorPos = { n[0].as<float>(), n[1].as<float>() };
+
+                ctrl->states.emplace(state.name, state);
             }
         }
 
@@ -293,21 +299,22 @@ namespace ignite
             ctrl->params.reserve(paramsNode.size());
             for (const auto &pn : paramsNode)
             {
-                AnimParam p;
-                if (auto n = pn["Name"]) p.name = n.as<std::string>();
-                if (auto n = pn["Type"]) p.type = anim_utils::StrToParamType(n.as<std::string>());
+                AnimParam param;
+                if (auto n = pn["Name"]) param.name = n.as<std::string>();
+                if (auto n = pn["Type"]) param.type = anim_utils::StrToParamType(n.as<std::string>());
                 if (auto n = pn["Value"])
                 {
-                    switch (p.type)
+                    switch (param.type)
                     {
-                        case AnimParam::Type::Float: p.floatVal = n.as<float>(); break;
-                        case AnimParam::Type::Int: p.intVal = n.as<int>(); break;
-                        case AnimParam::Type::Bool: p.boolVal = n.as<bool>(); break;
-                        case AnimParam::Type::String: p.strVal = n.as<std::string>(); break;
+                    case AnimParam::Type::Float: param.floatVal = n.as<float>(); break;
+                    case AnimParam::Type::Int: param.intVal = n.as<int>(); break;
+                    case AnimParam::Type::Bool: param.boolVal = n.as<bool>(); break;
+                    case AnimParam::Type::String: param.strVal = n.as<std::string>(); break;
                         default: break;
                     }
                 }
-                ctrl->params.push_back(p);
+
+                ctrl->params.emplace(param.name, param);
             }
         }
 
@@ -379,7 +386,9 @@ namespace ignite
 
         if (runtime.currentStateName.empty())
         {
-            runtime.currentStateName = !defaultState.empty() ? defaultState : (states.empty() ? std::string{} : states.front().name);
+            runtime.currentStateName = !defaultState.empty() 
+                ? defaultState 
+                : (states.empty() ? std::string{} : states.begin()->first); // get key of state
             runtime.stateElapsed = 0.0f;
             runtime.stateNormalized = 0.0f;
         }
@@ -387,7 +396,7 @@ namespace ignite
         const AnimState *state = FindState(runtime.currentStateName);
         if (!state && !states.empty())
         {
-            runtime.currentStateName = states.front().name;
+            runtime.currentStateName = states.begin()->first; // get key of state
             state = FindState(runtime.currentStateName);
             runtime.stateElapsed = 0.0f;
             runtime.stateNormalized = 0.0f;
@@ -572,54 +581,53 @@ namespace ignite
             ? std::clamp(runtime.transitionElapsed / runtime.transitionDuration, 0.0f, 1.0f)
             : 0.0f;
 
+        auto evaluatePoseForJointFromContribs = [&](size_t jointIndex, const std::vector<std::pair<Ref<SkeletalAnimation>, float>> &contribs, float normTime) -> Transform
+        {
+            const Joint &joint = skeleton->joints[jointIndex];
+            glm::vec3 translation(0.0f), scale(0.0f);
+            glm::quat rotationSum(0.0f, 0.0f, 0.0f, 0.0f);
+            glm::quat referenceRotation = joint.defaultTransform.rotation;
+            bool hasReference = false;
+
+            for (const auto &[sampleAnimation, weight] : contribs)
+            {
+                const float sampleTime = std::fmod(normTime * sampleAnimation->duration, sampleAnimation->duration);
+                Transform pose = joint.defaultTransform;
+                if (const auto channel = sampleAnimation->channels.find(static_cast<int>(jointIndex)); channel != sampleAnimation->channels.end())
+                    pose = channel->second.Calculate(sampleTime, joint.defaultTransform);
+
+                glm::quat rotation = pose.rotation;
+                if (hasReference && glm::dot(referenceRotation, rotation) < 0.0f)
+                    rotation = -rotation;
+                else if (!hasReference)
+                {
+                    referenceRotation = rotation;
+                    hasReference = true;
+                }
+                translation += pose.translation * weight;
+                scale += pose.scale * weight;
+                rotationSum.w += rotation.w * weight;
+                rotationSum.x += rotation.x * weight;
+                rotationSum.y += rotation.y * weight;
+                rotationSum.z += rotation.z * weight;
+            }
+
+            if (glm::length(rotationSum) > 0.000001f)
+                rotationSum = glm::normalize(rotationSum);
+            else
+                rotationSum = joint.defaultTransform.rotation;
+
+            return Transform{ translation, rotationSum, scale };
+        };
+
         // Calculate joint local poses (with transition cross-fading if active)
         for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
         {
-            const Joint &joint = skeleton->joints[jointIndex];
-
-            auto evaluatePoseFromContribs = [&](const std::vector<std::pair<Ref<SkeletalAnimation>, float>> &contribs, float normTime) -> Transform
-            {
-                glm::vec3 translation(0.0f), scale(0.0f);
-                glm::quat rotationSum(0.0f, 0.0f, 0.0f, 0.0f);
-                glm::quat referenceRotation = joint.defaultTransform.rotation;
-                bool hasReference = false;
-
-                for (const auto &[sampleAnimation, weight] : contribs)
-                {
-                    const float sampleTime = std::fmod(normTime * sampleAnimation->duration, sampleAnimation->duration);
-                    Transform pose = joint.defaultTransform;
-                    if (const auto channel = sampleAnimation->channels.find(static_cast<int>(jointIndex)); channel != sampleAnimation->channels.end())
-                        pose = channel->second.Calculate(sampleTime, joint.defaultTransform);
-
-                    glm::quat rotation = pose.rotation;
-                    if (hasReference && glm::dot(referenceRotation, rotation) < 0.0f)
-                        rotation = -rotation;
-                    else if (!hasReference)
-                    {
-                        referenceRotation = rotation;
-                        hasReference = true;
-                    }
-                    translation += pose.translation * weight;
-                    scale += pose.scale * weight;
-                    rotationSum.w += rotation.w * weight;
-                    rotationSum.x += rotation.x * weight;
-                    rotationSum.y += rotation.y * weight;
-                    rotationSum.z += rotation.z * weight;
-                }
-
-                if (glm::length(rotationSum) > 0.000001f)
-                    rotationSum = glm::normalize(rotationSum);
-                else
-                    rotationSum = joint.defaultTransform.rotation;
-
-                return Transform{ translation, rotationSum, scale };
-            };
-
-            Transform poseSource = evaluatePoseFromContribs(sourceContribs, runtime.stateNormalized);
+            Transform poseSource = evaluatePoseForJointFromContribs(jointIndex, sourceContribs, runtime.stateNormalized);
             if (runtime.isTransitioning && !targetContribs.empty())
             {
                 const float targetNormTime = runtime.stateNormalized;
-                Transform poseTarget = evaluatePoseFromContribs(targetContribs, targetNormTime);
+                Transform poseTarget = evaluatePoseForJointFromContribs(jointIndex, targetContribs, targetNormTime);
 
                 glm::quat rotA = poseSource.rotation;
                 glm::quat rotB = poseTarget.rotation;
@@ -635,6 +643,125 @@ namespace ignite
             {
                 runtime.localPoses[jointIndex] = poseSource;
             }
+        }
+
+        // =========================================================================
+        // Step 1: Check Active Motion Flags (Root Motion & In-Place)
+        // =========================================================================
+        bool rootMotionActive = false;
+        bool inPlaceActive = false;
+        for (const auto &[anim, weight] : sourceContribs)
+        {
+            if (anim)
+            {
+                if (anim->rootMotion) rootMotionActive = true;
+                if (anim->inPlace) inPlaceActive = true;
+            }
+        }
+
+        // =========================================================================
+        // Step 2: Locate the Root Joint (Parent Joint ID == -1)
+        // =========================================================================
+        size_t rootIndex = 0;
+        for (size_t i = 0; i < jointCount; ++i)
+        {
+            if (skeleton->joints[i].parentJointId == -1)
+            {
+                rootIndex = i;
+                break;
+            }
+        }
+
+        const Joint &rootJoint = skeleton->joints[rootIndex];
+
+        // =========================================================================
+        // Step 3: Helper Lambda to Sample & Blend Root Bone Pose at Any Time
+        // =========================================================================
+        // Evaluates the root bone transform at normalized time normTime,
+        // automatically handling cross-fading if a state transition is active.
+        auto getBlendedRootPose = [&](float normTime) -> Transform
+        {
+            Transform pSource = evaluatePoseForJointFromContribs(rootIndex, sourceContribs, normTime);
+            if (runtime.isTransitioning && !targetContribs.empty())
+            {
+                Transform pTarget = evaluatePoseForJointFromContribs(rootIndex, targetContribs, normTime);
+                glm::quat rA = pSource.rotation;
+                glm::quat rB = pTarget.rotation;
+                if (glm::dot(rA, rB) < 0.0f) rB = -rB;
+                Transform blended;
+                blended.translation = glm::mix(pSource.translation, pTarget.translation, blendAlpha);
+                blended.rotation = glm::normalize(glm::slerp(rA, rB, blendAlpha));
+                blended.scale = glm::mix(pSource.scale, pTarget.scale, blendAlpha);
+                return blended;
+            }
+            return pSource;
+        };
+
+        // =========================================================================
+        // Step 4: Apply Root Motion or In-Place Adjustments
+        // =========================================================================
+        if (inPlaceActive)
+        {
+            // --- In-Place Mode ---
+            // 1. Disable entity world movement (zero root motion delta).
+            // 2. Lock horizontal plane displacement (X and Z) to the starting position (t = 0.0).
+            // 3. Preserve full vertical keyframe height Y (currRoot.translation.y) so the
+            //    character maintains baseline standing height and jump/crouch bobbing.
+            runtime.hasRootMotion = false;
+            runtime.rootMotionDelta = glm::vec3(0.0f);
+
+            Transform startRoot = getBlendedRootPose(0.0f);
+            Transform currRoot = getBlendedRootPose(runtime.stateNormalized);
+
+            runtime.localPoses[rootIndex].translation = glm::vec3(startRoot.translation.x, currRoot.translation.y, startRoot.translation.z);
+        }
+        else if (rootMotionActive)
+        {
+            // --- Root Motion Mode ---
+            // 1. Enable root motion flag for Scene::UpdateAnimations to apply to Entity transform.
+            // 2. Compute frame-to-frame delta of root joint translation (handling loop wrap-around).
+            // 3. Extract horizontal movement (X and Z) into runtime.rootMotionDelta for entity transform.
+            // 4. Lock horizontal local pose (X and Z) to starting position to prevent double-transformation,
+            //    while preserving vertical height Y (currRoot.translation.y) in local pose.
+            runtime.hasRootMotion = true;
+
+            const float prevNorm = runtime.previousStateNormalized;
+            const float currNorm = runtime.stateNormalized;
+
+            glm::vec3 rawDelta(0.0f);
+            if (currNorm >= prevNorm)
+            {
+                // Normal frame step within same loop cycle
+                Transform prevRoot = getBlendedRootPose(prevNorm);
+                Transform currRoot = getBlendedRootPose(currNorm);
+                rawDelta = currRoot.translation - prevRoot.translation;
+            }
+            else
+            {
+                // Animation wrapped around loop boundary (from 1.0 back to 0.0)
+                Transform prevRoot = getBlendedRootPose(prevNorm);
+                Transform endRoot = getBlendedRootPose(1.0f);
+                Transform startRoot = getBlendedRootPose(0.0f);
+                Transform currRoot = getBlendedRootPose(currNorm);
+                rawDelta = (endRoot.translation - prevRoot.translation) + (currRoot.translation - startRoot.translation);
+            }
+
+            // Extract horizontal ground movement (X and Z) to move entity transform in world space
+            runtime.rootMotionDelta = glm::vec3(rawDelta.x, 0.0f, rawDelta.z);
+
+            Transform startRoot = getBlendedRootPose(0.0f);
+            Transform currRoot = getBlendedRootPose(currNorm);
+
+            // Lock horizontal local translation (X and Z) to prevent double-movement,
+            // keeping natural character standing and jump height Y intact.
+            runtime.localPoses[rootIndex].translation = glm::vec3(startRoot.translation.x, currRoot.translation.y, startRoot.translation.z);
+        }
+        else
+        {
+            // --- Standard Animation Mode ---
+            // Root joint moves strictly as baked in keyframes; entity transform remains unaffected.
+            runtime.hasRootMotion = false;
+            runtime.rootMotionDelta = glm::vec3(0.0f);
         }
 
         // Compute global poses

@@ -58,6 +58,7 @@ impl AssetRegistryFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ignite_asset::AssetMetaData;
 
     #[test]
     fn test_yaml_serialization() {

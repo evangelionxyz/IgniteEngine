@@ -126,6 +126,7 @@ namespace ignite
 
         PostProcessing &GetPostProcessingSettings() { return m_PostProcessing; }
         const PostProcessing &GetPostProcessingSettings() const { return m_PostProcessing; }
+        const glm::uvec2 GetViewportSize() const { return { m_ViewportWidth, m_ViewportHeight }; }
 
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
@@ -167,11 +168,7 @@ namespace ignite
 
     protected:
         static void FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms);
-
-        Ref<Material> ResolveMeshMaterial(
-            int instanceIndex,
-            const std::unordered_map<int, AssetHandle> &overrideMaterials,
-            AssetHandle defaultMaterialHandle);
+        Ref<Material> ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle);
 
         void EnsureSceneEnvironmentMap();
 
@@ -196,11 +193,17 @@ namespace ignite
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         Scene_GPUData m_SceneGPUData;
-        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
 
         std::vector<uint32_t> m_SelectedEntities;
         Ref<Scene> m_Scene;
         nvrhi::IDevice *m_Device = nullptr;
+
+        // This is the actual viewport resolution
+        // Not the scaled one
+        uint32_t m_ViewportWidth = 0;
+        uint32_t m_ViewportHeight = 0;
+
+        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
         bool m_Has2DPreRenderCache = false;
         bool m_CompositeVertexBufferUploadPending = true;
     };

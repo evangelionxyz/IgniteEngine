@@ -25,52 +25,40 @@ namespace ignite
 {
     namespace
     {
-        AnimParam *FindAnimParam(std::vector<AnimParam> &params, const std::string &name)
-        {
-            auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
-            return it != params.end() ? &(*it) : nullptr;
-        }
-
-        const AnimParam *FindAnimParam(const std::vector<AnimParam> &params, const std::string &name)
-        {
-            auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
-            return it != params.end() ? &(*it) : nullptr;
-        }
-
         void SyncMeshAnimatorParams(SkeletalMeshComponent &meshComp, const AnimatorController &controller)
         {
-            std::erase_if(meshComp.runtimeParams, [&controller](const AnimParam &param)
+            std::erase_if(meshComp.runtimeParams, [&controller](const auto &kv)
             {
-                return controller.GetParam(param.name) == nullptr;
+                return controller.GetParam(kv.first) == nullptr;
             });
 
-            for (const AnimParam &controllerParam : controller.params)
+            for (const auto &[name, param] : controller.params)
             {
-                AnimParam *runtimeParam = FindAnimParam(meshComp.runtimeParams, controllerParam.name);
+                AnimParam *runtimeParam = Animator::FindAnimParam(meshComp.runtimeParams, param.name);
                 if (!runtimeParam)
                 {
-                    meshComp.runtimeParams.push_back(controllerParam);
+                    meshComp.runtimeParams[name] = param;
                     continue;
                 }
 
-                if (runtimeParam->type != controllerParam.type)
+                if (runtimeParam->type != param.type)
                 {
-                    *runtimeParam = controllerParam;
+                    *runtimeParam = param;
                 }
             }
         }
 
         void ApplyMeshRuntimeParamsToController(const SkeletalMeshComponent &meshComp, AnimatorController &controller)
         {
-            for (AnimParam &controllerParam : controller.params)
+            for (auto &[name, param] : controller.params)
             {
-                if (const AnimParam *runtimeParam = FindAnimParam(meshComp.runtimeParams, controllerParam.name))
+                if (const AnimParam *runtimeParam = Animator::FindAnimParam(meshComp.runtimeParams, param.name))
                 {
-                    controllerParam.type = runtimeParam->type;
-                    controllerParam.floatVal = runtimeParam->floatVal;
-                    controllerParam.intVal = runtimeParam->intVal;
-                    controllerParam.boolVal = runtimeParam->boolVal;
-                    controllerParam.strVal = runtimeParam->strVal;
+                    param.type = runtimeParam->type;
+                    param.floatVal = runtimeParam->floatVal;
+                    param.intVal = runtimeParam->intVal;
+                    param.boolVal = runtimeParam->boolVal;
+                    param.strVal = runtimeParam->strVal;
                 }
             }
         }
@@ -782,6 +770,11 @@ namespace ignite
                     smc.currentStateName = sharedRuntime->currentStateName;
                     smc.stateElapsed = sharedRuntime->stateElapsed;
                     smc.stateNormalized = sharedRuntime->stateNormalized;
+
+                    if (sharedRuntime->hasRootMotion)
+                    {
+                        tr.local.translation += tr.local.rotation * sharedRuntime->rootMotionDelta;
+                    }
                 }
             }
             else
@@ -805,6 +798,11 @@ namespace ignite
                     smc.currentStateName = runtime.currentStateName;
                     smc.stateElapsed = runtime.stateElapsed;
                     smc.stateNormalized = runtime.stateNormalized;
+
+                    if (runtime.hasRootMotion)
+                    {
+                        tr.local.translation += tr.local.rotation * runtime.rootMotionDelta;
+                    }
                 }
             }
         }

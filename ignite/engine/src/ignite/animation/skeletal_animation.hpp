@@ -72,6 +72,8 @@ namespace ignite
         float duration = 0;
         float ticksPerSeconds = 1.0f;
         float timeInSeconds = 0.0f;
+        bool rootMotion = false;
+        bool inPlace = false;
         bool isPlaying = false;
         std::unordered_map<int, AnimationChannel> channels;
         std::vector<AnimationTimelineEvent> timelineEvents;

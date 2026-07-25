@@ -130,7 +130,7 @@ namespace ignite
 					}
 					else
 					{
-						// direct zoom for imediate response
+						// direct zoom for immediate response
 						m_Distance -= delta.y;
 						m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
 					}

@@ -120,6 +120,9 @@ namespace ignite
             AssetHandle previewMeshHandle = AssetHandle(0);
             AssetHandle previewAnimationHandle = AssetHandle(0);
             Ref<SkeletalMesh> cachedPreviewMesh;
+            Ref<AnimatorController> previewController;
+            AssetHandle lastSkeletonHandle = AssetHandle(0);
+            AssetHandle lastPreviewAnimationHandle = AssetHandle(0);
             std::vector<glm::mat4> previewGlobalTransforms;
             std::vector<glm::mat4> previewFinalTransforms;
             float timeSeconds = 0.0f;
@@ -623,7 +626,6 @@ namespace ignite
 
             Ref<SkeletalAnimation> previewAnimation = nullptr;
             float activePlaybackTime = 0.0f;
-            float prevPlaybackTime = 0.0f;
             bool isPlaying = false;
 
             if (assetData.metadata.type == AssetType::SkeletalAnimation)
@@ -634,7 +636,6 @@ namespace ignite
                 {
                     previewAnimation = currentAnim;
                     isPlaying = animState.playing;
-                    prevPlaybackTime = animState.timeSeconds;
                     if (animState.playing)
                     {
                         animState.timeSeconds += deltaTime;
@@ -661,7 +662,6 @@ namespace ignite
                 if (previewAnimation && previewAnimation->duration > 0.0f)
                 {
                     isPlaying = previewState.playing;
-                    prevPlaybackTime = previewState.timeSeconds;
                     if (previewState.playing)
                     {
                         previewState.timeSeconds += deltaTime;
@@ -679,76 +679,65 @@ namespace ignite
                 }
             }
 
-            if (isPlaying && previewAnimation && previewAnimation->duration > 0.0f)
-            {
-                const float animDurationSec = previewAnimation->duration / std::max(previewAnimation->ticksPerSeconds, 0.0001f);
-                if (animDurationSec > 0.0f)
-                {
-                    const float prevNorm = prevPlaybackTime / animDurationSec;
-                    const float currNorm = activePlaybackTime / animDurationSec;
-
-                    for (const auto &evt : previewAnimation->timelineEvents)
-                    {
-                        bool triggered = false;
-                        if (currNorm >= prevNorm)
-                        {
-                            triggered = (evt.normalizedTime >= prevNorm && evt.normalizedTime <= currNorm && prevNorm != currNorm);
-                        }
-                        else
-                        {
-                            triggered = (evt.normalizedTime >= prevNorm || evt.normalizedTime <= currNorm);
-                        }
-
-                        if (triggered && evt.action == AnimationTimelineEvent::Action::Audio && evt.GetAudioHandle() != AssetHandle(0))
-                        {
-                            if (auto sound = assetManager->GetAsset<FmodSound>(evt.GetAudioHandle()))
-                            {
-                                sound->Play();
-                            }
-                        }
-                    }
-                }
-            }
-
             const size_t jointCount = skeleton->joints.size();
             previewState.previewGlobalTransforms.resize(jointCount, glm::mat4(1.0f));
             previewState.previewFinalTransforms.resize(jointCount, glm::mat4(1.0f));
 
-            const bool hasPreviewAnimation = previewAnimation && previewAnimation->duration > 0.0f;
-            const float timeInTicks = hasPreviewAnimation
-                ? activePlaybackTime * std::max(previewAnimation->ticksPerSeconds, 0.0001f)
-                : 0.0f;
-
-            for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
+            if (previewAnimation && previewAnimation->duration > 0.0f)
             {
-                const Joint &joint = skeleton->joints[jointIndex];
-
-                glm::mat4 local = joint.defaultTransform.GetMatrix();
-                if (hasPreviewAnimation)
+                if (!previewState.previewController)
                 {
-                    if (previewAnimation->channels.contains((int)jointIndex))
+                    previewState.previewController = AnimatorController::Create();
+                }
+
+                if (previewState.lastSkeletonHandle != skeleton->handle)
+                {
+                    previewState.previewController->SetSkeletonHandle(skeleton->handle);
+                    previewState.lastSkeletonHandle = skeleton->handle;
+                }
+
+                if (previewState.lastPreviewAnimationHandle != previewAnimation->handle)
+                {
+                    AnimState previewAnimState;
+                    previewAnimState.name = "PreviewState";
+                    previewAnimState.SetAnimationHandle(previewAnimation->handle);
+                    previewState.previewController->states.clear();
+                    previewState.previewController->states[previewAnimState.name] = previewAnimState;
+                    previewState.previewController->defaultState = previewAnimState.name;
+                    previewState.lastPreviewAnimationHandle = previewAnimation->handle;
+                }
+
+                const float animDurationSec = previewAnimation->duration / std::max(previewAnimation->ticksPerSeconds, 0.0001f);
+                const float normTime = (animDurationSec > 0.0f) ? (activePlaybackTime / animDurationSec) : 0.0f;
+
+                AnimatorControllerRuntime runtime;
+                runtime.currentStateName = "PreviewState";
+                runtime.stateElapsed = activePlaybackTime;
+                runtime.stateNormalized = normTime;
+
+                if (previewState.previewController->UpdateSkeleton(isPlaying ? deltaTime : 0.0f, runtime, assetManager))
+                {
+                    previewState.previewFinalTransforms = std::move(runtime.finalTransforms);
+                    for (size_t jointIndex = 0; jointIndex < jointCount && jointIndex < runtime.globalPoses.size(); ++jointIndex)
                     {
-                        // defaultTransform as fallback (inside Calculate function)
-                        const Transform localTransform = previewAnimation->channels[(int)jointIndex].Calculate(timeInTicks, joint.defaultTransform);
-                        local = localTransform.GetMatrix();
+                        previewState.previewGlobalTransforms[jointIndex] = runtime.globalPoses[jointIndex].GetMatrix();
                     }
                 }
-
-                if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(jointCount))
+            }
+            else
+            {
+                for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
                 {
-                    previewState.previewGlobalTransforms[jointIndex] = local;
-                }
-                else
-                {
-                    previewState.previewGlobalTransforms[jointIndex] = previewState.previewGlobalTransforms[static_cast<size_t>(joint.parentJointId)] * local;
-                }
-
-                if (hasPreviewAnimation)
-                {
-                    previewState.previewFinalTransforms[jointIndex] = previewState.previewGlobalTransforms[jointIndex] * joint.inverseBindPose;
-                }
-                else
-                {
+                    const Joint &joint = skeleton->joints[jointIndex];
+                    glm::mat4 local = joint.defaultTransform.GetMatrix();
+                    if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(jointCount))
+                    {
+                        previewState.previewGlobalTransforms[jointIndex] = local;
+                    }
+                    else
+                    {
+                        previewState.previewGlobalTransforms[jointIndex] = previewState.previewGlobalTransforms[static_cast<size_t>(joint.parentJointId)] * local;
+                    }
                     previewState.previewFinalTransforms[jointIndex] = glm::mat4(1.0f);
                 }
             }
@@ -2634,10 +2623,10 @@ namespace ignite
                         // ==== Parameters ====
                         if (ImGui::CollapsingHeader("Parameters##ac2d_params", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            for (int i = 0; i < static_cast<int>(ctrl->params.size()); ++i)
+                            for (auto it = ctrl->params.begin(); it != ctrl->params.end(); ++it)
                             {
-                                auto &p = ctrl->params[static_cast<size_t>(i)];
-                                ImGui::PushID(i);
+                                auto &p = it->second;
+                                ImGui::PushID(it->first.c_str());
 
                                 ImGui::SetNextItemWidth(120);
                                 char pNameBuf[256];
@@ -2690,7 +2679,7 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::SmallButton("X##p_del"))
                                 {
-                                    ctrl->params.erase(ctrl->params.begin() + i);
+                                    it = ctrl->params.erase(it);
                                     ctrl->SetDirtyFlag(true);
                                     ImGui::PopID();
                                     break;
@@ -2701,22 +2690,22 @@ namespace ignite
 
                             if (ImGui::Button("+ Float##p_addf"))
                             {
-                                ctrl->params.push_back({ .name = "NewFloat", .type = AnimParam::Type::Float }); ctrl->SetDirtyFlag(true);
+                                ctrl->params["NewFloat"] = {.name = "NewFloat", .type = AnimParam::Type::Float}; ctrl->SetDirtyFlag(true);
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("+ Bool##p_addb"))
                             {
-                                ctrl->params.push_back({ .name = "NewBool", .type = AnimParam::Type::Bool }); ctrl->SetDirtyFlag(true);
+                                ctrl->params["NewBool"] = {.name = "NewBool", .type = AnimParam::Type::Bool}; ctrl->SetDirtyFlag(true);
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("+ Int##p_addi"))
                             {
-                                ctrl->params.push_back({ .name = "NewInt", .type = AnimParam::Type::Int }); ctrl->SetDirtyFlag(true);
+                                ctrl->params["NewInt"] = {.name = "NewInt", .type = AnimParam::Type::Int}; ctrl->SetDirtyFlag(true);
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("+ String##p_adds"))
                             {
-                                ctrl->params.push_back({ .name = "NewString", .type = AnimParam::Type::String }); ctrl->SetDirtyFlag(true);
+                                ctrl->params["NewString"] = {.name = "NewString", .type = AnimParam::Type::String}; ctrl->SetDirtyFlag(true);
                             }
                         }
 

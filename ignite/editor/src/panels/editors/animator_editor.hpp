@@ -42,8 +42,8 @@ namespace ignite
     class AnimatorEditor
     {
     public:
-        static bool DrawAnimatorStateCombo(const char *label, const std::vector<AnimState> &states, std::string &value, bool allowAnyState = false);
-        static bool DrawAnimatorParamCombo(const char *label, const std::vector<AnimParam> &params, std::string &value);
+        static bool DrawAnimatorStateCombo(const char *label, const std::unordered_map<std::string, AnimState> &states, std::string &value, bool allowAnyState = false);
+        static bool DrawAnimatorParamCombo(const char *label, const std::unordered_map<std::string, AnimParam> &params, std::string &value);
 
         static void RenameAnimatorStateReferences(const Ref<AnimatorController> &animator, const std::string &oldName, const std::string &newName);
         static void RemoveAnimatorStateReferences(const Ref<AnimatorController> &animator, const std::string &stateName);

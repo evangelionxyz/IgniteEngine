@@ -18,16 +18,18 @@ namespace ignite
         BlendSpaceSample() = default;
 
         BlendSpaceSample(const BlendSpaceSample &other)
-			: position(other.position), m_AnimationHandle(other.m_AnimationHandle), m_UUID(other.m_UUID)
+			: position(other.position), m_UUID(other.m_UUID)
         {
+            SetAnimationHandle(other.m_AnimationHandle);
         }
 
         BlendSpaceSample &operator=(const BlendSpaceSample &other)
         {
             if (this != &other)
             {
+                position = other.position;
                 m_UUID = UUID();
-                m_AnimationHandle = other.m_AnimationHandle;
+                SetAnimationHandle(other.m_AnimationHandle);
             }
             return *this;
         }

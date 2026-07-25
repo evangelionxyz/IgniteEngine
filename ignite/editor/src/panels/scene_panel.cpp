@@ -1316,178 +1316,10 @@ namespace ignite
                                 c.stateNormalized = 0.0f;
                                 c.runtimeParams.clear();
                             }
-
-                            Ref<AnimatorController> animCtrl = assetManager->GetAsset<AnimatorController>(c.runtimeAnimatorHandle);
-                            if (animCtrl)
-                            {
-                                std::erase_if(c.runtimeParams, [&animCtrl](const AnimParam &param)
-                                {
-                                    return animCtrl->GetParam(param.name) == nullptr;
-                                });
-
-                                for (const AnimParam &param : animCtrl->params)
-                                {
-                                    auto it = std::find_if(c.runtimeParams.begin(), c.runtimeParams.end(), [&param](const AnimParam &runtimeParam)
-                                    {
-                                        return runtimeParam.name == param.name;
-                                    });
-
-                                    if (it == c.runtimeParams.end())
-                                    {
-                                        c.runtimeParams.push_back(param);
-                                    }
-                                    else if (it->type != param.type)
-                                    {
-                                        *it = param;
-                                    }
-                                }
-
-                                if (ImGui::CollapsingHeader("Animator Preview", ImGuiTreeNodeFlags_DefaultOpen))
-                                {
-                                    ImGui::TextDisabled("Default State: %s", animCtrl->defaultState.empty() ? "(None)" : animCtrl->defaultState.c_str());
-
-                                    if (!animCtrl->states.empty())
-                                    {
-                                        std::vector<const char *> stateLabels;
-                                        stateLabels.reserve(animCtrl->states.size());
-
-                                        std::string activeState = c.currentStateName;
-                                        if (activeState.empty())
-                                        {
-                                            activeState = !animCtrl->defaultState.empty() ? animCtrl->defaultState : animCtrl->states.front().name;
-                                        }
-
-                                        int currentStateIndex = 0;
-                                        for (size_t i = 0; i < animCtrl->states.size(); ++i)
-                                        {
-                                            stateLabels.push_back(animCtrl->states[i].name.c_str());
-                                            if (animCtrl->states[i].name == activeState)
-                                            {
-                                                currentStateIndex = static_cast<int>(i);
-                                            }
-                                        }
-
-                                        ImGui::BeginDisabled(true);
-                                        if (UI::DrawComboBox("Preview State", stateLabels.data(), static_cast<int>(stateLabels.size()), &currentStateIndex))
-                                        {
-                                            c.currentStateName = animCtrl->states[static_cast<size_t>(currentStateIndex)].name;
-                                            c.stateElapsed = 0.0f;
-                                            c.stateNormalized = 0.0f;
-                                        }
-                                        ImGui::EndDisabled();
-
-                                        ImGui::TextDisabled("State Time: %.3fs", c.stateElapsed);
-                                        ImGui::TextDisabled("State Normalized: %.3f", c.stateNormalized);
-                                    }
-
-                                    if (!c.runtimeParams.empty())
-                                    {
-                                        ImGui::SeparatorText("Parameters");
-                                        for (AnimParam &param : c.runtimeParams)
-                                        {
-                                            switch (param.type)
-                                            {
-                                                case AnimParam::Type::Float:
-                                                    UI::DrawFloatControl(param.name.c_str(), &param.floatVal, 0.05f, -FLT_MAX, FLT_MAX);
-                                                    break;
-                                                case AnimParam::Type::Int:
-                                                    UI::DrawIntControl(param.name.c_str(), &param.intVal, 1.0f, INT_MIN, INT_MAX);
-                                                    break;
-                                                case AnimParam::Type::Bool:
-                                                    UI::DrawCheckbox(param.name.c_str(), &param.boolVal);
-                                                    break;
-                                                case AnimParam::Type::String:
-                                                {
-                                                    char buffer[256] = {};
-                                                    strncpy(buffer, param.strVal.c_str(), sizeof(buffer) - 1);
-                                                    if (ImGui::InputText(param.name.c_str(), buffer, sizeof(buffer)))
-                                                    {
-                                                        param.strVal = buffer;
-                                                    }
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if (!animCtrl->transitions.empty())
-                                    {
-                                        ImGui::SeparatorText("Transitions");
-
-                                        std::string activeState = c.currentStateName;
-                                        if (activeState.empty())
-                                        {
-                                            activeState = !animCtrl->defaultState.empty() ? animCtrl->defaultState : (animCtrl->states.empty() ? std::string {} : animCtrl->states.front().name);
-                                        }
-
-                                        auto findRuntimeParam = [&c](const std::string &name) -> const AnimParam *
-                                        {
-                                            auto it = std::find_if(c.runtimeParams.begin(), c.runtimeParams.end(), [&name](const AnimParam &param)
-                                            {
-                                                return param.name == name;
-                                            });
-                                            return it != c.runtimeParams.end() ? &(*it) : nullptr;
-                                        };
-
-                                        for (const AnimTransition &transition : animCtrl->transitions)
-                                        {
-                                            if (!transition.fromState.empty() && transition.fromState != activeState)
-                                            {
-                                                continue;
-                                            }
-
-                                            const std::string fromName = transition.fromState.empty() ? "Any State" : transition.fromState;
-                                            bool allPass = !transition.hasExitTime || c.stateNormalized >= transition.exitTime;
-
-                                            if (ImGui::TreeNode((std::format("{} -> {}", fromName, transition.toState) + "###transition_" + fromName + "_" + transition.toState).c_str()))
-                                            {
-                                                if (transition.hasExitTime)
-                                                {
-                                                    const bool exitPass = c.stateNormalized >= transition.exitTime;
-                                                    ImGui::TextColored(exitPass ? ImVec4(0.25f, 0.9f, 0.35f, 1.0f) : ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
-                                                        "Exit Time %.3f (%s)", transition.exitTime, exitPass ? "PASS" : "WAIT");
-                                                }
-                                                else
-                                                {
-                                                    ImGui::TextDisabled("Exit Time: Disabled");
-                                                }
-
-                                                for (const AnimCondition &condition : transition.conditions)
-                                                {
-                                                    const AnimParam *runtimeParam = findRuntimeParam(condition.paramName);
-                                                    const bool condPass = anim_utils::EvalCondition(condition, runtimeParam);
-                                                    allPass &= condPass;
-
-                                                    std::string threshold = "?";
-                                                    if (runtimeParam)
-                                                    {
-                                                        switch (runtimeParam->type)
-                                                        {
-                                                            case AnimParam::Type::Float: threshold = std::format("{}", condition.floatThreshold); break;
-                                                            case AnimParam::Type::Int: threshold = std::format("{}", condition.intThreshold); break;
-                                                            case AnimParam::Type::Bool: threshold = condition.boolThreshold ? "true" : "false"; break;
-                                                            case AnimParam::Type::String: threshold = condition.strThreshold; break;
-                                                        }
-                                                    }
-
-                                                    ImGui::BulletText("%s %s %s [%s]",
-                                                        condition.paramName.c_str(),
-                                                        anim_utils::OpToStr(condition.op),
-                                                        threshold.c_str(),
-                                                        condPass ? "PASS" : "FAIL");
-                                                }
-
-                                                ImGui::TextColored(allPass ? ImVec4(0.25f, 0.9f, 0.35f, 1.0f) : ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
-                                                    "Transition %s", allPass ? "READY" : "BLOCKED");
-                                                ImGui::TreePop();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                         }
 
-                        // --- SOCKET SYSTEM: Render Socket Attachments UI ---
+                        // SOCKET SYSTEM
+                        // Render Socket Attachments UI
                         if (sm->GetSkeletonHandle() != AssetHandle(0))
                         {
                             Ref<Skeleton> skeleton = assetManager->GetAsset<Skeleton>(sm->GetSkeletonHandle());
@@ -1505,41 +1337,39 @@ namespace ignite
                                         }
 
                                         bool isAttached = attachedMeshHandle != AssetHandle(0);
-                                        std::string socketMeshLabel = isAttached
-                                            ? assetManager->GetAssetDisplayName(attachedMeshHandle)
-                                            : "Drag Mesh Here";
+                                        const std::string socketMeshLabel = assetManager->GetAssetDisplayName(attachedMeshHandle);
 
                                         UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [this, &c, socketName = socket.name, assetManager, isAttached, &selectedEntity]()
+                                        {
+                                            if (ImGui::BeginDragDropTarget())
                                             {
-                                                if (ImGui::BeginDragDropTarget())
+                                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                                                 {
-                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                                                    {
-                                                        LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                                        AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                                    AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-                                                        if (metadata.type == AssetType::Mesh)
-                                                        {
-                                                            SkeletalMeshComponent before = c;
-                                                            c.socketAttachments[socketName] = handle;
-                                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                                        }
-                                                    }
-                                                    ImGui::EndDragDropTarget();
-                                                }
-
-                                                if (isAttached)
-                                                {
-                                                    ImGui::SameLine();
-                                                    if (ImGui::Button((std::string("X##socket_") + socketName).c_str()))
+                                                    if (metadata.type == AssetType::Mesh)
                                                     {
                                                         SkeletalMeshComponent before = c;
-                                                        c.socketAttachments.erase(socketName);
+                                                        c.socketAttachments[socketName] = handle;
                                                         CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                                                     }
                                                 }
-                                            });
+                                                ImGui::EndDragDropTarget();
+                                            }
+
+                                            if (isAttached)
+                                            {
+                                                ImGui::SameLine();
+                                                if (ImGui::Button((std::string("X##socket_") + socketName).c_str()))
+                                                {
+                                                    SkeletalMeshComponent before = c;
+                                                    c.socketAttachments.erase(socketName);
+                                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
+                                                }
+                                            }
+                                        });
                                     }
                                 }
                             }
@@ -1556,7 +1386,7 @@ namespace ignite
                 // Projection
                 {
                     static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
-                    int projectionIdx = static_cast<int>(c.camera.projectionType);
+                    auto projectionIdx = static_cast<int>(c.camera.projectionType);
                     if (UI::DrawComboBox("Projection", projectionTypeStr, IM_ARRAYSIZE(projectionTypeStr), &projectionIdx))
                     {
                         c.camera.projectionType = static_cast<ProjectionType>(projectionIdx);
@@ -1567,7 +1397,7 @@ namespace ignite
                 // Aspect Ratio
                 {
                     static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
-                    int aspectRatioIndex = static_cast<int>(c.camera.GetAspectRatioPreset());
+                    auto aspectRatioIndex = static_cast<int>(c.camera.GetAspectRatioPreset());
                     if (UI::DrawComboBox("Aspect Ratio", aspectRatioLabels, IM_ARRAYSIZE(aspectRatioLabels), &aspectRatioIndex))
                     {
                         c.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(aspectRatioIndex));

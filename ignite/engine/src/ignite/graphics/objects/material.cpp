@@ -28,12 +28,12 @@ namespace ignite
             GPUUploadSync::DeviceWaitIdle(device);
         }
 
-		AssetManager::GetInstance()->RemoveAssetPin(baseColorTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(baseColorTextureHandle)));
-		AssetManager::GetInstance()->RemoveAssetPin(emissiveTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(emissiveTextureHandle)));
-		AssetManager::GetInstance()->RemoveAssetPin(metallicTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(metallicTextureHandle)));
-		AssetManager::GetInstance()->RemoveAssetPin(roughnessTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(roughnessTextureHandle)));
-		AssetManager::GetInstance()->RemoveAssetPin(normalTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(normalTextureHandle)));
-		AssetManager::GetInstance()->RemoveAssetPin(occlusionTextureHandle, std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(occlusionTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(baseColorTextureHandle, std::format("material.basecolor.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(baseColorTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(emissiveTextureHandle, std::format("material.emissive.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(emissiveTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(metallicTextureHandle, std::format("material.metallic.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(metallicTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(roughnessTextureHandle, std::format("material.roughness.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(roughnessTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(normalTextureHandle, std::format("material.normal.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(normalTextureHandle)));
+		AssetManager::GetInstance()->RemoveAssetPin(occlusionTextureHandle, std::format("material.occlusion.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(occlusionTextureHandle)));
 
         // Clear binding set first (references other resources)
         m_BindingSet = nullptr;
@@ -65,7 +65,7 @@ namespace ignite
             }
         }
 
-        auto isTextureReady = [this](AssetHandle textureHandle, Ref<Texture> &outTexture, Ref<Texture> fallback) -> bool
+        auto isTextureReady = [this](AssetHandle textureHandle, Ref<Texture> &outTexture, Ref<Texture> fallback, std::string_view pinTag) -> bool
         {
             if (textureHandle == AssetHandle(0))
             {
@@ -78,19 +78,19 @@ namespace ignite
 			if (result && result->IsReady())
 			{
                 AssetManager::GetInstance()->AddAssetPin(textureHandle, 
-                    std::format("material.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(textureHandle)));
+                    std::format("material.{}.{}.{}", std::string(pinTag), static_cast<uint64_t>(handle), static_cast<uint64_t>(textureHandle)));
 				outTexture = result;
 			}
             return ready;
         };
 
         Ref<Texture> baseColor, emissive, metallic, roughness, normal, occlusion;
-		bool allTexturesReady = isTextureReady(baseColorTextureHandle, baseColor, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(emissiveTextureHandle, emissive, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(metallicTextureHandle, metallic, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(roughnessTextureHandle, roughness, Renderer::GetBlackTexture());
-        allTexturesReady &= isTextureReady(normalTextureHandle, normal, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(occlusionTextureHandle, occlusion, Renderer::GetWhiteTexture());
+		bool allTexturesReady = isTextureReady(baseColorTextureHandle, baseColor, Renderer::GetWhiteTexture(), "basecolor");
+        allTexturesReady &= isTextureReady(emissiveTextureHandle, emissive, Renderer::GetWhiteTexture(), "emissive");
+        allTexturesReady &= isTextureReady(metallicTextureHandle, metallic, Renderer::GetWhiteTexture(), "metallic");
+        allTexturesReady &= isTextureReady(roughnessTextureHandle, roughness, Renderer::GetBlackTexture(), "roughness");
+        allTexturesReady &= isTextureReady(normalTextureHandle, normal, Renderer::GetWhiteTexture(), "normal");
+        allTexturesReady &= isTextureReady(occlusionTextureHandle, occlusion, Renderer::GetWhiteTexture(), "occlusion");
 
         // Waiting for all textures loaded
         // binding set is still not created

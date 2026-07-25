@@ -386,6 +386,8 @@ R"(<Project>
 
                 assetManager->AssignMetaData(handle, metadata);
             }
+
+            assetManager->SyncFromRust();
         }
 
         return project;

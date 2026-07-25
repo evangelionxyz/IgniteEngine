@@ -51,6 +51,25 @@ typedef enum AssetType_RS
     AssetType_RS_Prefab,
 } AssetType_RS;
 
+// Matching Rust AssetState enum values
+typedef enum AssetState_RS
+{
+    AssetState_RS_Unloaded = 0,
+    AssetState_RS_Queued = 1,
+    AssetState_RS_Loading = 2,
+    AssetState_RS_Ready = 3,
+    AssetState_RS_Dirty = 4,
+    AssetState_RS_Unloading = 5,
+} AssetState_RS;
+
+// FFI struct for bulk snapshot copy
+typedef struct IgniteAssetRegistryEntryFFI
+{
+    uint64_t handle;
+    AssetType_RS asset_type;
+    char filepath[260];
+} IgniteAssetRegistryEntryFFI;
+
 // Handle Primitives
 uint64_t ignite_asset_handle_create(uint64_t id);
 bool ignite_asset_handle_is_valid(uint64_t handle);
@@ -66,6 +85,16 @@ IgniteResult ignite_rs_asset_pin(uint64_t handle);
 IgniteResult ignite_rs_asset_unpin(uint64_t handle);
 bool ignite_rs_asset_is_pinned(uint64_t handle);
 uint32_t ignite_rs_asset_get_pin_count(uint64_t handle);
+
+// Bulk Registry Snapshot & Lifecycle FFI
+uint64_t ignite_rs_asset_get_registry_version(void);
+size_t ignite_rs_asset_get_registry_count(void);
+size_t ignite_rs_asset_get_registry_snapshot(IgniteAssetRegistryEntryFFI* out_entries, size_t max_count);
+IgniteResult ignite_rs_asset_request_import(uint64_t handle);
+size_t ignite_rs_asset_poll_import_requests(uint64_t* out_handles, size_t max_count);
+IgniteResult ignite_rs_asset_mark_ready(uint64_t handle);
+AssetState_RS ignite_rs_asset_get_state(uint64_t handle);
+IgniteResult ignite_rs_asset_set_state(uint64_t handle, AssetState_RS state);
 
 #ifdef __cplusplus
 }

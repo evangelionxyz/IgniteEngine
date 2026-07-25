@@ -57,9 +57,9 @@ namespace ignite
     static glm::vec2 GetTAAJitter(uint64_t frameIndex, uint32_t width, uint32_t height)
     {
         if (width == 0 || height == 0)
-            return glm::vec2(0.0f);
+            return { 0.0f, 0.0f };
 
-        const uint32_t haltonIndex = static_cast<uint32_t>(frameIndex % 8u) + 1u;
+        const auto haltonIndex = static_cast<uint32_t>(frameIndex % 8u) + 1u;
         const glm::vec2 halton = glm::vec2(Halton(haltonIndex, 2), Halton(haltonIndex, 3));
         return (halton * 2.0f - 1.0f) / glm::vec2(static_cast<float>(width), static_cast<float>(height));
     }
@@ -213,11 +213,13 @@ namespace ignite
             postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
 
             // IMPORTANT!!!!
-            // Write frame context buffers before using it
+            // Write frame context buffers before using them
             glm::mat4 projection = camera->GetProjection();
             if (postProcessing.taaProperties.enable)
             {
-                const glm::vec2 jitter = GetTAAJitter(m_TAAFrameIndex, target->sceneRT->GetWidth(), target->sceneRT->GetHeight());
+                const glm::vec2 jitter = GetTAAJitter(m_TAAFrameIndex,
+                    target->sceneRT->GetWidth(),
+                    target->sceneRT->GetHeight());
                 projection[2][0] += jitter.x;
                 projection[2][1] += jitter.y;
             }
@@ -670,6 +672,12 @@ namespace ignite
         {
 			// Render targets
 			auto it = m_RenderTargets.find(camera);
+			if (it == m_RenderTargets.end() && camera)
+			{
+				GetOrCreateRenderTarget(camera);
+				it = m_RenderTargets.find(camera);
+			}
+
 			if (it != m_RenderTargets.end())
 			{
 				auto target = it->second;
@@ -2255,6 +2263,13 @@ namespace ignite
         target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
 
         m_RenderTargets.emplace(camera, target);
+
+        const glm::uvec2 vpSize = camera ? camera->GetViewportSize() : glm::uvec2(0);
+        if (vpSize.x > 0 && vpSize.y > 0)
+        {
+            ResizeFramebuffer(camera, vpSize.x, vpSize.y);
+        }
+
         return target;
     }
 
