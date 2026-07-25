@@ -59,8 +59,12 @@ namespace ignite
         virtual AnimParam *GetParam(const std::string &name);
         virtual const AnimParam *GetParam(const std::string &name) const;
 
-        std::vector<AnimParam> params;
+        std::unordered_map<std::string, AnimParam> params;
         std::vector<AnimTransition> transitions;
+
+		// Static for external usages
+        static AnimParam *FindAnimParam(std::unordered_map<std::string, AnimParam> &params, const std::string &name);
+        static const AnimParam *FindAnimParam(const std::unordered_map<std::string, AnimParam> &params, const std::string &name);
     };
 
     // -----------------------------------------------------------------------

@@ -3285,14 +3285,14 @@ namespace ignite
             if (smc.runtimeAnimatorInstance)
                 smc.runtimeAnimatorInstance->SetParamFloat(paramName, value);
             
-            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            auto it = smc.runtimeParams.find(paramName);
             if (it != smc.runtimeParams.end())
             {
-                it->floatVal = value;
+                it->second.floatVal = value;
             }
             else
             {
-                smc.runtimeParams.push_back({ paramName, "", value, 0, false, AnimParam::Type::Float });
+                smc.runtimeParams[paramName] = { paramName, "", value, 0, false, AnimParam::Type::Float };
             }
         }
 
@@ -3316,8 +3316,12 @@ namespace ignite
                     return;
                 }
             }
-            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
-            if (it != smc.runtimeParams.end()) *result = it->floatVal;
+
+            auto it = smc.runtimeParams.find(paramName);
+            if (it != smc.runtimeParams.end())
+            {
+                *result = it->second.floatVal;
+            }
         }
 
         static void AnimatorComponent_SetInt(uint64_t entityID, const char *paramName, int32_t value)
@@ -3336,14 +3340,14 @@ namespace ignite
                 smc.runtimeAnimatorInstance->SetParamInt(paramName, value);
             }
 
-            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            auto it = smc.runtimeParams.find(paramName);
             if (it != smc.runtimeParams.end())
             {
-                it->intVal = value;
+                it->second.intVal = value;
             }
             else
             {
-                smc.runtimeParams.push_back({ paramName, "", 0.0f, value, false, AnimParam::Type::Int });
+                smc.runtimeParams[paramName] = { paramName, "", 0.0f, value, false, AnimParam::Type::Int };
             }
         }
 
@@ -3368,10 +3372,10 @@ namespace ignite
                 }
             }
 
-            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            auto it = smc.runtimeParams.find(paramName);
             if (it != smc.runtimeParams.end())
             {
-                *result = it->intVal;
+                *result = it->second.intVal;
             }
         }
 
@@ -3391,14 +3395,14 @@ namespace ignite
                 smc.runtimeAnimatorInstance->SetParamBool(paramName, value);
             }
 
-            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            auto it = smc.runtimeParams.find(paramName);
             if (it != smc.runtimeParams.end())
             {
-                it->boolVal = value;
+                it->second.boolVal = value;
             }
             else
             {
-                smc.runtimeParams.push_back({ paramName, "", 0.0f, 0, value, AnimParam::Type::Bool });
+                smc.runtimeParams[paramName] = { paramName, "", 0.0f, 0, value, AnimParam::Type::Bool };
             }
         }
 
@@ -3421,10 +3425,10 @@ namespace ignite
                 }
             }
 
-            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            auto it = smc.runtimeParams.find(paramName);
             if (it != smc.runtimeParams.end())
             {
-                *result = it->boolVal;
+                *result = it->second.boolVal;
             }
         }
 
@@ -3441,14 +3445,14 @@ namespace ignite
             if (smc.runtimeAnimatorInstance)
                 smc.runtimeAnimatorInstance->SetParamString(paramName, value);
             
-            auto it = std::ranges::find_if(smc.runtimeParams, [&](const AnimParam &p) { return p.name == paramName; });
+            auto it = smc.runtimeParams.find(paramName);
             if (it != smc.runtimeParams.end())
             {
-                it->strVal = value;
+                it->second.strVal = value;
             }
             else 
             {
-                smc.runtimeParams.push_back({ paramName, value, 0.0f, 0, false, AnimParam::Type::String });
+                smc.runtimeParams[paramName] = { paramName, value, 0.0f, 0, false, AnimParam::Type::String };
             }
         }
 
@@ -3467,8 +3471,12 @@ namespace ignite
                     return;
                 }
             }
-            auto it = std::find_if(smc.runtimeParams.begin(), smc.runtimeParams.end(), [&](const AnimParam &p) { return p.name == paramName; });
-            if (it != smc.runtimeParams.end()) *result = it->strVal.c_str();
+
+            auto it = smc.runtimeParams.find(paramName);
+            if (it != smc.runtimeParams.end())
+            {
+                *result = it->second.strVal.c_str();
+            }
         }
 
         static void AnimatorComponent_SetState(uint64_t entityID, const char *stateName)

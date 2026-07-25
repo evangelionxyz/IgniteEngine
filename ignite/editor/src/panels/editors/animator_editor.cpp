@@ -23,7 +23,7 @@ namespace ignite
             std::string cleanBase = baseName.empty() ? "State" : baseName;
             auto hasStateName = [&](const std::string &name)
             {
-                return std::ranges::any_of(animator->states, [&](const AnimState &state) { return state.name == name; });
+                return animator->states.contains(name);
             };
 
             if (!hasStateName(cleanBase))
@@ -61,7 +61,7 @@ namespace ignite
             state.name = BuildUniqueStateName(animator, metadata.filepath.stem().string());
             state.SetMotion(type, motionHandle);
             state.editorPos = glm::vec2(worldPos.x, worldPos.y);
-            animator->states.push_back(state);
+            animator->states[state.name] = state;
             ui.selectedState = static_cast<int>(animator->states.size()) - 1;
             ui.selectedStates.clear();
             ui.selectedStates.insert(ui.selectedState);
@@ -92,12 +92,12 @@ namespace ignite
         }
     }
 
-    bool AnimatorEditor::DrawAnimatorStateCombo(const char *label, const std::vector<AnimState> &states, std::string &value, bool allowAnyState)
+    bool AnimatorEditor::DrawAnimatorStateCombo(const char *label, const std::unordered_map<std::string, AnimState> &states, std::string &value, bool allowAnyState)
     {
         std::string preview = value.empty() && allowAnyState ? "Any State" : value;
         if (preview.empty())
         {
-            preview = states.empty() ? "No States" : states.front().name;
+            preview = states.empty() ? "No States" : states.begin()->first;
         }
 
         bool changed = false;
@@ -117,12 +117,12 @@ namespace ignite
                 }
             }
 
-            for (const auto &state : states)
+            for (const auto &[name, state] : states)
             {
-                const bool selected = value == state.name;
-                if (ImGui::Selectable(state.name.c_str(), selected))
+                const bool selected = value == name;
+                if (ImGui::Selectable(name.c_str(), selected))
                 {
-                    value = state.name;
+                    value = name;
                     changed = true;
                 }
 
@@ -138,19 +138,19 @@ namespace ignite
         return changed;
     }
 
-    bool AnimatorEditor::DrawAnimatorParamCombo(const char *label, const std::vector<AnimParam> &params, std::string &value)
+    bool AnimatorEditor::DrawAnimatorParamCombo(const char *label, const std::unordered_map<std::string, AnimParam> &params, std::string &value)
     {
         const char *preview = value.empty() ? "Select Param" : value.c_str();
         bool changed = false;
 
         if (ImGui::BeginCombo(label, preview))
         {
-            for (const auto &param : params)
+            for (const auto &[name, param] : params)
             {
-                const bool selected = value == param.name;
-                if (ImGui::Selectable(param.name.c_str(), selected))
+                const bool selected = value == name;
+                if (ImGui::Selectable(name.c_str(), selected))
                 {
-                    value = param.name;
+                    value = name;
                     changed = true;
                 }
 
@@ -200,7 +200,7 @@ namespace ignite
 
         if (animator->defaultState == stateName)
         {
-            animator->defaultState = animator->states.empty() ? std::string {} : animator->states.front().name;
+            animator->defaultState = animator->states.empty() ? std::string {} : animator->states.begin()->first;
         }
 
         std::erase_if(animator->transitions, [&](const AnimTransition &transition)
@@ -252,7 +252,7 @@ namespace ignite
             const int row = static_cast<int>(animator->states.size()) / 2;
             const int col = static_cast<int>(animator->states.size()) % 2;
             state.editorPos = glm::vec2(60.0f + 220.0f * static_cast<float>(col), 80.0f + 150.0f * static_cast<float>(row));
-            animator->states.push_back(state);
+            animator->states[state.name] = state;
             ui.selectedState = static_cast<int>(animator->states.size()) - 1;
             ui.selectedStates.clear();
             ui.selectedStates.insert(ui.selectedState);
@@ -265,11 +265,11 @@ namespace ignite
         }
 
         ImGui::BeginChild("##ac_state_list", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-        for (int i = 0; i < static_cast<int>(animator->states.size()); ++i)
+        int i = 0;
+        for (const auto &[name, state] : animator->states)
         {
-            const AnimState &state = animator->states[static_cast<size_t>(i)];
-            std::string label = state.name.empty() ? std::format("State {}", i + 1) : state.name;
-            if (state.name == animator->defaultState)
+            std::string label = name.empty() ? std::format("State {}", i + 1) : name;
+            if (name == animator->defaultState)
             {
                 label += "  [Default]";
             }
@@ -285,6 +285,7 @@ namespace ignite
             ImGui::TextDisabled("%s: %s", state.GetMotionType() == AnimState::MotionType::BlendSpace ? "Blend Space" : "Animation",
                 assetManager->GetAssetDisplayName(state.GetMotionHandle()).c_str());
             ImGui::Separator();
+            ++i;
         }
         ImGui::EndChild();
     }
@@ -402,9 +403,9 @@ namespace ignite
             ImGui::PopID();
         }
 
-        for (int i = 0; i < static_cast<int>(animator->states.size()); ++i)
+        int i = 0;
+        for (auto &[name, state] : animator->states)
         {
-            AnimState &state = animator->states[static_cast<size_t>(i)];
             const UI::NodeGraphNode node = UI::NodeGraph::BuildNode(canvas, ImVec2(state.editorPos.x, state.editorPos.y), nodeSize);
 
             ImGui::PushID(i);
@@ -504,6 +505,7 @@ namespace ignite
             }
 
             ImGui::PopID();
+            ++i;
         }
 
         if (!ui.draggingTransitionLine && !ui.draggingItem && canvas.hovered && !anyNodeHovered && !anyTransitionGrabHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -518,7 +520,7 @@ namespace ignite
             }
         }
 
-        // Box selection fro animator states and "Any State"
+        // Box selection for animator states and "Any State"
         if (ui.boxSelectingStates)
         {
             const ImVec2 currentWorld = UI::NodeGraph::ToWorld(canvas, ImGui::GetIO().MousePos);
@@ -547,17 +549,18 @@ namespace ignite
                 }
 
                 // Animator states
-                for (int i = 0; i < static_cast<int>(animator->states.size()); ++i)
+                int stateIdx = 0;
+                for (const auto &[name, state] : animator->states)
                 {
-                    const AnimState &state = animator->states[static_cast<size_t>(i)];
                     const ImVec2 stateMin(state.editorPos.x, state.editorPos.y);
                     const ImVec2 stateMax(state.editorPos.x + nodeSize.x, state.editorPos.y + nodeSize.y);
                     const bool overlap = !(stateMax.x < minWorld.x || stateMin.x > maxWorld.x || stateMax.y < minWorld.y || stateMin.y > maxWorld.y);
                     if (overlap)
                     {
-                        ui.selectedStates.insert(i);
-                        ui.selectedState = i;
+                        ui.selectedStates.insert(stateIdx);
+                        ui.selectedState = stateIdx;
                     }
+                    ++stateIdx;
                 }
 
                 if (ui.selectedStates.empty() && !ui.anyStateSelected)
@@ -577,7 +580,8 @@ namespace ignite
                 {
                     if (index >= 0 && index < static_cast<int>(animator->states.size()))
                     {
-                        AnimState &state = animator->states[static_cast<size_t>(index)];
+                        auto stateIt = std::next(animator->states.begin(), index);
+                        AnimState &state = stateIt->second;
                         state.editorPos.x += deltaWorld.x;
                         state.editorPos.y += deltaWorld.y;
                         movedAny = true;
@@ -655,46 +659,57 @@ namespace ignite
         ImGui::SeparatorText("Selected State");
         if (ui.selectedState >= 0 && ui.selectedState < static_cast<int>(animator->states.size()))
         {
-            AnimState &state = animator->states[static_cast<size_t>(ui.selectedState)];
+            auto stateIt = std::next(animator->states.begin(), ui.selectedState);
+            AnimState &state = stateIt->second;
             const std::string oldName = state.name;
 
             char nameBuffer[256] {};
             std::strncpy(nameBuffer, state.name.c_str(), sizeof(nameBuffer) - 1);
             if (ImGui::InputText("Name##ac_sel_name", nameBuffer, sizeof(nameBuffer)))
             {
-                state.name = nameBuffer;
-                RenameAnimatorStateReferences(animator, oldName, state.name);
-                animator->SetDirtyFlag(true);
+                std::string newName = nameBuffer;
+                if (newName != oldName && !newName.empty())
+                {
+                    AnimState stateCopy = state;
+                    stateCopy.name = newName;
+                    animator->states.erase(stateIt);
+                    animator->states[newName] = stateCopy;
+                    RenameAnimatorStateReferences(animator, oldName, newName);
+                    animator->SetDirtyFlag(true);
+                    stateIt = animator->states.find(newName);
+                }
             }
 
-            AssetHandle motionHandle = state.GetMotionHandle();
+            AnimState &currState = stateIt->second;
+
+            AssetHandle motionHandle = currState.GetMotionHandle();
             std::string motionLabel = assetManager->GetAssetDisplayName(motionHandle);
             if (UI::DrawAssetDropTarget("Motion", motionLabel.c_str(), { AssetType::SkeletalAnimation, AssetType::BlendSpace }, &motionHandle, assetManager))
             {
                 const AssetType type = assetManager->GetMetaData(motionHandle).type;
                 if (type == AssetType::SkeletalAnimation)
                 {
-                    state.SetAnimationHandle(motionHandle);
+                    currState.SetAnimationHandle(motionHandle);
                 }
                 else if (type == AssetType::BlendSpace)
                 {
-                    state.SetBlendSpaceHandle(motionHandle);
+                    currState.SetBlendSpaceHandle(motionHandle);
                 }
                 else if (motionHandle == AssetHandle(0))
                 {
-                    state.SetMotion(AnimState::MotionType::SkeletalAnimation, AssetHandle(0));
+                    currState.SetMotion(AnimState::MotionType::SkeletalAnimation, AssetHandle(0));
                 }
                 animator->SetDirtyFlag(true);
             }
             if (ImGui::Button("Make Default##ac_make_default", ImVec2(-1.0f, 0.0f)))
             {
-                animator->defaultState = state.name;
+                animator->defaultState = currState.name;
                 animator->SetDirtyFlag(true);
             }
             if (ImGui::Button("Delete State##ac_delete_state", ImVec2(-1.0f, 0.0f)))
             {
-                const std::string removedState = state.name;
-                animator->states.erase(animator->states.begin() + ui.selectedState);
+                const std::string removedState = currState.name;
+                animator->states.erase(stateIt);
                 RemoveAnimatorStateReferences(animator, removedState);
                 ui.selectedTransition = -1;
                 ui.selectedState = animator->states.empty() ? -1 : std::min(ui.selectedState, static_cast<int>(animator->states.size()) - 1);
@@ -719,10 +734,13 @@ namespace ignite
             if (!animator->states.empty())
             {
                 const int fromIndex = std::max(ui.selectedState, 0);
-                transition.fromState = animator->states[static_cast<size_t>(std::min(fromIndex, static_cast<int>(animator->states.size()) - 1))].name;
+                auto fromIt = std::next(animator->states.begin(), std::min(fromIndex, static_cast<int>(animator->states.size()) - 1));
+                transition.fromState = fromIt->second.name;
                 if (animator->states.size() > 1)
                 {
-                    transition.toState = animator->states[static_cast<size_t>(transition.fromState == animator->states[0].name ? 1 : 0)].name;
+                    auto firstIt = animator->states.begin();
+                    auto secondIt = std::next(firstIt);
+                    transition.toState = (transition.fromState == firstIt->second.name) ? secondIt->second.name : firstIt->second.name;
                 }
             }
             animator->transitions.push_back(transition);
@@ -834,59 +852,82 @@ namespace ignite
 
     void AnimatorEditor::DrawAnimatorControllerParamsTab(const Ref<AnimatorController> &animator)
     {
-        if (ImGui::Button("+ Float##ac_add_float")) {
-            animator->params.push_back({ .name = "Speed", .type = AnimParam::Type::Float });
+        auto addParam = [&](const std::string &baseName, AnimParam::Type type)
+        {
+            std::string name = baseName;
+            int suffix = 1;
+            while (animator->params.contains(name))
+            {
+                name = std::format("{} {}", baseName, suffix++);
+            }
+            AnimParam param;
+            param.name = name;
+            param.type = type;
+            animator->params[name] = param;
             animator->SetDirtyFlag(true);
+        };
+
+        if (ImGui::Button("+ Float##ac_add_float")) {
+            addParam("Speed", AnimParam::Type::Float);
         }
         ImGui::SameLine();
         if (ImGui::Button("+ Bool##ac_add_bool")) {
-            animator->params.push_back({ .name = "IsMoving", .type = AnimParam::Type::Bool });
-            animator->SetDirtyFlag(true);
+            addParam("IsMoving", AnimParam::Type::Bool);
         }
         ImGui::SameLine();
         if (ImGui::Button("+ Int##ac_add_int")) {
-            animator->params.push_back({ .name = "StateIndex", .type = AnimParam::Type::Int });
-            animator->SetDirtyFlag(true);
+            addParam("StateIndex", AnimParam::Type::Int);
         }
         ImGui::SameLine();
         if (ImGui::Button("+ String##ac_add_str")) {
-            animator->params.push_back({ .name = "Tag", .type = AnimParam::Type::String });
-            animator->SetDirtyFlag(true);
+            addParam("Tag", AnimParam::Type::String);
         }
 
-        for (int i = 0; i < static_cast<int>(animator->params.size()); ++i)
+        int i = 0;
+        for (auto it = animator->params.begin(); it != animator->params.end(); )
         {
-            AnimParam &param = animator->params[static_cast<size_t>(i)];
+            AnimParam &param = it->second;
+            const std::string oldName = it->first;
             ImGui::PushID(i);
             ImGui::Separator();
 
+            bool paramDeleted = false;
             char nameBuffer[256] {};
             std::strncpy(nameBuffer, param.name.c_str(), sizeof(nameBuffer) - 1);
             if (ImGui::InputText("Name##ac_param_name", nameBuffer, sizeof(nameBuffer)))
             {
-                param.name = nameBuffer;
-                animator->SetDirtyFlag(true);
+                std::string newName = nameBuffer;
+                if (newName != oldName && !newName.empty())
+                {
+                    AnimParam paramCopy = param;
+                    paramCopy.name = newName;
+                    it = animator->params.erase(it);
+                    it = animator->params.insert(it, { newName, paramCopy });
+                    animator->SetDirtyFlag(true);
+                }
             }
 
-            int typeIndex = static_cast<int>(param.type);
+            AnimParam &currParam = it->second;
+
+            int typeIndex = static_cast<int>(currParam.type);
             if (ImGui::Combo("Type##ac_param_type", &typeIndex, s_ParamTypeNames, IM_ARRAYSIZE(s_ParamTypeNames)))
             {
-                param.type = static_cast<AnimParam::Type>(typeIndex);
+                currParam.type = static_cast<AnimParam::Type>(typeIndex);
                 animator->SetDirtyFlag(true);
             }
 
-            switch (param.type)
+            switch (currParam.type)
             {
-                case AnimParam::Type::Float: if (ImGui::DragFloat("Value##ac_param_f", &param.floatVal, 0.01f)) animator->SetDirtyFlag(true); break;
-                case AnimParam::Type::Int: if (ImGui::DragInt("Value##ac_param_i", &param.intVal)) animator->SetDirtyFlag(true); break;
-                case AnimParam::Type::Bool: if (ImGui::Checkbox("Value##ac_param_b", &param.boolVal)) animator->SetDirtyFlag(true); break;
+                case AnimParam::Type::Float: if (ImGui::DragFloat("Value##ac_param_f", &currParam.floatVal, 0.01f)) animator->SetDirtyFlag(true); break;
+                case AnimParam::Type::Int: if (ImGui::DragInt("Value##ac_param_i", &currParam.intVal)) animator->SetDirtyFlag(true); break;
+                case AnimParam::Type::Bool: if (ImGui::Checkbox("Value##ac_param_b", &currParam.boolVal)) animator->SetDirtyFlag(true); break;
                 case AnimParam::Type::String:
                 {
                     char valueBuffer[256] {};
-                    std::strncpy(valueBuffer, param.strVal.c_str(), sizeof(valueBuffer) - 1);
+                    std::strncpy(valueBuffer, currParam.strVal.c_str(), sizeof(valueBuffer) - 1);
                     if (ImGui::InputText("Value##ac_param_s", valueBuffer, sizeof(valueBuffer)))
                     {
-                        param.strVal = valueBuffer;
+                        currParam.strVal = valueBuffer;
                         animator->SetDirtyFlag(true);
                     }
                     break;
@@ -896,15 +937,20 @@ namespace ignite
 
             if (ImGui::Button("Delete Parameter##ac_param_delete", ImVec2(-1.0f, 0.0f)))
             {
-                const std::string removedParam = param.name;
-                animator->params.erase(animator->params.begin() + i);
+                const std::string removedParam = currParam.name;
+                it = animator->params.erase(it);
                 RemoveAnimatorParamReferences(animator, removedParam);
                 animator->SetDirtyFlag(true);
                 ImGui::PopID();
-                break;
+                paramDeleted = true;
             }
 
-            ImGui::PopID();
+            if (!paramDeleted)
+            {
+                ImGui::PopID();
+                ++it;
+            }
+            ++i;
         }
     }
 }

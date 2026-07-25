@@ -170,18 +170,17 @@ namespace ignite
         }
     }
 
-    void ISceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
+    void ISceneRenderer::ResizeFramebuffer([[maybe_unused]] ICamera *camera, uint32_t width, uint32_t height)
     {
         if (width == 0 || height == 0)
-        {
             return;
-        }
+        
+        // Set the viewport size
+        m_ViewportWidth = width;
+        m_ViewportHeight = height;
 
         if (m_Renderer2D)
-        {
             m_Renderer2D->InvalidatePreRenderCache();
-        }
-
         m_Has2DPreRenderCache = false;
     }
 

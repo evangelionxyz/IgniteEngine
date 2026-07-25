@@ -2634,10 +2634,10 @@ namespace ignite
                         // ==== Parameters ====
                         if (ImGui::CollapsingHeader("Parameters##ac2d_params", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            for (int i = 0; i < static_cast<int>(ctrl->params.size()); ++i)
+                            for (auto it = ctrl->params.begin(); it != ctrl->params.end(); ++it)
                             {
-                                auto &p = ctrl->params[static_cast<size_t>(i)];
-                                ImGui::PushID(i);
+                                auto &p = it->second;
+                                ImGui::PushID(it->first.c_str());
 
                                 ImGui::SetNextItemWidth(120);
                                 char pNameBuf[256];
@@ -2690,7 +2690,7 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::SmallButton("X##p_del"))
                                 {
-                                    ctrl->params.erase(ctrl->params.begin() + i);
+                                    it = ctrl->params.erase(it);
                                     ctrl->SetDirtyFlag(true);
                                     ImGui::PopID();
                                     break;
@@ -2701,22 +2701,22 @@ namespace ignite
 
                             if (ImGui::Button("+ Float##p_addf"))
                             {
-                                ctrl->params.push_back({ .name = "NewFloat", .type = AnimParam::Type::Float }); ctrl->SetDirtyFlag(true);
+                                ctrl->params["NewFloat"] = {.name = "NewFloat", .type = AnimParam::Type::Float}; ctrl->SetDirtyFlag(true);
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("+ Bool##p_addb"))
                             {
-                                ctrl->params.push_back({ .name = "NewBool", .type = AnimParam::Type::Bool }); ctrl->SetDirtyFlag(true);
+                                ctrl->params["NewBool"] = {.name = "NewBool", .type = AnimParam::Type::Bool}; ctrl->SetDirtyFlag(true);
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("+ Int##p_addi"))
                             {
-                                ctrl->params.push_back({ .name = "NewInt", .type = AnimParam::Type::Int }); ctrl->SetDirtyFlag(true);
+                                ctrl->params["NewInt"] = {.name = "NewInt", .type = AnimParam::Type::Int}; ctrl->SetDirtyFlag(true);
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("+ String##p_adds"))
                             {
-                                ctrl->params.push_back({ .name = "NewString", .type = AnimParam::Type::String }); ctrl->SetDirtyFlag(true);
+                                ctrl->params["NewString"] = {.name = "NewString", .type = AnimParam::Type::String}; ctrl->SetDirtyFlag(true);
                             }
                         }
 

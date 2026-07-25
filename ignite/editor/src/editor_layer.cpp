@@ -506,78 +506,19 @@ namespace ignite
         ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
         if (editCamera)
         {
-            // Resize Edit Viewport Framebuffer
-            auto target = m_SceneRenderer->GetRenderTarget(editCamera);
-            if (target)
-            {
-                const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
-                const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
-
-                if (isFramebufferSizeValid)
-                {
-                    const glm::uvec2 cameraSize = editCamera->GetViewportSize();
-                    const bool framebufferNeedsResize = desiredSize.x != cameraSize.x || desiredSize.y != cameraSize.y;
-                    // Resize camera
-                    if (framebufferNeedsResize || m_State.editorRequestToResize)
-                    {
-                        editCamera->UpdateProjection(desiredSize.x, desiredSize.y);
-                        m_State.editorResizing = true;
-                        m_State.editorRequestToResize = false;
-                    }
-                    // Resize framebuffer when in stable frame
-                    if (m_State.editorResizing)
-                    {
-                        if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-                        {
-                            m_SceneRenderer->ResizeFramebuffer(editCamera, desiredSize.x, desiredSize.y);
-                            m_State.editorResizing = false;
-                            m_State.editorResizingFrame = 0;
-                        }
-                    }
-                }
-            }
+            const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
+            ProcessCameraViewportResize(editCamera, desiredSize, m_State.editorResizing, m_State.editorResizingFrame, m_State.editorRequestToResize);
         }
 
         // Resizing game-play camera (Game Viewport)
         if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
         {
             auto &cc = primaryCam.GetComponent<CameraComponent>();
-            ICamera *gameCamera = &cc.camera;
-            {
-                auto target = m_SceneRenderer->GetRenderTarget(gameCamera);
-                
-                if (target)
-                {
-                    // Resize Game Viewport Framebuffer
-                    const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
-                    const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
-
-                    if (isFramebufferSizeValid)
-                    {
-                        const glm::uvec2 gameCameraSize = gameCamera->GetViewportSize();
-                        const bool framebufferNeedsResize = desiredSize.x != gameCameraSize.x || desiredSize.y != gameCameraSize.y;
-
-                        if (framebufferNeedsResize || m_State.gameplayRequestToResize)
-                        {
-                            gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
-                            m_State.gameplayResizing = true;
-                            m_State.gameplayRequestToResize = false;
-                        }
-                        if (m_State.gameplayResizing)
-                        {
-                            if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-                            {
-                                m_SceneRenderer->ResizeFramebuffer(gameCamera, desiredSize.x, desiredSize.y);
-                                m_State.gameplayResizing = false;
-                                m_State.gameplayResizingFrame = 0;
-                            }
-                        }
-                    }
-                }
-            }
+            const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
+            ProcessCameraViewportResize(&cc.camera, desiredSize, m_State.gameplayResizing, m_State.gameplayResizingFrame, m_State.gameplayRequestToResize);
         }
 
-        // Resize the EditorPlayCamera (mirror camera for Play mode → Editor Viewport).
+        // Resize the EditorPlayCamera (mirror camera for Play mode -> Editor Viewport).
         // It gets its own independent render target sized to the Editor Viewport,
         // so resizing the editor panel never affects the Game Viewport's projection.
         if (m_ActiveScene->IsRunning())
@@ -596,34 +537,9 @@ namespace ignite
                 m_EditorPlayCamera.lens          = cc.camera.lens;
             }
 
-            // Resize EditorPlayCamera framebuffer to match the Editor Viewport size
-            auto editorPlayTarget = m_SceneRenderer->GetRenderTarget(&m_EditorPlayCamera);
-            if (editorPlayTarget)
-            {
-                const glm::uvec2 framebufferSize = editorPlayTarget->compositeRT->GetSize();
-                const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
-                const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-                const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
-
-                if (isFramebufferSizeValid)
-                {
-                    if (framebufferNeedsResize)
-                    {
-                        m_EditorPlayCamera.UpdateProjection(desiredSize.x, desiredSize.y);
-                        m_State.editorPlayResizing = true;
-                    }
-
-                    if (m_State.editorPlayResizing)
-                    {
-                        if (m_State.editorPlayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-                        {
-                            m_SceneRenderer->ResizeFramebuffer(&m_EditorPlayCamera, desiredSize.x, desiredSize.y);
-                            m_State.editorPlayResizing = false;
-                            m_State.editorPlayResizingFrame = 0;
-                        }
-                    }
-                }
-            }
+            const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
+            bool dummyRequest = false;
+            ProcessCameraViewportResize(&m_EditorPlayCamera, desiredSize, m_State.editorPlayResizing, m_State.editorPlayResizingFrame, dummyRequest);
         }
 
         FrameContext *frameContext = Renderer::GetCurrentFrameContext();
@@ -2529,6 +2445,65 @@ namespace ignite
         }
 
         ImGui::End();
+    }
+
+    void EditorLayer::ProcessCameraViewportResize(ICamera *camera, const glm::uvec2 &desiredSize, bool &isResizing, int &resizingFrame, bool &requestToResize)
+    {
+        if (!camera || desiredSize.x == 0 || desiredSize.y == 0)
+            return;
+
+        auto target = m_SceneRenderer ? m_SceneRenderer->GetRenderTarget(camera) : nullptr;
+        const glm::uvec2 cameraSize = camera->GetViewportSize();
+        const glm::uvec2 targetSize = target ? target->compositeRT->GetSize() : glm::uvec2(0);
+
+        PostProcessing postProcessing = camera->postProcessing;
+        if (m_ActiveScene)
+        {
+            if (Entity primaryCamera = m_ActiveScene->GetPrimaryCamera())
+            {
+                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                if (camera == &cc.camera)
+                {
+                    postProcessing = cc.camera.postProcessing;
+                }
+            }
+        }
+        float globalScale = m_SceneRenderer ? m_SceneRenderer->sceneRenderSettings.renderScale : 1.0f;
+        postProcessing.renderScale = glm::clamp(postProcessing.renderScale * globalScale, 0.25f, 1.0f);
+
+        const uint32_t expectedRenderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.x) * postProcessing.renderScale)));
+        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(static_cast<float>(desiredSize.y) * postProcessing.renderScale));
+
+        const glm::uvec2 sceneRTSize = target ? target->sceneRT->GetSize() : glm::uvec2(0);
+
+        const bool cameraNeedsResize = (desiredSize.x != cameraSize.x || desiredSize.y != cameraSize.y);
+        const bool compositeNeedsResize = (!target || desiredSize.x != targetSize.x || desiredSize.y != targetSize.y);
+        const bool sceneRTNeedsResize = (!target || expectedRenderWidth != sceneRTSize.x || expectedRenderHeight != sceneRTSize.y);
+
+        const bool needsResize = cameraNeedsResize || compositeNeedsResize || sceneRTNeedsResize || requestToResize;
+
+        if (needsResize)
+        {
+            camera->UpdateProjection(desiredSize.x, desiredSize.y);
+            isResizing = true;
+            requestToResize = false;
+        }
+
+        if (isResizing && m_SceneRenderer)
+        {
+            if (!target || targetSize.x == 0 || targetSize.y == 0 || sceneRTSize.x == 0 || sceneRTSize.y == 0)
+            {
+                m_SceneRenderer->ResizeFramebuffer(camera, desiredSize.x, desiredSize.y);
+                isResizing = false;
+                resizingFrame = 0;
+            }
+            else if (resizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+            {
+                m_SceneRenderer->ResizeFramebuffer(camera, desiredSize.x, desiredSize.y);
+                isResizing = false;
+                resizingFrame = 0;
+            }
+        }
     }
 
 }

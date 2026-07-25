@@ -146,6 +146,8 @@ namespace ignite
         void UISettings();
         void UISceneRenderer();
 
+        void ProcessCameraViewportResize(ICamera *camera, const glm::uvec2 &desiredSize, bool &isResizing, int &resizingFrame, bool &requestToResize);
+
         ScenePanel *m_ScenePanel;
         AssetImporterPanel *m_AssetImporterPanel;
         ContentBrowserPanel *m_ContentBrowserPanel;

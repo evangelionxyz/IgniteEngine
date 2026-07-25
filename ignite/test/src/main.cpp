@@ -150,8 +150,8 @@ TEST(BlendSpace, NormalizedMultiSampleEvaluation)
 TEST(AnimatorController, BlendSpaceParameterEvaluation)
 {
     Ref<AnimatorController> controller = AnimatorController::Create();
-    controller->params.push_back({ .name = "Direction", .floatVal = 0.0f, .type = AnimParam::Type::Float });
-    controller->params.push_back({ .name = "Speed", .floatVal = 0.0f, .type = AnimParam::Type::Float });
+    controller->params["Direction"] = { .name = "Direction", .floatVal = 0.0f, .type = AnimParam::Type::Float };
+    controller->params["Speed"] = { .name = "Speed", .floatVal = 0.0f, .type = AnimParam::Type::Float };
 
     controller->SetParamFloat("Direction", -180.0f);
     controller->SetParamFloat("Speed", 5.0f);
@@ -167,12 +167,12 @@ TEST(AnimatorController, BlendSpaceParameterEvaluation)
     AnimState blendState;
     blendState.name = "WalkRunBlendSpace";
     blendState.SetMotion(AnimState::MotionType::BlendSpace, AssetHandle(505));
-    controller->states.push_back(blendState);
+    controller->states[blendState.name] = blendState;
     controller->defaultState = "WalkRunBlendSpace";
 
     EXPECT_EQ(controller->states.size(), 1);
-    EXPECT_EQ(controller->states[0].GetMotionType(), AnimState::MotionType::BlendSpace);
-    EXPECT_EQ(controller->states[0].GetMotionHandle(), AssetHandle(505));
+    EXPECT_EQ(controller->states["WalkRunBlendSpace"].GetMotionType(), AnimState::MotionType::BlendSpace);
+    EXPECT_EQ(controller->states["WalkRunBlendSpace"].GetMotionHandle(), AssetHandle(505));
 }
 
 // -------------------------------------------------
@@ -648,18 +648,17 @@ public class AnimationTest : Entity
 
     auto &meshComp = entity.AddComponent<SkeletalMeshComponent>();
     Ref<AnimatorController> controller = AnimatorController::Create();
-    controller->params = {
-        { .name = "Speed", .floatVal = 0.0f, .type = AnimParam::Type::Float },
-        { .name = "Direction", .floatVal = 0.0f, .type = AnimParam::Type::Float },
-        { .name = "IsMoving", .boolVal = false, .type = AnimParam::Type::Bool },
-        { .name = "StateIndex", .intVal = 0, .type = AnimParam::Type::Int },
-        { .name = "StateName", .strVal = "", .type = AnimParam::Type::String }
-    };
+    controller->params["Speed"] = { .name = "Speed", .floatVal = 0.0f, .type = AnimParam::Type::Float };
+    controller->params["Direction"] = { .name = "Direction", .floatVal = 0.0f, .type = AnimParam::Type::Float };
+    controller->params["IsMoving"] = { .name = "IsMoving", .boolVal = false, .type = AnimParam::Type::Bool };
+    controller->params["StateIndex"] = { .name = "StateIndex", .intVal = 0, .type = AnimParam::Type::Int };
+    controller->params["StateName"] = { .name = "StateName", .strVal = "", .type = AnimParam::Type::String };
+    
 
     AnimState blendState;
     blendState.name = "WalkRunState";
     blendState.SetMotion(AnimState::MotionType::BlendSpace, AssetHandle(888));
-    controller->states.push_back(blendState);
+    controller->states[blendState.name] = blendState;
     controller->defaultState = "WalkRunState";
 
     meshComp.runtimeAnimatorInstance = controller;

@@ -62,7 +62,7 @@ namespace ignite
         // Copy and create asset pin
         // for skeleton and states
         cloneAnim->SetSkeletonHandle(other->GetSkeletonHandle());
-		for (auto &state : cloneAnim->states)
+		for (auto &[name, state] : cloneAnim->states)
 		{
             // re assign to add asset pin
 			state.SetMotion(state.GetMotionType(), state.GetMotionHandle());
@@ -133,14 +133,18 @@ namespace ignite
 
     AnimState *AnimatorController::FindState(const std::string &name)
     {
-        auto it = std::find_if(states.begin(), states.end(), [&name](const AnimState &s) { return s.name == name; });
-        return it != states.end() ? &(*it) : nullptr;
+        auto it = states.find(name);
+        if (it != states.end())
+            return &it->second;
+        return nullptr;
     }
 
     const AnimState *AnimatorController::FindState(const std::string &name) const
     {
-        auto it = std::find_if(states.begin(), states.end(), [&name](const AnimState &s) { return s.name == name; });
-        return it != states.end() ? &(*it) : nullptr;
+		auto it = states.find(name);
+		if (it != states.end())
+			return &it->second;
+		return nullptr;
     }
 
     bool AnimatorController::Serialize(const ignite::Path &filepath)
@@ -152,31 +156,31 @@ namespace ignite
         out << YAML::Key << "SkeletonHandle" << YAML::Value << static_cast<uint64_t>(GetSkeletonHandle());
 
         out << YAML::Key << "States" << YAML::Value << YAML::BeginSeq;
-        for (const auto &s : states)
+        for (const auto &[name, state] : states)
         {
             out << YAML::BeginMap;
-            out << YAML::Key << "Name" << YAML::Value << s.name;
-            out << YAML::Key << "MotionType" << YAML::Value << (s.GetMotionType() == AnimState::MotionType::BlendSpace ? "BlendSpace" : "SkeletalAnimation");
-            out << YAML::Key << "MotionHandle" << YAML::Value << static_cast<uint64_t>(s.GetMotionHandle());
-            // Keep this field for older tools which only understand clips.
-            out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.GetAnimationAssetHandle());
-            out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << s.editorPos.x << s.editorPos.y << YAML::EndSeq;
+            out << YAML::Key << "Name" << YAML::Value << name;
+            out << YAML::Key << "MotionType" << YAML::Value << (state.GetMotionType() == AnimState::MotionType::BlendSpace ? "BlendSpace" : "SkeletalAnimation");
+            out << YAML::Key << "MotionHandle" << YAML::Value << static_cast<uint64_t>(state.GetMotionHandle());
+            // Keep this field for older tools which only understand clipstate.
+            out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(state.GetAnimationAssetHandle());
+            out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << state.editorPos.x << state.editorPos.y << YAML::EndSeq;
             out << YAML::EndMap;
         }
         out << YAML::EndSeq;
 
         out << YAML::Key << "Params" << YAML::Value << YAML::BeginSeq;
-        for (const auto &p : params)
+        for (const auto &[name, param] : params)
         {
             out << YAML::BeginMap;
-            out << YAML::Key << "Name" << YAML::Value << p.name;
-            out << YAML::Key << "Type" << YAML::Value << anim_utils::ParamTypeToStr(p.type);
-            switch (p.type)
+            out << YAML::Key << "Name" << YAML::Value << name;
+            out << YAML::Key << "Type" << YAML::Value << anim_utils::ParamTypeToStr(param.type);
+            switch (param.type)
             {
-                case AnimParam::Type::Float: out << YAML::Key << "Value" << YAML::Value << p.floatVal; break;
-                case AnimParam::Type::Int: out << YAML::Key << "Value" << YAML::Value << p.intVal; break;
-                case AnimParam::Type::Bool: out << YAML::Key << "Value" << YAML::Value << p.boolVal; break;
-                case AnimParam::Type::String: out << YAML::Key << "Value" << YAML::Value << p.strVal; break;
+                case AnimParam::Type::Float: out << YAML::Key << "Value" << YAML::Value << param.floatVal; break;
+                case AnimParam::Type::Int: out << YAML::Key << "Value" << YAML::Value << param.intVal; break;
+                case AnimParam::Type::Bool: out << YAML::Key << "Value" << YAML::Value << param.boolVal; break;
+                case AnimParam::Type::String: out << YAML::Key << "Value" << YAML::Value << param.strVal; break;
                 default: break;
             }
             out << YAML::EndMap;
@@ -274,17 +278,19 @@ namespace ignite
             ctrl->states.reserve(statesNode.size());
             for (const auto &sn : statesNode)
             {
-                AnimState &s = ctrl->states.emplace_back();
-                if (auto n = sn["Name"]) s.name = n.as<std::string>();
+                AnimState state;
+                if (auto n = sn["Name"]) state.name = n.as<std::string>();
 
                 const auto type = sn["MotionType"] && sn["MotionType"].as<std::string>() == "BlendSpace"
                     ? AnimState::MotionType::BlendSpace : AnimState::MotionType::SkeletalAnimation;
 
-                if (auto n = sn["MotionHandle"]) s.SetMotion(type, AssetHandle(n.as<uint64_t>()));
-                else if (auto n = sn["AnimHandle"]) s.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
+                if (auto n = sn["MotionHandle"]) state.SetMotion(type, AssetHandle(n.as<uint64_t>()));
+                else if (auto n = sn["AnimHandle"]) state.SetAnimationHandle(AssetHandle(n.as<uint64_t>()));
 
                 if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
-                    s.editorPos = { n[0].as<float>(), n[1].as<float>() };
+                    state.editorPos = { n[0].as<float>(), n[1].as<float>() };
+
+                ctrl->states.emplace(state.name, state);
             }
         }
 
@@ -293,21 +299,22 @@ namespace ignite
             ctrl->params.reserve(paramsNode.size());
             for (const auto &pn : paramsNode)
             {
-                AnimParam p;
-                if (auto n = pn["Name"]) p.name = n.as<std::string>();
-                if (auto n = pn["Type"]) p.type = anim_utils::StrToParamType(n.as<std::string>());
+                AnimParam param;
+                if (auto n = pn["Name"]) param.name = n.as<std::string>();
+                if (auto n = pn["Type"]) param.type = anim_utils::StrToParamType(n.as<std::string>());
                 if (auto n = pn["Value"])
                 {
-                    switch (p.type)
+                    switch (param.type)
                     {
-                        case AnimParam::Type::Float: p.floatVal = n.as<float>(); break;
-                        case AnimParam::Type::Int: p.intVal = n.as<int>(); break;
-                        case AnimParam::Type::Bool: p.boolVal = n.as<bool>(); break;
-                        case AnimParam::Type::String: p.strVal = n.as<std::string>(); break;
+                    case AnimParam::Type::Float: param.floatVal = n.as<float>(); break;
+                    case AnimParam::Type::Int: param.intVal = n.as<int>(); break;
+                    case AnimParam::Type::Bool: param.boolVal = n.as<bool>(); break;
+                    case AnimParam::Type::String: param.strVal = n.as<std::string>(); break;
                         default: break;
                     }
                 }
-                ctrl->params.push_back(p);
+
+                ctrl->params.emplace(param.name, param);
             }
         }
 
@@ -379,7 +386,9 @@ namespace ignite
 
         if (runtime.currentStateName.empty())
         {
-            runtime.currentStateName = !defaultState.empty() ? defaultState : (states.empty() ? std::string{} : states.front().name);
+            runtime.currentStateName = !defaultState.empty() 
+                ? defaultState 
+                : (states.empty() ? std::string{} : states.begin()->first); // get key of state
             runtime.stateElapsed = 0.0f;
             runtime.stateNormalized = 0.0f;
         }
@@ -387,7 +396,7 @@ namespace ignite
         const AnimState *state = FindState(runtime.currentStateName);
         if (!state && !states.empty())
         {
-            runtime.currentStateName = states.front().name;
+            runtime.currentStateName = states.begin()->first; // get key of state
             state = FindState(runtime.currentStateName);
             runtime.stateElapsed = 0.0f;
             runtime.stateNormalized = 0.0f;

@@ -289,7 +289,7 @@ namespace ignite
 
             Ref<Material> material = CreateRef<Material>();
             material->name = fbxMaterial->GetName();
-			LOG_ASSERT(material->name.empty(), "FBX material has no name, using default name instead");
+			LOG_ASSERT(!material->name.empty(), "FBX material has no name, using default name instead");
 
             glm::vec3 diffuse(1.0f);
             if (TryGetMaterialPropertyVec3(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, diffuse))

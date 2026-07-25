@@ -672,6 +672,12 @@ namespace ignite
         {
 			// Render targets
 			auto it = m_RenderTargets.find(camera);
+			if (it == m_RenderTargets.end() && camera)
+			{
+				GetOrCreateRenderTarget(camera);
+				it = m_RenderTargets.find(camera);
+			}
+
 			if (it != m_RenderTargets.end())
 			{
 				auto target = it->second;
@@ -2257,6 +2263,13 @@ namespace ignite
         target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
 
         m_RenderTargets.emplace(camera, target);
+
+        const glm::uvec2 vpSize = camera ? camera->GetViewportSize() : glm::uvec2(0);
+        if (vpSize.x > 0 && vpSize.y > 0)
+        {
+            ResizeFramebuffer(camera, vpSize.x, vpSize.y);
+        }
+
         return target;
     }
 

@@ -375,15 +375,14 @@ namespace ignite
                             auto updateParam = [&](const std::string &name, float val)
                             {
                                 if (name.empty()) return;
-                                auto it = std::find_if(smc.runtimeParams.begin(), smc.runtimeParams.end(),
-                                    [&](const AnimParam &p) { return p.name == name; });
+                                auto it = smc.runtimeParams.find(name);
                                 if (it != smc.runtimeParams.end())
                                 {
-                                    it->floatVal = val;
+                                    it->second.floatVal = val;
                                 }
                                 else
                                 {
-                                    smc.runtimeParams.push_back({ name, "", val, 0, false, AnimParam::Type::Float });
+                                    smc.runtimeParams[name] = AnimParam{ .name = name, .strVal = "", .floatVal = val, .intVal = 0, .boolVal = false, .type = AnimParam::Type::Float };
                                 }
                             };
 

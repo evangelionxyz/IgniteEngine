@@ -82,7 +82,7 @@ namespace ignite
     {
     public:
         std::string defaultState;
-        std::vector<AnimState> states;
+        std::unordered_map<std::string, AnimState> states;
 
         virtual ~AnimatorController() override;
 
