@@ -11,6 +11,8 @@
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
+#include "editor_layer.hpp"
 #include "ignite/core/logger.hpp"
 
 #include <imgui.h>
@@ -349,47 +351,71 @@ namespace ignite
         // Update active scene preview if Preview in Scene is enabled
         if (state.previewInScene && blendSpace)
         {
-            if (ScriptEngine *se = ScriptEngine::GetInstance())
+            EditorLayer *editorLayer = EditorLayer::GetInstance();
+            Ref<Scene> activeScene = editorLayer ? editorLayer->GetActiveScene() : nullptr;
+
+            if (activeScene && activeScene->registry)
             {
-                if (Scene *activeScene = se->GetSceneContext())
+                auto matchesBlendSpace = [&](const SkeletalMeshComponent &smc) -> bool
                 {
-                    if (activeScene->registry)
+                    AssetHandle controllerHandle = smc.runtimeAnimatorHandle;
+                    if (controllerHandle == AssetHandle(0) && smc.runtimeAnimatorInstance)
                     {
-                        auto view = activeScene->registry->view<SkeletalMeshComponent>();
-                        for (entt::entity e : view)
-                        {
-                            Entity entity{ e, activeScene };
-                            if (!entity.IsValid())
-                                continue;
-
-                            auto &smc = entity.GetComponent<SkeletalMeshComponent>();
-
-                            if (smc.runtimeAnimatorInstance)
-                            {
-                                if (!blendSpace->axisXName.empty())
-                                    smc.runtimeAnimatorInstance->SetParamFloat(blendSpace->axisXName, state.previewInput.x);
-                                if (!blendSpace->axisYName.empty())
-                                    smc.runtimeAnimatorInstance->SetParamFloat(blendSpace->axisYName, state.previewInput.y);
-                            }
-
-                            auto updateParam = [&](const std::string &name, float val)
-                            {
-                                if (name.empty()) return;
-                                auto it = smc.runtimeParams.find(name);
-                                if (it != smc.runtimeParams.end())
-                                {
-                                    it->second.floatVal = val;
-                                }
-                                else
-                                {
-                                    smc.runtimeParams[name] = AnimParam{ .name = name, .strVal = "", .floatVal = val, .intVal = 0, .boolVal = false, .type = AnimParam::Type::Float };
-                                }
-                            };
-
-                            updateParam(blendSpace->axisXName, state.previewInput.x);
-                            updateParam(blendSpace->axisYName, state.previewInput.y);
-                        }
+                        controllerHandle = smc.runtimeAnimatorInstance->handle;
                     }
+
+                    if (controllerHandle == AssetHandle(0))
+                        return false;
+
+                    Ref<AnimatorController> controller = assetManager->GetAsset<AnimatorController>(controllerHandle);
+                    if (!controller)
+                        return false;
+
+                    for (const auto &[name, animState] : controller->states)
+                    {
+                        if (animState.GetMotionHandle() == blendSpace->handle)
+                            return true;
+                    }
+                    return false;
+                };
+
+                auto view = activeScene->registry->view<SkeletalMeshComponent>();
+                for (entt::entity e : view)
+                {
+                    Entity entity{ e, activeScene.get() };
+                    if (!entity.IsValid())
+                        continue;
+
+                    auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+
+                    // Only update preview params for skeletal meshes using an AnimatorController that references this BlendSpace
+                    if (!matchesBlendSpace(smc))
+                        continue;
+
+                    if (smc.runtimeAnimatorInstance)
+                    {
+                        if (!blendSpace->axisXName.empty())
+                            smc.runtimeAnimatorInstance->SetParamFloat(blendSpace->axisXName, state.previewInput.x);
+                        if (!blendSpace->axisYName.empty())
+                            smc.runtimeAnimatorInstance->SetParamFloat(blendSpace->axisYName, state.previewInput.y);
+                    }
+
+                    auto updateParam = [&](const std::string &name, float val)
+                    {
+                        if (name.empty()) return;
+                        auto it = smc.runtimeParams.find(name);
+                        if (it != smc.runtimeParams.end())
+                        {
+                            it->second.floatVal = val;
+                        }
+                        else
+                        {
+                            smc.runtimeParams[name] = AnimParam{ .name = name, .strVal = "", .floatVal = val, .intVal = 0, .boolVal = false, .type = AnimParam::Type::Float };
+                        }
+                    };
+
+                    updateParam(blendSpace->axisXName, state.previewInput.x);
+                    updateParam(blendSpace->axisYName, state.previewInput.y);
                 }
             }
         }

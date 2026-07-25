@@ -712,6 +712,10 @@ namespace ignite
                 AppendRaw(buffer, static_cast<uint64_t>(event.GetCallbackAsset()));
             }
 
+            // Append root motion & in place
+            AppendRaw(buffer, anim->rootMotion);
+            AppendRaw(buffer, anim->inPlace);
+
             // Write to file
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
@@ -849,6 +853,18 @@ namespace ignite
                     event.normalizedTime = std::clamp(event.normalizedTime, 0.0f, 1.0f);
                     anim->timelineEvents.push_back(std::move(event));
                 }
+            }
+
+            bool rootMotion = false;
+            if (ReadRaw(inFile, &rootMotion, sizeof(rootMotion)))
+            {
+                anim->rootMotion = rootMotion;
+            }
+
+            bool inPlace = false;
+            if (ReadRaw(inFile, &inPlace, sizeof(inPlace)))
+            {
+                anim->inPlace = inPlace;
             }
 
             inFile.close();

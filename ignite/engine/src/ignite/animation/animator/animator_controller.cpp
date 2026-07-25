@@ -581,54 +581,53 @@ namespace ignite
             ? std::clamp(runtime.transitionElapsed / runtime.transitionDuration, 0.0f, 1.0f)
             : 0.0f;
 
+        auto evaluatePoseForJointFromContribs = [&](size_t jointIndex, const std::vector<std::pair<Ref<SkeletalAnimation>, float>> &contribs, float normTime) -> Transform
+        {
+            const Joint &joint = skeleton->joints[jointIndex];
+            glm::vec3 translation(0.0f), scale(0.0f);
+            glm::quat rotationSum(0.0f, 0.0f, 0.0f, 0.0f);
+            glm::quat referenceRotation = joint.defaultTransform.rotation;
+            bool hasReference = false;
+
+            for (const auto &[sampleAnimation, weight] : contribs)
+            {
+                const float sampleTime = std::fmod(normTime * sampleAnimation->duration, sampleAnimation->duration);
+                Transform pose = joint.defaultTransform;
+                if (const auto channel = sampleAnimation->channels.find(static_cast<int>(jointIndex)); channel != sampleAnimation->channels.end())
+                    pose = channel->second.Calculate(sampleTime, joint.defaultTransform);
+
+                glm::quat rotation = pose.rotation;
+                if (hasReference && glm::dot(referenceRotation, rotation) < 0.0f)
+                    rotation = -rotation;
+                else if (!hasReference)
+                {
+                    referenceRotation = rotation;
+                    hasReference = true;
+                }
+                translation += pose.translation * weight;
+                scale += pose.scale * weight;
+                rotationSum.w += rotation.w * weight;
+                rotationSum.x += rotation.x * weight;
+                rotationSum.y += rotation.y * weight;
+                rotationSum.z += rotation.z * weight;
+            }
+
+            if (glm::length(rotationSum) > 0.000001f)
+                rotationSum = glm::normalize(rotationSum);
+            else
+                rotationSum = joint.defaultTransform.rotation;
+
+            return Transform{ translation, rotationSum, scale };
+        };
+
         // Calculate joint local poses (with transition cross-fading if active)
         for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
         {
-            const Joint &joint = skeleton->joints[jointIndex];
-
-            auto evaluatePoseFromContribs = [&](const std::vector<std::pair<Ref<SkeletalAnimation>, float>> &contribs, float normTime) -> Transform
-            {
-                glm::vec3 translation(0.0f), scale(0.0f);
-                glm::quat rotationSum(0.0f, 0.0f, 0.0f, 0.0f);
-                glm::quat referenceRotation = joint.defaultTransform.rotation;
-                bool hasReference = false;
-
-                for (const auto &[sampleAnimation, weight] : contribs)
-                {
-                    const float sampleTime = std::fmod(normTime * sampleAnimation->duration, sampleAnimation->duration);
-                    Transform pose = joint.defaultTransform;
-                    if (const auto channel = sampleAnimation->channels.find(static_cast<int>(jointIndex)); channel != sampleAnimation->channels.end())
-                        pose = channel->second.Calculate(sampleTime, joint.defaultTransform);
-
-                    glm::quat rotation = pose.rotation;
-                    if (hasReference && glm::dot(referenceRotation, rotation) < 0.0f)
-                        rotation = -rotation;
-                    else if (!hasReference)
-                    {
-                        referenceRotation = rotation;
-                        hasReference = true;
-                    }
-                    translation += pose.translation * weight;
-                    scale += pose.scale * weight;
-                    rotationSum.w += rotation.w * weight;
-                    rotationSum.x += rotation.x * weight;
-                    rotationSum.y += rotation.y * weight;
-                    rotationSum.z += rotation.z * weight;
-                }
-
-                if (glm::length(rotationSum) > 0.000001f)
-                    rotationSum = glm::normalize(rotationSum);
-                else
-                    rotationSum = joint.defaultTransform.rotation;
-
-                return Transform{ translation, rotationSum, scale };
-            };
-
-            Transform poseSource = evaluatePoseFromContribs(sourceContribs, runtime.stateNormalized);
+            Transform poseSource = evaluatePoseForJointFromContribs(jointIndex, sourceContribs, runtime.stateNormalized);
             if (runtime.isTransitioning && !targetContribs.empty())
             {
                 const float targetNormTime = runtime.stateNormalized;
-                Transform poseTarget = evaluatePoseFromContribs(targetContribs, targetNormTime);
+                Transform poseTarget = evaluatePoseForJointFromContribs(jointIndex, targetContribs, targetNormTime);
 
                 glm::quat rotA = poseSource.rotation;
                 glm::quat rotB = poseTarget.rotation;
@@ -644,6 +643,125 @@ namespace ignite
             {
                 runtime.localPoses[jointIndex] = poseSource;
             }
+        }
+
+        // =========================================================================
+        // Step 1: Check Active Motion Flags (Root Motion & In-Place)
+        // =========================================================================
+        bool rootMotionActive = false;
+        bool inPlaceActive = false;
+        for (const auto &[anim, weight] : sourceContribs)
+        {
+            if (anim)
+            {
+                if (anim->rootMotion) rootMotionActive = true;
+                if (anim->inPlace) inPlaceActive = true;
+            }
+        }
+
+        // =========================================================================
+        // Step 2: Locate the Root Joint (Parent Joint ID == -1)
+        // =========================================================================
+        size_t rootIndex = 0;
+        for (size_t i = 0; i < jointCount; ++i)
+        {
+            if (skeleton->joints[i].parentJointId == -1)
+            {
+                rootIndex = i;
+                break;
+            }
+        }
+
+        const Joint &rootJoint = skeleton->joints[rootIndex];
+
+        // =========================================================================
+        // Step 3: Helper Lambda to Sample & Blend Root Bone Pose at Any Time
+        // =========================================================================
+        // Evaluates the root bone transform at normalized time normTime,
+        // automatically handling cross-fading if a state transition is active.
+        auto getBlendedRootPose = [&](float normTime) -> Transform
+        {
+            Transform pSource = evaluatePoseForJointFromContribs(rootIndex, sourceContribs, normTime);
+            if (runtime.isTransitioning && !targetContribs.empty())
+            {
+                Transform pTarget = evaluatePoseForJointFromContribs(rootIndex, targetContribs, normTime);
+                glm::quat rA = pSource.rotation;
+                glm::quat rB = pTarget.rotation;
+                if (glm::dot(rA, rB) < 0.0f) rB = -rB;
+                Transform blended;
+                blended.translation = glm::mix(pSource.translation, pTarget.translation, blendAlpha);
+                blended.rotation = glm::normalize(glm::slerp(rA, rB, blendAlpha));
+                blended.scale = glm::mix(pSource.scale, pTarget.scale, blendAlpha);
+                return blended;
+            }
+            return pSource;
+        };
+
+        // =========================================================================
+        // Step 4: Apply Root Motion or In-Place Adjustments
+        // =========================================================================
+        if (inPlaceActive)
+        {
+            // --- In-Place Mode ---
+            // 1. Disable entity world movement (zero root motion delta).
+            // 2. Lock horizontal plane displacement (X and Z) to the starting position (t = 0.0).
+            // 3. Preserve full vertical keyframe height Y (currRoot.translation.y) so the
+            //    character maintains baseline standing height and jump/crouch bobbing.
+            runtime.hasRootMotion = false;
+            runtime.rootMotionDelta = glm::vec3(0.0f);
+
+            Transform startRoot = getBlendedRootPose(0.0f);
+            Transform currRoot = getBlendedRootPose(runtime.stateNormalized);
+
+            runtime.localPoses[rootIndex].translation = glm::vec3(startRoot.translation.x, currRoot.translation.y, startRoot.translation.z);
+        }
+        else if (rootMotionActive)
+        {
+            // --- Root Motion Mode ---
+            // 1. Enable root motion flag for Scene::UpdateAnimations to apply to Entity transform.
+            // 2. Compute frame-to-frame delta of root joint translation (handling loop wrap-around).
+            // 3. Extract horizontal movement (X and Z) into runtime.rootMotionDelta for entity transform.
+            // 4. Lock horizontal local pose (X and Z) to starting position to prevent double-transformation,
+            //    while preserving vertical height Y (currRoot.translation.y) in local pose.
+            runtime.hasRootMotion = true;
+
+            const float prevNorm = runtime.previousStateNormalized;
+            const float currNorm = runtime.stateNormalized;
+
+            glm::vec3 rawDelta(0.0f);
+            if (currNorm >= prevNorm)
+            {
+                // Normal frame step within same loop cycle
+                Transform prevRoot = getBlendedRootPose(prevNorm);
+                Transform currRoot = getBlendedRootPose(currNorm);
+                rawDelta = currRoot.translation - prevRoot.translation;
+            }
+            else
+            {
+                // Animation wrapped around loop boundary (from 1.0 back to 0.0)
+                Transform prevRoot = getBlendedRootPose(prevNorm);
+                Transform endRoot = getBlendedRootPose(1.0f);
+                Transform startRoot = getBlendedRootPose(0.0f);
+                Transform currRoot = getBlendedRootPose(currNorm);
+                rawDelta = (endRoot.translation - prevRoot.translation) + (currRoot.translation - startRoot.translation);
+            }
+
+            // Extract horizontal ground movement (X and Z) to move entity transform in world space
+            runtime.rootMotionDelta = glm::vec3(rawDelta.x, 0.0f, rawDelta.z);
+
+            Transform startRoot = getBlendedRootPose(0.0f);
+            Transform currRoot = getBlendedRootPose(currNorm);
+
+            // Lock horizontal local translation (X and Z) to prevent double-movement,
+            // keeping natural character standing and jump height Y intact.
+            runtime.localPoses[rootIndex].translation = glm::vec3(startRoot.translation.x, currRoot.translation.y, startRoot.translation.z);
+        }
+        else
+        {
+            // --- Standard Animation Mode ---
+            // Root joint moves strictly as baked in keyframes; entity transform remains unaffected.
+            runtime.hasRootMotion = false;
+            runtime.rootMotionDelta = glm::vec3(0.0f);
         }
 
         // Compute global poses

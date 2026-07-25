@@ -71,13 +71,18 @@ namespace ignite
         };
     }
 
+    EditorLayer *EditorLayer::s_Instance = nullptr;
+
     EditorLayer::EditorLayer(const std::string &name)
         : Layer(name), m_StatusText("Ready")
     {
+        s_Instance = this;
     }
 
     EditorLayer::~EditorLayer()
     {
+        if (s_Instance == this)
+            s_Instance = nullptr;
     }
 
     void EditorLayer::OnAttach()

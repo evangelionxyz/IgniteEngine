@@ -58,11 +58,22 @@ namespace ignite
         ImGui::BeginChild("##anim_left", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_ResizeX);
         {
             ImGui::TextUnformatted("Skeleton Joints");
-            ImGui::Separator();
+
+            if (ImGui::TreeNodeEx("Properties", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (UI::DrawCheckbox("Root Motion", &animation->rootMotion))
+                    animation->SetDirtyFlag(true);
+                if (UI::DrawCheckbox("In Place", &animation->inPlace))
+                    animation->SetDirtyFlag(true);
+
+                ImGui::TreePop();
+            }
+
+            ImGui::Spacing();
 
             // Skeleton drag and drop target button
             const std::string skeletonLabel = assetManager->GetAssetDisplayName(animation->GetSkeletonHandle());
-			if (UI::DrawAssetDropTarget("Skeleton Handle", skeletonLabel.c_str(), { AssetType::Skeleton }, &skeletonHandle, assetManager))
+			if (UI::DrawAssetDropTarget("Skeleton Handle", skeletonLabel, { AssetType::Skeleton }, &skeletonHandle, assetManager))
 			{
                 animation->SetSkeletonHandle(skeletonHandle);
                 animation->SetDirtyFlag(true);

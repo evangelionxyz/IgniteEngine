@@ -770,6 +770,11 @@ namespace ignite
                     smc.currentStateName = sharedRuntime->currentStateName;
                     smc.stateElapsed = sharedRuntime->stateElapsed;
                     smc.stateNormalized = sharedRuntime->stateNormalized;
+
+                    if (sharedRuntime->hasRootMotion)
+                    {
+                        tr.local.translation += tr.local.rotation * sharedRuntime->rootMotionDelta;
+                    }
                 }
             }
             else
@@ -793,6 +798,11 @@ namespace ignite
                     smc.currentStateName = runtime.currentStateName;
                     smc.stateElapsed = runtime.stateElapsed;
                     smc.stateNormalized = runtime.stateNormalized;
+
+                    if (runtime.hasRootMotion)
+                    {
+                        tr.local.translation += tr.local.rotation * runtime.rootMotionDelta;
+                    }
                 }
             }
         }

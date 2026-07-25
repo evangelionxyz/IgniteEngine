@@ -76,6 +76,10 @@ namespace ignite
         std::vector<Transform> localPoses;
         std::vector<Transform> globalPoses;
         std::vector<glm::mat4> finalTransforms; // per-instance GPU-ready bone transforms
+
+        // Root motion
+        glm::vec3 rootMotionDelta = glm::vec3(0.0f);
+        bool hasRootMotion = false;
     };
 
     class IGN_API AnimatorController : public Animator, public Asset

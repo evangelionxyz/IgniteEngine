@@ -111,6 +111,8 @@ namespace ignite
         Ref<Prefab> GetEditingPrefab() const { return m_EditingPrefab; }
         AssetHandle GetEditingPrefabHandle() const { return m_EditingPrefabHandle; }
 
+        static EditorLayer *GetInstance() { return s_Instance; }
+
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
         Ref<Project> GetActiveProject() const { return m_ActiveProject; }
 
@@ -192,6 +194,8 @@ namespace ignite
         
         std::string m_StatusText;
         float m_LoadingProgress = 0.0f;
+
+        static EditorLayer *s_Instance;
 
         friend class ScenePanel;
         friend class AssetImporterPanel;
