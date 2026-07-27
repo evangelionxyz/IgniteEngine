@@ -53,7 +53,8 @@ namespace ignite
 		float pcfRadius = 0.3f;   // PCF filter radius in texels for cascade 0
 
 		int cascadeIndex;
-		float padding[3];
+		float shadowTexelSize = 1.0f / 2048.0f;
+		float padding[2];
 	};
 
 	struct CSMModel_GPUData

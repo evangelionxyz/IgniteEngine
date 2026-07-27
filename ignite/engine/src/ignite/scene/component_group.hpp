@@ -43,6 +43,7 @@ namespace ignite
         Rigidbody2DComponent,
         BoxCollider2DComponent,
         CircleCollider2DComponent,
+        CharacterControllerComponent,
         StaticMeshComponent,
         SkeletalMeshComponent,
         RigidbodyComponent,

@@ -163,7 +163,9 @@ namespace ignite
         void SetDPISacaleFactors(float x, float y);
 		void SetHeadLessDevice(bool headless) { m_DeviceParameters.headlessDevice = headless; }
         
-        bool IsVsyncEnabled() const { return m_DeviceParameters.vsyncEnable; }
+        inline bool IsVsyncEnabled() const { return m_DeviceParameters.vsyncEnable; }
+        inline void EnableVsync() { m_DeviceParameters.vsyncEnable = true; }
+        inline void DisableVsync() { m_DeviceParameters.vsyncEnable = false; }
 
         void CreateBackBuffers();
 
@@ -177,7 +179,6 @@ namespace ignite
         virtual uint32_t GetBackBufferCount() = 0;
         nvrhi::IFramebuffer *GetCurrentFramebuffer();
         nvrhi::IFramebuffer *GetFramebuffer(uint32_t index);
-
 
         virtual void Destroy();
         virtual ~DeviceManager() = default;

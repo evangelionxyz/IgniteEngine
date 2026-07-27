@@ -560,11 +560,6 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        if (auto *device = DeviceManager::GetInstance()->GetDevice())
-        {
-            GPUUploadSync::DeviceWaitIdle(device);
-        }
-
         std::unique_lock lock(m_AssetMutex);
 
         auto it = m_LoadedAssets.find(handle);
@@ -625,12 +620,6 @@ namespace ignite
         // GPU sync and asset destruction outside lock
         if (!assetsToUnload.empty())
         {
-            auto *deviceManager = DeviceManager::GetInstance();
-            if (deviceManager && deviceManager->GetDevice())
-            {
-                GPUUploadSync::DeviceWaitIdle(deviceManager->GetDevice());
-            }
-
             assetsToDestroy.clear();
             LOG_DEBUG("[Asset Manager] Unused assets unloaded. Remaining: {}", m_LoadedAssets.size());
         }
@@ -696,7 +685,7 @@ namespace ignite
             }
         }
 
-        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 64 * 1024 * 1024; // 512 MB
+        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 64 * 1024 * 1024;
 
         const uint64_t size = GetAssetFileSize(metadata);
 

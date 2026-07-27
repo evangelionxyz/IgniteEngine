@@ -49,6 +49,7 @@ namespace ignite
 					   ShadowMapQuality::ULTIMATE == quality ? 8192 : 1024;
 		
 		m_Quality = quality;
+		m_GPUData.shadowTexelSize = 1.0f / static_cast<float>(m_Resolution);
 
 		// Linear clamp sampler for shadow map PCF — used with SampleLevel in the shader.
 		// Linear filtering provides smooth interpolation between depth texels across Poisson taps.

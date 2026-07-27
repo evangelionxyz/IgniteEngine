@@ -95,25 +95,12 @@ namespace ignite
         atlas->SetReadyFlag(false);
 
         atlas->PrepareUploadData(4);
-        Application::SubmitToRenderThread([atlas, f]()
+        Texture::SubmitAsyncUpload(atlas, [atlas, f]()
         {
-            if (atlas)
+            if (f)
             {
-				nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-				nvrhi::CommandListHandle cmd = device->createCommandList();
-				cmd->open();
-				atlas->SetData(cmd, 4);
-				cmd->close();
-
-                Application::SubmitWorkerCommandList(cmd, [atlas, f]()
-                {
-                    atlas->SetReadyFlag(true);
-                    if (f)
-                    {
-                        f->SetReadyFlag(atlas->IsReady());
-                        f->NotifyChange();
-                    }
-                });
+                f->SetReadyFlag(atlas->IsReady());
+                f->NotifyChange();
             }
         });
 

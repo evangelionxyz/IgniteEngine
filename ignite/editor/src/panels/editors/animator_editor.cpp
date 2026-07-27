@@ -40,13 +40,11 @@ namespace ignite
             return std::format("{} {}", cleanBase, suffix);
         }
 
-        static void CreateAnimatorStateFromMotion(const Ref<AnimatorController> &animator, AssetManager *assetManager, AnimatorControllerEditorState &ui,
-            AssetHandle motionHandle, const ImVec2 &worldPos)
+        static void CreateAnimatorStateFromMotion(const Ref<AnimatorController> &animator, AssetManager *assetManager,
+            AnimatorControllerEditorState &ui, AssetHandle motionHandle, const ImVec2 &worldPos)
         {
             if (!animator || !assetManager || motionHandle == AssetHandle(0))
-            {
                 return;
-            }
 
             const AssetMetaData &metadata = assetManager->GetMetaData(motionHandle);
             AnimState::MotionType type;
@@ -78,13 +76,40 @@ namespace ignite
                 {
                     Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(motionHandle);
                     if (animation)
+                    {
                         animator->SetSkeletonHandle(animation->GetSkeletonHandle());
+                    }
                 }
                 else
                 {
                     Ref<BlendSpace> blendSpace = assetManager->GetAsset<BlendSpace>(motionHandle);
                     if (blendSpace)
+                    {
                         animator->SetSkeletonHandle(blendSpace->GetSkeletonAssetHandle());
+                        
+                        // Create blend space X and Y to animator params
+                        if (!animator->params.contains(blendSpace->axisXName))
+                        {
+                            animator->params[blendSpace->axisXName] = {
+                                AnimParam{
+                                    .name = blendSpace->axisXName,
+                                    .floatVal = 0.0f,
+                                    .type = AnimParam::Type::Float
+                                }
+                            };
+                        }
+
+						if (!animator->params.contains(blendSpace->axisYName))
+						{
+							animator->params[blendSpace->axisYName] = {
+								AnimParam{
+									.name = blendSpace->axisYName,
+									.floatVal = 0.0f,
+									.type = AnimParam::Type::Float
+								}
+							};
+						}
+                    }
                 }
             }
 

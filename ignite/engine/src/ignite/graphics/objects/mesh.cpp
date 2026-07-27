@@ -255,19 +255,7 @@ namespace ignite
                     }
 
                     texture->PrepareUploadData(4);
-                    Application::SubmitToRenderThread([texture]()
-                    {
-                        nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-                        cmd->open();
-                        texture->SetData(cmd, 4);
-                        texture->SetReadyFlag(false);
-                        cmd->close();
-
-                        Application::SubmitWorkerCommandList(cmd, [texture]()
-                        {
-                            texture->SetReadyFlag(true);
-                        });
-                    });
+                    Texture::SubmitAsyncUpload(texture);
 
                     const int index = (int)materialLoader.loadedTextures.size();
                     materialLoader.loadedTextures.push_back(texture);
@@ -552,15 +540,15 @@ namespace ignite
     void SkeletalMesh::SetSkeleton(AssetHandle skeletonHandle)
     {
         m_SkeletonHandle = skeletonHandle;
-		if (skeletonHandle != AssetHandle(0))
-            AssetManager::GetInstance()->AddAssetPin(skeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)skeletonHandle));
+		if (skeletonHandle != AssetHandle(0) && handle != AssetHandle(0))
+            AssetManager::GetInstance()->AddAssetPin(skeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)handle, (uint64_t)skeletonHandle));
     }
 
     void SkeletalMesh::SetAnimator(AssetHandle animatorHandle)
     {
         m_AnimatorHandle = animatorHandle;
-        if (animatorHandle != AssetHandle(0))
-            AssetManager::GetInstance()->AddAssetPin(animatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)animatorHandle));
+        if (animatorHandle != AssetHandle(0) && handle != AssetHandle(0))
+            AssetManager::GetInstance()->AddAssetPin(animatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)handle, (uint64_t)animatorHandle));
     }
 
     bool SkeletalMesh::Serialize(const ignite::Path &filepath)
@@ -1419,19 +1407,7 @@ namespace ignite
                         LOG_TRACE(" Loaded embedded texture");
 
                         texture->PrepareUploadData(4);
-                        Application::SubmitToRenderThread([texture]()
-                        {
-                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-                            cmd->open();
-                            texture->SetData(cmd, 4);
-                            texture->SetReadyFlag(false);
-                            cmd->close();
-
-                            Application::SubmitWorkerCommandList(cmd, [texture]()
-                            {
-                                texture->SetReadyFlag(true);
-                            });
-                        });
+                        Texture::SubmitAsyncUpload(texture);
                     }
                     else if (!image.uri.empty())
                     {

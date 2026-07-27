@@ -18,11 +18,15 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace ignite::physics
+{
+    class Physics2D;
+    class Physics3D;
+}
+
 namespace ignite
 {
     class CameraComponent;
-    class Physics2D;
-    class JoltScene;
     class Entity;
     class Environment;
     class WorldEnvironment;
@@ -57,7 +61,11 @@ namespace ignite
         void UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform);
         
         void OnUpdateRuntimeSimulate(float deltaTime);
+        void OnFixedUpdateRuntimeSimulate();
+        
         void OnUpdateEdit(float deltaTime);
+        void OnFixedUpdateEdit();
+
         void SetSceneRenderer(SceneRenderer *sceneRenderer) { m_SceneRenderer = sceneRenderer; }
 
         const ESceneState &GetState() const { return m_State; }
@@ -85,12 +93,11 @@ namespace ignite
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
         Environment *GetEnvironment();
         WorldEnvironment *GetActiveWorldEnvironment();
-		Physics2D *GetPhysics2D() { return m_Physics2D; }
-		JoltScene *GetJoltScene() { return m_JoltScene; }
+		physics::Physics2D *GetPhysics2D() { return m_Physics2D; }
+        physics::Physics3D *GetPhysics3D() { return m_Physics3D; }
 
         std::unordered_set<AssetHandle> CollectReferencedAssetHandles() const;
 
-        glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;
 
         static AssetType GetStaticType() { return AssetType::Scene; }
@@ -105,8 +112,8 @@ namespace ignite
 
         Project *m_Project;
         AssetManager *m_AssetManager;
-        Physics2D *m_Physics2D;
-        JoltScene *m_JoltScene;
+        physics::Physics2D *m_Physics2D;
+        physics::Physics3D *m_Physics3D;
 
         uint32_t m_ViewportWidth;
         uint32_t m_ViewportHeight;
@@ -114,8 +121,6 @@ namespace ignite
         SignalToken m_AssetChangeToken = kInvalidSignalToken;
         ESceneState m_State = ESceneState::Stop;
 
-        // std::vector<AssetHandle> m_UsedAssets;
-        
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
         std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;
 

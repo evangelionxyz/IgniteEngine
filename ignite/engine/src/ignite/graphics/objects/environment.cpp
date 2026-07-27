@@ -40,11 +40,6 @@ namespace ignite
 
     Environment::~Environment()
     {
-        if (auto *device = DeviceManager::GetInstance()->GetDevice())
-        {
-            GPUUploadSync::DeviceWaitIdle(device);
-        }
-
         m_Sampler.Reset();
 
         m_HDRTexture.reset();

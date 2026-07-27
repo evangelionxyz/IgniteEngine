@@ -15,6 +15,7 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "input/input_system.hpp"
 #include "ignite/asset/asset_manager.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include "ignite_rs/core.h"
 #include "ignite_rs/log.h"
@@ -117,11 +118,15 @@ namespace ignite
         deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
         deviceParams.enableDebugRuntime = true;
+        deviceParams.enableNvrhiValidationLayer = true;
+        deviceParams.enableGPUValidation = true;
+#else
+        deviceParams.enableDebugRuntime = false;
+        deviceParams.enableNvrhiValidationLayer = false;
+        deviceParams.enableGPUValidation = false;
 #endif
         deviceParams.swapChainBufferCount = 3; // TRIPLE BUFFER
-        deviceParams.enableNvrhiValidationLayer = true;
         deviceParams.enablePerMonitorDPI = true;
-        deviceParams.enableGPUValidation = true;
         deviceParams.supportExplicitDisplayScaling = true;
         deviceParams.enableHeapDirectlyIndexed = true;
         deviceParams.headlessDevice = m_CreateInfo.headless;
@@ -354,6 +359,12 @@ namespace ignite
             {
                 m_ImGuiLayer->EndFrame(backBufferFrameBuffer);
                 m_ImGuiLayer->RenderPlatformWindows();
+            }
+
+            if (Texture::HasPendingUploads())
+            {
+                IGN_PROFILE_SCOPE("RenderThread::TextureAsyncUploads");
+                Texture::ProcessAsyncUploads();
             }
 
             // Collect worker command lists with minimal lock hold.

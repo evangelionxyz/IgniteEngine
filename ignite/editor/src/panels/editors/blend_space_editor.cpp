@@ -356,29 +356,6 @@ namespace ignite
 
             if (activeScene && activeScene->registry)
             {
-                auto matchesBlendSpace = [&](const SkeletalMeshComponent &smc) -> bool
-                {
-                    AssetHandle controllerHandle = smc.runtimeAnimatorHandle;
-                    if (controllerHandle == AssetHandle(0) && smc.runtimeAnimatorInstance)
-                    {
-                        controllerHandle = smc.runtimeAnimatorInstance->handle;
-                    }
-
-                    if (controllerHandle == AssetHandle(0))
-                        return false;
-
-                    Ref<AnimatorController> controller = assetManager->GetAsset<AnimatorController>(controllerHandle);
-                    if (!controller)
-                        return false;
-
-                    for (const auto &[name, animState] : controller->states)
-                    {
-                        if (animState.GetMotionHandle() == blendSpace->handle)
-                            return true;
-                    }
-                    return false;
-                };
-
                 auto view = activeScene->registry->view<SkeletalMeshComponent>();
                 for (entt::entity e : view)
                 {
@@ -389,7 +366,29 @@ namespace ignite
                     auto &smc = entity.GetComponent<SkeletalMeshComponent>();
 
                     // Only update preview params for skeletal meshes using an AnimatorController that references this BlendSpace
-                    if (!matchesBlendSpace(smc))
+					AssetHandle controllerHandle = smc.runtimeAnimatorHandle;
+					if (controllerHandle == AssetHandle(0) && smc.runtimeAnimatorInstance)
+						controllerHandle = smc.runtimeAnimatorInstance->handle;
+
+                    if (controllerHandle == AssetHandle(0))
+                        continue;
+
+                    // Get controller
+					Ref<AnimatorController> controller = assetManager->GetAsset<AnimatorController>(controllerHandle);
+                    if (!controller)
+                        continue;
+
+                    // Get motion
+                    bool foundBlendSpace = false;
+					for (const auto &[name, animState] : controller->states)
+					{
+                        if (animState.GetMotionHandle() == blendSpace->handle)
+                        {
+                            foundBlendSpace = true;
+                            break;
+                        }
+					}
+                    if (!foundBlendSpace)
                         continue;
 
                     if (smc.runtimeAnimatorInstance)

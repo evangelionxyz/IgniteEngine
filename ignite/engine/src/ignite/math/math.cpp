@@ -241,22 +241,22 @@ namespace ignite
         return origin + rayDir * t;
     }
 
-    bool Math::RaySphereIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &sphereCenter, float sphereRadius)
+	bool Math::RaySphereIntersection(const physics::Ray &ray, const glm::vec3 &sphereCenter, float sphereRadius)
     {
-        glm::vec3 oc = rayOrigin - sphereCenter;
-        float a = glm::dot(rayDirection, rayDirection);
-        float b = 2.0f * glm::dot(oc, rayDirection);
+        glm::vec3 oc = ray.origin - sphereCenter;
+		float a = glm::dot(ray.direction, ray.direction);
+        float b = 2.0f * glm::dot(oc, ray.direction);
         float c = glm::dot(oc, oc) - sphereRadius * sphereRadius;
         float discriminant = b * b - 4 * a * c;
         return (discriminant > 0);
     }
 
-    bool Math::RayPlaneIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t)
+    bool Math::RayPlaneIntersection(const physics::Ray &ray, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t)
     {
-        float denom = glm::dot(planeNormal, rayDirection);
+        float denom = glm::dot(planeNormal, ray.direction);
         if (glm::abs(denom) > 1e-5f)
         {
-            glm::vec3 diff = planePoint - rayOrigin;
+            glm::vec3 diff = planePoint - ray.origin;
             t = glm::dot(diff, planeNormal) / denom;
             return t >= 0.0f;
         }
@@ -264,15 +264,15 @@ namespace ignite
         return false;
     }
 
-    bool Math::RayQuadIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t)
+    bool Math::RayQuadIntersection(const physics::Ray &ray, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t)
     {
         glm::vec3 edge1 = v1 - v0;
         glm::vec3 edge2 = v3 - v0;
         glm::vec3 normal = glm::normalize(glm::cross(edge1, edge2));
 
-        if (RayPlaneIntersection(rayOrigin, rayDirection, normal, v0, t))
+        if (RayPlaneIntersection(ray, normal, v0, t))
         {
-            glm::vec3 hitPoint = rayOrigin + rayDirection * t;
+            glm::vec3 hitPoint = ray.origin + ray.direction * t;
 
             glm::vec3 n0 = glm::cross(v1 - v0, hitPoint - v0);
             glm::vec3 n1 = glm::cross(v2 - v1, hitPoint - v1);

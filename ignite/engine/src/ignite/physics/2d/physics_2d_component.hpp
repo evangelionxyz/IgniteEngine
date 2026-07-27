@@ -29,6 +29,7 @@
 #include "box2d/types.h"
 
 #include "ignite/scene/icomponent.hpp"
+#include "ignite/physics/physics_types.hpp"
 
 #include <string>
 #include <glm/glm.hpp>
@@ -38,14 +39,7 @@ namespace ignite
     class Rigidbody2DComponent : public IComponent
     {
     public:
-        enum class EBodyType : uint8_t
-        {
-            Static = 0,
-            Kinematic = 1,
-            Dynamic = 2
-        };
-
-        EBodyType bodyType = EBodyType::Static;
+        physics::BodyType bodyType = physics::BodyType::Static;
 
         glm::vec2 linearVelocity = { 0.0f, 0.0f };
         float angularVelocity = 0.0f;

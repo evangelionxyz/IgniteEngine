@@ -1578,7 +1578,7 @@ namespace ignite
                 int bodyTypeIndex = static_cast<int>(c.bodyType);
                 if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), &bodyTypeIndex))
                 {
-                    c.bodyType = static_cast<Rigidbody2DComponent::EBodyType>(bodyTypeIndex);
+                    c.bodyType = static_cast<physics::BodyType>(bodyTypeIndex);
                 }
 
                 UI::DrawVec2Control("Linear Vel", c.linearVelocity, 0.025f);
@@ -1631,14 +1631,14 @@ namespace ignite
                     int bodyTypeIndex = static_cast<int>(c.bodyType);
                     if (UI::DrawComboBox("Body Type", bodyTypeLabels.data(), static_cast<int>(bodyTypeLabels.size()), &bodyTypeIndex))
                     {
-                        c.bodyType = static_cast<RigidbodyComponent::EBodyType>(bodyTypeIndex);
+                        c.bodyType = static_cast<physics::BodyType>(bodyTypeIndex);
                         c.dirty = true;
                     }
 
                     int motionTypeIndex = static_cast<int>(c.motionQuality);
                     if (UI::DrawComboBox("Motion Quality", motionTypeLabels.data(), static_cast<int>(motionTypeLabels.size()), &motionTypeIndex))
                     {
-                        c.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(motionTypeIndex);
+                        c.motionQuality = static_cast<physics::MotionQuality>(motionTypeIndex);
                         c.dirty = true;
                     }
 
@@ -1707,6 +1707,27 @@ namespace ignite
                 c.dirty |= UI::DrawFloatControl("Height", &c.height, 0.025f, 0.01f, 10000.0f, 1.0f);
 
                 // TODO: Collider Edit from UI (TOGGLES)
+            });
+
+            RenderComponent<CharacterControllerComponent>("Character Controller", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<CharacterControllerComponent>();
+
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 100.0f, 0.5f);
+                c.dirty |= UI::DrawFloatControl("Height", &c.height, 0.025f, 0.01f, 100.0f, 2.0f);
+                c.dirty |= UI::DrawFloatControl("Max Step Height", &c.maxStepHeight, 0.01f, 0.0f, 10.0f, 0.4f);
+                c.dirty |= UI::DrawFloatControl("Max Slope Angle", &c.maxSlopeAngle, 0.5f, 0.0f, 90.0f, 45.0f);
+                c.dirty |= UI::DrawFloatControl("Mass", &c.mass, 0.1f, 0.01f, 10000.0f, 80.0f);
+                c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f, 0.0f, 1.0f, 0.2f);
+                c.dirty |= UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.025f, 0.0f, 10.0f, 1.0f);
+                c.dirty |= UI::DrawVec3Control("Up Vector", c.up, 0.025f, 0.0f);
+                c.dirty |= UI::DrawVec3Control("Linear Velocity", c.linearVelocity, 0.025f, 0.0f);
+
+                if (auto charCtrl = c.character.lock())
+                {
+                    ImGui::Text("Ground State: %s", charCtrl->IsOnGround() ? "On Ground" : "In Air");
+                }
             });
 
             RenderComponent<MeshColliderComponent>("Mesh Collider", selectedEntity, [&]()
@@ -2670,6 +2691,9 @@ namespace ignite
                     case CompType_CapsuleCollider:
                         entity.AddComponent<CapsuleColliderComponent>();
                         break;
+                    case CompType_CharacterController:
+                        entity.AddComponent<CharacterControllerComponent>();
+                        break;
                     case CompType_MeshCollider:
                         entity.AddComponent<MeshColliderComponent>();
                         break;
@@ -3264,12 +3288,17 @@ namespace ignite
                                             {
                                                 auto &rb = entity.GetComponent<RigidbodyComponent>();
                                                 rb.isGizmoDragging = true;
-                                                if (rb.body && scene->GetJoltScene())
+                                                if (auto dynActor = rb.dynamicActor.lock())
                                                 {
-                                                    scene->GetJoltScene()->SetPosition(*rb.body, translation, true);
-                                                    scene->GetJoltScene()->SetRotation(*rb.body, rotation, true);
-                                                    scene->GetJoltScene()->SetLinearVelocity(*rb.body, glm::vec3(0.0f));
-                                                    scene->GetJoltScene()->GetBodyInterface()->SetAngularVelocity(rb.body->GetID(), JPH::Vec3(0.0f, 0.0f, 0.0f));
+                                                    dynActor->SetPosition(translation, true);
+                                                    dynActor->SetRotation(rotation, true);
+                                                    dynActor->SetLinearVelocity(glm::vec3(0.0f));
+                                                    dynActor->SetAngularVelocity(glm::vec3(0.0f));
+                                                }
+                                                else if (auto statActor = rb.staticActor.lock())
+                                                {
+                                                    statActor->SetPosition(translation, true);
+                                                    statActor->SetRotation(rotation, true);
                                                 }
                                             }
                                             if (entity.HasComponent<Rigidbody2DComponent>())
@@ -3388,12 +3417,17 @@ namespace ignite
                                             {
                                                 auto &rb = entity.GetComponent<RigidbodyComponent>();
                                                 rb.isGizmoDragging = true;
-                                                if (rb.body && scene->GetJoltScene())
+                                                if (auto dynActor = rb.dynamicActor.lock())
                                                 {
-                                                    scene->GetJoltScene()->SetPosition(*rb.body, translation, true);
-                                                    scene->GetJoltScene()->SetRotation(*rb.body, rotation, true);
-                                                    scene->GetJoltScene()->SetLinearVelocity(*rb.body, glm::vec3(0.0f));
-                                                    scene->GetJoltScene()->GetBodyInterface()->SetAngularVelocity(rb.body->GetID(), JPH::Vec3(0.0f, 0.0f, 0.0f));
+                                                    dynActor->SetPosition(translation, true);
+                                                    dynActor->SetRotation(rotation, true);
+                                                    dynActor->SetLinearVelocity(glm::vec3(0.0f));
+                                                    dynActor->SetAngularVelocity(glm::vec3(0.0f));
+                                                }
+                                                else if (auto statActor = rb.staticActor.lock())
+                                                {
+                                                    statActor->SetPosition(translation, true);
+                                                    statActor->SetRotation(rotation, true);
                                                 }
                                             }
                                             if (entity.HasComponent<Rigidbody2DComponent>())

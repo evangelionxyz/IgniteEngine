@@ -18,13 +18,14 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/hash.hpp>
-#include <glm/glm.hpp>
+
+#include "obb.hpp"
+#include "ignite/physics/3d/physics_3d.hpp"
 
 #ifndef IMGUI_DEFINE_MATH_OPERATORS
 #define IMGUI_DEFINE_MATH_OPERATORS
 #endif
 #include "imgui.h"
-#include "obb.hpp"
 
 namespace ignite
 {
@@ -37,9 +38,9 @@ namespace ignite
         static bool DecomposeTransform(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::quat &outRotation, glm::vec3 &outScale);
         static bool DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &outScale);
         static bool ProjectWorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen);
-        static bool RaySphereIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &sphereCenter, float sphereRadius);
-        static bool RayPlaneIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t);
-        static bool RayQuadIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t);
+        static bool RaySphereIntersection(const physics::Ray &ray, const glm::vec3 &sphereCenter, float sphereRadius);
+        static bool RayPlaneIntersection(const physics::Ray &ray, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t);
+        static bool RayQuadIntersection(const physics::Ray &ray, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t);
         static glm::vec3 Normalize(const glm::vec3 &v);
         static glm::vec3 WorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &modelTransform, const glm::mat4 &viewProjection, const glm::vec2 &screenSize);
         static glm::vec2 GetNormalizedDeviceCoord(const glm::vec2 &mouse, const glm::vec2 &screen);

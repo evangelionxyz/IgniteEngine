@@ -29,6 +29,7 @@ namespace ignite
         void InvokeOnCreate();
         void InvokeOnDestroy();
         void InvokeOnUpdate(float time);
+        void InvokeOnFixedUpdate();
 
         // Collision lifecycle callbacks
         void InvokeOnCollisionEnter(uint64_t otherEntityID);
@@ -125,6 +126,7 @@ namespace ignite
         int m_OnCreateMethodId = 0;
         int m_OnDestroyMethodId = 0;
         int m_OnUpdateMethodId = 0;
+        int m_OnFixedUpdateMethodId = 0;
 
         int m_OnCollisionEnterMethodId = 0;
         int m_OnCollisionStayMethodId  = 0;

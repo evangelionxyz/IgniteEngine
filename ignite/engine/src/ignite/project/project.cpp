@@ -11,7 +11,7 @@
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/application.hpp"
 
-#include "ignite/physics/3d/jolt/jolt_physics.hpp"
+#include "ignite/physics/3d/physics_3d.hpp"
 
 #include "ignite/serializer/serializer.hpp"
 
@@ -138,19 +138,8 @@ R"(<Project>
     {
         GenerateProject();
 
-        m_Physics2D = CreateScope<Physics2D>();
-
-        switch (m_Info.physics3DType)
-        {
-        case Physics3DType::Jolt:
-            m_Physics3D = CreateScope<JoltPhysics>();
-            break;
-        default:
-            LOG_ERROR("[Project] Unknown physics 3D type: {}", static_cast<int>(m_Info.physics3DType));
-            break;
-        }
-
-        m_Physics3D->Init();
+        m_Physics2D = CreateScope<physics::Physics2D>();
+        m_Physics3D = physics::Physics3D::Create(m_Info.physics3DType);
     }
 
     void Project::InitScriptEngine()
@@ -160,8 +149,6 @@ R"(<Project>
 
     Project::~Project()
     {		
-        m_Physics3D->Shutdown();
-
         m_CoreDependencyWatchers.clear();
         if (m_ScriptEngine)
             delete m_ScriptEngine;

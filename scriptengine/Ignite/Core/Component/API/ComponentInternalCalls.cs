@@ -207,6 +207,29 @@ public static class ComponentInternalCalls
     private static CoreNativeAPI.Funcs.GetFloatFn? s_CapsuleColliderGetHeight;
     private static CoreNativeAPI.Funcs.SetFloatFn? s_CapsuleColliderSetHeight;
 
+    // CharacterControllerComponent
+    private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetCenter;
+    private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_CharacterControllerSetCenter;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CharacterControllerGetRadius;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CharacterControllerSetRadius;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CharacterControllerGetHeight;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CharacterControllerSetHeight;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CharacterControllerGetMaxStepHeight;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CharacterControllerSetMaxStepHeight;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CharacterControllerGetMaxSlopeAngle;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CharacterControllerSetMaxSlopeAngle;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CharacterControllerGetMass;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CharacterControllerSetMass;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CharacterControllerGetFriction;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CharacterControllerSetFriction;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CharacterControllerGetGravityFactor;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CharacterControllerSetGravityFactor;
+    private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetUp;
+    private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_CharacterControllerSetUp;
+    private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetLinearVelocity;
+    private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_CharacterControllerSetLinearVelocity;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_CharacterControllerIsOnGround;
+
     // AnimatorComponent
     private static ComponentNativeAPI.Funcs.AnimatorSetFloatFn? s_AnimatorSetFloat;
     private static ComponentNativeAPI.Funcs.AnimatorGetFloatFn? s_AnimatorGetFloat;
@@ -424,6 +447,29 @@ public static class ComponentInternalCalls
         s_CapsuleColliderSetRadius = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CapsuleColliderComponent_SetRadius);
         s_CapsuleColliderGetHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CapsuleColliderComponent_GetHeight);
         s_CapsuleColliderSetHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CapsuleColliderComponent_SetHeight);
+
+        // CharacterControllerComponent
+        s_CharacterControllerGetCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetCenter);
+        s_CharacterControllerSetCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.CharacterControllerComponent_SetCenter);
+        s_CharacterControllerGetRadius = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CharacterControllerComponent_GetRadius);
+        s_CharacterControllerSetRadius = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CharacterControllerComponent_SetRadius);
+        s_CharacterControllerGetHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CharacterControllerComponent_GetHeight);
+        s_CharacterControllerSetHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CharacterControllerComponent_SetHeight);
+        s_CharacterControllerGetMaxStepHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CharacterControllerComponent_GetMaxStepHeight);
+        s_CharacterControllerSetMaxStepHeight = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CharacterControllerComponent_SetMaxStepHeight);
+        s_CharacterControllerGetMaxSlopeAngle = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CharacterControllerComponent_GetMaxSlopeAngle);
+        s_CharacterControllerSetMaxSlopeAngle = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CharacterControllerComponent_SetMaxSlopeAngle);
+        s_CharacterControllerGetMass = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CharacterControllerComponent_GetMass);
+        s_CharacterControllerSetMass = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CharacterControllerComponent_SetMass);
+        s_CharacterControllerGetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CharacterControllerComponent_GetFriction);
+        s_CharacterControllerSetFriction = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CharacterControllerComponent_SetFriction);
+        s_CharacterControllerGetGravityFactor = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetFloatFn>(api.CharacterControllerComponent_GetGravityFactor);
+        s_CharacterControllerSetGravityFactor = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetFloatFn>(api.CharacterControllerComponent_SetGravityFactor);
+        s_CharacterControllerGetUp = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetUp);
+        s_CharacterControllerSetUp = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.CharacterControllerComponent_SetUp);
+        s_CharacterControllerGetLinearVelocity = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetLinearVelocity);
+        s_CharacterControllerSetLinearVelocity = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.CharacterControllerComponent_SetLinearVelocity);
+        s_CharacterControllerIsOnGround = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.CharacterControllerComponent_IsOnGround);
 
         // AnimatorComponent
         s_AnimatorSetFloat = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorSetFloatFn>(api.AnimatorComponent_SetFloat);
@@ -1761,6 +1807,139 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         s_CapsuleColliderSetHeight!(entityID, value);
+    }
+
+    // CharacterControllerComponent wrappers
+    internal static void CharacterControllerComponent_GetCenter(ulong entityID, out Mathf.Vector3 result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetCenter!(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
+    }
+
+    internal static void CharacterControllerComponent_SetCenter(ulong entityID, Mathf.Vector3 value)
+    {
+        EnsureInitialized();
+        var v = NativeObject.ToNative(value);
+        s_CharacterControllerSetCenter!(entityID, ref v);
+    }
+
+    internal static void CharacterControllerComponent_GetRadius(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetRadius!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_SetRadius(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CharacterControllerSetRadius!(entityID, value);
+    }
+
+    internal static void CharacterControllerComponent_GetHeight(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetHeight!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_SetHeight(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CharacterControllerSetHeight!(entityID, value);
+    }
+
+    internal static void CharacterControllerComponent_GetMaxStepHeight(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetMaxStepHeight!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_SetMaxStepHeight(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CharacterControllerSetMaxStepHeight!(entityID, value);
+    }
+
+    internal static void CharacterControllerComponent_GetMaxSlopeAngle(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetMaxSlopeAngle!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_SetMaxSlopeAngle(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CharacterControllerSetMaxSlopeAngle!(entityID, value);
+    }
+
+    internal static void CharacterControllerComponent_GetMass(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetMass!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_SetMass(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CharacterControllerSetMass!(entityID, value);
+    }
+
+    internal static void CharacterControllerComponent_GetFriction(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetFriction!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_SetFriction(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CharacterControllerSetFriction!(entityID, value);
+    }
+
+    internal static void CharacterControllerComponent_GetGravityFactor(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetGravityFactor!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_SetGravityFactor(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CharacterControllerSetGravityFactor!(entityID, value);
+    }
+
+    internal static void CharacterControllerComponent_GetUp(ulong entityID, out Mathf.Vector3 result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetUp!(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
+    }
+
+    internal static void CharacterControllerComponent_SetUp(ulong entityID, Mathf.Vector3 value)
+    {
+        EnsureInitialized();
+        var v = NativeObject.ToNative(value);
+        s_CharacterControllerSetUp!(entityID, ref v);
+    }
+
+    internal static void CharacterControllerComponent_GetLinearVelocity(ulong entityID, out Mathf.Vector3 result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetLinearVelocity!(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
+    }
+
+    internal static void CharacterControllerComponent_SetLinearVelocity(ulong entityID, Mathf.Vector3 value)
+    {
+        EnsureInitialized();
+        var v = NativeObject.ToNative(value);
+        s_CharacterControllerSetLinearVelocity!(entityID, ref v);
+    }
+
+    internal static void CharacterControllerComponent_IsOnGround(ulong entityID, out bool result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerIsOnGround!(entityID, out result);
     }
 
     internal static void RigidbodyComponent_SetMass(ulong entityID, float value)

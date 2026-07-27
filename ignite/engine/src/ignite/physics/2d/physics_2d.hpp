@@ -7,18 +7,25 @@
 #include "physics_2d_component.hpp"
 #include <box2d/box2d.h>
 #include <entt/entt.hpp>
-#include <ignite/core/types.hpp>
 
+#include "ignite/core/types.hpp"
 #include "ignite/scene/entity.hpp"
 
 namespace ignite
 {
     class Scene;
+}
+
+namespace ignite::physics
+{
     class IGN_API Physics2D
     {
     public:
-        Physics2D();
+        Physics2D(Scene *scene = nullptr);
         ~Physics2D();
+
+        void SetScene(Scene *scene);
+        Scene *GetScene() const { return m_Scene; }
 
         void SimulationStart(Scene *scene);
         void SimulationStop();

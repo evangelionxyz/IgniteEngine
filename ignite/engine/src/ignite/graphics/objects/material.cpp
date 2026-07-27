@@ -23,11 +23,6 @@ namespace ignite
 
     Material::~Material()
     {
-        if (auto* device = DeviceManager::GetInstance()->GetDevice())
-        {
-            GPUUploadSync::DeviceWaitIdle(device);
-        }
-
 		AssetManager::GetInstance()->RemoveAssetPin(baseColorTextureHandle, std::format("material.basecolor.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(baseColorTextureHandle)));
 		AssetManager::GetInstance()->RemoveAssetPin(emissiveTextureHandle, std::format("material.emissive.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(emissiveTextureHandle)));
 		AssetManager::GetInstance()->RemoveAssetPin(metallicTextureHandle, std::format("material.metallic.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(metallicTextureHandle)));
@@ -103,7 +98,6 @@ namespace ignite
 
         EnsureGpuResources();
         auto device = DeviceManager::GetInstance()->GetDevice();
-        GPUUploadSync::DeviceWaitIdle(device);
 
         nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));

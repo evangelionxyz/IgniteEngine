@@ -11,6 +11,7 @@
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
+#include "ignite/physics/3d/physics_3d.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/core/input/input_system.hpp"
@@ -988,6 +989,11 @@ namespace ignite
 
         std::unordered_set<Material *> uploadedMaterialsThisPass;
         
+        if (m_RuntimeMaterial)
+        {
+            m_RuntimeMaterial->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
+        }
+
         // Static
 		auto staticPSO = GetStaticPSO(framebuffer, m_FillMode);
 		auto staticTransparentPSO = GetStaticTransparentPSO(framebuffer, m_FillMode);
@@ -1317,7 +1323,7 @@ namespace ignite
 	void SceneRenderer::DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
 	{
         DrawDebug2D(cmd, framebuffer, frameContext);
-        DrawDebug3D(cmd, framebuffer, frameContext);
+        DrawDebug3D(cmd, camera, framebuffer, frameContext);
 	}
 
 	void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
@@ -1338,22 +1344,25 @@ namespace ignite
 
     void SceneRenderer::DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D)
     {
-       IGN_PROFILE_FUNCTION();
+        IGN_PROFILE_FUNCTION();
+
+        if (!framebuffer)
+            return;
 
         if (!style.enabled)
             return;
 
-		DebugGrid_GPUData gpuData;
-		gpuData.thinColor = style.thinColor;
-		gpuData.thickColor = style.thickColor;
-		gpuData.xAxisColor = style.xAxisColor;
-		gpuData.yAxisColor = style.yAxisColor;
-		gpuData.zAxisColor = style.zAxisColor;
-		gpuData.settings0 = glm::vec4(glm::max(style.cellSize, 0.0001f), glm::max(style.minPixelsBetweenCells, 0.1f), glm::max(style.gridSize, 1.0f), glm::max(style.majorLineScale, 1.0f));
-		gpuData.settings1 = glm::vec4(is2D ? 1.0f : 0.0f, style.enableXAxis ? 1.0f : 0.0f, style.enableYAxis ? 1.0f : 0.0f, style.enableZAxis ? 1.0f : 0.0f);
+        DebugGrid_GPUData gpuData;
+        gpuData.thinColor = style.thinColor;
+        gpuData.thickColor = style.thickColor;
+        gpuData.xAxisColor = style.xAxisColor;
+        gpuData.yAxisColor = style.yAxisColor;
+        gpuData.zAxisColor = style.zAxisColor;
+        gpuData.settings0 = glm::vec4(glm::max(style.cellSize, 0.0001f), glm::max(style.minPixelsBetweenCells, 0.1f), glm::max(style.gridSize, 1.0f), glm::max(style.majorLineScale, 1.0f));
+        gpuData.settings1 = glm::vec4(is2D ? 1.0f : 0.0f, style.enableXAxis ? 1.0f : 0.0f, style.enableYAxis ? 1.0f : 0.0f, style.enableZAxis ? 1.0f : 0.0f);
 
         // Set buffer data before bind it
-		m_DebugGridBuffer.SetData(cmd, &gpuData, sizeof(gpuData));
+        m_DebugGridBuffer.SetData(cmd, &gpuData, sizeof(gpuData));
 
         // Bind buffer
         Ref<GraphicsPipeline> gridPipeline = GetDebugGridPSO(framebuffer);
@@ -1377,6 +1386,9 @@ namespace ignite
     void SceneRenderer::DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
+        
+		if (!framebuffer)
+			return;
 
         m_Renderer2D->Begin(cmd);
 
@@ -1442,221 +1454,197 @@ namespace ignite
         m_Renderer2D->End();
     }
 
-    void SceneRenderer::DrawDebug3D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
+    void SceneRenderer::DrawDebug3D(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
-        m_Renderer2D->Begin(cmd);
 
-        constexpr glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
-        constexpr int kCircleSegments = 24;
-        constexpr float kTwoPi = 6.28318530718f;
-        constexpr float kPi = 3.14159265359f;
-
-        static auto drawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
-        {
-            for (int i = 0; i < segments; ++i)
-            {
-                const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kTwoPi;
-                const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kTwoPi;
-
-                const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
-                const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                m_Renderer2D->DrawLine(p0, p1, color);
-            }
-        };
-
-        static auto drawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
-        {
-            for (int i = 0; i < segments; ++i)
-            {
-                const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kPi;
-                const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kPi;
-
-                const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
-                const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                m_Renderer2D->DrawLine(p0, p1, color);
-            }
-        };
-
-        if (sceneRenderSettings.showBoundingBox)
-        {
-			auto staticAabbView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
-			for (entt::entity e : staticAabbView)
-			{
-				const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, StaticMeshComponent>(e);
-				
-                if (!tr.visible)
-					continue;
-
-				auto sm = ResolveAsset<StaticMesh>(smc.handle);
-				if (!sm)
-                    continue;
-
-				m_Renderer2D->DrawAABB(smc.worldAABB);
-			}
-
-            auto skeletalAabbView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
-            for (entt::entity e : skeletalAabbView)
-            {
-                const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, SkeletalMeshComponent>(e);
-                
-                if (!tr.visible)
-                    continue;
-
-				auto sm = ResolveAsset<SkeletalMesh>(smc.handle);
-				if (!sm)
-					continue;
-
-				m_Renderer2D->DrawAABB(smc.worldAABB);
-            }
-        }
+		if (!framebuffer || !m_Scene || !m_Scene->registry)
+			return;
 
         if (sceneRenderSettings.showPhysicsCollider)
         {
-            auto boxCollider = m_Scene->registry->view<TransformComponent, BoxColliderComponent>();
-            for (entt::entity e : boxCollider)
+            m_Renderer2D->Begin(cmd);
+
+			constexpr glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
+			constexpr int kCircleSegments = 24;
+			constexpr float kTwoPi = 6.28318530718f;
+			constexpr float kPi = 3.14159265359f;
+
+			static auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+			{
+				for (int i = 0; i < segments; ++i)
+				{
+					const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kTwoPi;
+					const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kTwoPi;
+
+					const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
+					const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
+					m_Renderer2D->DrawLine(p0, p1, color);
+				}
+			};
+
+			static auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+			{
+				for (int i = 0; i < segments; ++i)
+				{
+					const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kPi;
+					const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kPi;
+
+					const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
+					const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
+					m_Renderer2D->DrawLine(p0, p1, color);
+				}
+				};
+
+            constexpr glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
+
+            // 1. Box Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, BoxColliderComponent>())
             {
                 const auto &[tr, box] = m_Scene->registry->get<TransformComponent, BoxColliderComponent>(e);
-                
-                if (!tr.visible)
-                    continue;
-
-                const glm::mat4 world = tr.world.GetMatrix();
-
-                const glm::vec3 c = box.center;
-                const glm::vec3 h = box.scale;
-                const glm::vec3 corners[8] =
-                {
-                    glm::vec3(world * glm::vec4(c.x - h.x, c.y - h.y, c.z - h.z, 1.0f)),
-                    glm::vec3(world * glm::vec4(c.x + h.x, c.y - h.y, c.z - h.z, 1.0f)),
-                    glm::vec3(world * glm::vec4(c.x + h.x, c.y + h.y, c.z - h.z, 1.0f)),
-                    glm::vec3(world * glm::vec4(c.x - h.x, c.y + h.y, c.z - h.z, 1.0f)),
-                    glm::vec3(world * glm::vec4(c.x - h.x, c.y - h.y, c.z + h.z, 1.0f)),
-                    glm::vec3(world * glm::vec4(c.x + h.x, c.y - h.y, c.z + h.z, 1.0f)),
-                    glm::vec3(world * glm::vec4(c.x + h.x, c.y + h.y, c.z + h.z, 1.0f)),
-                    glm::vec3(world * glm::vec4(c.x - h.x, c.y + h.y, c.z + h.z, 1.0f))
-                };
-
-                constexpr int edges[12][2] =
-                {
-                    { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 },
-                    { 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 4 },
-                    { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 }
-                };
-
-                for (const auto &edge : edges)
-                {
-                    m_Renderer2D->DrawLine(corners[edge[0]], corners[edge[1]], kPhysicsDebugColor);
-                }
+                glm::mat4 boxTransform = tr.world.GetMatrix()
+                    * glm::translate(glm::mat4(1.0f), box.center)
+                    * glm::scale(glm::mat4(1.0f), box.scale * 2.0f);
+                m_Renderer2D->DrawBox(boxTransform, colliderColor);
             }
 
-            auto sphereCollider = m_Scene->registry->view<TransformComponent, SphereColliderComponent>();
-            for (entt::entity e : sphereCollider)
+            // 2. Sphere Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, SphereColliderComponent>())
             {
                 const auto &[tr, sphere] = m_Scene->registry->get<TransformComponent, SphereColliderComponent>(e);
-                
-                if (!tr.visible)
-                    continue;
+                glm::vec3 centerWorld = glm::vec3(tr.world.GetMatrix() * glm::vec4(sphere.center, 1.0f));
+                float maxScale = std::max({ std::abs(tr.world.scale.x), std::abs(tr.world.scale.y), std::abs(tr.world.scale.z) });
+                float radiusWorld = sphere.radius * maxScale;
 
-                const glm::mat4 world = tr.world.GetMatrix();
+                glm::mat4 xy = glm::translate(glm::mat4(1.0f), centerWorld) * glm::scale(glm::mat4(1.0f), glm::vec3(radiusWorld * 2.0f));
+                glm::mat4 xz = glm::translate(glm::mat4(1.0f), centerWorld) * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(radiusWorld * 2.0f));
+                glm::mat4 yz = glm::translate(glm::mat4(1.0f), centerWorld) * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(radiusWorld * 2.0f));
 
-                const float maxAxis = glm::compMax(tr.world.scale);
-                const float scaledRadius = sphere.radius * maxAxis;
-
-                const glm::vec3 center = glm::vec3(world * glm::vec4(sphere.center, 1.0f));
-
-                const glm::vec3 axisX = glm::normalize(glm::vec3(world[0])) * scaledRadius;
-                const glm::vec3 axisY = glm::normalize(glm::vec3(world[1])) * scaledRadius;
-                const glm::vec3 axisZ = glm::normalize(glm::vec3(world[2])) * scaledRadius;
-
-                drawCircleRing(center, axisX, axisY, kCircleSegments, kPhysicsDebugColor);
-                drawCircleRing(center, axisX, axisZ, kCircleSegments, kPhysicsDebugColor);
-                drawCircleRing(center, axisY, axisZ, kCircleSegments, kPhysicsDebugColor);
+                m_Renderer2D->DrawCircle(xy, colliderColor);
+                m_Renderer2D->DrawCircle(xz, colliderColor);
+                m_Renderer2D->DrawCircle(yz, colliderColor);
             }
 
-            auto capsuleCollider = m_Scene->registry->view<TransformComponent, CapsuleColliderComponent>();
-            for (entt::entity e : capsuleCollider)
+            // 3. Capsule Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, CapsuleColliderComponent>())
             {
                 const auto &[tr, capsule] = m_Scene->registry->get<TransformComponent, CapsuleColliderComponent>(e);
+                
+				const glm::mat4 world = tr.world.GetMatrix();
+				const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
+				const float scaledRadius = capsule.radius * maxAxis;
+				const float scaledHalfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxAxis;
 
-                if (!tr.visible)
-                    continue;
-
-                const glm::mat4 world = tr.world.GetMatrix();
-                const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
-                const float scaledRadius = capsule.radius * maxAxis;
-                const float scaledHalfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxAxis;
-
-                const glm::vec3 center = glm::vec3(world * glm::vec4(capsule.center, 1.0f));
-                const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
-                const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
-                const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
+				const glm::vec3 center = glm::vec3(world * glm::vec4(capsule.center, 1.0f));
+				const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
+				const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
+				const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
 				const glm::vec3 upRadius = glm::normalize(glm::vec3(world[1])) * scaledRadius;
 
-                const glm::vec3 topCenter = center + upHeight;
-                const glm::vec3 bottomCenter = center - upHeight;
+				const glm::vec3 topCenter = center + upHeight;
+				const glm::vec3 bottomCenter = center - upHeight;
 
 				// Draw capsule as two circle rings and connecting lines
-                drawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
-                drawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+				DrawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+				DrawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
 
 				// Draw connecting lines between the top and bottom circles
-                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
+				m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
+				m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
+				m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
+				m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
 
 				// Draw arcs to represent the rounded ends of the capsule
-                drawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-                drawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				DrawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				DrawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				DrawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
             }
 
-            auto meshCollider = m_Scene->registry->view<TransformComponent, MeshColliderComponent>();
-            for (entt::entity e : meshCollider)
+            // 4. Character Controllers
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, CharacterControllerComponent>())
             {
-                const auto &[tr, mesh] = m_Scene->registry->get<TransformComponent, MeshColliderComponent>(e);
+                const auto &[tr, cc] = m_Scene->registry->get<TransformComponent, CharacterControllerComponent>(e);
+				const glm::mat4 world = tr.world.GetMatrix();
+				const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
+				const float scaledRadius = cc.radius * maxAxis;
+				const float scaledHalfHeight = glm::max(cc.height * 0.5f - cc.radius, 0.0f) * maxAxis;
 
-                if (!tr.visible || mesh.vertices.empty())
-                    continue;
+				const glm::vec3 center = glm::vec3(world * glm::vec4(cc.center, 1.0f));
+				const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
+				const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
+				const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
+				const glm::vec3 upRadius = glm::normalize(glm::vec3(world[1])) * scaledRadius;
 
-                const glm::mat4 world = tr.world.GetMatrix();
+				const glm::vec3 topCenter = center + upHeight;
+				const glm::vec3 bottomCenter = center - upHeight;
 
-                if (!mesh.indices.empty() && mesh.indices.size() % 3 == 0)
+				// Draw capsule as two circle rings and connecting lines
+				DrawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+				DrawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+
+				// Draw connecting lines between the top and bottom circles
+				m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
+				m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
+				m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
+				m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
+
+				// Draw arcs to represent the rounded ends of the capsule
+				DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				DrawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				DrawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+				DrawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+            }
+
+            // 5. Plane Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, PlaneColliderComponent>())
+            {
+                const auto &[tr, plane] = m_Scene->registry->get<TransformComponent, PlaneColliderComponent>(e);
+                glm::mat4 planeMat = tr.world.GetMatrix() * glm::translate(glm::mat4(1.0f), plane.center);
+
+                glm::vec3 p0 = glm::vec3(planeMat * glm::vec4(-0.5f * plane.scale.x, 0.0f, -0.5f * plane.scale.z, 1.0f));
+                glm::vec3 p1 = glm::vec3(planeMat * glm::vec4( 0.5f * plane.scale.x, 0.0f, -0.5f * plane.scale.z, 1.0f));
+                glm::vec3 p2 = glm::vec3(planeMat * glm::vec4( 0.5f * plane.scale.x, 0.0f,  0.5f * plane.scale.z, 1.0f));
+                glm::vec3 p3 = glm::vec3(planeMat * glm::vec4(-0.5f * plane.scale.x, 0.0f,  0.5f * plane.scale.z, 1.0f));
+
+                m_Renderer2D->DrawLine(p0, p1, colliderColor);
+                m_Renderer2D->DrawLine(p1, p2, colliderColor);
+                m_Renderer2D->DrawLine(p2, p3, colliderColor);
+                m_Renderer2D->DrawLine(p3, p0, colliderColor);
+
+                glm::vec3 normStart = glm::vec3(planeMat * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+                glm::vec3 normEnd = glm::vec3(planeMat * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+                m_Renderer2D->DrawLine(normStart, normEnd, colliderColor);
+            }
+
+            // 6. Mesh Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, MeshColliderComponent>())
+            {
+                const auto &[tr, meshComp] = m_Scene->registry->get<TransformComponent, MeshColliderComponent>(e);
+                glm::mat4 meshMat = tr.world.GetMatrix() * glm::translate(glm::mat4(1.0f), meshComp.center);
+
+                if (!meshComp.vertices.empty() && !meshComp.indices.empty())
                 {
-                    for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+                    for (size_t i = 0; i + 2 < meshComp.indices.size(); i += 3)
                     {
-                        const uint32_t i0 = mesh.indices[i + 0];
-                        const uint32_t i1 = mesh.indices[i + 1];
-                        const uint32_t i2 = mesh.indices[i + 2];
+                        glm::vec3 v0 = glm::vec3(meshMat * glm::vec4(meshComp.vertices[meshComp.indices[i]], 1.0f));
+                        glm::vec3 v1 = glm::vec3(meshMat * glm::vec4(meshComp.vertices[meshComp.indices[i + 1]], 1.0f));
+                        glm::vec3 v2 = glm::vec3(meshMat * glm::vec4(meshComp.vertices[meshComp.indices[i + 2]], 1.0f));
 
-                        if (i0 >= mesh.vertices.size() || i1 >= mesh.vertices.size() || i2 >= mesh.vertices.size())
-                            continue;
-
-                        const glm::vec3 p0 = glm::vec3(world * glm::vec4(mesh.vertices[i0], 1.0f));
-                        const glm::vec3 p1 = glm::vec3(world * glm::vec4(mesh.vertices[i1], 1.0f));
-                        const glm::vec3 p2 = glm::vec3(world * glm::vec4(mesh.vertices[i2], 1.0f));
-
-                        m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
-                        m_Renderer2D->DrawLine(p1, p2, kPhysicsDebugColor);
-                        m_Renderer2D->DrawLine(p2, p0, kPhysicsDebugColor);
+                        m_Renderer2D->DrawLine(v0, v1, colliderColor);
+                        m_Renderer2D->DrawLine(v1, v2, colliderColor);
+                        m_Renderer2D->DrawLine(v2, v0, colliderColor);
                     }
                 }
-                else if (mesh.vertices.size() >= 2)
+                else
                 {
-                    for (size_t i = 0; i + 1 < mesh.vertices.size(); ++i)
-                    {
-                        const glm::vec3 p0 = glm::vec3(world * glm::vec4(mesh.vertices[i], 1.0f));
-                        const glm::vec3 p1 = glm::vec3(world * glm::vec4(mesh.vertices[i + 1], 1.0f));
-                        m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
-                    }
+                    m_Renderer2D->DrawBox(meshMat, colliderColor);
                 }
             }
 
+            m_Renderer2D->Flush(framebuffer, frameContext->cameraBuffer.GetHandle());
+            m_Renderer2D->End();
         }
-        m_Renderer2D->Flush(framebuffer, frameContext->cameraBuffer.GetHandle());
-        m_Renderer2D->End();
     }
 
     Ref<CameraRenderTarget> SceneRenderer::GetRenderTarget(ICamera *camera)
@@ -1821,6 +1809,9 @@ namespace ignite
     // Helper to build a debug-grid pipeline per framebuffer (once)
     Ref<GraphicsPipeline> SceneRenderer::GetDebugGridPSO(nvrhi::IFramebuffer *framebuffer)
     {
+        if (!framebuffer)
+            return nullptr;
+
         auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
         auto it = m_DebugGridPSOCache.find(key);
         if (it != m_DebugGridPSOCache.end())
@@ -1899,6 +1890,9 @@ namespace ignite
         EBindingLayout meshLayout,
         bool transparent)
     {
+        if (!framebuffer)
+            return nullptr;
+
         auto key = MakeFramebufferKey(framebuffer, fillMode);
         auto it = cache.find(key);
         if (it != cache.end())
@@ -1951,6 +1945,9 @@ namespace ignite
         nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath, const char *pixelShaderPath, 
         EBindingLayout meshLayout)
 	{
+        if (!framebuffer)
+            return nullptr;
+
 		auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
 		auto it = cache.find(key);
 		if (it != cache.end())
@@ -2332,26 +2329,18 @@ namespace ignite
         entt::entity entity,
         const std::string &socketName)
     {
+        if (!framebuffer)
+            return;
+
         constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
 
 		static_assert(std::is_same_v<MeshT, StaticMesh> || std::is_same_v<MeshT, SkeletalMesh>,
 			"DrawPreviewMeshImpl: MeshT must be StaticMesh or SkeletalMesh");
 
-        glm::mat4 bones[MAX_BONES];
-        if constexpr (isSkeletal)
-        {
-            FillBoneArray(bones, boneTransforms);
-        }
-
         auto graphicsState = nvrhi::GraphicsState();
         graphicsState.pipeline = opaquePSO->GetHandle();
         graphicsState.framebuffer = framebuffer;
         graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-
-        if (m_RuntimeMaterial)
-        {
-            m_RuntimeMaterial->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
-        }
 
         const auto &instances = mesh->GetMeshInstances();
         for (size_t idx = 0; idx < instances.size(); ++idx)
@@ -2413,6 +2402,8 @@ namespace ignite
             {
                 if constexpr (isSkeletal)
                 {
+                    glm::mat4 bones[MAX_BONES];
+                    FillBoneArray(bones, boneTransforms);
                     gpuData.boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
                 }
                 else
@@ -2479,7 +2470,7 @@ namespace ignite
                     dc.meshInstance = meshInstance;
                     if constexpr (isSkeletal)
                     {
-                        std::memcpy(dc.bones, bones, sizeof(bones));
+                        // Bones are indexed via pushConstants_ObjectIndex and GPU buffer allocator
                     }
                     transparentDrawCalls.push_back(dc);
                 }
@@ -2524,12 +2515,6 @@ namespace ignite
         const std::string &socketName)
     {
         constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
-
-        glm::mat4 bones[MAX_BONES];
-        if constexpr (isSkeletal)
-        {
-            FillBoneArray(bones, boneTransforms);
-        }
 
         const auto &instances = mesh->GetMeshInstances();
         for (size_t idx = 0; idx < instances.size(); ++idx)
@@ -2596,6 +2581,8 @@ namespace ignite
             {
                 if constexpr (isSkeletal)
                 {
+                    glm::mat4 bones[MAX_BONES];
+                    FillBoneArray(bones, boneTransforms);
                     gpuData.boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
                 }
                 else

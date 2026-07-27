@@ -78,6 +78,7 @@ namespace ignite
         m_OnCreateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnCreate");
         m_OnDestroyMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnDestroy");
         m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnUpdate");
+        m_OnFixedUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnFixedUpdate");
 
         // Bind internal collision callback
         m_OnCollisionEnterMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionEnterNative");
@@ -334,7 +335,20 @@ namespace ignite
         }
     }
 
-    void ScriptInstance::InvokeOnCollisionEnter(uint64_t otherEntityID)
+	void ScriptInstance::InvokeOnFixedUpdate()
+	{
+		IGN_PROFILE_FUNCTION();
+        if (m_OnFixedUpdateMethodId)
+        {
+			if(!m_ScriptHost->Invoke(m_OnFixedUpdateMethodId, nullptr, 0, nullptr))
+			{
+				LOG_ERROR("[Script Instance] OnFixedUpdate invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnFixedUpdateMethodId = 0;
+			}
+        }
+	}
+
+	void ScriptInstance::InvokeOnCollisionEnter(uint64_t otherEntityID)
     {
         IGN_PROFILE_FUNCTION();
         if (m_OnCollisionEnterMethodId)

@@ -8,7 +8,7 @@
 #include "ignite/graphics/renderer/renderer_2d.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
-#include "ignite/physics/3d/jolt/jolt_physics.hpp"
+#include "ignite/physics/3d/physics_3d.hpp"
 #include "ignite/math/transform.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/core/application.hpp"
@@ -27,6 +27,8 @@ namespace ignite
     {
         void SyncMeshAnimatorParams(SkeletalMeshComponent &meshComp, const AnimatorController &controller)
         {
+            IGN_PROFILE_FUNCTION();
+
             std::erase_if(meshComp.runtimeParams, [&controller](const auto &kv)
             {
                 return controller.GetParam(kv.first) == nullptr;
@@ -50,6 +52,8 @@ namespace ignite
 
         void ApplyMeshRuntimeParamsToController(const SkeletalMeshComponent &meshComp, AnimatorController &controller)
         {
+			IGN_PROFILE_FUNCTION();
+
             for (auto &[name, param] : controller.params)
             {
                 if (const AnimParam *runtimeParam = Animator::FindAnimParam(meshComp.runtimeParams, param.name))
@@ -153,32 +157,33 @@ namespace ignite
         , m_SceneRenderer(nullptr)
         , m_Project(nullptr)
         , m_AssetManager(nullptr)
+        , m_Physics2D(nullptr)
+        , m_Physics3D(nullptr)
         , m_ViewportWidth(0)
         , m_ViewportHeight(0)
     {
-		// Waiting for m_UsedAssets to be loaded by AssetManager
-        // m_Ready = false;
+        registry = new entt::registry();
     }
 
     Scene::Scene(Project *project)
-        : m_Project(project), m_SceneRenderer(nullptr)
-        , m_ViewportWidth(1280), m_ViewportHeight(720)
+        : m_Project(project)
+        , m_SceneRenderer(nullptr)
+        , m_ViewportWidth(1280)
+        , m_ViewportHeight(720)
     {
         registry = new entt::registry();
 
         m_Physics2D = project->GetPhysics2D();
-        m_JoltScene = new JoltScene();
+        m_Physics2D->SetScene(this);
+
+        m_Physics3D = project->GetPhysics3D();
 
 		m_AssetManager = AssetManager::GetInstance();
-
 		m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
 		[this](const AssetChangeSignal &signal)
 		{
 			OnAssetChangeSignal(signal);
 		});
-
-        // Waiting for m_UsedAssets to be loaded by AssetManager
-        // m_Ready = false;
     }
 
     Scene::~Scene()
@@ -187,11 +192,7 @@ namespace ignite
 		SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
         m_AssetChangeToken = kInvalidSignalToken;
         
-        // Stop physics simulations
-        if (m_JoltScene)
-            delete m_JoltScene;
-
-        m_JoltScene = nullptr;
+        m_Physics3D = nullptr;
 		m_Physics2D = nullptr;
 
         // Clear all entities from registry before deletion
@@ -248,7 +249,179 @@ namespace ignite
         }
 
         m_Physics2D->SimulationStart(this);
-        m_JoltScene->SimulationStart(this);
+
+        if (m_Physics3D)
+        {
+            physics::Physics3DSettings pSettings;
+            m_Physics3D->SimulationStart(pSettings);
+
+            auto createCollider = [&](Entity entity, const TransformComponent &tr) -> Ref<physics::PhysicsCollider>
+            {
+                if (entity.HasComponent<BoxColliderComponent>())
+                {
+                    auto &box = entity.GetComponent<BoxColliderComponent>();
+                    physics::BoxColliderDesc desc;
+                    desc.center = box.center;
+                    desc.halfExtents = box.scale * tr.world.scale;
+                    auto col = m_Physics3D->CreateBoxCollider(desc);
+                    box.collider = col;
+                    return col;
+                }
+                else if (entity.HasComponent<SphereColliderComponent>())
+                {
+                    auto &sphere = entity.GetComponent<SphereColliderComponent>();
+                    physics::SphereColliderDesc desc;
+                    desc.center = sphere.center;
+                    float maxScale = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
+                    desc.radius = sphere.radius * maxScale;
+                    auto col = m_Physics3D->CreateSphereCollider(desc);
+                    sphere.collider = col;
+                    return col;
+                }
+                else if (entity.HasComponent<CapsuleColliderComponent>())
+                {
+                    auto &capsule = entity.GetComponent<CapsuleColliderComponent>();
+                    
+					const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+					const float radius = capsule.radius * maxScale;
+
+                    physics::CapsuleColliderDesc desc;
+                    desc.center = capsule.center;
+                    desc.radius = radius;
+                    desc.halfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxScale;
+                    auto col = m_Physics3D->CreateCapsuleCollider(desc);
+                    capsule.collider = col;
+                    return col;
+                }
+                else if (entity.HasComponent<PlaneColliderComponent>())
+                {
+                    auto &plane = entity.GetComponent<PlaneColliderComponent>();
+                    physics::PlaneColliderDesc desc;
+                    desc.center = plane.center;
+                    desc.scale = plane.scale * tr.world.scale;
+                    auto col = m_Physics3D->CreatePlaneCollider(desc);
+                    plane.collider = col;
+                    return col;
+                }
+                else if (entity.HasComponent<MeshColliderComponent>())
+                {
+                    auto &meshComp = entity.GetComponent<MeshColliderComponent>();
+                    physics::MeshColliderDesc desc;
+                    desc.center = meshComp.center;
+                    desc.vertices = meshComp.vertices;
+                    desc.indices = meshComp.indices;
+                    desc.isConvex = meshComp.convex;
+                    auto col = m_Physics3D->CreateMeshCollider(desc);
+                    meshComp.collider = col;
+                    return col;
+                }
+                return nullptr;
+            };
+
+            std::unordered_set<entt::entity> processedEntities;
+
+            for (entt::entity e : registry->view<RigidbodyComponent>())
+            {
+                Entity entity{ e, this };
+                auto &rb = entity.GetComponent<RigidbodyComponent>();
+                auto &tr = entity.GetTransform();
+                uint64_t userData = static_cast<uint64_t>(entity.GetUUID());
+
+                physics::RigidBodyDesc rbDesc;
+                rbDesc.bodyType = rb.bodyType;
+                rbDesc.motionQuality = rb.motionQuality;
+                rbDesc.useGravity = rb.useGravity;
+                rbDesc.mass = rb.mass;
+                rbDesc.friction = rb.friction;
+                rbDesc.restitution = rb.restitution;
+
+                physics::PhysicsTransformData transformData;
+                transformData.position = tr.world.translation;
+                transformData.rotation = tr.world.rotation;
+
+                Ref<physics::PhysicsCollider> collider = createCollider(entity, tr);
+
+                if (rb.bodyType == physics::BodyType::Dynamic || rb.bodyType == physics::BodyType::Kinematic)
+                {
+                    rb.dynamicActor = m_Physics3D->CreateDynamicBody(rbDesc, transformData, userData, collider);
+                }
+                else
+                {
+                    rb.staticActor = m_Physics3D->CreateStaticBody(rbDesc, transformData, userData, collider);
+                }
+                processedEntities.insert(e);
+            }
+
+            auto createStaticBodyForStandaloneCollider = [&](entt::entity e)
+            {
+                if (processedEntities.contains(e))
+                    return;
+
+                Entity entity{ e, this };
+                auto &tr = entity.GetTransform();
+                uint64_t userData = static_cast<uint64_t>(entity.GetUUID());
+
+                physics::RigidBodyDesc rbDesc;
+                rbDesc.bodyType = physics::BodyType::Static;
+
+                physics::PhysicsTransformData transformData;
+                transformData.position = tr.world.translation;
+                transformData.rotation = tr.world.rotation;
+
+                Ref<physics::PhysicsCollider> collider = createCollider(entity, tr);
+                if (collider)
+                {
+                    auto staticActor = m_Physics3D->CreateStaticBody(rbDesc, transformData, userData, collider);
+                    if (entity.HasComponent<RigidbodyComponent>())
+                    {
+                        entity.GetComponent<RigidbodyComponent>().staticActor = staticActor;
+                    }
+                    else
+                    {
+                        auto &rb = entity.AddComponent<RigidbodyComponent>();
+                        rb.bodyType = physics::BodyType::Static;
+                        rb.staticActor = staticActor;
+                    }
+                }
+                processedEntities.insert(e);
+            };
+
+            for (entt::entity e : registry->view<BoxColliderComponent>()) createStaticBodyForStandaloneCollider(e);
+            for (entt::entity e : registry->view<SphereColliderComponent>()) createStaticBodyForStandaloneCollider(e);
+            for (entt::entity e : registry->view<CapsuleColliderComponent>()) createStaticBodyForStandaloneCollider(e);
+            for (entt::entity e : registry->view<PlaneColliderComponent>()) createStaticBodyForStandaloneCollider(e);
+            for (entt::entity e : registry->view<MeshColliderComponent>()) createStaticBodyForStandaloneCollider(e);
+
+            for (entt::entity e : registry->view<CharacterControllerComponent>())
+            {
+                Entity entity{ e, this };
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                auto &tr = entity.GetTransform();
+                uint64_t userData = static_cast<uint64_t>(entity.GetUUID());
+
+                const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+                const float radius = cc.radius * maxScale;
+                const float halfHeight = glm::max(cc.height * 0.5f - cc.radius, 0.0f) * maxScale;
+
+                physics::CharacterControllerDesc ccDesc;
+                ccDesc.center = cc.center * tr.world.scale;
+                ccDesc.radius = radius;
+                ccDesc.halfHeight = halfHeight;
+                ccDesc.mass = cc.mass;
+                ccDesc.friction = cc.friction;
+                ccDesc.maxStepHeight = cc.maxStepHeight;
+                ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
+                ccDesc.up = cc.up;
+
+                auto charActor = m_Physics3D->CreateCharacterController(ccDesc, userData);
+                if (charActor)
+                {
+                    charActor->SetPosition(tr.world.translation);
+                    charActor->SetRotation(tr.world.rotation);
+                }
+                cc.character = charActor;
+            }
+        }
 
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
@@ -307,7 +480,22 @@ namespace ignite
         m_SharedAnimatorRuntime.clear();
         
         m_Physics2D->SimulationStop();
-        m_JoltScene->SimulationStop();
+        if (m_Physics3D)
+        {
+            m_Physics3D->SimulationStop();
+            for (entt::entity e : registry->view<RigidbodyComponent>())
+            {
+                auto &rb = registry->get<RigidbodyComponent>(e);
+                rb.dynamicActor.reset();
+                rb.staticActor.reset();
+            }
+
+            for (entt::entity e : registry->view<CharacterControllerComponent>())
+            {
+                auto &cc = registry->get<CharacterControllerComponent>(e);
+                cc.character.reset();
+            }
+        }
     }
 
     void Scene::Pause()
@@ -383,7 +571,20 @@ namespace ignite
         UpdateTransforms(deltaTime);
     }
 
-    Entity Scene::GetPrimaryCamera()
+	void Scene::OnFixedUpdateEdit()
+	{
+		// {
+		// 	IGN_PROFILE_SCOPE("Scene::Physics2D");
+		// 	m_Physics2D->Simulate(1.0f / 60.0f);
+		// }
+        // 
+		// {
+		// 	IGN_PROFILE_SCOPE("Scene::Physics3D");
+		// 	m_JoltScene->Simulate(1.0f / 60.0f);
+		// }
+	}
+
+	Entity Scene::GetPrimaryCamera()
     {
         auto camView = registry->view<CameraComponent>();
         for (entt::entity entity : camView)
@@ -426,14 +627,14 @@ namespace ignite
 
             // Update audio
 			registry->view<AudioSourceComponent>().each([this, deltaTime](entt::entity e, AudioSourceComponent &as)
-				{
-					if (as.handle == AssetHandle(0))
-                        return;
+			{
+				if (as.handle == AssetHandle(0))
+                    return;
 
-					Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
-                    if (sound)
-                        sound->Update(deltaTime);
-				});
+				Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+                if (sound)
+                    sound->Update(deltaTime);
+			});
 
             {
                 IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
@@ -442,16 +643,6 @@ namespace ignite
                     if (script.runtimeScriptInstance)
                         script.runtimeScriptInstance->InvokeOnUpdate(deltaTime);
                 });
-            }
-
-            {
-                IGN_PROFILE_SCOPE("Scene::Physics2D");
-                m_Physics2D->Simulate(deltaTime);
-            }
-
-            {
-                IGN_PROFILE_SCOPE("Scene::Physics3D");
-                m_JoltScene->Simulate(deltaTime);
             }
 
 			UpdateTransforms(deltaTime);
@@ -475,56 +666,188 @@ namespace ignite
 					return ent.GetComponent<ScriptComponent>().runtimeScriptInstance;
 				};
 
-                auto colEvents = m_JoltScene->DrainCollisionEvents();
-
-                for (const auto &ev : colEvents)
+                if (m_Physics3D)
                 {
-                    // UserData must be returns entity UUID
-                    const uint64_t entityIDA = m_JoltScene->GetUserData(ev.bodyA);
-                    const uint64_t entityIDB = m_JoltScene->GetUserData(ev.bodyB);
-                    
-                    if (entityIDA == 0 || entityIDB == 0)
-                        continue;
-                   
-					auto dispatch = [&ev](Ref<ScriptInstance> scriptInstance, uint64_t otherId)
+                    auto colEvents = m_Physics3D->DrainCollisionEvents();
+
+                    for (const auto &ev : colEvents)
                     {
+                        if (ev.userDataA == 0 || ev.userDataB == 0)
+                            continue;
+                       
+                        auto dispatch = [&ev](Ref<ScriptInstance> scriptInstance, uint64_t otherId)
+                        {
+                            if (!scriptInstance)
+                                return;
+
+                            switch (ev.type)
+                            {
+                                case physics::CollisionEventType::Enter: scriptInstance->InvokeOnCollisionEnter(otherId); break;
+                                case physics::CollisionEventType::Stay:  scriptInstance->InvokeOnCollisionStay(otherId);  break;
+                                case physics::CollisionEventType::Exit:  scriptInstance->InvokeOnCollisionExit(otherId);  break;
+                            }
+                        };
+
+                        dispatch(getScriptInstance(ev.userDataA), ev.userDataB);
+                        dispatch(getScriptInstance(ev.userDataB), ev.userDataA);
+                    }
+
+                    auto activationEvents = m_Physics3D->DrainActivationEvents();
+                    for (const auto &ev : activationEvents)
+                    {
+                        if (ev.userData == 0)
+                            continue;
+                        
+                        auto scriptInstance = getScriptInstance(ev.userData);
                         if (!scriptInstance)
-                            return;
+                            continue;
 
                         switch (ev.type)
                         {
-                            case JoltCollisionEventType::Enter: scriptInstance->InvokeOnCollisionEnter(otherId); break;
-                            case JoltCollisionEventType::Stay:  scriptInstance->InvokeOnCollisionStay(otherId);  break;
-                            case JoltCollisionEventType::Exit:  scriptInstance->InvokeOnCollisionExit(otherId);  break;
+                            case physics::ActivationEventType::Activated:   scriptInstance->InvokeOnBodyActivated();   break;
+                            case physics::ActivationEventType::Deactivated: scriptInstance->InvokeOnBodyDeactivated(); break;
                         }
-                    };
-
-                    dispatch(getScriptInstance(entityIDA), entityIDB);
-                    dispatch(getScriptInstance(entityIDB), entityIDA);
-                }
-
-				auto activationEvents = m_JoltScene->DrainActivationEvents();
-                for (const auto &ev : activationEvents)
-                {
-					const uint64_t entityID = m_JoltScene->GetUserData(ev.bodyId);
-					if (entityID == 0)
-						continue;
-					
-					auto scriptInstance = getScriptInstance(entityID);
-                    if (!scriptInstance)
-                        continue;
-
-					switch (ev.type)
-					{
-					    case JoltActivationEventType::Activated:   scriptInstance->InvokeOnBodyActivated();   break;
-					    case JoltActivationEventType::Deactivated: scriptInstance->InvokeOnBodyDeactivated(); break;
-					}
+                    }
                 }
             }
         }
     }
 
-    Ref<Scene> Scene::Create(Project *project)
+	void Scene::OnFixedUpdateRuntimeSimulate()
+	{
+		{
+			IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
+			registry->view<ScriptComponent>().each([](entt::entity e, ScriptComponent &script)
+			{
+				if (script.runtimeScriptInstance)
+					script.runtimeScriptInstance->InvokeOnFixedUpdate();
+			});
+		}
+
+		{
+			IGN_PROFILE_SCOPE("Scene::Physics2D");
+			m_Physics2D->Simulate(1.0f / 60.0f);
+		}
+
+		{
+			IGN_PROFILE_SCOPE("Scene::Physics3D");
+			if (m_Physics3D)
+			{
+				m_Physics3D->Simulate(1.0f / 60.0f);
+
+				// Calculate Parent transform
+				static auto CalculateParentTransform = [this](const IDComponent &idc, TransformComponent &trc, const glm::vec3 &worldTranslation, const glm::quat &worldRotation)
+				{
+					if (idc.parent != 0)
+					{
+						Entity parentEntity = SceneManager::GetEntity(this, idc.parent);
+						if (parentEntity)
+						{
+							const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
+							const glm::mat4 parentWorldMatrix = parentTr.world.GetMatrix();
+							const glm::mat4 invParentWorldMatrix = glm::inverse(parentWorldMatrix);
+
+							const glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation)
+								* glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), trc.world.scale);
+
+							const glm::mat4 childLocalMatrix = invParentWorldMatrix * childWorldMatrix;
+
+							const glm::vec3 savedLocalScale = trc.local.scale;
+							Transform::Decompose(childLocalMatrix, trc.local);
+							trc.local.scale = savedLocalScale;
+
+							trc.world.translation = worldTranslation;
+							trc.world.rotation = worldRotation;
+						}
+						else
+						{
+							trc.local.translation = worldTranslation;
+							trc.local.rotation = worldRotation;
+							trc.world.translation = worldTranslation;
+							trc.world.rotation = worldRotation;
+						}
+					}
+					else
+					{
+						trc.local.translation = worldTranslation;
+						trc.local.rotation = worldRotation;
+						trc.world.translation = worldTranslation;
+						trc.world.rotation = worldRotation;
+					}
+				};
+
+                // Dynamic, Static, Kinematic Actors
+				for (entt::entity e : registry->view<RigidbodyComponent>())
+				{
+					auto &rb = registry->get<RigidbodyComponent>(e);
+                    auto &idc = registry->get<IDComponent>(e);
+					auto &tr = registry->get<TransformComponent>(e);
+
+                    if (auto dynActor = rb.dynamicActor.lock())
+					{
+						if (dynActor->IsActive())
+						{
+							CalculateParentTransform(idc, tr, dynActor->GetPosition(), dynActor->GetRotation());
+                        }
+                    }
+                    else if (auto stActor = rb.staticActor.lock())
+                    {
+						CalculateParentTransform(idc, tr, stActor->GetPosition(), stActor->GetRotation());
+                    }
+				}
+
+                // Character controllers
+                for (entt::entity e : registry->view<CharacterControllerComponent>())
+                {
+                    auto &cc = registry->get<CharacterControllerComponent>(e);
+					auto &idc = registry->get<IDComponent>(e);
+					auto &tr = registry->get<TransformComponent>(e);
+                    if (cc.dirty)
+                    {
+                        uint64_t userData = static_cast<uint64_t>(Entity{ e, this }.GetUUID());
+                        const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+                        const float radius = cc.radius * maxScale;
+                        const float halfHeight = glm::max(cc.height * 0.5f - cc.radius, 0.0f) * maxScale;
+
+                        physics::CharacterControllerDesc ccDesc;
+                        ccDesc.center = cc.center * tr.world.scale;
+                        ccDesc.radius = radius;
+                        ccDesc.halfHeight = halfHeight;
+                        ccDesc.mass = cc.mass;
+                        ccDesc.friction = cc.friction;
+                        ccDesc.maxStepHeight = cc.maxStepHeight;
+                        ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
+                        ccDesc.up = cc.up;
+
+                        glm::vec3 currentPos = tr.world.translation;
+                        glm::quat currentRot = tr.world.rotation;
+                        if (auto ccActor = cc.character.lock())
+                        {
+                            currentPos = ccActor->GetPosition();
+                            currentRot = ccActor->GetRotation();
+                        }
+
+                        auto charActor = m_Physics3D->CreateCharacterController(ccDesc, userData);
+                        if (charActor)
+                        {
+                            charActor->SetPosition(currentPos);
+                            charActor->SetRotation(currentRot);
+                        }
+                        cc.character = charActor;
+                        cc.dirty = false;
+                    }
+
+                    if (auto ccActor = cc.character.lock())
+                    {
+                        ccActor->Move(cc.linearVelocity, 1.0f / 60.0f);
+                        CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
+                    }
+                }
+			}
+		}
+	}
+
+	Ref<Scene> Scene::Create(Project *project)
     {
         return CreateRef<Scene>(project);
     }
@@ -655,6 +978,8 @@ namespace ignite
 
 	void Scene::UpdateAnimations(float deltaTime)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto skeletalMeshView = registry->view<TransformComponent, SkeletalMeshComponent>();
         std::unordered_set<AssetHandle> updatedSharedHandles;
         for (auto ent : skeletalMeshView)
@@ -745,6 +1070,8 @@ namespace ignite
 
             if (sharedRuntime)
             {
+				IGN_PROFILE_SCOPE("Scene::Shared Animation Runtime");
+
                 // Only advance time once per shared controller per frame
                 if (updatedSharedHandles.find(sourceAnimatorHandle) == updatedSharedHandles.end())
                 {
@@ -779,6 +1106,8 @@ namespace ignite
             }
             else
             {
+                IGN_PROFILE_SCOPE("Scene::Unique Animation Runtime");
+
                 AnimatorControllerRuntime runtime;
                 runtime.currentStateName = smc.currentStateName;
                 runtime.stateElapsed = smc.stateElapsed;
@@ -969,6 +1298,11 @@ namespace ignite
 
     template<>
     IGN_API void Scene::OnComponentAdded<CapsuleColliderComponent>(Entity entity, CapsuleColliderComponent &comp)
+    {
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<CharacterControllerComponent>(Entity entity, CharacterControllerComponent &comp)
     {
     }
 

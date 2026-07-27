@@ -3301,7 +3301,7 @@ namespace ignite
     void AssetEditorPanel::UIAnimatorControllerEditor(UI::AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
-        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1600.0f, 1000.0f), ImVec2(520.0f, 700.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(720.0f, 512.0f), ImVec2(512.0f, 512.0f), ImGuiWindowFlags_NoScrollWithMouse))
         {
             if (DrawAssetEditorHeader(assetData))
             {

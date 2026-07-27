@@ -209,6 +209,11 @@ namespace ignite
         void PrepareUploadData(uint32_t channelCount);
         void PrepareUploadData(uint32_t rowPitch, uint32_t depthPitch);
 
+        // Asynchronous GPU upload queue management
+        static void SubmitAsyncUpload(Ref<Texture> texture, std::function<void()> onComplete = nullptr);
+        static void ProcessAsyncUploads(uint32_t maxUploadsPerFrame = 4, uint64_t maxBytesPerFrame = 16 * 1024 * 1024);
+        static bool HasPendingUploads();
+
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
         nvrhi::SamplerHandle GetSampler() const { return m_Sampler; }

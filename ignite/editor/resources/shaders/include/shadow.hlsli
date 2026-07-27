@@ -18,7 +18,8 @@ struct CascadesShadows
     float pcfRadius;
 
     int cascadeIndex;
-    float padding[3];
+    float shadowTexelSize;
+    float padding[2];
 };
 
 // ---------------------------------------------------------------------------
@@ -71,6 +72,11 @@ static float InterleavedGradientNoise(float2 screenPos)
 static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, SamplerState shadowSampler,
     float4x4 cameraView, float3 worldPos, float3 normal, float3 lightDirection, float2 screenPos)
 {
+    if (csm.shadowStrength <= 0.001f)
+    {
+        return 1.0f;
+    }
+
     float3 viewPos = mul(cameraView, float4(worldPos, 1.0f)).xyz;
     float viewDepth = -viewPos.z;
     int cascadeIdx = GetCascadeIndex(csm.cascadeSplits, viewDepth);
@@ -100,9 +106,8 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
     float compareDepth = shadowDepth - bias;
 
     // Texel size in UV space.
-    uint width, height, layers;
-    shadowMap.GetDimensions(width, height, layers);
-    float2 texelSize = 1.0f / float2(width, height);
+    float ts = csm.shadowTexelSize > 0.0f ? csm.shadowTexelSize : (1.0f / 2048.0f);
+    float2 texelSize = float2(ts, ts);
 
     // ---------------------------------------------------------------------------
     // PCF radius scales with cascade: keep cascade 0 sharp, relax for far ones.

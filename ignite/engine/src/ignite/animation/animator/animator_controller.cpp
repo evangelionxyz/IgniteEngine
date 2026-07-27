@@ -11,6 +11,8 @@
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/core/logger.hpp"
 
+#include "ignite/core/profiler/profiler.hpp"
+
 #pragma warning(push)
 #pragma warning(disable : 4275 4251)
 #include <yaml-cpp/yaml.h>
@@ -85,6 +87,8 @@ namespace ignite
 
     const AnimTransition *AnimatorController::FindMatchingTransition(const std::string &currentState, float normalizedTime) const
     {
+        IGN_PROFILE_FUNCTION();
+
         for (const auto &tr : transitions)
         {
             // Match: from current state OR "Any State" (empty from)
@@ -377,6 +381,8 @@ namespace ignite
 
     bool AnimatorController::UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (!assetManager || GetSkeletonHandle() == AssetHandle(0))
             return false;
 
@@ -404,6 +410,7 @@ namespace ignite
 
         auto resolveMotion = [&](const AnimState *motionState, std::vector<std::pair<Ref<SkeletalAnimation>, float>> &outContrib) -> bool
         {
+            IGN_PROFILE_SCOPE("Animator - Resolve Motion");
             outContrib.clear();
             if (!motionState || motionState->GetMotionHandle() == AssetHandle(0))
                 return false;
@@ -440,22 +447,27 @@ namespace ignite
         
         // Calculate effective weighted duration of current motion
         float effectiveDuration = 0.0f;
-        for (const auto &[anim, weight] : sourceContribs)
         {
-            const float durSec = anim->ticksPerSeconds > 0.0f ? (anim->duration / anim->ticksPerSeconds) : 0.0f;
-            effectiveDuration += durSec * weight;
-        }
+			IGN_PROFILE_SCOPE_COLOR("Animator - Calculate Effectuve Weighted Duration", tracy::Color::Crimson);
 
-        if (effectiveDuration > 0.0001f)
-        {
-            runtime.stateNormalized = std::fmod(runtime.stateNormalized + (deltaTime / effectiveDuration), 1.0f);
-            if (runtime.stateNormalized < 0.0f)
-                runtime.stateNormalized += 1.0f;
+			for (const auto &[anim, weight] : sourceContribs)
+			{
+				const float durSec = anim->ticksPerSeconds > 0.0f ? (anim->duration / anim->ticksPerSeconds) : 0.0f;
+				effectiveDuration += durSec * weight;
+			}
+
+			if (effectiveDuration > 0.0001f)
+			{
+				runtime.stateNormalized = std::fmod(runtime.stateNormalized + (deltaTime / effectiveDuration), 1.0f);
+				if (runtime.stateNormalized < 0.0f)
+					runtime.stateNormalized += 1.0f;
+			}
+			else
+			{
+				runtime.stateNormalized = 0.0f;
+			}
         }
-        else
-        {
-            runtime.stateNormalized = 0.0f;
-        }
+        
 
         // Trigger Animation Events (e.g., Audio actions)
         const float prevNorm = runtime.previousStateNormalized;
@@ -511,6 +523,8 @@ namespace ignite
         }
         else
         {
+			IGN_PROFILE_SCOPE_COLOR("Animator - Matching Transition", tracy::Color::Aqua);
+
             const AnimTransition *matchingTr = FindMatchingTransition(runtime.currentStateName, runtime.stateNormalized);
             if (matchingTr && matchingTr->toState != runtime.currentStateName)
             {
@@ -549,6 +563,8 @@ namespace ignite
         runtime.eventSourceAnimation = AssetHandle(0);
         if (!sourceContribs.empty())
         {
+			IGN_PROFILE_SCOPE_COLOR("Animator - Event Evaluation", tracy::Color::Aqua);
+
             const Ref<SkeletalAnimation> &eventAnimation = sourceContribs.front().first;
             runtime.eventSourceAnimation = eventAnimation->handle;
             const float previous = runtime.previousStateNormalized;
@@ -583,6 +599,8 @@ namespace ignite
 
         auto evaluatePoseForJointFromContribs = [&](size_t jointIndex, const std::vector<std::pair<Ref<SkeletalAnimation>, float>> &contribs, float normTime) -> Transform
         {
+            IGN_PROFILE_SCOPE_COLOR("Animator - Evaluate", tracy::Color::Red);
+
             const Joint &joint = skeleton->joints[jointIndex];
             glm::vec3 translation(0.0f), scale(0.0f);
             glm::quat rotationSum(0.0f, 0.0f, 0.0f, 0.0f);
@@ -621,29 +639,34 @@ namespace ignite
         };
 
         // Calculate joint local poses (with transition cross-fading if active)
-        for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
         {
-            Transform poseSource = evaluatePoseForJointFromContribs(jointIndex, sourceContribs, runtime.stateNormalized);
-            if (runtime.isTransitioning && !targetContribs.empty())
-            {
-                const float targetNormTime = runtime.stateNormalized;
-                Transform poseTarget = evaluatePoseForJointFromContribs(jointIndex, targetContribs, targetNormTime);
+			IGN_PROFILE_SCOPE("Animator - Calculate Joint Local Poses");
 
-                glm::quat rotA = poseSource.rotation;
-                glm::quat rotB = poseTarget.rotation;
-                if (glm::dot(rotA, rotB) < 0.0f) rotB = -rotB;
+			for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
+			{
+				Transform poseSource = evaluatePoseForJointFromContribs(jointIndex, sourceContribs, runtime.stateNormalized);
+				if (runtime.isTransitioning && !targetContribs.empty())
+				{
+					const float targetNormTime = runtime.stateNormalized;
+					Transform poseTarget = evaluatePoseForJointFromContribs(jointIndex, targetContribs, targetNormTime);
 
-                Transform blended;
-                blended.translation = glm::mix(poseSource.translation, poseTarget.translation, blendAlpha);
-                blended.rotation = glm::normalize(glm::slerp(rotA, rotB, blendAlpha));
-                blended.scale = glm::mix(poseSource.scale, poseTarget.scale, blendAlpha);
-                runtime.localPoses[jointIndex] = blended;
-            }
-            else
-            {
-                runtime.localPoses[jointIndex] = poseSource;
-            }
+					glm::quat rotA = poseSource.rotation;
+					glm::quat rotB = poseTarget.rotation;
+					if (glm::dot(rotA, rotB) < 0.0f) rotB = -rotB;
+
+					Transform blended;
+					blended.translation = glm::mix(poseSource.translation, poseTarget.translation, blendAlpha);
+					blended.rotation = glm::normalize(glm::slerp(rotA, rotB, blendAlpha));
+					blended.scale = glm::mix(poseSource.scale, poseTarget.scale, blendAlpha);
+					runtime.localPoses[jointIndex] = blended;
+				}
+				else
+				{
+					runtime.localPoses[jointIndex] = poseSource;
+				}
+			}
         }
+        
 
         // =========================================================================
         // Step 1: Check Active Motion Flags (Root Motion & In-Place)
@@ -654,8 +677,10 @@ namespace ignite
         {
             if (anim)
             {
-                if (anim->rootMotion) rootMotionActive = true;
-                if (anim->inPlace) inPlaceActive = true;
+                if (anim->rootMotion)
+                    rootMotionActive = true;
+                if (anim->inPlace)
+                    inPlaceActive = true;
             }
         }
 
@@ -681,6 +706,8 @@ namespace ignite
         // automatically handling cross-fading if a state transition is active.
         auto getBlendedRootPose = [&](float normTime) -> Transform
         {
+		    IGN_PROFILE_SCOPE_COLOR("Animator - Get Blend Pose", tracy::Color::Orange);
+
             Transform pSource = evaluatePoseForJointFromContribs(rootIndex, sourceContribs, normTime);
             if (runtime.isTransitioning && !targetContribs.empty())
             {
@@ -702,6 +729,8 @@ namespace ignite
         // =========================================================================
         if (inPlaceActive)
         {
+			IGN_PROFILE_SCOPE_COLOR("Animator - In Place", tracy::Color::Orange);
+
             // --- In-Place Mode ---
             // 1. Disable entity world movement (zero root motion delta).
             // 2. Lock horizontal plane displacement (X and Z) to the starting position (t = 0.0).
@@ -717,6 +746,8 @@ namespace ignite
         }
         else if (rootMotionActive)
         {
+			IGN_PROFILE_SCOPE_COLOR("Animator - Root Motion", tracy::Color::Orange);
+
             // --- Root Motion Mode ---
             // 1. Enable root motion flag for Scene::UpdateAnimations to apply to Entity transform.
             // 2. Compute frame-to-frame delta of root joint translation (handling loop wrap-around).
@@ -758,35 +789,48 @@ namespace ignite
         }
         else
         {
+			IGN_PROFILE_SCOPE_COLOR("Animator - NO ROOT MOTION / IN PLACE", tracy::Color::Orange);
+
             // --- Standard Animation Mode ---
             // Root joint moves strictly as baked in keyframes; entity transform remains unaffected.
             runtime.hasRootMotion = false;
             runtime.rootMotionDelta = glm::vec3(0.0f);
         }
 
-        // Compute global poses
-        for (size_t i = 0; i < jointCount; ++i)
         {
-            const Joint &joint = skeleton->joints[i];
-            if (joint.parentJointId == -1)
-            {
-                runtime.globalPoses[i] = runtime.localPoses[i];
-            }
-            else
-            {
-                const Transform& parent = runtime.globalPoses[joint.parentJointId];
-                Transform &global = runtime.globalPoses[i];
-                global.translation = parent.translation + parent.rotation * (parent.scale * runtime.localPoses[i].translation);
-                global.rotation = parent.rotation * runtime.localPoses[i].rotation;
-                global.scale = parent.scale * runtime.localPoses[i].scale;
-            }
+			IGN_PROFILE_SCOPE_COLOR("Animator - Compute Global Pose", tracy::Color::Orange);
+
+			// Compute global poses
+			for (size_t i = 0; i < jointCount; ++i)
+			{
+				const Joint &joint = skeleton->joints[i];
+				if (joint.parentJointId == -1)
+				{
+					runtime.globalPoses[i] = runtime.localPoses[i];
+				}
+				else
+				{
+					const Transform &parent = runtime.globalPoses[joint.parentJointId];
+					Transform &global = runtime.globalPoses[i];
+					global.translation = parent.translation + parent.rotation * (parent.scale * runtime.localPoses[i].translation);
+					global.rotation = parent.rotation * runtime.localPoses[i].rotation;
+					global.scale = parent.scale * runtime.localPoses[i].scale;
+				}
+			}
+
+			
         }
 
-        // Compute GPU-ready final transforms
-        for (size_t i = 0; i < jointCount; ++i)
         {
-            runtime.finalTransforms[i] = runtime.globalPoses[i].GetMatrix() * skeleton->joints[i].inverseBindPose;
+			IGN_PROFILE_SCOPE_COLOR("Animator - Compute GPU Final Transform", tracy::Color::Blue2);
+
+			// Compute GPU-ready final transforms
+			for (size_t i = 0; i < jointCount; ++i)
+			{
+				runtime.finalTransforms[i] = runtime.globalPoses[i].GetMatrix() * skeleton->joints[i].inverseBindPose;
+			}
         }
+        
 
         return true;
     }

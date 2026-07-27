@@ -855,4 +855,129 @@ namespace ignite
         return index;
     }
 
+    struct TextureUploadTask
+    {
+        Ref<Texture> texture;
+        std::function<void()> onComplete;
+    };
+
+    static std::mutex s_UploadQueueMutex;
+    static std::queue<TextureUploadTask> s_UploadQueue;
+
+    void Texture::SubmitAsyncUpload(Ref<Texture> texture, std::function<void()> onComplete)
+    {
+        if (!texture)
+            return;
+
+        auto *app = Application::GetInstance();
+        if (!app || !Application::IsRenderThreadRunning())
+        {
+            nvrhi::IDevice *device = DeviceManager::GetInstance() ? DeviceManager::GetInstance()->GetDevice() : nullptr;
+            if (device)
+            {
+                nvrhi::CommandListHandle cmd = device->createCommandList();
+                cmd->open();
+                texture->SetData(cmd, 4);
+                texture->SetReadyFlag(false);
+                cmd->close();
+
+                {
+                    std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                    device->executeCommandList(cmd);
+                }
+                texture->SetReadyFlag(true);
+                if (onComplete) onComplete();
+            }
+            return;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(s_UploadQueueMutex);
+            s_UploadQueue.push({ texture, onComplete });
+        }
+
+        Application::SubmitToRenderThread([]() {});
+    }
+
+    bool Texture::HasPendingUploads()
+    {
+        std::lock_guard<std::mutex> lock(s_UploadQueueMutex);
+        return !s_UploadQueue.empty();
+    }
+
+    void Texture::ProcessAsyncUploads(uint32_t maxUploadsPerFrame, uint64_t maxBytesPerFrame)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        std::vector<TextureUploadTask> batch;
+        {
+            std::lock_guard<std::mutex> lock(s_UploadQueueMutex);
+            if (s_UploadQueue.empty())
+                return;
+
+            uint32_t count = 0;
+            uint64_t accumulatedBytes = 0;
+
+            while (!s_UploadQueue.empty() && count < maxUploadsPerFrame)
+            {
+                auto task = s_UploadQueue.front();
+                s_UploadQueue.pop();
+
+                if (task.texture)
+                {
+                    uint64_t texBytes = static_cast<uint64_t>(task.texture->GetApproxSizeBytes());
+                    batch.push_back(task);
+                    accumulatedBytes += texBytes;
+                    count++;
+
+                    if (accumulatedBytes >= maxBytesPerFrame && count > 1)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (batch.empty())
+            return;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance() ? DeviceManager::GetInstance()->GetDevice() : nullptr;
+        if (!device)
+            return;
+
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
+
+        std::vector<std::function<void()>> completionCallbacks;
+        completionCallbacks.reserve(batch.size());
+
+        for (auto &task : batch)
+        {
+            if (!task.texture)
+                continue;
+
+            task.texture->SetReadyFlag(false);
+            task.texture->SetData(cmd, 4);
+
+            completionCallbacks.push_back([tex = task.texture, callback = task.onComplete]()
+            {
+                tex->SetReadyFlag(true);
+                if (callback)
+                {
+                    callback();
+                }
+            });
+        }
+
+        cmd->close();
+
+        Application::SubmitWorkerCommandList(cmd, [callbacks = std::move(completionCallbacks)]()
+        {
+            for (auto &cb : callbacks)
+            {
+                if (cb) cb();
+            }
+        });
+    }
+
 }

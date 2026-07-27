@@ -218,6 +218,29 @@ namespace ignite
         void (*CapsuleColliderComponent_GetHeight)(uint64_t entityID, float *result);
         void (*CapsuleColliderComponent_SetHeight)(uint64_t entityID, float value);
 
+        // CharacterControllerComponent
+        void (*CharacterControllerComponent_GetCenter)(uint64_t entityID, glm::vec3 *result);
+        void (*CharacterControllerComponent_SetCenter)(uint64_t entityID, const glm::vec3 *value);
+        void (*CharacterControllerComponent_GetRadius)(uint64_t entityID, float *result);
+        void (*CharacterControllerComponent_SetRadius)(uint64_t entityID, float value);
+        void (*CharacterControllerComponent_GetHeight)(uint64_t entityID, float *result);
+        void (*CharacterControllerComponent_SetHeight)(uint64_t entityID, float value);
+        void (*CharacterControllerComponent_GetMaxStepHeight)(uint64_t entityID, float *result);
+        void (*CharacterControllerComponent_SetMaxStepHeight)(uint64_t entityID, float value);
+        void (*CharacterControllerComponent_GetMaxSlopeAngle)(uint64_t entityID, float *result);
+        void (*CharacterControllerComponent_SetMaxSlopeAngle)(uint64_t entityID, float value);
+        void (*CharacterControllerComponent_GetMass)(uint64_t entityID, float *result);
+        void (*CharacterControllerComponent_SetMass)(uint64_t entityID, float value);
+        void (*CharacterControllerComponent_GetFriction)(uint64_t entityID, float *result);
+        void (*CharacterControllerComponent_SetFriction)(uint64_t entityID, float value);
+        void (*CharacterControllerComponent_GetGravityFactor)(uint64_t entityID, float *result);
+        void (*CharacterControllerComponent_SetGravityFactor)(uint64_t entityID, float value);
+        void (*CharacterControllerComponent_GetUp)(uint64_t entityID, glm::vec3 *result);
+        void (*CharacterControllerComponent_SetUp)(uint64_t entityID, const glm::vec3 *value);
+        void (*CharacterControllerComponent_GetLinearVelocity)(uint64_t entityID, glm::vec3 *result);
+        void (*CharacterControllerComponent_SetLinearVelocity)(uint64_t entityID, const glm::vec3 *value);
+        void (*CharacterControllerComponent_IsOnGround)(uint64_t entityID, bool *result);
+
         // AnimatorComponent (SkeletalMeshComponent / AnimatorController)
         void (*AnimatorComponent_SetFloat)(uint64_t entityID, const char *paramName, float value);
         void (*AnimatorComponent_GetFloat)(uint64_t entityID, const char *paramName, float *result);

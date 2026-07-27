@@ -22,7 +22,7 @@
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/core/application.hpp"
 
-#include "ignite/physics/3d/jolt/jolt_physics.hpp"
+#include "ignite/physics/3d/physics_3d.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/animation/animation_montage.hpp"
 #include "ignite/asset/asset_manager.hpp"
@@ -129,7 +129,7 @@ namespace ignite
                 glm::vec3 v3 = pos + rot * glm::vec3(-halfSize.x,  halfSize.y, 0.0f);
 
                 float t;
-                if (Math::RayQuadIntersection(*origin, *direction, v0, v1, v2, v3, t))
+                if (Math::RayQuadIntersection(physics::Ray{*origin, *direction}, v0, v1, v2, v3, t))
                 {
                     if (t < minDistance)
                     {
@@ -169,11 +169,12 @@ namespace ignite
             if (outHitNormal) *outHitNormal = glm::vec3(0.f, 1.f, 0.f);
 
             Scene *scene = GetSceneContext();
-            if (!scene || !scene->GetJoltScene() || !origin || !direction)
+            if (!scene || !scene->GetPhysics3D() || !origin || !direction)
                 return 0;
 
-            JoltRaycastHit hit = scene->GetJoltScene()->Raycast(*origin, *direction, maxDistance);
-            if (!hit.hit)
+            physics::Ray ray{ *origin, *direction };
+            physics::RaycastHit hit;
+            if (!scene->GetPhysics3D()->Raycast(ray, hit, maxDistance))
                 return 0;
 
             if (outHitPoint)
@@ -182,9 +183,7 @@ namespace ignite
             if (outHitNormal)
                 *outHitNormal = hit.hitNormal;
 
-            // Resolve body ID to entity UUID directly from the Jolt body user data.
-            const uint64_t entityID = static_cast<uint64_t>(scene->GetJoltScene()->GetUserData(hit.bodyId));
-            return entityID;
+            return hit.userData;
         }
 
         static uint64_t Scene_GetPrimaryCamera()
@@ -1726,7 +1725,7 @@ namespace ignite
             if (!result)
                 return;
 
-            *result = static_cast<int32_t>(Rigidbody2DComponent::EBodyType::Static);
+            *result = static_cast<int32_t>(physics::BodyType::Static);
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
                 return;
@@ -1741,7 +1740,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            rb.bodyType = static_cast<Rigidbody2DComponent::EBodyType>(value);
+            rb.bodyType = static_cast<physics::BodyType>(value);
             Scene *scene = GetSceneContext();
             if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
             {
@@ -2512,7 +2511,7 @@ namespace ignite
         static void RigidbodyComponent_GetType(uint64_t entityID, int32_t *result)
         {
             if (!result) return;
-            *result = static_cast<int32_t>(RigidbodyComponent::EBodyType::Static);
+			*result = static_cast<int32_t>(physics::BodyType::Static);
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
@@ -2525,21 +2524,17 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            rb.bodyType = static_cast<RigidbodyComponent::EBodyType>(value);
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            rb.bodyType = static_cast<physics::BodyType>(value);
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                JPH::EMotionType motionType = JPH::EMotionType::Static;
-                if (rb.bodyType == RigidbodyComponent::EBodyType::Kinematic) motionType = JPH::EMotionType::Kinematic;
-                else if (rb.bodyType == RigidbodyComponent::EBodyType::Dynamic) motionType = JPH::EMotionType::Dynamic;
-                scene->GetJoltScene()->GetBodyInterface()->SetMotionType(rb.body->GetID(), motionType, JPH::EActivation::Activate);
+                dynActor->SetMotionType(static_cast<physics::BodyType>(rb.bodyType));
             }
         }
 
         static void RigidbodyComponent_GetMotionQuality(uint64_t entityID, int32_t *result)
         {
             if (!result) return;
-            *result = static_cast<int32_t>(RigidbodyComponent::EMotionQuality::Discrete);
+            *result = static_cast<int32_t>(physics::MotionQuality::Discrete);
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
@@ -2563,10 +2558,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.useGravity = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetGravityFactor(*rb.body, rb.useGravity ? rb.gravityFactor : 0.0f);
+                dynActor->SetGravityFactor(rb.useGravity ? rb.gravityFactor : 0.0f);
             }
         }
 
@@ -2597,10 +2591,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.gravityFactor = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetGravityFactor(*rb.body, rb.useGravity ? rb.gravityFactor : 0.0f);
+                dynActor->SetGravityFactor(rb.useGravity ? rb.gravityFactor : 0.0f);
             }
         }
 
@@ -2612,10 +2605,9 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                *result = scene->GetJoltScene()->GetLinearVelocity(*rb.body);
+                *result = dynActor->GetLinearVelocity();
             }
             else
             {
@@ -2631,10 +2623,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.linearVelocity = *value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetLinearVelocity(*rb.body, *value);
+                dynActor->SetLinearVelocity(*value);
             }
         }
 
@@ -2646,10 +2637,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                *result = scene->GetJoltScene()->GetPosition(*rb.body);
+                *result = dynActor->GetPosition();
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                *result = statActor->GetPosition();
             }
         }
 
@@ -2660,10 +2654,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetPosition(*rb.body, *value, true);
+                dynActor->SetPosition(*value, true);
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                statActor->SetPosition(*value, true);
             }
         }
 
@@ -2675,10 +2672,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                *result = scene->GetJoltScene()->GetRotation(*rb.body);
+                *result = dynActor->GetRotation();
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                *result = statActor->GetRotation();
             }
         }
 
@@ -2689,10 +2689,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetRotation(*rb.body, *value, true);
+                dynActor->SetRotation(*value, true);
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                statActor->SetRotation(*value, true);
             }
         }
 
@@ -2704,10 +2707,9 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                *result = JoltToGlmVec3(scene->GetJoltScene()->GetBodyInterface()->GetAngularVelocity(rb.body->GetID()));
+                *result = dynActor->GetAngularVelocity();
             }
             else
             {
@@ -2723,10 +2725,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.angularVelocity = *value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->GetBodyInterface()->SetAngularVelocity(rb.body->GetID(), GlmToJoltVec3(*value));
+                dynActor->SetAngularVelocity(*value);
             }
         }
 
@@ -2737,17 +2738,6 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.mass = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
-            {
-                auto shape = rb.body->GetShape();
-                if (shape)
-                {
-                    JPH::MassProperties massProperties = shape->GetMassProperties();
-                    massProperties.ScaleToMass(value);
-                    scene->GetJoltScene()->SetMassProperties(*rb.body, massProperties);
-                }
-            }
         }
 
         static void RigidbodyComponent_GetLinearDamping(uint64_t entityID, float *result)
@@ -2757,17 +2747,7 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
-            auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
-            {
-                if (auto *mp = rb.body->GetMotionProperties())
-                {
-                    *result = mp->GetLinearDamping();
-                    return;
-                }
-            }
-            *result = rb.linearDamping;
+            *result = entity.GetComponent<RigidbodyComponent>().linearDamping;
         }
 
         static void RigidbodyComponent_SetLinearDamping(uint64_t entityID, float value)
@@ -2777,12 +2757,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.linearDamping = value;
-            if (rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                if (auto *mp = rb.body->GetMotionProperties())
-                {
-                    mp->SetLinearDamping(value);
-                }
+                dynActor->SetLinearDamping(value);
             }
         }
 
@@ -2793,17 +2770,7 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
-            auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
-            {
-                if (auto *mp = rb.body->GetMotionProperties())
-                {
-                    *result = mp->GetAngularDamping();
-                    return;
-                }
-            }
-            *result = rb.angularDamping;
+            *result = entity.GetComponent<RigidbodyComponent>().angularDamping;
         }
 
         static void RigidbodyComponent_SetAngularDamping(uint64_t entityID, float value)
@@ -2813,12 +2780,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.angularDamping = value;
-            if (rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                if (auto *mp = rb.body->GetMotionProperties())
-                {
-                    mp->SetAngularDamping(value);
-                }
+                dynActor->SetAngularDamping(value);
             }
         }
 
@@ -2830,10 +2794,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                *result = scene->GetJoltScene()->GetFriction(*rb.body);
+                *result = dynActor->GetFriction();
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                *result = statActor->GetFriction();
             }
             else
             {
@@ -2848,10 +2815,13 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.friction = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetFriction(*rb.body, value);
+                dynActor->SetFriction(value);
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                statActor->SetFriction(value);
             }
         }
 
@@ -2863,10 +2833,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                *result = scene->GetJoltScene()->GetRestitution(*rb.body);
+                *result = dynActor->GetRestitution();
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                *result = statActor->GetRestitution();
             }
             else
             {
@@ -2881,10 +2854,13 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.restitution = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetRestitution(*rb.body, value);
+                dynActor->SetRestitution(value);
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                statActor->SetRestitution(value);
             }
         }
 
@@ -2895,17 +2871,7 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
-            auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
-            {
-                if (auto *mp = rb.body->GetMotionProperties())
-                {
-                    *result = mp->GetMaxLinearVelocity();
-                    return;
-                }
-            }
-            *result = rb.maxLinearVelocity;
+            *result = entity.GetComponent<RigidbodyComponent>().maxLinearVelocity;
         }
 
         static void RigidbodyComponent_SetMaxLinearVelocity(uint64_t entityID, float value)
@@ -2915,10 +2881,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.maxLinearVelocity = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetMaxLinearVelocity(*rb.body, value);
+                dynActor->SetMaxLinearVelocity(value);
             }
         }
 
@@ -2929,17 +2894,7 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
-            auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
-            {
-                if (auto *mp = rb.body->GetMotionProperties())
-                {
-                    *result = mp->GetMaxAngularVelocity();
-                    return;
-                }
-            }
-            *result = rb.maxAngularVelocity;
+            *result = entity.GetComponent<RigidbodyComponent>().maxAngularVelocity;
         }
 
         static void RigidbodyComponent_SetMaxAngularVelocity(uint64_t entityID, float value)
@@ -2949,10 +2904,9 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.maxAngularVelocity = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->SetMaxAngularVelocity(*rb.body, value);
+                dynActor->SetMaxAngularVelocity(value);
             }
         }
 
@@ -2963,14 +2917,7 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
-            auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
-            {
-				*result = rb.body->GetApplyGyroscopicForce();
-                return;
-            }
-            *result = rb.applyGyroscopicForce;
+            *result = entity.GetComponent<RigidbodyComponent>().applyGyroscopicForce;
         }
 
         static void RigidbodyComponent_SetApplyGyroscopicForce(uint64_t entityID, bool value)
@@ -2980,10 +2927,6 @@ namespace ignite
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
             rb.applyGyroscopicForce = value;
-            if (rb.body)
-            {
-				rb.body->SetApplyGyroscopicForce(value);
-            }
         }
 
         static void RigidbodyComponent_GetCenterOfMass(uint64_t entityID, glm::vec3 *result)
@@ -2994,10 +2937,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                *result = scene->GetJoltScene()->GetCenterOfMassPosition(*rb.body);
+                *result = dynActor->GetCenterOfMassPosition();
+            }
+            else
+            {
+                *result = rb.centerMass;
             }
         }
 
@@ -3009,10 +2955,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                *result = scene->GetJoltScene()->IsActive(*rb.body);
+                *result = dynActor->IsActive();
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                *result = statActor->IsActive();
             }
         }
 
@@ -3023,10 +2972,9 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->GetBodyInterface()->AddForce(rb.body->GetID(), GlmToJoltVec3(*force), GlmToJoltVec3(*point));
+                dynActor->AddForceAtPosition(*force, *point);
             }
         }
 
@@ -3037,10 +2985,9 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->AddForce(*rb.body, *force);
+                dynActor->AddForce(*force);
             }
         }
 
@@ -3051,10 +2998,9 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->AddTorque(*rb.body, *torque);
+                dynActor->AddTorque(*torque);
             }
         }
 
@@ -3065,10 +3011,9 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->GetBodyInterface()->AddImpulse(rb.body->GetID(), GlmToJoltVec3(*impulse), GlmToJoltVec3(*point));
+                dynActor->AddImpulseAtPosition(*impulse, *point);
             }
         }
 
@@ -3079,10 +3024,9 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->AddImpulse(*rb.body, *impulse);
+                dynActor->AddImpulse(*impulse);
             }
         }
 
@@ -3093,10 +3037,9 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->AddAngularImpulse(*rb.body, *impulse);
+                dynActor->AddAngularImpulse(*impulse);
             }
         }
 
@@ -3106,10 +3049,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->ActivateBody(*rb.body);
+                dynActor->ActivateBody();
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                statActor->ActivateBody();
             }
         }
 
@@ -3119,10 +3065,13 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->DeactivateBody(*rb.body);
+                dynActor->DeactivateBody();
+            }
+            else if (auto statActor = rb.staticActor.lock())
+            {
+                statActor->DeactivateBody();
             }
         }
 
@@ -3133,10 +3082,10 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
                 return;
             auto &rb = entity.GetComponent<RigidbodyComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetJoltScene() && rb.body)
+            if (auto dynActor = rb.dynamicActor.lock())
             {
-                scene->GetJoltScene()->MoveKinematic(*rb.body, *targetPosition, *targetRotation, deltaTime);
+                dynActor->SetPosition(*targetPosition, true);
+                dynActor->SetEulerAngleRotation(*targetRotation, true);
             }
         }
 
@@ -3270,6 +3219,230 @@ namespace ignite
             if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
             {
                 entity.GetComponent<CapsuleColliderComponent>().height = value;
+            }
+        }
+
+        // --- CharacterControllerComponent ---
+        static void CharacterControllerComponent_GetCenter(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().center;
+        }
+
+        static void CharacterControllerComponent_SetCenter(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.center = *value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetRadius(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.5f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().radius;
+        }
+
+        static void CharacterControllerComponent_SetRadius(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.radius = value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetHeight(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 2.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().height;
+        }
+
+        static void CharacterControllerComponent_SetHeight(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.height = value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetMaxStepHeight(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.4f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().maxStepHeight;
+        }
+
+        static void CharacterControllerComponent_SetMaxStepHeight(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.maxStepHeight = value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetMaxSlopeAngle(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 45.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().maxSlopeAngle;
+        }
+
+        static void CharacterControllerComponent_SetMaxSlopeAngle(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.maxSlopeAngle = value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetMass(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 80.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().mass;
+        }
+
+        static void CharacterControllerComponent_SetMass(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.mass = value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetFriction(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.2f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().friction;
+        }
+
+        static void CharacterControllerComponent_SetFriction(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.friction = value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetGravityFactor(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().gravityFactor;
+        }
+
+        static void CharacterControllerComponent_SetGravityFactor(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.gravityFactor = value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetUp(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f, 1.0f, 0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+                *result = entity.GetComponent<CharacterControllerComponent>().up;
+        }
+
+        static void CharacterControllerComponent_SetUp(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.up = *value;
+                cc.dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetLinearVelocity(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    *result = charCtrl->GetLinearVelocity();
+                else
+                    *result = cc.linearVelocity;
+            }
+        }
+
+        static void CharacterControllerComponent_SetLinearVelocity(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.linearVelocity = *value;
+                if (auto charCtrl = cc.character.lock())
+                    charCtrl->SetLinearVelocity(*value);
+            }
+        }
+
+        static void CharacterControllerComponent_IsOnGround(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    *result = charCtrl->IsOnGround();
             }
         }
 
@@ -3754,6 +3927,28 @@ namespace ignite
             &CapsuleColliderComponent_SetRadius,
             &CapsuleColliderComponent_GetHeight,
             &CapsuleColliderComponent_SetHeight,
+
+            &CharacterControllerComponent_GetCenter,
+            &CharacterControllerComponent_SetCenter,
+            &CharacterControllerComponent_GetRadius,
+            &CharacterControllerComponent_SetRadius,
+            &CharacterControllerComponent_GetHeight,
+            &CharacterControllerComponent_SetHeight,
+            &CharacterControllerComponent_GetMaxStepHeight,
+            &CharacterControllerComponent_SetMaxStepHeight,
+            &CharacterControllerComponent_GetMaxSlopeAngle,
+            &CharacterControllerComponent_SetMaxSlopeAngle,
+            &CharacterControllerComponent_GetMass,
+            &CharacterControllerComponent_SetMass,
+            &CharacterControllerComponent_GetFriction,
+            &CharacterControllerComponent_SetFriction,
+            &CharacterControllerComponent_GetGravityFactor,
+            &CharacterControllerComponent_SetGravityFactor,
+            &CharacterControllerComponent_GetUp,
+            &CharacterControllerComponent_SetUp,
+            &CharacterControllerComponent_GetLinearVelocity,
+            &CharacterControllerComponent_SetLinearVelocity,
+            &CharacterControllerComponent_IsOnGround,
 
             &AnimatorComponent_SetFloat,
             &AnimatorComponent_GetFloat,

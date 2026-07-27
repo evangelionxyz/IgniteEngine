@@ -22,75 +22,78 @@ namespace ignite
 {
     static void SerializeScriptFieldValue(Serializer &sr, const std::string &name, const ScriptField &fieldDef, const ScriptInstanceField &field)
     {
+        sr.AddKeyValue("Name", name);
         switch (fieldDef.Type)
         {
         case ScriptFieldType::Bool:
-            sr.AddKeyValue(name.c_str(), field.GetValue<bool>());
+            sr.AddKeyValue("Value", field.GetValue<bool>());
             break;
         case ScriptFieldType::Char:
-            sr.AddKeyValue(name.c_str(), static_cast<uint16_t>(field.GetValue<char16_t>()));
+            sr.AddKeyValue("Value", static_cast<uint16_t>(field.GetValue<char16_t>()));
             break;
         case ScriptFieldType::Byte:
-            sr.AddKeyValue(name.c_str(), static_cast<int>(field.GetValue<uint8_t>()));
+            sr.AddKeyValue("Value", static_cast<int>(field.GetValue<uint8_t>()));
             break;
         case ScriptFieldType::SByte:
-            sr.AddKeyValue(name.c_str(), static_cast<int>(field.GetValue<int8_t>()));
+            sr.AddKeyValue("Value", static_cast<int>(field.GetValue<int8_t>()));
             break;
         case ScriptFieldType::Short:
-            sr.AddKeyValue(name.c_str(), static_cast<int>(field.GetValue<int16_t>()));
+            sr.AddKeyValue("Value", static_cast<int>(field.GetValue<int16_t>()));
             break;
         case ScriptFieldType::UShort:
-            sr.AddKeyValue(name.c_str(), static_cast<int>(field.GetValue<uint16_t>()));
+            sr.AddKeyValue("Value", static_cast<int>(field.GetValue<uint16_t>()));
             break;
         case ScriptFieldType::Int:
-            sr.AddKeyValue(name.c_str(), field.GetValue<int32_t>());
+            sr.AddKeyValue("Value", field.GetValue<int32_t>());
             break;
         case ScriptFieldType::UInt:
-            sr.AddKeyValue(name.c_str(), field.GetValue<uint32_t>());
+            sr.AddKeyValue("Value", field.GetValue<uint32_t>());
             break;
         case ScriptFieldType::Long:
-            sr.AddKeyValue(name.c_str(), field.GetValue<int64_t>());
+            sr.AddKeyValue("Value", field.GetValue<int64_t>());
             break;
         case ScriptFieldType::ULong:
-            sr.AddKeyValue(name.c_str(), field.GetValue<uint64_t>());
+            sr.AddKeyValue("Value", field.GetValue<uint64_t>());
             break;
         case ScriptFieldType::Float:
-            sr.AddKeyValue(name.c_str(), field.GetValue<float>());
+            sr.AddKeyValue("Value", field.GetValue<float>());
             break;
         case ScriptFieldType::Double:
-            sr.AddKeyValue(name.c_str(), field.GetValue<double>());
+            sr.AddKeyValue("Value", field.GetValue<double>());
             break;
         case ScriptFieldType::String:
-            sr.AddKeyValue(name.c_str(), field.GetValue<std::string>());
+            sr.AddKeyValue("Value", field.GetValue<std::string>());
             break;
         case ScriptFieldType::Vector2:
-            sr.AddKeyValue(name.c_str(), field.GetValue<glm::vec2>());
+            sr.AddKeyValue("Value", field.GetValue<glm::vec2>());
             break;
         case ScriptFieldType::Vector3:
-            sr.AddKeyValue(name.c_str(), field.GetValue<glm::vec3>());
+            sr.AddKeyValue("Value", field.GetValue<glm::vec3>());
             break;
         case ScriptFieldType::Vector4:
         case ScriptFieldType::Color:
-            sr.AddKeyValue(name.c_str(), field.GetValue<glm::vec4>());
+            sr.AddKeyValue("Value", field.GetValue<glm::vec4>());
             break;
         case ScriptFieldType::Quat:
-            sr.AddKeyValue(name.c_str(), field.GetValue<glm::quat>());
+            sr.AddKeyValue("Value", field.GetValue<glm::quat>());
             break;
         case ScriptFieldType::Entity:
         case ScriptFieldType::Asset:
-            sr.AddKeyValue(name.c_str(), field.GetValue<uint64_t>());
+            sr.AddKeyValue("Value", field.GetValue<uint64_t>());
             break;
         case ScriptFieldType::Enum:
-            sr.AddKeyValue(name.c_str(), field.GetValue<int32_t>());
+            sr.AddKeyValue("Value", field.GetValue<int32_t>());
             break;
         default:
             break;
         }
+
+        sr.AddKeyValue("Type", ScriptFieldTypeToString(field.field.Type));
     }
 
-    static void DeserializeScriptFieldValue(const YAML::Node &fieldNode, const std::string &name, const ScriptField &fieldDef, ScriptInstanceField &outField)
+    static void DeserializeScriptFieldValue(YAML::Node fieldNode, const std::string &name, const ScriptField &fieldDef, ScriptInstanceField &outField)
     {
-        const auto &valueNode = fieldNode["Value"];
+        auto valueNode = fieldNode["Value"];
 
         outField.field = fieldDef;
         try
@@ -164,6 +167,9 @@ namespace ignite
         {
             LOG_WARN("[EntitySerializer] Failed to deserialize field '{}'", name);
         }
+
+        auto typeNode = fieldNode["Type"].as<std::string>();
+        outField.field.Type = ScriptFieldTypeFromString(typeNode);
     }
 
     void EntitySerializer::SerializeEntity(Serializer &sr, Entity entity)
@@ -554,6 +560,26 @@ namespace ignite
                 sr.EndMap();
             }
 
+            // CharacterController
+            if (entity.HasComponent<CharacterControllerComponent>())
+            {
+                const auto &comp = entity.GetComponent<CharacterControllerComponent>();
+                sr.BeginMap("CharacterController");
+                {
+                    sr.AddKeyValue("Radius", comp.radius);
+                    sr.AddKeyValue("Height", comp.height);
+                    sr.AddKeyValue("MaxStepHeight", comp.maxStepHeight);
+                    sr.AddKeyValue("MaxSlopeAngle", comp.maxSlopeAngle);
+                    sr.AddKeyValue("Mass", comp.mass);
+                    sr.AddKeyValue("Friction", comp.friction);
+                    sr.AddKeyValue("GravityFactor", comp.gravityFactor);
+                    sr.AddKeyValue("Center", comp.center);
+                    sr.AddKeyValue("Up", comp.up);
+                    sr.AddKeyValue("LinearVelocity", comp.linearVelocity);
+                }
+                sr.EndMap();
+            }
+
             // MeshCollider
             if (entity.HasComponent<MeshColliderComponent>())
             {
@@ -690,7 +716,6 @@ namespace ignite
                 sr.BeginMap("Script");
                 {
                     sr.AddKeyValue("ClassName", comp.className);
-
                     ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
                     if (scriptEngine && scriptEngine->IsEntityClassExists(comp.className))
                     {
@@ -698,16 +723,18 @@ namespace ignite
                         {
                             if (auto *instanceFields = scriptClass->GetInstanceFieldsById(entity.GetUUID()))
                             {
-                                sr.BeginMap("Fields");
+                                sr.BeginSequence("Fields");
                                 for (const auto &[fieldName, instanceField] : *instanceFields)
                                 {
                                     if (scriptClass->GetFields().contains(fieldName))
                                     {
+                                        sr.BeginMap();
                                         const ScriptField &fieldDef = scriptClass->GetFields().at(fieldName);
                                         SerializeScriptFieldValue(sr, fieldName, fieldDef, instanceField);
+                                        sr.EndMap();
                                     }
                                 }
-                                sr.EndMap();
+                                sr.EndSequence();
                             }
                         }
                     }
@@ -892,7 +919,7 @@ namespace ignite
         if (YAML::Node node = entityNode["Rigidbody2D"])
         {
             auto &comp = desEntity.AddComponent<Rigidbody2DComponent>();
-            if (auto n = node["BodyType"]) comp.bodyType = static_cast<Rigidbody2DComponent::EBodyType>(n.as<int>());
+            if (auto n = node["BodyType"]) comp.bodyType = static_cast<physics::BodyType>(n.as<int>());
             if (auto n = node["LinearVelocity"]) comp.linearVelocity = n.as<glm::vec2>();
             if (auto n = node["AngularVelocity"]) comp.angularVelocity = n.as<float>();
             if (auto n = node["GravityScale"]) comp.gravityScale = n.as<float>();
@@ -979,8 +1006,8 @@ namespace ignite
         if (YAML::Node node = entityNode["Rigidbody"])
         {
             auto &comp = desEntity.AddComponent<RigidbodyComponent>();
-            if (auto n = node["MotionQuality"]) comp.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(n.as<int>());
-            if (auto n = node["BodyType"]) comp.bodyType = static_cast<RigidbodyComponent::EBodyType>(n.as<int>());
+            if (auto n = node["MotionQuality"]) comp.motionQuality = static_cast<physics::MotionQuality>(n.as<int>());
+            if (auto n = node["BodyType"]) comp.bodyType = static_cast<physics::BodyType>(n.as<int>());
             if (auto n = node["UseGravity"]) comp.useGravity = n.as<bool>();
             if (auto n = node["RotateX"]) comp.rotateX = n.as<bool>();
             if (auto n = node["RotateY"]) comp.rotateY = n.as<bool>();
@@ -1028,6 +1055,22 @@ namespace ignite
             if (auto n = node["Radius"]) comp.radius = n.as<float>();
             if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
             if (auto n = node["Height"]) comp.height = n.as<float>();
+        }
+
+        // CharacterController Component
+        if (YAML::Node node = entityNode["CharacterController"])
+        {
+            auto &comp = desEntity.AddComponent<CharacterControllerComponent>();
+            if (auto n = node["Radius"]) comp.radius = n.as<float>();
+            if (auto n = node["Height"]) comp.height = n.as<float>();
+            if (auto n = node["MaxStepHeight"]) comp.maxStepHeight = n.as<float>();
+            if (auto n = node["MaxSlopeAngle"]) comp.maxSlopeAngle = n.as<float>();
+            if (auto n = node["Mass"]) comp.mass = n.as<float>();
+            if (auto n = node["Friction"]) comp.friction = n.as<float>();
+            if (auto n = node["GravityFactor"]) comp.gravityFactor = n.as<float>();
+            if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
+            if (auto n = node["Up"]) comp.up = n.as<glm::vec3>();
+            if (auto n = node["LinearVelocity"]) comp.linearVelocity = n.as<glm::vec3>();
         }
 
         // MeshCollider Component

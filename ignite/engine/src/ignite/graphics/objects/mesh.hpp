@@ -109,12 +109,6 @@ namespace ignite
         MeshPrimitive() = default;
         ~MeshPrimitive()
         {
-            // Wait for GPU to ensure buffers are not in use
-            if (auto *device = DeviceManager::GetInstance()->GetDevice())
-            {
-                GPUUploadSync::DeviceWaitIdle(device);
-            }
-
             // Clear GPU buffers
             vertexBuffer.reset();
             indexBuffer.reset();

@@ -12,7 +12,7 @@
 #include "entity_destroy_command.hpp"
 
 #include "ignite/physics/2d/physics_2d.hpp"
-#include "ignite/physics/3d/jolt/jolt_physics.hpp"
+#include "ignite/physics/3d/physics_3d.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/uuid.hpp"
@@ -357,7 +357,12 @@ namespace ignite
         if (!scene || !scene->registry->valid(entity))
             return;
 
-		scene->GetJoltScene()->DestroyEntity(entity);
+		if (entity.HasComponent<RigidbodyComponent>())
+		{
+			auto &rb = entity.GetComponent<RigidbodyComponent>();
+			if (auto dynActor = rb.dynamicActor.lock()) dynActor->DestroyBody();
+			if (auto statActor = rb.staticActor.lock()) statActor->DestroyBody();
+		}
 		scene->GetPhysics2D()->DestroyEntity(entity);
 
         IDComponent idComp = entity.GetComponent<IDComponent>();
@@ -435,10 +440,71 @@ namespace ignite
             if (newEntity.HasComponent<RigidbodyComponent>())
             {
                 auto &rb = newEntity.GetComponent<RigidbodyComponent>();
-                rb.body = nullptr;
+                rb.dynamicActor.reset();
+                rb.staticActor.reset();
+
+                if (scene->GetPhysics3D())
+                {
+                    auto &tr = newEntity.GetTransform();
+                    uint64_t userData = static_cast<uint64_t>(newEntity.GetUUID());
+
+                    physics::RigidBodyDesc rbDesc;
+                    rbDesc.bodyType = rb.bodyType;
+                    rbDesc.motionQuality = rb.motionQuality;
+                    rbDesc.useGravity = rb.useGravity;
+                    rbDesc.mass = rb.mass;
+                    rbDesc.friction = rb.friction;
+                    rbDesc.restitution = rb.restitution;
+
+                    physics::PhysicsTransformData transformData;
+                    transformData.position = tr.world.translation;
+                    transformData.rotation = tr.world.rotation;
+
+                    if (rb.bodyType == physics::BodyType::Dynamic || rb.bodyType == physics::BodyType::Kinematic)
+                    {
+                        rb.dynamicActor = scene->GetPhysics3D()->CreateDynamicBody(rbDesc, transformData, userData);
+                    }
+                    else
+                    {
+                        rb.staticActor = scene->GetPhysics3D()->CreateStaticBody(rbDesc, transformData, userData);
+                    }
+                }
             }
 
-		    scene->GetJoltScene()->InstantiateEntity(newEntity);
+            if (newEntity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = newEntity.GetComponent<CharacterControllerComponent>();
+                cc.character.reset();
+
+                if (scene->GetPhysics3D() && scene->IsRunning())
+                {
+                    auto &tr = newEntity.GetTransform();
+                    uint64_t userData = static_cast<uint64_t>(newEntity.GetUUID());
+
+                    const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+                    const float radius = cc.radius * maxScale;
+                    const float halfHeight = glm::max(cc.height * 0.5f - cc.radius, 0.0f) * maxScale;
+
+                    physics::CharacterControllerDesc ccDesc;
+                    ccDesc.center = cc.center * tr.world.scale;
+                    ccDesc.radius = radius;
+                    ccDesc.halfHeight = halfHeight;
+                    ccDesc.mass = cc.mass;
+                    ccDesc.friction = cc.friction;
+                    ccDesc.maxStepHeight = cc.maxStepHeight;
+                    ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
+                    ccDesc.up = cc.up;
+
+                    auto charActor = scene->GetPhysics3D()->CreateCharacterController(ccDesc, userData);
+                    if (charActor)
+                    {
+                        charActor->SetPosition(tr.world.translation);
+                        charActor->SetRotation(tr.world.rotation);
+                    }
+                    cc.character = charActor;
+                }
+            }
+
 		    scene->GetPhysics2D()->InstantiateEntity(newEntity);
         }
 

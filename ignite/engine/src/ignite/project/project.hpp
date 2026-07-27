@@ -10,7 +10,7 @@
 #include "ignite/asset/material_manager.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
-#include "ignite/physics/3d/iphysics_3d.hpp"
+#include "ignite/physics/3d/physics_3d.hpp"
 
 #include <atomic>
 #include <string>
@@ -41,7 +41,7 @@ namespace ignite
         ignite::Path scriptsDirectory = "Scripts";
         ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
 
-		Physics3DType physics3DType = Physics3DType::Jolt;
+		physics::Physics3DType physics3DType = physics::Physics3DType::Jolt;
         ProjectConfiguration configuration = ProjectConfiguration::Debug;
     };
 
@@ -106,8 +106,8 @@ namespace ignite
         WeakRef<Scene> GetActiveSceneWeak() const { return m_ActiveScene; }
 		Ref<Scene> LockActiveScene() const { return m_ActiveScene; }
 		
-        IPhysics3D *GetPhysics3D() { return m_Physics3D.get(); }
-		Physics2D *GetPhysics2D() { return m_Physics2D.get(); }
+        physics::Physics3D *GetPhysics3D() { return m_Physics3D.get(); }
+		physics::Physics2D *GetPhysics2D() { return m_Physics2D.get(); }
 
         ProjectConfiguration GetConfiguration() const { return m_Info.configuration; }
 
@@ -125,14 +125,14 @@ namespace ignite
         void CreateDirectories() const;
         void GenerateProject();
 
-        Ref<Scene> m_ActiveScene; // current active scene in editor
+        Ref<Scene> m_ActiveScene;
         ProjectInfo m_Info;
 
         MaterialManager m_MaterialManager;
 		ScriptEngine *m_ScriptEngine = nullptr;
 
-        Scope<Physics2D> m_Physics2D;
-        Scope<IPhysics3D> m_Physics3D;
+        Scope<physics::Physics2D> m_Physics2D;
+        Scope<physics::Physics3D> m_Physics3D;
 
         std::map<std::string, bool> m_CoreDependencies;
         std::map<std::string, bool> m_CoreDependenciesPending;

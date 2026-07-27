@@ -58,7 +58,7 @@ namespace ignite
         // 2D Physics — body / shape IDs are runtime-only, we copy editable fields only
         struct Rigidbody2DSnapshot
         {
-            Rigidbody2DComponent::EBodyType bodyType = Rigidbody2DComponent::EBodyType::Static;
+            physics::BodyType bodyType = physics::BodyType::Static;
             glm::vec2 linearVelocity = { 0.0f, 0.0f };
             float angularVelocity = 0.0f;
             float gravityScale = 1.0f;
@@ -96,10 +96,9 @@ namespace ignite
         };
         std::optional<CircleCollider2DSnapshot> circleCollider2D;
 
-        // 3D Physics — JPH::Body* is runtime-only
         struct RigidbodySnapshot
         {
-            RigidbodyComponent::EBodyType bodyType = RigidbodyComponent::EBodyType::Static;
+			physics::BodyType bodyType = physics::BodyType::Static;
             bool  useGravity = true;
             bool  rotateX = true, rotateY = true, rotateZ = true;
             bool  moveX = true, moveY = true, moveZ = true;

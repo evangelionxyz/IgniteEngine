@@ -934,20 +934,9 @@ namespace ignite
         result->handle = handle;
         result->PrepareUploadData(4);
 
-        // Submit GPU upload to main thread with proper synchronization
-        Application::SubmitToRenderThread([texture = result]()
+        Texture::SubmitAsyncUpload(result, [texture = result]()
         {
-            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-            cmd->open();
-            texture->SetData(cmd, 4);
-            texture->SetReadyFlag(false);
-            cmd->close();
-
-            Application::SubmitWorkerCommandList(cmd, [texture]()
-            {
-                texture->SetReadyFlag(true);
-                texture->NotifyChange();
-            });
+            texture->NotifyChange();
         });
 
         return result;

@@ -3,7 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "physics_2d.hpp"
-#include <ignite/scene/scene.hpp>
+#include "ignite/scene/scene.hpp"
 
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/scene_manager.hpp"
@@ -11,14 +11,13 @@
 
 #include "ignite/math/transform.hpp"
 
-namespace ignite
+namespace ignite::physics
 {
-
-    Physics2D::Physics2D()
+    Physics2D::Physics2D(Scene *scene)
+        : m_Scene(scene)
     {
         b2WorldDef worldDef = b2DefaultWorldDef();
         m_WorldId = b2CreateWorld(&worldDef);
-        m_Scene = nullptr;
     }
 
     Physics2D::~Physics2D()
@@ -28,6 +27,11 @@ namespace ignite
 
         m_WorldId = b2_nullWorldId;
         m_Scene = nullptr;
+    }
+
+    void Physics2D::SetScene(Scene *scene)
+    {
+        m_Scene = scene;
     }
 
     void Physics2D::SimulationStart(Scene *scene)

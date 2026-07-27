@@ -40,7 +40,9 @@ namespace ignite
         CompType_Animator2D,
         CompType_PointLight,
         CompType_SpotLight,
-        CompType_LAST
+        CompType_CharacterController,
+
+        CompType_COUNT
     };
 
     class IGN_API IComponent

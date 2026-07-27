@@ -81,8 +81,6 @@ namespace ignite
 
     EditorLayer::~EditorLayer()
     {
-        if (s_Instance == this)
-            s_Instance = nullptr;
     }
 
     void EditorLayer::OnAttach()
@@ -141,6 +139,9 @@ namespace ignite
     void EditorLayer::OnDetach()
     {
         Layer::OnDetach();
+
+		if (s_Instance == this)
+			s_Instance = nullptr;
 
         // Close project
         CloseCurrentProject();
@@ -293,11 +294,13 @@ namespace ignite
                 case ESceneState::Simulate:
                 case ESceneState::Play:
                 {
+                    m_ActiveScene->OnFixedUpdateRuntimeSimulate();
                     m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
                     break;
                 }
                 case ESceneState::Stop:
                 {
+                    m_ActiveScene->OnFixedUpdateEdit();
                     m_ActiveScene->OnUpdateEdit(deltaTime);
                     break;
                 }
@@ -723,6 +726,23 @@ namespace ignite
                 ImGui::EndMenu();
             }
 
+            if (ImGui::BeginMenu("Edit"))
+            {
+                if (ImGui::MenuItem("Enable VSync", nullptr, nullptr, !DeviceManager::GetInstance()->IsVsyncEnabled()))
+                {
+                    DeviceManager::GetInstance()->EnableVsync();
+                }
+				if (ImGui::MenuItem("Disable VSync", nullptr, nullptr, DeviceManager::GetInstance()->IsVsyncEnabled()))
+				{
+					DeviceManager::GetInstance()->DisableVsync();
+				}
+				if (ImGui::MenuItem("Screenshot", nullptr, false, m_ActiveProject != nullptr))
+				{
+					m_State.takeScreenshot = true;
+				}
+                ImGui::EndMenu();
+            }
+
             // VIEW MENU
             if (ImGui::BeginMenu("View"))
             {
@@ -750,11 +770,6 @@ namespace ignite
                 if (ImGui::MenuItem("Asset Registry", nullptr, false, m_ActiveProject != nullptr))
                 {
                     m_State.assetRegistryWindow = true;
-                }
-
-                if (ImGui::MenuItem("Screenshot", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.takeScreenshot = true;
                 }
 
                 ImGui::EndMenu();

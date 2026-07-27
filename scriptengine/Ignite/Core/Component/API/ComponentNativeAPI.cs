@@ -212,6 +212,29 @@ public static class ComponentNativeAPI
         public IntPtr CapsuleColliderComponent_GetHeight;
         public IntPtr CapsuleColliderComponent_SetHeight;
 
+        // CharacterControllerComponent
+        public IntPtr CharacterControllerComponent_GetCenter;
+        public IntPtr CharacterControllerComponent_SetCenter;
+        public IntPtr CharacterControllerComponent_GetRadius;
+        public IntPtr CharacterControllerComponent_SetRadius;
+        public IntPtr CharacterControllerComponent_GetHeight;
+        public IntPtr CharacterControllerComponent_SetHeight;
+        public IntPtr CharacterControllerComponent_GetMaxStepHeight;
+        public IntPtr CharacterControllerComponent_SetMaxStepHeight;
+        public IntPtr CharacterControllerComponent_GetMaxSlopeAngle;
+        public IntPtr CharacterControllerComponent_SetMaxSlopeAngle;
+        public IntPtr CharacterControllerComponent_GetMass;
+        public IntPtr CharacterControllerComponent_SetMass;
+        public IntPtr CharacterControllerComponent_GetFriction;
+        public IntPtr CharacterControllerComponent_SetFriction;
+        public IntPtr CharacterControllerComponent_GetGravityFactor;
+        public IntPtr CharacterControllerComponent_SetGravityFactor;
+        public IntPtr CharacterControllerComponent_GetUp;
+        public IntPtr CharacterControllerComponent_SetUp;
+        public IntPtr CharacterControllerComponent_GetLinearVelocity;
+        public IntPtr CharacterControllerComponent_SetLinearVelocity;
+        public IntPtr CharacterControllerComponent_IsOnGround;
+
         // AnimatorComponent
         public IntPtr AnimatorComponent_SetFloat;
         public IntPtr AnimatorComponent_GetFloat;

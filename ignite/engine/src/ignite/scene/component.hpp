@@ -24,14 +24,16 @@
 #include "ignite/math/transform.hpp"
 #include "scene_camera.hpp"
 #include "ignite/core/string_utils.hpp"
-#include <string>
+#include "ignite/physics/3d/physics_3d.hpp"
 
+#include <string>
 #include <glm/glm.hpp>
 
 // Forward declaration
 namespace JPH
 {
     class Body;
+    class CharacterVirtual;
 }
 
 namespace ignite
@@ -69,6 +71,7 @@ namespace ignite
         { "Animator 2D", CompType_Animator2D },
         { "Point Light", CompType_PointLight },
         { "Spot Light", CompType_SpotLight },
+        { "Character Controller", CompType_CharacterController },
     };
 
     enum EntityType : uint8_t
@@ -185,6 +188,7 @@ namespace ignite
             case CompType_Widget: return "CompType_Widget";
             case CompType_PointLight: return "CompType_PointLight";
             case CompType_SpotLight: return "CompType_SpotLight";
+            case CompType_CharacterController: return "CompType_CharacterController";
             case CompType_Invalid:
             default: return "Invalid Component";
         }
@@ -507,21 +511,8 @@ namespace ignite
     public:
         using CollisionGroup = uint32_t;
 
-        enum class EMotionQuality : uint8_t
-        {
-            Discrete = 0,
-            LinearCast = 1
-        };
-
-        enum class EBodyType : uint8_t
-        {
-            Static = 0,
-            Kinematic = 1,
-            Dynamic = 2,
-        };
-
-        EMotionQuality motionQuality = EMotionQuality::Discrete;
-        EBodyType bodyType = EBodyType::Static;
+        physics::MotionQuality motionQuality = physics::MotionQuality::Discrete;
+        physics::BodyType bodyType = physics::BodyType::Static;
 
         bool useGravity = true;
         bool rotateX = true, rotateY = true, rotateZ = true;
@@ -544,10 +535,68 @@ namespace ignite
         glm::vec3 linearVelocity = { 0.0f, 0.0f, 0.0f };
         glm::vec3 centerMass = { 0.0f, 0.0f, 0.0f };
 
-        JPH::Body *body = nullptr;
+        WeakRef<physics::PhysicsDynamicActor> dynamicActor;
+        WeakRef<physics::PhysicsStaticActor> staticActor;
         bool isGizmoDragging = false;
 
         RigidbodyComponent() = default;
+        RigidbodyComponent(const RigidbodyComponent &other)
+            : motionQuality(other.motionQuality)
+            , bodyType(other.bodyType)
+            , useGravity(other.useGravity)
+            , rotateX(other.rotateX), rotateY(other.rotateY), rotateZ(other.rotateZ)
+            , moveX(other.moveX), moveY(other.moveY), moveZ(other.moveZ)
+            , allowSleeping(other.allowSleeping)
+            , isSensor(other.isSensor)
+            , retainAcceleration(other.retainAcceleration)
+            , applyGyroscopicForce(other.applyGyroscopicForce)
+            , mass(other.mass)
+            , gravityFactor(other.gravityFactor)
+            , linearDamping(other.linearDamping)
+            , angularDamping(other.angularDamping)
+            , friction(other.friction)
+            , restitution(other.restitution)
+            , maxLinearVelocity(other.maxLinearVelocity)
+            , maxAngularVelocity(other.maxAngularVelocity)
+            , angularVelocity(other.angularVelocity)
+            , linearVelocity(other.linearVelocity)
+            , centerMass(other.centerMass)
+            , dynamicActor(other.dynamicActor)
+            , staticActor(other.staticActor)
+            , isGizmoDragging(other.isGizmoDragging)
+        {
+        }
+
+        RigidbodyComponent &operator=(const RigidbodyComponent &other)
+        {
+            if (this != &other)
+            {
+                motionQuality = other.motionQuality;
+                bodyType = other.bodyType;
+                useGravity = other.useGravity;
+                rotateX = other.rotateX; rotateY = other.rotateY; rotateZ = other.rotateZ;
+                moveX = other.moveX; moveY = other.moveY; moveZ = other.moveZ;
+                allowSleeping = other.allowSleeping;
+                isSensor = other.isSensor;
+                retainAcceleration = other.retainAcceleration;
+                applyGyroscopicForce = other.applyGyroscopicForce;
+                mass = other.mass;
+                gravityFactor = other.gravityFactor;
+                linearDamping = other.linearDamping;
+                angularDamping = other.angularDamping;
+                friction = other.friction;
+                restitution = other.restitution;
+                maxLinearVelocity = other.maxLinearVelocity;
+                maxAngularVelocity = other.maxAngularVelocity;
+                angularVelocity = other.angularVelocity;
+                linearVelocity = other.linearVelocity;
+                centerMass = other.centerMass;
+                dynamicActor = other.dynamicActor;
+                staticActor = other.staticActor;
+                isGizmoDragging = other.isGizmoDragging;
+            }
+            return *this;
+        }
 
         COMPONENT_CLASS_TYPE(CompType_Rigidbody)
     };
@@ -556,7 +605,24 @@ namespace ignite
     {
     public:
 		glm::vec3 center = { 0.0f, 0.0f, 0.0f };
-        void *shape = nullptr;
+        WeakRef<physics::PhysicsCollider> collider;
+
+        PhysicsColliderComponent() = default;
+        PhysicsColliderComponent(const PhysicsColliderComponent &other)
+            : center(other.center)
+            , collider(other.collider)
+        {
+        }
+
+        PhysicsColliderComponent &operator=(const PhysicsColliderComponent &other)
+        {
+            if (this != &other)
+            {
+                center = other.center;
+                collider = other.collider;
+            }
+            return *this;
+        }
     };
 
     class BoxColliderComponent : public PhysicsColliderComponent, public IComponent
@@ -598,6 +664,60 @@ namespace ignite
         CapsuleColliderComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_CapsuleCollider)
+    };
+
+    class CharacterControllerComponent : public PhysicsColliderComponent, public IComponent
+    {
+    public:
+        float radius = 0.5f;
+        float height = 2.0f;
+        float maxStepHeight = 0.4f;
+        float maxSlopeAngle = 45.0f; // in degrees
+        float mass = 80.0f;
+        float friction = 0.2f;
+        float gravityFactor = 1.0f;
+
+        glm::vec3 up = { 0.0f, 1.0f, 0.0f };
+        glm::vec3 linearVelocity = { 0.0f, 0.0f, 0.0f };
+
+        WeakRef<physics::PhysicsCharacterController> character;
+
+        CharacterControllerComponent() = default;
+        CharacterControllerComponent(const CharacterControllerComponent &other)
+            : PhysicsColliderComponent(other)
+            , radius(other.radius)
+            , height(other.height)
+            , maxStepHeight(other.maxStepHeight)
+            , maxSlopeAngle(other.maxSlopeAngle)
+            , mass(other.mass)
+            , friction(other.friction)
+            , gravityFactor(other.gravityFactor)
+            , up(other.up)
+            , linearVelocity(other.linearVelocity)
+            , character(other.character)
+        {
+        }
+
+        CharacterControllerComponent &operator=(const CharacterControllerComponent &other)
+        {
+            if (this != &other)
+            {
+                PhysicsColliderComponent::operator=(other);
+                radius = other.radius;
+                height = other.height;
+                maxStepHeight = other.maxStepHeight;
+                maxSlopeAngle = other.maxSlopeAngle;
+                mass = other.mass;
+                friction = other.friction;
+                gravityFactor = other.gravityFactor;
+                up = other.up;
+                linearVelocity = other.linearVelocity;
+                character = other.character;
+            }
+            return *this;
+        }
+
+        COMPONENT_CLASS_TYPE(CompType_CharacterController)
     };
 
     class MeshColliderComponent : public PhysicsColliderComponent, public IComponent
