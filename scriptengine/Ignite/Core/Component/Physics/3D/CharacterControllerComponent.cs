@@ -115,4 +115,38 @@ public sealed class CharacterControllerComponent : IComponent
             return result;
         }
     }
+
+    public Vector3 GroundNormal
+    {
+        get
+        {
+            ComponentInternalCalls.CharacterControllerComponent_GetGroundNormal(Entity!.ID, out Vector3 result);
+            return result;
+        }
+    }
+
+    public Vector3 Position
+    {
+        get
+        {
+            ComponentInternalCalls.CharacterControllerComponent_GetPosition(Entity!.ID, out Vector3 result);
+            return result;
+        }
+        set => ComponentInternalCalls.CharacterControllerComponent_SetPosition(Entity!.ID, value);
+    }
+
+    public Quaternion Rotation
+    {
+        get
+        {
+            ComponentInternalCalls.CharacterControllerComponent_GetRotation(Entity!.ID, out Quaternion result);
+            return result;
+        }
+        set => ComponentInternalCalls.CharacterControllerComponent_SetRotation(Entity!.ID, value);
+    }
+
+    public void Move(Vector3 displacement, float deltaTime = 1.0f / 60.0f)
+    {
+        ComponentInternalCalls.CharacterControllerComponent_Move(Entity!.ID, displacement, deltaTime);
+    }
 }

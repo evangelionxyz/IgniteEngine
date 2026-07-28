@@ -510,22 +510,15 @@ namespace ignite
             return true;
         }
 
-        if (IsReferenceType(*fieldType))
+        if (IsReferenceType(*fieldType) || managedType == mochi::ManagedType::Unknown)
         {
-            void *handle = nullptr;
-            instanceIt->second.GetFieldValueRaw(fieldName, &handle);
-            if (handle == nullptr)
+            // MochiSharp cannot marshal reference types via Marshal.SizeOf in GetFieldValue. Default to 0 (null reference).
+            if (bufferSize >= static_cast<int>(sizeof(uint64_t)))
             {
                 *static_cast<uint64_t *>(buffer) = 0;
+                return true;
             }
-            else
-            {
-                mochi::ManagedObject refObj;
-                refObj.m_Handle = mochi::s_ManagedFunctions.CopyObjectFptr(handle);
-                refObj.m_Type = fieldType;
-                *static_cast<uint64_t *>(buffer) = refObj.GetPropertyValue<uint64_t>("ID");
-            }
-            return true;
+            return false;
         }
 
         instanceIt->second.GetFieldValueRaw(fieldName, buffer);

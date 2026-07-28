@@ -42,24 +42,49 @@ public static partial class Mathf
             W = w;
         }
 
-        public float Length()
-        {
-            return Sqrt(X * X + Y * Y + Z * Z + W * W);
-        }
+        public float Length() => Sqrt(X * X + Y * Y + Z * Z + W * W);
+        public float LengthSquared() => X * X + Y * Y + Z * Z + W * W;
+
+        public float Magnitude() => Length();
+        public float SqrMagnitude() => LengthSquared();
+
+        public float magnitude => Length();
+        public float sqrMagnitude => LengthSquared();
+        public float length => Length();
+        public float lengthSquared => LengthSquared();
 
         public Vector4 Normalized()
         {
-            float length = Length();
-            if (length > 0.0f)
+            float len = Length();
+            if (len > 0.0f)
             {
-                return new Vector4(X / length, Y / length, Z / length, W / length);
+                return new Vector4(X / len, Y / len, Z / len, W / len);
             }
             return Zero;
+        }
+
+        public Vector4 normalized => Normalized();
+
+        public void Normalize()
+        {
+            float len = Length();
+            if (len > 0.0f)
+            {
+                X /= len;
+                Y /= len;
+                Z /= len;
+                W /= len;
+            }
+            else
+            {
+                X = Y = Z = W = 0.0f;
+            }
         }
 
         public static float Dot(Vector4 a, Vector4 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z + a.W * b.W;
 
         public static float Distance(Vector4 a, Vector4 b) => (a - b).Length();
+        public static float DistanceSquared(Vector4 a, Vector4 b) => (a - b).LengthSquared();
 
         public static Vector4 Lerp(Vector4 a, Vector4 b, float t)
         {

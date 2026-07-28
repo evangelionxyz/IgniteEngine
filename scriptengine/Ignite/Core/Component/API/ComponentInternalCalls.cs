@@ -10,7 +10,6 @@ public static class ComponentInternalCalls
     private static bool s_Initialized;
     private static ComponentNativeAPI.Funcs.SceneGetScreenToWorldRayFn? s_SceneGetScreenToWorldRay;
     private static ComponentNativeAPI.Funcs.SceneRaycastFn? s_SceneRaycast;
-    private static ComponentNativeAPI.Funcs.ScenePhysicsRaycastFn? s_ScenePhysicsRaycast;
     private static ComponentNativeAPI.Funcs.SceneGetPrimaryCameraFn? s_SceneGetPrimaryCamera;
     private static ComponentNativeAPI.Funcs.EntityHasComponentFn? s_EntityHasComponent;
     private static ComponentNativeAPI.Funcs.EntityAddComponentFn? s_EntityAddComponent;
@@ -229,6 +228,12 @@ public static class ComponentInternalCalls
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetLinearVelocity;
     private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_CharacterControllerSetLinearVelocity;
     private static CoreNativeAPI.Funcs.GetBoolFn? s_CharacterControllerIsOnGround;
+    private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetGroundNormal;
+    private static ComponentNativeAPI.Funcs.CharacterControllerMoveFn? s_CharacterControllerMove;
+    private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetPosition;
+    private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_CharacterControllerSetPosition;
+    private static ComponentNativeAPI.Funcs.GetQuaternionVoidFn? s_CharacterControllerGetRotation;
+    private static ComponentNativeAPI.Funcs.SetQuaternionVoidFn? s_CharacterControllerSetRotation;
 
     // AnimatorComponent
     private static ComponentNativeAPI.Funcs.AnimatorSetFloatFn? s_AnimatorSetFloat;
@@ -250,7 +255,6 @@ public static class ComponentInternalCalls
         ComponentNativeAPI.API api = Marshal.PtrToStructure<ComponentNativeAPI.API>((IntPtr)apiPtr);
         s_SceneGetScreenToWorldRay = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SceneGetScreenToWorldRayFn>(api.Scene_GetScreenToWorldRay);
         s_SceneRaycast = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SceneRaycastFn>(api.Scene_Raycast);
-        s_ScenePhysicsRaycast = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.ScenePhysicsRaycastFn>(api.Scene_PhysicsRaycast);
         s_SceneGetPrimaryCamera = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SceneGetPrimaryCameraFn>(api.Scene_GetPrimaryCamera);
         s_EntityHasComponent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityHasComponentFn>(api.Entity_HasComponent);
         s_EntityAddComponent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityAddComponentFn>(api.Entity_AddComponent);
@@ -470,6 +474,12 @@ public static class ComponentInternalCalls
         s_CharacterControllerGetLinearVelocity = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetLinearVelocity);
         s_CharacterControllerSetLinearVelocity = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.CharacterControllerComponent_SetLinearVelocity);
         s_CharacterControllerIsOnGround = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.CharacterControllerComponent_IsOnGround);
+        s_CharacterControllerGetGroundNormal = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetGroundNormal);
+        s_CharacterControllerMove = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.CharacterControllerMoveFn>(api.CharacterControllerComponent_Move);
+        s_CharacterControllerGetPosition = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetPosition);
+        s_CharacterControllerSetPosition = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.CharacterControllerComponent_SetPosition);
+        s_CharacterControllerGetRotation = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetQuaternionVoidFn>(api.CharacterControllerComponent_GetRotation);
+        s_CharacterControllerSetRotation = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetQuaternionVoidFn>(api.CharacterControllerComponent_SetRotation);
 
         // AnimatorComponent
         s_AnimatorSetFloat = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorSetFloatFn>(api.AnimatorComponent_SetFloat);
@@ -589,23 +599,15 @@ public static class ComponentInternalCalls
         outDirection = NativeObject.ToManaged(dir);
     }
 
-    internal static ulong Scene_Raycast(Mathf.Vector3 origin, Mathf.Vector3 direction)
-    {
-        EnsureInitialized();
-        NativeObject.Vector3 nOrigin = NativeObject.ToNative(origin);
-        NativeObject.Vector3 nDirection = NativeObject.ToNative(direction);
-        return s_SceneRaycast!(ref nOrigin, ref nDirection);
-    }
-
-    internal static unsafe ulong Scene_PhysicsRaycast(Mathf.Vector3 origin, Mathf.Vector3 direction, float maxDistance,
-                                                        out Mathf.Vector3 hitPoint, out Mathf.Vector3 hitNormal)
+    internal static unsafe ulong Scene_Raycast(Mathf.Vector3 origin, Mathf.Vector3 direction, float maxDistance,
+                                               out Mathf.Vector3 hitPoint, out Mathf.Vector3 hitNormal)
     {
         EnsureInitialized();
         NativeObject.Vector3 nOrigin = NativeObject.ToNative(origin);
         NativeObject.Vector3 nDirection = NativeObject.ToNative(direction);
         NativeObject.Vector3 nHitPoint  = default;
         NativeObject.Vector3 nHitNormal = default;
-        ulong id = s_ScenePhysicsRaycast!(
+        ulong id = s_SceneRaycast!(
             ref nOrigin, ref nDirection,
             maxDistance, &nHitPoint, &nHitNormal);
         hitPoint  = NativeObject.ToManaged(nHitPoint);
@@ -1940,6 +1942,48 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         s_CharacterControllerIsOnGround!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_GetGroundNormal(ulong entityID, out Mathf.Vector3 result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetGroundNormal!(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
+    }
+
+    internal static void CharacterControllerComponent_Move(ulong entityID, Mathf.Vector3 displacement, float deltaTime)
+    {
+        EnsureInitialized();
+        var d = NativeObject.ToNative(displacement);
+        s_CharacterControllerMove!(entityID, ref d, deltaTime);
+    }
+
+    internal static void CharacterControllerComponent_GetPosition(ulong entityID, out Mathf.Vector3 result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetPosition!(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
+    }
+
+    internal static void CharacterControllerComponent_SetPosition(ulong entityID, Mathf.Vector3 position)
+    {
+        EnsureInitialized();
+        var p = NativeObject.ToNative(position);
+        s_CharacterControllerSetPosition!(entityID, ref p);
+    }
+
+    internal static void CharacterControllerComponent_GetRotation(ulong entityID, out Mathf.Quaternion result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerGetRotation!(entityID, out NativeObject.Quaternion native);
+        result = NativeObject.ToManaged(native);
+    }
+
+    internal static void CharacterControllerComponent_SetRotation(ulong entityID, Mathf.Quaternion rotation)
+    {
+        EnsureInitialized();
+        var r = NativeObject.ToNative(rotation);
+        s_CharacterControllerSetRotation!(entityID, ref r);
     }
 
     internal static void RigidbodyComponent_SetMass(ulong entityID, float value)

@@ -11,8 +11,7 @@ namespace ignite
     struct ComponentScriptGlueAPI
     {
         void (*Scene_GetScreenToWorldRay)(float x, float y, glm::vec3 *outOrigin, glm::vec3 *outDirection);
-        uint64_t (*Scene_Raycast)(const glm::vec3 *origin, const glm::vec3 *direction);
-        uint64_t (*Scene_PhysicsRaycast)(const glm::vec3 *origin, const glm::vec3 *direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal);
+        uint64_t (*Scene_Raycast)(const glm::vec3 *origin, const glm::vec3 *direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal);
         uint64_t (*Scene_GetPrimaryCamera)();
 
         bool (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
@@ -240,6 +239,12 @@ namespace ignite
         void (*CharacterControllerComponent_GetLinearVelocity)(uint64_t entityID, glm::vec3 *result);
         void (*CharacterControllerComponent_SetLinearVelocity)(uint64_t entityID, const glm::vec3 *value);
         void (*CharacterControllerComponent_IsOnGround)(uint64_t entityID, bool *result);
+        void (*CharacterControllerComponent_GetGroundNormal)(uint64_t entityID, glm::vec3 *result);
+        void (*CharacterControllerComponent_Move)(uint64_t entityID, const glm::vec3 *displacement, float deltaTime);
+        void (*CharacterControllerComponent_GetPosition)(uint64_t entityID, glm::vec3 *result);
+        void (*CharacterControllerComponent_SetPosition)(uint64_t entityID, const glm::vec3 *position);
+        void (*CharacterControllerComponent_GetRotation)(uint64_t entityID, glm::quat *result);
+        void (*CharacterControllerComponent_SetRotation)(uint64_t entityID, const glm::quat *rotation);
 
         // AnimatorComponent (SkeletalMeshComponent / AnimatorController)
         void (*AnimatorComponent_SetFloat)(uint64_t entityID, const char *paramName, float value);

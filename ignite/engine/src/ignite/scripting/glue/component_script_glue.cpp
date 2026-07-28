@@ -78,95 +78,10 @@ namespace ignite
             if (outDirection) *outDirection = rayDir;
         }
 
-        static uint64_t Scene_Raycast(const glm::vec3 *origin, const glm::vec3 *direction)
+        static uint64_t Scene_Raycast(const glm::vec3 *origin, const glm::vec3 *direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal)
         {
-            Scene *scene = GetSceneContext();
-            if (!scene || !origin || !direction)
-                return 0;
-
-            float minDistance = std::numeric_limits<float>::max();
-            uint64_t resultID = 0;
-
-            // --- 3D Meshes ---
-            auto meshView = scene->registry->view<SkeletalMeshComponent, TransformComponent>();
-            for (entt::entity e : meshView)
-            {
-				const auto &[tr, smc] = scene->registry->get<TransformComponent, SkeletalMeshComponent>(e);
-                
-                if (!tr.visible || smc.handle == AssetHandle(0))
-                    continue;
-
-				auto mesh = AssetManager::GetInstance()->GetAsset<SkeletalMesh>(smc.handle);
-				if (!mesh)
-					continue;
-
-                float t;
-                if (smc.worldAABB.IntersectRay(*origin, *direction, t))
-                {
-                    if (t < minDistance)
-                    {
-                        minDistance = t;
-                        resultID = (uint64_t)Entity{ e, scene }.GetUUID();
-                    }
-                }
-            }
-
-            // Helper for quad intersection (2D components)
-            auto CheckQuad = [&](Entity entity, glm::vec2 size)
-            {
-                auto &transform = entity.GetComponent<TransformComponent>();
-                if (!transform.visible) return;
-
-                glm::vec3 pos = transform.world.translation;
-                glm::quat rot = transform.world.rotation;
-                glm::vec3 scale = transform.world.scale;
-                
-                glm::vec3 halfSize = glm::vec3(size.x * 0.5f, size.y * 0.5f, 0.0f) * scale;
-
-                glm::vec3 v0 = pos + rot * glm::vec3(-halfSize.x, -halfSize.y, 0.0f);
-                glm::vec3 v1 = pos + rot * glm::vec3( halfSize.x, -halfSize.y, 0.0f);
-                glm::vec3 v2 = pos + rot * glm::vec3( halfSize.x,  halfSize.y, 0.0f);
-                glm::vec3 v3 = pos + rot * glm::vec3(-halfSize.x,  halfSize.y, 0.0f);
-
-                float t;
-                if (Math::RayQuadIntersection(physics::Ray{*origin, *direction}, v0, v1, v2, v3, t))
-                {
-                    if (t < minDistance)
-                    {
-                        minDistance = t;
-                        resultID = (uint64_t)entity.GetUUID();
-                    }
-                }
-            };
-
-            auto spriteView = scene->registry->view<Sprite2DComponent, TransformComponent>();
-            for (auto entityID : spriteView)
-            {
-                CheckQuad(Entity(entityID, scene), { 1.0f, 1.0f });
-            }
-
-            auto circleView = scene->registry->view<Circle2DComponent, TransformComponent>();
-            for (auto entityID : circleView)
-            {
-                CheckQuad(Entity(entityID, scene), { 1.0f, 1.0f });
-            }
-
-            auto textView = scene->registry->view<TextComponent, TransformComponent>();
-            for (auto entityID : textView)
-            {
-                CheckQuad(Entity(entityID, scene), { 1.0f, 1.0f });
-            }
-
-            return resultID;
-        }
-
-        // Physics (Jolt narrow-phase) raycast - returns first solid-body hit
-        // outHitEntityID: UUID of the hit entity (0 if none)
-        // outHitPoint, outHitNormal: world-space hit info
-        static uint64_t Scene_PhysicsRaycast(const glm::vec3 *origin, const glm::vec3 *direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal)
-        {
-            if (outHitPoint) *outHitPoint = glm::vec3(0.f);
-            if (outHitNormal) *outHitNormal = glm::vec3(0.f, 1.f, 0.f);
+            if (outHitPoint) *outHitPoint = glm::vec3(0.0f);
+            if (outHitNormal) *outHitNormal = glm::vec3(0.0f, 1.0f, 0.0f);
 
             Scene *scene = GetSceneContext();
             if (!scene || !scene->GetPhysics3D() || !origin || !direction)
@@ -3446,6 +3361,91 @@ namespace ignite
             }
         }
 
+        static void CharacterControllerComponent_GetGroundNormal(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f, 1.0f, 0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    *result = charCtrl->GetGroundNormal();
+            }
+        }
+
+        static void CharacterControllerComponent_Move(uint64_t entityID, const glm::vec3 *displacement, float deltaTime)
+        {
+            if (!displacement) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    charCtrl->Move(*displacement, deltaTime);
+            }
+        }
+
+        static void CharacterControllerComponent_GetPosition(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    *result = charCtrl->GetPosition();
+                else
+                    *result = entity.GetTransform().world.translation;
+            }
+        }
+
+        static void CharacterControllerComponent_SetPosition(uint64_t entityID, const glm::vec3 *position)
+        {
+            if (!position) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    charCtrl->SetPosition(*position);
+                entity.GetTransform().world.translation = *position;
+                entity.GetTransform().local.translation = *position;
+                entity.GetTransform().dirty = true;
+            }
+        }
+
+        static void CharacterControllerComponent_GetRotation(uint64_t entityID, glm::quat *result)
+        {
+            if (!result) return;
+            *result = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    *result = charCtrl->GetRotation();
+                else
+                    *result = entity.GetTransform().world.rotation;
+            }
+        }
+
+        static void CharacterControllerComponent_SetRotation(uint64_t entityID, const glm::quat *rotation)
+        {
+            if (!rotation) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    charCtrl->SetRotation(*rotation);
+                entity.GetTransform().world.rotation = *rotation;
+                entity.GetTransform().local.rotation = *rotation;
+                entity.GetTransform().dirty = true;
+            }
+        }
+
         static void AnimatorComponent_SetFloat(uint64_t entityID, const char *paramName, float value)
         {
             if (!paramName)
@@ -3730,7 +3730,6 @@ namespace ignite
         {
             &Scene_GetScreenToWorldRay,
             &Scene_Raycast,
-            &Scene_PhysicsRaycast,
             &Scene_GetPrimaryCamera,
             &Entity_HasComponent,
             &Entity_AddComponent,
@@ -3949,6 +3948,12 @@ namespace ignite
             &CharacterControllerComponent_GetLinearVelocity,
             &CharacterControllerComponent_SetLinearVelocity,
             &CharacterControllerComponent_IsOnGround,
+            &CharacterControllerComponent_GetGroundNormal,
+            &CharacterControllerComponent_Move,
+            &CharacterControllerComponent_GetPosition,
+            &CharacterControllerComponent_SetPosition,
+            &CharacterControllerComponent_GetRotation,
+            &CharacterControllerComponent_SetRotation,
 
             &AnimatorComponent_SetFloat,
             &AnimatorComponent_GetFloat,

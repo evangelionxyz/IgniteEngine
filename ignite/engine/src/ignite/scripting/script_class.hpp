@@ -35,6 +35,9 @@ namespace ignite
         std::unordered_map<std::string, ScriptField> &GetFields() { return m_Fields; }
         const std::vector<std::string>& GetOrderedFieldNames() const { return m_OrderedFieldNames; }
 
+        std::unordered_map<std::string, ScriptInstanceField> &GetDefaultFields() { return m_DefaultFields; }
+        const std::unordered_map<std::string, ScriptInstanceField> &GetDefaultFields() const { return m_DefaultFields; }
+
         // Script instance fields
         void InsertInstanceFields(uint64_t instanceId, const std::unordered_map<std::string, ScriptInstanceField> &instanceField);
         std::unordered_map<std::string, ScriptInstanceField> *GetInstanceFieldsById(uint64_t instanceId);
@@ -49,6 +52,7 @@ namespace ignite
 
         // Class fields
         std::unordered_map<std::string, ScriptField> m_Fields;
+        std::unordered_map<std::string, ScriptInstanceField> m_DefaultFields;
         std::vector<std::string> m_OrderedFieldNames;
 
         // Script instance fields

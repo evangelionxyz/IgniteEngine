@@ -803,6 +803,25 @@ namespace ignite
                     }
                 }
 
+                // Capture C# initial default values for all fields in scriptClass
+                uint64_t tempId = 0xFFFFFFFFFFFFFFFFULL;
+                if (scriptEngineData->scriptHost && scriptEngineData->scriptHost->CreateInstance(tempId, fullName))
+                {
+                    auto &defaultFields = scriptClass->GetDefaultFields();
+                    for (const auto &[fieldName, fieldDef] : scriptClass->GetFields())
+                    {
+                        ScriptInstanceField defaultField;
+                        defaultField.field = fieldDef;
+                        char buffer[64] = { 0 };
+                        if (scriptEngineData->scriptHost->GetInstanceFieldValue(tempId, fieldName, buffer, sizeof(buffer)))
+                        {
+                            defaultField.SetValueRaw(buffer, sizeof(buffer));
+                        }
+                        defaultFields[fieldName] = defaultField;
+                    }
+                    scriptEngineData->scriptHost->DestroyInstance(tempId);
+                }
+
                 // Store the class
                 outClasses[fullName] = scriptClass;
             }
@@ -846,6 +865,28 @@ namespace ignite
 
             // Re-push the stored C++ fields into the new managed instance
             ScriptInstance::PopulateSOFields(scriptEngineData->scriptHost.get(), id, *so);
+
+            // Synchronize any new script fields from C# into the C++ ScriptableObject
+            Ref<ScriptClass> scriptClass = GetScriptableObjectClassByName(so->GetClassName());
+            if (scriptClass)
+            {
+                auto &soFields = so->GetFields();
+                for (const auto &[fieldName, fieldDef] : scriptClass->GetFields())
+                {
+                    if (!soFields.contains(fieldName))
+                    {
+                        ScriptInstanceField newField;
+                        newField.field = fieldDef;
+                        char buffer[64] = { 0 };
+                        if (scriptEngineData->scriptHost->GetInstanceFieldValue(id, fieldName, buffer, sizeof(buffer)))
+                        {
+                            newField.SetValueRaw(buffer, sizeof(buffer));
+                        }
+                        soFields[fieldName] = newField;
+                    }
+                }
+            }
+
             LOG_TRACE("[Script Engine] Refreshed ScriptableObject '{}' (handle={})",
                 so->GetClassName(), id);
         }

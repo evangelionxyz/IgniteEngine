@@ -170,3 +170,40 @@ TEST(CharacterController, ScaledPhysicsLifecycle)
     scene->OnStop();
     EXPECT_TRUE(cc.character.expired());
 }
+
+TEST(CharacterController, PhysicsMethodsAndMovement)
+{
+    Ref<Project> project = CreateTestProject("CCMethodsProject");
+    ASSERT_NE(project, nullptr);
+
+    Ref<Scene> scene = CreateRef<Scene>(project.get());
+    Entity entity = SceneManager::CreateEntity(scene.get(), "MovementCharacter", EntityType_Node);
+    auto &cc = entity.AddComponent<CharacterControllerComponent>();
+    cc.radius = 0.5f;
+    cc.height = 2.0f;
+    cc.center = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    scene->OnStart(ESceneState::Play);
+    auto charActor = cc.character.lock();
+    ASSERT_NE(charActor, nullptr);
+
+    // Test initial position & GroundNormal default
+    charActor->SetPosition(glm::vec3(1.0f, 5.0f, 2.0f));
+    EXPECT_NEAR(charActor->GetPosition().x, 1.0f, 1e-4f);
+    EXPECT_NEAR(charActor->GetPosition().y, 5.0f, 1e-4f);
+    EXPECT_NEAR(charActor->GetPosition().z, 2.0f, 1e-4f);
+
+    glm::vec3 normal = charActor->GetGroundNormal();
+    EXPECT_FLOAT_EQ(normal.y, 0.0f);
+
+    // Test rotation
+    glm::quat rot = glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    charActor->SetRotation(rot);
+    EXPECT_NEAR(charActor->GetRotation().w, rot.w, 1e-4f);
+
+    // Test movement
+    charActor->Move(glm::vec3(2.0f, 0.0f, 0.0f), 1.0f / 60.0f);
+    EXPECT_FALSE(cc.character.expired());
+
+    scene->OnStop();
+}

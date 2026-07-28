@@ -65,29 +65,9 @@ public static class Physics
         return new Ray(origin, direction);
     }
 
-    /// <summary>
-    /// Broad-phase raycast against mesh AABBs and 2D quads.
-    /// Fast but imprecise — use <see cref="PhysicsRaycast"/> for solid-body collisions.
-    /// </summary>
-    public static Entity? Raycast(Ray ray)
+    public static bool Raycast(Ray ray, float maxDistance, out RaycastHit hit)
     {
-        ulong entityID = ComponentInternalCalls.Scene_Raycast(ray.Origin, ray.Direction);
-        if (entityID == 0)
-            return null;
-        return new Entity(entityID);
-    }
-
-    /// <summary>
-    /// Narrow-phase raycast using Jolt physics. Only hits entities with a Rigidbody
-    /// and collider component. Returns rich hit information.
-    /// </summary>
-    /// <param name="ray">The ray to cast.</param>
-    /// <param name="maxDistance">Maximum ray length in world units.</param>
-    /// <param name="hit">Populated with hit entity, point and normal on success.</param>
-    /// <returns>True if anything was hit.</returns>
-    public static bool PhysicsRaycast(Ray ray, float maxDistance, out RaycastHit hit)
-    {
-        ulong entityID = ComponentInternalCalls.Scene_PhysicsRaycast(
+        ulong entityID = ComponentInternalCalls.Scene_Raycast(
             ray.Origin, ray.Direction, maxDistance,
             out Mathf.Vector3 hitPoint, out Mathf.Vector3 hitNormal);
 
@@ -106,22 +86,16 @@ public static class Physics
         return true;
     }
 
-    /// <summary>
-    /// Narrow-phase raycast using Jolt physics. Simple overload that only returns the hit entity.
-    /// </summary>
-    public static Entity? PhysicsRaycast(Ray ray, float maxDistance = 1000f)
+    public static bool Raycast(Ray ray, out RaycastHit hit, float maxDistance = 1000f)
     {
-        ulong entityID = ComponentInternalCalls.Scene_PhysicsRaycast(
+        return Raycast(ray, maxDistance, out hit);
+    }
+
+    public static Entity? Raycast(Ray ray, float maxDistance = 1000f)
+    {
+        ulong entityID = ComponentInternalCalls.Scene_Raycast(
             ray.Origin, ray.Direction, maxDistance,
             out _, out _);
         return entityID != 0 ? new Entity(entityID) : null;
-    }
-
-    /// <summary>
-    /// Unity-style narrow-phase raycast using Jolt physics.
-    /// </summary>
-    public static bool Raycast(Ray ray, out RaycastHit hit, float maxDistance = 1000f)
-    {
-        return PhysicsRaycast(ray, maxDistance, out hit);
     }
 }

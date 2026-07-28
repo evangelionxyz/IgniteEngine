@@ -1206,21 +1206,16 @@ namespace ignite
                         {
                             if (auto name = fieldNode["Name"])
                             {
-                                for (auto it = fieldsNode.begin(); it != fieldsNode.end(); ++it)
+                                std::string fieldName = name.as<std::string>();
+                                if (classFields.contains(fieldName))
                                 {
-                                    std::string fieldName = name.as<std::string>();
-                                    if (classFields.contains(fieldName))
-                                    {
-                                        const ScriptField &fieldDef = classFields.at(fieldName);
-                                        ScriptInstanceField instanceField;
-                                        DeserializeScriptFieldValue(fieldNode, fieldName, fieldDef, instanceField);
-                                        instanceFields[fieldName] = instanceField;
-                                    }
+                                    const ScriptField &fieldDef = classFields.at(fieldName);
+                                    ScriptInstanceField instanceField;
+                                    DeserializeScriptFieldValue(fieldNode, fieldName, fieldDef, instanceField);
+                                    instanceFields[fieldName] = instanceField;
                                 }
                             }
                         }
-                        
-
                         scriptClass->InsertInstanceFields(desEntity.GetUUID(), instanceFields);
                     }
                 }

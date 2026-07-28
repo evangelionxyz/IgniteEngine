@@ -10,7 +10,6 @@ public static class ComponentNativeAPI
     {
         public IntPtr Scene_GetScreenToWorldRay;
         public IntPtr Scene_Raycast;
-        public IntPtr Scene_PhysicsRaycast;
         public IntPtr Scene_GetPrimaryCamera;
         public IntPtr Entity_HasComponent;
         public IntPtr Entity_AddComponent;
@@ -234,6 +233,12 @@ public static class ComponentNativeAPI
         public IntPtr CharacterControllerComponent_GetLinearVelocity;
         public IntPtr CharacterControllerComponent_SetLinearVelocity;
         public IntPtr CharacterControllerComponent_IsOnGround;
+        public IntPtr CharacterControllerComponent_GetGroundNormal;
+        public IntPtr CharacterControllerComponent_Move;
+        public IntPtr CharacterControllerComponent_GetPosition;
+        public IntPtr CharacterControllerComponent_SetPosition;
+        public IntPtr CharacterControllerComponent_GetRotation;
+        public IntPtr CharacterControllerComponent_SetRotation;
 
         // AnimatorComponent
         public IntPtr AnimatorComponent_SetFloat;
@@ -256,10 +261,7 @@ public static class ComponentNativeAPI
         public delegate void SceneGetScreenToWorldRayFn(float x, float y, out NativeObject.Vector3 outOrigin, out NativeObject.Vector3 outDirection);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong SceneRaycastFn(ref NativeObject.Vector3 origin, ref NativeObject.Vector3 direction);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public unsafe delegate ulong ScenePhysicsRaycastFn(ref NativeObject.Vector3 origin, ref NativeObject.Vector3 direction, float maxDistance, NativeObject.Vector3* outHitPoint, NativeObject.Vector3* outHitNormal);
+        public unsafe delegate ulong SceneRaycastFn(ref NativeObject.Vector3 origin, ref NativeObject.Vector3 direction, float maxDistance, NativeObject.Vector3* outHitPoint, NativeObject.Vector3* outHitNormal);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate ulong SceneGetPrimaryCameraFn();
@@ -426,6 +428,9 @@ public static class ComponentNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void RigidbodyMoveKinematicFn(ulong entityID, ref NativeObject.Vector3 targetPosition, ref NativeObject.Vector3 targetRotation, float deltaTime);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void CharacterControllerMoveFn(ulong entityID, ref NativeObject.Vector3 displacement, float deltaTime);
 
         // AnimatorComponent delegates
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

@@ -34,24 +34,58 @@ public static partial class Mathf
 
         public static Vector2 Zero => new Vector2(0.0f);
 
-        public float Length()
-        {
-            return Sqrt(X * X + Y * Y);
-        }
+        public float Length() => Sqrt(X * X + Y * Y);
+        public float LengthSquared() => X * X + Y * Y;
+
+        public float Magnitude() => Length();
+        public float SqrMagnitude() => LengthSquared();
+
+        public float magnitude => Length();
+        public float sqrMagnitude => LengthSquared();
+        public float length => Length();
+        public float lengthSquared => LengthSquared();
 
         public Vector2 Normalized()
         {
-            float length = Length();
-            if (length > 0.0f)
+            float len = Length();
+            if (len > 0.0f)
             {
-                return new Vector2(X / length, Y / length);
+                return new Vector2(X / len, Y / len);
             }
             return Zero;
+        }
+
+        public Vector2 normalized => Normalized();
+
+        public void Normalize()
+        {
+            float len = Length();
+            if (len > 0.0f)
+            {
+                X /= len;
+                Y /= len;
+            }
+            else
+            {
+                X = Y = 0.0f;
+            }
         }
 
         public static float Dot(Vector2 a, Vector2 b) => a.X * b.X + a.Y * b.Y;
 
         public static float Distance(Vector2 a, Vector2 b) => (a - b).Length();
+        public static float DistanceSquared(Vector2 a, Vector2 b) => (a - b).LengthSquared();
+
+        public static Vector2 ClampMagnitude(Vector2 vector, float maxLength)
+        {
+            float sqrLen = vector.LengthSquared();
+            if (sqrLen > maxLength * maxLength)
+            {
+                float len = Sqrt(sqrLen);
+                return new Vector2(vector.X / len * maxLength, vector.Y / len * maxLength);
+            }
+            return vector;
+        }
 
         public static Vector2 Lerp(Vector2 a, Vector2 b, float t)
         {

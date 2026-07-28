@@ -2201,6 +2201,18 @@ namespace ignite
                                 {
                                     dummy = it->second;
                                 }
+                                else if (scriptClass->GetDefaultFields().contains(name))
+                                {
+                                    dummy = scriptClass->GetDefaultFields().at(name);
+                                }
+                                else if (scriptEngine->GetScriptHost())
+                                {
+                                    char buffer[64] = { 0 };
+                                    if (scriptEngine->GetScriptHost()->GetInstanceFieldValue(instanceId, name, buffer, sizeof(buffer)))
+                                    {
+                                        dummy.SetValueRaw(buffer, sizeof(buffer));
+                                    }
+                                }
 
                                 switch (field.Type)
                                 {

@@ -55,19 +55,42 @@ public static partial class Mathf
 
         public static Vector3 Zero => new Vector3(0.0f);
 
+        public float Length() => Sqrt(X * X + Y * Y + Z * Z);
+        public float LengthSquared() => X * X + Y * Y + Z * Z;
+
+        public float Magnitude() => Length();
+        public float SqrMagnitude() => LengthSquared();
+
+        public float magnitude => Length();
+        public float sqrMagnitude => LengthSquared();
+        public float length => Length();
+        public float lengthSquared => LengthSquared();
+
         public Vector3 Normalized()
         {
-            float length = Length();
-            if (length > 0.0f)
+            float len = Length();
+            if (len > 0.0f)
             {
-                return new Vector3(X / length, Y / length, Z / length);
+                return new Vector3(X / len, Y / len, Z / len);
             }
             return Zero;
         }
 
-        public float Length()
+        public Vector3 normalized => Normalized();
+
+        public void Normalize()
         {
-            return Sqrt(X * X + Y * Y + Z * Z);
+            float len = Length();
+            if (len > 0.0f)
+            {
+                X /= len;
+                Y /= len;
+                Z /= len;
+            }
+            else
+            {
+                X = Y = Z = 0.0f;
+            }
         }
 
         public static float Dot(Vector3 a, Vector3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
@@ -82,6 +105,18 @@ public static partial class Mathf
         }
 
         public static float Distance(Vector3 a, Vector3 b) => (a - b).Length();
+        public static float DistanceSquared(Vector3 a, Vector3 b) => (a - b).LengthSquared();
+
+        public static Vector3 ClampMagnitude(Vector3 vector, float maxLength)
+        {
+            float sqrLen = vector.LengthSquared();
+            if (sqrLen > maxLength * maxLength)
+            {
+                float len = Sqrt(sqrLen);
+                return new Vector3(vector.X / len * maxLength, vector.Y / len * maxLength, vector.Z / len * maxLength);
+            }
+            return vector;
+        }
 
         public static Vector3 Lerp(Vector3 a, Vector3 b, float t)
         {

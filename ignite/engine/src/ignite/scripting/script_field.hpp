@@ -218,11 +218,22 @@ namespace ignite
             m_Buffer[copyLen] = '\0';
         }
 
+        void SetValueRaw(const void *buffer, size_t size)
+        {
+            memset(m_Buffer, 0, sizeof(m_Buffer));
+            if (buffer && size > 0)
+                memcpy(m_Buffer, buffer, std::min(size, sizeof(m_Buffer)));
+        }
+
+        const void *GetBufferRaw() const { return m_Buffer; }
+        void *GetBufferRaw() { return m_Buffer; }
+
     private:
         char m_Buffer[64];
 
         friend class ScriptEngine;
         friend class ScriptInstance;
+        friend class ScriptableObject;
     };
 }
 

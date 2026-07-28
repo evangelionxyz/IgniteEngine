@@ -4,6 +4,9 @@
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/Shape/SubShapeID.h>
 
 namespace ignite::physics
 {
@@ -79,6 +82,26 @@ namespace ignite::physics
 
 	bool JoltMeshCollider::CastRay(const Ray &ray, RaycastHit &out, float maxDistance)
 	{
+		if (!m_Shape)
+			return false;
+
+		JPH::RayCast rayCast(
+			JPH::Vec3(ray.origin.x, ray.origin.y, ray.origin.z),
+			JPH::Vec3(ray.direction.x * maxDistance, ray.direction.y * maxDistance, ray.direction.z * maxDistance)
+		);
+
+		JPH::SubShapeIDCreator subShapeIDCreator;
+		JPH::RayCastResult hit;
+		if (m_Shape->CastRay(rayCast, subShapeIDCreator, hit))
+		{
+			out.fraction = hit.mFraction;
+			JPH::Vec3 hitPos = rayCast.GetPointOnRay(hit.mFraction);
+			out.hitPoint = glm::vec3(hitPos.GetX(), hitPos.GetY(), hitPos.GetZ());
+			JPH::Vec3 normal = m_Shape->GetSurfaceNormal(hit.mSubShapeID2, hitPos);
+			out.hitNormal = glm::vec3(normal.GetX(), normal.GetY(), normal.GetZ());
+			return true;
+		}
+
 		return false;
 	}
 }

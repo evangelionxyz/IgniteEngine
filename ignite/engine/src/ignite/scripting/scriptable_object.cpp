@@ -204,9 +204,17 @@ namespace ignite
                     }
                     else
                     {
-                        // Write a default value
+                        // Check if live managed instance has this field value
                         ScriptInstanceField defaultField;
                         defaultField.field = fieldDef;
+                        if (engine && engine->GetScriptHost() && handle != AssetHandle(0))
+                        {
+                            char buffer[64] = { 0 };
+                            if (engine->GetScriptHost()->GetInstanceFieldValue(static_cast<uint64_t>(handle), fieldName, buffer, sizeof(buffer)))
+                            {
+                                defaultField.SetValueRaw(buffer, sizeof(buffer));
+                            }
+                        }
                         SerializeFieldValue(sr, fieldName, fieldDef, defaultField);
                     }
                 }
