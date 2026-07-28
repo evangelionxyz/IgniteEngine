@@ -113,16 +113,6 @@ float4 main(VSOutput input) : SV_Target
 
     float depth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
     
-    // Check if there is a transparent object on far plane
-    uint2 texDims;
-    objectIDTexture.GetDimensions(texDims.x, texDims.y);
-    int2 pixelCoords = clamp(int2(input.uv * texDims), int2(0, 0), int2(texDims.x - 1, texDims.y - 1));
-    uint objID = objectIDTexture.Load(int3(pixelCoords, 0));
-    if (objID != 0xFFFFFFFFu && depth >= 0.999f)
-    {
-        depth = 0.0f; // Disable fog for transparent object in empty sky
-    }
-    
     // Convert depth to view space distance
     float4 clipSpace = float4(input.uv.x * 2.0f - 1.0f, 1.0f - input.uv.y * 2.0f, depth, 1.0f);
     float4 viewSpace = mul(projectionInv, clipSpace);
@@ -165,12 +155,6 @@ float4 main(VSOutput input) : SV_Target
                         }
 
                         float sampleDepth = depthTexture.SampleLevel(linearSampler, suv, 0.0f).r;
-                        int2 sampleCoords = clamp(int2(suv * texDims), int2(0, 0), int2(texDims.x - 1, texDims.y - 1));
-                        uint sampleObjID = objectIDTexture.Load(int3(sampleCoords, 0));
-                        if (sampleObjID != 0xFFFFFFFFu && sampleDepth >= 0.999f)
-                        {
-                            sampleDepth = 0.0f;
-                        }
                         sampleColor = ApplyFog(sampleColor, sampleDepth, suv);
                         accum += float4(sampleColor, 1.0f);
                         totalWeight += 1.0f;
