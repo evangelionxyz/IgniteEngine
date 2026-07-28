@@ -123,6 +123,14 @@ namespace ignite::physics
 		bodySettings.mIsSensor = desc.isSensor;
 		bodySettings.mAllowSleeping = desc.allowSleeping;
 
+		bodySettings.mAllowedDOFs = JPH::EAllowedDOFs::None;
+		if (desc.rotateX) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::RotationX;
+		if (desc.rotateY) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::RotationY;
+		if (desc.rotateZ) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::RotationZ;
+		if (desc.moveX) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::TranslationX;
+		if (desc.moveY) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::TranslationY;
+		if (desc.moveZ) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::TranslationZ;
+
 		JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
 		if (!body) return nullptr;
 

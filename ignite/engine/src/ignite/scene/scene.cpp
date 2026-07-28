@@ -337,6 +337,12 @@ namespace ignite
                 rbDesc.mass = rb.mass;
                 rbDesc.friction = rb.friction;
                 rbDesc.restitution = rb.restitution;
+                rbDesc.rotateX = rb.rotateX;
+                rbDesc.rotateY = rb.rotateY;
+                rbDesc.rotateZ = rb.rotateZ;
+                rbDesc.moveX = rb.moveX;
+                rbDesc.moveY = rb.moveY;
+                rbDesc.moveZ = rb.moveZ;
 
                 physics::PhysicsTransformData transformData;
                 transformData.position = tr.world.translation;
