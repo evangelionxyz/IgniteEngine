@@ -986,9 +986,12 @@ namespace ignite
                             default: break;
                         }
 
-                        ImGui::PushStyleColor(ImGuiCol_Text, color);
-                        ImGui::TextWrapped("%s", log.message.c_str());
-                        ImGui::PopStyleColor();
+                        if (log.level >= 0 && log.level < spdlog::level::n_levels)
+                        {
+							ImGui::PushStyleColor(ImGuiCol_Text, color);
+							ImGui::TextWrapped("%s", log.message.c_str());
+							ImGui::PopStyleColor();
+                        }
                     }
                 }
 
@@ -1311,16 +1314,19 @@ namespace ignite
             CloseCurrentProject();
         }
 
-        if (const Ref<Project> openedProject = Project::Deserialize(filepath))
+        AssetWorker::SubmitJob([this, filepath]()
         {
-            // Subscribe Build Solution callback
-            m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
-                { OnProjectReadySignal(signal); });
+			if (const Ref<Project> openedProject = Project::Deserialize(filepath))
+			{
+				// Subscribe Build Solution callback
+				m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
+					{ OnProjectReadySignal(signal); });
 
-            m_ActiveProject = openedProject;
-            m_CurrentProjectFilepath = filepath;
-            openedProject->InitScriptEngine();
-        }
+				m_ActiveProject = openedProject;
+				m_CurrentProjectFilepath = filepath;
+				openedProject->InitScriptEngine();
+			}
+        });
     }
 
     bool EditorLayer::OnMouseMovedEvent(MouseMovedEvent &event)

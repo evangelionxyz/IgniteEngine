@@ -207,8 +207,6 @@ namespace ignite
         : m_Project(project), m_Scene(nullptr)
     {
         scriptEngine = this;
-
-
         if (scriptEngineData)
         {
             ReloadAssembly();

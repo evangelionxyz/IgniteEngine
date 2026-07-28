@@ -10,7 +10,7 @@
 #include "ignite/scripting/scriptable_object.hpp"
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/application.hpp"
-
+#include "ignite/core/time.hpp"
 #include "ignite/physics/3d/physics_3d.hpp"
 
 #include "ignite/serializer/serializer.hpp"
@@ -38,6 +38,11 @@ public class {CLASS_NAME} : Entity
     public override void OnUpdate(float deltaTime)
     {
         // Update loop
+    }
+
+    public override void OnFixedUpdate()
+    {
+        // Physics 1/60 loop
     }
 }
 )";
@@ -360,8 +365,12 @@ R"(<Project>
             YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
 
 			assetManager->SetActiveProject(project);
+            
+            const YAML::Node assetNodes = assetRegNode["Assets"];
 
-            for (YAML::Node assetNode : assetRegNode["Assets"])
+            Timer timer;
+            LOG_WARN("[Project] Deserializing Asset Registries {} items...", assetNodes.size());
+            for (const auto &assetNode : assetNodes)
             {
                 AssetHandle handle = AssetHandle(assetNode["Handle"].as<uint64_t>());
                 AssetMetaData metadata;
@@ -373,6 +382,8 @@ R"(<Project>
 
                 assetManager->AssignMetaData(handle, metadata);
             }
+            LOG_WARN("[Project] Deserializing Asset Registries took {}s", timer.Elapsed());
+            timer.Reset();
 
             assetManager->SyncFromRust();
         }

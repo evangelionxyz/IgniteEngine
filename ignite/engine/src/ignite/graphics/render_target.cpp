@@ -153,18 +153,8 @@ namespace ignite {
 
     void RenderTarget::Resize(const uint32_t width, const uint32_t height)
     {
-        if (width == 0 || height == 0)
-        {
+        if (width == 0 || height == 0 || (m_CreateInfo.width == width && m_CreateInfo.height == height))
             return;
-        }
-
-        if (m_CreateInfo.width == width && m_CreateInfo.height == height)
-        {
-            return;
-        }
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        GPUUploadSync::DeviceWaitIdle(device);
 
         if (m_FramebufferHandle != nullptr)
             m_FramebufferHandle.Reset();

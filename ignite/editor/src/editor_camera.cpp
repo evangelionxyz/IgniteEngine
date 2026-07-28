@@ -110,8 +110,6 @@ namespace ignite
 			return;
 		}
 
-		// auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
-
 		if (mouse.rightButtonDown)
 		{
 			glm::vec2 delta = mouse.position - mouse.lastPosition;
