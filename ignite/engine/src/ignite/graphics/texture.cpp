@@ -346,6 +346,12 @@ namespace ignite
             return;
         }
 
+        if (m_CreateInfo.width > 0 && m_CreateInfo.height > 0)
+        {
+            const uint32_t maxMips = CalculateMaxMipLevels(m_CreateInfo.width, m_CreateInfo.height, m_CreateInfo.depth);
+            m_CreateInfo.mipLevels = (m_CreateInfo.mipLevels == 0) ? 1u : std::min(m_CreateInfo.mipLevels, maxMips);
+        }
+
         if (m_CreateInfo.format == nvrhi::Format::RGBA8_UNORM)
         {
             if (m_CreateInfo.flip)
@@ -437,6 +443,12 @@ namespace ignite
         return pixelData;
     }
 
+    uint32_t Texture::CalculateMaxMipLevels(uint32_t width, uint32_t height, uint32_t depth)
+    {
+        const uint32_t maxDim = std::max({ width, height, depth, 1u });
+        return 1u + static_cast<uint32_t>(std::floor(std::log2(static_cast<float>(maxDim))));
+    }
+
 	void Texture::CreateTextureHandle()
     {
         IGN_PROFILE_FUNCTION();
@@ -447,6 +459,12 @@ namespace ignite
 
     	LOG_ASSERT(m_CreateInfo.dimension != nvrhi::TextureDimension::Unknown, "[Texture] Dimension must be set");
     	LOG_ASSERT(m_CreateInfo.initialState != nvrhi::ResourceStates::Unknown, "[Texture] State must be set");
+
+        if (m_CreateInfo.width > 0 && m_CreateInfo.height > 0)
+        {
+            const uint32_t maxMips = CalculateMaxMipLevels(m_CreateInfo.width, m_CreateInfo.height, m_CreateInfo.depth);
+            m_CreateInfo.mipLevels = (m_CreateInfo.mipLevels == 0) ? 1u : std::min(m_CreateInfo.mipLevels, maxMips);
+        }
 
         auto textureDesc = nvrhi::TextureDesc();
         textureDesc.setDimension(m_CreateInfo.dimension);

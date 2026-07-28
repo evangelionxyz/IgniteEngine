@@ -469,6 +469,10 @@ namespace ignite
         // GPU sync and asset destruction outside lock
         if (!assetsToUnload.empty())
         {
+            if (auto *deviceManager = DeviceManager::GetInstance())
+            {
+                deviceManager->WaitForIdle();
+            }
             assetsToDestroy.clear();
             LOG_DEBUG("[Asset Manager] Unused assets unloaded. Remaining: {}", m_LoadedAssets.size());
         }

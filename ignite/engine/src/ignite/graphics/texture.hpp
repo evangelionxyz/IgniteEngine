@@ -220,6 +220,7 @@ namespace ignite
         uint32_t GetBindlessIndex() const;
 
         static void *GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device);
+        static uint32_t CalculateMaxMipLevels(uint32_t width, uint32_t height, uint32_t depth = 1);
 
         int GetWidth() const { return m_CreateInfo.width; }
         int GetHeight() const { return m_CreateInfo.height; }

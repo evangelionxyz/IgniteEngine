@@ -253,6 +253,7 @@ namespace ignite
                 target->compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
                 target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
             }
 
             nvrhi::IFramebuffer *sceneFramebuffer = target->sceneRT->GetFramebuffer();
@@ -282,6 +283,10 @@ namespace ignite
 
 			cmd->setTextureState(target->widgetRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
 			cmd->setTextureState(target->debugRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+			if (target->debugRT->GetColorAttachment(1))
+			{
+				cmd->setTextureState(target->debugRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+			}
 
             cmd->commitBarriers();
 
@@ -2253,6 +2258,7 @@ namespace ignite
         debugRTCreateInfo.attachments =
         {
             FramebufferAttachments{ "[Scene DebugAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget },
+            FramebufferAttachments{ "[Scene DebugObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget },
             FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }
         };
 
