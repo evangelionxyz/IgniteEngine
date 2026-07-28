@@ -728,14 +728,17 @@ namespace ignite
 
             if (ImGui::BeginMenu("Edit"))
             {
-                if (ImGui::MenuItem("Enable VSync", nullptr, nullptr, !DeviceManager::GetInstance()->IsVsyncEnabled()))
+                const std::string vsyncLabel = DeviceManager::GetInstance()->IsVsyncEnabled() ? "Disable Vsync" : "Enable Vsync";
+                if (ImGui::MenuItem(vsyncLabel.c_str(), nullptr, nullptr))
                 {
-                    DeviceManager::GetInstance()->EnableVsync();
+                    Application::SubmitToMainThread([]()
+                    {
+                        if (DeviceManager::GetInstance()->IsVsyncEnabled())
+                            DeviceManager::GetInstance()->DisableVsync();
+                        else
+                            DeviceManager::GetInstance()->EnableVsync();
+                    });
                 }
-				if (ImGui::MenuItem("Disable VSync", nullptr, nullptr, DeviceManager::GetInstance()->IsVsyncEnabled()))
-				{
-					DeviceManager::GetInstance()->DisableVsync();
-				}
 				if (ImGui::MenuItem("Screenshot", nullptr, false, m_ActiveProject != nullptr))
 				{
 					m_State.takeScreenshot = true;

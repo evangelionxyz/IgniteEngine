@@ -164,8 +164,8 @@ namespace ignite
 		void SetHeadLessDevice(bool headless) { m_DeviceParameters.headlessDevice = headless; }
         
         inline bool IsVsyncEnabled() const { return m_DeviceParameters.vsyncEnable; }
-        inline void EnableVsync() { m_DeviceParameters.vsyncEnable = true; }
-        inline void DisableVsync() { m_DeviceParameters.vsyncEnable = false; }
+        void EnableVsync();
+        void DisableVsync();
 
         void CreateBackBuffers();
 

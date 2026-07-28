@@ -165,6 +165,20 @@ namespace ignite
         m_InstanceCreated = false;
     }
 
+    void DeviceManager::EnableVsync()
+    {
+        m_DeviceParameters.vsyncEnable = true;
+        ResizeSwapChain();
+        CreateBackBuffers();
+    }
+    
+    void DeviceManager::DisableVsync()
+    {
+        m_DeviceParameters.vsyncEnable = false;
+        ResizeSwapChain();
+        CreateBackBuffers();
+    }
+
     nvrhi::IFramebuffer* DeviceManager::GetCurrentFramebuffer()
     {
         return GetFramebuffer(GetCurrentBackBufferIndex());
