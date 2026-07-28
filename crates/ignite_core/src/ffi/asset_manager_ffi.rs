@@ -98,50 +98,6 @@ pub extern "C" fn ignite_rs_asset_remove_metadata(handle: u64) -> IgniteResult {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_pin(handle: u64) -> IgniteResult {
-    if handle == 0 {
-        return IgniteResult::ErrInvalidHandle; // Rule 13: AssetHandle(0) is invalid, never pin
-    }
-    with_asset_manager(|mgr| {
-        if mgr.pin_asset(AssetHandle::from_u64(handle)) {
-            IgniteResult::Ok
-        } else {
-            IgniteResult::ErrInvalidHandle
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_unpin(handle: u64) -> IgniteResult {
-    if handle == 0 {
-        return IgniteResult::ErrInvalidHandle;
-    }
-    with_asset_manager(|mgr| {
-        if mgr.unpin_asset(AssetHandle::from_u64(handle)) {
-            IgniteResult::Ok
-        } else {
-            IgniteResult::ErrNotFound
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_is_pinned(handle: u64) -> bool {
-    if handle == 0 {
-        return false;
-    }
-    with_asset_manager(|mgr| mgr.is_pinned(AssetHandle::from_u64(handle)))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_get_pin_count(handle: u64) -> u32 {
-    if handle == 0 {
-        return 0;
-    }
-    with_asset_manager(|mgr| mgr.get_pin_count(AssetHandle::from_u64(handle)))
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ignite_rs_asset_get_registry_version() -> u64 {
     with_asset_manager(|mgr| mgr.registry_version)
 }

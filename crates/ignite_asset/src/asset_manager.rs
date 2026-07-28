@@ -8,7 +8,6 @@ pub type AssetRegistry = HashMap<AssetHandle, AssetMetaData>;
 #[derive(Debug, Default)]
 pub struct AssetManager {
     pub asset_registry: AssetRegistry,
-    pub pinned_assets: HashMap<AssetHandle, u32>,
 
     /// Monotonically increasing version counter for registry mutations.
     /// Used by C++ to detect when a re-sync is necessary.
@@ -26,7 +25,6 @@ impl AssetManager {
     pub fn new() -> Self {
         Self {
             asset_registry: AssetRegistry::new(),
-            pinned_assets: HashMap::new(),
             registry_version: 1,
             asset_states: HashMap::new(),
             import_queue: VecDeque::new(),
@@ -60,7 +58,6 @@ impl AssetManager {
         if !handle.is_valid() {
             return false;
         }
-        self.pinned_assets.remove(&handle);
         self.asset_states.remove(&handle);
         let removed = self.asset_registry.remove(&handle).is_some();
         if removed {
@@ -158,51 +155,7 @@ impl AssetManager {
         self.import_queue.len()
     }
 
-    // =========================================================================
-    // Asset Pinning
-    // =========================================================================
-    pub fn pin_asset(&mut self, handle: AssetHandle) -> bool {
-        if !handle.is_valid() {
-            return false; // AssetHandle(0) must NOT be pinned
-        }
-        let count = self.pinned_assets.entry(handle).or_insert(0);
-        *count += 1;
-        true
-    }
-
-    pub fn unpin_asset(&mut self, handle: AssetHandle) -> bool {
-        if !handle.is_valid() {
-            return false;
-        }
-        if let std::collections::hash_map::Entry::Occupied(mut entry) = self.pinned_assets.entry(handle) {
-            let count = entry.get_mut();
-            if *count > 1 {
-                *count -= 1;
-            } else {
-                entry.remove();
-            }
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn is_pinned(&self, handle: AssetHandle) -> bool {
-        if !handle.is_valid() {
-            return false;
-        }
-        self.pinned_assets.contains_key(&handle)
-    }
-
-    pub fn get_pin_count(&self, handle: AssetHandle) -> u32 {
-        if !handle.is_valid() {
-            return 0;
-        }
-        self.pinned_assets.get(&handle).copied().unwrap_or(0)
-    }
-
     pub fn clear(&mut self) {
-        self.pinned_assets.clear();
         self.asset_registry.clear();
         self.asset_states.clear();
         self.import_queue.clear();

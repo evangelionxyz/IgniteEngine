@@ -261,37 +261,6 @@ TEST(RustInterop, Phase2AssetRegistryAndMetadata)
     EXPECT_EQ(ignite_rs_asset_get_metadata(handle, outBuf, sizeof(outBuf), &outType), IgniteResult_ErrNotFound);
 }
 
-TEST(RustInterop, Phase2AssetPinningRefCounting)
-{
-    const uint64_t validHandle = 0x999988887777ULL;
-    const uint64_t invalidHandle = 0ULL; // AssetHandle(0) must never be pinned (Rule 13)
-
-    // Rule 13: Pinning handle 0 should return ErrInvalidHandle
-    EXPECT_EQ(ignite_rs_asset_pin(invalidHandle), IgniteResult_ErrInvalidHandle);
-    EXPECT_FALSE(ignite_rs_asset_is_pinned(invalidHandle));
-    EXPECT_EQ(ignite_rs_asset_get_pin_count(invalidHandle), 0u);
-
-    // Pinning valid handle
-    EXPECT_EQ(ignite_rs_asset_pin(validHandle), IgniteResult_Ok);
-    EXPECT_TRUE(ignite_rs_asset_is_pinned(validHandle));
-    EXPECT_EQ(ignite_rs_asset_get_pin_count(validHandle), 1u);
-
-    // Increment pin count
-    EXPECT_EQ(ignite_rs_asset_pin(validHandle), IgniteResult_Ok);
-    EXPECT_EQ(ignite_rs_asset_get_pin_count(validHandle), 2u);
-
-    // Decrement pin count
-    EXPECT_EQ(ignite_rs_asset_unpin(validHandle), IgniteResult_Ok);
-    EXPECT_EQ(ignite_rs_asset_get_pin_count(validHandle), 1u);
-
-    // Final unpin removes pin
-    EXPECT_EQ(ignite_rs_asset_unpin(validHandle), IgniteResult_Ok);
-    EXPECT_FALSE(ignite_rs_asset_is_pinned(validHandle));
-    EXPECT_EQ(ignite_rs_asset_get_pin_count(validHandle), 0u);
-
-    // Unpin when not pinned returns ErrNotFound
-    EXPECT_EQ(ignite_rs_asset_unpin(validHandle), IgniteResult_ErrNotFound);
-}
 
 // -------------------------------------------------
 // Phase 3: Serialization FFI Tests (serde & bincode)

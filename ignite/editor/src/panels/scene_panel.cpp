@@ -669,8 +669,6 @@ namespace ignite
                             {
                                 c.widgetHandle = handle;
                                 c.dirty = true;
-
-                                assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -681,7 +679,6 @@ namespace ignite
                         ImGui::SameLine();
                         if (ImGui::Button("X##ClearWidget"))
                         {
-                            assetManager->RemoveAssetPin(c.widgetHandle, std::string(kActiveSceneAssetOwner));
                             c.widgetHandle = AssetHandle(0);
                             c.dirty = true;
                         }
@@ -722,8 +719,6 @@ namespace ignite
                                     c.hdrHandle = handle;
                                     c.dirtyEnvironment = true;
                                     c.gpuInitialized = false;
-
-                                    AssetManager::GetInstance()->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                 }
                             }
                             ImGui::EndDragDropTarget();
@@ -734,7 +729,6 @@ namespace ignite
                             ImGui::SameLine();
                             if (ImGui::Button("X"))
                             {
-                                AssetManager::GetInstance()->RemoveAssetPin(c.hdrHandle, std::string(kActiveSceneAssetOwner));
                                 c.hdrHandle = AssetHandle(0);
                                 c.dirtyEnvironment = true;
                                 c.gpuInitialized = false;
@@ -850,8 +844,6 @@ namespace ignite
                                     Sprite2DComponent before = c;
                                     c.materialHandle = handle;
                                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-
-                                    assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                 }
                             }
                             ImGui::EndDragDropTarget();
@@ -863,7 +855,6 @@ namespace ignite
                             if (ImGui::Button("X"))
                             {
                                 Sprite2DComponent before = c;
-                                assetManager->RemoveAssetPin(c.materialHandle, std::string(kActiveSceneAssetOwner));
                                 c.materialHandle = AssetHandle(0);
                                 CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                             }
@@ -894,8 +885,6 @@ namespace ignite
                                     if (type == AssetType::Texture)
                                     {
                                         c.handle = handle;
-
-                                        assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                     }
                                 }
                                 else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_SPRITE_SHEET_ITEM))
@@ -922,7 +911,6 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::Button("X##ClearTexture"))
                                 {
-                                    assetManager->RemoveAssetPin(c.handle, std::string(kActiveSceneAssetOwner));
                                     c.handle = AssetHandle(0);
                                 }
                             }
@@ -1064,8 +1052,6 @@ namespace ignite
                                 assetManager->AssignMetaData(handle, metadata);
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
-
-                                assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -1076,7 +1062,6 @@ namespace ignite
                         ImGui::SameLine();
                         if (ImGui::Button("X"))
                         {
-                            assetManager->RemoveAssetPin(c.handle, std::string(kActiveSceneAssetOwner));
                             c.handle = AssetHandle(0); // reset the mesh
                         }
                     }
@@ -1173,8 +1158,6 @@ namespace ignite
                                 assetManager->AssignMetaData(handle, metadata);
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
-
-                                assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -1185,7 +1168,6 @@ namespace ignite
                         ImGui::SameLine();
                         if (ImGui::Button("X"))
                         {
-                            assetManager->RemoveAssetPin(c.handle, std::string(kActiveSceneAssetOwner));
                             c.handle = AssetHandle(0); // reset the mesh
                         }
                     }
@@ -1281,8 +1263,6 @@ namespace ignite
                                         c.stateElapsed = 0.0f;
                                         c.stateNormalized = 0.0f;
                                         c.runtimeParams.clear();
-
-                                        assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                     }
                                 }
 
@@ -1294,7 +1274,6 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::Button("X"))
                                 {
-                                    assetManager->RemoveAssetPin(c.runtimeAnimatorHandle, std::string(kActiveSceneAssetOwner));
                                     sm->SetAnimator(AssetHandle(0)); // reset animator
                                     c.runtimeAnimatorHandle = AssetHandle(0);
                                     c.currentStateName.clear();
@@ -1761,7 +1740,6 @@ namespace ignite
                                     if (assetManager->GetAssetType(handle) == AssetType::Font)
                                     {
                                         c.fontHandle = handle;
-                                        assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                     }
                                 }
                                 ImGui::EndDragDropTarget();
@@ -1772,7 +1750,6 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::Button("X##ClearTextFont"))
                                 {
-                                    assetManager->RemoveAssetPin(c.fontHandle, std::string(kActiveSceneAssetOwner));
                                     c.fontHandle = AssetHandle(0);
                                 }
                             }
@@ -1842,8 +1819,6 @@ namespace ignite
                                         {
                                             c.handle = handle;
                                             Ref<FmodSound> sound = assetManager->GetAsset<FmodSound>(handle);
-
-                                            assetManager->AddAssetPin(handle, std::string(kActiveSceneAssetOwner));
                                         }
                                     }
                                 }
@@ -1856,7 +1831,6 @@ namespace ignite
                             ImGui::SameLine();
                             if (ImGui::Button("X"))
                             {
-                                assetManager->RemoveAssetPin(c.handle, std::string(kActiveSceneAssetOwner));
                                 c.handle = AssetHandle(0);
                             }
                         }
@@ -3136,7 +3110,7 @@ namespace ignite
                                     }
                                     else if (metadata.type == AssetType::Prefab)
                                     {
-                                        Ref<Prefab> prefab = AssetManager::GetInstance()->GetAssetImmediate<Prefab>(*handle);
+                                        Ref<Prefab> prefab = AssetManager::GetInstance()->GetAsset<Prefab>(*handle);
                                         if (prefab)
                                         {
                                             Entity instantiated = Prefab::Instantiate(prefab, m_Scene);

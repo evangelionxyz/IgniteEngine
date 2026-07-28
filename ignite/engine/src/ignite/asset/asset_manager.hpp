@@ -75,14 +75,6 @@ namespace ignite
         void LoadAssetAsync(AssetHandle handle);
         void LoadAssetImmediate(AssetHandle handle);
 
-        void AddAssetPin(AssetHandle handle, std::string_view ownerTag);
-        void RemoveAssetPin(AssetHandle handle, std::string_view ownerTag);
-        void ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles);
-        void ClearAssetPins(std::string_view ownerTag);
-        bool IsAssetPinned(AssetHandle handle) const;
-        uint32_t GetAssetPinCount(AssetHandle handle) const;
-        std::vector<std::string> GetAssetPinOwners(AssetHandle handle) const;
-
         void OnUpdate(float deltaTime);
 
         void OnAssetChangeSignal(const AssetChangeSignal &signal);
@@ -228,8 +220,6 @@ namespace ignite
 
         float assetUnloadTimer = 0.0f;
         
-        std::unordered_map<AssetHandle, uint32_t> m_AssetPinCounts;
-        std::unordered_map<std::string, std::unordered_set<AssetHandle>> m_PinnedAssetsByOwner;
         std::unordered_map<std::string, AssetHandle> m_AssetHandleByPath;
 
         std::queue<std::function<bool()>> m_OnChangeCallbacks;

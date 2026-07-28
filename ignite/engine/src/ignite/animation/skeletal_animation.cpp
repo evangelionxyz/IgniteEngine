@@ -27,27 +27,10 @@ namespace ignite
 
     AnimationTimelineEvent::AnimationTimelineEvent() = default;
 
-    AnimationTimelineEvent::~AnimationTimelineEvent()
-    {
-        UnpinAssets();
-    }
+    AnimationTimelineEvent::~AnimationTimelineEvent() = default;
 
     void AnimationTimelineEvent::UnpinAssets()
     {
-        if (m_AudioHandle != AssetHandle(0))
-        {
-            if (auto *assetManager = AssetManager::GetInstance())
-            {
-                assetManager->RemoveAssetPin(m_AudioHandle, std::format("animevent.audio.{}.{}", static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AudioHandle)));
-            }
-        }
-        if (m_CallbackAsset != AssetHandle(0))
-        {
-            if (auto *assetManager = AssetManager::GetInstance())
-            {
-                assetManager->RemoveAssetPin(m_CallbackAsset, std::format("animevent.callback.{}.{}", static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_CallbackAsset)));
-            }
-        }
     }
 
     AnimationTimelineEvent::AnimationTimelineEvent(const AnimationTimelineEvent &other)
@@ -88,7 +71,6 @@ namespace ignite
     {
         if (this != &other)
         {
-            UnpinAssets();
             normalizedTime = other.normalizedTime;
             name = std::move(other.name);
             action = other.action;
@@ -103,54 +85,15 @@ namespace ignite
 
     void AnimationTimelineEvent::SetAudioHandle(const AssetHandle &handle)
     {
-        if (m_AudioHandle != handle)
-        {
-            if (m_AudioHandle != AssetHandle(0))
-            {
-                if (auto *assetManager = AssetManager::GetInstance())
-                {
-                    assetManager->RemoveAssetPin(m_AudioHandle, std::format("animevent.audio.{}.{}", static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AudioHandle)));
-                }
-            }
-            m_AudioHandle = handle;
-            if (m_AudioHandle != AssetHandle(0))
-            {
-                if (auto *assetManager = AssetManager::GetInstance())
-                {
-                    assetManager->AddAssetPin(m_AudioHandle, std::format("animevent.audio.{}.{}", static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AudioHandle)));
-                }
-            }
-        }
+        m_AudioHandle = handle;
     }
 
     void AnimationTimelineEvent::SetCallbackAsset(const AssetHandle &handle)
     {
-        if (m_CallbackAsset != handle)
-        {
-            if (m_CallbackAsset != AssetHandle(0))
-            {
-                if (auto *assetManager = AssetManager::GetInstance())
-                {
-                    assetManager->RemoveAssetPin(m_CallbackAsset, std::format("animevent.callback.{}.{}", static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_CallbackAsset)));
-                }
-            }
-            m_CallbackAsset = handle;
-            if (m_CallbackAsset != AssetHandle(0))
-            {
-                if (auto *assetManager = AssetManager::GetInstance())
-                {
-                    assetManager->AddAssetPin(m_CallbackAsset, std::format("animevent.callback.{}.{}", static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_CallbackAsset)));
-                }
-            }
-        }
+        m_CallbackAsset = handle;
     }
 
-	SkeletalAnimation::~SkeletalAnimation()
-	{
-		if (m_SkeletonHandle != AssetHandle(0))
-			AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle,
-				std::format("skeletal-animtion.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
-	}
+	SkeletalAnimation::~SkeletalAnimation() = default;
 
 	bool SkeletalAnimation::Serialize(const ignite::Path &filepath)
 	{
@@ -166,13 +109,6 @@ namespace ignite
 
     void SkeletalAnimation::SetSkeletonHandle(const AssetHandle &skeletonHandle)
     {
-        if (m_SkeletonHandle != AssetHandle(0))
-            AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle,
-                std::format("skeletal-animtion.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
-
         m_SkeletonHandle = skeletonHandle;
-		if (m_SkeletonHandle != AssetHandle(0) && handle != AssetHandle(0))
-			AssetManager::GetInstance()->AddAssetPin(m_SkeletonHandle,
-				std::format("skeletal-animtion.{}.{}", static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
     }
 }

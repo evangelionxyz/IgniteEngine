@@ -1470,7 +1470,7 @@ namespace ignite
 			constexpr float kTwoPi = 6.28318530718f;
 			constexpr float kPi = 3.14159265359f;
 
-			static auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+			auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
 			{
 				for (int i = 0; i < segments; ++i)
 				{
@@ -1483,7 +1483,7 @@ namespace ignite
 				}
 			};
 
-			static auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+			auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
 			{
 				for (int i = 0; i < segments; ++i)
 				{

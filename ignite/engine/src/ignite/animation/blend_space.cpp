@@ -17,56 +17,10 @@
 
 namespace ignite
 {
-	// ------------------------------------
-	// Blend Space Sample struct
-	BlendSpaceSample::~BlendSpaceSample()
-	{
-		if (m_AnimationHandle != AssetHandle(0))
-			AssetManager::GetInstance()->RemoveAssetPin(m_AnimationHandle, std::format("blendspace.sample.{}.{}",
-				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
-	}
-
-	void BlendSpaceSample::SetAnimationHandle(const AssetHandle &animationHandle)
-	{
-		if (m_AnimationHandle != AssetHandle(0))
-			AssetManager::GetInstance()->RemoveAssetPin(m_AnimationHandle, std::format("blendspace.sample.{}.{}",
-				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
-
-        m_AnimationHandle = animationHandle;
-		if (m_AnimationHandle != AssetHandle(0))
-			AssetManager::GetInstance()->AddAssetPin(m_AnimationHandle, std::format("blendspace.sample.{}.{}",
-				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
-	}
-
-	// ------------------------------------
-	// Blend Space Weight struct
-	BlendSpaceWeight::~BlendSpaceWeight()
-	{
-		if (m_AnimationHandle != AssetHandle(0))
-			AssetManager::GetInstance()->RemoveAssetPin(m_AnimationHandle, std::format("blendspace.weight.{}.{}",
-				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
-	}
-
-	void BlendSpaceWeight::SetAnimationHandle(const AssetHandle &animationHandle)
-	{
-		if (m_AnimationHandle != AssetHandle(0))
-			AssetManager::GetInstance()->RemoveAssetPin(m_AnimationHandle, std::format("blendspace.weight.{}.{}",
-				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
-
-        m_AnimationHandle = animationHandle;
-		if (m_AnimationHandle != AssetHandle(0))
-			AssetManager::GetInstance()->AddAssetPin(m_AnimationHandle, std::format("blendspace.weight.{}.{}",
-				static_cast<uint64_t>(m_UUID), static_cast<uint64_t>(m_AnimationHandle)));
-	}
 
 	// ------------------------------------
     // Blend Space class
-	BlendSpace::~BlendSpace()
-	{
-		if (m_SkeletonHandle != AssetHandle(0))
-			AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("blendspace.{}.{}",
-                static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
-	}
+	BlendSpace::~BlendSpace() = default;
 
 	glm::vec2 BlendSpace::ClampInput(const glm::vec2 &input) const
     {
@@ -75,14 +29,7 @@ namespace ignite
 
 	void BlendSpace::SetSkeletonAssetHandle(AssetHandle skeletonHandle)
 	{
-		if (m_SkeletonHandle != AssetHandle(0))
-			AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("blendspace.{}.{}",
-				static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
-
         m_SkeletonHandle = skeletonHandle;
-        if (m_SkeletonHandle != AssetHandle(0) && handle != AssetHandle(0))
-            AssetManager::GetInstance()->AddAssetPin(m_SkeletonHandle, std::format("blendspace.{}.{}",
-                static_cast<uint64_t>(handle), static_cast<uint64_t>(m_SkeletonHandle)));
 	}
 
 	glm::vec2 BlendSpace::NormalizePosition(const glm::vec2 &pos) const

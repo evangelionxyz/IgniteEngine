@@ -65,37 +65,11 @@ namespace ignite
 
     void AnimationMontage::SetAnimationHandle(AssetHandle animationHandle)
     {
-        if (m_AnimationHandle == animationHandle)
-            return;
-
-        // Pin tracking
-        if (auto *am = AssetManager::GetInstance())
-        {
-            const std::string ownerTag = std::format("montage.{}", static_cast<uint64_t>(handle));
-            if (m_AnimationHandle != AssetHandle(0))
-                am->RemoveAssetPin(m_AnimationHandle, ownerTag);
-            if (animationHandle != AssetHandle(0))
-                am->AddAssetPin(animationHandle, ownerTag);
-        }
-
         m_AnimationHandle = animationHandle;
     }
 
     void AnimationMontage::SetSkeletonHandle(AssetHandle skeletonHandle)
     {
-        if (m_SkeletonHandle == skeletonHandle)
-            return;
-
-        // Pin tracking
-        if (auto *am = AssetManager::GetInstance())
-        {
-            const std::string ownerTag = std::format("montage.skel.{}", static_cast<uint64_t>(handle));
-            if (m_SkeletonHandle != AssetHandle(0))
-                am->RemoveAssetPin(m_SkeletonHandle, ownerTag);
-            if (skeletonHandle != AssetHandle(0))
-                am->AddAssetPin(skeletonHandle, ownerTag);
-        }
-
         m_SkeletonHandle = skeletonHandle;
     }
 

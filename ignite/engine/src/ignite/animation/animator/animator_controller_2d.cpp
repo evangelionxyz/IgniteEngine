@@ -17,13 +17,9 @@ namespace ignite
 	void AnimState2D::SetAnimationHandle(const AssetHandle &animationHandle)
 	{
 		m_AnimHandle = animationHandle;
-		AssetManager::GetInstance()->AddAssetPin(m_AnimHandle, std::format("animstate2d.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
 	}
 
-    AnimState2D::~AnimState2D()
-    {
-		AssetManager::GetInstance()->RemoveAssetPin(m_AnimHandle, std::format("animstate2d.{}.{}", (uint64_t)m_UUID, (uint64_t)m_AnimHandle));
-    }
+    AnimState2D::~AnimState2D() = default;
 
     std::string AnimatorController2D::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
     {

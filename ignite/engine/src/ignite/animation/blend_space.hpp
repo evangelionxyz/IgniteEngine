@@ -17,31 +17,11 @@ namespace ignite
 
         BlendSpaceSample() = default;
 
-        BlendSpaceSample(const BlendSpaceSample &other)
-			: position(other.position), m_UUID(other.m_UUID)
-        {
-            SetAnimationHandle(other.m_AnimationHandle);
-        }
-
-        BlendSpaceSample &operator=(const BlendSpaceSample &other)
-        {
-            if (this != &other)
-            {
-                position = other.position;
-                m_UUID = UUID();
-                SetAnimationHandle(other.m_AnimationHandle);
-            }
-            return *this;
-        }
-
-        ~BlendSpaceSample();
-
-        void SetAnimationHandle(const AssetHandle &animationHandle);
+        void SetAnimationHandle(const AssetHandle &animationHandle) { m_AnimationHandle = animationHandle; }
         const AssetHandle &GetAnimationAssetHandle() const { return m_AnimationHandle; }
 
     private:
         AssetHandle m_AnimationHandle;
-        UUID m_UUID; // should be randomly generated
     };
 
     struct IGN_API BlendSpaceWeight
@@ -55,30 +35,11 @@ namespace ignite
         {
         }
 
-        BlendSpaceWeight(const BlendSpaceWeight &other)
-			: weight(other.weight), m_AnimationHandle(other.m_AnimationHandle)
-		{
-		}
-        
-        BlendSpaceWeight &operator=(const BlendSpaceWeight &other)
-		{
-			if (this != &other)
-			{
-				m_UUID = UUID();
-                weight = other.weight;
-				m_AnimationHandle = other.m_AnimationHandle;
-			}
-			return *this;
-		}
-
-        ~BlendSpaceWeight();
-
-		void SetAnimationHandle(const AssetHandle &animationHandle);
+		void SetAnimationHandle(const AssetHandle &animationHandle) { m_AnimationHandle = animationHandle; }
 		const AssetHandle &GetAnimationAssetHandle() const { return m_AnimationHandle; }
 
     private:
 		AssetHandle m_AnimationHandle;
-        UUID m_UUID; // should be randomly generated
     };
 
     class IGN_API BlendSpace : public Asset

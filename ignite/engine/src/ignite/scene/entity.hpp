@@ -67,7 +67,7 @@ namespace ignite
 
         bool IsValid() const
         {
-            if (!m_Scene)
+            if (!m_Scene || !m_Scene->registry)
                 return false;
 
             return m_Scene->registry->valid(m_Handle);

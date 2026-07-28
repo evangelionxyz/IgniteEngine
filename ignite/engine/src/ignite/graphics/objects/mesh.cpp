@@ -369,19 +369,11 @@ namespace ignite
     // ===================================
     MeshInstance::~MeshInstance()
     {
-        // Wait for GPU to ensure resources are not in use
-        if (auto *device = DeviceManager::GetInstance()->GetDevice())
-        {
-            GPUUploadSync::DeviceWaitIdle(device);
-        }
-
-        AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}.{}", m_Name, (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
     }
     
     void MeshInstance::SetMaterial(const AssetHandle &assetHandle)
     {
         m_MaterialHandle = assetHandle;
-        AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("meshinstance.material.{}.{}.{}", m_Name, (uint64_t)m_UUID, (uint64_t)m_MaterialHandle));
     }
 
     // ===================================
@@ -540,15 +532,11 @@ namespace ignite
     void SkeletalMesh::SetSkeleton(AssetHandle skeletonHandle)
     {
         m_SkeletonHandle = skeletonHandle;
-		if (skeletonHandle != AssetHandle(0) && handle != AssetHandle(0))
-            AssetManager::GetInstance()->AddAssetPin(skeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)handle, (uint64_t)skeletonHandle));
     }
 
     void SkeletalMesh::SetAnimator(AssetHandle animatorHandle)
     {
         m_AnimatorHandle = animatorHandle;
-        if (animatorHandle != AssetHandle(0) && handle != AssetHandle(0))
-            AssetManager::GetInstance()->AddAssetPin(animatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)handle, (uint64_t)animatorHandle));
     }
 
     bool SkeletalMesh::Serialize(const ignite::Path &filepath)
@@ -594,8 +582,6 @@ namespace ignite
 
     SkeletalMesh::~SkeletalMesh()
     {
-        AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("skeletalmesh.skeleton.{}.{}", (uint64_t)this->handle, (uint64_t)m_SkeletonHandle));
-        AssetManager::GetInstance()->RemoveAssetPin(m_AnimatorHandle, std::format("skeletalmesh.animator.{}.{}", (uint64_t)this->handle, (uint64_t)m_AnimatorHandle));
         m_MeshInstances.clear();
     }
 

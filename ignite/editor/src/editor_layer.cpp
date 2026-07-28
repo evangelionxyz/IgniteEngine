@@ -1015,20 +1015,13 @@ namespace ignite
             return;
         }
 
-        // Update asset pins in the project for the new scene
+        // Update active scene
         if (m_ActiveProject)
         {
-            std::unordered_set<AssetHandle> referencedHandles;
             if (scene)
-                referencedHandles = scene->CollectReferencedAssetHandles();
-
-            if (m_InPrefabIsolationMode && m_MainSceneBeforeIsolation)
             {
-                auto mainSceneHandles = m_MainSceneBeforeIsolation->CollectReferencedAssetHandles();
-                referencedHandles.insert(mainSceneHandles.begin(), mainSceneHandles.end());
+                scene->PreloadReferencedAssets();
             }
-
-            AssetManager::GetInstance()->ReplaceAssetPins(std::string(kActiveSceneAssetOwner), referencedHandles);
         }
 
         // Clear references in all systems before changing active scene
@@ -1074,7 +1067,7 @@ namespace ignite
         if (!assetManager)
             return;
 
-        Ref<Prefab> prefab = assetManager->GetAssetImmediate<Prefab>(prefabHandle);
+        Ref<Prefab> prefab = assetManager->GetAsset<Prefab>(prefabHandle);
         if (!prefab || !prefab->GetPrefabScene())
         {
             LOG_ERROR("[Editor] Failed to load prefab for isolation editing!");
@@ -1085,8 +1078,6 @@ namespace ignite
         m_EditingPrefab = prefab;
         m_EditingPrefabHandle = prefabHandle;
         m_InPrefabIsolationMode = true;
-
-        assetManager->AddAssetPin(prefabHandle, "editor.prefab-edit");
 
         SetActiveScene(prefab->GetPrefabScene());
 
@@ -1109,11 +1100,6 @@ namespace ignite
                 m_EditingPrefab->Serialize(fullPath);
                 SetStatusText(fmt::format("Saved Prefab: {}", meta.filepath.filename().string()));
             }
-        }
-
-        if (assetManager && m_EditingPrefabHandle != AssetHandle(0))
-        {
-            assetManager->RemoveAssetPin(m_EditingPrefabHandle, "editor.prefab-edit");
         }
 
         Ref<Scene> previousMainScene = m_MainSceneBeforeIsolation;
@@ -1149,7 +1135,6 @@ namespace ignite
     {
         if (m_EditorScene)
         {
-			AssetManager::GetInstance()->RemoveAssetPin(m_CurrentSceneHandle, std::string(kActiveSceneAssetOwner));
             m_EditorScene->OnStop();
         }
 
@@ -1219,9 +1204,6 @@ namespace ignite
 
         if (m_CurrentSceneHandle == openSceneHandle)
             return;
-
-		AssetManager::GetInstance()->RemoveAssetPin(m_CurrentSceneHandle, std::string(kActiveSceneAssetOwner));
-		AssetManager::GetInstance()->AddAssetPin(openSceneHandle, std::string(kActiveSceneAssetOwner));
 
         m_CurrentSceneHandle = openSceneHandle;
         if (m_EditorScene)
@@ -1709,9 +1691,6 @@ namespace ignite
                     SaveScene(filepath);
                     LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
                     RefreshContentBrowsers();
-
-                    const AssetHandle sceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
-                    AssetManager::GetInstance()->AddAssetPin(m_CurrentSceneHandle, std::string(kActiveSceneAssetOwner));
                 });
             }
             else if (payload.metadata.type == AssetType::Project)
@@ -2150,18 +2129,10 @@ namespace ignite
                 {
                     ImGui::TableNextRow();
 
-                    const uint32_t pinCount = assetManager->GetAssetPinCount(handle);
-                    const auto owners = assetManager->GetAssetPinOwners(handle);
-
                     // Column 0: Handle (TreeNode)
                     ImGui::TableNextColumn();
-                    ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_SpanFullWidth;
-                    if (pinCount == 0)
-                    {
-                        treeNodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                    }
-
-                    bool open = ImGui::TreeNodeEx((void*)(uint64_t)handle, treeNodeFlags | ImGuiTreeNodeFlags_DefaultOpen, "%llu", static_cast<uint64_t>(handle));
+                    ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                    ImGui::TreeNodeEx((void*)(uint64_t)handle, treeNodeFlags, "%llu", static_cast<uint64_t>(handle));
 
                     // Column 1: Type with color coding
                     ImGui::TableNextColumn();
@@ -2203,16 +2174,9 @@ namespace ignite
                         ImGui::Text("-");
                     }
 
-                    // Column 4: Pins count
+                    // Column 4: Reserved
                     ImGui::TableNextColumn();
-                    if (pinCount > 0)
-                    {
-                        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "%u", pinCount);
-                    }
-                    else
-                    {
-                        ImGui::Text("-");
-                    }
+                    ImGui::Text("-");
 
                     // Column 5: Filepath
                     ImGui::TableNextColumn();
@@ -2238,40 +2202,6 @@ namespace ignite
                             SaveProject();
                         }
                         ImGui::PopID();
-                    }
-
-                    // Render nested owner pins if node is expanded
-                    if (open && pinCount > 0)
-                    {
-                        for (const auto &owner : owners)
-                        {
-                            ImGui::TableNextRow();
-
-                            // Column 0: Handle / Owner sub-node indicator
-                            ImGui::TableNextColumn();
-                            ImGui::TreeNodeEx(owner.c_str(), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen, "Owner");
-
-                            // Column 1: Type ("Pin")
-                            ImGui::TableNextColumn();
-                            ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "Pin");
-
-                            // Column 2: Status
-                            ImGui::TableNextColumn();
-                            ImGui::Text("-");
-
-                            // Column 3: Refs
-                            ImGui::TableNextColumn();
-                            ImGui::Text("-");
-
-                            // Column 4: Pins
-                            ImGui::TableNextColumn();
-                            ImGui::Text("-");
-
-                            // Column 5: Tag name
-                            ImGui::TableNextColumn();
-                            ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "%s", owner.c_str());
-                        }
-                        ImGui::TreePop();
                     }
                 };
 

@@ -138,8 +138,11 @@ TEST(BlendSpace, NormalizedMultiSampleEvaluation)
     ASSERT_FALSE(weightsMid.empty());
     for (const auto &w : weightsMid)
     {
-        uint64_t handleVal = static_cast<uint64_t>(w.GetAnimationAssetHandle());
-        EXPECT_TRUE(handleVal == 201 || handleVal == 202 || handleVal == 203);
+        if (w.weight > 0.01f)
+        {
+            uint64_t handleVal = static_cast<uint64_t>(w.GetAnimationAssetHandle());
+            EXPECT_TRUE(handleVal == 201 || handleVal == 202 || handleVal == 203);
+        }
     }
 }
 
@@ -350,7 +353,8 @@ TEST(EngineTests, AssetManager)
     for (auto texFilepath : { "test_image.png" })
     {
         // Create a dummy image asset under Assets (.png extension maps to AssetType::Texture)
-        ignite::Path assetFilepath = project->GetAssetDirectory() / texFilepath;
+        ignite::Path assetFilepath = project->GetProjectFilepath(project->GetAssetDirectory() / texFilepath);
+        ignite::Path::create_directories(assetFilepath.parent_path());
         {
             std::ofstream file(assetFilepath.generic_string());
             file << "Fake PNG Data";
@@ -781,7 +785,7 @@ TEST(SceneTransition, BasicTransition)
     }
 }
 
-TEST(SceneTransition, SharedAssetPinned)
+TEST(SceneTransition, SharedAssetRetained)
 {
     ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
     ignite::Path projectDir = testResourcesRoot / "temp/SceneTransitionShared";

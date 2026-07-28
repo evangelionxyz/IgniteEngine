@@ -112,22 +112,16 @@ namespace ignite
         }
 
         decltype(m_LoadedAssets) OLD_LoadedAssets;
-        decltype(m_PinnedAssetsByOwner) OLD_PinnedAssetsByOwner;
-        decltype(m_AssetPinCounts) OLD_AssetPinCounts;
         decltype(m_LoadingAssets) OLD_LoadingAssets;
         decltype(m_AssetRegistry) OLD_AssetRegistry;
         {
             std::unique_lock lock(m_AssetMutex);
             OLD_LoadedAssets.swap(m_LoadedAssets);
-            OLD_PinnedAssetsByOwner.swap(m_PinnedAssetsByOwner);
-            OLD_AssetPinCounts.swap(m_AssetPinCounts);
             OLD_LoadingAssets.swap(m_LoadingAssets);
             OLD_AssetRegistry.swap(m_AssetRegistry);
         }
 
         OLD_LoadedAssets.clear();
-        OLD_PinnedAssetsByOwner.clear();
-        OLD_AssetPinCounts.clear();
         OLD_AssetRegistry.clear();
 
         m_Project.reset();
@@ -187,7 +181,8 @@ namespace ignite
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
-            metadata.filepath = filepath;
+            Ref<Project> activeProj = m_Project.lock();
+            metadata.filepath = activeProj ? activeProj->GetProjectRelativeFilepath(filepath) : filepath;
             metadata.type = GetAssetTypeFromExtension(filepath.extension().generic_string());
             AssignMetaData(handle, metadata);
             GetAsset(handle);
@@ -225,7 +220,8 @@ namespace ignite
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
-            metadata.filepath = filepath;
+            Ref<Project> activeProj = m_Project.lock();
+            metadata.filepath = activeProj ? activeProj->GetProjectRelativeFilepath(filepath) : filepath;
             metadata.type = GetAssetTypeFromExtension(filepath.extension().generic_string());
             AssignMetaData(handle, metadata);
             GetAssetImmediate(handle);
@@ -248,11 +244,15 @@ namespace ignite
     {
         LOG_ASSERT(handle != AssetHandle(0), "[Asset Manager] Invalid asset handle");
 
-        std::unique_lock lock(m_AssetMutex);
+        {
+            std::unique_lock lock(m_AssetMutex);
 
-        // Sync metadata with Rust AssetManager backend
-        ignite_rs_asset_assign_metadata(static_cast<uint64_t>(handle),
-                                        metadata.filepath.generic_string().c_str(), static_cast<AssetType_RS>(metadata.type));
+            // Sync metadata with Rust AssetManager backend
+            ignite_rs_asset_assign_metadata(static_cast<uint64_t>(handle),
+                metadata.filepath.generic_string().c_str(), static_cast<AssetType_RS>(metadata.type));
+        }
+
+        SyncFromRust();
     }
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
@@ -270,10 +270,14 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        std::unique_lock lock(m_AssetMutex);
+        {
+            std::unique_lock lock(m_AssetMutex);
 
-        // Sync removal with Rust AssetManager backend
-        ignite_rs_asset_remove_metadata(static_cast<uint64_t>(handle));
+            // Sync removal with Rust AssetManager backend
+            ignite_rs_asset_remove_metadata(static_cast<uint64_t>(handle));
+        }
+
+        SyncFromRust();
     }
 
     void AssetManager::LoadAssetAsync(AssetHandle handle)
@@ -284,153 +288,6 @@ namespace ignite
     void AssetManager::LoadAssetImmediate(AssetHandle handle)
     {
         GetAssetImmediate<Asset>(handle);
-    }
-
-    void AssetManager::AddAssetPin(AssetHandle handle, std::string_view ownerTag)
-    {
-        if (handle == AssetHandle(0) || ownerTag.empty())
-        {
-            return;
-        }
-
-        std::unique_lock lock(m_AssetMutex);
-        auto &ownedAssets = m_PinnedAssetsByOwner[std::string(ownerTag)];
-        if (ownedAssets.insert(handle).second)
-        {
-            ++m_AssetPinCounts[handle];
-            ignite_rs_asset_pin(static_cast<uint64_t>(handle));
-        }
-    }
-
-    void AssetManager::RemoveAssetPin(AssetHandle handle, std::string_view ownerTag)
-    {
-        if (handle == AssetHandle(0) || ownerTag.empty())
-        {
-            return;
-        }
-
-        std::unique_lock lock(m_AssetMutex);
-        const auto ownerIt = m_PinnedAssetsByOwner.find(std::string(ownerTag));
-        if (ownerIt == m_PinnedAssetsByOwner.end())
-        {
-            return;
-        }
-
-        if (!ownerIt->second.erase(handle))
-        {
-            return;
-        }
-
-        if (ownerIt->second.empty())
-        {
-            m_PinnedAssetsByOwner.erase(ownerIt);
-        }
-
-        const auto pinIt = m_AssetPinCounts.find(handle);
-        if (pinIt == m_AssetPinCounts.end())
-        {
-            return;
-        }
-
-        if (pinIt->second <= 1)
-        {
-            m_AssetPinCounts.erase(pinIt);
-        }
-        else
-        {
-            --pinIt->second;
-        }
-
-        ignite_rs_asset_unpin(static_cast<uint64_t>(handle));
-    }
-
-    void AssetManager::ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles)
-    {
-        if (ownerTag.empty())
-        {
-            return;
-        }
-
-        std::unique_lock lock(m_AssetMutex);
-        std::unordered_set<AssetHandle> previousHandles;
-        if (const auto ownerIt = m_PinnedAssetsByOwner.find(ownerTag); ownerIt != m_PinnedAssetsByOwner.end())
-        {
-            previousHandles = ownerIt->second;
-        }
-
-        for (AssetHandle handle : previousHandles)
-        {
-            if (handles.contains(handle))
-            {
-                continue;
-            }
-
-            if (auto pinIt = m_AssetPinCounts.find(handle); pinIt != m_AssetPinCounts.end())
-            {
-                if (pinIt->second <= 1)
-                {
-                    m_AssetPinCounts.erase(pinIt);
-                }
-                else
-                {
-                    --pinIt->second;
-                }
-            }
-        }
-
-        for (AssetHandle handle : handles)
-        {
-            if (handle == AssetHandle(0) || previousHandles.contains(handle))
-            {
-                continue;
-            }
-
-            ++m_AssetPinCounts[handle];
-        }
-
-        if (handles.empty())
-        {
-            m_PinnedAssetsByOwner.erase(ownerTag);
-        }
-        else
-        {
-            m_PinnedAssetsByOwner[ownerTag] = handles;
-        }
-    }
-
-    void AssetManager::ClearAssetPins(std::string_view ownerTag)
-    {
-        ReplaceAssetPins(std::string(ownerTag), {});
-    }
-
-    bool AssetManager::IsAssetPinned(AssetHandle handle) const
-    {
-        std::unique_lock lock(m_AssetMutex);
-        return m_AssetPinCounts.contains(handle);
-    }
-
-    uint32_t AssetManager::GetAssetPinCount(AssetHandle handle) const
-    {
-        std::unique_lock lock(m_AssetMutex);
-        if (m_AssetPinCounts.contains(handle))
-        {
-            return m_AssetPinCounts.at(handle);
-        }
-        return 0;
-    }
-
-    std::vector<std::string> AssetManager::GetAssetPinOwners(AssetHandle handle) const
-    {
-        std::unique_lock lock(m_AssetMutex);
-        std::vector<std::string> owners;
-        for (const auto &[owner, assets] : m_PinnedAssetsByOwner)
-        {
-            if (assets.contains(handle))
-            {
-                owners.push_back(owner);
-            }
-        }
-        return owners;
     }
 
     void AssetManager::SyncFromRust()
@@ -461,10 +318,12 @@ namespace ignite
             metadata.filepath = entries[i].filepath;
             metadata.type = static_cast<AssetType>(entries[i].asset_type);
 
+            // Asset Registry
             m_AssetRegistry[handle] = metadata;
 
             if (!metadata.filepath.empty())
             {
+                // Asset Handle by Path
                 const ignite::Path absoluteMetadataPath = activeProject ? activeProject->GetProjectFilepath(metadata.filepath) : metadata.filepath;
                 m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
             }
@@ -477,15 +336,6 @@ namespace ignite
     {
         // Sync metadata registry from Rust source of truth
         SyncFromRust();
-
-        // Call each frame
-        assetUnloadTimer += deltaTime;
-        constexpr float kUnloadInterval = 10.0f;
-        if (assetUnloadTimer >= kUnloadInterval)
-        {
-            assetUnloadTimer = 0.0f;
-            UnloadUnusedAssets();
-        }
 
         // Call each frame
         if (!m_OnChangeCallbacks.empty())
@@ -597,8 +447,7 @@ namespace ignite
 
             for (const auto &[handle, asset] : m_LoadedAssets)
             {
-                const bool pinned = m_AssetPinCounts.contains(handle);
-                if (asset && !pinned && asset.use_count() == 1)
+                if (asset && asset.use_count() == 1)
                 {
                     assetsToUnload.push_back(handle);
                     assetsToDestroy.push_back(asset);
@@ -670,7 +519,10 @@ namespace ignite
 
     bool AssetManager::IsAssetHandleValid(AssetHandle handle) const
     {
-        return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
+        if (static_cast<uint64_t>(handle) == 0)
+            return false;
+
+        return m_AssetRegistry.contains(handle) || m_LoadedAssets.contains(handle);
     }
 
     Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)

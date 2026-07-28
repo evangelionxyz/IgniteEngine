@@ -215,6 +215,8 @@ namespace ignite
 
         m_State = playOrSimulateState;
 
+        PreloadReferencedAssets();
+
         if (auto *scriptEngine = ScriptEngine::GetInstance())
         {
             scriptEngine->SetSceneContext(this);
@@ -231,21 +233,22 @@ namespace ignite
             if (as.handle == AssetHandle(0))
                 continue;
 
-            // Main thread
-			// Load the sound asset immediately to ensure it's ready for playback
-            Ref<FmodSound> sound = m_AssetManager->GetAssetImmediate<FmodSound>(as.handle);
-            if (as.playOnStart)
-            {
-                if (sound)
-                {
-                    RebuildAudioSourceDspChain(as, sound);
+            Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+			if (sound)
+			{
+				RebuildAudioSourceDspChain(as, sound);
+                
+                sound->Stop();
+
+                if (as.playOnStart)
                     sound->Play();
-                    sound->SetVolume(as.volume);
-                    sound->SetPitch(as.pitch);
-                    sound->SetPan(as.pan);
-                    sound->SetMode(as.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
-                }
-            }
+
+				sound->SetVolume(as.volume);
+				sound->SetPitch(as.pitch);
+				sound->SetPan(as.pan);
+				sound->SetMode(as.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
+			}
+            
         }
 
         m_Physics2D->SimulationStart(this);
@@ -736,21 +739,19 @@ namespace ignite
 				m_Physics3D->Simulate(1.0f / 60.0f);
 
 				// Calculate Parent transform
-				static auto CalculateParentTransform = [this](const IDComponent &idc, TransformComponent &trc, const glm::vec3 &worldTranslation, const glm::quat &worldRotation)
+				auto CalculateParentTransform = [this](const IDComponent &idc, TransformComponent &trc, const glm::vec3 &worldTranslation, const glm::quat &worldRotation)
 				{
 					if (idc.parent != 0)
 					{
 						Entity parentEntity = SceneManager::GetEntity(this, idc.parent);
-						if (parentEntity)
+						if (parentEntity && parentEntity.HasComponent<TransformComponent>())
 						{
 							const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
-							const glm::mat4 parentWorldMatrix = parentTr.world.GetMatrix();
-							const glm::mat4 invParentWorldMatrix = glm::inverse(parentWorldMatrix);
 
 							const glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation)
 								* glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), trc.world.scale);
 
-							const glm::mat4 childLocalMatrix = invParentWorldMatrix * childWorldMatrix;
+							const glm::mat4 childLocalMatrix = glm::inverse(parentTr.world.GetMatrix()) * childWorldMatrix;
 
 							const glm::vec3 savedLocalScale = trc.local.scale;
 							Transform::Decompose(childLocalMatrix, trc.local);
@@ -952,6 +953,32 @@ namespace ignite
         });
 
         return handles;
+    }
+
+    void Scene::PreloadReferencedAssets()
+    {
+        if (!m_AssetManager)
+        {
+            m_AssetManager = AssetManager::GetInstance();
+        }
+
+        if (!m_AssetManager)
+        {
+            return;
+        }
+
+        const auto handles = CollectReferencedAssetHandles();
+        for (AssetHandle handle : handles)
+        {
+            if (handle != AssetHandle(0))
+            {
+                Ref<Asset> asset = m_AssetManager->GetAsset<Asset>(handle);
+                if (asset)
+                {
+                    m_LoadedAssets[handle] = asset;
+                }
+            }
+        }
     }
 
 	void Scene::OnAssetChangeSignal(const AssetChangeSignal &signal)

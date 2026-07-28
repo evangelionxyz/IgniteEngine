@@ -530,8 +530,12 @@ namespace ignite
 
     Entity SceneManager::GetEntity(Scene *scene, UUID uuid)
     {
-        if (scene->entities.contains(uuid))
-            return Entity { scene->entities[uuid], scene };
+        if (scene && scene->entities.contains(uuid))
+        {
+            entt::entity handle = scene->entities.at(uuid);
+            if (scene->registry && scene->registry->valid(handle))
+                return Entity{ handle, scene };
+        }
 
         return Entity{};
     }
@@ -654,6 +658,7 @@ namespace ignite
 
         // copy scene extra data
         newScene->handle = other->handle;
+        newScene->m_LoadedAssets = other->m_LoadedAssets;
 
         // Do not copy entities (it will be created when creating entity)
         // newScene->entities = other->entities;
@@ -706,19 +711,8 @@ namespace ignite
 
         Application::SubmitToMainThread([nextSceneHandle, assetManager]()
         {
-			// Load incoming scene immediate so we can collect its referenced assets
-			Ref<Scene> nextScene = assetManager->GetAssetImmediate<Scene>(nextSceneHandle);
-			if (!nextScene)
-			{
-				LOG_ERROR("[Scene Manager] Failed to load pending scene asset {}", static_cast<uint64_t>(nextSceneHandle));
-				return;
-			}
-
-			std::unordered_set<AssetHandle> referencedAssets = nextScene->CollectReferencedAssetHandles();
-			referencedAssets.insert(nextSceneHandle);
-
-			assetManager->ReplaceAssetPins("scene_transition", referencedAssets);
-
+			// Load incoming scene async so we can collect its referenced assets
+			Ref<Scene> nextScene = assetManager->GetAsset<Scene>(nextSceneHandle);
 			s_TransitionPending = true;
 			s_PendingSceneHandle = nextSceneHandle;
         });
@@ -729,13 +723,20 @@ namespace ignite
         if (!s_TransitionPending)
             return;
 
-        s_TransitionPending = false;
-        AssetHandle nextSceneHandle = s_PendingSceneHandle;
-        s_PendingSceneHandle = AssetHandle(0);
-
         auto* assetManager = AssetManager::GetInstance();
         if (!assetManager)
             return;
+
+        AssetHandle nextSceneHandle = s_PendingSceneHandle;
+        Ref<Scene> loadedScene = assetManager->GetAsset<Scene>(nextSceneHandle);
+        if (!loadedScene)
+        {
+            // Asset is still loading on worker thread, defer transition execution
+            return;
+        }
+
+        s_TransitionPending = false;
+        s_PendingSceneHandle = AssetHandle(0);
 
         Ref<Project> project = assetManager->LockActiveProject();
         if (!project)
@@ -748,13 +749,9 @@ namespace ignite
             previousState = currentScene->GetState();
             currentScene->OnStop();
         }
-
-        // Load the new scene
-        Ref<Scene> loadedScene = assetManager->GetAssetImmediate<Scene>(nextSceneHandle);
         if (!loadedScene)
         {
             LOG_ERROR("[Scene Manager] Failed to load transition target scene!");
-            assetManager->ClearAssetPins("scene_transition");
             return;
         }
 
@@ -762,14 +759,13 @@ namespace ignite
         if (!transitionScene)
         {
             LOG_ERROR("[Scene Manager] Failed to copy transition scene!");
-            assetManager->ClearAssetPins("scene_transition");
             return;
         }
 
         project->SetActiveScene(transitionScene);
         transitionScene->OnStart(previousState);
 
-        assetManager->ClearAssetPins("scene_transition");
+        assetManager->UnloadUnusedAssets();
 
         LOG_INFO("[Scene Manager] Successfully transitioned to scene {}", project->GetAssetDisplayName(nextSceneHandle));
     }

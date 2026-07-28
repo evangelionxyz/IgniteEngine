@@ -80,12 +80,6 @@ IgniteResult ignite_rs_asset_assign_metadata(uint64_t handle, const char* path, 
 IgniteResult ignite_rs_asset_get_metadata(uint64_t handle, char* out_path_buf, size_t max_len, AssetType_RS* out_type);
 IgniteResult ignite_rs_asset_remove_metadata(uint64_t handle);
 
-// Asset Pinning & Lifetime Tracking FFI (Rule 13 & 14)
-IgniteResult ignite_rs_asset_pin(uint64_t handle);
-IgniteResult ignite_rs_asset_unpin(uint64_t handle);
-bool ignite_rs_asset_is_pinned(uint64_t handle);
-uint32_t ignite_rs_asset_get_pin_count(uint64_t handle);
-
 // Bulk Registry Snapshot & Lifecycle FFI
 uint64_t ignite_rs_asset_get_registry_version(void);
 size_t ignite_rs_asset_get_registry_count(void);

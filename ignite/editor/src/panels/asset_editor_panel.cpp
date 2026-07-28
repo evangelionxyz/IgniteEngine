@@ -168,10 +168,6 @@ namespace ignite
             return assetPath;
         }
 
-        static std::string BuildAssetEditorPinOwnerTag(AssetHandle handle)
-        {
-            return std::format("editor.asset-editor.{}", static_cast<uint64_t>(handle));
-        }
 
         static void SaveAnimatorControllerEditorMeta(Project *project, const Ref<AnimatorController> &controller, const AssetMetaData &metadata,
             const AnimatorControllerEditorState &ui)
@@ -903,10 +899,6 @@ namespace ignite
                 return false;
             }
 
-            if (m_EditorLayer && m_EditorLayer->GetActiveProject())
-            {
-                AssetManager::GetInstance()->ClearAssetPins(BuildAssetEditorPinOwnerTag(assetData.handle));
-            }
 
             if (assetData.sceneData.sceneRenderer || assetData.sceneData.sceneRT || assetData.sceneData.uiRT || assetData.sceneData.compositeRT)
             {
@@ -1250,7 +1242,6 @@ namespace ignite
                         data.requestFocus = true;
                         data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
 
-                        assetManager->AddAssetPin(handle, BuildAssetEditorPinOwnerTag(handle));
 
                         InitializeSceneData(data);
 
@@ -4562,11 +4553,7 @@ namespace ignite
                             const std::string previewAnimLabel = assetManager->GetAssetDisplayName(previewState.previewAnimationHandle);
                             if (UI::DrawAssetDropTarget("Animation", previewAnimLabel.c_str(), { AssetType::SkeletalAnimation }, &previewState.previewAnimationHandle, assetManager))
                             {
-                                if (previewState.previewAnimationHandle != AssetHandle(0))
-                                {
-                                    previewState.timeSeconds = 0.0f;
-                                    assetManager->AddAssetPin(previewState.previewAnimationHandle, BuildAssetEditorPinOwnerTag(previewState.previewAnimationHandle));
-                                }
+                                previewState.timeSeconds = 0.0f;
                             }
 
                             ImGui::Spacing();
@@ -5041,7 +5028,6 @@ namespace ignite
             return true;
         }
 
-        AssetManager::GetInstance()->AddAssetPin(handle, BuildAssetEditorPinOwnerTag(handle));
 
         std::string assetName = metadata.filepath.filename().string();
         if (assetName.empty())
@@ -5148,13 +5134,6 @@ namespace ignite
 
     void AssetEditorPanel::CloseAllAssetEditors()
     {
-		if (auto assetManager = AssetManager::GetInstance())
-		{
-			for (const auto &assetData : m_Assets)
-			{
-				assetManager->ClearAssetPins(BuildAssetEditorPinOwnerTag(assetData.handle));
-			}
-		}
         m_Assets.clear();
     }
 }

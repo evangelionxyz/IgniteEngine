@@ -97,6 +97,7 @@ namespace ignite
         physics::Physics3D *GetPhysics3D() { return m_Physics3D; }
 
         std::unordered_set<AssetHandle> CollectReferencedAssetHandles() const;
+        void PreloadReferencedAssets();
 
         float timeInSeconds = 0.0f;
 
@@ -121,6 +122,7 @@ namespace ignite
         SignalToken m_AssetChangeToken = kInvalidSignalToken;
         ESceneState m_State = ESceneState::Stop;
 
+        std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
         std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;
 

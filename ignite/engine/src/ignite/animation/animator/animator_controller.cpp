@@ -23,10 +23,7 @@
 
 namespace ignite
 {
-    AnimState::~AnimState()
-    {
-		AssetManager::GetInstance()->RemoveAssetPin(m_MotionHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MotionHandle));
-    }
+    AnimState::~AnimState() = default;
 
 	void AnimState::SetAnimationHandle(const AssetHandle &animationHandle)
 	{
@@ -40,43 +37,26 @@ namespace ignite
 
     void AnimState::SetMotion(MotionType type, const AssetHandle &motionHandle)
     {
-        if (m_MotionHandle != AssetHandle(0))
-            AssetManager::GetInstance()->RemoveAssetPin(m_MotionHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MotionHandle));
-
         m_MotionType = type;
         m_MotionHandle = motionHandle;
-        
-        if (m_MotionHandle != AssetHandle(0))
-            AssetManager::GetInstance()->AddAssetPin(m_MotionHandle, std::format("animstate.{}.{}", (uint64_t)m_UUID, (uint64_t)m_MotionHandle));
     }
 
 	AnimatorController::~AnimatorController()
 	{
         states.clear();
-		AssetManager::GetInstance()->RemoveAssetPin(m_SkeletonHandle, std::format("animatorcontroller.{}.{}", (uint64_t)handle, (uint64_t)m_SkeletonHandle));
 	}
 
 	Ref<AnimatorController> AnimatorController::Clone(const Ref<AnimatorController> &other)
 	{
         Ref<AnimatorController> cloneAnim = CreateRef<AnimatorController>(*other);
         cloneAnim->handle = AssetHandle();
-        
-        // Copy and create asset pin
-        // for skeleton and states
         cloneAnim->SetSkeletonHandle(other->GetSkeletonHandle());
-		for (auto &[name, state] : cloneAnim->states)
-		{
-            // re assign to add asset pin
-			state.SetMotion(state.GetMotionType(), state.GetMotionHandle());
-		}
         return cloneAnim;
 	}
 
 	void AnimatorController::SetSkeletonHandle(const AssetHandle &skeletonHandle)
 	{
 		m_SkeletonHandle = skeletonHandle;
-		if (handle != AssetHandle(0) || m_SkeletonHandle != AssetHandle(0))
-		    AssetManager::GetInstance()->AddAssetPin(m_SkeletonHandle, std::format("animatorcontroller.{}.{}", (uint64_t)handle, (uint64_t)m_SkeletonHandle));
 	}
 
 	std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
