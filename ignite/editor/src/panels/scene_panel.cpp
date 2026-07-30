@@ -23,7 +23,7 @@
 #include "ignite/math/frustum.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
-#include "ignite/scripting/script_instances/script_instance.hpp"
+#include "ignite/scripting/script_instance.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"

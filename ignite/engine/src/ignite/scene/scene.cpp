@@ -646,7 +646,7 @@ namespace ignite
 			});
 
             {
-                IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
+                IGN_PROFILE_SCOPE("Scene::Script OnUpdate");
                 registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &script)
                 {
                     if (script.runtimeScriptInstance)
@@ -719,13 +719,22 @@ namespace ignite
                     }
                 }
             }
+
+            // Frame synchronization point: apply pending live C# hot reload
+            if (ScriptEngine *se = ScriptEngine::GetInstance())
+            {
+                if (se->IsHotReloadPending())
+                {
+                    se->HotReloadAssembly();
+                }
+            }
         }
     }
 
 	void Scene::OnFixedUpdateRuntimeSimulate()
 	{
 		{
-			IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
+			IGN_PROFILE_SCOPE("Scene::Script OnFixedUpdate");
 			registry->view<ScriptComponent>().each([](entt::entity e, ScriptComponent &script)
 			{
 				if (script.runtimeScriptInstance)

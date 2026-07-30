@@ -10,10 +10,10 @@
 #include "MochiSharp/MochiManagedFunctions.hpp"
 #include "MochiSharp/String.hpp"
 
-#include "ignite/scripting/script_engine.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/asset/asset_manager.hpp"
-#include "ignite/scripting/script_instances/script_instance.hpp"
+#include "script_engine.hpp"
+#include "script_instance.hpp"
 
 namespace ignite
 {
@@ -207,7 +207,7 @@ namespace ignite
         }
 
         const auto *api = CoreScriptGlue::GetAPI();
-        const uint64_t apiPtr = reinterpret_cast<uint64_t>(api);
+        const auto apiPtr = (uint64_t)api;
 
         const int methodId = BindStaticMethod("Ignite.Core.CoreInternalCalls", "Initialize");
         if (methodId == 0)
@@ -236,7 +236,7 @@ namespace ignite
         }
 
         const auto *api = ComponentScriptGlue::GetAPI();
-        const uint64_t apiPtr = reinterpret_cast<uint64_t>(api);
+        const auto apiPtr = (uint64_t)api;
 
         const int methodId = BindStaticMethod("Ignite.Core.Component.ComponentInternalCalls", "Initialize");
         if (methodId == 0)

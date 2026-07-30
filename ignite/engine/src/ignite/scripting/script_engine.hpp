@@ -6,7 +6,8 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/asset/asset_importer.hpp"
-#include "script_instances/script_instance.hpp"
+
+#include "script_instance.hpp"
 #include "scriptable_object.hpp"
 #include "script_host.hpp"
 #include "FileWatch.hpp"
@@ -33,13 +34,15 @@ namespace ignite
         bool LoadAppAssembly(const ignite::Path &filepath);
 
         bool ReloadAssembly();
+        bool IsHotReloadPending() const;
+        void HotReloadAssembly();
 
         void SetSceneContext(Scene *scene);
         void ClearSceneContext();
         
         // Entity script
         bool IsEntityClassExists(const std::string &fullClassName);
-        Ref<ScriptInstance> OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className);
+        Ref<ScriptInstance> OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className, bool invokeOnCreate = true);
         void OnDestroyEntityInstance(ScriptInstanceID instanceID);
 
         Ref<ScriptClass> GetEntityClassByName(const std::string &name);
@@ -74,6 +77,7 @@ namespace ignite
         void LoadAppAssemblyClasses();
         void LoadAppClasses(const std::string &classFullName, ScriptClassMap &outClasses);
         void RefreshScriptableObjectInstances();
+        void CaptureAllInstanceFieldValues();
 
         Project *m_Project;
         Scene *m_Scene;

@@ -49,3 +49,6 @@
 [submodule "thirdparty/SDL3"]
 	path = thirdparty/SDL3
 	url = https://github.com/libsdl-org/SDL.git
+[submodule "thirdparty/Harmony"]
+	path = thirdparty/Harmony
+	url = https://github.com/pardeike/Harmony.git

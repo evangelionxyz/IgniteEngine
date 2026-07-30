@@ -93,6 +93,7 @@ namespace ignite
         bool isReady = false;
         bool assemblyReloadingPending = false;
         bool assemblyReloadDeferred = false;
+        bool hotReloadPending = false;
         bool hasAppAssemblyLastWriteTime = false;
 
         // Entity script
@@ -234,7 +235,7 @@ namespace ignite
 
         // Build solution if the App Assembly is not available yet
         EnsureAppAssembly();
-		scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
+        scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
     }
 
     ScriptEngine::~ScriptEngine()
@@ -287,9 +288,9 @@ namespace ignite
             {
                 if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsRunning())
                 {
-                    scriptEngineData->assemblyReloadDeferred = true;
+                    scriptEngineData->hotReloadPending = true;
                     scriptEngineData->assemblyReloadingPending = false;
-                    LOG_INFO("[Script Engine] App assembly change detected during play. Reload deferred until scene stops.");
+                    LOG_INFO("[Script Engine] App assembly change detected during play. Hot reload scheduled for frame end.");
                     return;
                 }
 
@@ -436,7 +437,7 @@ namespace ignite
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
         EnsureAppAssembly();
-		scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
+        scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
 
         return true;
     }
@@ -475,7 +476,159 @@ namespace ignite
         return false;
     }
 
-    Ref<ScriptInstance> ScriptEngine::OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className)
+    bool ScriptEngine::IsHotReloadPending() const
+    {
+        return scriptEngineData ? scriptEngineData->hotReloadPending : false;
+    }
+
+    void ScriptEngine::CaptureAllInstanceFieldValues()
+    {
+        if (!scriptEngineData || !scriptEngineData->scriptHost)
+            return;
+
+        char buffer[64];
+        for (auto &[instanceID, scriptInstance] : scriptEngineData->entityScriptInstances)
+        {
+            if (!scriptInstance)
+                continue;
+
+            auto scriptClass = scriptInstance->GetScriptClass();
+            if (!scriptClass)
+                continue;
+
+            auto *instanceFields = scriptClass->GetInstanceFieldsById(instanceID);
+            if (!instanceFields)
+                continue;
+
+            for (auto &[fieldName, instanceField] : *instanceFields)
+            {
+                if (instanceField.field.Type == ScriptFieldType::Invalid)
+                    continue;
+
+                memset(buffer, 0, sizeof(buffer));
+                if (scriptEngineData->scriptHost->GetInstanceFieldValue(instanceID, fieldName, buffer, sizeof(buffer)))
+                {
+                    instanceField.SetValueRaw(buffer, sizeof(buffer));
+                }
+            }
+        }
+    }
+
+    void ScriptEngine::HotReloadAssembly()
+    {
+        if (!scriptEngineData || !m_Scene)
+            return;
+
+        LOG_INFO("[Script Engine] Hot reloading app assembly in play mode...");
+
+        // 1. Capture current C# managed field values to C++ ScriptInstanceFields
+        CaptureAllInstanceFieldValues();
+
+        // 2. Snapshot current active script components in the scene
+        struct ScriptEntitySnapshot
+        {
+            entt::entity entity;
+            ScriptInstanceID instanceID;
+            std::string className;
+        };
+        std::vector<ScriptEntitySnapshot> scriptSnapshots;
+
+        if (m_Scene && m_Scene->registry)
+        {
+            m_Scene->registry->view<ScriptComponent>().each([this, &scriptSnapshots](entt::entity e, ScriptComponent &script)
+            {
+                if (script.runtimeScriptInstance)
+                {
+                    Entity entity{ e, m_Scene };
+                    scriptSnapshots.push_back({ e, entity.GetUUID(), script.className });
+                    script.runtimeScriptInstance = nullptr;
+                }
+            });
+        }
+
+        // 3. Clear entity script instances map before reloading assembly
+        scriptEngineData->entityScriptInstances.clear();
+
+        // 4. Reset filewatcher write time guard and reload assembly
+        scriptEngineData->hasAppAssemblyLastWriteTime = false;
+        scriptEngineData->appAssemblyLastWriteTime = {};
+        scriptEngineData->appAssemblyFileWatcher.reset();
+
+        if (!ReloadAssembly())
+        {
+            LOG_ERROR("[Script Engine] Hot reload failed during assembly reload!");
+            scriptEngineData->hotReloadPending = false;
+            return;
+        }
+
+        // 5. Re-create script instances for entities without calling OnCreate
+        for (const auto &snap : scriptSnapshots)
+        {
+            if (m_Scene->registry->valid(snap.entity))
+            {
+                auto &script = m_Scene->registry->get<ScriptComponent>(snap.entity);
+                script.runtimeScriptInstance = OnCreateEntityInstance(snap.instanceID, snap.className, /*invokeOnCreate=*/false);
+
+                if (script.runtimeScriptInstance)
+                {
+                    auto scriptClass = script.runtimeScriptInstance->GetScriptClass();
+                    auto *instanceFields = scriptClass->GetInstanceFieldsById(snap.instanceID);
+                    if (instanceFields)
+                    {
+                        for (auto &[fieldName, instanceField] : *instanceFields)
+                        {
+                            // Restore primitive / value-type [SerializeField] fields into
+                            // the freshly-created managed instance.  Entity and Asset fields
+                            // hold GC handles that were invalidated when the old ALC was
+                            // unloaded, so we skip them here — the script must re-acquire
+                            // those references in its OnHotReload() override.
+                            switch (instanceField.field.Type)
+                            {
+                                case ScriptFieldType::Bool:    { auto v = instanceField.GetValue<bool>();     scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Byte:    { auto v = instanceField.GetValue<uint8_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::SByte:   { auto v = instanceField.GetValue<int8_t>();   scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Char:    { auto v = instanceField.GetValue<char16_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Short:   { auto v = instanceField.GetValue<int16_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::UShort:  { auto v = instanceField.GetValue<uint16_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Int:     { auto v = instanceField.GetValue<int32_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::UInt:    { auto v = instanceField.GetValue<uint32_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Long:    { auto v = instanceField.GetValue<int64_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::ULong:   { auto v = instanceField.GetValue<uint64_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Float:   { auto v = instanceField.GetValue<float>();    scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Double:  { auto v = instanceField.GetValue<double>();   scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Vector2: { auto v = instanceField.GetValue<glm::vec2>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Vector3: { auto v = instanceField.GetValue<glm::vec3>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Vector4: { auto v = instanceField.GetValue<glm::vec4>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Color:   { auto v = instanceField.GetValue<glm::vec4>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Quat:    { auto v = instanceField.GetValue<glm::quat>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Enum:    { auto v = instanceField.GetValue<int32_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::String:
+                                {
+                                    auto str = instanceField.GetValue<std::string>();
+                                    scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, str.data(), (int)str.size());
+                                    break;
+                                }
+                                // Entity / Asset hold GC handles from the old (now-unloaded) ALC.
+                                // Passing them would crash MochiSharp's marshaller.
+                                // The script must re-acquire them in OnHotReload().
+                                case ScriptFieldType::Entity:
+                                case ScriptFieldType::Asset:
+                                default: break;
+                            }
+                        }
+                    }
+
+                    // 6. Invoke OnHotReload() callback
+                    script.runtimeScriptInstance->InvokeOnHotReload();
+                }
+            }
+        }
+
+        scriptEngineData->hotReloadPending = false;
+        LOG_INFO("[Script Engine] App assembly hot reload complete! {} script instances updated.", scriptSnapshots.size());
+    }
+
+    Ref<ScriptInstance> ScriptEngine::OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className, bool invokeOnCreate)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -485,7 +638,8 @@ namespace ignite
             scriptEngineData->entityScriptInstances[instanceID] = scriptInstance;
 
             // C# On Create Function
-            scriptInstance->InvokeOnCreate();
+            if (invokeOnCreate)
+                scriptInstance->InvokeOnCreate();
             return scriptInstance;
         }
 

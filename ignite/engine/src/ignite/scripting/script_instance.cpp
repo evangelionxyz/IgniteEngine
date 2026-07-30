@@ -79,6 +79,7 @@ namespace ignite
         m_OnDestroyMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnDestroy");
         m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnUpdate");
         m_OnFixedUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnFixedUpdate");
+        m_OnHotReloadMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnHotReload");
 
         // Bind internal collision callback
         m_OnCollisionEnterMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionEnterNative");
@@ -350,6 +351,19 @@ namespace ignite
 			{
 				LOG_ERROR("[Script Instance] OnFixedUpdate invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
                 m_OnFixedUpdateMethodId = 0;
+			}
+        }
+	}
+
+	void ScriptInstance::InvokeOnHotReload()
+	{
+		IGN_PROFILE_FUNCTION();
+        if (m_OnHotReloadMethodId)
+        {
+			if (!m_ScriptHost->Invoke(m_OnHotReloadMethodId, nullptr, 0, nullptr))
+			{
+				LOG_ERROR("[Script Instance] OnHotReload invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnHotReloadMethodId = 0;
 			}
         }
 	}

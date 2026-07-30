@@ -155,16 +155,16 @@ namespace ignite
 
     struct ScriptField
     {
-        ScriptFieldType Type = ScriptFieldType::Invalid;
         std::string Name;
         std::string ManagedTypeName;
         std::string ListElementTypeName; // Populated when Type is a List_* variant
-        bool IsPublic = false;
-        bool HasSerializeFieldAttribute = false;
-
-        bool IsEnum = false;
-        std::vector<std::string> EnumNames;
+		std::vector<std::string> EnumNames;
         std::vector<int> EnumValues;
+
+		ScriptFieldType Type = ScriptFieldType::Invalid;
+		bool IsPublic = false;
+		bool HasSerializeFieldAttribute = false;
+		bool IsEnum = false;
 
         bool IsList() const
         {

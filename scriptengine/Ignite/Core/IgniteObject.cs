@@ -18,6 +18,7 @@ public abstract class IgniteObject : IEquatable<IgniteObject>
     public virtual void OnUpdate(float deltaTime) { }
     public virtual void OnDestroy() { }
     public virtual void OnFixedUpdate() { }
+    public virtual void OnHotReload() { }
 
     // Equatable Funcs
     public override bool Equals(object? obj) => obj is IgniteObject so && Equals(so);

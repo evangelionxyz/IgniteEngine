@@ -1106,6 +1106,116 @@ public class GameSettings : ScriptableObject
     }
 }
 
+// -------------------------------------------------
+// Live Play-Mode C# Script Hot-Reload Test
+// -------------------------------------------------
+TEST(EngineTests, ScriptEngineLivePlayModeHotReload)
+{
+    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    ignite::Path projectDir = testResourcesRoot / "temp/LiveHotReloadProject";
+
+    if (ignite::Path::exists(projectDir))
+    {
+        std::filesystem::remove_all(projectDir.string());
+    }
+    ignite::Path::create_directories(projectDir);
+
+    ProjectInfo info;
+    info.name = "LiveHotReloadProject";
+    info.filepath = projectDir / "LiveHotReloadProject.ixproj";
+    info.rootDirectory = projectDir;
+    info.assetDirectory = "Assets";
+    info.scriptsDirectory = "Scripts";
+    info.assetRegistryFilepath = "AssetRegistry.ixreg";
+    info.configuration = ProjectConfiguration::Debug;
+
+    Ref<Project> project = Project::Create(info);
+    ASSERT_NE(project, nullptr);
+
+    project->InitScriptEngine();
+
+    // Create C# script LiveTestScript.cs
+    ignite::Path scriptFilepath = project->GetScriptsDirectory() / "LiveTestScript.cs";
+    {
+        std::ofstream out(scriptFilepath.generic_string());
+        out << R"(using Ignite;
+
+namespace LiveHotReloadProject;
+
+public class LiveTestScript : Entity
+{
+    public float Speed = 10.0f;
+    public bool HotReloaded = false;
+
+    public override void OnHotReload()
+    {
+        HotReloaded = true;
+    }
+}
+)";
+    }
+
+    project->RegenerateCSharpProject();
+    project->InitScriptEngine();
+
+    ScriptEngine *scriptEngine = project->GetScriptEngine();
+    ASSERT_NE(scriptEngine, nullptr);
+
+    auto waitReady = [&](int timeoutSec = 30)
+    {
+        auto start = std::chrono::steady_clock::now();
+        while (!scriptEngine->IsReady()
+               && std::chrono::steady_clock::now() - start < std::chrono::seconds(timeoutSec))
+        {
+            Application::GetInstance()->ProcessMainThreadSubmissions();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    };
+
+    waitReady(30);
+    ASSERT_TRUE(scriptEngine->IsReady());
+
+    Ref<Scene> scene = Scene::Create(project.get());
+    scriptEngine->SetSceneContext(scene.get());
+
+    Entity entity = SceneManager::CreateEntity(scene.get(), "TestPlayer", EntityType_Node);
+    auto &sc = entity.AddComponent<ScriptComponent>();
+    sc.className = "LiveHotReloadProject.LiveTestScript";
+
+    scene->OnStart(ESceneState::Play);
+
+    ASSERT_NE(sc.runtimeScriptInstance, nullptr);
+
+    // Modify a field value during play mode
+    sc.runtimeScriptInstance->SetFieldValue<float>("Speed", 55.0f);
+    EXPECT_FLOAT_EQ(sc.runtimeScriptInstance->GetFieldValue<float>("Speed"), 55.0f);
+
+    // Rebuild project DLL to simulate user recompiling a script in play mode
+    project->BuildSolution(true);
+
+    // Wait for SignalBus / FileWatcher to set hotReloadPending
+    auto start = std::chrono::steady_clock::now();
+    while (!scriptEngine->IsHotReloadPending() && std::chrono::steady_clock::now() - start < std::chrono::seconds(10))
+    {
+        Application::GetInstance()->ProcessMainThreadSubmissions();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Process frame update tick (which triggers HotReloadAssembly at frame sync point)
+    scene->OnUpdateRuntimeSimulate(0.016f);
+
+    // Verify script instance was re-created
+    ASSERT_NE(sc.runtimeScriptInstance, nullptr);
+
+    // Verify field value 55.0f was preserved across hot reload
+    EXPECT_FLOAT_EQ(sc.runtimeScriptInstance->GetFieldValue<float>("Speed"), 55.0f);
+
+    // Verify OnHotReload callback was invoked
+    EXPECT_TRUE(sc.runtimeScriptInstance->GetFieldValue<bool>("HotReloaded"));
+
+    scene->OnStop();
+}
+
 int main(int argc, char **argv)
 {
     ignite::Logger::Init();
