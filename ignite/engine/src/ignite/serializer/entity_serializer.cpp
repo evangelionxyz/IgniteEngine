@@ -200,7 +200,16 @@ namespace ignite
                     sr.AddKeyValue("LocalTranslation", comp.local.translation);
                     sr.AddKeyValue("LocalRotation", comp.local.rotation);
                     sr.AddKeyValue("LocalScale", comp.local.scale);
+                }
+                sr.EndMap();
+            }
 
+            // Rendering Component
+            if (entity.HasComponent<RenderingComponent>())
+            {
+                const auto &comp = entity.GetComponent<RenderingComponent>();
+                sr.BeginMap("Rendering");
+                {
                     sr.AddKeyValue("Visible", comp.visible);
                 }
                 sr.EndMap();
@@ -766,7 +775,12 @@ namespace ignite
             comp.local.translation = node["LocalTranslation"].as<glm::vec3>();
             comp.local.rotation = node["LocalRotation"].as<glm::quat>();
             comp.local.scale = node["LocalScale"].as<glm::vec3>();
+        }
 
+        // Rendering component
+        if (YAML::Node node = entityNode["Rendering"])
+        {
+            auto &comp = desEntity.AddComponent<RenderingComponent>();
             comp.visible = node["Visible"].as<bool>();
         }
 

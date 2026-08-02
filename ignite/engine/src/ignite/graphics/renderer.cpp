@@ -165,6 +165,8 @@ namespace ignite
         frame.objectAllocator.SetBuffer(frame.objectBuffer.GetHandle());
         frame.boneAllocator.BeginFrame();
         frame.boneAllocator.SetBuffer(frame.boneBuffer.GetHandle());
+        frame.instanceIndexAllocator.BeginFrame();
+        frame.instanceIndexAllocator.SetBuffer(frame.instanceIndexBuffer.GetHandle());
 	}
 
 	nvrhi::GraphicsAPI Renderer::GetGraphicsAPI()

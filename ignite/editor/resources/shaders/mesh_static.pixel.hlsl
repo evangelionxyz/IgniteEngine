@@ -10,11 +10,12 @@
 
 DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0
 cbuffer CameraBuffer                    : register(b1, space0) { Camera camera; }
-StructuredBuffer<Object> g_ObjectBuffer : register(t2, space0);
-cbuffer SceneBuffer                     : register(b3, space0) { Scene scene; }
-cbuffer CascadesBuffer                  : register(b4, space0) { CascadesShadows csm; }
-cbuffer PointLightBuffer                : register(b5, space0) { PointLight pointLights[MAX_POINT_LIGHTS]; }
-cbuffer SpotLightBuffer                 : register(b6, space0) { SpotLight spotLights[MAX_SPOT_LIGHTS]; }
+StructuredBuffer<Object>   g_ObjectBuffer    : register(t2, space0);
+StructuredBuffer<uint>     g_InstanceIndices : register(t3, space0);
+cbuffer SceneBuffer                     : register(b4, space0) { Scene scene; }
+cbuffer CascadesBuffer                  : register(b5, space0) { CascadesShadows csm; }
+cbuffer PointLightBuffer                : register(b6, space0) { PointLight pointLights[MAX_POINT_LIGHTS]; }
+cbuffer SpotLightBuffer                 : register(b7, space0) { SpotLight spotLights[MAX_SPOT_LIGHTS]; }
 
 // ==============================
 // set 1
@@ -53,7 +54,7 @@ float SelectChannel(float4 value, int channel)
 PSOutput main(PixelVertexInput input)
 {
     PSOutput result;
-    result.objectID = g_ObjectBuffer[g_Push.objectIndex].objectID;
+    result.objectID = input.objectID;
 
     float2 tiledUV = input.uv * material.tilingFactor;
 

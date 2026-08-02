@@ -2,14 +2,16 @@
 #include "include/scene.hlsli"
 #include "include/shadow.hlsli"
 
-DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0
+DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0 - for skeletal: baseInstanceOffset == objectIndex (instancing deferred)
 cbuffer CameraBuffer                    : register(b1, space0) { Camera camera; }
-StructuredBuffer<Object> g_ObjectBuffer : register(t2, space0);
-StructuredBuffer<float4x4> g_Bones      : register(t3, space0);
+StructuredBuffer<Object>   g_ObjectBuffer : register(t2, space0);
+StructuredBuffer<float4x4> g_Bones       : register(t3, space0);
 cbuffer SceneBuffer                     : register(b4, space0) { Scene scene; }
 cbuffer CascadesBuffer                  : register(b5, space0) { CascadesShadows csm; }
+cbuffer PointLightBuffer                : register(b6, space0) { } // unused in VS
+cbuffer SpotLightBuffer                 : register(b7, space0) { } // unused in VS
 
-float4 SkinPosition(VertexMeshAnim input)
+float4 SkinPosition(VertexMeshAnim input, uint objectIndex)
 {
     const float totalWeight = dot(input.weights, 1.0f);
     if (totalWeight <= 0.0001f)
@@ -25,7 +27,7 @@ float4 SkinPosition(VertexMeshAnim input)
         const uint bone = min(input.boneIDs[i], (uint)(MAX_BONES - 1));
         if (weight > 0.0f)
         {
-            uint globalBoneIdx = g_ObjectBuffer[g_Push.objectIndex].boneOffset + bone;
+            uint globalBoneIdx = g_ObjectBuffer[objectIndex].boneOffset + bone;
             skinned += mul(g_Bones[globalBoneIdx], float4(input.position, 1.0f)) * weight;
         }
     }
@@ -46,8 +48,11 @@ PixelVertexInput main(VertexMeshAnim input)
 {
     PixelVertexInput pixelInput;
 
-    float4 localPosition = SkinPosition(input);
-    float4 worldPosition = mul(g_ObjectBuffer[g_Push.objectIndex].transformMatrix, localPosition);
+    // For skeletal meshes, baseInstanceOffset is used directly as the object index
+    const uint objectIndex = g_Push.baseInstanceOffset;
+
+    float4 localPosition = SkinPosition(input, objectIndex);
+    float4 worldPosition = mul(g_ObjectBuffer[objectIndex].transformMatrix, localPosition);
 
     pixelInput.normal = input.normal;
     pixelInput.tangent = input.tangent;
@@ -55,6 +60,7 @@ PixelVertexInput main(VertexMeshAnim input)
     pixelInput.worldPos = worldPosition.xyz;
     pixelInput.uv = input.uv;
     pixelInput.color = input.color;
+    pixelInput.objectID = g_ObjectBuffer[objectIndex].objectID;
 
     const int cascadeIdx = clamp(csm.cascadeIndex, 0, 3);
     pixelInput.position = mul(csm.lightViewProjection[cascadeIdx], worldPosition);

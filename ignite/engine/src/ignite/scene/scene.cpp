@@ -530,11 +530,11 @@ namespace ignite
             }
         });
 
-        auto staticMeshView = registry->view<TransformComponent, StaticMeshComponent>();
+        auto staticMeshView = registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
         for (entt::entity e : staticMeshView)
         {
-            const auto &[tr, smc] = staticMeshView.get<TransformComponent, StaticMeshComponent>(e);
-            if (!tr.visible || smc.handle == AssetHandle(0))
+            const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+            if (!rc.visible || smc.handle == AssetHandle(0))
                 continue;
 
             if (auto mesh = m_AssetManager->GetAsset<StaticMesh>(smc.handle))
@@ -1021,13 +1021,13 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        auto skeletalMeshView = registry->view<TransformComponent, SkeletalMeshComponent>();
+        auto skeletalMeshView = registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
         std::unordered_set<AssetHandle> updatedSharedHandles;
         for (auto ent : skeletalMeshView)
         {
-            const auto &[tr, smc] = skeletalMeshView.get<TransformComponent, SkeletalMeshComponent>(ent);
+            const auto &[tr, rc, smc] = skeletalMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(ent);
 
-            if (!tr.visible || smc.handle == AssetHandle(0))
+            if (!rc.visible || smc.handle == AssetHandle(0))
                 continue;
 
             auto mesh = m_AssetManager->GetAsset<SkeletalMesh>(smc.handle);
@@ -1278,6 +1278,11 @@ namespace ignite
 
     template<>
     IGN_API void Scene::OnComponentAdded<TransformComponent>(Entity entity, TransformComponent &comp)
+    {
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<RenderingComponent>(Entity entity, RenderingComponent &comp)
     {
     }
 

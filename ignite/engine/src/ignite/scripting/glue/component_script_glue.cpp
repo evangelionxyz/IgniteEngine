@@ -727,10 +727,10 @@ namespace ignite
         static void Entity_SetVisibility(uint64_t entityID, bool value)
         {
             Entity entity = GetEntityByID(entityID);
-            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
+            if (!entity.IsValid() || !entity.HasComponent<RenderingComponent>())
                 return;
 
-            entity.GetComponent<TransformComponent>().visible = value;
+            entity.GetComponent<RenderingComponent>().visible = value;
         }
 
         static void Entity_GetVisibility(uint64_t entityID, bool *result)
@@ -740,10 +740,10 @@ namespace ignite
 
             *result = false;
             Entity entity = GetEntityByID(entityID);
-            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
+            if (!entity.IsValid() || !entity.HasComponent<RenderingComponent>())
                 return;
 
-            *result = entity.GetComponent<TransformComponent>().visible;
+            *result = entity.GetComponent<RenderingComponent>().visible;
         }
 
         static const char *Entity_GetName(uint64_t entityID)

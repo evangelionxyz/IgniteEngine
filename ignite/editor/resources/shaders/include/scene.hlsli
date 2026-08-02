@@ -17,7 +17,11 @@
 
 struct PushConstants
 {
-    uint objectIndex;
+    // For instanced draws: base index into the InstanceIndexBuffer.
+    // Shader reads: objectIndex = g_InstanceIndices[baseInstanceOffset + SV_InstanceID]
+    // For non-instanced (skeletal / transparent) draws: baseInstanceOffset is the
+    // objectIndex directly in the legacy path.
+    uint baseInstanceOffset;
 };
 
 struct Object
@@ -109,6 +113,7 @@ struct PixelVertexInput
     float3 worldPos : WORLDPOS;
     float2 uv : TEXCOORD;
     float4 color : COLOR;
+    nointerpolation uint objectID : OBJECTID;
 };
 
 // Lighting

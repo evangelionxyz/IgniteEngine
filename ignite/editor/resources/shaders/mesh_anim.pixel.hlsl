@@ -51,7 +51,7 @@ float SelectChannel(float4 value, int channel)
 PSOutput main(PixelVertexInput input)
 {
     PSOutput result;
-    result.objectID = g_ObjectBuffer[g_Push.objectIndex].objectID;
+    result.objectID = input.objectID;
 
     float2 tiledUV = input.uv * material.tilingFactor;
 

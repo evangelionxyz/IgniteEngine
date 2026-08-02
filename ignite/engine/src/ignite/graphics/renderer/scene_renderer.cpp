@@ -435,11 +435,11 @@ namespace ignite
         m_SocketObjectIndexCache.clear();
 
         // 1. Preallocate and upload Skeletal Meshes (including bone data)
-        auto skeletalMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+        auto skeletalMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
         for (entt::entity e : skeletalMeshView)
         {
-            const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, SkeletalMeshComponent>(e);
-            if (!tr.visible || smc.handle == AssetHandle(0))
+            const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+            if (!rc.visible || smc.handle == AssetHandle(0))
                 continue;
 
             auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
@@ -572,11 +572,11 @@ namespace ignite
         }
 
         // 2. Preallocate and upload Static Meshes
-        auto staticMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+        auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
         for (entt::entity e : staticMeshView)
         {
-            const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, StaticMeshComponent>(e);
-            if (!tr.visible || smc.handle == AssetHandle(0))
+            const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+            if (!rc.visible || smc.handle == AssetHandle(0))
                 continue;
 
             auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
@@ -732,16 +732,14 @@ namespace ignite
             PointLightBufferData pointLightData = {};
             int pointLightCount = 0;
 
-            auto pointLightView = m_Scene->registry->view<TransformComponent, PointLightComponent>();
+            auto pointLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, PointLightComponent>();
             for (entt::entity e : pointLightView)
             {
                 if (pointLightCount >= MAX_POINT_LIGHTS)
                     break;
 
-                const TransformComponent &tr = pointLightView.get<TransformComponent>(e);
-                const PointLightComponent &light = pointLightView.get<PointLightComponent>(e);
-
-                if (!tr.visible || !light.enabled)
+                const auto &[tr, rc, light] = pointLightView.get<TransformComponent, RenderingComponent, PointLightComponent>(e);
+                if (!rc.visible || !light.enabled)
                     continue;
 
                 PointLight_GPUData &gpu = pointLightData.lights[pointLightCount];
@@ -760,16 +758,14 @@ namespace ignite
             SpotLightBufferData spotLightData = {};
             int spotLightCount = 0;
 
-            auto spotLightView = m_Scene->registry->view<TransformComponent, SpotLightComponent>();
+            auto spotLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, SpotLightComponent>();
             for (entt::entity e : spotLightView)
             {
                 if (spotLightCount >= MAX_SPOT_LIGHTS)
                     break;
 
-                const TransformComponent &tr = spotLightView.get<TransformComponent>(e);
-                const SpotLightComponent &light = spotLightView.get<SpotLightComponent>(e);
-
-                if (!tr.visible || !light.enabled)
+                const auto &[tr, rc, light] = spotLightView.get<TransformComponent, RenderingComponent, SpotLightComponent>(e);
+                if (!rc.visible || !light.enabled)
                     continue;
 
                 const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
@@ -882,33 +878,68 @@ namespace ignite
 				staticState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
 				staticState.pipeline = staticCSMPSO->GetHandle();
 
-				// Static Mesh
+				// Static Mesh Shadows — batch instanced
 				{
-					IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshShadow");
+					IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshShadow::BatchCollect");
 
-					auto skelMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+					m_ShadowBatchBuilder.Clear();
+
+					auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
 					for (entt::entity e : skelMeshView)
 					{
-						TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-						if (!tr.visible)
+						const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
+						if (!rc.visible)
 							continue;
 
 						StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
 						if (smc.handle == AssetHandle(0))
 							continue;
 
-						auto skeletalMesh = ResolveAsset<StaticMesh>(smc.handle);
-						if (!skeletalMesh)
+						auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
+						if (!staticMesh)
 							continue;
 
 						// Perform cascade frustum culling
 						if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
 							continue;
 
-						const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-						DrawMeshShadow(cmd, frameContext, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, std::vector<glm::mat4>(),
-							smc.cachedInstanceTransforms, staticState, i, e);
+						const auto &instances = staticMesh->GetMeshInstances();
+						for (size_t idx = 0; idx < instances.size(); ++idx)
+						{
+							auto &meshInstance = instances[idx];
+							auto &primitive = meshInstance->GetPrimitive();
+							if (!primitive->vertexBuffer || !primitive->indexBuffer)
+							{
+								primitive->WriteBuffer(cmd);
+							}
+
+							auto cacheIt = m_EntityObjectIndexCache.find(e);
+							if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+								continue;
+
+							const uint32_t objectIndex = cacheIt->second[idx];
+
+							BatchKey key;
+							key.vertexBuffer       = primitive->vertexBuffer->GetHandle().Get();
+							key.indexBuffer        = primitive->indexBuffer->GetHandle().Get();
+							key.meshBindingSet     = frameContext->staticMeshCSMBindingSet[i].Get();
+							key.materialBindingSet = nullptr; // CSM draws have no material binding
+							key.pipeline           = staticCSMPSO->GetHandle().Get();
+
+							m_ShadowBatchBuilder.Submit(
+								key,
+								primitive->vertexBuffer->GetHandle(),
+								primitive->indexBuffer->GetHandle(),
+								frameContext->staticMeshCSMBindingSet[i],
+								nullptr,
+								staticCSMPSO->GetHandle(),
+								primitive->indexBuffer->GetCount(),
+								objectIndex);
+						}
 					}
+
+					// Flush instanced shadow draws for this cascade
+					FlushShadowBatches(cmd, frameContext, static_cast<uint32_t>(i));
 				}
 
 				nvrhi::GraphicsState animatedState = nvrhi::GraphicsState();
@@ -920,11 +951,11 @@ namespace ignite
 				{
 					IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshShadow");
 
-					auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+					auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
 					for (entt::entity e : skelMeshView)
 					{
-						TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-						if (!tr.visible)
+                        const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
+						if (!rc.visible)
 							continue;
 
 						SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
@@ -1009,15 +1040,17 @@ namespace ignite
 
         std::vector<TransparentDrawCall> transparentDrawCalls;
 
-        // Static Meshes
+        // Static Meshes — collected into the batch builder for instanced dispatch
         {
-			IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshColor");
+			IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshColor::BatchCollect");
 
-            auto staticMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+            m_OpaqueBatchBuilder.Clear();
+
+            auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
             for (entt::entity e : staticMeshView)
             {
-                const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, StaticMeshComponent>(e);
-                if (!tr.visible || smc.handle == AssetHandle(0))
+                const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+                if (!rc.visible || smc.handle == AssetHandle(0))
                     continue;
 
                 auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
@@ -1028,22 +1061,80 @@ namespace ignite
                     continue;
 
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                DrawMesh(cmd, frameContext, framebuffer, staticMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, 
-                    smc.overrideMaterials, std::vector<glm::mat4>(), smc.cachedInstanceTransforms, 
-                    camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
+
+                // For each sub-mesh primitive, look up the pre-allocated object index and submit to batch builder
+                const auto &instances = staticMesh->GetMeshInstances();
+                for (size_t idx = 0; idx < instances.size(); ++idx)
+                {
+                    auto &meshInstance = instances[idx];
+                    auto &primitive = meshInstance->GetPrimitive();
+                    if (!primitive->vertexBuffer || !primitive->indexBuffer)
+                    {
+                        primitive->WriteBuffer(cmd);
+                    }
+
+                    // Look up pre-allocated object index from PreallocateGPUData
+                    auto cacheIt = m_EntityObjectIndexCache.find(e);
+                    if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                        continue;
+
+                    const uint32_t objectIndex = cacheIt->second[idx];
+
+                    Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                    if (material && uploadedMaterialsThisPass.insert(material.get()).second)
+                        material->UploadToGpu(cmd);
+
+                    // Skip transparent sub-meshes — they use the legacy per-draw-call path
+                    MaterialType matType = material ? material->GetType() : m_RuntimeMaterial->GetType();
+                    if (matType == MaterialType::Transparent)
+                    {
+                        // Fallback: add to transparent list via legacy DrawMesh path
+                        DrawMesh(cmd, frameContext, framebuffer, staticMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
+                            smc.overrideMaterials, std::vector<glm::mat4>(), smc.cachedInstanceTransforms,
+                            camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
+                        break; // DrawMesh handles all sub-meshes; avoid double-processing
+                    }
+
+                    const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                        ? material->GetBindingSet()
+                        : m_RuntimeMaterial->GetBindingSet();
+
+                    if (!materialBindingSet)
+                        continue;
+
+                    BatchKey key;
+                    key.vertexBuffer       = primitive->vertexBuffer->GetHandle().Get();
+                    key.indexBuffer        = primitive->indexBuffer->GetHandle().Get();
+                    key.meshBindingSet     = frameContext->staticMeshBindingSet.Get();
+                    key.materialBindingSet = materialBindingSet.Get();
+                    key.pipeline           = staticPSO->GetHandle().Get();
+
+                    m_OpaqueBatchBuilder.Submit(
+                        key,
+                        primitive->vertexBuffer->GetHandle(),
+                        primitive->indexBuffer->GetHandle(),
+                        frameContext->staticMeshBindingSet,
+                        materialBindingSet,
+                        staticPSO->GetHandle(),
+                        primitive->indexBuffer->GetCount(),
+                        objectIndex);
+                }
                 Renderer::Stats.staticMeshCount++;
             }
+
+            // Flush all opaque static mesh batches (instanced draw calls)
+            FlushOpaqueBatches(cmd, frameContext, framebuffer);
         }
 
         // Skeletal Meshes
         {
             IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshColor");
 
-            auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+            auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
             for (entt::entity e : skelMeshView)
             {
-                const auto &[tr, smc] = m_Scene->registry->get<TransformComponent, SkeletalMeshComponent>(e);
-                if (!tr.visible || smc.handle == AssetHandle(0))
+                const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+                if (!rc.visible || smc.handle == AssetHandle(0))
                     continue;
 
                 auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
@@ -1155,12 +1246,12 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::2DPass::PointLightsView");
 
-                auto pointLight2DView = m_Scene->registry->view<TransformComponent, PointLight2DComponent>();
+                auto pointLight2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, PointLight2DComponent>();
                 for (entt::entity e : pointLight2DView)
                 {
-                    const auto &[tr, light] = m_Scene->registry->get<TransformComponent, PointLight2DComponent>(e);
+                    const auto &[tr, rc, light] = m_Scene->registry->get<TransformComponent, RenderingComponent, PointLight2DComponent>(e);
 
-                    if (!tr.visible || !light.enabled)
+                    if (!rc.visible || !light.enabled)
                         continue;
 
                     PointLight2D_GPUData gpuLight;
@@ -1177,12 +1268,11 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Circle2DView");
 
-                auto circle2DView = m_Scene->registry->view<TransformComponent, Circle2DComponent>();
+                auto circle2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, Circle2DComponent>();
                 for (entt::entity e : circle2DView)
                 {
-                    const auto &[tr, circle] = m_Scene->registry->get<TransformComponent, Circle2DComponent>(e);
-                    
-                    if (!tr.visible)
+                    const auto &[tr, rc, circle] = m_Scene->registry->get<TransformComponent, RenderingComponent, Circle2DComponent>(e);
+                    if (!rc.visible)
                         continue;
 
 					const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
@@ -1192,12 +1282,11 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Quad2DView");
                 Project *project = m_Scene->GetProject();
-                auto quad2DView = m_Scene->registry->view<TransformComponent, Sprite2DComponent>();
+                auto quad2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, Sprite2DComponent>();
                 for (entt::entity e : quad2DView)
                 {
-                    const auto &[tr, sprite] = m_Scene->registry->get<TransformComponent, Sprite2DComponent>(e);
-                    
-                    if (!tr.visible)
+                    const auto &[tr, rc, sprite] = m_Scene->registry->get<TransformComponent, RenderingComponent, Sprite2DComponent>(e);
+                    if (!rc.visible)
                         continue;
 
                     const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
@@ -1240,11 +1329,11 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::2DPass::TextView");
 
-                auto textView = m_Scene->registry->view<TransformComponent, TextComponent>();
+                auto textView = m_Scene->registry->view<TransformComponent, RenderingComponent, TextComponent>();
                 for (entt::entity e : textView)
                 {
-                    const auto &[tr, text] = m_Scene->registry->get<TransformComponent, TextComponent>(e);
-                    if (!tr.visible || text.fontHandle == AssetHandle(0) || text.text.empty())
+                    const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                    if (!rc.visible || text.fontHandle == AssetHandle(0) || text.text.empty())
                         continue;
 
                     const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
@@ -1404,12 +1493,12 @@ namespace ignite
 
         if (sceneRenderSettings.showPhysicsCollider)
         {
-            auto boxCollider2DView = m_Scene->registry->view<TransformComponent, BoxCollider2DComponent>();
+            auto boxCollider2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, BoxCollider2DComponent>();
             for (entt::entity e : boxCollider2DView)
             {
-                const auto &[tr, box] = m_Scene->registry->get<TransformComponent, BoxCollider2DComponent>(e);
+                const auto &[tr, rc, box] = m_Scene->registry->get<TransformComponent, RenderingComponent, BoxCollider2DComponent>(e);
                 
-                if (!tr.visible)
+                if (!rc.visible)
                     continue;
 
                 const glm::mat4 world = tr.world.GetMatrix();
@@ -1428,12 +1517,12 @@ namespace ignite
                 m_Renderer2D->DrawLine(glm::vec3(c3), glm::vec3(c0), kPhysicsDebugColor);
             }
 
-            auto circleCollider2DView = m_Scene->registry->view<TransformComponent, CircleCollider2DComponent>();
+            auto circleCollider2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, CircleCollider2DComponent>();
             for (entt::entity e : circleCollider2DView)
             {
-                const auto &[tr, circle] = m_Scene->registry->get<TransformComponent, CircleCollider2DComponent>(e);
+                const auto &[tr, rc, circle] = m_Scene->registry->get<TransformComponent, RenderingComponent, CircleCollider2DComponent>(e);
                 
-                if (!tr.visible)
+                if (!rc.visible)
                     continue;
 
                 const glm::mat4 world = tr.world.GetMatrix();
@@ -2316,24 +2405,140 @@ namespace ignite
 		return SSAOs;
 	}
 
+	// ---------------------------------------------------------------------------
+	// FlushOpaqueBatches — dispatch all opaque static mesh batches as instanced draws.
+	// Each DrawBatch contains N instances sharing the same vertex buffer, index buffer,
+	// material binding set, and PSO. The object indices are uploaded to the
+	// InstanceIndexBuffer and referenced via push constant base offset.
+	// ---------------------------------------------------------------------------
+	void SceneRenderer::FlushOpaqueBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer)
+	{
+		if (m_OpaqueBatchBuilder.IsEmpty())
+			return;
+
+		IGN_PROFILE_SCOPE("SceneRenderer::FlushOpaqueBatches");
+
+		m_OpaqueBatchBuilder.Finalize();
+		const auto &batches = m_OpaqueBatchBuilder.GetBatches();
+
+		// Batch upload all instance indices upfront in a single contiguous writeBuffer call
+		std::vector<uint32_t> allObjectIndices;
+		std::vector<uint32_t> batchBaseOffsets;
+		batchBaseOffsets.reserve(batches.size());
+
+		for (const DrawBatch &batch : batches)
+		{
+			uint32_t offset = static_cast<uint32_t>(allObjectIndices.size());
+			batchBaseOffsets.push_back(offset);
+			allObjectIndices.insert(allObjectIndices.end(), batch.objectIndices.begin(), batch.objectIndices.end());
+		}
+
+		const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator.Allocate(
+			cmd,
+			allObjectIndices.data(),
+			static_cast<uint32_t>(allObjectIndices.size()));
+
+		nvrhi::GraphicsState graphicsState = nvrhi::GraphicsState();
+		graphicsState.framebuffer = framebuffer;
+		graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+
+		for (size_t i = 0; i < batches.size(); ++i)
+		{
+			const DrawBatch &batch = batches[i];
+			if (!batch.meshBindingSet || !batch.materialBindingSet || !batch.vertexBuffer || !batch.indexBuffer || !batch.pipeline)
+				continue;
+
+			const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[i];
+
+			graphicsState.pipeline = batch.pipeline;
+			graphicsState.bindings = { batch.meshBindingSet, batch.materialBindingSet, BindlessSystem::GetDescriptorTable() };
+			graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ batch.vertexBuffer, 0, 0 } };
+			graphicsState.setIndexBuffer({ batch.indexBuffer, nvrhi::Format::R32_UINT });
+
+			cmd->setGraphicsState(graphicsState);
+			cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+
+			nvrhi::DrawArguments args;
+			args.setVertexCount(batch.indexCount);
+			args.instanceCount = batch.GetInstanceCount();
+			cmd->drawIndexed(args);
+
+			Renderer::Stats.drawCallCount++;
+			Renderer::Stats.indexCount3D += batch.indexCount * batch.GetInstanceCount();
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	// FlushShadowBatches — dispatch all CSM shadow batches as instanced draws.
+	// Similar to FlushOpaqueBatches but uses the CSM framebuffer and no material
+	// binding set (shadow pass only writes depth).
+	// ---------------------------------------------------------------------------
+	void SceneRenderer::FlushShadowBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, uint32_t cascadeIndex)
+	{
+		if (m_ShadowBatchBuilder.IsEmpty())
+			return;
+
+		IGN_PROFILE_SCOPE("SceneRenderer::FlushShadowBatches");
+
+		m_ShadowBatchBuilder.Finalize();
+		const auto &batches = m_ShadowBatchBuilder.GetBatches();
+
+		// Batch upload all instance indices upfront in a single contiguous writeBuffer call
+		std::vector<uint32_t> allObjectIndices;
+		std::vector<uint32_t> batchBaseOffsets;
+		batchBaseOffsets.reserve(batches.size());
+
+		for (const DrawBatch &batch : batches)
+		{
+			uint32_t offset = static_cast<uint32_t>(allObjectIndices.size());
+			batchBaseOffsets.push_back(offset);
+			allObjectIndices.insert(allObjectIndices.end(), batch.objectIndices.begin(), batch.objectIndices.end());
+		}
+
+		const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator.Allocate(
+			cmd,
+			allObjectIndices.data(),
+			static_cast<uint32_t>(allObjectIndices.size()));
+
+		nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(cascadeIndex, frameContext->frameIndexInFlight);
+		nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
+
+		nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
+		csmState.framebuffer = csmFramebuffer;
+		csmState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+
+		for (size_t i = 0; i < batches.size(); ++i)
+		{
+			const DrawBatch &batch = batches[i];
+			if (!batch.meshBindingSet || !batch.vertexBuffer || !batch.indexBuffer || !batch.pipeline)
+				continue;
+
+			const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[i];
+
+			csmState.pipeline = batch.pipeline;
+			csmState.bindings = { batch.meshBindingSet };
+			csmState.vertexBuffers = { nvrhi::VertexBufferBinding{ batch.vertexBuffer, 0, 0 } };
+			csmState.setIndexBuffer({ batch.indexBuffer, nvrhi::Format::R32_UINT });
+
+			cmd->setGraphicsState(csmState);
+			cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+
+			nvrhi::DrawArguments args;
+			args.setVertexCount(batch.indexCount);
+			args.instanceCount = batch.GetInstanceCount();
+			cmd->drawIndexed(args);
+
+			Renderer::Stats.shadowDrawCallCount++;
+		}
+	}
+
 	template<typename MeshT>
-    void SceneRenderer::DrawMesh(
-        nvrhi::ICommandList *cmd,
-		FrameContext *frameContext,
-        nvrhi::IFramebuffer *framebuffer,
-        const Ref<MeshT> &mesh,
-        const glm::mat4 &parentTransform,
-        const glm::mat4 &normalMatrix,
-        uint32_t objectID,
-        const std::unordered_map<int, AssetHandle> &overrideMaterials,
-        const std::vector<glm::mat4> &boneTransforms,
-        const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
-        ICamera *camera,
-        Ref<GraphicsPipeline> opaquePSO,
-        std::vector<TransparentDrawCall> &transparentDrawCalls,
-        std::unordered_set<Material *> &uploadedMaterialsThisPass,
-        entt::entity entity,
-        const std::string &socketName)
+    void SceneRenderer::DrawMesh(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer,
+        const Ref<MeshT> &mesh, const glm::mat4 &parentTransform, const glm::mat4 &normalMatrix, uint32_t objectID,
+        const std::unordered_map<int, AssetHandle> &overrideMaterials, const std::vector<glm::mat4> &boneTransforms,
+        const std::vector<Mesh_GPUData> &cachedInstanceTransforms, ICamera *camera, Ref<GraphicsPipeline> opaquePSO,
+        std::vector<TransparentDrawCall> &transparentDrawCalls, std::unordered_set<Material *> &uploadedMaterialsThisPass,
+        entt::entity entity, const std::string &socketName)
     {
         if (!framebuffer)
             return;
@@ -2488,8 +2693,15 @@ namespace ignite
 
                     cmd->setGraphicsState(graphicsState);
 					
-					// Push the object ID to the shader via push constants
-                    cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
+					if constexpr (!isSkeletal)
+					{
+						uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &PushConstant_ObjectIndex, 1);
+						cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+					}
+					else
+					{
+						cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
+					}
 
                     const uint32_t idxCount = primitive->indexBuffer->GetCount();
                     nvrhi::DrawArguments args;
@@ -2506,19 +2718,10 @@ namespace ignite
     }
 
     template<typename MeshT>
-    void SceneRenderer::DrawMeshShadow(
-        nvrhi::ICommandList *cmd,
-		FrameContext *frameContext,
-        const Ref<MeshT> &mesh,
-        const glm::mat4 &parentTransform,
-        const glm::mat4 &normalMatrix,
-        uint32_t objectID,
-        const std::vector<glm::mat4> &boneTransforms,
-        const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
-        nvrhi::GraphicsState &csmState,
-        uint32_t cascadeIndex,
-        entt::entity entity,
-        const std::string &socketName)
+    void SceneRenderer::DrawMeshShadow(nvrhi::ICommandList *cmd, FrameContext *frameContext, const Ref<MeshT> &mesh,
+        const glm::mat4 &parentTransform, const glm::mat4 &normalMatrix, uint32_t objectID, const std::vector<glm::mat4> &boneTransforms,
+        const std::vector<Mesh_GPUData> &cachedInstanceTransforms, nvrhi::GraphicsState &csmState, uint32_t cascadeIndex,
+        entt::entity entity, const std::string &socketName)
     {
         constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
 
@@ -2612,8 +2815,15 @@ namespace ignite
 
                 cmd->setGraphicsState(csmState);
 
-				// Push the object ID to the shader via push constants
-				cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
+				if constexpr (!isSkeletal)
+				{
+					uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &PushConstant_ObjectIndex, 1);
+					cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+				}
+				else
+				{
+					cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
+				}
 
                 const uint32_t idxCount = primitive->indexBuffer->GetCount();
                 nvrhi::DrawArguments args;

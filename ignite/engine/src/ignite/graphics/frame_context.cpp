@@ -28,6 +28,43 @@ namespace ignite
 		return index;
 	}
 
+	uint32_t InstanceIndexAllocator::Allocate(nvrhi::ICommandList *cmd, const uint32_t *indices, uint32_t count)
+	{
+		if (count == 0)
+			return 0;
+
+		const uint32_t base = m_IndexCount;
+		const uint32_t maxIndices = m_Buffer ? static_cast<uint32_t>(m_Buffer->getDesc().byteSize / sizeof(uint32_t)) : 0;
+		if (base + count > maxIndices)
+		{
+			static bool loggedOnce = false;
+			if (!loggedOnce)
+			{
+				LOG_ERROR("[InstanceIndexAllocator] Overflow! Requested: {}, Max: {}. Clamping.", base + count, maxIndices);
+				loggedOnce = true;
+			}
+			return base < maxIndices ? base : 0;
+		}
+		cmd->writeBuffer(m_Buffer, indices, count * sizeof(uint32_t), base * sizeof(uint32_t));
+		m_IndexCount += count;
+		return base;
+	}
+
+	void InstanceIndexBuffer::Initialize(uint32_t maxIndices, nvrhi::IDevice *device)
+	{
+		nvrhi::BufferDesc desc;
+		desc.byteSize = sizeof(uint32_t) * maxIndices;
+		desc.canHaveUAVs = false;
+		desc.canHaveTypedViews = false;
+		desc.structStride = sizeof(uint32_t);
+		desc.isVertexBuffer = false;
+		desc.isIndexBuffer = false;
+		desc.debugName = "Instance Index Buffer";
+		desc.initialState = nvrhi::ResourceStates::ShaderResource;
+		desc.keepInitialState = true;
+		m_Buffer = device->createBuffer(desc);
+	}
+
 	uint32_t BoneAllocator::Allocate(nvrhi::ICommandList *cmd, const glm::mat4 *bones, uint32_t count)
 	{
 		const uint32_t index = m_BoneCount;
@@ -92,8 +129,10 @@ namespace ignite
 			ConstantBuffer(sizeof(CSM_GPUData), true, 16, "CSM Cascade 3 Buffer")
 		}
 	{
+		// 16384 objects, 16384 bone slots * MAX_BONES, 65536 instance indices (for batched draws)
 		objectBuffer.Initialize(16384, device);
 		boneBuffer.Initialize(4096 * MAX_BONES, device);
+		instanceIndexBuffer.Initialize(65536, device);
 	}
 
 	void FrameContext::InitializeBindingSets(nvrhi::IDevice *device, nvrhi::IBindingLayout *staticLayout, nvrhi::IBindingLayout *animLayout)
@@ -104,10 +143,11 @@ namespace ignite
 			desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));
 			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer.GetHandle())); // volatile
 			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer.GetHandle()));
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, sceneBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, csmBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, pointLightBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, spotLightBuffer.GetHandle())); // volatile
+			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, instanceIndexBuffer.GetHandle())); // Instance index indirection
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer.GetHandle())); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmBuffer.GetHandle())); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetHandle())); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetHandle())); // volatile
 			staticMeshBindingSet = device->createBindingSet(desc, staticLayout);
 		}
 
@@ -133,14 +173,15 @@ namespace ignite
 				desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));
 				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer.GetHandle()));
 				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, sceneBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, csmPerCascadeBuffers[i].GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, pointLightBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, spotLightBuffer.GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, instanceIndexBuffer.GetHandle())); // Instance index indirection
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer.GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmPerCascadeBuffers[i].GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetHandle()));
 				staticMeshCSMBindingSet[i] = device->createBindingSet(desc, staticLayout);
 			}
 
-			// Animated CSM
+			// Animated CSM (bones stay at t3; no instance index buffer needed for skeletal — deferred)
 			{
 				nvrhi::BindingSetDesc desc;
 				desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));

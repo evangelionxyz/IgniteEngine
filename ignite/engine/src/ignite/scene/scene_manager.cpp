@@ -97,6 +97,7 @@ namespace ignite
         Entity entity = Entity { scene->registry->create(), scene };
         entity.AddComponent<IDComponent>(name, type, uuid);
         entity.AddComponent<TransformComponent>();
+        entity.AddComponent<RenderingComponent>();
         scene->entities[uuid] = entity;
         return entity;
     }
@@ -222,7 +223,7 @@ namespace ignite
         Entity entity = Entity { scene->registry->create(), scene };
         entity.AddComponent<IDComponent>(name, EntityType_Node, uuid);
         entity.AddComponent<TransformComponent>();
-
+        entity.AddComponent<RenderingComponent>();
         scene->entities[uuid] = entity;
 
         return entity;

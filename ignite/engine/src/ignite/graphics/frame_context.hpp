@@ -36,6 +36,18 @@ namespace ignite
 		uint32_t m_BoneCount = 0;
 	};
 
+	class InstanceIndexAllocator
+	{
+	public:
+		void BeginFrame() { m_IndexCount = 0; }
+		uint32_t Allocate(nvrhi::ICommandList *cmd, const uint32_t *indices, uint32_t count);
+		void SetBuffer(nvrhi::BufferHandle buffer) { m_Buffer = buffer; }
+
+	private:
+		nvrhi::BufferHandle m_Buffer;
+		uint32_t m_IndexCount = 0;
+	};
+
 	class ObjectBuffer
 	{
 	public:
@@ -50,6 +62,16 @@ namespace ignite
 	{
 	public:
 		void Initialize(uint32_t maxBones, nvrhi::IDevice *device);
+		nvrhi::BufferHandle GetHandle() const { return m_Buffer; }
+
+	private:
+		nvrhi::BufferHandle m_Buffer;
+	};
+
+	class InstanceIndexBuffer
+	{
+	public:
+		void Initialize(uint32_t maxIndices, nvrhi::IDevice *device);
 		nvrhi::BufferHandle GetHandle() const { return m_Buffer; }
 
 	private:
@@ -74,6 +96,9 @@ namespace ignite
 
 		BoneBuffer boneBuffer;
 		BoneAllocator boneAllocator;
+
+		InstanceIndexBuffer instanceIndexBuffer;
+		InstanceIndexAllocator instanceIndexAllocator;
 
 		nvrhi::BindingSetHandle staticMeshBindingSet;
 		nvrhi::BindingSetHandle animatedBindingSet;	

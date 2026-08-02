@@ -7,6 +7,7 @@
 #include "ignite/core/base.hpp"
 #include "iscene_renderer.hpp"
 #include "ignite/graphics/hash_keys.hpp"
+#include "batch_builder.hpp"
 
 #include "ignite/scene/entity.hpp"
 
@@ -75,6 +76,12 @@ namespace ignite
         void DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebufferm, FrameContext *frameContext);
         void DrawDebug3D(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
 
+        /// Flush all accumulated opaque static-mesh batches to the command list.
+        void FlushOpaqueBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer);
+
+        /// Flush all accumulated shadow (CSM) static-mesh batches to the command list.
+        void FlushShadowBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, uint32_t cascadeIndex);
+
     private:
         struct TransparentDrawCall
         {
@@ -92,55 +99,22 @@ namespace ignite
         };
 
         template<typename MeshT>
-        void DrawMesh(
-            nvrhi::ICommandList *cmd,
-			FrameContext *frameContext,
-            nvrhi::IFramebuffer *framebuffer,
-            const Ref<MeshT> &mesh,
-            const glm::mat4 &parentTransform,
-            const glm::mat4 &normalMatrix,
-            uint32_t objectID,
-            const std::unordered_map<int, AssetHandle> &overrideMaterials,
-            const std::vector<glm::mat4> &boneTransforms,
-            const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
-            ICamera *camera,
-            Ref<GraphicsPipeline> opaquePSO,
-            std::vector<TransparentDrawCall> &transparentDrawCalls,
-            std::unordered_set<Material *> &uploadedMaterialsThisPass,
-            entt::entity entity = entt::null,
-            const std::string &socketName = "");
+        void DrawMesh(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
+            const glm::mat4 &normalMatrix, uint32_t objectID, const std::unordered_map<int, AssetHandle> &overrideMaterials, const std::vector<glm::mat4> &boneTransforms,
+            const std::vector<Mesh_GPUData> &cachedInstanceTransforms, ICamera *camera, Ref<GraphicsPipeline> opaquePSO, std::vector<TransparentDrawCall> &transparentDrawCalls,
+            std::unordered_set<Material *> &uploadedMaterialsThisPass, entt::entity entity = entt::null, const std::string &socketName = "");
 
         template<typename MeshT>
-        void DrawMeshShadow(
-            nvrhi::ICommandList *cmd,
-			FrameContext *frameContext,
-            const Ref<MeshT> &mesh,
-            const glm::mat4 &parentTransform,
-            const glm::mat4 &normalMatrix,
-            uint32_t objectID,
-            const std::vector<glm::mat4> &boneTransforms,
-            const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
-            nvrhi::GraphicsState &csmState,
-            uint32_t cascadeIndex,
-            entt::entity entity = entt::null,
-            const std::string &socketName = "");
+        void DrawMeshShadow( nvrhi::ICommandList *cmd, FrameContext *frameContext, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
+            const glm::mat4 &normalMatrix, uint32_t objectID, const std::vector<glm::mat4> &boneTransforms, const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
+            nvrhi::GraphicsState &csmState, uint32_t cascadeIndex, entt::entity entity = entt::null, const std::string &socketName = "");
 
-        Ref<GraphicsPipeline> GetOrCreateMeshPSO(
-            std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
-            nvrhi::IFramebuffer *framebuffer,
-            nvrhi::RasterFillMode fillMode,
-            const char *vertexShaderPath,
-            const char *pixelShaderPath,
-            EBindingLayout meshLayout,
-            bool transparent);
+        Ref<GraphicsPipeline> GetOrCreateMeshPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
+            nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, const char *vertexShaderPath, const char *pixelShaderPath,
+            EBindingLayout meshLayout, bool transparent);
 
-		Ref<GraphicsPipeline> GetOrCreateCMSPSO(
-			std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
-            nvrhi::IFramebuffer *framebuffer,
-            const char *vertexShaderPath, 
-            const char *pixelShaderPath,
-			EBindingLayout meshLayout
-        );
+		Ref<GraphicsPipeline> GetOrCreateCMSPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
+            nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath,  const char *pixelShaderPath, EBindingLayout meshLayout);
 
         Ref<GraphicsPipeline> GetDebugGridPSO(nvrhi::IFramebuffer *framebuffer);
         Ref<GraphicsPipeline> GetAnimatedPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
@@ -202,6 +176,13 @@ namespace ignite
         std::unordered_map<entt::entity, std::vector<uint32_t>> m_EntityObjectIndexCache;
         std::unordered_map<entt::entity, uint32_t> m_EntityBoneOffsetCache;
         std::map<std::pair<entt::entity, std::string>, std::vector<uint32_t>> m_SocketObjectIndexCache;
+
+        // -----------------------------------------------------------------------
+        // Batch builders for GPU instancing of opaque static meshes.
+        // Populated during ColorPass/ShadowPass, flushed at end of each pass.
+        // -----------------------------------------------------------------------
+        BatchBuilder m_OpaqueBatchBuilder;   // Color pass opaque static meshes
+        BatchBuilder m_ShadowBatchBuilder;   // Shadow pass (CSM) static meshes
     };
 }
 

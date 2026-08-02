@@ -48,6 +48,7 @@ namespace ignite
     {
         { "Camera", CompType_Camera },
         { "Arrow", CompType_Arrow },
+        { "Rendering", CompType_Rendering },
         { "Rigid Body 2D", CompType_Rigidbody2D },
         { "Directional Light", CompType_DirectionalLight },
         { "Box Collider 2D", CompType_BoxCollider2D },
@@ -165,6 +166,7 @@ namespace ignite
         {
             case CompType_Camera: return "CompType_Camera";
             case CompType_Arrow: return "CompType_Arrow";
+            case CompType_Rendering: return "CompType_Rendering";
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_CircleCollider2D: return "CompType_CircleCollider2D";
@@ -265,12 +267,19 @@ namespace ignite
         Transform world;
         Transform local;
 
-        bool isAnimated = false;
-        bool visible = true;
-
         TransformComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_Transform)
+    };
+
+    class RenderingComponent : public IComponent
+    {
+    public:
+        bool visible = true;
+
+        RenderingComponent() = default;
+
+        COMPONENT_CLASS_TYPE(CompType_Rendering)
     };
 
     class DirectionalLightComponent : public IComponent

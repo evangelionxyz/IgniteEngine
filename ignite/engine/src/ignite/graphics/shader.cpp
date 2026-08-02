@@ -142,6 +142,8 @@ namespace ignite
         options.bRegShift = 256; // NVRHI Compatible
         options.uRegShift = 384; // NVRHI Compatible
         
+        options.AddCompilerOptions("-Zpc"); // Force column-major matrix packing matching GLM
+        
         // Important!!!!
         if (api == nvrhi::GraphicsAPI::VULKAN)
         {

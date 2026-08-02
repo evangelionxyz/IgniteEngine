@@ -639,14 +639,13 @@ namespace ignite
                 if (scaleState.isItemActivated)            s_TransformBefore = comp;
                 if (scaleState.isItemEdited)               comp.dirty = true;
                 if (scaleState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, selectedEntity.GetUUID(), s_TransformBefore, comp));
+            }, false); // false: not allowed to remove the component
 
-                // Visibility checkbox — instant commit
-                {
-                    TransformComponent before = comp;
-                    UI::State visibleState = UI::DrawCheckbox("Visible", &comp.visible);
-                    if (visibleState.isItemEdited)
-                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, selectedEntity.GetUUID(), before, comp));
-                }
+            // Rendering component
+            RenderComponent<RenderingComponent>("Rendering", selectedEntity, [&]()
+            {
+                auto &comp = selectedEntity.GetComponent<RenderingComponent>();
+                UI::State visibleState = UI::DrawCheckbox("Visible", &comp.visible);
 
             }, false); // false: not allowed to remove the component
 
@@ -2232,7 +2231,7 @@ namespace ignite
                                         auto data = dummy.GetValue<float>();
                                         bool changed = (field.uiType == FieldUIType::Slider)
                                             ? UI::DrawSliderFloat(name.c_str(), &data, field.minValue, field.maxValue)
-                                            : UI::DrawFloatControl(name.c_str(), &data, 0.1f, -FLT_MAX, FLT_MAX);
+                                            : UI::DrawFloatControl(name.c_str(), &data, field.speed, -FLT_MAX, FLT_MAX);
                                         if (changed)
                                         {
                                             dummy.SetValue<float>(data);
@@ -2412,7 +2411,7 @@ namespace ignite
                                         float data = static_cast<float>(dData);
                                         bool changed = (field.uiType == FieldUIType::Slider)
                                             ? UI::DrawSliderFloat(name.c_str(), &data, field.minValue, field.maxValue)
-                                            : UI::DrawFloatControl(name.c_str(), &data, 0.1f, -FLT_MAX, FLT_MAX);
+                                            : UI::DrawFloatControl(name.c_str(), &data, field.speed, -FLT_MAX, FLT_MAX);
                                         if (changed)
                                         {
                                             dData = static_cast<double>(data);
@@ -2426,7 +2425,7 @@ namespace ignite
                                     case ScriptFieldType::Vector2:
                                     {
                                         auto data = dummy.GetValue<glm::vec2>();
-                                        if (UI::DrawVec2Control(name.c_str(), data, 0.1f))
+                                        if (UI::DrawVec2Control(name.c_str(), data, field.speed))
                                         {
                                             dummy.SetValue<glm::vec2>(data);
                                             (*classRegisteredInstanceField)[name] = dummy;
@@ -2438,7 +2437,7 @@ namespace ignite
                                     case ScriptFieldType::Vector3:
                                     {
                                         auto data = dummy.GetValue<glm::vec3>();
-                                        if (UI::DrawVec3Control(name.c_str(), data, 0.1f))
+                                        if (UI::DrawVec3Control(name.c_str(), data, field.speed))
                                         {
                                             dummy.SetValue<glm::vec3>(data);
                                             (*classRegisteredInstanceField)[name] = dummy;
@@ -2450,7 +2449,7 @@ namespace ignite
                                     case ScriptFieldType::Vector4:
                                     {
                                         auto data = dummy.GetValue<glm::vec4>();
-                                        if (UI::DrawVec4Control(name.c_str(), data, 0.1f))
+                                        if (UI::DrawVec4Control(name.c_str(), data, field.speed))
                                         {
                                             dummy.SetValue<glm::vec4>(data);
                                             (*classRegisteredInstanceField)[name] = dummy;
@@ -2463,7 +2462,7 @@ namespace ignite
                                     {
                                         auto data = dummy.GetValue<glm::quat>();
                                         glm::vec4 vec = { data.x, data.y, data.z, data.w };
-                                        if (UI::DrawVec4Control(name.c_str(), vec, 0.1f))
+                                        if (UI::DrawVec4Control(name.c_str(), vec, field.speed))
                                         {
                                             data = { vec.w, vec.x, vec.y, vec.z };
                                             dummy.SetValue<glm::quat>(data);
@@ -2870,11 +2869,11 @@ namespace ignite
                     Rect viewportRect = { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max };
 
                     // Camera icons & frustum outlines
-                    auto cameraViewReg = m_Scene->registry->view<TransformComponent, CameraComponent>();
+                    auto cameraViewReg = m_Scene->registry->view<TransformComponent, RenderingComponent, CameraComponent>();
                     for (entt::entity e : cameraViewReg)
                     {
-                        auto &tr = m_Scene->registry->get<TransformComponent>(e);
-                        if (!tr.visible)
+                        const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
+                        if (!rc.visible)
                             continue;
 
                         const glm::mat4 world = tr.world.GetMatrix();
@@ -2921,11 +2920,11 @@ namespace ignite
                     }
 
                     // Light icons & direction vectors
-                    auto dirLightReg = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
+                    auto dirLightReg = m_Scene->registry->view<TransformComponent, RenderingComponent, DirectionalLightComponent>();
                     for (entt::entity e : dirLightReg)
                     {
-                        auto &tr = m_Scene->registry->get<TransformComponent>(e);
-                        if (!tr.visible)
+                        const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
+                        if (!rc.visible)
                             continue;
 
                         auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
