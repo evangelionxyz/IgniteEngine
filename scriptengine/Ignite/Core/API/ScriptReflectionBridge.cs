@@ -280,3 +280,4 @@ internal static class ScriptReflectionBridge
         return ResolveType(trimmedName);
     }
 }
+

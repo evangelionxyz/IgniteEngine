@@ -49,6 +49,10 @@ namespace ignite
         bool GetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, void *buffer, int bufferSize);
         bool SetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, const void *buffer, int bufferSize);
 
+        // List<Entity> hot-reload helpers: capture IDs before ALC unload, restore after reload
+        std::string GetEntityListFieldIds(uint64_t instanceId, const std::string &fieldName);
+        bool SetEntityListField(uint64_t instanceId, const std::string &fieldName, const std::string &pipeSeparatedIds);
+
         // Bind an instance method and return a method handle
         int BindInstanceMethod(uint64_t instanceId, const std::string &methodName);
 

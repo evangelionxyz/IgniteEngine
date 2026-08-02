@@ -105,6 +105,10 @@ namespace ignite
         ScriptClassMap scriptableObjectClasses;
         std::vector<std::string> scriptableObjecClassStorage;
         std::vector<ScriptableObjectMenuEntry> scriptableObjectMenuEntries;
+
+        // Hot-reload: captured List<Entity> / List<Asset> field IDs
+        // Key: instanceID -> (fieldName -> pipe-separated entity IDs string)
+        std::unordered_map<ScriptInstanceID, std::unordered_map<std::string, std::string>> capturedEntityListFields;
     };
 
     ScriptEngineData *scriptEngineData = nullptr;
@@ -505,6 +509,25 @@ namespace ignite
                 if (instanceField.field.Type == ScriptFieldType::Invalid)
                     continue;
 
+                // Entity and Asset fields are reference types: GetInstanceFieldValue always
+                // returns 0 for them (MochiSharp can't marshal GC references into a raw buffer).
+                // Their uint64_t IDs are already correctly stored in the C++ buffer from when
+                // the field was first assigned, so skip the capture to avoid overwriting them.
+                if (instanceField.field.Type == ScriptFieldType::Entity ||
+                    instanceField.field.Type == ScriptFieldType::Asset)
+                    continue;
+
+                // List<Entity> and List<Asset>: read the entity IDs via the managed reflection
+                // bridge before the ALC is torn down, so we can reconstruct the list after reload.
+                if (instanceField.field.Type == ScriptFieldType::List_Entity ||
+                    instanceField.field.Type == ScriptFieldType::List_Asset)
+                {
+                    std::string ids = scriptEngineData->scriptHost->GetEntityListFieldIds(instanceID, fieldName);
+                    LOG_ASSERT(!ids.empty(), "[Script Engine] IDs is empty! This can be a bug!");
+                    scriptEngineData->capturedEntityListFields[instanceID][fieldName] = std::move(ids);
+                    continue;
+                }
+
                 memset(buffer, 0, sizeof(buffer));
                 if (scriptEngineData->scriptHost->GetInstanceFieldValue(instanceID, fieldName, buffer, sizeof(buffer)))
                 {
@@ -548,6 +571,7 @@ namespace ignite
 
         // 3. Clear entity script instances map before reloading assembly
         scriptEngineData->entityScriptInstances.clear();
+        // (capturedEntityListFields is preserved across the reload and consumed in step 5)
 
         // 4. Reset filewatcher write time guard and reload assembly
         scriptEngineData->hasAppAssemblyLastWriteTime = false;
@@ -608,22 +632,68 @@ namespace ignite
                                     scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, str.data(), (int)str.size());
                                     break;
                                 }
-                                // Entity / Asset hold GC handles from the old (now-unloaded) ALC.
-                                // Passing them would crash MochiSharp's marshaller.
-                                // The script must re-acquire them in OnHotReload().
+                                // Entity and Asset fields are stored as uint64_t IDs in the C++ buffer
+                                // (entity UUID or asset handle) — not raw GC handles — so they are safe
+                                // to restore across a hot reload via the ID-based SetInstanceFieldValue path.
                                 case ScriptFieldType::Entity:
+                                {
+                                    auto id = instanceField.GetValue<uint64_t>();
+                                    if (id != 0)
+                                        scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &id, sizeof(id));
+                                    break;
+                                }
                                 case ScriptFieldType::Asset:
+                                {
+                                    auto id = instanceField.GetValue<uint64_t>();
+                                    if (id != 0)
+                                    {
+                                        // Re-create the managed ScriptableObject sub-instance in the new ALC
+                                        // so MochiSharp can resolve the reference via its _instances lookup.
+                                        Scene *scene = m_Scene;
+                                        AssetManager *am = scene ? scene->GetAssetManager() : nullptr;
+                                        if (am && am->IsAssetHandleValid(AssetHandle(id)))
+                                        {
+                                            auto so = am->GetAssetImmediate<ScriptableObject>(AssetHandle(id));
+                                            if (so)
+                                            {
+                                                if (!scriptEngineData->scriptHost->CreateInstance(id, so->GetClassName()))
+                                                {
+                                                    LOG_ERROR("[Script Engine] HotReload: failed to recreate SO managed instance '{}' (handle={})", so->GetClassName(), id);
+                                                }
+                                                else
+                                                {
+                                                    ScriptInstance::PopulateSOFields(scriptEngineData->scriptHost.get(), id, *so);
+                                                }
+                                            }
+                                        }
+                                        scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &id, sizeof(id));
+                                    }
+                                    break;
+                                }
                                 default: break;
                             }
                         }
                     }
 
-                    // 6. Invoke OnHotReload() callback
+                    // 6. Restore List<Entity> / List<Asset> fields captured before the ALC unload.
+                    // The managed bridge reconstructs each list from the pipe-separated entity IDs.
+                    auto capturedListIt = scriptEngineData->capturedEntityListFields.find(snap.instanceID);
+                    if (capturedListIt != scriptEngineData->capturedEntityListFields.end())
+                    {
+                        for (auto &[fieldName, ids] : capturedListIt->second)
+                        {
+                            if (!ids.empty())
+                                scriptEngineData->scriptHost->SetEntityListField(snap.instanceID, fieldName, ids);
+                        }
+                    }
+
+                    // 7. Invoke OnHotReload() callback
                     script.runtimeScriptInstance->InvokeOnHotReload();
                 }
             }
         }
 
+        scriptEngineData->capturedEntityListFields.clear();
         scriptEngineData->hotReloadPending = false;
         LOG_INFO("[Script Engine] App assembly hot reload complete! {} script instances updated.", scriptSnapshots.size());
     }
@@ -1039,8 +1109,7 @@ namespace ignite
                 }
             }
 
-            LOG_TRACE("[Script Engine] Refreshed ScriptableObject '{}' (handle={})",
-                so->GetClassName(), id);
+            LOG_TRACE("[Script Engine] Refreshed ScriptableObject '{}' (handle={})", so->GetClassName(), id);
         }
     }
 }

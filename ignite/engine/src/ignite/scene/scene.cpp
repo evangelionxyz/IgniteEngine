@@ -733,6 +733,8 @@ namespace ignite
 
 	void Scene::OnFixedUpdateRuntimeSimulate()
 	{
+        constexpr float dt = 1.0f / 60.0f;
+
 		{
 			IGN_PROFILE_SCOPE("Scene::Script OnFixedUpdate");
 			registry->view<ScriptComponent>().each([](entt::entity e, ScriptComponent &script)
@@ -744,14 +746,14 @@ namespace ignite
 
 		{
 			IGN_PROFILE_SCOPE("Scene::Physics2D");
-			m_Physics2D->Simulate(1.0f / 60.0f);
+			m_Physics2D->Simulate(dt);
 		}
 
 		{
 			IGN_PROFILE_SCOPE("Scene::Physics3D");
 			if (m_Physics3D)
 			{
-				m_Physics3D->Simulate(1.0f / 60.0f);
+				m_Physics3D->Simulate(dt);
 
 				// Calculate Parent transform
 				auto CalculateParentTransform = [this](const IDComponent &idc, TransformComponent &trc, const glm::vec3 &worldTranslation, const glm::quat &worldRotation)
@@ -765,13 +767,10 @@ namespace ignite
 
 							const glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation)
 								* glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), trc.world.scale);
-
 							const glm::mat4 childLocalMatrix = glm::inverse(parentTr.world.GetMatrix()) * childWorldMatrix;
-
 							const glm::vec3 savedLocalScale = trc.local.scale;
 							Transform::Decompose(childLocalMatrix, trc.local);
 							trc.local.scale = savedLocalScale;
-
 							trc.world.translation = worldTranslation;
 							trc.world.rotation = worldRotation;
 						}

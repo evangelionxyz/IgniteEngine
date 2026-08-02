@@ -720,4 +720,70 @@ namespace ignite
 
         return InvokeStaticStringMethod(*bridgeType, "GetCreateAssetMenuData", assemblyPath.stem().string(), baseType);
     }
+
+    std::string ScriptHost::GetEntityListFieldIds(uint64_t instanceId, const std::string &fieldName)
+    {
+        if (!m_Initialized || fieldName.empty())
+            return {};
+
+        auto instanceIt = m_InstanceMap.find(instanceId);
+        if (instanceIt == m_InstanceMap.end())
+            return {};
+
+        // Call GetEntityListFieldIds(string fieldName) as an *instance* method on the
+        // managed object.  InvokeMethodRetFptr correctly resolves the GC handle via
+        // GCHandle.FromIntPtr, unlike InvokeStaticMethod which cannot unmarshal a raw
+        // void* into an 'object' parameter.
+        auto managedFieldName = mochi::String::New(fieldName);
+        mochi::String result;
+        const mochi::ManagedType paramTypes[] = { mochi::ManagedType::String };
+        const void *params[] = { managedFieldName.Data() ? &managedFieldName : nullptr };
+        auto methodName = mochi::String::New("GetEntityListFieldIds");
+        mochi::s_ManagedFunctions.InvokeMethodRetFptr(
+            instanceIt->second.m_Handle,
+            methodName,
+            params,
+            paramTypes,
+            1,
+            &result);
+        mochi::String::Free(methodName);
+        mochi::String::Free(managedFieldName);
+
+        std::string ids;
+        if (result.Data())
+            ids = static_cast<std::string>(result);
+        mochi::String::Free(result);
+        return ids;
+    }
+
+    bool ScriptHost::SetEntityListField(uint64_t instanceId, const std::string &fieldName, const std::string &pipeSeparatedIds)
+    {
+        if (!m_Initialized || fieldName.empty())
+            return false;
+
+        auto instanceIt = m_InstanceMap.find(instanceId);
+        if (instanceIt == m_InstanceMap.end())
+            return false;
+
+        // Call SetEntityListField(string fieldName, string ids) as an *instance* method
+        // on the managed object, same reasoning as GetEntityListFieldIds above.
+        auto managedFieldName = mochi::String::New(fieldName);
+        auto managedIds = mochi::String::New(pipeSeparatedIds);
+        const mochi::ManagedType paramTypes[] = { mochi::ManagedType::String, mochi::ManagedType::String };
+        const void *params[] = {
+            managedFieldName.Data() ? &managedFieldName : nullptr,
+            managedIds.Data()       ? &managedIds       : nullptr
+        };
+        auto methodName = mochi::String::New("SetEntityListField");
+        mochi::s_ManagedFunctions.InvokeMethodFptr(
+            instanceIt->second.m_Handle,
+            methodName,
+            params,
+            paramTypes,
+            2);
+        mochi::String::Free(methodName);
+        mochi::String::Free(managedFieldName);
+        mochi::String::Free(managedIds);
+        return true;
+    }
 }
