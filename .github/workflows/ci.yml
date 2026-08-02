@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [master]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
    build:
     runs-on: ${{ matrix.os }}
@@ -22,6 +26,12 @@ jobs:
       PREMAKE_VERSION: 5.0.0-beta8
 
     steps:
+      - name: Skip Duplicate Actions
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          concurrent_skipping: 'never'
+          skip_after_successful_duplicate: 'true'
+
       - name: Checkout repository recursively (with submodules)
         uses: actions/checkout@v4
         with:
@@ -94,7 +104,7 @@ jobs:
       - name: Build Solution - Visual Studio
         if: runner.os == 'Windows'
         shell: pwsh
-        run: msbuild $env:SOLUTION_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /v:m
+        run: msbuild $env:SOLUTION_FILE_IGN /t:Build /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /v:m
 
       - name: Build Editor (Linux)
         if: runner.os == 'Linux'

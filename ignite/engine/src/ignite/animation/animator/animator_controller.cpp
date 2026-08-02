@@ -406,9 +406,19 @@ namespace ignite
                 if (!blendSpace) return false;
                 const AnimParam *x = GetParam(blendSpace->axisXName);
                 const AnimParam *y = GetParam(blendSpace->axisYName);
-                const glm::vec2 input(x && x->type == AnimParam::Type::Float ? x->floatVal : 0.0f,
+                const glm::vec2 rawInput(
+                    x && x->type == AnimParam::Type::Float ? x->floatVal : 0.0f,
                     y && y->type == AnimParam::Type::Float ? y->floatVal : 0.0f);
-                for (const BlendSpaceWeight &weight : blendSpace->Evaluate(input))
+
+                // Advance smoothed input using the BlendSpace's smoothing settings.
+                // Runtime smoothing state (smoothedInput, velocity) is stored per-instance in 'runtime'.
+                const glm::vec2 smoothedInput = blendSpace->AdvanceSmoothedInput(
+                    rawInput,
+                    runtime.blendSpaceSmoothedInput,
+                    runtime.blendSpaceVelocity,
+                    deltaTime);
+
+                for (const BlendSpaceWeight &weight : blendSpace->Evaluate(smoothedInput))
                 {
                     Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(weight.GetAnimationAssetHandle());
                     if (animation && animation->duration > 0.0f)

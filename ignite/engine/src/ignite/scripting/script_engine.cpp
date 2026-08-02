@@ -24,6 +24,7 @@ namespace ignite
         constexpr const char *kIgniteObjectName = "Ignite.IgniteObject";
         constexpr const char *kSerializeFieldTypeName = "Ignite.SerializeField";
         constexpr const char *kScriptableObjectTypeName = "Ignite.ScriptableObject";
+        constexpr const char *kUISliderTypeName = "Ignite.UISlider";
         constexpr const char *kEntityTypeName = "Ignite.Entity";
     }
 
@@ -891,10 +892,9 @@ namespace ignite
 
         const std::string appAssemblyName = m_Project->GetScriptModulePath().stem().string();
         std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(m_Project->GetScriptModulePath(), classFullName);
-
         if (derivedTypes.empty())
         {
-            LOG_WARN("[Script Engine] No derived script classes found in {} for '{}'", m_Project->GetScriptModulePath().generic_string(), classFullName);
+            LOG_ERROR("[Script Engine] No derived script classes found in {} for '{}'", m_Project->GetScriptModulePath().generic_string(), classFullName);
             return;
         }
 
@@ -913,13 +913,39 @@ namespace ignite
                 // Create the script class
                 const Ref<ScriptClass> scriptClass = CreateRef<ScriptClass>(classNamespace, className, appAssemblyName);
 
+                // UI attributes for this class
+                std::unordered_map<std::string, std::pair<float, float>> uiSliderMap;
+                std::string uiAttributes = scriptEngineData->scriptHost->GetFieldUIAttribute(fullName, kUISliderTypeName);
+                if (!uiAttributes.empty())
+                {
+                    auto uiEntries = stringutils::SplitString(uiAttributes, '|');
+                    for (const auto &uiEntry : uiEntries)
+                    {
+                        if (uiEntry.empty())
+                            continue;
+                        auto parts = stringutils::SplitString(uiEntry, '~');
+                        if (parts.size() >= 6)
+                        {
+                            const std::string &fName = parts[0];
+                            try
+                            {
+                                float minVal = std::stof(parts[4]);
+                                float maxVal = std::stof(parts[5]);
+                                uiSliderMap[fName] = { minVal, maxVal };
+                            }
+                            catch (...) {}
+                        }
+                    }
+                }
+
                 // Get field typename
                 const std::string fieldMetadata = scriptEngineData->scriptHost->GetTypeFields(fullName);
                 size_t fieldStart = 0;
                 auto fieldEntries = stringutils::SplitString(fieldMetadata, '|');
                 for (const auto &fieldEntry : fieldEntries)
                 {
-                    if (fieldEntry.empty()) continue;
+                    if (fieldEntry.empty())
+                        continue;
 
                     auto parts = stringutils::SplitString(fieldEntry, '~');
                     if (parts.size() >= 4)
@@ -989,6 +1015,18 @@ namespace ignite
                                     // List of a custom entity script class (treat as List<Entity>)
                                     field.Type = ScriptFieldType::List_Entity;
                                 }
+                            }
+                        }
+
+                        // Apply UI attributes strictly for single numeric field types
+                        auto sliderIt = uiSliderMap.find(fieldName);
+                        if (sliderIt != uiSliderMap.end())
+                        {
+                            if (IsSingleNumericFieldType(field.Type))
+                            {
+                                field.uiType = FieldUIType::Slider;
+                                field.minValue = sliderIt->second.first;
+                                field.maxValue = sliderIt->second.second;
                             }
                         }
 

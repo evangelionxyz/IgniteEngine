@@ -153,6 +153,32 @@ namespace ignite
         return ScriptFieldType::Invalid;
 	}
 
+    inline bool IsSingleNumericFieldType(ScriptFieldType type)
+    {
+        switch (type)
+        {
+            case ScriptFieldType::Byte:
+            case ScriptFieldType::SByte:
+            case ScriptFieldType::Short:
+            case ScriptFieldType::UShort:
+            case ScriptFieldType::Int:
+            case ScriptFieldType::UInt:
+            case ScriptFieldType::Long:
+            case ScriptFieldType::ULong:
+            case ScriptFieldType::Float:
+            case ScriptFieldType::Double:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    enum class FieldUIType
+    {
+        Default = 0,
+        Slider = 1
+    };
+
     struct ScriptField
     {
         std::string Name;
@@ -165,6 +191,12 @@ namespace ignite
 		bool IsPublic = false;
 		bool HasSerializeFieldAttribute = false;
 		bool IsEnum = false;
+
+        // UI
+        FieldUIType uiType = FieldUIType::Default;
+        float minValue = -FLT_MAX;
+        float maxValue = FLT_MAX;
+        float speed = 0.025f;
 
         bool IsList() const
         {

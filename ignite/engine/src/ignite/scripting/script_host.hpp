@@ -65,6 +65,7 @@ namespace ignite
         // Get all non-abstract classes derived from baseType in an assembly
         std::string GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType);
         std::string GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType);
+        std::string GetFieldUIAttribute(const std::string &classFullName, const std::string &attributeTypeName);
 
         // Check if initialized
         bool IsInitialized() const { return m_Initialized; }

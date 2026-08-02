@@ -20,6 +20,21 @@
 
 namespace ignite
 {
+    // Returns the display string for a smoothing type enum value.
+    static const char *SmoothingTypeToString(BlendSpaceSmoothingType type)
+    {
+        switch (type)
+        {
+        case BlendSpaceSmoothingType::Averaged:     return "Averaged";
+        case BlendSpaceSmoothingType::Linear:       return "Linear";
+        case BlendSpaceSmoothingType::Cubic:        return "Cubic";
+        case BlendSpaceSmoothingType::EaseInOut:    return "Ease In/Out";
+        case BlendSpaceSmoothingType::Exponential:  return "Exponential";
+        case BlendSpaceSmoothingType::SpringDamper: return "Spring Damper";
+        default:                                    return "Unknown";
+        }
+    }
+
     void BlendSpaceEditor::DrawBlendSpaceEditor(const Ref<BlendSpace> &blendSpace, AssetManager *assetManager, BlendSpaceEditorState &state)
     {
         if (!blendSpace || !assetManager)
@@ -84,6 +99,102 @@ namespace ignite
             blendSpace->axisMin.y = axisYMin;
             blendSpace->axisMax.y = axisYMax;
             blendSpace->SetDirtyFlag(true);
+        }
+
+        // ---- Grid Section ----
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextUnformatted("Grid");
+
+        int gridDivX = blendSpace->gridDivisions.x;
+        int gridDivY = blendSpace->gridDivisions.y;
+        if (ImGui::DragInt("Grid Div X", &gridDivX, 1.0f, 1, 100))
+        {
+            blendSpace->gridDivisions.x = std::max(1, gridDivX);
+            blendSpace->SetDirtyFlag(true);
+        }
+        if (ImGui::DragInt("Grid Div Y", &gridDivY, 1.0f, 1, 100))
+        {
+            blendSpace->gridDivisions.y = std::max(1, gridDivY);
+            blendSpace->SetDirtyFlag(true);
+        }
+
+        if (ImGui::Checkbox("Snap to Grid", &blendSpace->snapToGrid))
+            blendSpace->SetDirtyFlag(true);
+
+        // ---- Input Smoothing Section ----
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextUnformatted("Input Smoothing");
+        ImGui::TextDisabled("(0 = instant, no smoothing)");
+
+        float stX = blendSpace->smoothingTime.x;
+        float stY = blendSpace->smoothingTime.y;
+        if (ImGui::DragFloat("Smooth Time X (s)", &stX, 0.01f, 0.0f, 10.0f, "%.3f"))
+        {
+            blendSpace->smoothingTime.x = std::max(0.0f, stX);
+            blendSpace->SetDirtyFlag(true);
+        }
+        if (ImGui::DragFloat("Smooth Time Y (s)", &stY, 0.01f, 0.0f, 10.0f, "%.3f"))
+        {
+            blendSpace->smoothingTime.y = std::max(0.0f, stY);
+            blendSpace->SetDirtyFlag(true);
+        }
+
+        // Smoothing type combo
+        {
+            constexpr BlendSpaceSmoothingType kTypes[] = {
+                BlendSpaceSmoothingType::Averaged,
+                BlendSpaceSmoothingType::Linear,
+                BlendSpaceSmoothingType::Cubic,
+                BlendSpaceSmoothingType::EaseInOut,
+                BlendSpaceSmoothingType::Exponential,
+                BlendSpaceSmoothingType::SpringDamper,
+            };
+            constexpr int kTypeCount = static_cast<int>(std::size(kTypes));
+
+            int currentIdx = 0;
+            for (int i = 0; i < kTypeCount; ++i)
+            {
+                if (kTypes[i] == blendSpace->smoothingType)
+                {
+                    currentIdx = i;
+                    break;
+                }
+            }
+
+            if (ImGui::BeginCombo("Smoothing Type", SmoothingTypeToString(blendSpace->smoothingType)))
+            {
+                for (int i = 0; i < kTypeCount; ++i)
+                {
+                    const bool selected = (i == currentIdx);
+                    if (ImGui::Selectable(SmoothingTypeToString(kTypes[i]), selected))
+                    {
+                        blendSpace->smoothingType = kTypes[i];
+                        blendSpace->SetDirtyFlag(true);
+                    }
+                    if (selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+        }
+
+        // Damping ratio — only visible for SpringDamper
+        if (blendSpace->smoothingType == BlendSpaceSmoothingType::SpringDamper)
+        {
+            float dr = blendSpace->dampingRatio;
+            if (ImGui::DragFloat("Damping Ratio", &dr, 0.01f, 0.001f, 10.0f, "%.3f"))
+            {
+                blendSpace->dampingRatio = std::max(0.001f, dr);
+                blendSpace->SetDirtyFlag(true);
+            }
+            if (blendSpace->dampingRatio < 1.0f)
+                ImGui::TextDisabled("  (< 1 = overshoot)");
+            else if (blendSpace->dampingRatio > 1.0f)
+                ImGui::TextDisabled("  (> 1 = over-damped, slower)");
+            else
+                ImGui::TextDisabled("  (= 1 = critically damped)");
         }
 
         ImGui::Spacing();
@@ -168,7 +279,10 @@ namespace ignite
             glm::vec2 pos = selected.position;
             if (ImGui::DragFloat2("Position", &pos.x, 0.5f, blendSpace->axisMin.x, blendSpace->axisMax.x))
             {
-                selected.position = blendSpace->ClampInput(pos);
+                pos = blendSpace->ClampInput(pos);
+                if (blendSpace->snapToGrid)
+                    pos = blendSpace->SnapToGridPos(pos);
+                selected.position = pos;
                 blendSpace->SetDirtyFlag(true);
             }
         }
@@ -225,13 +339,19 @@ namespace ignite
             return glm::vec2(minVal.x + normX * valRange.x, minVal.y + normY * valRange.y);
         };
 
-        // Draw grid subdivisions (10x10)
-        for (int i = 0; i <= 10; ++i)
+        // Draw grid subdivisions driven by blendSpace->gridDivisions
+        const int divX = std::max(1, blendSpace->gridDivisions.x);
+        const int divY = std::max(1, blendSpace->gridDivisions.y);
+        for (int i = 0; i <= divX; ++i)
         {
-            float t = static_cast<float>(i) / 10.0f;
+            float t  = static_cast<float>(i) / static_cast<float>(divX);
             float px = gridMin.x + t * gridRectSize.x;
-            float py = gridMin.y + t * gridRectSize.y;
             drawList->AddLine(ImVec2(px, gridMin.y), ImVec2(px, gridMax.y), IM_COL32(45, 45, 50, 255));
+        }
+        for (int i = 0; i <= divY; ++i)
+        {
+            float t  = static_cast<float>(i) / static_cast<float>(divY);
+            float py = gridMin.y + t * gridRectSize.y;
             drawList->AddLine(ImVec2(gridMin.x, py), ImVec2(gridMax.x, py), IM_COL32(45, 45, 50, 255));
         }
 
@@ -252,6 +372,27 @@ namespace ignite
         const std::string yLabel = std::format("{} ({:.1f} .. {:.1f})", blendSpace->axisYName.empty() ? "Axis Y" : blendSpace->axisYName, minVal.y, maxVal.y);
         drawList->AddText(ImVec2(gridMin.x + gridRectSize.x * 0.5f - 40.0f, gridMax.y + 10.0f), IM_COL32(200, 200, 200, 255), xLabel.c_str());
         drawList->AddText(ImVec2(gridMin.x - 35.0f, gridMin.y - 25.0f), IM_COL32(200, 200, 200, 255), yLabel.c_str());
+
+        // Draw grid division labels on the axes (X bottom, Y left)
+        {
+            const ImU32 labelColor = IM_COL32(140, 140, 150, 200);
+            for (int i = 0; i <= divX; ++i)
+            {
+                float t   = static_cast<float>(i) / static_cast<float>(divX);
+                float val = minVal.x + t * valRange.x;
+                float px  = gridMin.x + t * gridRectSize.x;
+                const std::string text = std::format("{:.0f}", val);
+                drawList->AddText(ImVec2(px - 8.0f, gridMax.y + 3.0f), labelColor, text.c_str());
+            }
+            for (int i = 0; i <= divY; ++i)
+            {
+                float t   = static_cast<float>(i) / static_cast<float>(divY);
+                float val = maxVal.y - t * valRange.y; // Y is flipped on screen
+                float py  = gridMin.y + t * gridRectSize.y;
+                const std::string text = std::format("{:.0f}", val);
+                drawList->AddText(ImVec2(gridMin.x - 30.0f, py - 6.0f), labelColor, text.c_str());
+            }
+        }
 
         const ImVec2 mousePos = ImGui::GetMousePos();
         const bool canvasHovered = ImGui::IsWindowHovered() && mousePos.x >= gridMin.x && mousePos.x <= gridMax.x && mousePos.y >= gridMin.y && mousePos.y <= gridMax.y;
@@ -286,13 +427,15 @@ namespace ignite
             }
         }
 
-        // Dragging Sample logic
+        // Dragging Sample logic (with optional snap to grid)
         if (state.isDraggingSample && ImGui::IsMouseDown(ImGuiMouseButton_Left))
         {
             if (state.draggingSampleIndex >= 0 && state.draggingSampleIndex < static_cast<int>(blendSpace->samples.size()))
             {
-                glm::vec2 newGridPos = screenToGrid(mousePos);
-                blendSpace->samples[state.draggingSampleIndex].position = blendSpace->ClampInput(newGridPos);
+                glm::vec2 newGridPos = blendSpace->ClampInput(screenToGrid(mousePos));
+                if (blendSpace->snapToGrid)
+                    newGridPos = blendSpace->SnapToGridPos(newGridPos);
+                blendSpace->samples[state.draggingSampleIndex].position = newGridPos;
                 blendSpace->SetDirtyFlag(true);
             }
         }
@@ -336,7 +479,10 @@ namespace ignite
                     {
                         BlendSpaceSample newSample;
                         newSample.SetAnimationHandle(handle);
-                        newSample.position = blendSpace->ClampInput(screenToGrid(mousePos));
+                        glm::vec2 dropPos = blendSpace->ClampInput(screenToGrid(mousePos));
+                        if (blendSpace->snapToGrid)
+                            dropPos = blendSpace->SnapToGridPos(dropPos);
+                        newSample.position = dropPos;
                         blendSpace->samples.push_back(newSample);
                         state.selectedSample = static_cast<int>(blendSpace->samples.size()) - 1;
                         blendSpace->SetDirtyFlag(true);

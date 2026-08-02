@@ -802,6 +802,92 @@ namespace ignite::UI
         return state;
     }
 
+    static State DrawSliderFloat(const char *label, float *value, float minValue = 0.0f, float maxValue = 1.0f, float &coloumnWidth = defColWidth)
+    {
+        State state;
+
+        ImGui::PushID(label);
+
+        ImGui::Columns(2);
+        ImGui::SetColumnWidth(0, coloumnWidth);
+        ImGui::Text("%s", label);
+        ImGui::NextColumn();
+
+        float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
+
+        ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x - (buttonSize.x - GImGui->Style.ItemSpacing.x));
+
+        {
+            ScopedColorStyle buttonStyle({
+                { EColorStyle::Button,          { 0.2f, 0.2f, 0.2f, 1.0f } },
+                { EColorStyle::ButtonHovered,   { 0.7f, 0.7f, 0.7f, 1.0f } },
+                { EColorStyle::ButtonActive,    { 0.4f, 0.4f, 0.5f, 1.0f } }
+                });
+            if (ImGui::Button("V", buttonSize))
+            {
+                *value = minValue;
+                state.isItemEdited = true;
+                state.isItemDeactivatedAfterEdit = true;
+            }
+            State::Check(state);
+            ImGui::SameLine();
+            ImGui::SliderFloat("##V", value, minValue, maxValue);
+            State::Check(state);
+            ImGui::PopItemWidth();
+        }
+
+        ImGui::Columns(1);
+
+        ImGui::PopID();
+
+        return state;
+    }
+
+    static State DrawSliderInt(const char *label, int *value, int minValue = 0, int maxValue = 100, float &coloumnWidth = defColWidth)
+    {
+        State state;
+
+        ImGui::PushID(label);
+
+        ImGui::Columns(2);
+        ImGui::SetColumnWidth(0, coloumnWidth);
+        ImGui::Text("%s", label);
+        ImGui::NextColumn();
+
+        float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
+
+        ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x - (buttonSize.x - GImGui->Style.ItemSpacing.x));
+
+        {
+            ScopedColorStyle buttonStyle({
+                { EColorStyle::Button,          { 0.2f, 0.2f, 0.2f, 1.0f } },
+                { EColorStyle::ButtonHovered,   { 0.7f, 0.7f, 0.7f, 1.0f } },
+                { EColorStyle::ButtonActive,    { 0.4f, 0.4f, 0.5f, 1.0f } }
+                });
+
+            if (ImGui::Button("V", buttonSize))
+            {
+                *value = minValue;
+                state.isItemEdited = true;
+                state.isItemDeactivatedAfterEdit = true;
+            }
+            State::Check(state);
+
+            ImGui::SameLine();
+            ImGui::SliderInt("##V", value, minValue, maxValue);
+            State::Check(state);
+            ImGui::PopItemWidth();
+        }
+
+        ImGui::Columns(1);
+
+        ImGui::PopID();
+
+        return state;
+    }
+
 
     template<typename TOnChanged>
     inline void DrawTexturePreviewDropTarget(const char *label, AssetHandle &textureHandle, TOnChanged &&onChanged)

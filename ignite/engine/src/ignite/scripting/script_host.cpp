@@ -703,9 +703,7 @@ namespace ignite
     {
         mochi::Type *bridgeType = GetReflectionBridgeType();
         if (!bridgeType)
-        {
             return {};
-        }
 
         return InvokeStaticStringMethod(*bridgeType, "GetDerivedTypes", assemblyPath.stem().string(), baseType);
     }
@@ -714,11 +712,18 @@ namespace ignite
     {
         mochi::Type *bridgeType = GetReflectionBridgeType();
         if (!bridgeType)
-        {
             return {};
-        }
 
         return InvokeStaticStringMethod(*bridgeType, "GetCreateAssetMenuData", assemblyPath.stem().string(), baseType);
+    }
+
+    std::string ScriptHost::GetFieldUIAttribute(const std::string &classFullName, const std::string &attributeTypeName)
+    {
+        mochi::Type *bridgeType = GetReflectionBridgeType();
+        if (!bridgeType)
+            return {};
+
+        return InvokeStaticStringMethod(*bridgeType, "GetFieldUIAttribute", classFullName, attributeTypeName);
     }
 
     std::string ScriptHost::GetEntityListFieldIds(uint64_t instanceId, const std::string &fieldName)
@@ -739,13 +744,7 @@ namespace ignite
         const mochi::ManagedType paramTypes[] = { mochi::ManagedType::String };
         const void *params[] = { managedFieldName.Data() ? &managedFieldName : nullptr };
         auto methodName = mochi::String::New("GetEntityListFieldIds");
-        mochi::s_ManagedFunctions.InvokeMethodRetFptr(
-            instanceIt->second.m_Handle,
-            methodName,
-            params,
-            paramTypes,
-            1,
-            &result);
+        mochi::s_ManagedFunctions.InvokeMethodRetFptr(instanceIt->second.m_Handle, methodName, params, paramTypes, 1, &result);
         mochi::String::Free(methodName);
         mochi::String::Free(managedFieldName);
 
@@ -775,12 +774,7 @@ namespace ignite
             managedIds.Data()       ? &managedIds       : nullptr
         };
         auto methodName = mochi::String::New("SetEntityListField");
-        mochi::s_ManagedFunctions.InvokeMethodFptr(
-            instanceIt->second.m_Handle,
-            methodName,
-            params,
-            paramTypes,
-            2);
+        mochi::s_ManagedFunctions.InvokeMethodFptr(instanceIt->second.m_Handle, methodName, params, paramTypes, 2);
         mochi::String::Free(methodName);
         mochi::String::Free(managedFieldName);
         mochi::String::Free(managedIds);

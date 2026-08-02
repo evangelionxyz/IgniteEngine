@@ -41,48 +41,118 @@ internal static class ScriptReflectionBridge
         if (type == null)
             return string.Empty;
 
-        var builder = new StringBuilder();
+        var sb = new StringBuilder();
         var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
         foreach (var field in fields)
         {
-            bool isPublic = field.IsPublic;
-            bool hasSerializeField = serializeFieldAttributeType != null && field.IsDefined(serializeFieldAttributeType, inherit: true);
+            var isPublic = field.IsPublic;
+            var hasSerializeField = serializeFieldAttributeType != null && field.IsDefined(serializeFieldAttributeType, inherit: true);
 
             // Only expose public fields or fields explicitly marked with [SerializeField].
             // Private runtime-only fields (e.g. internal state, component wrappers) are skipped.
             if (!isPublic && !hasSerializeField)
                 continue;
 
-            if (builder.Length > 0)
-                builder.Append('|');
+            if (sb.Length > 0)
+                sb.Append('|');
 
-            builder.Append(field.Name);
-            builder.Append('~');
-            builder.Append(GetNormalizedTypeName(field.FieldType));
-            builder.Append('~');
-            builder.Append(isPublic ? '1' : '0');
-            builder.Append('~');
-            builder.Append(hasSerializeField ? '1' : '0');
+            sb.Append(field.Name);
+            sb.Append('~');
+            sb.Append(GetNormalizedTypeName(field.FieldType));
+            sb.Append('~');
+            sb.Append(isPublic ? '1' : '0');
+            sb.Append('~');
+            sb.Append(hasSerializeField ? '1' : '0');
 
             if (field.FieldType.IsEnum)
             {
-                builder.Append("~1~");
-                builder.Append(string.Join(',', Enum.GetNames(field.FieldType)));
-                builder.Append('~');
-                builder.Append(string.Join(',', Enum.GetValues(field.FieldType).Cast<object>().Select(value => Convert.ToInt32(value))));
+                sb.Append("~1~");
+                sb.Append(string.Join(',', Enum.GetNames(field.FieldType)));
+                sb.Append('~');
+                sb.Append(string.Join(',', Enum.GetValues(field.FieldType).Cast<object>().Select(value => Convert.ToInt32(value))));
             }
         }
 
-        return builder.ToString();
+        return sb.ToString();
+    }
+
+    internal static string GetFieldUIAttribute(string typeName, string attributeTypeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName) || string.IsNullOrWhiteSpace(attributeTypeName))
+            return string.Empty;
+
+        Type? type = ResolveTypePreferScriptingContext(typeName);
+        Type? uiAttributeType = ResolveTypePreferScriptingContext(attributeTypeName);
+
+        // We also need the serialize field attribute
+        Type? serializeFieldAttributeType = ResolveTypePreferScriptingContext("Ignite.SerializeField");
+
+        if (type == null || uiAttributeType == null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        foreach (var field in fields)
+        {
+            var isPublic = field.IsPublic;
+            var hasSerializeField = serializeFieldAttributeType != null && field.IsDefined(serializeFieldAttributeType, inherit: true);
+
+            // Only expose public fields or fields explicitly marked with [SerializeField].
+            // Private runtime-only fields (e.g. internal state, component wrappers) are skipped.
+            if (!isPublic && !hasSerializeField)
+                continue;
+
+            var uiAttribute = field.GetCustomAttribute(uiAttributeType, inherit: true);
+            if (uiAttribute == null)
+                continue;
+
+            var minValue = 0.0f;
+            var maxValue = 1.0f;
+
+            /// Get the UI attribute Min/Max properties or fields
+            var minProp = uiAttributeType.GetProperty("MinValue", BindingFlags.Public | BindingFlags.Instance);
+            var maxProp = uiAttributeType.GetProperty("MaxValue", BindingFlags.Public | BindingFlags.Instance);
+            var minField = uiAttributeType.GetField("MinValue", BindingFlags.Public | BindingFlags.Instance);
+            var maxField = uiAttributeType.GetField("MaxValue", BindingFlags.Public | BindingFlags.Instance);
+
+            if (minProp?.GetValue(uiAttribute) is float resolvedMinProp)
+                minValue = resolvedMinProp;
+            else if (minField?.GetValue(uiAttribute) is float resolvedMinField)
+                minValue = resolvedMinField;
+
+            if (maxProp?.GetValue(uiAttribute) is float resolvedMaxProp)
+                maxValue = resolvedMaxProp;
+            else if (maxField?.GetValue(uiAttribute) is float resolvedMaxField)
+                maxValue = resolvedMaxField;
+
+            if (sb.Length > 0)
+                sb.Append('|');
+
+            sb.Append(field.Name);
+            sb.Append('~');
+            sb.Append(GetNormalizedTypeName(field.FieldType));
+            sb.Append('~');
+            sb.Append(isPublic ? '1' : '0');
+            sb.Append('~');
+            sb.Append(hasSerializeField ? '1' : '0');
+
+            // Min/Max
+            sb.Append('~');
+            sb.Append(minValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            sb.Append('~');
+            sb.Append(maxValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
     /// Returns a stable, compact type name for use as a field type key on the C++ side.
     /// 
     /// Rules:
-    ///   - List&lt;T&gt;  → "List&lt;ElementFullName&gt;"  (normalized so C++ can map it directly)
-    ///   - Everything else → raw FullName  (already covered by the C++ s_ScriptFieldTypeMap)
+    ///   - List&lt;T&gt; -> "List&lt;ElementFullName&gt;"  (normalized so C++ can map it directly)
+    ///   - Everything else -> raw FullName  (already covered by the C++ s_ScriptFieldTypeMap)
     /// </summary>
     private static string GetNormalizedTypeName(Type type)
     {

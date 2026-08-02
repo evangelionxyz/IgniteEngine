@@ -450,6 +450,8 @@ namespace ignite
         std::string currentStateName;
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
+        glm::vec2 blendSpaceSmoothedInput = glm::vec2(0.0f);
+        glm::vec2 blendSpaceVelocity = glm::vec2(0.0f);
         AssetHandle runtimeAnimatorHandle = AssetHandle(0);
         std::unordered_map<std::string, AnimParam> runtimeParams;
         Ref<AnimatorController> runtimeAnimatorInstance = nullptr; // runtime-only for unique animator mode
@@ -472,6 +474,8 @@ namespace ignite
 			this->currentStateName.clear();
 			this->stateElapsed = 0.0f;
 			this->stateNormalized = 0.0f;
+			this->blendSpaceSmoothedInput = glm::vec2(0.0f);
+			this->blendSpaceVelocity = glm::vec2(0.0f);
         }
 
         glm::mat4 GetSocketWorldTransform(const glm::mat4 &meshWorldMatrix, const Skeleton &skeleton, const std::string &socketName) const

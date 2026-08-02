@@ -80,6 +80,13 @@ namespace ignite
         // Root motion
         glm::vec3 rootMotionDelta = glm::vec3(0.0f);
         bool hasRootMotion = false;
+
+        // BlendSpace per-instance smoothing state.
+        // Smoothed input advances toward the raw animator param values each frame
+        // using the smoothing settings on the active BlendSpace asset.
+        glm::vec2 blendSpaceSmoothedInput = glm::vec2(0.0f);
+        // Spring-damper velocity state (only used when smoothingType == SpringDamper).
+        glm::vec2 blendSpaceVelocity = glm::vec2(0.0f);
     };
 
     class IGN_API AnimatorController : public Animator, public Asset

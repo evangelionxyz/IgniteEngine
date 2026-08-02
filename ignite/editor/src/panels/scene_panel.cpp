@@ -2230,7 +2230,10 @@ namespace ignite
                                     case ScriptFieldType::Float:
                                     {
                                         auto data = dummy.GetValue<float>();
-                                        if (UI::DrawFloatControl(name.c_str(), &data, 0.1f, -FLT_MAX, FLT_MAX))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderFloat(name.c_str(), &data, field.minValue, field.maxValue)
+                                            : UI::DrawFloatControl(name.c_str(), &data, 0.1f, -FLT_MAX, FLT_MAX);
+                                        if (changed)
                                         {
                                             dummy.SetValue<float>(data);
                                             (*classRegisteredInstanceField)[name] = dummy;
@@ -2242,7 +2245,10 @@ namespace ignite
                                     case ScriptFieldType::Int:
                                     {
                                         auto data = dummy.GetValue<int>();
-                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX);
+                                        if (changed)
                                         {
                                             dummy.SetValue<int>(data);
                                             (*classRegisteredInstanceField)[name] = dummy;
@@ -2255,7 +2261,10 @@ namespace ignite
                                     {
                                         auto val = dummy.GetValue<uint32_t>();
                                         int data = static_cast<int>(val);
-                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX);
+                                        if (changed)
                                         {
                                             val = static_cast<uint32_t>(data);
                                             dummy.SetValue<uint32_t>(val);
@@ -2269,7 +2278,10 @@ namespace ignite
                                     {
                                         auto val = dummy.GetValue<uint8_t>();
                                         int data = static_cast<int>(val);
-                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, 255))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, 255);
+                                        if (changed)
                                         {
                                             val = static_cast<uint8_t>(data);
                                             dummy.SetValue<uint8_t>(val);
@@ -2283,7 +2295,10 @@ namespace ignite
                                     {
                                         auto val = dummy.GetValue<int8_t>();
                                         int data = static_cast<int>(val);
-                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, -128, 127))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, -128, 127);
+                                        if (changed)
                                         {
                                             val = static_cast<int8_t>(data);
                                             dummy.SetValue<int8_t>(val);
@@ -2297,7 +2312,10 @@ namespace ignite
                                     {
                                         auto val = dummy.GetValue<int16_t>();
                                         int data = static_cast<int>(val);
-                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, SHRT_MIN, SHRT_MAX))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, SHRT_MIN, SHRT_MAX);
+                                        if (changed)
                                         {
                                             val = static_cast<int16_t>(data);
                                             dummy.SetValue<int16_t>(val);
@@ -2311,7 +2329,10 @@ namespace ignite
                                     {
                                         auto val = dummy.GetValue<uint16_t>();
                                         int data = static_cast<int>(val);
-                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, USHRT_MAX))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, USHRT_MAX);
+                                        if (changed)
                                         {
                                             val = static_cast<uint16_t>(data);
                                             dummy.SetValue<uint16_t>(val);
@@ -2325,7 +2346,10 @@ namespace ignite
                                     {
                                         auto val = dummy.GetValue<int64_t>();
                                         int data = static_cast<int>(val);
-                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX);
+                                        if (changed)
                                         {
                                             val = static_cast<int64_t>(data);
                                             dummy.SetValue<int64_t>(val);
@@ -2339,7 +2363,10 @@ namespace ignite
                                     {
                                         auto val = dummy.GetValue<uint64_t>();
                                         int data = static_cast<int>(val);
-                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX);
+                                        if (changed)
                                         {
                                             val = static_cast<uint64_t>(data);
                                             dummy.SetValue<uint64_t>(val);
@@ -2383,7 +2410,10 @@ namespace ignite
                                     {
                                         auto dData = dummy.GetValue<double>();
                                         float data = static_cast<float>(dData);
-                                        if (UI::DrawFloatControl(name.c_str(), &data, 0.1f, -FLT_MAX, FLT_MAX))
+                                        bool changed = (field.uiType == FieldUIType::Slider)
+                                            ? UI::DrawSliderFloat(name.c_str(), &data, field.minValue, field.maxValue)
+                                            : UI::DrawFloatControl(name.c_str(), &data, 0.1f, -FLT_MAX, FLT_MAX);
+                                        if (changed)
                                         {
                                             dData = static_cast<double>(data);
                                             dummy.SetValue<double>(dData);

@@ -1153,6 +1153,8 @@ namespace ignite
                 runtime.currentStateName = smc.currentStateName;
                 runtime.stateElapsed = smc.stateElapsed;
                 runtime.stateNormalized = smc.stateNormalized;
+                runtime.blendSpaceSmoothedInput = smc.blendSpaceSmoothedInput;
+                runtime.blendSpaceVelocity = smc.blendSpaceVelocity;
 
                 if (animController->UpdateSkeleton(deltaTime, runtime, m_AssetManager))
                 {
@@ -1168,6 +1170,8 @@ namespace ignite
                     smc.currentStateName = runtime.currentStateName;
                     smc.stateElapsed = runtime.stateElapsed;
                     smc.stateNormalized = runtime.stateNormalized;
+                    smc.blendSpaceSmoothedInput = runtime.blendSpaceSmoothedInput;
+                    smc.blendSpaceVelocity = runtime.blendSpaceVelocity;
 
                     if (runtime.hasRootMotion)
                     {
