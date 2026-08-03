@@ -14,7 +14,7 @@
 
 namespace ignite
 {
-    SSAO::SSAO(uint32_t width, uint32_t height)
+    SSAO::SSAO(nvrhi::ICommandList *cmd, uint32_t width, uint32_t height)
         : m_Width(std::max(width, 1u)), m_Height(std::max(height, 1u))
     {
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
@@ -57,7 +57,7 @@ namespace ignite
         m_BlurComputeShader = Shader::Create("resources/shaders/ssao_blur.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
 
         BuildKernel();
-        BuildNoise();
+        BuildNoise(cmd);
         CreateTextures(m_Width, m_Height);
     }
 
@@ -91,7 +91,7 @@ namespace ignite
         }
     }
 
-    void SSAO::BuildNoise()
+    void SSAO::BuildNoise(nvrhi::ICommandList *cmd)
     {
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
         std::default_random_engine rng;
@@ -112,10 +112,6 @@ namespace ignite
         pixelData.resize(16 * sizeof(glm::vec4));
         std::memcpy(pixelData.data(), noise.data(), pixelData.size());
 
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        auto pool = device->createCommandList();
-        pool->open();
-
         TextureCreateInfo info;
         info.width = 4;
         info.height = 4;
@@ -128,10 +124,7 @@ namespace ignite
         info.keepInitialState = true;
         info.bindless = false;
 
-        m_NoiseTexture = Texture::Create(pixelData, info, pool, "HBAO Noise");
-        
-        pool->close();
-        device->executeCommandList(pool);
+        m_NoiseTexture = Texture::Create(pixelData, info, cmd, "HBAO Noise");
     }
 
     void SSAO::CreateTextures(uint32_t width, uint32_t height)
@@ -296,7 +289,7 @@ namespace ignite
     void SSAO::Resize(uint32_t width, uint32_t height)
     {
         if (width == 0 || height == 0) return;
-        if (m_Width == width / 2 && m_Height == height / 2) return;
+        if (m_Width == std::max(width / 2, 1u) && m_Height == std::max(height / 2, 1u)) return;
         CreateTextures(width, height);
     }
 

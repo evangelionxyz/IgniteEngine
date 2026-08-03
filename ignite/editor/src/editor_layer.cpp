@@ -2334,7 +2334,7 @@ namespace ignite
         }
 
         // Scene Render
-        if (ImGui::TreeNodeEx("Settings Render", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("Render Settings", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
             auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
             
@@ -2366,7 +2366,7 @@ namespace ignite
                     ImGui::TreePop();
                 }
 
-				if (ImGui::TreeNodeEx("Internal Render scale"))
+				if (ImGui::TreeNodeEx("Render scale"))
 				{
                     UI::DrawFloatControl("Factor", &renderSettings.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
 					if (UI::DrawButtonWithColumn("", "Apply"))
@@ -2382,6 +2382,14 @@ namespace ignite
                     static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
                     static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
                     static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
+                    static const char *fillModeLabels[]{ "Solid", "Wireframe" };
+
+                    int fillMode = static_cast<int>(renderSettings.fillMode);
+                    if (UI::DrawComboBox("Fill Mode", fillModeLabels, IM_ARRAYSIZE(fillModeLabels), &fillMode))
+                    {
+                        m_SceneRenderer->SetFillMode(static_cast<nvrhi::RasterFillMode>(fillMode));
+                    }
+
                     int renderMode = m_SceneRenderer->GetRenderMode();
                     if (UI::DrawComboBox("Render Mode", renderModeLabels, IM_ARRAYSIZE(renderModeLabels), &renderMode))
                     {

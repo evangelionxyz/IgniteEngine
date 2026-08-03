@@ -689,6 +689,14 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<WorldEnvironment>();
 
+                const char *skyTypes[] = { "HDRI", "Procedural Sky" };
+                int currentType = static_cast<int>(c.skyType);
+                if (ImGui::Combo("Sky Type", &currentType, skyTypes, 2))
+                {
+                    c.skyType = static_cast<SkyType>(currentType);
+                    c.dirtyEnvironment = true;
+                }
+
                 UI::DrawFloatControl("Exposure", &c.exposure, 0.025f, 0.0f, FLT_MAX);
                 UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 0.0f, FLT_MAX);
                 UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
@@ -702,38 +710,76 @@ namespace ignite
                     UI::DrawFloatControl("Fog End", &c.fogEnd, 0.1f, 0.0f, FLT_MAX);
                 }
 
-                const bool hasHDR = c.hdrHandle != AssetHandle(0);
-                std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
-                UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, assetManager, this, &hasHDR]()
-                    {
-                        if (ImGui::BeginDragDropTarget())
+                if (c.skyType == SkyType::HDRI)
+                {
+                    const bool hasHDR = c.hdrHandle != AssetHandle(0);
+                    std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
+                    UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, assetManager, this, &hasHDR]()
                         {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            if (ImGui::BeginDragDropTarget())
                             {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                if (metadata.type == AssetType::Texture && metadata.filepath.extension() == ".hdr")
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                                 {
-                                    c.hdrHandle = handle;
+                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                    AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                    if (metadata.type == AssetType::Texture && metadata.filepath.extension() == ".hdr")
+                                    {
+                                        c.hdrHandle = handle;
+                                        c.dirtyEnvironment = true;
+                                        c.gpuInitialized = false;
+                                    }
+                                }
+                                ImGui::EndDragDropTarget();
+                            }
+
+                            if (hasHDR)
+                            {
+                                ImGui::SameLine();
+                                if (ImGui::Button("X"))
+                                {
+                                    c.hdrHandle = AssetHandle(0);
                                     c.dirtyEnvironment = true;
                                     c.gpuInitialized = false;
                                 }
                             }
-                            ImGui::EndDragDropTarget();
+                        });
+                }
+                else if (c.skyType == SkyType::ProceduralSky)
+                {
+                    if (ImGui::TreeNodeEx("Atmosphere Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        auto &atmo = c.atmosphereParams;
+                        bool modified = false;
+
+                        ImGui::TextDisabled("Scattering values use 1e-3 per km units.");
+                        modified |= UI::DrawVec3Control("Rayleigh Scattering (x10^-3 / km)", atmo.rayleighScattering);
+                        modified |= UI::DrawVec3Control("Mie Scattering (x10^-3 / km)", atmo.mieScattering);
+                        modified |= UI::DrawFloatControl("Rayleigh Scale Height (km)", &atmo.rayleighDensityH, 0.025f, 0.1f, 50.0f);
+                        modified |= UI::DrawFloatControl("Mie Scale Height (km)", &atmo.mieDensityH, 0.025f, 0.1f, 20.0f);
+                        modified |= UI::DrawFloatControl("Mie Anisotropy (g)", &atmo.mieG, 0.01f, 0.0f, 0.99f);
+                        modified |= UI::DrawFloatControl("Planet Radius (km)", &atmo.planetRadius, 10.0f, 100.0f, 100000.0f);
+                        modified |= UI::DrawFloatControl("Atmosphere Radius (km)", &atmo.atmosphereRadius, 10.0f, 100.0f, 100000.0f);
+
+                        if (ImGui::ColorEdit3("Ground Albedo", &atmo.groundAlbedo.r))
+                        {
+                            modified = true;
                         }
 
-                        if (hasHDR)
+                        if (ImGui::Button("Reset to Earth Default"))
                         {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X"))
-                            {
-                                c.hdrHandle = AssetHandle(0);
-                                c.dirtyEnvironment = true;
-                                c.gpuInitialized = false;
-                            }
+                            atmo = AtmosphereParams();
+                            modified = true;
                         }
-                    });
+
+                        if (modified && c.environment && c.environment->GetProceduralSky())
+                        {
+                            c.environment->GetProceduralSky()->MarkDirty();
+                        }
+
+                        ImGui::TreePop();
+                    }
+                }
             });
 
             RenderComponent<DirectionalLightComponent>("Directional Light", selectedEntity, [&]()
@@ -1527,7 +1573,7 @@ namespace ignite
 						if (pp.enableSSAO)
 						{
 							c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 0.5f).isItemEdited;
+							c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 1.0f).isItemEdited;
 							c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
 							c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
 						}

@@ -19,6 +19,7 @@
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/procedural_sky.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/math/aabb.hpp"
 #include "ignite/math/transform.hpp"
@@ -348,6 +349,9 @@ namespace ignite
     public:
         Ref<Environment> environment;
         AssetHandle hdrHandle = AssetHandle(0);
+
+        SkyType skyType = SkyType::HDRI;
+        AtmosphereParams atmosphereParams;
 
         float exposure = 1.1f;
         float gamma = 2.2f;

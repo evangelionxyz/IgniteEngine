@@ -28,9 +28,9 @@ float3 ReconstructViewPos(float2 uv, float depth)
 
 float3 ReconstructNormal(float2 uv, float centerDepth, float3 centerVS)
 {
-    uint dw, dh;
-    t_Depth.GetDimensions(dw, dh);
-    float2 texel = 1.0f / float2(dw, dh);
+    uint w, h;
+    u_Target.GetDimensions(w, h);
+    float2 texel = 1.0f / float2(w, h);
 
     float dL = t_Depth.SampleLevel(s_Clamp, uv - float2(texel.x, 0.0f), 0.0f).r;
     float dR = t_Depth.SampleLevel(s_Clamp, uv + float2(texel.x, 0.0f), 0.0f).r;
@@ -42,9 +42,24 @@ float3 ReconstructNormal(float2 uv, float centerDepth, float3 centerVS)
     float3 pU = ReconstructViewPos(uv - float2(0.0f, texel.y), dU);
     float3 pD = ReconstructViewPos(uv + float2(0.0f, texel.y), dD);
 
-    float3 dx = (abs(dL - centerDepth) < abs(dR - centerDepth)) ? (centerVS - pL) : (pR - centerVS);
-    float3 dy = (abs(dU - centerDepth) < abs(dD - centerDepth)) ? (pU - centerVS) : (centerVS - pD);
-    return normalize(cross(dx, dy));
+    float3 dxL = centerVS - pL;
+    float3 dxR = pR - centerVS;
+    float3 dyD = centerVS - pD;
+    float3 dyU = pU - centerVS;
+
+    float3 dx = (abs(dxL.z) < abs(dxR.z)) ? dxL : dxR;
+    float3 dy = (abs(dyD.z) < abs(dyU.z)) ? dyD : dyU;
+
+    float3 n = cross(dx, dy);
+    float len = length(n);
+    float3 normal = (len > 1e-6f) ? (n / len) : float3(0.0f, 0.0f, 1.0f);
+
+    float3 viewDir = -normalize(centerVS);
+    if (dot(normal, viewDir) < 0.0f)
+    {
+        normal = -normal;
+    }
+    return normal;
 }
 
 float HashAngle(float2 uv)
@@ -74,24 +89,27 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float3 posVS = ReconstructViewPos(uv, depth);
     float3 normalVS = ReconstructNormal(uv, depth, posVS);
 
-    // If normal reconstruction flips because of projection handedness, keep it facing the camera.
-    if (dot(normalVS, -normalize(posVS)) < 0.0f)
-        normalVS = -normalVS;
+    float radius = max(u_Params.x, 0.05f);
+    float userBias = max(u_Params.y, 0.05f);
+    float power = max(u_Params.z, 0.1f);
 
-    float radius = max(u_Params.x, 0.01f);
-    float bias = u_Params.y;
-    float power = max(u_Params.z, 0.01f);
+    // View direction vector (from surface to camera)
+    float3 viewDir = -normalize(posVS);
+    float NdotV_view = max(dot(normalVS, viewDir), 0.05f);
 
-    // Convert the world-space radius to a screen-space search radius.
-    // Clamp to avoid huge far-plane walks and tiny near-plane flicker.
+    // Slope-dependent tangent bias: automatically scales with surface obliqueness relative to camera
+    // Prevents self-occlusion artifacts/lines at steep camera angles
+    float slope = sqrt(saturate(1.0f - NdotV_view * NdotV_view)) / NdotV_view;
+    float effectiveBias = max(userBias, slope * 0.12f);
+
     float viewZ = max(abs(posVS.z), 0.1f);
-    float radiusPixels = clamp(radius * abs(u_Projection[1][1]) * float(h) * 0.5f / viewZ, 2.0f, 48.0f);
+    float radiusPixels = clamp(radius * abs(u_Projection[1][1]) * float(h) * 0.5f / viewZ, 3.0f, 64.0f);
 
     static const int kDirections = 8;
-    static const int kSteps = 6;
+    static const int kSteps = 4;
 
     float randomAngle = HashAngle(uv);
-    float occlusion = 0.0f;
+    float totalOcclusion = 0.0f;
     float weightSum = 0.0f;
 
     [unroll]
@@ -100,13 +118,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float angle = randomAngle + (6.28318530718f * (float(dirIndex) + 0.5f) / float(kDirections));
         float2 dir = float2(cos(angle), sin(angle));
 
-        float horizon = 0.0f;
+        float maxHorizon = 0.0f;
 
         [unroll]
         for (int stepIndex = 1; stepIndex <= kSteps; ++stepIndex)
         {
-            float stepScale = (float(stepIndex) + 0.35f) / float(kSteps);
-            float2 suv = uv + dir * texel * radiusPixels * stepScale;
+            float stepFrac = (float(stepIndex) - 0.25f) / float(kSteps);
+            float2 suv = uv + dir * texel * radiusPixels * stepFrac;
 
             if (any(suv < 0.0f) || any(suv > 1.0f))
                 continue;
@@ -118,20 +136,31 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float3 sampleVS = ReconstructViewPos(suv, sampleDepth);
             float3 delta = sampleVS - posVS;
             float dist = length(delta);
+
             if (dist <= 1e-4f || dist > radius)
                 continue;
 
             float3 horizonDir = delta / dist;
-            float projected = dot(normalVS, horizonDir) - bias;
-            float falloff = saturate(1.0f - (dist * dist) / (radius * radius));
-            horizon = max(horizon, saturate(projected) * falloff);
+            float NdotV = dot(normalVS, horizonDir);
+
+            // Angle attenuation with slope-adaptive tangent bias
+            float occlude = max(0.0f, NdotV - effectiveBias);
+
+            // Smooth distance attenuation
+            float dNorm = dist / radius;
+            float falloff = saturate(1.0f - dNorm * dNorm);
+
+            // Prevent self-occlusion from sub-texel depth noise near sample origin
+            float innerFade = saturate(dist / (radius * 0.12f));
+
+            maxHorizon = max(maxHorizon, occlude * falloff * innerFade);
         }
 
-        occlusion += horizon;
+        totalOcclusion += maxHorizon;
         weightSum += 1.0f;
     }
 
-    float ao = 1.0f - occlusion / max(weightSum, 1.0f);
+    float ao = 1.0f - (totalOcclusion / max(weightSum, 1.0f));
     ao = pow(saturate(ao), power);
     u_Target[DTid.xy] = ao;
 }

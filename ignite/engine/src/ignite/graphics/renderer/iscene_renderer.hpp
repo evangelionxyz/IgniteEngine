@@ -61,6 +61,8 @@ namespace ignite
         MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
         float renderScale = 1.0f;
 
+        nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
+
         SceneRenderSettings()
         {
             worldGrid2D.enableZAxis = false;
@@ -203,7 +205,6 @@ namespace ignite
         uint32_t m_ViewportWidth = 0;
         uint32_t m_ViewportHeight = 0;
 
-        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
         bool m_Has2DPreRenderCache = false;
         bool m_CompositeVertexBufferUploadPending = true;
     };

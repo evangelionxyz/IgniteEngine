@@ -20,6 +20,8 @@ namespace ignite
     class ConstantBuffer;
     class Scene;
     class ICamera;
+    class ProceduralSky;
+    enum class SkyType : uint32_t;
 
     class IGN_API Environment : public Asset
     {
@@ -38,6 +40,12 @@ namespace ignite
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 
         Ref<Texture> GetHDRTexture() { return m_HDRTexture; }
+
+        SkyType GetSkyType() const { return m_SkyType; }
+        void SetSkyType(SkyType type) { m_SkyType = type; }
+
+        Ref<ProceduralSky> &GetProceduralSky() { return m_ProceduralSky; }
+
     private:
 
         void CreateVerticesIndices();
@@ -45,6 +53,8 @@ namespace ignite
         Ref<VertexBuffer> m_VertexBuffer;
         Ref<IndexBuffer> m_IndexBuffer;
         Ref<Texture> m_HDRTexture;
+        Ref<ProceduralSky> m_ProceduralSky;
+        SkyType m_SkyType;
     	nvrhi::SamplerHandle m_Sampler;
 
         std::array<glm::vec3, 24> m_Vertices;

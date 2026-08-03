@@ -262,7 +262,18 @@ namespace ignite
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
-                const Ref<GraphicsPipeline> envPSO = GetEnvironmentPSO(sceneFramebuffer, m_FillMode);
+                if (m_WorldEnvironment->skyType == SkyType::ProceduralSky && m_WorldEnvironment->environment->GetProceduralSky())
+                {
+                    glm::vec3 sunDir = glm::vec3(m_SceneGPUData.sunDirection);
+                    glm::vec3 sunCol = glm::vec3(m_SceneGPUData.sunColor);
+                    float sunIntensity = glm::clamp(m_SceneGPUData.sunColor.a, 0.1f, 5.0f);
+                    float sunRadius = m_SceneGPUData.sunAngularRadius;
+
+                    m_WorldEnvironment->environment->GetProceduralSky()->GetParams() = m_WorldEnvironment->atmosphereParams;
+                    m_WorldEnvironment->environment->GetProceduralSky()->RenderLUTs(cmd, sunDir, sunCol, sunIntensity, sunRadius, camera->position);
+                }
+
+                const Ref<GraphicsPipeline> envPSO = GetEnvironmentPSO(sceneFramebuffer, sceneRenderSettings.fillMode);
                 m_WorldEnvironment->environment->Draw(cmd, sceneFramebuffer, envPSO,
                     frameContext->cameraBuffer.GetHandle(), frameContext->sceneBuffer.GetHandle());
             }
@@ -273,20 +284,20 @@ namespace ignite
             if (drawDebug)
             {
                 nvrhi::IFramebuffer *debugFramebuffer = target->debugRT->GetFramebuffer().Get();
-				DebugPass(cmd, camera, debugFramebuffer, frameContext);
+                DebugPass(cmd, camera, debugFramebuffer, frameContext);
             }
-            
+
             // Transition color and depth attachments to ShaderResource before they are read by post-processing
             cmd->setTextureState(target->sceneRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
             cmd->setTextureState(target->sceneRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-			cmd->setTextureState(target->sceneRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(target->sceneRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
 
-			cmd->setTextureState(target->widgetRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-			cmd->setTextureState(target->debugRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-			if (target->debugRT->GetColorAttachment(1))
-			{
-				cmd->setTextureState(target->debugRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-			}
+            cmd->setTextureState(target->widgetRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(target->debugRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            if (target->debugRT->GetColorAttachment(1))
+            {
+                cmd->setTextureState(target->debugRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            }
 
             cmd->commitBarriers();
 
@@ -296,8 +307,8 @@ namespace ignite
             if (msaaActive)
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::MSAAResolve");
-                Ref<Texture> msaaColor  = target->sceneRT->GetColorAttachment(0);
-                Ref<Texture> msaaObjID  = target->sceneRT->GetColorAttachment(1);
+                Ref<Texture> msaaColor = target->sceneRT->GetColorAttachment(0);
+                Ref<Texture> msaaObjID = target->sceneRT->GetColorAttachment(1);
                 Ref<Texture> resolvedColor = target->sceneResolvedRT->GetColorAttachment(0);
                 Ref<Texture> resolvedObjID = target->sceneResolvedRT->GetColorAttachment(1);
 
@@ -313,8 +324,8 @@ namespace ignite
                 cmd->commitBarriers();
             }
 
-			const auto width = target->sceneRT->GetWidth();
-			const auto height = target->sceneRT->GetHeight();
+            const auto width = target->sceneRT->GetWidth();
+            const auto height = target->sceneRT->GetHeight();
 
             // Differentiate between Edit Viewport and Game Viewport cameras.
             // This is crucial to prevent resources (Bloom, SSAO, Edge Detection) from fighting
@@ -343,8 +354,8 @@ namespace ignite
                 }
 
                 // Use the resolved (single-sample) color and object-ID textures for edge detection
-                Ref<Texture> edgeColorSrc  = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
-                Ref<Texture> edgeObjIDSrc  = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(1) : target->sceneRT->GetColorAttachment(1);
+                Ref<Texture> edgeColorSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
+                Ref<Texture> edgeObjIDSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(1) : target->sceneRT->GetColorAttachment(1);
                 m_EdgeDetection->UpdateBindingSet(edgeColorSrc, edgeObjIDSrc, target->sceneRT->GetDepthAttachment());
 
                 constexpr uint32_t kMaxSelectedIDs = 100;
@@ -370,26 +381,26 @@ namespace ignite
             Ref<Texture> bloomTexture = nullptr;
             if (postProcessing.enableBloom)
             {
-				IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
-				const auto &blooms = GetOrCreateBlooms(camera);
-				Ref<Bloom> bloomInstance = blooms[frameContext->frameIndexInFlight];
-				bloomInstance->settings.intensity = postProcessing.bloomIntensity;
-				bloomInstance->settings.knee = postProcessing.bloomKnee;
-				bloomInstance->settings.radius = postProcessing.bloomRadius;
-				bloomInstance->settings.threshold = postProcessing.bloomThreshold;
-				bloomInstance->settings.iterations = postProcessing.bloomIterations;
-				bloomInstance->Resize(width, height);
-				// Bloom reads from the resolved (single-sample) texture
-				Ref<Texture> bloomSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
-				bloomInstance->Build(cmd, bloomSrc, m_CompositeVertexBuffer);
-				bloomTexture = bloomInstance->GetBloomTexture();
+                IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
+                const auto &blooms = GetOrCreateBlooms(camera);
+                Ref<Bloom> bloomInstance = blooms[frameContext->frameIndexInFlight];
+                bloomInstance->settings.intensity = postProcessing.bloomIntensity;
+                bloomInstance->settings.knee = postProcessing.bloomKnee;
+                bloomInstance->settings.radius = postProcessing.bloomRadius;
+                bloomInstance->settings.threshold = postProcessing.bloomThreshold;
+                bloomInstance->settings.iterations = postProcessing.bloomIterations;
+                bloomInstance->Resize(width, height);
+                // Bloom reads from the resolved (single-sample) texture
+                Ref<Texture> bloomSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
+                bloomInstance->Build(cmd, bloomSrc, m_CompositeVertexBuffer);
+                bloomTexture = bloomInstance->GetBloomTexture();
             }
 
             Ref<Texture> ssaoTexture = nullptr;
             if (postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::HBAOPass", 0x404040FF);
-				const auto &SSAOs = GetOrCreateSSAOs(camera);
+                const auto &SSAOs = GetOrCreateSSAOs(cmd, camera);
                 Ref<SSAO> ssaoInstance = SSAOs[frameContext->frameIndexInFlight];
                 ssaoInstance->Resize(width, height);
                 ssaoInstance->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
@@ -521,7 +532,7 @@ namespace ignite
                                     gpuData = smc.cachedInstanceTransforms[idx];
                                 }
                                 else
-                               {
+                                {
                                     glm::mat4 meshTransform = meshInstance->global;
                                     gpuData.transformation = socketWorld * meshTransform;
                                     gpuData.normal = normalMatrix;
@@ -615,7 +626,7 @@ namespace ignite
 
     void SceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
     {
-		IGN_PROFILE_FUNCTION();
+        IGN_PROFILE_FUNCTION();
 
         ISceneRenderer::ResizeFramebuffer(camera, width, height);
 
@@ -647,64 +658,64 @@ namespace ignite
         const uint32_t renderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(width) * postProcessing.renderScale)));
         const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(height) * postProcessing.renderScale)));
 
-		m_CompositeBindingSetCache.clear();
-		m_DebugGridBindingSetCache.clear();
+        m_CompositeBindingSetCache.clear();
+        m_DebugGridBindingSetCache.clear();
 
-		// Resize Bloom and SSAO instances for the specific camera
+        // Resize Bloom and SSAO instances for the specific camera
         {
-		    auto it = m_Blooms.find(camera);
+            auto it = m_Blooms.find(camera);
             if (it != m_Blooms.end())
             {
-				for (auto &bloom : it->second)
-				{
-					if (bloom)
-						bloom->Resize(renderWidth, renderHeight);
-				}
+                for (auto &bloom : it->second)
+                {
+                    if (bloom)
+                        bloom->Resize(renderWidth, renderHeight);
+                }
             }
         }
 
-		{
-			auto it = m_SSAOs.find(camera);
-			if (it != m_SSAOs.end())
-			{
-				for (auto &ssao : it->second)
-				{
-					if (ssao)
-						ssao->Resize(renderWidth, renderHeight);
-				}
-			}
-		}
+        {
+            auto it = m_SSAOs.find(camera);
+            if (it != m_SSAOs.end())
+            {
+                for (auto &ssao : it->second)
+                {
+                    if (ssao)
+                        ssao->Resize(renderWidth, renderHeight);
+                }
+            }
+        }
 
         {
-			// Render targets
-			auto it = m_RenderTargets.find(camera);
-			if (it == m_RenderTargets.end() && camera)
-			{
-				GetOrCreateRenderTarget(camera);
-				it = m_RenderTargets.find(camera);
-			}
+            // Render targets
+            auto it = m_RenderTargets.find(camera);
+            if (it == m_RenderTargets.end() && camera)
+            {
+                GetOrCreateRenderTarget(camera);
+                it = m_RenderTargets.find(camera);
+            }
 
-			if (it != m_RenderTargets.end())
-			{
-				auto target = it->second;
+            if (it != m_RenderTargets.end())
+            {
+                auto target = it->second;
 
-				target->sceneRT->Resize(renderWidth, renderHeight);
-				if (target->sceneResolvedRT)
-					target->sceneResolvedRT->Resize(renderWidth, renderHeight);
-				target->widgetRT->Resize(width, height);
-				target->compositeRT->Resize(width, height);
-				for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
-				{
-					if (historyRT)
-						historyRT->Resize(width, height);
-				}
-				target->taaHistoryValid = false;
+                target->sceneRT->Resize(renderWidth, renderHeight);
+                if (target->sceneResolvedRT)
+                    target->sceneResolvedRT->Resize(renderWidth, renderHeight);
+                target->widgetRT->Resize(width, height);
+                target->compositeRT->Resize(width, height);
+                for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
+                {
+                    if (historyRT)
+                        historyRT->Resize(width, height);
+                }
+                target->taaHistoryValid = false;
 
-				target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
-				target->debugRT->Resize(renderWidth, renderHeight);
-			}
+                target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+                target->debugRT->Resize(renderWidth, renderHeight);
+            }
         }
-        
+
     }
 
     void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext)
@@ -712,10 +723,10 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
 
         // Static
-		Ref<GraphicsPipeline> staticCSMPSO = GetStaticCSMPSO();
+        Ref<GraphicsPipeline> staticCSMPSO = GetStaticCSMPSO();
 
         // Animated
-		Ref<GraphicsPipeline> animatedCSMPSO = GetAnimatedCSMPSO();
+        Ref<GraphicsPipeline> animatedCSMPSO = GetAnimatedCSMPSO();
 
         auto worldEnvView = m_Scene->registry->view<WorldEnvironment>();
         for (entt::entity e : worldEnvView)
@@ -724,6 +735,7 @@ namespace ignite
             m_SceneGPUData.exposure = world.exposure;
             m_SceneGPUData.gamma = world.gamma;
             m_SceneGPUData.ambient = world.ambient;
+            m_SceneGPUData.skyType = static_cast<int>(world.skyType);
             break;
         }
 
@@ -750,7 +762,7 @@ namespace ignite
             }
 
             m_SceneGPUData.numPointLights = pointLightCount;
-			frameContext->pointLightBuffer.SetData(cmd, &pointLightData, sizeof(PointLight_GPUData));
+            frameContext->pointLightBuffer.SetData(cmd, &pointLightData, sizeof(PointLight_GPUData));
         }
 
         // Collect spot lights
@@ -774,13 +786,13 @@ namespace ignite
                 gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
                 gpu.directionAndAngle = glm::vec4(forward, glm::cos(glm::radians(light.outerConeAngle)));
                 gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation, 
+                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation,
                     glm::cos(glm::radians(light.innerConeAngle)));
                 ++spotLightCount;
             }
 
             m_SceneGPUData.numSpotLights = spotLightCount;
-			frameContext->spotLightBuffer.SetData(cmd, &spotLightData, sizeof(SpotLight_GPUData));
+            frameContext->spotLightBuffer.SetData(cmd, &spotLightData, sizeof(SpotLight_GPUData));
         }
 
         glm::vec3 sunDirection =
@@ -809,10 +821,11 @@ namespace ignite
             csmData.pcfRadius = light.pcfRadius;
             shadowDist = light.shadowDistance;
 
-			m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-			m_SceneGPUData.sungAngles.x = std::atan2(sunDirection.x, sunDirection.z);
-			m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
-			m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
+            m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+            m_SceneGPUData.sungAngles.x = std::atan2(sunDirection.x, sunDirection.z);
+            m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
+            m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
+            m_SceneGPUData.sunDirection = glm::vec4(sunDirection, 0.0f);
 
             const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
             if (m_CascadedShadowMap->GetQuality() != quality)
@@ -820,22 +833,22 @@ namespace ignite
                 m_CascadedShadowMap->Resize(quality);
 
                 Application::SubmitToMainThread([]()
-                {
-                    SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment });
-                });
+                    {
+                        SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment });
+                    });
             }
 
             break;
         }
 
-		// If no directional light is found, we still need to write default cascade data to the frame context buffer
-		if (!cascadeShadow)
-		{
+        // If no directional light is found, we still need to write default cascade data to the frame context buffer
+        if (!cascadeShadow)
+        {
             CSM_GPUData sceneCascadeData = {};
             sceneCascadeData.cascadeIndex = -1;
             sceneCascadeData.shadowStrength = 0.0f;
-			// Write the cascade data to the frame context buffer for use in the main scene pass
-			frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
+            // Write the cascade data to the frame context buffer for use in the main scene pass
+            frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
 
             for (int i = 0; i < NUM_CASCADES; ++i)
             {
@@ -845,176 +858,176 @@ namespace ignite
                 frameContext->csmPerCascadeBuffers[i].SetData(cmd, &cascadeGpuData, sizeof(cascadeGpuData));
                 m_CascadedShadowMap->BeginCascade(cmd, i, frameContext->frameIndexInFlight);
             }
-		}
+        }
         else
         {
-			m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
+            m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
 
-			// Share cascade data with the main scene pass (cascadeIndex is unused there)
-			CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
-			sceneCascadeData.cascadeIndex = -1;
+            // Share cascade data with the main scene pass (cascadeIndex is unused there)
+            CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
+            sceneCascadeData.cascadeIndex = -1;
 
-			// Write the cascade data to the frame context buffer for use in the main scene pass
-			frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
+            // Write the cascade data to the frame context buffer for use in the main scene pass
+            frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
 
-			for (int i = 0; i < NUM_CASCADES; ++i)
-			{
-				IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
+            for (int i = 0; i < NUM_CASCADES; ++i)
+            {
+                IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
 
-				CSM_GPUData cascadeGpuData = sceneCascadeData;
-				cascadeGpuData.cascadeIndex = i;
-				frameContext->csmPerCascadeBuffers[i].SetData(cmd, &cascadeGpuData, sizeof(cascadeGpuData));
+                CSM_GPUData cascadeGpuData = sceneCascadeData;
+                cascadeGpuData.cascadeIndex = i;
+                frameContext->csmPerCascadeBuffers[i].SetData(cmd, &cascadeGpuData, sizeof(cascadeGpuData));
 
-				// Clear the specific array layer for this cascade
-				m_CascadedShadowMap->BeginCascade(cmd, i, frameContext->frameIndexInFlight);
+                // Clear the specific array layer for this cascade
+                m_CascadedShadowMap->BeginCascade(cmd, i, frameContext->frameIndexInFlight);
 
-				nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i, frameContext->frameIndexInFlight);
-				nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
+                nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i, frameContext->frameIndexInFlight);
+                nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
 
-				Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
+                Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
 
-				nvrhi::GraphicsState staticState = nvrhi::GraphicsState();
-				staticState.framebuffer = csmFramebuffer;
-				staticState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
-				staticState.pipeline = staticCSMPSO->GetHandle();
+                nvrhi::GraphicsState staticState = nvrhi::GraphicsState();
+                staticState.framebuffer = csmFramebuffer;
+                staticState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+                staticState.pipeline = staticCSMPSO->GetHandle();
 
-				// Static Mesh Shadows — batch instanced
-				{
-					IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshShadow::BatchCollect");
+                // Static Mesh Shadows — batch instanced
+                {
+                    IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshShadow::BatchCollect");
 
-					m_ShadowBatchBuilder.Clear();
+                    m_ShadowBatchBuilder.Clear();
 
-					auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
-					for (entt::entity e : skelMeshView)
-					{
-						const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
-						if (!rc.visible)
-							continue;
-
-						StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-						if (smc.handle == AssetHandle(0))
-							continue;
-
-						auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
-						if (!staticMesh)
-							continue;
-
-						// Perform cascade frustum culling
-						if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
-							continue;
-
-						const auto &instances = staticMesh->GetMeshInstances();
-						for (size_t idx = 0; idx < instances.size(); ++idx)
-						{
-							auto &meshInstance = instances[idx];
-							auto &primitive = meshInstance->GetPrimitive();
-							if (!primitive->vertexBuffer || !primitive->indexBuffer)
-							{
-								primitive->WriteBuffer(cmd);
-							}
-
-							auto cacheIt = m_EntityObjectIndexCache.find(e);
-							if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
-								continue;
-
-							const uint32_t objectIndex = cacheIt->second[idx];
-
-							BatchKey key;
-							key.vertexBuffer       = primitive->vertexBuffer->GetHandle().Get();
-							key.indexBuffer        = primitive->indexBuffer->GetHandle().Get();
-							key.meshBindingSet     = frameContext->staticMeshCSMBindingSet[i].Get();
-							key.materialBindingSet = nullptr; // CSM draws have no material binding
-							key.pipeline           = staticCSMPSO->GetHandle().Get();
-
-							m_ShadowBatchBuilder.Submit(
-								key,
-								primitive->vertexBuffer->GetHandle(),
-								primitive->indexBuffer->GetHandle(),
-								frameContext->staticMeshCSMBindingSet[i],
-								nullptr,
-								staticCSMPSO->GetHandle(),
-								primitive->indexBuffer->GetCount(),
-								objectIndex);
-						}
-					}
-
-					// Flush instanced shadow draws for this cascade
-					FlushShadowBatches(cmd, frameContext, static_cast<uint32_t>(i));
-				}
-
-				nvrhi::GraphicsState animatedState = nvrhi::GraphicsState();
-				animatedState.framebuffer = csmFramebuffer;
-				animatedState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
-				animatedState.pipeline = animatedCSMPSO->GetHandle();
-
-				// Skeletal Mesh
-				{
-					IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshShadow");
-
-					auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
-					for (entt::entity e : skelMeshView)
-					{
+                    auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
+                    for (entt::entity e : skelMeshView)
+                    {
                         const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
-						if (!rc.visible)
-							continue;
+                        if (!rc.visible)
+                            continue;
 
-						SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
-						if (smc.handle == AssetHandle(0))
-							continue;
+                        StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
+                        if (smc.handle == AssetHandle(0))
+                            continue;
 
-						auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
-						if (!skeletalMesh)
-							continue;
+                        auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
+                        if (!staticMesh)
+                            continue;
 
-						// Perform cascade frustum culling
-						if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
-							continue;
+                        // Perform cascade frustum culling
+                        if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
+                            continue;
 
-						const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-						DrawMeshShadow(cmd, frameContext, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
+                        const auto &instances = staticMesh->GetMeshInstances();
+                        for (size_t idx = 0; idx < instances.size(); ++idx)
+                        {
+                            auto &meshInstance = instances[idx];
+                            auto &primitive = meshInstance->GetPrimitive();
+                            if (!primitive->vertexBuffer || !primitive->indexBuffer)
+                            {
+                                primitive->WriteBuffer(cmd);
+                            }
+
+                            auto cacheIt = m_EntityObjectIndexCache.find(e);
+                            if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                                continue;
+
+                            const uint32_t objectIndex = cacheIt->second[idx];
+
+                            BatchKey key;
+                            key.vertexBuffer = primitive->vertexBuffer->GetHandle().Get();
+                            key.indexBuffer = primitive->indexBuffer->GetHandle().Get();
+                            key.meshBindingSet = frameContext->staticMeshCSMBindingSet[i].Get();
+                            key.materialBindingSet = nullptr; // CSM draws have no material binding
+                            key.pipeline = staticCSMPSO->GetHandle().Get();
+
+                            m_ShadowBatchBuilder.Submit(
+                                key,
+                                primitive->vertexBuffer->GetHandle(),
+                                primitive->indexBuffer->GetHandle(),
+                                frameContext->staticMeshCSMBindingSet[i],
+                                nullptr,
+                                staticCSMPSO->GetHandle(),
+                                primitive->indexBuffer->GetCount(),
+                                objectIndex);
+                        }
+                    }
+
+                    // Flush instanced shadow draws for this cascade
+                    FlushShadowBatches(cmd, frameContext, static_cast<uint32_t>(i));
+                }
+
+                nvrhi::GraphicsState animatedState = nvrhi::GraphicsState();
+                animatedState.framebuffer = csmFramebuffer;
+                animatedState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+                animatedState.pipeline = animatedCSMPSO->GetHandle();
+
+                // Skeletal Mesh
+                {
+                    IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshShadow");
+
+                    auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
+                    for (entt::entity e : skelMeshView)
+                    {
+                        const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
+                        if (!rc.visible)
+                            continue;
+
+                        SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
+                        if (smc.handle == AssetHandle(0))
+                            continue;
+
+                        auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+                        if (!skeletalMesh)
+                            continue;
+
+                        // Perform cascade frustum culling
+                        if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
+                            continue;
+
+                        const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                        DrawMeshShadow(cmd, frameContext, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
                             smc.finalBoneTransforms, smc.cachedInstanceTransforms, animatedState, i, e);
 
-						// --- SOCKET SYSTEM: Render attached meshes for Shadows ---
-						if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
-						{
-							Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
-							if (skeleton)
-							{
-								for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
-								{
-									if (attachedMeshHandle == AssetHandle(0))
-										continue;
+                        // --- SOCKET SYSTEM: Render attached meshes for Shadows ---
+                        if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+                        {
+                            Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
+                            if (skeleton)
+                            {
+                                for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                                {
+                                    if (attachedMeshHandle == AssetHandle(0))
+                                        continue;
 
-									auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
-									if (!attachedMeshAsset)
-										continue;
+                                    auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
+                                    if (!attachedMeshAsset)
+                                        continue;
 
-									glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
-									glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
+                                    glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                                    glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
 
-									if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
-									{
-										auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-										DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
-											smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, i, e, socketName);
-									}
-									else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
-									{
-										auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
-										DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
-											std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, i, e, socketName);
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-			
+                                    if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
+                                    {
+                                        auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
+                                        DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
+                                            smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, i, e, socketName);
+                                    }
+                                    else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
+                                    {
+                                        auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
+                                        DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
+                                            std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, i, e, socketName);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
         }
 
-		cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-		cmd->commitBarriers();
+        cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+        cmd->commitBarriers();
     }
 
     void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug)
@@ -1024,25 +1037,25 @@ namespace ignite
         Frustum frustum(camera);
 
         std::unordered_set<Material *> uploadedMaterialsThisPass;
-        
+
         if (m_RuntimeMaterial)
         {
             m_RuntimeMaterial->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
         }
 
         // Static
-		auto staticPSO = GetStaticPSO(framebuffer, m_FillMode);
-		auto staticTransparentPSO = GetStaticTransparentPSO(framebuffer, m_FillMode);
+        auto staticPSO = GetStaticPSO(framebuffer, sceneRenderSettings.fillMode);
+        auto staticTransparentPSO = GetStaticTransparentPSO(framebuffer, sceneRenderSettings.fillMode);
 
         // Animated
-        auto animatedPSO = GetAnimatedPSO(framebuffer, m_FillMode);
-        auto animatedTransparentPSO = GetAnimatedTransparentPSO(framebuffer, m_FillMode);
+        auto animatedPSO = GetAnimatedPSO(framebuffer, sceneRenderSettings.fillMode);
+        auto animatedTransparentPSO = GetAnimatedTransparentPSO(framebuffer, sceneRenderSettings.fillMode);
 
         std::vector<TransparentDrawCall> transparentDrawCalls;
 
         // Static Meshes — collected into the batch builder for instanced dispatch
         {
-			IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshColor::BatchCollect");
+            IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshColor::BatchCollect");
 
             m_OpaqueBatchBuilder.Clear();
 
@@ -1103,11 +1116,11 @@ namespace ignite
                         continue;
 
                     BatchKey key;
-                    key.vertexBuffer       = primitive->vertexBuffer->GetHandle().Get();
-                    key.indexBuffer        = primitive->indexBuffer->GetHandle().Get();
-                    key.meshBindingSet     = frameContext->staticMeshBindingSet.Get();
+                    key.vertexBuffer = primitive->vertexBuffer->GetHandle().Get();
+                    key.indexBuffer = primitive->indexBuffer->GetHandle().Get();
+                    key.meshBindingSet = frameContext->staticMeshBindingSet.Get();
                     key.materialBindingSet = materialBindingSet.Get();
-                    key.pipeline           = staticPSO->GetHandle().Get();
+                    key.pipeline = staticPSO->GetHandle().Get();
 
                     m_OpaqueBatchBuilder.Submit(
                         key,
@@ -1145,8 +1158,8 @@ namespace ignite
                     continue;
 
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID, 
-                    smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms, 
+                DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
+                    smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms,
                     camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
                 Renderer::Stats.skeletalMeshCount++;
 
@@ -1171,15 +1184,15 @@ namespace ignite
                             if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
                             {
                                 auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-                                DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID, 
-                                    std::unordered_map<int, AssetHandle>(), smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), 
+                                DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
+                                    std::unordered_map<int, AssetHandle>(), smc.finalBoneTransforms, std::vector<Mesh_GPUData>(),
                                     camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
                             }
                             else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
                             {
                                 auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
                                 DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                    std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), 
+                                    std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(),
                                     camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
                             }
                         }
@@ -1214,7 +1227,7 @@ namespace ignite
                 if (dc.isSkeletal)
                 {
                     auto skelInstance = std::static_pointer_cast<SkeletalMeshInstance>(dc.meshInstance);
-					// OLD mesh instance data update
+                    // OLD mesh instance data update
                     // skelInstance->SetSkeletonData(cmd, (void*)dc.bones, sizeof(dc.bones));
                 }
 
@@ -1227,8 +1240,8 @@ namespace ignite
 
                 cmd->setGraphicsState(transparentGState);
 
-				// Push constants for object ID
-				cmd->setPushConstants(&dc.pushConstants_ObjectIndex, sizeof(dc.pushConstants_ObjectIndex));
+                // Push constants for object ID
+                cmd->setPushConstants(&dc.pushConstants_ObjectIndex, sizeof(dc.pushConstants_ObjectIndex));
 
                 nvrhi::DrawArguments args;
                 args.setVertexCount(dc.indexCount);
@@ -1275,8 +1288,8 @@ namespace ignite
                     if (!rc.visible)
                         continue;
 
-					const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-					m_Renderer2D->DrawCircle(tr.world.GetMatrix(), circle.color, circle.thickness, circle.fade, objectID);
+                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                    m_Renderer2D->DrawCircle(tr.world.GetMatrix(), circle.color, circle.thickness, circle.fade, objectID);
                 }
             }
             {
@@ -1319,7 +1332,7 @@ namespace ignite
                     else // Render with default
                     {
                         Ref<Texture> texture = ResolveAsset<Texture>(sprite.handle);
-                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), sprite.color, 
+                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), sprite.color,
                             texture, uv0, uv1, sprite.tilingFactor, objectID);
                     }
 
@@ -1414,13 +1427,13 @@ namespace ignite
         // m_WidgetRenderer->Render(cmd, framebuffer);
     }
 
-	void SceneRenderer::DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
-	{
+    void SceneRenderer::DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
+    {
         DrawDebug2D(cmd, framebuffer, frameContext);
         DrawDebug3D(cmd, camera, framebuffer, frameContext);
-	}
+    }
 
-	void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
+    void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
     {
         m_EditorWidgetMouseX = mouseX;
         m_EditorWidgetMouseY = mouseY;
@@ -1480,9 +1493,9 @@ namespace ignite
     void SceneRenderer::DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
-        
-		if (!framebuffer)
-			return;
+
+        if (!framebuffer)
+            return;
 
         m_Renderer2D->Begin(cmd);
 
@@ -1497,7 +1510,7 @@ namespace ignite
             for (entt::entity e : boxCollider2DView)
             {
                 const auto &[tr, rc, box] = m_Scene->registry->get<TransformComponent, RenderingComponent, BoxCollider2DComponent>(e);
-                
+
                 if (!rc.visible)
                     continue;
 
@@ -1521,7 +1534,7 @@ namespace ignite
             for (entt::entity e : circleCollider2DView)
             {
                 const auto &[tr, rc, circle] = m_Scene->registry->get<TransformComponent, RenderingComponent, CircleCollider2DComponent>(e);
-                
+
                 if (!rc.visible)
                     continue;
 
@@ -1552,43 +1565,43 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-		if (!framebuffer || !m_Scene || !m_Scene->registry)
-			return;
+        if (!framebuffer || !m_Scene || !m_Scene->registry)
+            return;
 
         if (sceneRenderSettings.showPhysicsCollider)
         {
             m_Renderer2D->Begin(cmd);
 
-			constexpr glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
-			constexpr int kCircleSegments = 24;
-			constexpr float kTwoPi = 6.28318530718f;
-			constexpr float kPi = 3.14159265359f;
+            constexpr glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
+            constexpr int kCircleSegments = 24;
+            constexpr float kTwoPi = 6.28318530718f;
+            constexpr float kPi = 3.14159265359f;
 
-			auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
-			{
-				for (int i = 0; i < segments; ++i)
-				{
-					const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kTwoPi;
-					const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kTwoPi;
+            auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+                {
+                    for (int i = 0; i < segments; ++i)
+                    {
+                        const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kTwoPi;
+                        const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kTwoPi;
 
-					const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
-					const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-					m_Renderer2D->DrawLine(p0, p1, color);
-				}
-			};
+                        const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
+                        const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
+                        m_Renderer2D->DrawLine(p0, p1, color);
+                    }
+                };
 
-			auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
-			{
-				for (int i = 0; i < segments; ++i)
-				{
-					const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kPi;
-					const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kPi;
+            auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+                {
+                    for (int i = 0; i < segments; ++i)
+                    {
+                        const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kPi;
+                        const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kPi;
 
-					const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
-					const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-					m_Renderer2D->DrawLine(p0, p1, color);
-				}
-				};
+                        const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
+                        const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
+                        m_Renderer2D->DrawLine(p0, p1, color);
+                    }
+                };
 
             constexpr glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
 
@@ -1623,71 +1636,71 @@ namespace ignite
             for (entt::entity e : m_Scene->registry->view<TransformComponent, CapsuleColliderComponent>())
             {
                 const auto &[tr, capsule] = m_Scene->registry->get<TransformComponent, CapsuleColliderComponent>(e);
-                
-				const glm::mat4 world = tr.world.GetMatrix();
-				const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
-				const float scaledRadius = capsule.radius * maxAxis;
-				const float scaledHalfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxAxis;
 
-				const glm::vec3 center = glm::vec3(world * glm::vec4(capsule.center, 1.0f));
-				const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
-				const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
-				const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
-				const glm::vec3 upRadius = glm::normalize(glm::vec3(world[1])) * scaledRadius;
+                const glm::mat4 world = tr.world.GetMatrix();
+                const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
+                const float scaledRadius = capsule.radius * maxAxis;
+                const float scaledHalfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxAxis;
 
-				const glm::vec3 topCenter = center + upHeight;
-				const glm::vec3 bottomCenter = center - upHeight;
+                const glm::vec3 center = glm::vec3(world * glm::vec4(capsule.center, 1.0f));
+                const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
+                const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
+                const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
+                const glm::vec3 upRadius = glm::normalize(glm::vec3(world[1])) * scaledRadius;
 
-				// Draw capsule as two circle rings and connecting lines
-				DrawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
-				DrawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                const glm::vec3 topCenter = center + upHeight;
+                const glm::vec3 bottomCenter = center - upHeight;
 
-				// Draw connecting lines between the top and bottom circles
-				m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
-				m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
-				m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
-				m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
+                // Draw capsule as two circle rings and connecting lines
+                DrawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                DrawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
 
-				// Draw arcs to represent the rounded ends of the capsule
-				DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-				DrawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-				DrawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-				DrawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                // Draw connecting lines between the top and bottom circles
+                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
+
+                // Draw arcs to represent the rounded ends of the capsule
+                DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                DrawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                DrawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                DrawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
             }
 
             // 4. Character Controllers
             for (entt::entity e : m_Scene->registry->view<TransformComponent, CharacterControllerComponent>())
             {
                 const auto &[tr, cc] = m_Scene->registry->get<TransformComponent, CharacterControllerComponent>(e);
-				const glm::mat4 world = tr.world.GetMatrix();
-				const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
-				const float scaledRadius = cc.radius * maxAxis;
-				const float scaledHalfHeight = glm::max(cc.height * 0.5f - cc.radius, 0.0f) * maxAxis;
+                const glm::mat4 world = tr.world.GetMatrix();
+                const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
+                const float scaledRadius = cc.radius * maxAxis;
+                const float scaledHalfHeight = glm::max(cc.height * 0.5f - cc.radius, 0.0f) * maxAxis;
 
-				const glm::vec3 center = glm::vec3(world * glm::vec4(cc.center, 1.0f));
-				const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
-				const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
-				const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
-				const glm::vec3 upRadius = glm::normalize(glm::vec3(world[1])) * scaledRadius;
+                const glm::vec3 center = glm::vec3(world * glm::vec4(cc.center, 1.0f));
+                const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
+                const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledRadius;
+                const glm::vec3 upHeight = glm::normalize(glm::vec3(world[1])) * scaledHalfHeight;
+                const glm::vec3 upRadius = glm::normalize(glm::vec3(world[1])) * scaledRadius;
 
-				const glm::vec3 topCenter = center + upHeight;
-				const glm::vec3 bottomCenter = center - upHeight;
+                const glm::vec3 topCenter = center + upHeight;
+                const glm::vec3 bottomCenter = center - upHeight;
 
-				// Draw capsule as two circle rings and connecting lines
-				DrawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
-				DrawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                // Draw capsule as two circle rings and connecting lines
+                DrawCircleRing(topCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                DrawCircleRing(bottomCenter, right, forward, kCircleSegments, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
 
-				// Draw connecting lines between the top and bottom circles
-				m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
-				m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
-				m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
-				m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
+                // Draw connecting lines between the top and bottom circles
+                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
 
-				// Draw arcs to represent the rounded ends of the capsule
-				DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-				DrawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-				DrawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
-				DrawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                // Draw arcs to represent the rounded ends of the capsule
+                DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                DrawArc(topCenter, right, upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                DrawArc(bottomCenter, forward, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                DrawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
             }
 
             // 5. Plane Colliders
@@ -1697,9 +1710,9 @@ namespace ignite
                 glm::mat4 planeMat = tr.world.GetMatrix() * glm::translate(glm::mat4(1.0f), plane.center);
 
                 glm::vec3 p0 = glm::vec3(planeMat * glm::vec4(-0.5f * plane.scale.x, 0.0f, -0.5f * plane.scale.z, 1.0f));
-                glm::vec3 p1 = glm::vec3(planeMat * glm::vec4( 0.5f * plane.scale.x, 0.0f, -0.5f * plane.scale.z, 1.0f));
-                glm::vec3 p2 = glm::vec3(planeMat * glm::vec4( 0.5f * plane.scale.x, 0.0f,  0.5f * plane.scale.z, 1.0f));
-                glm::vec3 p3 = glm::vec3(planeMat * glm::vec4(-0.5f * plane.scale.x, 0.0f,  0.5f * plane.scale.z, 1.0f));
+                glm::vec3 p1 = glm::vec3(planeMat * glm::vec4(0.5f * plane.scale.x, 0.0f, -0.5f * plane.scale.z, 1.0f));
+                glm::vec3 p2 = glm::vec3(planeMat * glm::vec4(0.5f * plane.scale.x, 0.0f, 0.5f * plane.scale.z, 1.0f));
+                glm::vec3 p3 = glm::vec3(planeMat * glm::vec4(-0.5f * plane.scale.x, 0.0f, 0.5f * plane.scale.z, 1.0f));
 
                 m_Renderer2D->DrawLine(p0, p1, colliderColor);
                 m_Renderer2D->DrawLine(p1, p2, colliderColor);
@@ -1757,15 +1770,15 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
 
         auto compositeFramebuffer = target->compositeRT->GetFramebuffer();
-        
-		// Setup Post Processing settings
+
+        // Setup Post Processing settings
         if (camera)
         {
             m_PostProcessingData.flags.x = (postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
             m_PostProcessingData.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
             m_PostProcessingData.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
             m_PostProcessingData.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
-			m_PostProcessingData.tonemapMode = static_cast<int>(postProcessing.tonemapMode);
+            m_PostProcessingData.tonemapMode = static_cast<int>(postProcessing.tonemapMode);
             m_PostProcessingData.vignetteParams = glm::vec4(
                 postProcessing.vignetteRadius,
                 glm::max(postProcessing.vignetteSoftness, 0.001f),
@@ -1817,7 +1830,7 @@ namespace ignite
             : Renderer::GetBlackTexture();
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePSO(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
-        nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), target, 
+        nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), target,
             edgeTexture, bloomTexture, ssaoTexture, taaHistoryTexture, m_CompositePostProcessBuffer.GetHandle(), m_CompositeSampler.Get(), msaaResolved);
 
         cmd->setBufferState(m_CompositeVertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
@@ -1849,26 +1862,38 @@ namespace ignite
 
     Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
     {
-        return (m_WorldEnvironment && m_WorldEnvironment->environment) 
+        return (m_WorldEnvironment && m_WorldEnvironment->environment)
             ? m_WorldEnvironment->environment->GetHDRTexture() : nullptr;
     }
 
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode)
     {
-        m_FillMode = mode;
+        sceneRenderSettings.fillMode = mode;
 
         // Recreate pipelines
+
+        // ANIMATED
         m_AnimatedPSOCache.clear();
-        m_StaticPSOCache.clear();
 		m_TransparentAnimatedPSOCache.clear();
+        m_AnimatedCSMPSOCache.clear();
+
+        // STATIC
+        m_StaticPSOCache.clear();
 		m_TransparentStaticPSOCache.clear();
+        m_StaticCSMPSOCache.clear();
+
+        // ENV & Debug
         m_EnvironmentPSOCache.clear();
         m_CompositePSOCache.clear();
         m_DebugGridPSOCache.clear();
+
+        m_CompositePSOCache.clear();
+        m_DebugGridPSOCache.clear();
+
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
 
-        m_Renderer2D->SetFillMode(mode);
+        // m_Renderer2D->SetFillMode(mode);
     }
 
     void SceneRenderer::SetSelectedEntity(const Entity &entity)
@@ -2385,7 +2410,7 @@ namespace ignite
         return blooms;
 	}
 
-	std::vector<Ref<SSAO>> SceneRenderer::GetOrCreateSSAOs(ICamera *camera)
+	std::vector<Ref<SSAO>> SceneRenderer::GetOrCreateSSAOs(nvrhi::ICommandList *cmd, ICamera *camera)
 	{
 		constexpr uint32_t resolution = 1080;
 
@@ -2397,7 +2422,7 @@ namespace ignite
 		std::vector<Ref<SSAO>> SSAOs(maxFrame);
 		for (uint32_t i = 0; i < maxFrame; ++i)
 		{
-			Ref<SSAO> ssao = CreateRef<SSAO>(resolution, resolution);
+			Ref<SSAO> ssao = CreateRef<SSAO>(cmd, resolution, resolution);
 			SSAOs[i] = ssao;
 		}
 

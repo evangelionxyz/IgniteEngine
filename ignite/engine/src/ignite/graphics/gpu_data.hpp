@@ -29,7 +29,7 @@ namespace ignite
 		glm::vec2 sungAngles = glm::vec2(0.0f, 1.0f);
 		float sunAngularRadius = 0.5f;
 		int renderMode = 0;
-	    int debugShadow = 0;
+		int debugShadow = 0;
 
 		float exposure = 1.1f;
 		float gamma = 2.2f;
@@ -37,7 +37,10 @@ namespace ignite
 
 		int numPointLights = 0;
 		int numSpotLights = 0;
-		float _pad[3] = { 0.0f, 0.0f, 0.0f };
+		int skyType = 0; // 0 = HDRI, 1 = Procedural Sky
+		float _pad2 = 0.0f;
+
+		glm::vec4 sunDirection = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 	};
 
 	struct CSM_GPUData

@@ -96,6 +96,36 @@ static float3 SampleSphericalMap(Texture2D tex, SamplerState samp, float3 dir)
     return tex.Sample(samp, uv).rgb;
 }
 
+static float3 SampleEnvironmentMap(Texture2D tex, SamplerState samp, float3 dir, int skyType, float cameraAltitudeKm)
+{
+    if (skyType == 1)
+    {
+        dir = normalize(dir);
+        float azimuth = atan2(dir.z, dir.x);
+        float u = (azimuth < 0.0f ? azimuth + 6.283185307f : azimuth) / 6.283185307f;
+
+        float r = 6360.0f + max(0.001f, cameraAltitudeKm);
+        float horizonAngle = asin(clamp(6360.0f / r, 0.0f, 1.0f));
+        float zenith = acos(clamp(dir.y, -1.0f, 1.0f));
+
+        float v = 0.5f;
+        if (zenith <= horizonAngle)
+        {
+            // Looking UP: zenith in [0, horizonAngle] -> v in [0.5, 1.0] (Blue Sky Zenith at v=1.0)
+            float coord = sqrt(clamp((horizonAngle - zenith) / max(1e-4f, horizonAngle), 0.0f, 1.0f));
+            v = 0.5f * (1.0f + coord);
+        }
+        else
+        {
+            // Looking DOWN: zenith in [horizonAngle, pi] -> v in [0.0, 0.5] (Ground at v=0.0)
+            float coord = sqrt(clamp((zenith - horizonAngle) / max(1e-4f, 3.14159265359f - horizonAngle), 0.0f, 1.0f));
+            v = 0.5f * (1.0f - coord);
+        }
+        return tex.Sample(samp, float2(u, clamp(v, 0.0f, 1.0f))).rgb;
+    }
+    return SampleSphericalMap(tex, samp, dir);
+}
+
 // Convert RGB to Luminance 
 static float Luminance(float3 color)
 {

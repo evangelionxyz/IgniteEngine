@@ -63,35 +63,43 @@ namespace ignite
 
 		if (m_WorldEnvironment)
 		{
-			m_WorldEnvironment->dirtyEnvironment = true;
 			if (!m_WorldEnvironment->environment)
 			{
 				m_WorldEnvironment->environment = Environment::Create();
 				m_WorldEnvironment->gpuInitialized = false;
 			}
 
-			const bool isHDRLoaded = m_WorldEnvironment->hdrHandle != AssetHandle(0);
-			if (m_WorldEnvironment->dirtyEnvironment && m_WorldEnvironment->environment)
-			{
-				Ref<Texture> hdrTexture;
-				if (isHDRLoaded)
-				{
-					hdrTexture = ResolveAsset<Texture>(m_WorldEnvironment->hdrHandle);
-					if (hdrTexture && hdrTexture->IsReady())
-					{
-						m_WorldEnvironment->environment->SetTexture(hdrTexture);
-					}
-				}
-				else
-				{
-					m_WorldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
-				}
+			m_WorldEnvironment->environment->SetSkyType(m_WorldEnvironment->skyType);
 
-				// Keep retrieve HDR If it is loaded, but still empty
-				if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
-					m_WorldEnvironment->dirtyEnvironment = true;
-				else
-					m_WorldEnvironment->dirtyEnvironment = false;
+			if (m_WorldEnvironment->skyType == SkyType::HDRI)
+			{
+				const bool isHDRLoaded = m_WorldEnvironment->hdrHandle != AssetHandle(0);
+				if (m_WorldEnvironment->dirtyEnvironment && m_WorldEnvironment->environment)
+				{
+					Ref<Texture> hdrTexture;
+					if (isHDRLoaded)
+					{
+						hdrTexture = ResolveAsset<Texture>(m_WorldEnvironment->hdrHandle);
+						if (hdrTexture && hdrTexture->IsReady())
+						{
+							m_WorldEnvironment->environment->SetTexture(hdrTexture);
+						}
+					}
+					else
+					{
+						m_WorldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
+					}
+
+					// Keep retrieve HDR If it is loaded, but still empty
+					if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
+						m_WorldEnvironment->dirtyEnvironment = true;
+					else
+						m_WorldEnvironment->dirtyEnvironment = false;
+				}
+			}
+			else
+			{
+				m_WorldEnvironment->dirtyEnvironment = false;
 			}
 		}
 	}

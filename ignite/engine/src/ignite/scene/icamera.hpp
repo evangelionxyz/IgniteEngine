@@ -79,10 +79,10 @@ namespace ignite
         float chromAbRadial = 0.1f;
 
         // HBAO params
-        float aoRadius = 1.2f;      // view-space horizon radius in world units
-        float aoBias = 0.03f;       // tangent bias to reduce self-occlusion
-        float aoIntensity = 1.0f;   // blend strength when applied in post (1.0 = natural)
-        float aoPower = 1.35f;      // curve/power for contrast
+        float aoRadius = 1.3f;      // view-space horizon radius in world units
+        float aoBias = 0.75f;       // tangent bias to reduce self-occlusion
+        float aoIntensity = 2.0f;   // blend strength when applied in post (1.0 = natural)
+        float aoPower = 5.0f;      // curve/power for contrast
 
 		// Anti-aliasing 
 		TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive

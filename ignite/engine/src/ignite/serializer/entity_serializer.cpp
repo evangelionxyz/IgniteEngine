@@ -679,6 +679,7 @@ namespace ignite
                 const auto &comp = entity.GetComponent<WorldEnvironment>();
                 sr.BeginMap("WorldEnvironment");
                 {
+                    sr.AddKeyValue("SkyType", static_cast<uint32_t>(comp.skyType));
                     sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
                     sr.AddKeyValue("Exposure", comp.exposure);
                     sr.AddKeyValue("Gamma", comp.gamma);
@@ -687,6 +688,16 @@ namespace ignite
                     sr.AddKeyValue("FogColor", comp.fogColor);
                     sr.AddKeyValue("FogStart", comp.fogStart);
                     sr.AddKeyValue("FogEnd", comp.fogEnd);
+
+                    sr.AddKeyValue("RayleighScattering", comp.atmosphereParams.rayleighScattering);
+                    sr.AddKeyValue("RayleighDensityH", comp.atmosphereParams.rayleighDensityH);
+                    sr.AddKeyValue("MieScattering", comp.atmosphereParams.mieScattering);
+                    sr.AddKeyValue("MieDensityH", comp.atmosphereParams.mieDensityH);
+                    sr.AddKeyValue("MieG", comp.atmosphereParams.mieG);
+                    sr.AddKeyValue("OzoneAbsorption", comp.atmosphereParams.ozoneAbsorption);
+                    sr.AddKeyValue("PlanetRadius", comp.atmosphereParams.planetRadius);
+                    sr.AddKeyValue("AtmosphereRadius", comp.atmosphereParams.atmosphereRadius);
+                    sr.AddKeyValue("GroundAlbedo", comp.atmosphereParams.groundAlbedo);
                 }
                 sr.EndMap();
             }
@@ -1169,6 +1180,7 @@ namespace ignite
         if (YAML::Node node = entityNode["WorldEnvironment"])
         {
             auto &comp = desEntity.AddComponent<WorldEnvironment>();
+            if (auto n = node["SkyType"]) comp.skyType = static_cast<SkyType>(n.as<uint32_t>());
             if (auto n = node["HDRHandle"]) comp.hdrHandle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["Exposure"]) comp.exposure = n.as<float>();
             if (auto n = node["Gamma"]) comp.gamma = n.as<float>();
@@ -1177,6 +1189,16 @@ namespace ignite
             if (auto n = node["FogColor"]) comp.fogColor = n.as<glm::vec4>();
             if (auto n = node["FogStart"]) comp.fogStart = n.as<float>();
             if (auto n = node["FogEnd"]) comp.fogEnd = n.as<float>();
+
+            if (auto n = node["RayleighScattering"]) comp.atmosphereParams.rayleighScattering = n.as<glm::vec3>();
+            if (auto n = node["RayleighDensityH"]) comp.atmosphereParams.rayleighDensityH = n.as<float>();
+            if (auto n = node["MieScattering"]) comp.atmosphereParams.mieScattering = n.as<glm::vec3>();
+            if (auto n = node["MieDensityH"]) comp.atmosphereParams.mieDensityH = n.as<float>();
+            if (auto n = node["MieG"]) comp.atmosphereParams.mieG = n.as<float>();
+            if (auto n = node["OzoneAbsorption"]) comp.atmosphereParams.ozoneAbsorption = n.as<glm::vec3>();
+            if (auto n = node["PlanetRadius"]) comp.atmosphereParams.planetRadius = n.as<float>();
+            if (auto n = node["AtmosphereRadius"]) comp.atmosphereParams.atmosphereRadius = n.as<float>();
+            if (auto n = node["GroundAlbedo"]) comp.atmosphereParams.groundAlbedo = n.as<glm::vec3>();
         }
 
         // Text Component

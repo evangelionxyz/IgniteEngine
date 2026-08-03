@@ -104,13 +104,11 @@ PSOutput main(PixelVertexInput input)
         float3 finalNormal = normalize(N * normalMap);
 
         float3 reflectDirection = reflect(-viewDirection, finalNormal);
-        float3 reflectRadiance = SampleSphericalMap(environmentMapTexture, sampler0, reflectDirection);
+        float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, camera.position.y * 0.001f);
         float3 reflectedSpecular = float3(0.0f, 0.0f, 0.0f);
         
         if (length(reflectRadiance) > 0.01f)
         {
-            reflectRadiance = reflectRadiance / (reflectRadiance + 1.0f);
-            
             float reflectionStrength = lerp(0.01f, 1.0f, metallic) * (1.0f - roughness);
             float3 F = SchlickFresnel(viewDirection, finalNormal, specularColor);
             float NdotR = saturate(dot(finalNormal, reflectDirection));

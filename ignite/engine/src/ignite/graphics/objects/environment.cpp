@@ -18,6 +18,8 @@
 
 #include <stb_image.h>
 
+#include "procedural_sky.hpp"
+
 namespace ignite
 {
     Environment::Environment()
@@ -31,6 +33,8 @@ namespace ignite
         m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * m_Indices.size(), "Environment Index Buffer");
 
         m_HDRTexture = Renderer::GetBlackTexture();
+        m_ProceduralSky = CreateRef<ProceduralSky>();
+        m_SkyType = SkyType::HDRI;
 
         auto samplerDesc = nvrhi::SamplerDesc();
         samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
@@ -43,6 +47,7 @@ namespace ignite
         m_Sampler.Reset();
 
         m_HDRTexture.reset();
+        m_ProceduralSky.reset();
         m_VertexBuffer.reset();
         m_IndexBuffer.reset();
     }
@@ -50,7 +55,15 @@ namespace ignite
     void Environment::Draw(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &pipeline,
         const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &sceneBuffer)
     {
-        Ref<Texture> tex = m_HDRTexture ? m_HDRTexture : Renderer::GetBlackTexture();
+        Ref<Texture> tex = nullptr;
+        if (m_SkyType == SkyType::ProceduralSky && m_ProceduralSky && m_ProceduralSky->GetSkyViewLUT())
+        {
+            tex = m_ProceduralSky->GetSkyViewLUT();
+        }
+        else
+        {
+            tex = m_HDRTexture ? m_HDRTexture : Renderer::GetBlackTexture();
+        }
 
         nvrhi::BindingSetDesc bsDesc;
         bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer));

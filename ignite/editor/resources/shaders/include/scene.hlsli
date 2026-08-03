@@ -52,7 +52,9 @@ struct Scene
     float ambient;
     int numPointLights;
     int numSpotLights;
-    float3 _pad;
+    int skyType;
+    float _pad2;
+    float4 sunDirection;
 };
 
 struct Material

@@ -19,11 +19,12 @@ namespace ignite
     class SSAO
     {
     public:
-        SSAO(uint32_t width, uint32_t height);
+        SSAO(nvrhi::ICommandList *cmd, uint32_t width, uint32_t height);
         ~SSAO();
 
         void Build(nvrhi::ICommandList *cmd, const Ref<Texture> &depthTexture, ICamera *camera,
             const PostProcessing &settings, const Ref<VertexBuffer> &fullscreenVertexBuffer);
+
         void Resize(uint32_t width, uint32_t height);
         Ref<Texture> GetAOTexture() const;
 
@@ -49,7 +50,7 @@ namespace ignite
         void InvalidatePipelines();
         void EnsurePipelines();
         void BuildKernel();
-        void BuildNoise();
+        void BuildNoise(nvrhi::ICommandList *cmd);
 
         uint32_t m_Width = 0;
         uint32_t m_Height = 0;

@@ -135,7 +135,7 @@ namespace ignite
         
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
 		std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);
-		std::vector<Ref<SSAO>> GetOrCreateSSAOs(ICamera *camera);
+		std::vector<Ref<SSAO>> GetOrCreateSSAOs(nvrhi::ICommandList *cmd, ICamera *camera);
 
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
