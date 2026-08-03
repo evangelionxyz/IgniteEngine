@@ -208,8 +208,8 @@ namespace ignite
                 // which forces D3D12 to require a bound vertex buffer even when the
                 // shader is purely procedural (e.g. infinite_grid.vertex.hlsl).
                 const bool isSysValue = vertexAttr.name.size() >= 3 &&
-                    vertexAttr.name[0] == 'S' &&
-                    vertexAttr.name[1] == 'V' &&
+                    (vertexAttr.name[0] == 'S' || vertexAttr.name[0] == 's') &&
+                    (vertexAttr.name[1] == 'V' || vertexAttr.name[1] == 'v') &&
                     vertexAttr.name[2] == '_';
                 if (isSysValue)
                 {
@@ -226,6 +226,21 @@ namespace ignite
                 attr.elementStride = vertexAttr.elementStride;
                 
                 outVertexAttributes.push_back(attr);
+            }
+
+            // Recalculate offsets and strides per vertex buffer index, because system values
+            // (e.g. SV_InstanceID) skipped above may have artificially inflated vertexAttr.offset
+            // and vertexAttr.elementStride during DXIL reflection.
+            std::unordered_map<uint32_t, uint32_t> bufferStrides;
+            for (auto &attr : outVertexAttributes)
+            {
+                uint32_t &currentOffset = bufferStrides[attr.bufferIndex];
+                attr.offset = currentOffset;
+                currentOffset += GetVertexStride(attr.format);
+            }
+            for (auto &attr : outVertexAttributes)
+            {
+                attr.elementStride = bufferStrides[attr.bufferIndex];
             }
         }
 
