@@ -76,7 +76,8 @@ project "Ignite.Editor"
         "%{IncludeDir.JSON}",
         "%{IncludeDir.NUKLEAR}",
         "%{IncludeDir.MochiSharpNative}",
-        "%{IncludeDir.Hostfxr}"
+        "%{IncludeDir.Hostfxr}",
+        "%{IncludeDir.FASTNOISE2}"
     }
 
     defines {

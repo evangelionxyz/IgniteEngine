@@ -49,8 +49,9 @@ if not FBX_SDK_PATH then
 end
 print("FBX_SDK path: " .. tostring(FBX_SDK_PATH))
 
--- SDL3 Dir
+-- Thirdparty Source Dirs
 SDL3_SOURCE_DIR = "%{wks.location}/thirdparty/SDL3"
+FASTNOISE2_SOURCE_DIR = "%{wks.location}/thirdparty/FastNoise2"
 
 --includedirs
 IncludeDir                          = {}
@@ -89,6 +90,7 @@ IncludeDir["TRACY"]                 = "%{THIRDPARTY_DIR}/tracy/public"
 IncludeDir["NUKLEAR"]               = "%{THIRDPARTY_DIR}/Nuklear"
 IncludeDir["UmbraShaderCompiler"]   = "%{THIRDPARTY_DIR}/UmbraShaderCompiler/Include"
 IncludeDir["gtest"]                 = "%{THIRDPARTY_DIR}/gtest/googletest/include"
+IncludeDir["FASTNOISE2"]            = "%{THIRDPARTY_DIR}/FastNoise2/include"
 
 
 -- =============== LINUX SYSTEM PATHS ===============
@@ -116,6 +118,9 @@ Library["Hostfxr"]                   = "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/
 Library["ASSIMP"]                    = "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.lib"
 Library["FMOD"]                      = "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod_vc.lib"
 Library["SDL3"]                      = "%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.lib"
+
+Library["FastNoiseD"]                = "%{THIRDPARTY_DIR}/FastNoise2/build/Debug/lib/FastNoiseD.lib"
+Library["FastNoise"]                 = "%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib/FastNoise.lib"
 
 Library["Iex"]                       = "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.lib"
 Library["OpenEXR"]                   = "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.lib"
@@ -186,4 +191,5 @@ include "tracy.lua"
 include "gtest.lua"
 include "umbrashadercompiler.lua"
 include "nvrhi.lua"
+include "fastnoise2.lua"
 group ""

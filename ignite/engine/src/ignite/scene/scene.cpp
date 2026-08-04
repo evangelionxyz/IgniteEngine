@@ -1392,6 +1392,11 @@ namespace ignite
     }
 
     template<>
+    IGN_API void Scene::OnComponentAdded<TerrainComponent>(Entity entity, TerrainComponent &comp)
+    {
+    }
+
+    template<>
     IGN_API void Scene::OnComponentAdded<Animator2DComponent>(Entity entity, Animator2DComponent &comp)
     {
         // Will initialize from controller's default state on first update tick

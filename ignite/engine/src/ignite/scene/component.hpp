@@ -9,6 +9,7 @@
 #endif
 
 #include "icomponent.hpp"
+#include "ignite/terrain/terrain.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/animation_2d.hpp"
@@ -74,6 +75,7 @@ namespace ignite
         { "Point Light", CompType_PointLight },
         { "Spot Light", CompType_SpotLight },
         { "Character Controller", CompType_CharacterController },
+        { "Terrain", CompType_Terrain },
     };
 
     enum EntityType : uint8_t
@@ -192,6 +194,7 @@ namespace ignite
             case CompType_PointLight: return "CompType_PointLight";
             case CompType_SpotLight: return "CompType_SpotLight";
             case CompType_CharacterController: return "CompType_CharacterController";
+            case CompType_Terrain: return "CompType_Terrain";
             case CompType_Invalid:
             default: return "Invalid Component";
         }
@@ -812,18 +815,22 @@ namespace ignite
     {
     public:
         std::string className = "EMPTY";
-        ScriptComponent() = default;
-
         Ref<ScriptInstance> runtimeScriptInstance = nullptr;
 
+        ScriptComponent() = default;
         COMPONENT_CLASS_TYPE(CompType_Script)
     };
 
-    // -------------------------------------------------------------------------
-    // Animator2DComponent: references an AnimatorController2D asset and holds
-    // per-entity runtime playback state so multiple entities can run the same
-    // controller independently.
-    // -------------------------------------------------------------------------
+    class TerrainComponent : public IComponent
+    {
+    public:
+        Ref<TerrainData> data;
+        std::vector<TerrainChunk> chunks;
+
+        TerrainComponent() = default;
+        COMPONENT_CLASS_TYPE(CompType_Terrain)
+    };
+
     class Animator2DComponent : public IComponent
     {
     public:
@@ -831,12 +838,12 @@ namespace ignite
 
         // Runtime state (not serialized except currentStateName)
         std::string currentStateName;
-        float       stateElapsed    = 0.0f;  // absolute time in current state (seconds)
-        float       stateNormalized = 0.0f;  // normalized time [0..1]
+        float stateElapsed = 0.0f;  // absolute time in current state (seconds)
+        float stateNormalized = 0.0f;  // normalized time [0..1]
 
         // Per-entity animation runtime (copy of Animation2D playback state)
         int   currentFrame = 0;
-        float elapsed      = 0.0f;
+        float elapsed = 0.0f;
 
         Animator2DComponent() = default;
 

@@ -42,6 +42,7 @@ namespace ignite
         CompType_PointLight,
         CompType_SpotLight,
         CompType_CharacterController,
+        CompType_Terrain,
 
         CompType_COUNT
     };

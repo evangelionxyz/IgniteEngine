@@ -59,6 +59,7 @@ namespace ignite
         DirectionalLightComponent,
         PointLightComponent,
         SpotLightComponent,
-        Animator2DComponent
+        Animator2DComponent,
+        TerrainComponent
     >; 
 }

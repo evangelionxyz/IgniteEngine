@@ -59,7 +59,8 @@ project "Ignite.Engine"
         "%{IncludeDir.MSDFGEN}",
         "%{IncludeDir.FREETYPE}",
         "%{IncludeDir.TRACY}",
-        "%{IncludeDir.FBX_SDK}"
+        "%{IncludeDir.FBX_SDK}",
+        "%{IncludeDir.FASTNOISE2}"
     }
 
     libdirs { "%{cfg.targetdir}" }
@@ -95,13 +96,17 @@ project "Ignite.Engine"
         "GLM_FORCE_SSE2"
     }
 
-    -- build rust and SDL
+    -- build rust, SDL, and FastNoise2
     filter "configurations:Debug or Debug-Profiling"
         libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
             -- Configure and Build SDL
             'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
+            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Debug"',
+
+            -- Configure and Build FastNoise2
+            'cmake -S "%{FASTNOISE2_SOURCE_DIR}" -B "%{FASTNOISE2_SOURCE_DIR}/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "%{FASTNOISE2_SOURCE_DIR}/build" --config "Debug"',
 
             -- Build Rust
             'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
@@ -115,6 +120,10 @@ project "Ignite.Engine"
             -- Configure and Build SDL
             'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
             'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
+
+            -- Configure and Build FastNoise2
+            'cmake -S "%{FASTNOISE2_SOURCE_DIR}" -B "%{FASTNOISE2_SOURCE_DIR}/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "%{FASTNOISE2_SOURCE_DIR}/build" --config "Release"',
             
             -- Build Rust
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
@@ -229,6 +238,9 @@ project "Ignite.Engine"
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll", "%{cfg.targetdir}"),
 
+            -- copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/")
+
+
             -- Copying dotnet libraries
             copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/hostfxr.dll", "%{cfg.targetdir}")
@@ -273,7 +285,8 @@ project "Ignite.Engine"
                 "%{Library.Imath}",
                 "%{Library.FBX_SDK_DEBUG}",
                 "%{Library.FBX_XML_DEBUG}",
-                "%{Library.FBX_ALEMBIC_DEBUG}"
+                "%{Library.FBX_ALEMBIC_DEBUG}",
+                "%{Library.FastNoiseD}"
             }
             postbuildcommands {
                 copy_file("%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk.dll", "%{cfg.targetdir}"),
@@ -281,7 +294,8 @@ project "Ignite.Engine"
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Debug/bin/FastNoiseD.dll", "%{cfg.targetdir}")
             }
 
 
@@ -335,7 +349,8 @@ project "Ignite.Engine"
                 "%{Library.Imath}",
                 "%{Library.FBX_SDK}",
                 "%{Library.FBX_XML}",
-                "%{Library.FBX_ALEMBIC}"
+                "%{Library.FBX_ALEMBIC}",
+                "%{Library.FastNoise}"
             }
             postbuildcommands {
                 copy_file("%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll", "%{cfg.targetdir}"),
@@ -343,7 +358,8 @@ project "Ignite.Engine"
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/bin/FastNoise.dll", "%{cfg.targetdir}")
             }
             
 
@@ -388,7 +404,8 @@ project "Ignite.Engine"
                 "%{Library.Imath}",
                 "%{Library.FBX_SDK}",
                 "%{Library.FBX_XML}",
-                "%{Library.FBX_ALEMBIC}"
+                "%{Library.FBX_ALEMBIC}",
+                "%{Library.FastNoise}"
             }
             postbuildcommands {
                 copy_file("%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll", "%{cfg.targetdir}"),
@@ -396,7 +413,8 @@ project "Ignite.Engine"
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
+                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/bin/FastNoise.dll", "%{cfg.targetdir}")
             }
 
         filter { "system:linux", "configurations:Shipping or Shipping-Profiling" }

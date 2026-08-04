@@ -2,8 +2,8 @@
 
 Work in progress C++ Game Engine
 
-[![Build Windows](https://github.com/evangelionxyz/ignite/actions/workflows/ci.yml/badge.svg)](https://github.com/evangelionxyz/ignite/actions/workflows/ci.yml)
-[![GitHub Stars](https://img.shields.io/github/stars/evangelionxyz/ignite?style=flat&label=stars)](https://github.com/evangelionxyz/ignite/stargazers)
+[![Build Windows](https://github.com/evangelionxyz/IgniteEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/evangelionxyz/IgniteEngine/actions/workflows/ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/evangelionxyz/IgniteEngine?style=flat&label=stars)](https://github.com/evangelionxyz/IgniteEngine/stargazers)
 
 ## Installation
 
@@ -11,7 +11,7 @@ Work in progress C++ Game Engine
 
 We actively develop on the `dev` branch. You can use `-b dev` when cloning the repository. <br>
 ```bash
-git clone --recursively https://github.com/evangelionxyz/Ignite.git -b master
+git clone --recursively https://github.com/evangelionxyz/IgniteEngine.git -b master
 ```
 
 ## Windows Build
