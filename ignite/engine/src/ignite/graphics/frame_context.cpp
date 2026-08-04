@@ -141,13 +141,13 @@ namespace ignite
 		{
 			nvrhi::BindingSetDesc desc;
 			desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer.GetHandle()));
-			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, instanceIndexBuffer.GetHandle())); // Instance index indirection
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetHandle())); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer)); // volatile
+			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer));
+			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, instanceIndexBuffer)); // Instance index indirection
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer)); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmBuffer)); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer)); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer)); // volatile
 			staticMeshBindingSet = device->createBindingSet(desc, staticLayout);
 		}
 
@@ -155,13 +155,13 @@ namespace ignite
 		{
 			nvrhi::BindingSetDesc desc;
 			desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer.GetHandle()));
-			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, boneBuffer.GetHandle()));
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetHandle())); // volatile
-			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetHandle())); // volatile
+            desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer)); // volatile
+			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer));
+			desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, boneBuffer));
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer)); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmBuffer)); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer)); // volatile
+			desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer)); // volatile
 			animatedBindingSet = device->createBindingSet(desc, animLayout);
 		}
 
@@ -171,13 +171,13 @@ namespace ignite
 			{
 				nvrhi::BindingSetDesc desc;
 				desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, instanceIndexBuffer.GetHandle())); // Instance index indirection
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmPerCascadeBuffers[i].GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer));
+				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer));
+				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, instanceIndexBuffer)); // Instance index indirection
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmPerCascadeBuffers[i]));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer));
 				staticMeshCSMBindingSet[i] = device->createBindingSet(desc, staticLayout);
 			}
 
@@ -185,13 +185,13 @@ namespace ignite
 			{
 				nvrhi::BindingSetDesc desc;
 				desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, boneBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmPerCascadeBuffers[i].GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetHandle()));
-				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cameraBuffer));
+				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, objectBuffer));
+				desc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, boneBuffer));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, sceneBuffer));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, csmPerCascadeBuffers[i]));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, pointLightBuffer));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, spotLightBuffer));
 				animatedMeshCSMBindingSet[i] = device->createBindingSet(desc, animLayout);
 			}
 		}

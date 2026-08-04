@@ -89,6 +89,9 @@ namespace ignite
 
         static Ref<RenderTarget> Create(const RenderTargetCreateInfo &createInfo, const std::string& debugName = "[RenderTarget]");
 
+        operator nvrhi::FramebufferHandle() const { return m_FramebufferHandle; }
+        operator nvrhi::IFramebuffer *() const { return m_FramebufferHandle; }
+
     private:
         std::vector<Ref<Texture>> m_ColorAttachments;
         nvrhi::FramebufferHandle m_FramebufferHandle;

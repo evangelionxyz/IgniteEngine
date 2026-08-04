@@ -42,6 +42,8 @@ namespace ignite
         size_t GetByteSize() const { return m_ByteSize; }
 
         nvrhi::BufferHandle GetHandle() { return m_Handle; }
+        operator nvrhi::BufferHandle() const { return m_Handle; }
+        operator nvrhi::IBuffer *() const { return m_Handle; }
 
         static Ref<IndexBuffer> Create(size_t size, const std::string &debugName = "Index Buffer");
 

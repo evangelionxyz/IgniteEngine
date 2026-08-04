@@ -56,6 +56,9 @@ namespace ignite {
         nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
 
         nvrhi::GraphicsPipelineHandle GetHandle() { return m_Handle; }
+        operator nvrhi::GraphicsPipelineHandle() const { return m_Handle; }
+        operator nvrhi::IGraphicsPipeline *() const { return m_Handle; }
+
         nvrhi::InputLayoutHandle GetInputLayout() { return m_InputLayout; }
 
         Ref<Shader> GetShader(UMBRA_ShaderType shaderType)

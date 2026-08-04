@@ -86,11 +86,15 @@ namespace ignite
         uint32_t m_PreviewMouseX       = 0;
         uint32_t m_PreviewMouseY       = 0;
         bool     m_PreviewMouseHovered = false;
-        bool     m_UseEnvironment      = false;
-        bool     m_EnvTextureInvalidating         = false;
+        bool     m_UseEnvironment                  = false;
+        bool     m_EnvTextureInvalidating          = false;
         bool     m_EnvironmentTextureLoadAttempted = false;
-
         Scene_GPUData m_SceneGPUData;
+
+        void EnsureBindingSets(FrameContext *frameContext);
+
+        std::unordered_map<FrameContext *, nvrhi::BindingSetHandle> m_StaticMeshBindingSets;
+        std::unordered_map<FrameContext *, nvrhi::BindingSetHandle> m_AnimatedBindingSets;
     };
 }
 #endif

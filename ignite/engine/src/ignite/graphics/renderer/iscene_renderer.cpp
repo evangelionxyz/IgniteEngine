@@ -28,7 +28,7 @@ namespace ignite
             m_CSMPerCascadeBuffers[i] = ConstantBuffer::Create(sizeof(CSM_GPUData), false, 1, "[SceneRenderer] CSM Per-Cascade Buffer " + std::to_string(i));
         }
 
-		static constexpr std::array screenVertices
+		static const std::array screenVertices
 		{
 			VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
 			VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
@@ -67,6 +67,7 @@ namespace ignite
 			{
 				m_WorldEnvironment->environment = Environment::Create();
 				m_WorldEnvironment->gpuInitialized = false;
+                m_WorldEnvironment->dirtyEnvironment = true;
 			}
 
 			m_WorldEnvironment->environment->SetSkyType(m_WorldEnvironment->skyType);
@@ -119,24 +120,24 @@ namespace ignite
         }
     }
 
-    Ref<Material> ISceneRenderer::ResolveMeshMaterial(
-        int instanceIndex,
-        const std::unordered_map<int, AssetHandle> &overrideMaterials,
-        AssetHandle defaultMaterialHandle)
+    Ref<Material> ISceneRenderer::ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle)
     {
         Ref<Material> material = nullptr;
 
+        // Retrieve the Override Materials if available
         auto overrideIt = overrideMaterials.find(instanceIndex);
         if (overrideIt != overrideMaterials.end() && overrideIt->second != AssetHandle(0))
         {
             material = ResolveAsset<Material>(overrideIt->second);
         }
 
+        // Retrive the attached material
         if (!material && defaultMaterialHandle != AssetHandle(0))
         {
             material = ResolveAsset<Material>(defaultMaterialHandle);
         }
 
+        // Fallback
         if (!material)
         {
             material = Renderer::GetDefaultMaterial();

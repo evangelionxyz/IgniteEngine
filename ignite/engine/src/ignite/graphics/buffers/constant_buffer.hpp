@@ -39,6 +39,9 @@ namespace ignite
         void SetData(nvrhi::ICommandList *cmd, void *data, size_t dataSize, const size_t offset = 0);
 
         nvrhi::BufferHandle GetHandle() { return m_Handle; }
+        operator nvrhi::BufferHandle() const { return m_Handle; }
+        operator nvrhi::IBuffer *() const { return m_Handle; }
+
         size_t GetByteSize() const { return m_ByteSize; }
 
         static Ref<ConstantBuffer> Create(const size_t size, bool isVolatile = true, const uint32_t maxVersion = 16, const std::string &debugName = "Constant Buffer");

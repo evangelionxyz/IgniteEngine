@@ -237,6 +237,9 @@ namespace ignite
 
         bool operator ==(const Texture &other) const  { return m_Handle.Get() == other.m_Handle.Get(); }
 
+        operator nvrhi::TextureHandle() const { return m_Handle; }
+        operator nvrhi::ITexture *() const { return m_Handle; }
+
     private:
         void CreateTextureHandle();
         void EnsureTextureHandle();

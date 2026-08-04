@@ -10,13 +10,13 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #endif
 
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/compatibility.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/quaternion.hpp>
-#include <glm/gtc/constants.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/hash.hpp>
 
 #include "obb.hpp"

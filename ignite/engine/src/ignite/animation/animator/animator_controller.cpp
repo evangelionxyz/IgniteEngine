@@ -807,8 +807,6 @@ namespace ignite
 					global.scale = parent.scale * runtime.localPoses[i].scale;
 				}
 			}
-
-			
         }
 
         {

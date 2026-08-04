@@ -19,6 +19,9 @@ namespace ignite
 		uint32_t Allocate(nvrhi::ICommandList *cmd, const Mesh_GPUData &data);
 		void SetBuffer(nvrhi::BufferHandle buffer) { m_Buffer = buffer; }
 
+        operator nvrhi::BufferHandle() const { return m_Buffer; }
+        operator nvrhi::IBuffer *() const { return m_Buffer; }
+
 	private:
 		nvrhi::BufferHandle m_Buffer;
 		uint32_t m_ObjectCount = 0;
@@ -30,6 +33,9 @@ namespace ignite
 		void BeginFrame() { m_BoneCount = 0; }
 		uint32_t Allocate(nvrhi::ICommandList *cmd, const glm::mat4 *bones, uint32_t count);
 		void SetBuffer(nvrhi::BufferHandle buffer) { m_Buffer = buffer; }
+
+        operator nvrhi::BufferHandle() const { return m_Buffer; }
+        operator nvrhi::IBuffer *() const { return m_Buffer; }
 
 	private:
 		nvrhi::BufferHandle m_Buffer;
@@ -43,6 +49,9 @@ namespace ignite
 		uint32_t Allocate(nvrhi::ICommandList *cmd, const uint32_t *indices, uint32_t count);
 		void SetBuffer(nvrhi::BufferHandle buffer) { m_Buffer = buffer; }
 
+        operator nvrhi::BufferHandle() const { return m_Buffer; }
+        operator nvrhi::IBuffer *() const { return m_Buffer; }
+
 	private:
 		nvrhi::BufferHandle m_Buffer;
 		uint32_t m_IndexCount = 0;
@@ -54,6 +63,9 @@ namespace ignite
 		void Initialize(uint32_t maxObjects, nvrhi::IDevice *device);
 		nvrhi::BufferHandle GetHandle() const { return m_Buffer; }
 
+        operator nvrhi::BufferHandle() const { return m_Buffer; }
+        operator nvrhi::IBuffer *() const { return m_Buffer; }
+
 	private:
 		nvrhi::BufferHandle m_Buffer;
 	};
@@ -64,6 +76,9 @@ namespace ignite
 		void Initialize(uint32_t maxBones, nvrhi::IDevice *device);
 		nvrhi::BufferHandle GetHandle() const { return m_Buffer; }
 
+        operator nvrhi::BufferHandle() const { return m_Buffer; }
+        operator nvrhi::IBuffer *() const { return m_Buffer; }
+
 	private:
 		nvrhi::BufferHandle m_Buffer;
 	};
@@ -73,6 +88,9 @@ namespace ignite
 	public:
 		void Initialize(uint32_t maxIndices, nvrhi::IDevice *device);
 		nvrhi::BufferHandle GetHandle() const { return m_Buffer; }
+
+        operator nvrhi::BufferHandle() const { return m_Buffer; }
+        operator nvrhi::IBuffer *() const { return m_Buffer; }
 
 	private:
 		nvrhi::BufferHandle m_Buffer;

@@ -29,6 +29,7 @@
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/objects/procedural_sky.hpp"
 
 namespace ignite
 {
@@ -288,15 +289,15 @@ namespace ignite
             }
 
             // Transition color and depth attachments to ShaderResource before they are read by post-processing
-            cmd->setTextureState(target->sceneRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-            cmd->setTextureState(target->sceneRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-            cmd->setTextureState(target->sceneRT->GetDepthAttachment()->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(*target->sceneRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(*target->sceneRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(*target->sceneRT->GetDepthAttachment(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
 
-            cmd->setTextureState(target->widgetRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-            cmd->setTextureState(target->debugRT->GetColorAttachment(0)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(*target->widgetRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->setTextureState(*target->debugRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
             if (target->debugRT->GetColorAttachment(1))
             {
-                cmd->setTextureState(target->debugRT->GetColorAttachment(1)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->setTextureState(*target->debugRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
             }
 
             cmd->commitBarriers();
@@ -312,15 +313,15 @@ namespace ignite
                 Ref<Texture> resolvedColor = target->sceneResolvedRT->GetColorAttachment(0);
                 Ref<Texture> resolvedObjID = target->sceneResolvedRT->GetColorAttachment(1);
 
-                cmd->setTextureState(resolvedColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveDest);
-                cmd->setTextureState(resolvedObjID->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveDest);
+                cmd->setTextureState(*resolvedColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveDest);
+                cmd->setTextureState(*resolvedObjID, nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveDest);
                 cmd->commitBarriers();
 
-                cmd->resolveTexture(resolvedColor->GetHandle(), nvrhi::TextureSubresourceSet(), msaaColor->GetHandle(), nvrhi::TextureSubresourceSet());
-                cmd->resolveTexture(resolvedObjID->GetHandle(), nvrhi::TextureSubresourceSet(), msaaObjID->GetHandle(), nvrhi::TextureSubresourceSet());
+                cmd->resolveTexture(*resolvedColor, nvrhi::TextureSubresourceSet(), *msaaColor, nvrhi::TextureSubresourceSet());
+                cmd->resolveTexture(*resolvedObjID, nvrhi::TextureSubresourceSet(), *msaaObjID, nvrhi::TextureSubresourceSet());
 
-                cmd->setTextureState(resolvedColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-                cmd->setTextureState(resolvedObjID->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->setTextureState(*resolvedColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->setTextureState(*resolvedObjID, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
                 cmd->commitBarriers();
             }
 
@@ -417,12 +418,12 @@ namespace ignite
                 IGN_PROFILE_SCOPE("SceneRenderer::TAAHistoryCopy");
                 Ref<Texture> compositeColor = target->compositeRT->GetColorAttachment(0);
                 Ref<Texture> historyColor = target->taaHistoryRT[frameContext->frameIndexInFlight]->GetColorAttachment(0);
-                cmd->setTextureState(compositeColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::CopySource);
-                cmd->setTextureState(historyColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
+                cmd->setTextureState(*compositeColor, nvrhi::AllSubresources, nvrhi::ResourceStates::CopySource);
+                cmd->setTextureState(*historyColor, nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
                 cmd->commitBarriers();
-                cmd->copyTexture(historyColor->GetHandle(), nvrhi::TextureSlice(), compositeColor->GetHandle(), nvrhi::TextureSlice());
-                cmd->setTextureState(historyColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-                cmd->setTextureState(compositeColor->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->copyTexture(*historyColor, nvrhi::TextureSlice(), *compositeColor, nvrhi::TextureSlice());
+                cmd->setTextureState(*historyColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->setTextureState(*compositeColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
                 cmd->commitBarriers();
                 target->taaHistoryValid = true;
                 ++m_TAAFrameIndex;
@@ -697,7 +698,7 @@ namespace ignite
 
             if (it != m_RenderTargets.end())
             {
-                auto target = it->second;
+                auto &target = it->second;
 
                 target->sceneRT->Resize(renderWidth, renderHeight);
                 if (target->sceneResolvedRT)
@@ -889,7 +890,7 @@ namespace ignite
                 nvrhi::GraphicsState staticState = nvrhi::GraphicsState();
                 staticState.framebuffer = csmFramebuffer;
                 staticState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
-                staticState.pipeline = staticCSMPSO->GetHandle();
+                staticState.pipeline = *staticCSMPSO;
 
                 // Static Mesh Shadows — batch instanced
                 {
@@ -897,57 +898,64 @@ namespace ignite
 
                     m_ShadowBatchBuilder.Clear();
 
-                    auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
-                    for (entt::entity e : skelMeshView)
+                    auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
+                    std::vector<entt::entity> candidateEntities;
+                    std::vector<AABB> candidateAABBs;
+
+                    for (entt::entity e : staticMeshView)
                     {
-                        const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
-                        if (!rc.visible)
+                        const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+                        if (!rc.visible || smc.handle == AssetHandle(0))
                             continue;
 
-                        StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-                        if (smc.handle == AssetHandle(0))
-                            continue;
+                        candidateEntities.push_back(e);
+                        candidateAABBs.push_back(smc.worldAABB);
+                    }
 
-                        auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
-                        if (!staticMesh)
-                            continue;
+                    if (!candidateEntities.empty())
+                    {
+                        std::vector<uint8_t> visibility(candidateEntities.size());
+                        cascadeFrustum.IsAABBVisibleBatch(candidateAABBs.data(), candidateAABBs.size(), visibility.data());
 
-                        // Perform cascade frustum culling
-                        if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
-                            continue;
-
-                        const auto &instances = staticMesh->GetMeshInstances();
-                        for (size_t idx = 0; idx < instances.size(); ++idx)
+                        for (size_t cIdx = 0; cIdx < candidateEntities.size(); ++cIdx)
                         {
-                            auto &meshInstance = instances[idx];
-                            auto &primitive = meshInstance->GetPrimitive();
-                            if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                            {
-                                primitive->WriteBuffer(cmd);
-                            }
-
-                            auto cacheIt = m_EntityObjectIndexCache.find(e);
-                            if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                            if (!visibility[cIdx])
                                 continue;
 
-                            const uint32_t objectIndex = cacheIt->second[idx];
+                            entt::entity e = candidateEntities[cIdx];
+                            StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
+                            auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
+                            if (!staticMesh)
+                                continue;
 
-                            BatchKey key;
-                            key.vertexBuffer = primitive->vertexBuffer->GetHandle().Get();
-                            key.indexBuffer = primitive->indexBuffer->GetHandle().Get();
-                            key.meshBindingSet = frameContext->staticMeshCSMBindingSet[i].Get();
-                            key.materialBindingSet = nullptr; // CSM draws have no material binding
-                            key.pipeline = staticCSMPSO->GetHandle().Get();
+                            const auto &instances = staticMesh->GetMeshInstances();
+                            for (size_t idx = 0; idx < instances.size(); ++idx)
+                            {
+                                auto &meshInstance = instances[idx];
+                                auto &primitive = meshInstance->GetPrimitive();
+                                if (!primitive->vertexBuffer || !primitive->indexBuffer)
+                                {
+                                    primitive->WriteBuffer(cmd);
+                                }
 
-                            m_ShadowBatchBuilder.Submit(
-                                key,
-                                primitive->vertexBuffer->GetHandle(),
-                                primitive->indexBuffer->GetHandle(),
-                                frameContext->staticMeshCSMBindingSet[i],
-                                nullptr,
-                                staticCSMPSO->GetHandle(),
-                                primitive->indexBuffer->GetCount(),
-                                objectIndex);
+                                auto cacheIt = m_EntityObjectIndexCache.find(e);
+                                if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                                    continue;
+
+                                const uint32_t objectIndex = cacheIt->second[idx];
+
+                                BatchKey key;
+                                key.vertexBuffer = *primitive->vertexBuffer;
+                                key.indexBuffer = *primitive->indexBuffer;
+                                key.meshBindingSet = frameContext->staticMeshCSMBindingSet[i].Get();
+                                key.materialBindingSet = nullptr; // CSM draws have no material binding
+                                key.pipeline = *staticCSMPSO;
+
+                                m_ShadowBatchBuilder.Submit(key,
+                                    *primitive->vertexBuffer,*primitive->indexBuffer,
+                                    frameContext->staticMeshCSMBindingSet[i],
+                                    nullptr, *staticCSMPSO, primitive->indexBuffer->GetCount(),objectIndex);
+                            }
                         }
                     }
 
@@ -958,76 +966,88 @@ namespace ignite
                 nvrhi::GraphicsState animatedState = nvrhi::GraphicsState();
                 animatedState.framebuffer = csmFramebuffer;
                 animatedState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
-                animatedState.pipeline = animatedCSMPSO->GetHandle();
+                animatedState.pipeline = *animatedCSMPSO;
 
                 // Skeletal Mesh
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshShadow");
 
                     auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
+                    std::vector<entt::entity> candidateSkelEntities;
+                    std::vector<AABB> candidateSkelAABBs;
+
                     for (entt::entity e : skelMeshView)
                     {
-                        const auto &[tr, rc] = m_Scene->registry->get<TransformComponent, RenderingComponent>(e);
-                        if (!rc.visible)
+                        const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+                        if (!rc.visible || smc.handle == AssetHandle(0))
                             continue;
 
-                        SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
-                        if (smc.handle == AssetHandle(0))
-                            continue;
+                        candidateSkelEntities.push_back(e);
+                        candidateSkelAABBs.push_back(smc.worldAABB);
+                    }
 
-                        auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
-                        if (!skeletalMesh)
-                            continue;
+                    if (!candidateSkelEntities.empty())
+                    {
+                        std::vector<uint8_t> visibility(candidateSkelEntities.size());
+                        cascadeFrustum.IsAABBVisibleBatch(candidateSkelAABBs.data(), candidateSkelAABBs.size(), visibility.data());
 
-                        // Perform cascade frustum culling
-                        if (!cascadeFrustum.IsAABBVisible(smc.worldAABB))
-                            continue;
-
-                        const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                        DrawMeshShadow(cmd, frameContext, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                            smc.finalBoneTransforms, smc.cachedInstanceTransforms, animatedState, i, e);
-
-                        // --- SOCKET SYSTEM: Render attached meshes for Shadows ---
-                        if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+                        for (size_t cIdx = 0; cIdx < candidateSkelEntities.size(); ++cIdx)
                         {
-                            Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
-                            if (skeleton)
+                            if (!visibility[cIdx])
+                                continue;
+
+                            entt::entity e = candidateSkelEntities[cIdx];
+                            const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+                            auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+                            if (!skeletalMesh)
+                                continue;
+
+                            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                            DrawMeshShadow(cmd, frameContext, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
+                                smc.finalBoneTransforms, smc.cachedInstanceTransforms, animatedState, i, e);
+
+                            // --- SOCKET SYSTEM: Render attached meshes for Shadows ---
+                            if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
                             {
-                                for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                                Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
+                                if (skeleton)
                                 {
-                                    if (attachedMeshHandle == AssetHandle(0))
-                                        continue;
-
-                                    auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
-                                    if (!attachedMeshAsset)
-                                        continue;
-
-                                    glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
-                                    glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
-
-                                    if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
+                                    for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
                                     {
-                                        auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-                                        DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
-                                            smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, i, e, socketName);
-                                    }
-                                    else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
-                                    {
-                                        auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
-                                        DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
-                                            std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, i, e, socketName);
+                                        if (attachedMeshHandle == AssetHandle(0))
+                                            continue;
+
+                                        auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
+                                        if (!attachedMeshAsset)
+                                            continue;
+
+                                        glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                                        glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
+
+                                        if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
+                                        {
+                                            auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
+                                            DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
+                                                smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedState, i, e, socketName);
+                                        }
+                                        else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
+                                        {
+                                            auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
+                                            DrawMeshShadow(cmd, frameContext, attachedMesh, socketWorld, normalMatrix, objectID,
+                                                std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticState, i, e, socketName);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+
             }
 
+            cmd->setTextureState(*m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            cmd->commitBarriers();
         }
-
-        cmd->setTextureState(m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight)->GetHandle(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-        cmd->commitBarriers();
     }
 
     void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug)
@@ -1060,79 +1080,92 @@ namespace ignite
             m_OpaqueBatchBuilder.Clear();
 
             auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
+            std::vector<entt::entity> candidateStaticEntities;
+            std::vector<AABB> candidateStaticAABBs;
+
             for (entt::entity e : staticMeshView)
             {
-                const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+                const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
                 if (!rc.visible || smc.handle == AssetHandle(0))
                     continue;
 
-                auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
-                if (!staticMesh)
-                    continue;
+                candidateStaticEntities.push_back(e);
+                candidateStaticAABBs.push_back(smc.worldAABB);
+            }
 
-                if (!frustum.IsAABBVisible(smc.worldAABB))
-                    continue;
+            if (!candidateStaticEntities.empty())
+            {
+                std::vector<uint8_t> visibility(candidateStaticEntities.size());
+                frustum.IsAABBVisibleBatch(candidateStaticAABBs.data(), candidateStaticAABBs.size(), visibility.data());
 
-                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                // For each sub-mesh primitive, look up the pre-allocated object index and submit to batch builder
-                const auto &instances = staticMesh->GetMeshInstances();
-                for (size_t idx = 0; idx < instances.size(); ++idx)
+                for (size_t cIdx = 0; cIdx < candidateStaticEntities.size(); ++cIdx)
                 {
-                    auto &meshInstance = instances[idx];
-                    auto &primitive = meshInstance->GetPrimitive();
-                    if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                    {
-                        primitive->WriteBuffer(cmd);
-                    }
-
-                    // Look up pre-allocated object index from PreallocateGPUData
-                    auto cacheIt = m_EntityObjectIndexCache.find(e);
-                    if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                    if (!visibility[cIdx])
                         continue;
 
-                    const uint32_t objectIndex = cacheIt->second[idx];
-
-                    Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
-                    if (material && uploadedMaterialsThisPass.insert(material.get()).second)
-                        material->UploadToGpu(cmd);
-
-                    // Skip transparent sub-meshes — they use the legacy per-draw-call path
-                    MaterialType matType = material ? material->GetType() : m_RuntimeMaterial->GetType();
-                    if (matType == MaterialType::Transparent)
-                    {
-                        // Fallback: add to transparent list via legacy DrawMesh path
-                        DrawMesh(cmd, frameContext, framebuffer, staticMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                            smc.overrideMaterials, std::vector<glm::mat4>(), smc.cachedInstanceTransforms,
-                            camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
-                        break; // DrawMesh handles all sub-meshes; avoid double-processing
-                    }
-
-                    const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
-                        ? material->GetBindingSet()
-                        : m_RuntimeMaterial->GetBindingSet();
-
-                    if (!materialBindingSet)
+                    entt::entity e = candidateStaticEntities[cIdx];
+                    const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+                    auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
+                    if (!staticMesh)
                         continue;
 
-                    BatchKey key;
-                    key.vertexBuffer = primitive->vertexBuffer->GetHandle().Get();
-                    key.indexBuffer = primitive->indexBuffer->GetHandle().Get();
-                    key.meshBindingSet = frameContext->staticMeshBindingSet.Get();
-                    key.materialBindingSet = materialBindingSet.Get();
-                    key.pipeline = staticPSO->GetHandle().Get();
+                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
-                    m_OpaqueBatchBuilder.Submit(
-                        key,
-                        primitive->vertexBuffer->GetHandle(),
-                        primitive->indexBuffer->GetHandle(),
-                        frameContext->staticMeshBindingSet,
-                        materialBindingSet,
-                        staticPSO->GetHandle(),
-                        primitive->indexBuffer->GetCount(),
-                        objectIndex);
+                    // For each sub-mesh primitive, look up the pre-allocated object index and submit to batch builder
+                    const auto &instances = staticMesh->GetMeshInstances();
+                    for (size_t idx = 0; idx < instances.size(); ++idx)
+                    {
+                        auto &meshInstance = instances[idx];
+                        auto &primitive = meshInstance->GetPrimitive();
+                        if (!primitive->vertexBuffer || !primitive->indexBuffer)
+                        {
+                            primitive->WriteBuffer(cmd);
+                        }
+
+                        // Look up pre-allocated object index from PreallocateGPUData
+                        auto cacheIt = m_EntityObjectIndexCache.find(e);
+                        if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                            continue;
+
+                        const uint32_t objectIndex = cacheIt->second[idx];
+
+                        Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                        if (material && uploadedMaterialsThisPass.insert(material.get()).second)
+                            material->UploadToGpu(cmd);
+
+                        // Skip transparent sub-meshes — they use the legacy per-draw-call path
+                        MaterialType matType = material ? material->GetType() : m_RuntimeMaterial->GetType();
+                        if (matType == MaterialType::Transparent)
+                        {
+                            // Fallback: add to transparent list via legacy DrawMesh path
+                            DrawMesh(cmd, frameContext, framebuffer, staticMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
+                                smc.overrideMaterials, std::vector<glm::mat4>(), smc.cachedInstanceTransforms,
+                                camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
+                            break; // DrawMesh handles all sub-meshes; avoid double-processing
+                        }
+
+                        const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                            ? material->GetBindingSet()
+                            : m_RuntimeMaterial->GetBindingSet();
+
+                        if (!materialBindingSet)
+                            continue;
+
+                        BatchKey key;
+                        key.vertexBuffer = *primitive->vertexBuffer;
+                        key.indexBuffer = *primitive->indexBuffer;
+                        key.meshBindingSet = frameContext->staticMeshBindingSet.Get();
+                        key.materialBindingSet = materialBindingSet.Get();
+                        key.pipeline = *staticPSO;
+
+                        m_OpaqueBatchBuilder.Submit(
+                            key, *primitive->vertexBuffer, *primitive->indexBuffer,
+                            frameContext->staticMeshBindingSet,
+                            materialBindingSet, *staticPSO,
+                            primitive->indexBuffer->GetCount(), objectIndex);
+                    }
+                    Renderer::Stats.staticMeshCount++;
                 }
-                Renderer::Stats.staticMeshCount++;
             }
 
             // Flush all opaque static mesh batches (instanced draw calls)
@@ -1144,56 +1177,73 @@ namespace ignite
             IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshColor");
 
             auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
+            std::vector<entt::entity> candidateSkelColorEntities;
+            std::vector<AABB> candidateSkelColorAABBs;
+
             for (entt::entity e : skelMeshView)
             {
-                const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+                const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
                 if (!rc.visible || smc.handle == AssetHandle(0))
                     continue;
 
-                auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
-                if (!skeletalMesh)
-                    continue;
+                candidateSkelColorEntities.push_back(e);
+                candidateSkelColorAABBs.push_back(smc.worldAABB);
+            }
 
-                if (!frustum.IsAABBVisible(smc.worldAABB))
-                    continue;
+            if (!candidateSkelColorEntities.empty())
+            {
+                std::vector<uint8_t> visibility(candidateSkelColorEntities.size());
+                frustum.IsAABBVisibleBatch(candidateSkelColorAABBs.data(), candidateSkelColorAABBs.size(), visibility.data());
 
-                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                    smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms,
-                    camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
-                Renderer::Stats.skeletalMeshCount++;
-
-                // --- SOCKET SYSTEM: Render attached meshes ---
-                if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+                for (size_t cIdx = 0; cIdx < candidateSkelColorEntities.size(); ++cIdx)
                 {
-                    Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
-                    if (skeleton)
+                    if (!visibility[cIdx])
+                        continue;
+
+                    entt::entity e = candidateSkelColorEntities[cIdx];
+                    const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+                    auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+                    if (!skeletalMesh)
+                        continue;
+
+                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                    DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
+                        smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms,
+                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
+                    Renderer::Stats.skeletalMeshCount++;
+
+                    // --- SOCKET SYSTEM: Render attached meshes ---
+                    if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
                     {
-                        for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                        Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
+                        if (skeleton)
                         {
-                            if (attachedMeshHandle == AssetHandle(0))
-                                continue;
-
-                            auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
-                            if (!attachedMeshAsset)
-                                continue;
-
-                            glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
-                            glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
-
-                            if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
+                            for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
                             {
-                                auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-                                DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                    std::unordered_map<int, AssetHandle>(), smc.finalBoneTransforms, std::vector<Mesh_GPUData>(),
-                                    camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
-                            }
-                            else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
-                            {
-                                auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
-                                DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                    std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(),
-                                    camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
+                                if (attachedMeshHandle == AssetHandle(0))
+                                    continue;
+
+                                auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
+                                if (!attachedMeshAsset)
+                                    continue;
+
+                                glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                                glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
+
+                                if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
+                                {
+                                    auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
+                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
+                                        std::unordered_map<int, AssetHandle>(), smc.finalBoneTransforms, std::vector<Mesh_GPUData>(),
+                                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
+                                }
+                                else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
+                                {
+                                    auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
+                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
+                                        std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(),
+                                        camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
+                                }
                             }
                         }
                     }
@@ -1232,7 +1282,7 @@ namespace ignite
                 }
 
                 auto &pipeline = dc.isSkeletal ? animatedTransparentPSO : staticTransparentPSO;
-                transparentGState.pipeline = pipeline->GetHandle();
+                transparentGState.pipeline = *pipeline;
 
                 transparentGState.bindings = { dc.meshBindingSet, dc.materialBindingSet, BindlessSystem::GetDescriptorTable() };
                 transparentGState.vertexBuffers = { nvrhi::VertexBufferBinding{ dc.vertexBuffer, 0, 0 } };
@@ -1477,7 +1527,7 @@ namespace ignite
             frameContext->cameraBuffer.GetHandle(), m_DebugGridBuffer.GetHandle());
 
         auto graphicsState = nvrhi::GraphicsState();
-        graphicsState.pipeline = gridPipeline->GetHandle();
+        graphicsState.pipeline = *gridPipeline;
         graphicsState.framebuffer = framebuffer;
         graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
         graphicsState.bindings = { bindingSet };
@@ -1500,7 +1550,7 @@ namespace ignite
         m_Renderer2D->Begin(cmd);
 
         // 2D Physics debug draw
-        constexpr glm::vec4 kPhysicsDebugColor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+        const glm::vec4 kPhysicsDebugColor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
         constexpr int kCircleDebugSegments = 24;
         constexpr float kTwoPi = 6.28318530718f;
 
@@ -1572,7 +1622,7 @@ namespace ignite
         {
             m_Renderer2D->Begin(cmd);
 
-            constexpr glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
+            const glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
             constexpr int kCircleSegments = 24;
             constexpr float kTwoPi = 6.28318530718f;
             constexpr float kPi = 3.14159265359f;
@@ -1603,7 +1653,7 @@ namespace ignite
                     }
                 };
 
-            constexpr glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
+            const glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
 
             // 1. Box Colliders
             for (entt::entity e : m_Scene->registry->view<TransformComponent, BoxColliderComponent>())
@@ -1833,12 +1883,12 @@ namespace ignite
         nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), target,
             edgeTexture, bloomTexture, ssaoTexture, taaHistoryTexture, m_CompositePostProcessBuffer.GetHandle(), m_CompositeSampler.Get(), msaaResolved);
 
-        cmd->setBufferState(m_CompositeVertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
+        cmd->setBufferState(*m_CompositeVertexBuffer, nvrhi::ResourceStates::VertexBuffer);
 
         auto graphicsState = nvrhi::GraphicsState();
-        graphicsState.pipeline = compositePipeline->GetHandle();
+        graphicsState.pipeline = *compositePipeline;
         graphicsState.framebuffer = compositeFramebuffer;
-        graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ m_CompositeVertexBuffer->GetHandle(), 0, 0 } };
+        graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ *m_CompositeVertexBuffer, 0, 0 } };
         graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(compositeFramebuffer->getFramebufferInfo().getViewport());
         graphicsState.bindings = { bindingSet };
         cmd->setGraphicsState(graphicsState);
@@ -1862,8 +1912,17 @@ namespace ignite
 
     Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
     {
-        return (m_WorldEnvironment && m_WorldEnvironment->environment)
-            ? m_WorldEnvironment->environment->GetHDRTexture() : nullptr;
+        if (!m_WorldEnvironment || !m_WorldEnvironment->environment)
+            return nullptr;
+
+        if (m_WorldEnvironment->skyType == SkyType::ProceduralSky)
+        {
+            Ref<ProceduralSky> proceduralSky = m_WorldEnvironment->environment->GetProceduralSky();
+            if (proceduralSky && proceduralSky->GetSkyViewLUT())
+                return proceduralSky->GetSkyViewLUT();
+        }
+
+        return m_WorldEnvironment->environment->GetHDRTexture();
     }
 
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode)
@@ -2254,15 +2313,15 @@ namespace ignite
         CompositeBindingKey key
         {
             bindingLayout,
-            sceneColor->GetHandle(),
-            target->widgetRT->GetColorAttachment(0)->GetHandle(),
-            edge->GetHandle(),
-            bloom->GetHandle(),
-            ssao->GetHandle(),
-            depth->GetHandle(),
-            debug->GetHandle(),
-            objectIDTex->GetHandle(),
-            taaHistory->GetHandle(),
+            *sceneColor,
+            *target->widgetRT->GetColorAttachment(0),
+            *edge,
+            *bloom,
+            *ssao,
+            *depth,
+            *debug,
+            *objectIDTex,
+            *taaHistory,
             postProcessBuffer,
             sampler
         };
@@ -2277,15 +2336,15 @@ namespace ignite
 
         // Composite Binding set
         auto bindingSetDesc = nvrhi::BindingSetDesc();
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneColor->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, target->widgetRT->GetColorAttachment(0)->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, edge->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, bloom->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, ssao->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, depth->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, debug->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, objectIDTex->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(8, taaHistory->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, *sceneColor));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, *target->widgetRT->GetColorAttachment(0)));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, *edge));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, *bloom));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, *ssao));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, *depth));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, *debug));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, *objectIDTex));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(8, *taaHistory));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
 
@@ -2574,7 +2633,7 @@ namespace ignite
 			"DrawPreviewMeshImpl: MeshT must be StaticMesh or SkeletalMesh");
 
         auto graphicsState = nvrhi::GraphicsState();
-        graphicsState.pipeline = opaquePSO->GetHandle();
+        graphicsState.pipeline = *opaquePSO;
         graphicsState.framebuffer = framebuffer;
         graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
@@ -2713,8 +2772,8 @@ namespace ignite
                 else
                 {
                     graphicsState.bindings = { meshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
-                    graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ primitive->vertexBuffer->GetHandle(), 0, 0 } };
-                    graphicsState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+                    graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ *primitive->vertexBuffer, 0, 0 } };
+                    graphicsState.setIndexBuffer({ *primitive->indexBuffer, nvrhi::Format::R32_UINT });
 
                     cmd->setGraphicsState(graphicsState);
 					
@@ -2835,8 +2894,8 @@ namespace ignite
             if (meshBindingSet)
             {
                 csmState.bindings = { meshBindingSet };
-                csmState.vertexBuffers = { nvrhi::VertexBufferBinding{ primitive->vertexBuffer->GetHandle(), 0, 0 } };
-                csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+                csmState.vertexBuffers = { nvrhi::VertexBufferBinding{ *primitive->vertexBuffer, 0, 0 } };
+                csmState.setIndexBuffer({ *primitive->indexBuffer, nvrhi::Format::R32_UINT });
 
                 cmd->setGraphicsState(csmState);
 

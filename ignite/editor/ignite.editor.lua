@@ -6,6 +6,8 @@ project "Ignite.Editor"
     language "c++"
     cppdialect "c++23"
 
+    vectorextensions "AVX2"
+
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
@@ -84,6 +86,7 @@ project "Ignite.Editor"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
+        "GLM_FORCE_SSE2"
     }
 
     -- build rust

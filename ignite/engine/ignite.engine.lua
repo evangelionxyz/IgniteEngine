@@ -5,6 +5,8 @@ project "Ignite.Engine"
     language "C++"
     cppdialect "C++23"
 
+    vectorextensions "AVX2"
+
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
@@ -90,6 +92,7 @@ project "Ignite.Engine"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
+        "GLM_FORCE_SSE2"
     }
 
     -- build rust and SDL

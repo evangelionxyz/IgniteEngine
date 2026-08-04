@@ -65,7 +65,7 @@ namespace ignite
 {
     namespace
     {
-        constexpr std::array<glm::vec2, 4> kBoundsCorners =
+        const std::array<glm::vec2, 4> kBoundsCorners =
         {
             glm::vec2(-0.5f, -0.5f),
             glm::vec2( 0.5f, -0.5f),
