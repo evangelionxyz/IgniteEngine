@@ -94,6 +94,8 @@ namespace ignite::physics
 			return std::static_pointer_cast<JoltPlaneCollider>(collider)->GetJoltShape();
 		case ColliderType::Mesh:
 			return std::static_pointer_cast<JoltMeshCollider>(collider)->GetJoltShape();
+		case ColliderType::HeightField:
+			return std::static_pointer_cast<JoltHeightFieldCollider>(collider)->GetJoltShape();
 		}
 		return nullptr;
 	}
@@ -193,6 +195,11 @@ namespace ignite::physics
 	Ref<PhysicsMeshCollider> JoltPhysics::CreateMeshCollider(const MeshColliderDesc &desc)
 	{
 		return CreateRef<JoltMeshCollider>(desc);
+	}
+
+	Ref<PhysicsHeightFieldCollider> JoltPhysics::CreateHeightFieldCollider(const HeightFieldColliderDesc &desc)
+	{
+		return CreateRef<JoltHeightFieldCollider>(desc);
 	}
 
 	Ref<PhysicsCharacterController> JoltPhysics::CreateCharacterController(const CharacterControllerDesc &desc, uint64_t userData)

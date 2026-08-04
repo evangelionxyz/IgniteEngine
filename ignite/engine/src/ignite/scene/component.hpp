@@ -76,6 +76,7 @@ namespace ignite
         { "Spot Light", CompType_SpotLight },
         { "Character Controller", CompType_CharacterController },
         { "Terrain", CompType_Terrain },
+        { "HeightField Collider", CompType_HeightFieldCollider },
     };
 
     enum EntityType : uint8_t
@@ -752,6 +753,18 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_MeshCollider)
     };
 
+    class HeightFieldColliderComponent : public PhysicsColliderComponent, public IComponent
+    {
+    public:
+        uint32_t sampleCount = 0;
+        glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
+        std::vector<float> heights;
+
+        HeightFieldColliderComponent() = default;
+
+        COMPONENT_CLASS_TYPE(CompType_HeightFieldCollider)
+    };
+
     class AudioSourceComponent : public IComponent
     {
     public:
@@ -831,11 +844,14 @@ namespace ignite
         int noiseSeed = 1337;
         uint32_t chunkCount = 4;
         uint32_t lodLevels = 3;
+
+        // TODO: heightmap handle should takes image from ContentBrowser
         AssetHandle heightmapHandle = AssetHandle(0);
 
         Ref<TerrainData> data = nullptr;
         std::vector<TerrainChunk> chunks;
         bool gpuInitialized = false;
+        WeakRef<physics::PhysicsCollider> collider;
 
         TerrainComponent() = default;
         ~TerrainComponent()

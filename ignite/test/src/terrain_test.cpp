@@ -9,6 +9,7 @@
 #include "ignite/terrain/terrain_renderer.hpp"
 #include "ignite/serializer/entity_serializer.hpp"
 #include "ignite/serializer/serializer.hpp"
+#include "ignite/physics/3d/jolt/jolt_physics.hpp"
 
 using namespace ignite;
 
@@ -153,4 +154,36 @@ TEST(TerrainSystem, SerializationRoundtrip)
     EXPECT_FLOAT_EQ(terrainNode["MaxHeight"].as<float>(), 75.0f);
     EXPECT_EQ(terrainNode["ChunkCount"].as<uint32_t>(), 4u);
     EXPECT_EQ(terrainNode["LodLevels"].as<uint32_t>(), 2u);
+}
+
+TEST(Physics3D, HeightFieldColliderCreationAndRaycast)
+{
+    physics::Physics3DSettings pSettings;
+    auto physics3D = physics::Physics3D::Create(physics::Physics3DType::Jolt);
+    ASSERT_NE(physics3D, nullptr);
+    physics3D->SimulationStart(pSettings);
+
+    physics::HeightFieldColliderDesc desc;
+    desc.sampleCount = 4;
+    desc.center = glm::vec3(-5.0f, 0.0f, -5.0f);
+    desc.scale = glm::vec3(3.333f, 10.0f, 3.333f);
+    desc.heights = {
+        0.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 1.0f, 0.0f,
+        0.0f, 1.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 0.0f
+    };
+
+    auto hfCollider = physics3D->CreateHeightFieldCollider(desc);
+    ASSERT_NE(hfCollider, nullptr);
+    EXPECT_EQ(hfCollider->GetColliderType(), physics::ColliderType::HeightField);
+    EXPECT_EQ(hfCollider->GetSampleCount(), 4u);
+    EXPECT_EQ(hfCollider->GetHeights().size(), 16u);
+
+    AABB bounds;
+    hfCollider->CalculateAABB(bounds);
+    EXPECT_LE(bounds.min.x, bounds.max.x);
+    EXPECT_LE(bounds.min.y, bounds.max.y);
+
+    physics3D->SimulationStop();
 }

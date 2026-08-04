@@ -59,6 +59,15 @@ namespace ignite::physics
 		virtual ColliderType GetColliderType() const override { return ColliderType::Mesh; }
 		virtual bool IsConvex() const = 0;
 	};
+
+	class IGN_API PhysicsHeightFieldCollider : public PhysicsCollider
+	{
+	public:
+		virtual ColliderType GetColliderType() const override { return ColliderType::HeightField; }
+		virtual uint32_t GetSampleCount() const = 0;
+		virtual const std::vector<float> &GetHeights() const = 0;
+		virtual glm::vec3 GetScale() const = 0;
+	};
 }
 
 #endif

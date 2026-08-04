@@ -1280,6 +1280,16 @@ namespace ignite
                         if (!frustum.IsAABBVisible(worldBounds))
                             continue;
 
+                        // TODO: Implement material
+                        Ref<Material> material = m_RuntimeMaterial;
+                        if (material && uploadedMaterialsThisPass.insert(material.get()).second)
+                            material->UploadToGpu(cmd);
+
+                        const nvrhi::BindingSetHandle materialBindingSet = material->GetBindingSet();
+
+                        if (!materialBindingSet)
+                            continue;
+
                         const uint32_t objectIndex = cacheIt->second[idx];
 
                         BatchKey key;
@@ -1748,16 +1758,12 @@ namespace ignite
         if (!framebuffer || !m_Scene || !m_Scene->registry)
             return;
 
-        if (sceneRenderSettings.showPhysicsCollider)
-        {
-            m_Renderer2D->Begin(cmd);
+        const glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
+        constexpr int kCircleSegments = 24;
+        constexpr float kTwoPi = 6.28318530718f;
+        constexpr float kPi = 3.14159265359f;
 
-            const glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
-            constexpr int kCircleSegments = 24;
-            constexpr float kTwoPi = 6.28318530718f;
-            constexpr float kPi = 3.14159265359f;
-
-            auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+        auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
             {
                 for (int i = 0; i < segments; ++i)
                 {
@@ -1770,7 +1776,7 @@ namespace ignite
                 }
             };
 
-            auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+        auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
             {
                 for (int i = 0; i < segments; ++i)
                 {
@@ -1783,9 +1789,16 @@ namespace ignite
                 }
             };
 
-            const glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
-            const glm::vec4 boundsColor(0.7f, 0.2f, 0.8f, 1.0f);
+        const glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
+        const glm::vec4 boundsColor(0.7f, 0.2f, 0.8f, 1.0f);
 
+        if (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider)
+        {
+            m_Renderer2D->Begin(cmd);
+        }
+
+        if (sceneRenderSettings.showBoundingBox)
+        {
             // Draw bounding boxes
             for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>())
             {
@@ -1820,12 +1833,15 @@ namespace ignite
                     AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
                     minPos = glm::min(minPos, worldBounds.min);
                     maxPos = glm::max(maxPos, worldBounds.max);
-                    m_Renderer2D->DrawAABB(worldBounds, {0.9f, 0.9f, 0.9, 0.5f});
+                    m_Renderer2D->DrawAABB(worldBounds, { 0.9f, 0.9f, 0.9, 0.5f });
                 }
 
                 m_Renderer2D->DrawAABB(AABB::FromMinMax(minPos, maxPos), boundsColor);
             }
+        }
 
+        if (sceneRenderSettings.showPhysicsCollider)
+        {
             // Box Colliders
             for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, BoxColliderComponent>())
             {
@@ -1987,6 +2003,90 @@ namespace ignite
                 }
             }
 
+            // HeightField Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, HeightFieldColliderComponent>())
+            {
+                const auto &[tr, rc, hfc] = m_Scene->registry->get<TransformComponent, RenderingComponent, HeightFieldColliderComponent>(e);
+                if (!rc.visible || hfc.sampleCount < 2 || hfc.heights.empty() || hfc.heights.size() != static_cast<size_t>(hfc.sampleCount) * static_cast<size_t>(hfc.sampleCount))
+                    continue;
+
+                const uint32_t sampleCount = hfc.sampleCount;
+                const uint32_t stride = std::max(1u, sampleCount / 64u);
+                const glm::mat4 worldMat = tr.world.GetMatrix();
+
+                for (uint32_t z = 0; z < sampleCount - 1; z += stride)
+                {
+                    const uint32_t nextZ = std::min(z + stride, sampleCount - 1);
+                    for (uint32_t x = 0; x < sampleCount - 1; x += stride)
+                    {
+                        const uint32_t nextX = std::min(x + stride, sampleCount - 1);
+
+                        auto getPos = [&](uint32_t ix, uint32_t iz) -> glm::vec3
+                        {
+                            float h = hfc.heights[iz * sampleCount + ix];
+                            glm::vec3 loc = hfc.center + glm::vec3(static_cast<float>(ix), h, static_cast<float>(iz)) * hfc.scale;
+                            return glm::vec3(worldMat * glm::vec4(loc, 1.0f));
+                        };
+
+                        glm::vec3 v00 = getPos(x, z);
+                        glm::vec3 v10 = getPos(nextX, z);
+                        glm::vec3 v01 = getPos(x, nextZ);
+                        glm::vec3 v11 = getPos(nextX, nextZ);
+
+                        m_Renderer2D->DrawLine(v00, v10, colliderColor);
+                        m_Renderer2D->DrawLine(v00, v01, colliderColor);
+                        m_Renderer2D->DrawLine(v10, v01, colliderColor);
+                        m_Renderer2D->DrawLine(v10, v11, colliderColor);
+                        m_Renderer2D->DrawLine(v01, v11, colliderColor);
+                    }
+                }
+            }
+
+            // Terrain HeightField Colliders Debug Draw
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>())
+            {
+                const auto &[tr, rc, tc] = m_Scene->registry->get<TransformComponent, RenderingComponent, TerrainComponent>(e);
+                if (!rc.visible || !tc.data || tc.data->heightmap.empty() || tc.data->resolution < 2)
+                    continue;
+
+                const uint32_t res = tc.data->resolution;
+                const uint32_t stride = std::max(1u, res / 64u);
+                const float step = tc.worldSize / static_cast<float>(res - 1);
+                const float halfSize = tc.worldSize * 0.5f;
+                const glm::mat4 worldMat = tr.world.GetMatrix();
+
+                for (uint32_t z = 0; z < res - 1; z += stride)
+                {
+                    const uint32_t nextZ = std::min(z + stride, res - 1);
+                    for (uint32_t x = 0; x < res - 1; x += stride)
+                    {
+                        const uint32_t nextX = std::min(x + stride, res - 1);
+
+                        auto getPos = [&](uint32_t ix, uint32_t iz) -> glm::vec3
+                        {
+                            float posX = static_cast<float>(ix) * step - halfSize;
+                            float posZ = static_cast<float>(iz) * step - halfSize;
+                            float posY = tc.data->GetHeight(ix, iz) * tc.maxHeight;
+                            return glm::vec3(worldMat * glm::vec4(posX, posY, posZ, 1.0f));
+                        };
+
+                        glm::vec3 v00 = getPos(x, z);
+                        glm::vec3 v10 = getPos(nextX, z);
+                        glm::vec3 v01 = getPos(x, nextZ);
+                        glm::vec3 v11 = getPos(nextX, nextZ);
+
+                        m_Renderer2D->DrawLine(v00, v10, colliderColor);
+                        m_Renderer2D->DrawLine(v00, v01, colliderColor);
+                        m_Renderer2D->DrawLine(v10, v01, colliderColor);
+                        m_Renderer2D->DrawLine(v10, v11, colliderColor);
+                        m_Renderer2D->DrawLine(v01, v11, colliderColor);
+                    }
+                }
+            }
+        }
+
+        if (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider)
+        {
             m_Renderer2D->Flush(framebuffer, frameContext->cameraBuffer.GetHandle());
             m_Renderer2D->End();
         }

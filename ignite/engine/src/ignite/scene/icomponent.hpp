@@ -43,6 +43,7 @@ namespace ignite
         CompType_SpotLight,
         CompType_CharacterController,
         CompType_Terrain,
+        CompType_HeightFieldCollider,
 
         CompType_COUNT
     };

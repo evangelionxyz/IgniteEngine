@@ -630,6 +630,25 @@ namespace ignite
                 sr.EndMap();
             }
 
+            // HeightFieldCollider
+            if (entity.HasComponent<HeightFieldColliderComponent>())
+            {
+                const auto &comp = entity.GetComponent<HeightFieldColliderComponent>();
+                sr.BeginMap("HeightFieldCollider");
+                {
+                    sr.AddKeyValue("Center", comp.center);
+                    sr.AddKeyValue("Scale", comp.scale);
+                    sr.AddKeyValue("SampleCount", comp.sampleCount);
+                    sr.BeginSequence("Heights");
+                    for (const float h : comp.heights)
+                    {
+                        sr.AddValue(h);
+                    }
+                    sr.EndSequence();
+                }
+                sr.EndMap();
+            }
+
             // Audio Source
             if (entity.HasComponent<AudioSourceComponent>())
             {
@@ -1153,6 +1172,22 @@ namespace ignite
                 for (YAML::Node iNode : indicesNode)
                 {
                     comp.indices.push_back(iNode.as<uint32_t>());
+                }
+            }
+        }
+
+        // HeightFieldCollider Component
+        if (YAML::Node node = entityNode["HeightFieldCollider"])
+        {
+            auto &comp = desEntity.AddComponent<HeightFieldColliderComponent>();
+            if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
+            if (auto n = node["Scale"]) comp.scale = n.as<glm::vec3>();
+            if (auto n = node["SampleCount"]) comp.sampleCount = n.as<uint32_t>();
+            if (YAML::Node heightsNode = node["Heights"])
+            {
+                for (YAML::Node hNode : heightsNode)
+                {
+                    comp.heights.push_back(hNode.as<float>());
                 }
             }
         }

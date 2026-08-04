@@ -39,6 +39,7 @@ namespace ignite::physics
 		Capsule = 2,
 		Mesh = 3,
 		Plane = 4,
+		HeightField = 5,
 	};
 
 	enum class CollisionEventType : uint8_t
@@ -155,6 +156,14 @@ namespace ignite::physics
 		std::vector<glm::vec3> vertices;
 		std::vector<uint32_t> indices;
 		bool isConvex = false;
+	};
+
+	struct HeightFieldColliderDesc
+	{
+		glm::vec3 center = { 0.0f, 0.0f, 0.0f };
+		glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
+		uint32_t sampleCount = 0;
+		std::vector<float> heights;
 	};
 
 	struct CharacterControllerDesc

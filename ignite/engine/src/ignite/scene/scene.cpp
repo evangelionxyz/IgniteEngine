@@ -325,6 +325,41 @@ namespace ignite
                     meshComp.collider = col;
                     return col;
                 }
+                else if (entity.HasComponent<HeightFieldColliderComponent>())
+                {
+                    auto &hfComp = entity.GetComponent<HeightFieldColliderComponent>();
+                    physics::HeightFieldColliderDesc desc;
+                    desc.center = hfComp.center;
+                    desc.scale = hfComp.scale * tr.world.scale;
+                    desc.sampleCount = hfComp.sampleCount;
+                    desc.heights = hfComp.heights;
+                    auto col = m_Physics3D->CreateHeightFieldCollider(desc);
+                    hfComp.collider = col;
+                    return col;
+                }
+                else if (entity.HasComponent<TerrainComponent>())
+                {
+                    auto &tc = entity.GetComponent<TerrainComponent>();
+                    if (tc.data && !tc.data->heightmap.empty() && tc.data->resolution >= 2)
+                    {
+                        tc.data->worldSize = tc.worldSize;
+                        tc.data->maxHeight = tc.maxHeight;
+
+                        physics::HeightFieldColliderDesc desc;
+                        uint32_t res = tc.data->resolution;
+                        float step = tc.worldSize / static_cast<float>(res - 1);
+                        float halfSize = tc.worldSize * 0.5f;
+
+                        desc.center = glm::vec3(-halfSize, 0.0f, -halfSize) * tr.world.scale;
+                        desc.scale = glm::vec3(step, tc.maxHeight, step) * tr.world.scale;
+                        desc.sampleCount = res;
+                        desc.heights = tc.data->heightmap;
+
+                        auto col = m_Physics3D->CreateHeightFieldCollider(desc);
+                        tc.collider = col;
+                        return col;
+                    }
+                }
                 return nullptr;
             };
 
@@ -407,6 +442,8 @@ namespace ignite
             for (entt::entity e : registry->view<CapsuleColliderComponent>()) createStaticBodyForStandaloneCollider(e);
             for (entt::entity e : registry->view<PlaneColliderComponent>()) createStaticBodyForStandaloneCollider(e);
             for (entt::entity e : registry->view<MeshColliderComponent>()) createStaticBodyForStandaloneCollider(e);
+            for (entt::entity e : registry->view<HeightFieldColliderComponent>()) createStaticBodyForStandaloneCollider(e);
+            for (entt::entity e : registry->view<TerrainComponent>()) createStaticBodyForStandaloneCollider(e);
 
             for (entt::entity e : registry->view<CharacterControllerComponent>())
             {
@@ -663,6 +700,124 @@ namespace ignite
 
 			UpdateTransforms(deltaTime);
 
+            // Update physics
+            {
+                IGN_PROFILE_SCOPE("Scene::Physics2D");
+                m_Physics2D->Simulate(deltaTime);
+            }
+
+            {
+                IGN_PROFILE_SCOPE("Scene::Physics3D");
+                if (m_Physics3D)
+                {
+                    m_Physics3D->Simulate(deltaTime);
+
+                    // Calculate Parent transform
+                    auto CalculateParentTransform = [this](const IDComponent &idc, TransformComponent &trc, const glm::vec3 &worldTranslation, const glm::quat &worldRotation)
+                    {
+                        if (idc.parent != 0)
+                        {
+                            Entity parentEntity = SceneManager::GetEntity(this, idc.parent);
+                            if (parentEntity && parentEntity.HasComponent<TransformComponent>())
+                            {
+                                const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
+
+                                const glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation)
+                                    * glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), trc.world.scale);
+                                const glm::mat4 childLocalMatrix = glm::inverse(parentTr.world.GetMatrix()) * childWorldMatrix;
+                                const glm::vec3 savedLocalScale = trc.local.scale;
+                                Transform::Decompose(childLocalMatrix, trc.local);
+                                trc.local.scale = savedLocalScale;
+                                trc.world.translation = worldTranslation;
+                                trc.world.rotation = worldRotation;
+                            }
+                            else
+                            {
+                                trc.local.translation = worldTranslation;
+                                trc.local.rotation = worldRotation;
+                                trc.world.translation = worldTranslation;
+                                trc.world.rotation = worldRotation;
+                            }
+                        }
+                        else
+                        {
+                            trc.local.translation = worldTranslation;
+                            trc.local.rotation = worldRotation;
+                            trc.world.translation = worldTranslation;
+                            trc.world.rotation = worldRotation;
+                        }
+                    };
+
+                    // Dynamic, Static, Kinematic Actors
+                    for (entt::entity e : registry->view<RigidbodyComponent>())
+                    {
+                        auto &rb = registry->get<RigidbodyComponent>(e);
+                        auto &idc = registry->get<IDComponent>(e);
+                        auto &tr = registry->get<TransformComponent>(e);
+
+                        if (auto dynActor = rb.dynamicActor.lock())
+                        {
+                            if (dynActor->IsActive())
+                            {
+                                CalculateParentTransform(idc, tr, dynActor->GetPosition(), dynActor->GetRotation());
+                            }
+                        }
+                        else if (auto stActor = rb.staticActor.lock())
+                        {
+                            CalculateParentTransform(idc, tr, stActor->GetPosition(), stActor->GetRotation());
+                        }
+                    }
+
+                    // Character controllers
+                    for (entt::entity e : registry->view<CharacterControllerComponent>())
+                    {
+                        auto &cc = registry->get<CharacterControllerComponent>(e);
+                        auto &idc = registry->get<IDComponent>(e);
+                        auto &tr = registry->get<TransformComponent>(e);
+                        if (cc.dirty)
+                        {
+                            uint64_t userData = static_cast<uint64_t>(Entity{ e, this }.GetUUID());
+                            const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+                            const float radius = cc.radius * maxScale;
+                            const float halfHeight = glm::max(cc.height * 0.5f - cc.radius, 0.0f) * maxScale;
+
+                            physics::CharacterControllerDesc ccDesc;
+                            ccDesc.center = cc.center * tr.world.scale;
+                            ccDesc.radius = radius;
+                            ccDesc.halfHeight = halfHeight;
+                            ccDesc.mass = cc.mass;
+                            ccDesc.friction = cc.friction;
+                            ccDesc.maxStepHeight = cc.maxStepHeight;
+                            ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
+                            ccDesc.up = cc.up;
+
+                            glm::vec3 currentPos = tr.world.translation;
+                            glm::quat currentRot = tr.world.rotation;
+                            if (auto ccActor = cc.character.lock())
+                            {
+                                currentPos = ccActor->GetPosition();
+                                currentRot = ccActor->GetRotation();
+                            }
+
+                            auto charActor = m_Physics3D->CreateCharacterController(ccDesc, userData);
+                            if (charActor)
+                            {
+                                charActor->SetPosition(currentPos);
+                                charActor->SetRotation(currentRot);
+                            }
+                            cc.character = charActor;
+                            cc.dirty = false;
+                        }
+
+                        if (auto ccActor = cc.character.lock())
+                        {
+                            ccActor->Move(cc.linearVelocity, 1.0f / 60.0f);
+                            CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
+                        }
+                    }
+                }
+            }
+
             // Dispatch Jolt collision events to C# scripts
             {
                 IGN_PROFILE_SCOPE("Scene::CollisionEvents");
@@ -740,8 +895,6 @@ namespace ignite
 
 	void Scene::OnFixedUpdateRuntimeSimulate()
 	{
-        constexpr float dt = 1.0f / 60.0f;
-
 		{
 			IGN_PROFILE_SCOPE("Scene::Script OnFixedUpdate");
 			registry->view<ScriptComponent>().each([](entt::entity e, ScriptComponent &script)
@@ -749,123 +902,6 @@ namespace ignite
 				if (script.runtimeScriptInstance)
 					script.runtimeScriptInstance->InvokeOnFixedUpdate();
 			});
-		}
-
-		{
-			IGN_PROFILE_SCOPE("Scene::Physics2D");
-			m_Physics2D->Simulate(dt);
-		}
-
-		{
-			IGN_PROFILE_SCOPE("Scene::Physics3D");
-			if (m_Physics3D)
-			{
-				m_Physics3D->Simulate(dt);
-
-				// Calculate Parent transform
-				auto CalculateParentTransform = [this](const IDComponent &idc, TransformComponent &trc, const glm::vec3 &worldTranslation, const glm::quat &worldRotation)
-				{
-					if (idc.parent != 0)
-					{
-						Entity parentEntity = SceneManager::GetEntity(this, idc.parent);
-						if (parentEntity && parentEntity.HasComponent<TransformComponent>())
-						{
-							const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
-
-							const glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation)
-								* glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), trc.world.scale);
-							const glm::mat4 childLocalMatrix = glm::inverse(parentTr.world.GetMatrix()) * childWorldMatrix;
-							const glm::vec3 savedLocalScale = trc.local.scale;
-							Transform::Decompose(childLocalMatrix, trc.local);
-							trc.local.scale = savedLocalScale;
-							trc.world.translation = worldTranslation;
-							trc.world.rotation = worldRotation;
-						}
-						else
-						{
-							trc.local.translation = worldTranslation;
-							trc.local.rotation = worldRotation;
-							trc.world.translation = worldTranslation;
-							trc.world.rotation = worldRotation;
-						}
-					}
-					else
-					{
-						trc.local.translation = worldTranslation;
-						trc.local.rotation = worldRotation;
-						trc.world.translation = worldTranslation;
-						trc.world.rotation = worldRotation;
-					}
-				};
-
-                // Dynamic, Static, Kinematic Actors
-				for (entt::entity e : registry->view<RigidbodyComponent>())
-				{
-					auto &rb = registry->get<RigidbodyComponent>(e);
-                    auto &idc = registry->get<IDComponent>(e);
-					auto &tr = registry->get<TransformComponent>(e);
-
-                    if (auto dynActor = rb.dynamicActor.lock())
-					{
-						if (dynActor->IsActive())
-						{
-							CalculateParentTransform(idc, tr, dynActor->GetPosition(), dynActor->GetRotation());
-                        }
-                    }
-                    else if (auto stActor = rb.staticActor.lock())
-                    {
-						CalculateParentTransform(idc, tr, stActor->GetPosition(), stActor->GetRotation());
-                    }
-				}
-
-                // Character controllers
-                for (entt::entity e : registry->view<CharacterControllerComponent>())
-                {
-                    auto &cc = registry->get<CharacterControllerComponent>(e);
-					auto &idc = registry->get<IDComponent>(e);
-					auto &tr = registry->get<TransformComponent>(e);
-                    if (cc.dirty)
-                    {
-                        uint64_t userData = static_cast<uint64_t>(Entity{ e, this }.GetUUID());
-                        const float maxScale = glm::compMax(glm::abs(tr.world.scale));
-                        const float radius = cc.radius * maxScale;
-                        const float halfHeight = glm::max(cc.height * 0.5f - cc.radius, 0.0f) * maxScale;
-
-                        physics::CharacterControllerDesc ccDesc;
-                        ccDesc.center = cc.center * tr.world.scale;
-                        ccDesc.radius = radius;
-                        ccDesc.halfHeight = halfHeight;
-                        ccDesc.mass = cc.mass;
-                        ccDesc.friction = cc.friction;
-                        ccDesc.maxStepHeight = cc.maxStepHeight;
-                        ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
-                        ccDesc.up = cc.up;
-
-                        glm::vec3 currentPos = tr.world.translation;
-                        glm::quat currentRot = tr.world.rotation;
-                        if (auto ccActor = cc.character.lock())
-                        {
-                            currentPos = ccActor->GetPosition();
-                            currentRot = ccActor->GetRotation();
-                        }
-
-                        auto charActor = m_Physics3D->CreateCharacterController(ccDesc, userData);
-                        if (charActor)
-                        {
-                            charActor->SetPosition(currentPos);
-                            charActor->SetRotation(currentRot);
-                        }
-                        cc.character = charActor;
-                        cc.dirty = false;
-                    }
-
-                    if (auto ccActor = cc.character.lock())
-                    {
-                        ccActor->Move(cc.linearVelocity, 1.0f / 60.0f);
-                        CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
-                    }
-                }
-			}
 		}
 	}
 
@@ -1365,6 +1401,11 @@ namespace ignite
 
     template<>
     IGN_API void Scene::OnComponentAdded<MeshColliderComponent>(Entity entity, MeshColliderComponent &comp)
+    {
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<HeightFieldColliderComponent>(Entity entity, HeightFieldColliderComponent &comp)
     {
     }
 

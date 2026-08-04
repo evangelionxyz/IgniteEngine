@@ -12,6 +12,7 @@
 #include "jolt_capsule_collider.hpp"
 #include "jolt_mesh_collider.hpp"
 #include "jolt_plane_collider.hpp"
+#include "jolt_height_field_collider.hpp"
 #include "jolt_character_controller.hpp"
 
 #include <Jolt/Jolt.h>
@@ -222,6 +223,7 @@ namespace ignite::physics
 		virtual Ref<PhysicsCapsuleCollider> CreateCapsuleCollider(const CapsuleColliderDesc &desc) override;
 		virtual Ref<PhysicsPlaneCollider> CreatePlaneCollider(const PlaneColliderDesc &desc) override;
 		virtual Ref<PhysicsMeshCollider> CreateMeshCollider(const MeshColliderDesc &desc) override;
+		virtual Ref<PhysicsHeightFieldCollider> CreateHeightFieldCollider(const HeightFieldColliderDesc &desc) override;
 
 		virtual Ref<PhysicsCharacterController> CreateCharacterController(const CharacterControllerDesc &desc, uint64_t userData) override;
 

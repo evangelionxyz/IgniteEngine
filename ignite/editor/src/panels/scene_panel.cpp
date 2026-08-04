@@ -1777,6 +1777,15 @@ namespace ignite
                 }
             });
 
+            RenderComponent<HeightFieldColliderComponent>("HeightField Collider", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<HeightFieldColliderComponent>();
+                c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
+                ImGui::Text("Sample Count: %u", c.sampleCount);
+                ImGui::Text("Heights Size: %zu", c.heights.size());
+            });
+
             RenderComponent<TextComponent>("Text", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<TextComponent>();
@@ -2696,11 +2705,19 @@ namespace ignite
 
                 if (UI::DrawFloatControl("World Size", &c.worldSize, 1.0f, 1.0f, 10000.0f))
                 {
+                    if (c.data)
+                    {
+                        c.data->worldSize = c.worldSize;
+                    }
                     rebuildGPU = true;
                 }
 
                 if (UI::DrawFloatControl("Max Height", &c.maxHeight, 1.0f, 0.0f, 5000.0f))
                 {
+                    if (c.data)
+                    {
+                        c.data->maxHeight = c.maxHeight;
+                    }
                     rebuildGPU = true;
                 }
 
@@ -2843,6 +2860,9 @@ namespace ignite
                         break;
                     case CompType_Terrain:
                         entity.AddComponent<TerrainComponent>();
+                        break;
+                    case CompType_HeightFieldCollider:
+                        entity.AddComponent<HeightFieldColliderComponent>();
                         break;
                     case CompType_AudioSource:
                         entity.AddComponent<AudioSourceComponent>();

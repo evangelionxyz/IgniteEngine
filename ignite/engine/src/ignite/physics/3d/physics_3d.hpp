@@ -28,6 +28,7 @@ namespace ignite::physics
 		virtual Ref<PhysicsCapsuleCollider> CreateCapsuleCollider(const CapsuleColliderDesc &desc) = 0;
 		virtual Ref<PhysicsPlaneCollider> CreatePlaneCollider(const PlaneColliderDesc &desc) = 0;
 		virtual Ref<PhysicsMeshCollider> CreateMeshCollider(const MeshColliderDesc &desc) = 0;
+		virtual Ref<PhysicsHeightFieldCollider> CreateHeightFieldCollider(const HeightFieldColliderDesc &desc) = 0;
 
 		virtual Ref<PhysicsCharacterController> CreateCharacterController(const CharacterControllerDesc &desc, uint64_t userData) = 0;
 

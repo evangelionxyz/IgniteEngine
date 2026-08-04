@@ -60,6 +60,7 @@ namespace ignite
         PointLightComponent,
         SpotLightComponent,
         Animator2DComponent,
-        TerrainComponent
+        TerrainComponent,
+        HeightFieldColliderComponent
     >; 
 }
