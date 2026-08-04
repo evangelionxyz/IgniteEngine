@@ -50,8 +50,8 @@ end
 print("FBX_SDK path: " .. tostring(FBX_SDK_PATH))
 
 -- Thirdparty Source Dirs
-SDL3_SOURCE_DIR = "%{wks.location}/thirdparty/SDL3"
-FASTNOISE2_SOURCE_DIR = "%{wks.location}/thirdparty/FastNoise2"
+SDL3_SOURCE_DIR = wks_absolute .. "/thirdparty/SDL3"
+FASTNOISE2_SOURCE_DIR = wks_absolute .. "/thirdparty/FastNoise2"
 
 --includedirs
 IncludeDir                          = {}
@@ -91,6 +91,9 @@ IncludeDir["NUKLEAR"]               = "%{THIRDPARTY_DIR}/Nuklear"
 IncludeDir["UmbraShaderCompiler"]   = "%{THIRDPARTY_DIR}/UmbraShaderCompiler/Include"
 IncludeDir["gtest"]                 = "%{THIRDPARTY_DIR}/gtest/googletest/include"
 IncludeDir["FASTNOISE2"]            = "%{THIRDPARTY_DIR}/FastNoise2/include"
+IncludeDir["FASTSIMD"]              = "%{THIRDPARTY_DIR}/FastNoise2/build/_deps/fastsimd-src/include"
+IncludeDir["FASTSIMD_CONFIG"]       = "%{THIRDPARTY_DIR}/FastNoise2/build/src/fastsimd/FastSIMD_FastNoise/include"
+
 
 
 -- =============== LINUX SYSTEM PATHS ===============
@@ -191,5 +194,4 @@ include "tracy.lua"
 include "gtest.lua"
 include "umbrashadercompiler.lua"
 include "nvrhi.lua"
-include "fastnoise2.lua"
 group ""

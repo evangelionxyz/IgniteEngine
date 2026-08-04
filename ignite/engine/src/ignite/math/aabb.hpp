@@ -17,11 +17,12 @@ namespace ignite
         glm::vec3 min = glm::vec3(0.0f);
         glm::vec3 max = glm::vec3(0.0f);
 
-        AABB() = default;
-        AABB(const AABB &) = default;
-        AABB(const glm::vec3 &center, const glm::vec3 &size)
-            : min(center - size * 0.5f), max(center + size * 0.5f)
+        static inline AABB FromMinMax(const glm::vec3 &min, const glm::vec3 &max)
         {
+            AABB aabb;
+            aabb.min = min;
+            aabb.max = max;
+            return aabb;
         }
 
         const glm::vec3 GetCenter() const

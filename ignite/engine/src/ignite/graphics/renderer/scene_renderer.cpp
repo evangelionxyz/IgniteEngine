@@ -82,6 +82,9 @@ namespace ignite
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
         m_RuntimeMaterial   = CreateRef<Material>();
+
+        m_TerrainRenderer = CreateRef<TerrainRenderer>();
+        m_TerrainRenderer->Init();
     }
 
     SceneRenderer::~SceneRenderer()
@@ -99,6 +102,7 @@ namespace ignite
 
         m_ResolvedAssetsCache.clear();
         m_RuntimeMaterial.reset();
+        m_TerrainRenderer.reset();
     }
 
     void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
@@ -623,6 +627,38 @@ namespace ignite
             }
             m_EntityObjectIndexCache[e] = indices;
         }
+
+        // 3. Preallocate and upload Terrain Meshes
+        auto terrainView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
+        for (entt::entity e : terrainView)
+        {
+            auto [tr, rc, tc] = terrainView.get<TransformComponent, RenderingComponent, TerrainComponent>(e);
+            if (!rc.visible)
+                continue;
+
+            if (!tc.gpuInitialized || tc.chunks.empty())
+            {
+                m_TerrainRenderer->RebuildMesh(cmd, tc, tr.world.GetMatrix());
+            }
+
+            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+            std::vector<uint32_t> indices;
+            indices.reserve(tc.chunks.size());
+
+            for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
+            {
+                Mesh_GPUData gpuData;
+                gpuData.transformation = tr.world.GetMatrix();
+                gpuData.normal = glm::transpose(glm::inverse(glm::mat3(tr.world.GetMatrix())));
+                gpuData.objectID = objectID;
+                gpuData.boneOffset = 0;
+
+                uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
+                indices.push_back(objectIndex);
+            }
+            m_EntityObjectIndexCache[e] = indices;
+        }
     }
 
     void SceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
@@ -959,6 +995,47 @@ namespace ignite
                         }
                     }
 
+                    // Terrain Shadows
+                    auto terrainShadowView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
+                    for (entt::entity e : terrainShadowView)
+                    {
+                        auto [tr, rc, tc] = terrainShadowView.get<TransformComponent, RenderingComponent, TerrainComponent>(e);
+                        if (!rc.visible)
+                            continue;
+
+                        auto cacheIt = m_EntityObjectIndexCache.find(e);
+                        if (cacheIt == m_EntityObjectIndexCache.end())
+                            continue;
+
+                        for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
+                        {
+                            if (idx >= cacheIt->second.size())
+                                break;
+
+                            auto &chunk = tc.chunks[idx];
+                            if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
+                                continue;
+
+                            AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
+                            if (!cascadeFrustum.IsAABBVisible(worldBounds))
+                                continue;
+
+                            const uint32_t objectIndex = cacheIt->second[idx];
+
+                            BatchKey key;
+                            key.vertexBuffer = *chunk.primitive->vertexBuffer;
+                            key.indexBuffer = *chunk.primitive->indexBuffer;
+                            key.meshBindingSet = frameContext->staticMeshCSMBindingSet[i].Get();
+                            key.materialBindingSet = nullptr;
+                            key.pipeline = *staticCSMPSO;
+
+                            m_ShadowBatchBuilder.Submit(key,
+                                *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
+                                frameContext->staticMeshCSMBindingSet[i],
+                                nullptr, *staticCSMPSO, chunk.primitive->indexBuffer->GetCount(), objectIndex);
+                        }
+                    }
+
                     // Flush instanced shadow draws for this cascade
                     FlushShadowBatches(cmd, frameContext, static_cast<uint32_t>(i));
                 }
@@ -1165,6 +1242,59 @@ namespace ignite
                             primitive->indexBuffer->GetCount(), objectIndex);
                     }
                     Renderer::Stats.staticMeshCount++;
+                }
+            }
+
+            // Terrain Meshes
+            {
+                auto terrainView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
+                for (entt::entity e : terrainView)
+                {
+                    auto [tr, rc, tc] = terrainView.get<TransformComponent, RenderingComponent, TerrainComponent>(e);
+                    if (!rc.visible)
+                        continue;
+
+                    if (!tc.gpuInitialized || tc.chunks.empty())
+                    {
+                        m_TerrainRenderer->RebuildMesh(cmd, tc, tr.world.GetMatrix());
+                    }
+
+                    auto cacheIt = m_EntityObjectIndexCache.find(e);
+                    if (cacheIt == m_EntityObjectIndexCache.end())
+                        continue;
+
+                    const nvrhi::BindingSetHandle materialBindingSet = m_RuntimeMaterial->GetBindingSet();
+                    if (!materialBindingSet)
+                        continue;
+
+                    for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
+                    {
+                        if (idx >= cacheIt->second.size())
+                            break;
+
+                        auto &chunk = tc.chunks[idx];
+                        if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
+                            continue;
+
+                        AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
+                        if (!frustum.IsAABBVisible(worldBounds))
+                            continue;
+
+                        const uint32_t objectIndex = cacheIt->second[idx];
+
+                        BatchKey key;
+                        key.vertexBuffer = *chunk.primitive->vertexBuffer;
+                        key.indexBuffer = *chunk.primitive->indexBuffer;
+                        key.meshBindingSet = frameContext->staticMeshBindingSet.Get();
+                        key.materialBindingSet = materialBindingSet.Get();
+                        key.pipeline = *staticPSO;
+
+                        m_OpaqueBatchBuilder.Submit(
+                            key, *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
+                            frameContext->staticMeshBindingSet,
+                            materialBindingSet, *staticPSO,
+                            chunk.primitive->indexBuffer->GetCount(), objectIndex);
+                    }
                 }
             }
 
@@ -1628,47 +1758,94 @@ namespace ignite
             constexpr float kPi = 3.14159265359f;
 
             auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+            {
+                for (int i = 0; i < segments; ++i)
                 {
-                    for (int i = 0; i < segments; ++i)
-                    {
-                        const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kTwoPi;
-                        const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kTwoPi;
+                    const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kTwoPi;
+                    const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kTwoPi;
 
-                        const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
-                        const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                        m_Renderer2D->DrawLine(p0, p1, color);
-                    }
-                };
+                    const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
+                    const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
+                    m_Renderer2D->DrawLine(p0, p1, color);
+                }
+            };
 
             auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+            {
+                for (int i = 0; i < segments; ++i)
                 {
-                    for (int i = 0; i < segments; ++i)
-                    {
-                        const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kPi;
-                        const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kPi;
+                    const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kPi;
+                    const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kPi;
 
-                        const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
-                        const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                        m_Renderer2D->DrawLine(p0, p1, color);
-                    }
-                };
+                    const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
+                    const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
+                    m_Renderer2D->DrawLine(p0, p1, color);
+                }
+            };
 
             const glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
+            const glm::vec4 boundsColor(0.7f, 0.2f, 0.8f, 1.0f);
 
-            // 1. Box Colliders
-            for (entt::entity e : m_Scene->registry->view<TransformComponent, BoxColliderComponent>())
+            // Draw bounding boxes
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>())
             {
-                const auto &[tr, box] = m_Scene->registry->get<TransformComponent, BoxColliderComponent>(e);
+                const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+                if (!rc.visible || smc.handle == AssetHandle(0))
+                    continue;
+                m_Renderer2D->DrawAABB(smc.worldAABB, boundsColor);
+            }
+
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>())
+            {
+                const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+                if (!rc.visible || smc.handle == AssetHandle(0))
+                    continue;
+                m_Renderer2D->DrawAABB(smc.worldAABB, boundsColor);
+            }
+
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>())
+            {
+                const auto &[tr, rc, tc] = m_Scene->registry->get<TransformComponent, RenderingComponent, TerrainComponent>(e);
+                if (!rc.visible)
+                    continue;
+
+                glm::vec3 minPos = glm::vec3(std::numeric_limits<float>::max());
+                glm::vec3 maxPos = glm::vec3(std::numeric_limits<float>::min());
+                for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
+                {
+                    auto &chunk = tc.chunks[idx];
+                    if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
+                        continue;
+
+                    AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
+                    minPos = glm::min(minPos, worldBounds.min);
+                    maxPos = glm::max(maxPos, worldBounds.max);
+                    m_Renderer2D->DrawAABB(worldBounds, {0.9f, 0.9f, 0.9, 0.5f});
+                }
+
+                m_Renderer2D->DrawAABB(AABB::FromMinMax(minPos, maxPos), boundsColor);
+            }
+
+            // Box Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, BoxColliderComponent>())
+            {
+                const auto &[tr, rc, box] = m_Scene->registry->get<TransformComponent, RenderingComponent, BoxColliderComponent>(e);
+                if (!rc.visible)
+                    continue;
+
                 glm::mat4 boxTransform = tr.world.GetMatrix()
                     * glm::translate(glm::mat4(1.0f), box.center)
                     * glm::scale(glm::mat4(1.0f), box.scale * 2.0f);
                 m_Renderer2D->DrawBox(boxTransform, colliderColor);
             }
 
-            // 2. Sphere Colliders
-            for (entt::entity e : m_Scene->registry->view<TransformComponent, SphereColliderComponent>())
+            // Sphere Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, SphereColliderComponent>())
             {
-                const auto &[tr, sphere] = m_Scene->registry->get<TransformComponent, SphereColliderComponent>(e);
+                const auto &[tr, rc, sphere] = m_Scene->registry->get<TransformComponent, RenderingComponent, SphereColliderComponent>(e);
+                if (!rc.visible)
+                    continue;
+
                 glm::vec3 centerWorld = glm::vec3(tr.world.GetMatrix() * glm::vec4(sphere.center, 1.0f));
                 float maxScale = std::max({ std::abs(tr.world.scale.x), std::abs(tr.world.scale.y), std::abs(tr.world.scale.z) });
                 float radiusWorld = sphere.radius * maxScale;
@@ -1682,10 +1859,12 @@ namespace ignite
                 m_Renderer2D->DrawCircle(yz, colliderColor);
             }
 
-            // 3. Capsule Colliders
-            for (entt::entity e : m_Scene->registry->view<TransformComponent, CapsuleColliderComponent>())
+            // Capsule Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, CapsuleColliderComponent>())
             {
-                const auto &[tr, capsule] = m_Scene->registry->get<TransformComponent, CapsuleColliderComponent>(e);
+                const auto &[tr, rc, capsule] = m_Scene->registry->get<TransformComponent, RenderingComponent, CapsuleColliderComponent>(e);
+                if (!rc.visible)
+                    continue;
 
                 const glm::mat4 world = tr.world.GetMatrix();
                 const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
@@ -1718,10 +1897,13 @@ namespace ignite
                 DrawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
             }
 
-            // 4. Character Controllers
-            for (entt::entity e : m_Scene->registry->view<TransformComponent, CharacterControllerComponent>())
+            // Character Controllers
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, CharacterControllerComponent>())
             {
-                const auto &[tr, cc] = m_Scene->registry->get<TransformComponent, CharacterControllerComponent>(e);
+                const auto &[tr, rc, cc] = m_Scene->registry->get<TransformComponent, RenderingComponent, CharacterControllerComponent>(e);
+                if (!rc.visible)
+                    continue;
+
                 const glm::mat4 world = tr.world.GetMatrix();
                 const float maxAxis = glm::compMax(glm::abs(tr.world.scale));
                 const float scaledRadius = cc.radius * maxAxis;
@@ -1753,10 +1935,13 @@ namespace ignite
                 DrawArc(bottomCenter, right, -upRadius, kCircleSegments / 2, kPhysicsDebugColor);
             }
 
-            // 5. Plane Colliders
-            for (entt::entity e : m_Scene->registry->view<TransformComponent, PlaneColliderComponent>())
+            // Plane Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, PlaneColliderComponent>())
             {
-                const auto &[tr, plane] = m_Scene->registry->get<TransformComponent, PlaneColliderComponent>(e);
+                const auto &[tr, rc, plane] = m_Scene->registry->get<TransformComponent, RenderingComponent, PlaneColliderComponent>(e);
+                if (!rc.visible)
+                    continue;
+
                 glm::mat4 planeMat = tr.world.GetMatrix() * glm::translate(glm::mat4(1.0f), plane.center);
 
                 glm::vec3 p0 = glm::vec3(planeMat * glm::vec4(-0.5f * plane.scale.x, 0.0f, -0.5f * plane.scale.z, 1.0f));
@@ -1774,19 +1959,22 @@ namespace ignite
                 m_Renderer2D->DrawLine(normStart, normEnd, colliderColor);
             }
 
-            // 6. Mesh Colliders
-            for (entt::entity e : m_Scene->registry->view<TransformComponent, MeshColliderComponent>())
+            // Mesh Colliders
+            for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, MeshColliderComponent>())
             {
-                const auto &[tr, meshComp] = m_Scene->registry->get<TransformComponent, MeshColliderComponent>(e);
-                glm::mat4 meshMat = tr.world.GetMatrix() * glm::translate(glm::mat4(1.0f), meshComp.center);
+                const auto &[tr, rc, mc] = m_Scene->registry->get<TransformComponent, RenderingComponent, MeshColliderComponent>(e);
+                if (!rc.visible)
+                    continue;
 
-                if (!meshComp.vertices.empty() && !meshComp.indices.empty())
+                glm::mat4 meshMat = tr.world.GetMatrix() * glm::translate(glm::mat4(1.0f), mc.center);
+
+                if (!mc.vertices.empty() && !mc.indices.empty())
                 {
-                    for (size_t i = 0; i + 2 < meshComp.indices.size(); i += 3)
+                    for (size_t i = 0; i + 2 < mc.indices.size(); i += 3)
                     {
-                        glm::vec3 v0 = glm::vec3(meshMat * glm::vec4(meshComp.vertices[meshComp.indices[i]], 1.0f));
-                        glm::vec3 v1 = glm::vec3(meshMat * glm::vec4(meshComp.vertices[meshComp.indices[i + 1]], 1.0f));
-                        glm::vec3 v2 = glm::vec3(meshMat * glm::vec4(meshComp.vertices[meshComp.indices[i + 2]], 1.0f));
+                        glm::vec3 v0 = glm::vec3(meshMat * glm::vec4(mc.vertices[mc.indices[i]], 1.0f));
+                        glm::vec3 v1 = glm::vec3(meshMat * glm::vec4(mc.vertices[mc.indices[i + 1]], 1.0f));
+                        glm::vec3 v2 = glm::vec3(meshMat * glm::vec4(mc.vertices[mc.indices[i + 2]], 1.0f));
 
                         m_Renderer2D->DrawLine(v0, v1, colliderColor);
                         m_Renderer2D->DrawLine(v1, v2, colliderColor);
@@ -1811,7 +1999,6 @@ namespace ignite
             return it->second;
         return nullptr;
     }
-
 
     void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext,
         Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing,

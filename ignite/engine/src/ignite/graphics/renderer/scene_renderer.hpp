@@ -8,6 +8,7 @@
 #include "iscene_renderer.hpp"
 #include "ignite/graphics/hash_keys.hpp"
 #include "batch_builder.hpp"
+#include "ignite/terrain/terrain_renderer.hpp"
 
 #include "ignite/scene/entity.hpp"
 
@@ -60,6 +61,7 @@ namespace ignite
 
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap() override;
         Ref<Renderer2D> &GetRenderer2D() { return m_Renderer2D; }
+        Ref<TerrainRenderer> &GetTerrainRenderer() { return m_TerrainRenderer; }
 
         Ref<CameraRenderTarget> GetRenderTarget(ICamera *camera);
 
@@ -176,6 +178,8 @@ namespace ignite
         std::unordered_map<entt::entity, std::vector<uint32_t>> m_EntityObjectIndexCache;
         std::unordered_map<entt::entity, uint32_t> m_EntityBoneOffsetCache;
         std::map<std::pair<entt::entity, std::string>, std::vector<uint32_t>> m_SocketObjectIndexCache;
+
+        Ref<TerrainRenderer> m_TerrainRenderer;
 
         // -----------------------------------------------------------------------
         // Batch builders for GPU instancing of opaque static meshes.

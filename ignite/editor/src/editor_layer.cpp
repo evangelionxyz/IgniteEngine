@@ -81,6 +81,10 @@ namespace ignite
 
     EditorLayer::~EditorLayer()
     {
+        if (auto *cm = CommandManager::GetInstance())
+        {
+            cm->Clear();
+        }
     }
 
     void EditorLayer::OnAttach()
@@ -381,7 +385,7 @@ namespace ignite
                             {
                                 const auto &aabb = smc.worldAABB;
                                 focusCenter = (aabb.min + aabb.max) * 0.5f;
-                                halfExtents = glm::abs(aabb.max - aabb.min);
+                                halfExtents = glm::abs(aabb.max - aabb.min) * 0.5f;
                             }
                         }
                     }
@@ -394,9 +398,32 @@ namespace ignite
                             {
                                 const auto &aabb = smc.worldAABB;
                                 focusCenter = (aabb.min + aabb.max) * 0.5f;
-                                halfExtents = glm::abs(aabb.max - aabb.min);
+                                halfExtents = glm::abs(aabb.max - aabb.min) * 0.5f;
                             }
                         }
+                    }
+                    else if (entity.HasComponent<TerrainComponent>())
+                    {
+                        const auto &tr = entity.GetComponent<TransformComponent>();
+                        const auto &tc = entity.GetComponent<TerrainComponent>();
+
+                        glm::vec3 minPos = glm::vec3(std::numeric_limits<float>::max());
+                        glm::vec3 maxPos = glm::vec3(std::numeric_limits<float>::min());
+
+                        for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
+                        {
+                            auto &chunk = tc.chunks[idx];
+                            if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
+                                continue;
+
+                            AABB aabb = chunk.bounds.Transform(tr.world.GetMatrix());
+
+                            minPos = glm::min(minPos, aabb.min);
+                            maxPos = glm::max(maxPos, aabb.max);
+                        }
+
+                        focusCenter = (minPos + maxPos) * 0.5f;
+                        halfExtents = glm::abs(maxPos - minPos) * 0.5f;
                     }
 
                     const float radius = glm::max(halfExtents.x, glm::max(halfExtents.y, halfExtents.z));

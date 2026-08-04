@@ -198,6 +198,13 @@ namespace ignite
         // Clear all entities from registry before deletion
         if (registry)
         {
+            auto terrainView = registry->view<TerrainComponent>();
+            for (auto e : terrainView)
+            {
+                auto &comp = terrainView.get<TerrainComponent>(e);
+                comp.ReleaseGPU();
+            }
+
             registry->clear();
             delete registry;
         }
@@ -1394,6 +1401,12 @@ namespace ignite
     template<>
     IGN_API void Scene::OnComponentAdded<TerrainComponent>(Entity entity, TerrainComponent &comp)
     {
+        if (!comp.data)
+        {
+            comp.data = CreateRef<TerrainData>();
+        }
+        comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
+        comp.gpuInitialized = false;
     }
 
     template<>

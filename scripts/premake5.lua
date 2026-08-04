@@ -13,7 +13,7 @@ workspace "IGN"
         "Shipping-Profiling"
     }
 
-    local wks_absolute = path.getabsolute("../")
+    wks_absolute = path.getabsolute("../")
     BUILD_DIR = wks_absolute .. "/bin"
     OUTPUT_DIR = BUILD_DIR .. "/%{cfg.buildcfg}"
     THIRDPARTY_DIR = wks_absolute .. "/thirdparty"

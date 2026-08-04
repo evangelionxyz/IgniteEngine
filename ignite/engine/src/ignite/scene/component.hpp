@@ -824,10 +824,35 @@ namespace ignite
     class TerrainComponent : public IComponent
     {
     public:
-        Ref<TerrainData> data;
+        uint32_t resolution = 64;
+        float worldSize = 100.0f;
+        float maxHeight = 50.0f;
+        float noiseFrequency = 0.6f;
+        int noiseSeed = 1337;
+        uint32_t chunkCount = 4;
+        uint32_t lodLevels = 3;
+        AssetHandle heightmapHandle = AssetHandle(0);
+
+        Ref<TerrainData> data = nullptr;
         std::vector<TerrainChunk> chunks;
+        bool gpuInitialized = false;
 
         TerrainComponent() = default;
+        ~TerrainComponent()
+        {
+            ReleaseGPU();
+        }
+
+        void ReleaseGPU()
+        {
+            for (auto &chunk : chunks)
+            {
+                chunk.primitive.reset();
+            }
+            chunks.clear();
+            gpuInitialized = false;
+        }
+
         COMPONENT_CLASS_TYPE(CompType_Terrain)
     };
 

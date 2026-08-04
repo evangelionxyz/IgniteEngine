@@ -8,10 +8,11 @@
 
 namespace ignite
 {
+    class TerrainComponent;
+
     class IGN_API TerrainBuilder
     {
     public:
-
         void ApplyBrush();
         void Raise();
         void Flatten();
@@ -19,6 +20,7 @@ namespace ignite
         void Paint();
 
         void Generate();
+        static void GenerateProcedural(TerrainComponent &comp, float frequency = 0.2f, int seed = 1337);
 
     private:
 

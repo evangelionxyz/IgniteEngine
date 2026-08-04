@@ -5,6 +5,7 @@
 #include "editor_layer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/audio/fmod_dsp.hpp"
+#include "ignite/terrain/terrain_builder.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/input/input_system.hpp"
@@ -216,56 +217,56 @@ namespace ignite
             // Root tree node
             
             const auto sceneName = m_EditorLayer->IsInPrefabIsolation() ? "Prefab" : assetManager->GetAssetDisplayName(m_Scene->handle);
-			const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
+            const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
                 | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns | ImGuiTreeNodeFlags_DefaultOpen;
 
             if (ImGui::TreeNodeEx(sceneName.c_str(), treeFlags))
             {
-				// target drop
-				if (ImGui::BeginDragDropTarget())
-				{
-					if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
-					{
-						const size_t count = payload->DataSize / sizeof(UUID);
-						const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+                // target drop
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                    {
+                        const size_t count = payload->DataSize / sizeof(UUID);
+                        const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
 
-						for (size_t i = 0; i < count; ++i)
-						{
-							const UUID uuid = droppedUUIDs[i];
-							Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
+                        for (size_t i = 0; i < count; ++i)
+                        {
+                            const UUID uuid = droppedUUIDs[i];
+                            Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
 
-							if (!droppedEntity)
-								continue;
+                            if (!droppedEntity)
+                                continue;
 
-							// check if src entity has parent
-							auto &idComp = droppedEntity.GetComponent<IDComponent>();
-							if (idComp.parent != UUID(0))
-							{
-								UUID oldParent = idComp.parent;
-								// current parent should be removed
-								Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
-								parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
-								idComp.parent = UUID(0);
+                            // check if src entity has parent
+                            auto &idComp = droppedEntity.GetComponent<IDComponent>();
+                            if (idComp.parent != UUID(0))
+                            {
+                                UUID oldParent = idComp.parent;
+                                // current parent should be removed
+                                Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
+                                parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
+                                idComp.parent = UUID(0);
 
-								// Record for undo — re-parenting to root (UUID 0)
-								CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
-									m_Scene, droppedEntity.GetUUID(), oldParent, UUID(0)));
-							}
-						}
-					}
+                                // Record for undo — re-parenting to root (UUID 0)
+                                CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
+                                    m_Scene, droppedEntity.GetUUID(), oldParent, UUID(0)));
+                            }
+                        }
+                    }
 
-					ImGui::EndDragDropTarget();
-				}
+                    ImGui::EndDragDropTarget();
+                }
 
-				std::vector<Entity> rootEntities;
-				m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
-					{
-						if (id.parent == UUID(0))
-							rootEntities.emplace_back(e, m_Scene);
-					});
+                std::vector<Entity> rootEntities;
+                m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
+                    {
+                        if (id.parent == UUID(0))
+                            rootEntities.emplace_back(e, m_Scene);
+                    });
 
-				for (const Entity &entity : rootEntities)
-					RenderEntityNode(entity);
+                for (const Entity &entity : rootEntities)
+                    RenderEntityNode(entity);
 
                 // Add some extra space at the bottom
                 ImGui::Dummy(ImVec2(-1.0f, 32.0f));
@@ -371,6 +372,14 @@ namespace ignite
             {
                 entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene, "World Environment"));
             }
+            if (ImGui::MenuItem("Terrain"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Terrain"));
+                if (entity.IsValid() && !entity.HasComponent<TerrainComponent>())
+                {
+                    entity.AddComponent<TerrainComponent>();
+                }
+            }
             ImGui::EndMenu();
         }
 
@@ -421,8 +430,8 @@ namespace ignite
             ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         }
 
-		ImGui::TableNextRow();
-		ImGui::TableNextColumn();
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
 
         const ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
             | ImGuiTreeNodeFlags_OpenOnDoubleClick
@@ -1475,114 +1484,114 @@ namespace ignite
                     }
                 }
 
-				if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
-				{
-					auto &pp = c.camera.postProcessing;
+                if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    auto &pp = c.camera.postProcessing;
 
-					if (ImGui::TreeNodeEx("Anti aliasing"))
-					{
-						if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
-						{
-							c.dirty |= UI::DrawCheckbox("Enable", &pp.taaProperties.enable);
-							c.dirty |= UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
-							ImGui::TreePop();
-						}
+                    if (ImGui::TreeNodeEx("Anti aliasing"))
+                    {
+                        if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            c.dirty |= UI::DrawCheckbox("Enable", &pp.taaProperties.enable);
+                            c.dirty |= UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
+                            ImGui::TreePop();
+                        }
 
-						if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
-						{
+                        if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
                             c.dirty |= UI::DrawCheckbox("Enable", &pp.msaaProperties.enable);
                             c.dirty |= UI::DrawIntControl("Samples", &pp.msaaProperties.sampleCount, 1, 1, 16);
-							ImGui::TreePop();
-						}
+                            ImGui::TreePop();
+                        }
 
-						ImGui::TreePop();
-					}
+                        ImGui::TreePop();
+                    }
 
-					if (ImGui::TreeNodeEx("Render scale"))
-					{
-						c.dirty |= UI::DrawFloatControl("Factor", &pp.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
-						if (UI::DrawButtonWithColumn("", "Apply"))
-						{
-							m_EditorLayer->m_State.gameplayRequestToResize = true;
+                    if (ImGui::TreeNodeEx("Render scale"))
+                    {
+                        c.dirty |= UI::DrawFloatControl("Factor", &pp.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
+                        if (UI::DrawButtonWithColumn("", "Apply"))
+                        {
+                            m_EditorLayer->m_State.gameplayRequestToResize = true;
                             m_EditorLayer->m_State.editorRequestToResize = true;
-						}
-						ImGui::TreePop();
-					}
+                        }
+                        ImGui::TreePop();
+                    }
 
-					if (ImGui::TreeNodeEx("Post Processing"))
-					{
-						// Tonemapping & Color correction
-						if (ImGui::TreeNodeEx("Color Correction", ImGuiTreeNodeFlags_DefaultOpen))
-						{
-							const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "Filmic" };
-							int currentTonemap = static_cast<int>(pp.tonemapMode);
-							if (UI::DrawComboBox("Tonemap Mode", tonemapModes, std::size(tonemapModes), &currentTonemap))
-							{
-								pp.tonemapMode = static_cast<TonemapMode>(currentTonemap);
+                    if (ImGui::TreeNodeEx("Post Processing"))
+                    {
+                        // Tonemapping & Color correction
+                        if (ImGui::TreeNodeEx("Color Correction", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "Filmic" };
+                            int currentTonemap = static_cast<int>(pp.tonemapMode);
+                            if (UI::DrawComboBox("Tonemap Mode", tonemapModes, std::size(tonemapModes), &currentTonemap))
+                            {
+                                pp.tonemapMode = static_cast<TonemapMode>(currentTonemap);
                                 c.dirty = true;
-							}
-							// TODO: Add these controls back in when we have a proper color grading system
-							// c.dirty |= UI::DrawFloatControl("Exposure", &pp.exposure, 0.025f, 0.0f, 10.0f, 1.0f);
-							// c.dirty |= UI::DrawFloatControl("Gamma", &pp.gamma, 0.025f, 0.1f, 5.0f, 2.2f);
+                            }
+                            // TODO: Add these controls back in when we have a proper color grading system
+                            // c.dirty |= UI::DrawFloatControl("Exposure", &pp.exposure, 0.025f, 0.0f, 10.0f, 1.0f);
+                            // c.dirty |= UI::DrawFloatControl("Gamma", &pp.gamma, 0.025f, 0.1f, 5.0f, 2.2f);
 
-							ImGui::TreePop();
-						}
+                            ImGui::TreePop();
+                        }
 
-						// Depth of Field
-						c.dirty |= UI::DrawCheckbox("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
-						if (c.camera.lens.enabledDOF)
-						{
-							c.dirty |= UI::DrawFloatControl("Focal Length", &c.camera.lens.focalLength, 0.1f, 0.0f, FLT_MAX).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Focal Distance", &c.camera.lens.focalDistance, 0.05f, 0.0f, FLT_MAX).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("fStop", &c.camera.lens.fStop, 0.05f, 0.0f, FLT_MAX).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Focus Range", &c.camera.lens.focusRange, 0.05f, 0.0f, FLT_MAX).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Blur Amount", &c.camera.lens.blurAmount, 0.05f, 0.0f, FLT_MAX).isItemEdited;
-						}
+                        // Depth of Field
+                        c.dirty |= UI::DrawCheckbox("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
+                        if (c.camera.lens.enabledDOF)
+                        {
+                            c.dirty |= UI::DrawFloatControl("Focal Length", &c.camera.lens.focalLength, 0.1f, 0.0f, FLT_MAX).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Focal Distance", &c.camera.lens.focalDistance, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("fStop", &c.camera.lens.fStop, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Focus Range", &c.camera.lens.focusRange, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Blur Amount", &c.camera.lens.blurAmount, 0.05f, 0.0f, FLT_MAX).isItemEdited;
+                        }
 
-						// Bloom
-						c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
-						if (pp.enableBloom)
-						{
-							c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Bloom Knee", &pp.bloomKnee, 0.01f, 0.0f, 10.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
-							c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
-						}
+                        // Bloom
+                        c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
+                        if (pp.enableBloom)
+                        {
+                            c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Bloom Knee", &pp.bloomKnee, 0.01f, 0.0f, 10.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
+                            c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
+                        }
 
-						// Vignette
-						c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
-						if (pp.enableVignette)
-						{
-							c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
-						}
+                        // Vignette
+                        c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
+                        if (pp.enableVignette)
+                        {
+                            c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        }
 
-						// Chromatic Aberration
-						c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
-						if (pp.enableChromAb)
-						{
-							c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
-						}
+                        // Chromatic Aberration
+                        c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
+                        if (pp.enableChromAb)
+                        {
+                            c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        }
 
-						// SSAO
-						c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
-						if (pp.enableSSAO)
-						{
-							c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 1.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
-							c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
-						}
+                        // SSAO
+                        c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
+                        if (pp.enableSSAO)
+                        {
+                            c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 1.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
+                        }
 
-						ImGui::TreePop();
-					}
+                        ImGui::TreePop();
+                    }
 
-					ImGui::TreePop();
-				}
+                    ImGui::TreePop();
+                }
 
                 if (c.dirty && m_Data.sceneViewportGameplayVisible)
                 {
@@ -1633,15 +1642,15 @@ namespace ignite
             });
 
             RenderComponent<CircleCollider2DComponent>("Circle Collider 2D", selectedEntity, [&]()
-                {
-                    auto &cc = selectedEntity.GetComponent<CircleCollider2DComponent>();
-                    cc.dirty = UI::DrawVec2Control("Center", cc.center, 0.025f);
-                    cc.dirty |= UI::DrawFloatControl("Radius", &cc.radius, 0.025f, 0.0f, FLT_MAX);
-                    cc.dirty |= UI::DrawFloatControl("Restitution", &cc.restitution, 0.025f, 0.0f, FLT_MAX);
-                    cc.dirty |= UI::DrawFloatControl("Friction", &cc.friction, 0.025f, 0.0f, FLT_MAX);
-                    cc.dirty |= UI::DrawFloatControl("Density", &cc.density, 0.025f);
-                    cc.dirty |= UI::DrawCheckbox("Is Sensor", &cc.isSensor);
-                });
+            {
+                auto &cc = selectedEntity.GetComponent<CircleCollider2DComponent>();
+                cc.dirty = UI::DrawVec2Control("Center", cc.center, 0.025f);
+                cc.dirty |= UI::DrawFloatControl("Radius", &cc.radius, 0.025f, 0.0f, FLT_MAX);
+                cc.dirty |= UI::DrawFloatControl("Restitution", &cc.restitution, 0.025f, 0.0f, FLT_MAX);
+                cc.dirty |= UI::DrawFloatControl("Friction", &cc.friction, 0.025f, 0.0f, FLT_MAX);
+                cc.dirty |= UI::DrawFloatControl("Density", &cc.density, 0.025f);
+                cc.dirty |= UI::DrawCheckbox("Is Sensor", &cc.isSensor);
+            });
 
             RenderComponent<RigidbodyComponent>("Rigid Body", selectedEntity, [&]()
             {
@@ -1769,77 +1778,77 @@ namespace ignite
             });
 
             RenderComponent<TextComponent>("Text", selectedEntity, [&]()
-                {
-                    auto &c = selectedEntity.GetComponent<TextComponent>();
+            {
+                auto &c = selectedEntity.GetComponent<TextComponent>();
 
-                    const bool isFontLoaded = c.fontHandle != AssetHandle(0);
-                    std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Here";
-                    UI::DrawButtonWithColumn("Font", fontLabel.c_str(), nullptr, [&, this]()
-                        {
-                            if (ImGui::BeginDragDropTarget())
-                            {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                                {
-                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    if (assetManager->GetAssetType(handle) == AssetType::Font)
-                                    {
-                                        c.fontHandle = handle;
-                                    }
-                                }
-                                ImGui::EndDragDropTarget();
-                            }
-
-                            if (isFontLoaded)
-                            {
-                                ImGui::SameLine();
-                                if (ImGui::Button("X##ClearTextFont"))
-                                {
-                                    c.fontHandle = AssetHandle(0);
-                                }
-                            }
-                        });
-
-                    const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
-                    std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Here";
-                    UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c, this, assetManager, &isMaterialLoaded]()
-                        {
-                            if (ImGui::BeginDragDropTarget())
-                            {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                                {
-                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    if (assetManager->GetAssetType(handle) == AssetType::Material2D)
-                                    {
-                                        c.material2dHandle = handle;
-                                    }
-                                }
-                                ImGui::EndDragDropTarget();
-                            }
-
-                            if (isMaterialLoaded)
-                            {
-                                ImGui::SameLine();
-                                if (ImGui::Button("X##ClearTextMaterial"))
-                                {
-                                    c.material2dHandle = AssetHandle(0);
-                                }
-                            }
-                        });
-
-                    char textBuffer[2048] = {};
-                    strncpy(textBuffer, c.text.c_str(), sizeof(textBuffer) - 1);
-                    if (ImGui::InputTextMultiline("Text", textBuffer, sizeof(textBuffer), ImVec2{0.0f, 0.0f}))
+                const bool isFontLoaded = c.fontHandle != AssetHandle(0);
+                std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Here";
+                UI::DrawButtonWithColumn("Font", fontLabel.c_str(), nullptr, [&, this]()
                     {
-                        c.text = textBuffer;
-                    }
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            {
+                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                if (assetManager->GetAssetType(handle) == AssetType::Font)
+                                {
+                                    c.fontHandle = handle;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
 
-                    UI::DrawColorVec4("Color", c.color);
-                    UI::DrawFloatControl("Kerning", &c.kerning, 0.001f, -10.0f, 10.0f);
-                    UI::DrawFloatControl("Line Spacing", &c.lineSpacing, 0.001f, -10.0f, 10.0f);
-                    UI::DrawCheckbox("Screen Space", &c.screenSpace);
-                });
+                        if (isFontLoaded)
+                        {
+                            ImGui::SameLine();
+                            if (ImGui::Button("X##ClearTextFont"))
+                            {
+                                c.fontHandle = AssetHandle(0);
+                            }
+                        }
+                    });
+
+                const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
+                std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Here";
+                UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c, this, assetManager, &isMaterialLoaded]()
+                    {
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            {
+                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                if (assetManager->GetAssetType(handle) == AssetType::Material2D)
+                                {
+                                    c.material2dHandle = handle;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+
+                        if (isMaterialLoaded)
+                        {
+                            ImGui::SameLine();
+                            if (ImGui::Button("X##ClearTextMaterial"))
+                            {
+                                c.material2dHandle = AssetHandle(0);
+                            }
+                        }
+                    });
+
+                char textBuffer[2048] = {};
+                strncpy(textBuffer, c.text.c_str(), sizeof(textBuffer) - 1);
+                if (ImGui::InputTextMultiline("Text", textBuffer, sizeof(textBuffer), ImVec2{0.0f, 0.0f}))
+                {
+                    c.text = textBuffer;
+                }
+
+                UI::DrawColorVec4("Color", c.color);
+                UI::DrawFloatControl("Kerning", &c.kerning, 0.001f, -10.0f, 10.0f);
+                UI::DrawFloatControl("Line Spacing", &c.lineSpacing, 0.001f, -10.0f, 10.0f);
+                UI::DrawCheckbox("Screen Space", &c.screenSpace);
+            });
 
             RenderComponent<AudioSourceComponent>("Audio Source", selectedEntity, [&]()
             {
@@ -2666,12 +2675,86 @@ namespace ignite
                 }
             });
 
+            RenderComponent<TerrainComponent>("Terrain", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<TerrainComponent>();
+                TerrainComponent compBefore = c;
+
+                bool rebuildGPU = false;
+
+                int res = static_cast<int>(c.resolution);
+                if (UI::DrawIntControl("Resolution", &res, 1, 16, 2048))
+                {
+                    c.resolution = static_cast<uint32_t>(std::max(16, res));
+                    if (!c.data)
+                    {
+                        c.data = CreateRef<TerrainData>();
+                    }
+                    c.data->InitFlat(c.resolution, c.worldSize, c.maxHeight);
+                    rebuildGPU = true;
+                }
+
+                if (UI::DrawFloatControl("World Size", &c.worldSize, 1.0f, 1.0f, 10000.0f))
+                {
+                    rebuildGPU = true;
+                }
+
+                if (UI::DrawFloatControl("Max Height", &c.maxHeight, 1.0f, 0.0f, 5000.0f))
+                {
+                    rebuildGPU = true;
+                }
+
+                int chunkCount = static_cast<int>(c.chunkCount);
+                if (UI::DrawIntControl("Chunk Count", &chunkCount, 1, 1, 64))
+                {
+                    c.chunkCount = static_cast<uint32_t>(std::max(1, chunkCount));
+                    rebuildGPU = true;
+                }
+
+                int lodLevels = static_cast<int>(c.lodLevels);
+                if (UI::DrawIntControl("LOD Levels", &lodLevels, 1, 1, 10))
+                {
+                    c.lodLevels = static_cast<uint32_t>(std::max(1, lodLevels));
+                    rebuildGPU = true;
+                }
+
+                if (ImGui::Button("Rebuild Flat Terrain", ImVec2(-1.0f, 0.0f)))
+                {
+                    if (!c.data)
+                    {
+                        c.data = CreateRef<TerrainData>();
+                    }
+                    c.data->InitFlat(c.resolution, c.worldSize, c.maxHeight);
+                    rebuildGPU = true;
+                }
+
+                UI::DrawFloatControl("Noise Frequency", &c.noiseFrequency, 0.05f, 0.001f, 5.0f);
+                UI::DrawIntControl("Noise Seed", &c.noiseSeed, 1, 0, 99999);
+
+                if (ImGui::Button("Generate Noise Terrain", ImVec2(-1.0f, 0.0f)))
+                {
+                    TerrainBuilder::GenerateProcedural(c, c.noiseFrequency, c.noiseSeed);
+                    rebuildGPU = true;
+                }
+
+                if (rebuildGPU)
+                {
+                    c.gpuInitialized = false;
+                    TerrainComponent compBeforeCmd = compBefore;
+                    TerrainComponent compAfterCmd = c;
+                    compBeforeCmd.ReleaseGPU();
+                    compAfterCmd.ReleaseGPU();
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TerrainComponent>>(m_Scene, selectedEntity.GetUUID(), compBeforeCmd, compAfterCmd));
+                }
+            });
+
             if (ImGui::BeginPopup("##add_component_context", ImGuiWindowFlags_NoDecoration))
             {
                 static char buffer[256] = { 0 };
                 static std::string compNameFilterResultStr;
                 static std::set<std::pair<std::string, CompType>> filteredCompName;
 
+                ImGui::SetKeyboardFocusHere();
                 ImGui::InputTextWithHint("##component_name", "Component", buffer, sizeof(buffer) + 1, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
 
                 compNameFilterResultStr = std::string(buffer);
@@ -2757,6 +2840,9 @@ namespace ignite
                         break;
                     case CompType_MeshCollider:
                         entity.AddComponent<MeshColliderComponent>();
+                        break;
+                    case CompType_Terrain:
+                        entity.AddComponent<TerrainComponent>();
                         break;
                     case CompType_AudioSource:
                         entity.AddComponent<AudioSourceComponent>();
@@ -2883,15 +2969,15 @@ namespace ignite
 
                 ImDrawList *drawList = ImGui::GetWindowDrawList();
 
-				// if (m_SceneFocused && mouseWantsFocus)
-				{
-					const char *bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
-					const ImVec2 textSize = ImGui::CalcTextSize(bannerText);
-					const ImVec2 bannerSize = ImVec2{ textSize.x + 24.0f, textSize.y + 8.0f };
-					const ImVec2 bannerCursor = { canvasPos.x + (canvasSize.x - bannerSize.x) * 0.5f, canvasPos.y + 10.0f };
-					//ImGui::SetCursorScreenPos(bannerCursor);
-					UI::DrawBannerText(bannerText, { 124.0f, 200.0f });
-				}
+                // if (m_SceneFocused && mouseWantsFocus)
+                {
+                    const char *bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
+                    const ImVec2 textSize = ImGui::CalcTextSize(bannerText);
+                    const ImVec2 bannerSize = ImVec2{ textSize.x + 24.0f, textSize.y + 8.0f };
+                    const ImVec2 bannerCursor = { canvasPos.x + (canvasSize.x - bannerSize.x) * 0.5f, canvasPos.y + 10.0f };
+                    //ImGui::SetCursorScreenPos(bannerCursor);
+                    UI::DrawBannerText(bannerText, { 124.0f, 200.0f });
+                }
 
                 // Click inside the viewport to (re-)focus in Play or Simulate modes
                 // Only allow focusing if the scene is not already focused and the cooldown has expired
@@ -3062,19 +3148,19 @@ namespace ignite
                                 }
                             }
 
-							if (targetSelection == GetSelectedEntity())
-							{
-								// If the target selection is already selected, and the user is not holding Shift, deselect it.
-								if (!m_EditorLayer->GetState().multiSelect)
-								{
-									SetSelectedEntity(Entity{});
-									SetGizmoOperation(GizmoOperation::NONE);
-								}
-							}
-							else
-							{
-								SetSelectedEntity(targetSelection);
-							}
+                            if (targetSelection == GetSelectedEntity())
+                            {
+                                // If the target selection is already selected, and the user is not holding Shift, deselect it.
+                                if (!m_EditorLayer->GetState().multiSelect)
+                                {
+                                    SetSelectedEntity(Entity{});
+                                    SetGizmoOperation(GizmoOperation::NONE);
+                                }
+                            }
+                            else
+                            {
+                                SetSelectedEntity(targetSelection);
+                            }
                         }
                         else // invalid entity
                         {
@@ -3141,15 +3227,15 @@ namespace ignite
                                                 }
                                             }
 
-											if (targetSelection == GetSelectedEntity())
-											{
-												// If the target selection is already selected, and the user is not holding Shift, deselect it.
+                                            if (targetSelection == GetSelectedEntity())
+                                            {
+                                                // If the target selection is already selected, and the user is not holding Shift, deselect it.
                                                 if (!m_EditorLayer->GetState().multiSelect)
                                                 {
-												    SetSelectedEntity(Entity{});
-												    SetGizmoOperation(GizmoOperation::NONE);
+                                                    SetSelectedEntity(Entity{});
+                                                    SetGizmoOperation(GizmoOperation::NONE);
                                                 }
-											}
+                                            }
                                             else
                                             {
                                                 SetSelectedEntity(targetSelection);

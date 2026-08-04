@@ -337,6 +337,24 @@ namespace ignite
                 sr.EndMap();
             }
 
+            // Terrain Component
+            if (entity.HasComponent<TerrainComponent>())
+            {
+                const auto &comp = entity.GetComponent<TerrainComponent>();
+                sr.BeginMap("Terrain");
+                {
+                    sr.AddKeyValue("Resolution", comp.resolution);
+                    sr.AddKeyValue("WorldSize", comp.worldSize);
+                    sr.AddKeyValue("MaxHeight", comp.maxHeight);
+                    sr.AddKeyValue("NoiseFreq", comp.noiseFrequency);
+                    sr.AddKeyValue("NoiseSeed", comp.noiseSeed);
+                    sr.AddKeyValue("ChunkCount", comp.chunkCount);
+                    sr.AddKeyValue("LodLevels", comp.lodLevels);
+                    sr.AddKeyValue("HeightmapHandle", static_cast<uint64_t>(comp.heightmapHandle));
+                }
+                sr.EndMap();
+            }
+
             // Sprite 2D component
             if (entity.HasComponent<Sprite2DComponent>())
             {
@@ -899,6 +917,27 @@ namespace ignite
             if (auto n = node["QuadraticAttenuation"]) comp.quadraticAttenuation = n.as<float>();
             if (auto n = node["InnerConeAngle"]) comp.innerConeAngle = n.as<float>();
             if (auto n = node["OuterConeAngle"]) comp.outerConeAngle = n.as<float>();
+        }
+
+        // Terrain
+        if (YAML::Node node = entityNode["Terrain"])
+        {
+            auto &comp = desEntity.AddComponent<TerrainComponent>();
+            if (auto n = node["Resolution"]) comp.resolution = n.as<uint32_t>();
+            if (auto n = node["WorldSize"]) comp.worldSize = n.as<float>();
+            if (auto n = node["MaxHeight"]) comp.maxHeight = n.as<float>();
+            if (auto n = node["NoiseFreq"]) comp.noiseFrequency = n.as<float>();
+            if (auto n = node["NoiseSeed"]) comp.noiseSeed = n.as<int>();
+            if (auto n = node["ChunkCount"]) comp.chunkCount = n.as<uint32_t>();
+            if (auto n = node["LodLevels"]) comp.lodLevels = n.as<uint32_t>();
+            if (auto n = node["HeightmapHandle"]) comp.heightmapHandle = AssetHandle(n.as<uint64_t>());
+
+            if (!comp.data)
+            {
+                comp.data = CreateRef<TerrainData>();
+            }
+            comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
+            comp.gpuInitialized = false;
         }
 
         // Sprite 2D component

@@ -60,7 +60,9 @@ project "Ignite.Engine"
         "%{IncludeDir.FREETYPE}",
         "%{IncludeDir.TRACY}",
         "%{IncludeDir.FBX_SDK}",
-        "%{IncludeDir.FASTNOISE2}"
+        "%{IncludeDir.FASTNOISE2}",
+        "%{IncludeDir.FASTSIMD}",
+        "%{IncludeDir.FASTSIMD_CONFIG}"
     }
 
     libdirs { "%{cfg.targetdir}" }
@@ -98,37 +100,37 @@ project "Ignite.Engine"
 
     -- build rust, SDL, and FastNoise2
     filter "configurations:Debug or Debug-Profiling"
-        libdirs { "%{wks.location}/crates/target/debug" }
+        libdirs { wks_absolute .. "/crates/target/debug" }
         prebuildcommands {
             -- Configure and Build SDL
-            'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Debug"',
+            'cmake -S "' .. SDL3_SOURCE_DIR .. '" -B "' .. SDL3_SOURCE_DIR .. '/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "' .. SDL3_SOURCE_DIR .. '/build" --config "Debug"',
 
             -- Configure and Build FastNoise2
-            'cmake -S "%{FASTNOISE2_SOURCE_DIR}" -B "%{FASTNOISE2_SOURCE_DIR}/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "%{FASTNOISE2_SOURCE_DIR}/build" --config "Debug"',
+            'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Debug"',
 
             -- Build Rust
-            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
-            copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
+            'cargo build --manifest-path "' .. wks_absolute .. '/crates/Cargo.toml"',
+            copy_file(wks_absolute .. "/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file(wks_absolute .. "/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
     filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
-        libdirs { "%{wks.location}/crates/target/release" }
+        libdirs { wks_absolute .. "/crates/target/release" }
         prebuildcommands {
             -- Configure and Build SDL
-            'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
-            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
+            'cmake -S "' .. SDL3_SOURCE_DIR .. '" -B "' .. SDL3_SOURCE_DIR .. '/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "' .. SDL3_SOURCE_DIR .. '/build" --config "Release"',
 
             -- Configure and Build FastNoise2
-            'cmake -S "%{FASTNOISE2_SOURCE_DIR}" -B "%{FASTNOISE2_SOURCE_DIR}/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
-            'cmake --build "%{FASTNOISE2_SOURCE_DIR}/build" --config "Release"',
+            'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Release"',
             
             -- Build Rust
-            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
-            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+            'cargo build --release --manifest-path "' .. wks_absolute .. '/crates/Cargo.toml"',
+            copy_file(wks_absolute .. "/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file(wks_absolute .. "/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
     filter {}
