@@ -1327,14 +1327,14 @@ namespace ignite
             ExitPrefabIsolation(true);
         }
 
-        SaveProject();
-
-        // Stop scene
+        // Stop scene before saving
         if (m_EditorScene)
             m_EditorScene->OnStop();
 
         if (m_ActiveScene)
             m_ActiveScene->OnStop();
+
+        SaveProject();
 
         SetActiveScene(nullptr);
 

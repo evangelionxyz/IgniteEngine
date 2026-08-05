@@ -8,7 +8,7 @@
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/graphics/bloom.hpp"
 #include "ignite/graphics/ssao.hpp"
-#include "ignite/graphics/edge_detection.hpp"
+#include "ignite/graphics/outline_jfa.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 
@@ -180,7 +180,7 @@ namespace ignite
         nvrhi::SamplerHandle m_CompositeSampler;
 
         Ref<Renderer2D> m_Renderer2D;
-        Ref<EdgeDetection> m_EdgeDetection;
+        Ref<OutlineJFA> m_OutlineJFA;
         
         ConstantBuffer m_CompositePostProcessBuffer;
         ConstantBuffer m_DebugGridBuffer;

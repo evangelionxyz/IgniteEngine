@@ -77,8 +77,8 @@ namespace ignite
         m_CompositeSampler = m_Device->createSampler(compositeSamplerDesc);
 
         m_Renderer2D = Renderer2D::Create();
-        m_EdgeDetection = EdgeDetection::Create();
-		m_EdgeDetection->CreatePipeline();
+        m_OutlineJFA = OutlineJFA::Create();
+		m_OutlineJFA->CreatePipeline();
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
         m_RuntimeMaterial   = CreateRef<Material>();
@@ -138,6 +138,8 @@ namespace ignite
         m_StaticPSOCache.clear();
         m_TransparentStaticPSOCache.clear();
         m_StaticCSMPSOCache.clear();
+        m_SelectStaticPSOCache.clear();
+        m_SelectAnimatedPSOCache.clear();
         m_EnvironmentPSOCache.clear();
         m_CompositePSOCache.clear();
         m_DebugGridPSOCache.clear();
@@ -205,11 +207,15 @@ namespace ignite
             // Scene post processing
             PostProcessing postProcessing = camera->postProcessing;
             CameraLens cameraLens = camera->lens;
+
+            bool isGameCamera = false;
             if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
             {
                 const auto &cc = primaryCamera.GetComponent<CameraComponent>();
 				postProcessing = cc.camera.postProcessing;
 				cameraLens = cc.camera.lens;
+
+                isGameCamera = camera == &cc.camera;
             }
 
             postProcessing.taaProperties.enable = postProcessing.taaProperties.enable || sceneRenderSettings.taaProperties.enable;
@@ -332,54 +338,33 @@ namespace ignite
             const auto width = target->sceneRT->GetWidth();
             const auto height = target->sceneRT->GetHeight();
 
-            // Differentiate between Edit Viewport and Game Viewport cameras.
-            // This is crucial to prevent resources (Bloom, SSAO, Edge Detection) from fighting
-            // and constantly recreating textures when both viewports are active with different sizes.
-            bool isGameCamera = false;
-            if (m_Scene)
-            {
-                if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
-                {
-                    const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                    if (camera == &cc.camera)
-                    {
-                        isGameCamera = true;
-                    }
-                }
-            }
-
             // Skip selection highlights/outlines for the game camera (gameplay viewport).
-            // This avoids running EdgeDetection compute shaders and recreating the outline texture for the game's resolution.
+            // This avoids running OutlineJFA compute shaders and recreating the outline texture for the game's resolution.
             Ref<Texture> edgeTexture = nullptr;
-            if (!isGameCamera && m_EdgeDetection && !m_SelectedEntities.empty())
+            if (!isGameCamera && m_OutlineJFA && !m_SelectedEntities.empty())
             {
-                if (!m_EdgeDetection->GetOutputTexture() || m_EdgeDetection->GetOutputTexture()->GetWidth() != static_cast<int>(width) || m_EdgeDetection->GetOutputTexture()->GetHeight() != static_cast<int>(height))
+                if (!m_OutlineJFA->GetOutputTexture() || m_OutlineJFA->GetOutputTexture()->GetWidth() != static_cast<int>(width) || m_OutlineJFA->GetOutputTexture()->GetHeight() != static_cast<int>(height))
                 {
-                    m_EdgeDetection->CreateOutputTexture(width, height);
+                    m_OutlineJFA->CreateOutputTexture(width, height);
                 }
 
-                // Use the resolved (single-sample) color and object-ID textures for edge detection
-                Ref<Texture> edgeColorSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
+                // Use the resolved (single-sample) object-ID texture for JFA outline
                 Ref<Texture> edgeObjIDSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(1) : target->sceneRT->GetColorAttachment(1);
-                m_EdgeDetection->UpdateBindingSet(edgeColorSrc, edgeObjIDSrc, target->sceneRT->GetDepthAttachment());
+                m_OutlineJFA->UpdateBindingSet(edgeObjIDSrc);
 
                 constexpr uint32_t kMaxSelectedIDs = 100;
                 const uint32_t selectedCount = static_cast<uint32_t>(std::min(m_SelectedEntities.size(), static_cast<size_t>(kMaxSelectedIDs)));
                 if (selectedCount > 0)
                 {
-                    cmd->writeBuffer(m_EdgeDetection->GetSelectedIDBuffer(), m_SelectedEntities.data(), sizeof(uint32_t) * selectedCount);
+                    cmd->writeBuffer(m_OutlineJFA->GetSelectedIDBuffer(), m_SelectedEntities.data(), sizeof(uint32_t) * selectedCount);
 
-                    EdgeDetectionParameter edgeParams;
-                    edgeParams.texelSize = glm::vec2(1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
-                    edgeParams.edgeThreshold = 0.1f;
-                    edgeParams.outlineWidth = 2.5f;
-                    edgeParams.outlineColor = glm::vec4(1.0f, 0.5f, 0.1f, 1.0f);
-                    edgeParams.depthSensitivity = 25.0f;
-                    edgeParams.useObjectID = 1;
-                    edgeParams.selectedCount = selectedCount;
+                    OutlineJFAParameter jfaParams;
+                    jfaParams.outlineWidth = 2.5f;
+                    jfaParams.outlineColor = glm::vec4(1.0f, 0.5f, 0.1f, 1.0f);
+                    jfaParams.selectedCount = selectedCount;
 
-                    m_EdgeDetection->ExecuteCompute(cmd, edgeParams, width, height);
-                    edgeTexture = m_EdgeDetection->GetOutputTexture();
+                    m_OutlineJFA->ExecuteCompute(cmd, jfaParams, width, height);
+                    edgeTexture = m_OutlineJFA->GetOutputTexture();
                 }
             }
 
@@ -1566,6 +1551,11 @@ namespace ignite
             m_Has2DPreRenderCache = true;
             m_Renderer2D->End();
         }
+
+        if (!m_SelectedEntities.empty())
+        {
+            RenderSelectedEntitiesIDOverlay(cmd, camera, frameContext, framebuffer, uploadedMaterialsThisPass);
+        }
     }
 
     void SceneRenderer::UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
@@ -2521,6 +2511,202 @@ namespace ignite
             "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
             EBindingLayout::MESH_STATIC, true);
 	}
+
+    Ref<GraphicsPipeline> SceneRenderer::GetOrCreateSelectMeshPSO(
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
+        nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode,
+        const char *vertexShaderPath, const char *pixelShaderPath,
+        EBindingLayout meshLayout)
+    {
+        if (!framebuffer)
+            return nullptr;
+
+        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto it = cache.find(key);
+        if (it != cache.end())
+        {
+            return it->second;
+        }
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.enableDepthTest = false;
+        params.enableDepthWrite = false;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.depthFunc = nvrhi::ComparisonFunc::Always;
+        params.cullMode = nvrhi::RasterCullMode::Front;
+
+        Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, true);
+
+        auto gp = GraphicsPipeline::Create("Mesh Select Pipeline");
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
+            .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
+            .AddBindingLayout(BindlessSystem::GetBindingLayout())
+            .Build(framebuffer, params);
+
+        cache.clear();
+        cache.emplace(key, gp);
+        return gp;
+    }
+
+    Ref<GraphicsPipeline> SceneRenderer::GetStaticSelectPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        return GetOrCreateSelectMeshPSO(m_SelectStaticPSOCache, framebuffer, fillMode,
+            "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
+            EBindingLayout::MESH_STATIC);
+    }
+
+    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedSelectPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        return GetOrCreateSelectMeshPSO(m_SelectAnimatedPSOCache, framebuffer, fillMode,
+            "resources/shaders/mesh_anim.vertex.hlsl", "resources/shaders/mesh_anim.pixel.hlsl",
+            EBindingLayout::MESH_ANIM);
+    }
+
+    void SceneRenderer::RenderSelectedEntitiesIDOverlay(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, std::unordered_set<Material *> &uploadedMaterialsThisPass)
+    {
+        if (m_SelectedEntities.empty() || !m_Scene || !framebuffer)
+            return;
+
+        IGN_PROFILE_FUNCTION();
+
+        auto staticSelectPSO = GetStaticSelectPSO(framebuffer, sceneRenderSettings.fillMode);
+        auto animatedSelectPSO = GetAnimatedSelectPSO(framebuffer, sceneRenderSettings.fillMode);
+
+        // 1. Draw selected static meshes
+        auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
+        for (entt::entity e : staticMeshView)
+        {
+            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+            if (std::ranges::find(m_SelectedEntities, objectID) == m_SelectedEntities.end())
+                continue;
+
+            const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+            if (!rc.visible || smc.handle == AssetHandle(0))
+                continue;
+
+            auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
+            if (!staticMesh)
+                continue;
+
+            auto cacheIt = m_EntityObjectIndexCache.find(e);
+            if (cacheIt == m_EntityObjectIndexCache.end())
+                continue;
+
+            const auto &instances = staticMesh->GetMeshInstances();
+            for (size_t idx = 0; idx < instances.size(); ++idx)
+            {
+                if (idx >= cacheIt->second.size())
+                    break;
+
+                auto &meshInstance = instances[idx];
+                auto &primitive = meshInstance->GetPrimitive();
+                if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
+                    continue;
+
+                const uint32_t objectIndex = cacheIt->second[idx];
+
+                // Pre-allocate instance index BEFORE setting graphics state to avoid buffer write inside render pass
+                uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &objectIndex, 1);
+
+                Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                if (material && uploadedMaterialsThisPass.insert(material.get()).second)
+                {
+                    material->UploadToGpu(cmd);
+                }
+
+                const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                    ? material->GetBindingSet()
+                    : m_RuntimeMaterial->GetBindingSet();
+
+                if (!materialBindingSet)
+                    continue;
+
+                nvrhi::GraphicsState graphicsState;
+                graphicsState.pipeline = *staticSelectPSO;
+                graphicsState.framebuffer = framebuffer;
+                graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+                graphicsState.bindings = { frameContext->staticMeshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
+                graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ *primitive->vertexBuffer, 0, 0 } };
+                graphicsState.setIndexBuffer({ *primitive->indexBuffer, nvrhi::Format::R32_UINT });
+
+                cmd->setGraphicsState(graphicsState);
+                cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+
+                nvrhi::DrawArguments args;
+                args.setVertexCount(primitive->indexBuffer->GetCount());
+                args.instanceCount = 1;
+                cmd->drawIndexed(args);
+            }
+        }
+
+        // 2. Draw selected skeletal meshes
+        auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
+        for (entt::entity e : skelMeshView)
+        {
+            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+            if (std::ranges::find(m_SelectedEntities, objectID) == m_SelectedEntities.end())
+                continue;
+
+            const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+            if (!rc.visible || smc.handle == AssetHandle(0))
+                continue;
+
+            auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+            if (!skeletalMesh)
+                continue;
+
+            auto cacheIt = m_EntityObjectIndexCache.find(e);
+            if (cacheIt == m_EntityObjectIndexCache.end())
+                continue;
+
+            const auto &instances = skeletalMesh->GetMeshInstances();
+            for (size_t idx = 0; idx < instances.size(); ++idx)
+            {
+                if (idx >= cacheIt->second.size())
+                    break;
+
+                auto &meshInstance = instances[idx];
+                auto &primitive = meshInstance->GetPrimitive();
+                if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
+                    continue;
+
+                const uint32_t objectIndex = cacheIt->second[idx];
+
+                Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                if (material && uploadedMaterialsThisPass.insert(material.get()).second)
+                {
+                    material->UploadToGpu(cmd);
+                }
+
+                const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                    ? material->GetBindingSet()
+                    : m_RuntimeMaterial->GetBindingSet();
+
+                if (!materialBindingSet)
+                    continue;
+
+                nvrhi::GraphicsState graphicsState;
+                graphicsState.pipeline = *animatedSelectPSO;
+                graphicsState.framebuffer = framebuffer;
+                graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+                graphicsState.bindings = { frameContext->animatedBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
+                graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ *primitive->vertexBuffer, 0, 0 } };
+                graphicsState.setIndexBuffer({ *primitive->indexBuffer, nvrhi::Format::R32_UINT });
+
+                cmd->setGraphicsState(graphicsState);
+                cmd->setPushConstants(&objectIndex, sizeof(objectIndex));
+
+                nvrhi::DrawArguments args;
+                args.setVertexCount(primitive->indexBuffer->GetCount());
+                args.instanceCount = 1;
+                cmd->drawIndexed(args);
+            }
+        }
+    }
 
 	Ref<GraphicsPipeline> SceneRenderer::GetAnimatedCSMPSO()
 	{

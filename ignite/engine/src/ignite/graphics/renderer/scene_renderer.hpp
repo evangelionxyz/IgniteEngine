@@ -134,6 +134,13 @@ namespace ignite
         Ref<GraphicsPipeline> GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
 		Ref<GraphicsPipeline> GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
 
+        Ref<GraphicsPipeline> GetOrCreateSelectMeshPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
+            nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, const char *vertexShaderPath, const char *pixelShaderPath,
+            EBindingLayout meshLayout);
+        Ref<GraphicsPipeline> GetStaticSelectPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetAnimatedSelectPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        void RenderSelectedEntitiesIDOverlay(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, std::unordered_set<Material *> &uploadedMaterialsThisPass);
+
 		Ref<GraphicsPipeline> GetAnimatedCSMPSO();
 		Ref<GraphicsPipeline> GetStaticCSMPSO();
 
@@ -162,6 +169,9 @@ namespace ignite
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticPSOCache;
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentStaticPSOCache;
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticCSMPSOCache;
+
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_SelectStaticPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_SelectAnimatedPSOCache;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_EnvironmentPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CompositePSOCache;
