@@ -9,7 +9,8 @@ namespace ignite
     WidgetImage::WidgetImage(WidgetID wID)
         : IWidgetItem(wID)
     {
-        size = glm::vec2(200.0f, 200.0f);
+        layout.width = 200.0f;
+        layout.height = 200.0f;
     }
 
     WidgetImage::~WidgetImage()
@@ -19,7 +20,7 @@ namespace ignite
 
     void WidgetImage::Arrange(const Rect &parentArea)
     {
-        worldRect = CalculateAlignedRect(parentArea);
+        IWidgetItem::Arrange(parentArea);
     }
 
     bool WidgetImage::HitTest(int px, int py)

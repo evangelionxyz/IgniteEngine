@@ -3395,6 +3395,7 @@ namespace ignite
                         const auto localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
                         const auto localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
                         activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                        activeSceneRenderer->SetCameraWidgetMousePosition(&m_EditorCamera, localMouseX, localMouseY, imageHovered);
                     }
                     
                     if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
@@ -4027,6 +4028,7 @@ namespace ignite
 
                                 // Set the Widget Mouse Position
                                 activeSceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                                activeSceneRenderer->SetCameraWidgetMousePosition(camera, localMouseX, localMouseY, imageHovered);
                             }
 
                             if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))

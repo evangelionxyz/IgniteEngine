@@ -4,7 +4,7 @@
 #ifndef IGN_WIDGET_CANVAS_HPP
 #define IGN_WIDGET_CANVAS_HPP
 
-#include "widget.hpp"
+#include "widget_container.hpp"
 
 namespace ignite
 {
@@ -26,7 +26,14 @@ namespace ignite
         virtual bool Serialize(const ignite::Path &filepath) override;
         static Ref<WidgetCanvas> Deserialize(const ignite::Path &filepath);
 
-        void SetViewportSize(const uint32_t width, const uint32_t height) { m_ViewportSize = { width, height }; }
+        inline void SetViewportSize(uint32_t width, uint32_t height)
+        {
+            if (m_ViewportSize.x != width || m_ViewportSize.y != height)
+            {
+                m_ViewportSize = { width, height };
+                if (m_Root) m_Root->MarkLayoutDirty();
+            }
+        }
         const glm::uvec2 &GetViewportSize() const { return m_ViewportSize; }
 
         void SetName(const std::string &newName) { name = newName; }
@@ -45,6 +52,9 @@ namespace ignite
         WidgetID AddBoxSizing(WidgetContainer *container = nullptr);
         WidgetID AddOverlay(WidgetContainer *container = nullptr);
         bool ReparentItem(WidgetID id, WidgetContainer *newParent);
+        bool ReorderItem(WidgetID draggedId, WidgetID targetId, bool insertAfter);
+        bool MoveItemUp(WidgetID id);
+        bool MoveItemDown(WidgetID id);
         bool RemoveItem(WidgetID id);
 
         WidgetContainer *CreateRoot(uint32_t width, uint32_t height);

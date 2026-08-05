@@ -8,7 +8,7 @@
 
 namespace ignite
 {
-    class WidgetImage : public IWidgetItem
+    class IGN_API WidgetImage : public IWidgetItem
     {
     public:
         WidgetImage(WidgetID wID);

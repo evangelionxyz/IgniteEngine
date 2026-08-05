@@ -8,14 +8,11 @@
 
 namespace ignite
 {
-    class WidgetContainer : public IWidgetItem
+    class IGN_API WidgetContainer : public IWidgetItem
     {
     public:
         WidgetContainer(WidgetID wID);
         virtual ~WidgetContainer() override;
-
-        LayoutMode layout = LayoutMode::Vertical;
-        float gap = 0.0f;
 
         virtual void Measure() override;
         virtual void Arrange(const Rect &parentArea) override;
@@ -25,7 +22,7 @@ namespace ignite
     };
 
     // A container that clamps its own size to [minSize, maxSize] before layout.
-    class WidgetBoxSizing : public WidgetContainer
+    class IGN_API WidgetBoxSizing : public WidgetContainer
     {
     public:
         WidgetBoxSizing(WidgetID wID);
@@ -39,7 +36,7 @@ namespace ignite
     };
 
     // A container that stacks all children on top of each other (each child fills the full parent area).
-    class WidgetOverlay : public WidgetContainer
+    class IGN_API WidgetOverlay : public WidgetContainer
     {
     public:
         WidgetOverlay(WidgetID wID);

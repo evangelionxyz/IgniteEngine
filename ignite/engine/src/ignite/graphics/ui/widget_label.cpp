@@ -127,17 +127,22 @@ namespace ignite
 
     void WidgetLabel::Measure()
     {
-        if (!font || text.empty())
+        const glm::vec2 textMeasured = GetTextBounds().GetSize();
+        if (layout.widthMode == SizeMode::Auto)
         {
-            size = glm::vec2(0.0f);
-            return;
+            const float defaultWidth = (textMeasured.x > 0.0f) ? textMeasured.x : (text.empty() ? 50.0f : 100.0f);
+            layout.width = defaultWidth + layout.padding.w + layout.padding.y;
         }
-        size = GetTextBounds().GetSize();
+        if (layout.heightMode == SizeMode::Auto)
+        {
+            const float defaultHeight = (textMeasured.y > 0.0f) ? textMeasured.y : style.fontSize;
+            layout.height = defaultHeight + layout.padding.x + layout.padding.z;
+        }
     }
 
     void WidgetLabel::Arrange(const Rect &parentRect)
     {
-        worldRect = CalculateAlignedRect(parentRect);
+        IWidgetItem::Arrange(parentRect);
     }
 
     bool WidgetLabel::HitTest(int px, int py)

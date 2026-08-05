@@ -36,6 +36,9 @@ namespace ignite
         // Convert a canvas-space coordinate to ImGui screen space.
         static ImVec2 CanvasToScreen(float cx, float cy, const ImVec2 &imagePos, const ImVec2 &imageSize, float canvasW, float canvasH);
 
+        // Convert an ImGui screen-space coordinate to canvas space.
+        static ImVec2 ScreenToCanvas(const ImVec2 &screenPos, const ImVec2 &imagePos, const ImVec2 &imageSize, float canvasW, float canvasH);
+
         // Widgets
         static bool DrawWidgetLabel(class WidgetLabel *label, AssetManager *assetManager);
         static bool DrawWidgetImage(class WidgetImage *image, AssetManager *assetManager);

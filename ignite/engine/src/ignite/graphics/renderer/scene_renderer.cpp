@@ -284,7 +284,7 @@ namespace ignite
             }
 
             ColorPass(cmd, camera, frameContext, sceneFramebuffer, drawDebug);
-            UIPass(cmd, target->widgetRT->GetFramebuffer(), frameContext);
+            UIPass(cmd, camera, target->widgetRT->GetFramebuffer(), frameContext);
 
             if (drawDebug)
             {
@@ -1568,9 +1568,13 @@ namespace ignite
         }
     }
 
-    void SceneRenderer::UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
+    void SceneRenderer::UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
+        (void)frameContext;
+
+        if (!m_Scene || !framebuffer)
+            return;
 
         // Set root widget
         auto rootWidget = m_Scene->GetRootWidget();
@@ -1587,39 +1591,85 @@ namespace ignite
             m_WidgetRenderer->Resize(width, height);
         }
 
-        // const bool isGameplayFramebuffer = framebuffer == m_GameplayWidgetRT->GetFramebuffer();
-        // const bool useMouseOverride = isGameplayFramebuffer ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
-        // const bool isHovered = isGameplayFramebuffer ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
-        // const uint32_t mouseX = isGameplayFramebuffer ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
-        // const uint32_t mouseY = isGameplayFramebuffer ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
-        // const glm::ivec2 mousePos = InputSystem::GetMousePosition();
+        uint32_t mouseX = 0;
+        uint32_t mouseY = 0;
+        bool isHovered = false;
+        bool useOverride = false;
 
-        // if (useMouseOverride)
-        // {
-        //     if (isHovered)
-        //     {
-        //         m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
-        //     }
-        //     else
-        //     {
-        //         const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
-        //         m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
-        //     }
-        // }
-        // else
-        // {
-        //     m_WidgetRenderer->SetMousePosition(
-        //         static_cast<uint32_t>(std::max(mousePos.x, 0)),
-        //         static_cast<uint32_t>(std::max(mousePos.y, 0)));
-        // }
-        // m_WidgetRenderer->Update(0.0f);
-        // m_WidgetRenderer->Render(cmd, framebuffer);
+        // Check per-camera input map first
+        auto it = m_CameraInputStates.find(camera);
+        if (it != m_CameraInputStates.end() && it->second.useOverride)
+        {
+            mouseX = it->second.mouseX;
+            mouseY = it->second.mouseY;
+            isHovered = it->second.hovered;
+            useOverride = true;
+        }
+        else
+        {
+            // Fallback to legacy Editor/Gameplay mouse state
+            bool isGameCamera = false;
+            if (m_Scene)
+            {
+                if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+                {
+                    const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                    if (camera == &cc.camera)
+                    {
+                        isGameCamera = true;
+                    }
+                }
+            }
+
+            useOverride = isGameCamera ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
+            if (useOverride)
+            {
+                mouseX = isGameCamera ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
+                mouseY = isGameCamera ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
+                isHovered = isGameCamera ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
+            }
+        }
+
+        if (useOverride)
+        {
+            if (isHovered)
+            {
+                m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
+            }
+            else
+            {
+                const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+                m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
+            }
+        }
+        else
+        {
+            const glm::ivec2 mousePos = InputSystem::GetMousePosition();
+            m_WidgetRenderer->SetMousePosition(
+                static_cast<uint32_t>(std::max(mousePos.x, 0)),
+                static_cast<uint32_t>(std::max(mousePos.y, 0)));
+        }
+
+        m_WidgetRenderer->Update(0.0f);
+        m_WidgetRenderer->Render(cmd, framebuffer);
     }
 
     void SceneRenderer::DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
     {
         DrawDebug2D(cmd, framebuffer, frameContext);
         DrawDebug3D(cmd, camera, framebuffer, frameContext);
+    }
+
+    void SceneRenderer::SetCameraWidgetMousePosition(ICamera *camera, uint32_t mouseX, uint32_t mouseY, bool hovered)
+    {
+        if (!camera)
+            return;
+
+        auto &state = m_CameraInputStates[camera];
+        state.mouseX = mouseX;
+        state.mouseY = mouseY;
+        state.hovered = hovered;
+        state.useOverride = true;
     }
 
     void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)

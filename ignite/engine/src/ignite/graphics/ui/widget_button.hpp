@@ -20,7 +20,7 @@ namespace ignite
         float borderWidth = 1.0f;
     };
 
-    class WidgetButton : public IWidgetItem
+    class IGN_API WidgetButton : public IWidgetItem
     {
     public:
         bool hovered = false;

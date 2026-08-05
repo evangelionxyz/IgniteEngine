@@ -16,7 +16,7 @@ namespace ignite
         float lineSpacing = 0.025f;
     };
 
-    class WidgetLabel : public IWidgetItem
+    class IGN_API WidgetLabel : public IWidgetItem
     {
     public:
         AssetHandle fontHandle = AssetHandle(0);

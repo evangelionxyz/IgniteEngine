@@ -10,6 +10,11 @@ namespace ignite
     WidgetButton::WidgetButton(const std::string &text, WidgetID wID)
         : label(CreateScope<WidgetLabel>(text, (WidgetID)-1)), IWidgetItem(wID)
     {
+        baseStyle.backgroundColor = UI_COLOR_DARK_GRAY;
+        baseStyle.borderColor = UI_COLOR_GRAY;
+        baseStyle.borderWidth = 1.0f;
+        baseStyle.cornerRadius = 0.0f;
+
         style.color = UI_COLOR_DARK_GRAY;
         style.hoverColor = UI_COLOR_GRAY;
         style.pressedColor = UI_COLOR_DARK_GRAY;
@@ -89,7 +94,11 @@ namespace ignite
 
     void WidgetButton::Arrange(const Rect &parentRect)
     {
-        worldRect = CalculateAlignedRect(parentRect);
+        IWidgetItem::Arrange(parentRect);
+        if (label)
+        {
+            label->Arrange(box.content);
+        }
     }
 
     bool WidgetButton::HitTest(int px, int py)

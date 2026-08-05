@@ -73,49 +73,48 @@ namespace ignite
 
             if (Ref<WidgetButton> button = item->As<WidgetButton>())
             {
-                if (button->imageHandle != AssetHandle(0))
+                Ref<Texture> prevImg = button->image;
+                button->image = (button->imageHandle != AssetHandle(0))
+                    ? assetManager->GetAsset<Texture>(button->imageHandle)
+                    : nullptr;
+                if (prevImg != button->image)
                 {
-                    button->image = assetManager->GetAsset<Texture>(button->imageHandle);
-                    if (!button->image)
-                        return;
-                }
-                else
-                {
-                    button->image = nullptr;
+                    button->MarkLayoutDirty();
                 }
 
                 if (button->label)
                 {
-                    if (button->label->fontHandle != AssetHandle(0))
+                    Ref<Font> prevFont = button->label->font;
+                    button->label->font = (button->label->fontHandle != AssetHandle(0))
+                        ? assetManager->GetAsset<Font>(button->label->fontHandle)
+                        : nullptr;
+                    if (prevFont != button->label->font)
                     {
-                        button->label->font = assetManager->GetAsset<Font>(button->label->fontHandle);
-                        if (!button->label->font)
-                            return;
-                    }
-                    else
-                    {
-                        button->label->font = nullptr;
+                        button->label->MarkLayoutDirty();
                     }
                 }
             }
             else if (Ref<WidgetLabel> label = item->As<WidgetLabel>())
             {
-                if (label->fontHandle != AssetHandle(0))
+                Ref<Font> prevFont = label->font;
+                label->font = (label->fontHandle != AssetHandle(0))
+                    ? assetManager->GetAsset<Font>(label->fontHandle)
+                    : nullptr;
+                if (prevFont != label->font)
                 {
-                    label->font = assetManager->GetAsset<Font>(label->fontHandle);
-                    if (!label->font)
-                        return;
-                }
-                else
-                {
-                    label->font = nullptr;
+                    label->MarkLayoutDirty();
                 }
             }
             else if (Ref<WidgetImage> img = item->As<WidgetImage>())
             {
-                img->image = img->imageHandle != AssetHandle(0)
+                Ref<Texture> prevImg = img->image;
+                img->image = (img->imageHandle != AssetHandle(0))
                     ? assetManager->GetAsset<Texture>(img->imageHandle)
                     : nullptr;
+                if (prevImg != img->image)
+                {
+                    img->MarkLayoutDirty();
+                }
             }
 
             for (const Ref<IWidgetItem> &child : item->children)
@@ -149,20 +148,37 @@ namespace ignite
                 return;
             }
 
+            const float opacity = item->baseStyle.opacity;
+            glm::vec4 bgColor = item->baseStyle.backgroundColor;
+            glm::vec4 borderColor = item->baseStyle.borderColor;
+            float borderWidth = item->baseStyle.borderWidth;
+            float cornerRadius = item->baseStyle.cornerRadius;
+
             if (Ref<WidgetButton> button = item->As<WidgetButton>())
             {
-                if (button->style.cornerRadius > 0.0f)
+                bgColor = button->GetCurrentColor();
+                if (button->style.borderColor.a > 0.0f) borderColor = button->style.borderColor;
+                if (button->style.borderWidth > 0.0f) borderWidth = button->style.borderWidth;
+                if (button->style.cornerRadius > 0.0f) cornerRadius = button->style.cornerRadius;
+
+                bgColor.a *= opacity;
+                borderColor.a *= opacity;
+
+                if (bgColor.a > 0.0f)
                 {
-                    renderer->DrawRoundedQuad(button->GetAlignedRect(), button->style.cornerRadius, button->GetCurrentColor(), button->image, glm::vec2(0.0f), glm::vec2(1.0f));
-                }
-                else
-                {
-                    renderer->DrawQuad(button->GetAlignedRect(), 0.0f, button->GetCurrentColor(), button->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                    if (cornerRadius > 0.0f)
+                    {
+                        renderer->DrawRoundedQuad(button->box.border, cornerRadius, bgColor, button->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                    }
+                    else
+                    {
+                        renderer->DrawQuad(button->box.border, 0.0f, bgColor, button->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                    }
                 }
 
-                if (button->style.borderWidth > 0.0f && button->style.borderColor.a > 0.0f)
+                if (borderWidth > 0.0f && borderColor.a > 0.0f)
                 {
-                    renderer->DrawRoundedBorder(button->GetAlignedRect(), button->style.cornerRadius, button->style.borderWidth, button->style.borderColor);
+                    renderer->DrawRoundedBorder(button->box.border, cornerRadius, borderWidth, borderColor);
                 }
 
                 if (button->label && button->label->font && button->label->font->IsReady())
@@ -171,25 +187,33 @@ namespace ignite
                     const glm::vec2 textSize = textBounds.GetSize();
                     const glm::vec2 textPos =
                     {
-                        button->GetAlignedRect().min.x + std::max((button->GetAlignedRect().GetSize().x - textSize.x) * 0.5f, 0.0f) - textBounds.min.x,
-                        button->GetAlignedRect().min.y + std::max((button->GetAlignedRect().GetSize().y - textSize.y) * 0.5f, 0.0f) - textBounds.min.y
+                        button->box.content.min.x + std::max((button->box.content.GetSize().x - textSize.x) * 0.5f, 0.0f) - textBounds.min.x,
+                        button->box.content.min.y + std::max((button->box.content.GetSize().y - textSize.y) * 0.5f, 0.0f) - textBounds.min.y
                     };
 
                     const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f)) *
                         glm::scale(glm::mat4(1.0f), { button->label->style.fontSize, button->label->style.fontSize, 1.0f });
 
-                    const LabelStyle &labelStyle = button->label->style;
+                    LabelStyle labelStyle = button->label->style;
+                    labelStyle.color.a *= opacity;
                     renderer->DrawString(button->label->text, button->label->font, labelStyle.color, textTransform, labelStyle.kerning, labelStyle.lineSpacing);
                 }
             }
             else if (Ref<WidgetLabel> label = item->As<WidgetLabel>())
             {
+                bgColor.a *= opacity;
+                if (bgColor.a > 0.0f)
+                {
+                    renderer->DrawQuad(label->box.border, 0.0f, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f));
+                }
+
                 if (label->font && label->font->IsReady())
                 {
                     const Rect textBounds = label->GetTextBounds();
-                    const LabelStyle &labelStyle = label->style;
+                    LabelStyle labelStyle = label->style;
+                    labelStyle.color.a *= opacity;
 
-                    const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(label->GetAlignedRect().min - textBounds.min, 0.0f)) *
+                    const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(label->box.content.min - textBounds.min, 0.0f)) *
                         glm::scale(glm::mat4(1.0f), { labelStyle.fontSize, labelStyle.fontSize, 1.0f });
 
                     renderer->DrawString(label->text, label->font, labelStyle.color, textTransform, labelStyle.kerning, labelStyle.lineSpacing);
@@ -197,7 +221,32 @@ namespace ignite
             }
             else if (Ref<WidgetImage> img = item->As<WidgetImage>())
             {
-                renderer->DrawQuad(img->GetAlignedRect(), 0.0f, glm::vec4(1.0f), img->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, opacity);
+                if (bgColor.a > 0.0f) color *= bgColor;
+                renderer->DrawQuad(img->box.content, 0.0f, color, img->image, glm::vec2(0.0f), glm::vec2(1.0f));
+
+                if (borderWidth > 0.0f && borderColor.a > 0.0f)
+                {
+                    renderer->DrawRoundedBorder(img->box.border, cornerRadius, borderWidth, borderColor);
+                }
+            }
+            else
+            {
+                bgColor.a *= opacity;
+                borderColor.a *= opacity;
+
+                if (bgColor.a > 0.0f)
+                {
+                    if (cornerRadius > 0.0f)
+                        renderer->DrawRoundedQuad(item->box.border, cornerRadius, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f));
+                    else
+                        renderer->DrawQuad(item->box.border, 0.0f, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f));
+                }
+
+                if (borderWidth > 0.0f && borderColor.a > 0.0f)
+                {
+                    renderer->DrawRoundedBorder(item->box.border, cornerRadius, borderWidth, borderColor);
+                }
             }
 
             const std::vector<Ref<IWidgetItem>> sortedChildren = GetSortedVisibleChildren(item->children);
@@ -711,6 +760,18 @@ namespace ignite
         }
     }
 
+    static void ClearDirtyRecursive(const Ref<IWidgetItem> &item)
+    {
+        if (!item)
+            return;
+        item->m_DirtyLayout = false;
+        item->m_DirtyPaint = false;
+        for (const Ref<IWidgetItem> &child : item->children)
+        {
+            ClearDirtyRecursive(child);
+        }
+    }
+
     void WidgetRenderer::Update(float deltaTime)
     {
         (void)deltaTime;
@@ -735,8 +796,13 @@ namespace ignite
                 continue;
             }
 
-            MeasureRecursive(root->As<IWidgetItem>());
-            root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height)));
+            if (root->m_DirtyLayout)
+            {
+                MeasureRecursive(root->As<IWidgetItem>());
+                root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height)));
+                ClearDirtyRecursive(root->As<IWidgetItem>());
+            }
+
             ResolveWidgetAssetsRecursive(root->As<IWidgetItem>(), AssetManager::GetInstance());
             UpdateRecursive(root->As<IWidgetItem>(), mousePos, isMousePressed);
         }

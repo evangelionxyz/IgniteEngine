@@ -54,22 +54,43 @@ namespace ignite
             sr.AddKeyValue("ID", item->id);
             sr.AddKeyValue("ParentID", item->parent ? item->parent->id : 0);
             sr.AddKeyValue("Type", static_cast<int>(item->GetWidgetType()));
-            sr.AddKeyValue("Position", item->position);
-            sr.AddKeyValue("Size", item->size);
-            sr.AddKeyValue("VerticalAlignment", static_cast<int>(item->VAlignment));
-            sr.AddKeyValue("HorizontalAlignment", static_cast<int>(item->HAlignment));
-            sr.AddKeyValue("Visible", item->visible);
             sr.AddKeyValue("ZIndex", item->zIndex);
 
-            if (item->GetWidgetType() == WidgetType::Container)
-            {
-                if (const Ref<WidgetContainer> container = item->As<WidgetContainer>())
-                {
-                    sr.AddKeyValue("Layout", static_cast<int>(container->layout));
-                    sr.AddKeyValue("Padding", container->padding);
-                    sr.AddKeyValue("Gap", container->gap);
-                }
-            }
+            // Layout properties
+            sr.AddKeyValue("Position", item->layout.position);
+            sr.AddKeyValue("WidthMode", static_cast<int>(item->layout.widthMode));
+            sr.AddKeyValue("HeightMode", static_cast<int>(item->layout.heightMode));
+            sr.AddKeyValue("Width", item->layout.width);
+            sr.AddKeyValue("Height", item->layout.height);
+            sr.AddKeyValue("MinWidth", item->layout.minWidth);
+            sr.AddKeyValue("MinHeight", item->layout.minHeight);
+            sr.AddKeyValue("MaxWidth", item->layout.maxWidth);
+            sr.AddKeyValue("MaxHeight", item->layout.maxHeight);
+            sr.AddKeyValue("Margin", item->layout.margin);
+            sr.AddKeyValue("Padding", item->layout.padding);
+            sr.AddKeyValue("VerticalAlignment", static_cast<int>(item->layout.verticalAlignment));
+            sr.AddKeyValue("HorizontalAlignment", static_cast<int>(item->layout.horizontalAlignment));
+            sr.AddKeyValue("PositionType", static_cast<int>(item->layout.positionType));
+            sr.AddKeyValue("Overflow", static_cast<int>(item->layout.overflow));
+            sr.AddKeyValue("Visibility", static_cast<int>(item->layout.visibility));
+
+            // Flex properties
+            sr.AddKeyValue("FlexDirection", static_cast<int>(item->layout.flex.direction));
+            sr.AddKeyValue("JustifyContent", static_cast<int>(item->layout.flex.justifyContent));
+            sr.AddKeyValue("AlignItems", static_cast<int>(item->layout.flex.alignItems));
+            sr.AddKeyValue("AlignSelf", static_cast<int>(item->layout.flex.alignSelf));
+            sr.AddKeyValue("FlexWrap", static_cast<int>(item->layout.flex.wrap));
+            sr.AddKeyValue("FlexGrow", item->layout.flex.grow);
+            sr.AddKeyValue("FlexShrink", item->layout.flex.shrink);
+            sr.AddKeyValue("FlexBasis", item->layout.flex.basis);
+            sr.AddKeyValue("FlexGap", item->layout.flex.gap);
+
+            // UIStyle properties
+            sr.AddKeyValue("BackgroundColor", item->baseStyle.backgroundColor);
+            sr.AddKeyValue("BorderColor", item->baseStyle.borderColor);
+            sr.AddKeyValue("BorderWidth", item->baseStyle.borderWidth);
+            sr.AddKeyValue("CornerRadius", item->baseStyle.cornerRadius);
+            sr.AddKeyValue("Opacity", item->baseStyle.opacity);
 
             if (item->GetWidgetType() == WidgetType::Button)
             {
@@ -92,7 +113,6 @@ namespace ignite
                         sr.AddKeyValue("Kerning", button->label->style.kerning);
                         sr.AddKeyValue("LineSpacing", button->label->style.lineSpacing);
                     }
-
                 }
             }
 
@@ -172,7 +192,6 @@ namespace ignite
                 const WidgetID id = itemNode["ID"].as<int>();
                 const WidgetID parentID = itemNode["ParentID"].as<int>();
 
-                // Create item
                 Ref<IWidgetItem> item = nullptr;
                 switch (type)
                 {
@@ -190,20 +209,95 @@ namespace ignite
 
                 if (auto n = itemNode["Name"]) item->name = n.as<std::string>();
                 if (auto n = itemNode["ID"]) item->id = n.as<int>();
-                if (auto n = itemNode["Position"]) item->position = n.as<glm::vec2>();
                 if (auto n = itemNode["ZIndex"]) item->zIndex = n.as<int>();
-                if (auto n = itemNode["Size"]) item->size = n.as<glm::vec2>();
-                if (auto n = itemNode["VerticalAlignment"]) item->VAlignment = static_cast<VerticalAlignment>(n.as<int>());
-                if (auto n = itemNode["HorizontalAlignment"]) item->HAlignment = static_cast<HorizontalAlignment>(n.as<int>());
-                if (auto n = itemNode["Visible"]) item->visible = n.as<bool>();
+
+                // Position & Size fallback
+                if (auto n = itemNode["Position"]) item->layout.position = n.as<glm::vec2>();
+                if (auto n = itemNode["WidthMode"]) item->layout.widthMode = static_cast<SizeMode>(n.as<int>());
+                if (auto n = itemNode["HeightMode"]) item->layout.heightMode = static_cast<SizeMode>(n.as<int>());
+
+                if (auto n = itemNode["Width"]) item->layout.width = n.as<float>();
+                else if (auto n = itemNode["Size"]) item->layout.width = n.as<glm::vec2>().x;
+
+                if (auto n = itemNode["Height"]) item->layout.height = n.as<float>();
+                else if (auto n = itemNode["Size"]) item->layout.height = n.as<glm::vec2>().y;
+
+                if (auto n = itemNode["MinWidth"]) item->layout.minWidth = n.as<float>();
+                if (auto n = itemNode["MinHeight"]) item->layout.minHeight = n.as<float>();
+                if (auto n = itemNode["MaxWidth"]) item->layout.maxWidth = n.as<float>();
+                if (auto n = itemNode["MaxHeight"]) item->layout.maxHeight = n.as<float>();
+
+                // Margin & Padding fallback (vec4 or scalar)
+                if (auto n = itemNode["Margin"])
+                {
+                    try { item->layout.margin = n.as<glm::vec4>(); }
+                    catch (...) { item->layout.margin = glm::vec4(n.as<float>()); }
+                }
+
+                if (auto n = itemNode["Padding"])
+                {
+                    try { item->layout.padding = n.as<glm::vec4>(); }
+                    catch (...) { item->layout.padding = glm::vec4(n.as<float>()); }
+                }
+
+                if (auto n = itemNode["VerticalAlignment"]) item->layout.verticalAlignment = static_cast<VerticalAlignment>(n.as<int>());
+                if (auto n = itemNode["HorizontalAlignment"]) item->layout.horizontalAlignment = static_cast<HorizontalAlignment>(n.as<int>());
+                if (auto n = itemNode["PositionType"]) item->layout.positionType = static_cast<PositionType>(n.as<int>());
+                if (auto n = itemNode["Overflow"]) item->layout.overflow = static_cast<OverflowMode>(n.as<int>());
+
+                if (auto n = itemNode["Visibility"])
+                {
+                    item->layout.visibility = static_cast<VisibilityMode>(n.as<int>());
+                }
+                else if (auto n = itemNode["Visible"])
+                {
+                    item->layout.visibility = n.as<bool>() ? VisibilityMode::Visible : VisibilityMode::Hidden;
+                }
+
+                // Flex fallback
+                if (auto n = itemNode["FlexDirection"])
+                {
+                    item->layout.flex.direction = static_cast<FlexDirection>(n.as<int>());
+                }
+                else if (auto n = itemNode["Layout"])
+                {
+                    const int oldLayout = n.as<int>();
+                    item->layout.flex.direction = (oldLayout == 0) ? FlexDirection::Row : FlexDirection::Column;
+                }
+
+                if (auto n = itemNode["JustifyContent"]) item->layout.flex.justifyContent = static_cast<JustifyContent>(n.as<int>());
+                if (auto n = itemNode["AlignItems"]) item->layout.flex.alignItems = static_cast<AlignItems>(n.as<int>());
+                if (auto n = itemNode["AlignSelf"]) item->layout.flex.alignSelf = static_cast<AlignSelf>(n.as<int>());
+                if (auto n = itemNode["FlexWrap"]) item->layout.flex.wrap = static_cast<FlexWrap>(n.as<int>());
+                if (auto n = itemNode["FlexGrow"]) item->layout.flex.grow = n.as<float>();
+                if (auto n = itemNode["FlexShrink"]) item->layout.flex.shrink = n.as<float>();
+                if (auto n = itemNode["FlexBasis"]) item->layout.flex.basis = n.as<float>();
+
+                if (auto n = itemNode["FlexGap"]) item->layout.flex.gap = n.as<float>();
+                else if (auto n = itemNode["Gap"]) item->layout.flex.gap = n.as<float>();
+
+                // UIStyle
+                if (auto n = itemNode["BackgroundColor"]) item->baseStyle.backgroundColor = n.as<glm::vec4>();
+                if (auto n = itemNode["BorderColor"]) item->baseStyle.borderColor = n.as<glm::vec4>();
+                if (auto n = itemNode["BorderWidth"]) item->baseStyle.borderWidth = n.as<float>();
+                if (auto n = itemNode["CornerRadius"]) item->baseStyle.cornerRadius = n.as<float>();
+                if (auto n = itemNode["Opacity"]) item->baseStyle.opacity = n.as<float>();
 
                 if (type == WidgetType::Container)
                 {
                     if (Ref<WidgetContainer> container = item->As<WidgetContainer>())
                     {
-                        if (itemNode["Layout"]) container->layout = static_cast<LayoutMode>(itemNode["Layout"].as<int>());
-                        if (itemNode["Padding"]) container->padding = itemNode["Padding"].as<float>();
-                        if (itemNode["Gap"]) container->gap = itemNode["Gap"].as<float>();
+                        if (itemNode["Layout"])
+                        {
+                            const int oldLayout = itemNode["Layout"].as<int>();
+                            container->layout.flex.direction = (oldLayout == 0) ? FlexDirection::Row : FlexDirection::Column;
+                        }
+                        if (itemNode["Padding"])
+                        {
+                            try { container->layout.padding = itemNode["Padding"].as<glm::vec4>(); }
+                            catch (...) { container->layout.padding = glm::vec4(itemNode["Padding"].as<float>()); }
+                        }
+                        if (itemNode["Gap"]) container->layout.flex.gap = itemNode["Gap"].as<float>();
                     }
                 }
 
@@ -238,6 +332,7 @@ namespace ignite
                         if (itemNode["FontHandle"]) text->fontHandle = AssetHandle(itemNode["FontHandle"].as<uint64_t>());
                         if (itemNode["Text"]) text->text = itemNode["Text"].as<std::string>();
                         if (itemNode["Color"]) text->style.color = itemNode["Color"].as<glm::vec4>();
+                        if (itemNode["FontSize"]) text->style.fontSize = itemNode["FontSize"].as<float>();
                         if (itemNode["Kerning"]) text->style.kerning = itemNode["Kerning"].as<float>();
                         if (itemNode["LineSpacing"]) text->style.lineSpacing = itemNode["LineSpacing"].as<float>();
                     }
@@ -259,18 +354,28 @@ namespace ignite
 
         for (auto &[id, item] : widget->m_WidgetItems)
         {
+            if (item)
+            {
+                item->children.clear();
+            }
+        }
+
+        for (auto &[id, item] : widget->m_WidgetItems)
+        {
             if (!item)
             {
                 continue;
             }
 
             const auto parentIt = parentMap.find(id);
-            if (parentIt == parentMap.end() || parentIt->second == 0)
+            const int parentID = (parentIt != parentMap.end()) ? parentIt->second : -1;
+
+            if (id == parentID || parentID < 0)
             {
                 if (item->GetWidgetType() == WidgetType::Container && !widget->m_Root)
                 {
                     widget->m_Root = item->As<WidgetContainer>();
-                    const glm::vec2 rootSize = widget->m_Root->size;
+                    const glm::vec2 rootSize = widget->m_Root->GetSize();
                     if (rootSize.x > 0.0f && rootSize.y > 0.0f)
                     {
                         widget->m_ViewportSize =
@@ -283,7 +388,7 @@ namespace ignite
                 continue;
             }
 
-            const auto ownerIt = widget->m_WidgetItems.find(parentIt->second);
+            const auto ownerIt = widget->m_WidgetItems.find(parentID);
             if (ownerIt == widget->m_WidgetItems.end() || !ownerIt->second)
             {
                 continue;
@@ -323,6 +428,9 @@ namespace ignite
         }
 
         m_WidgetItems[wID] = button;
+        button->MarkLayoutDirty();
+        button->MarkPaintDirty();
+        SetDirtyFlag(true);
         return wID;
     }
 
@@ -338,6 +446,9 @@ namespace ignite
         }
 
         m_WidgetItems[wID] = label;
+        label->MarkLayoutDirty();
+        label->MarkPaintDirty();
+        SetDirtyFlag(true);
         return wID;
     }
 
@@ -353,6 +464,9 @@ namespace ignite
         }
 
         m_WidgetItems[wID] = child;
+        child->MarkLayoutDirty();
+        child->MarkPaintDirty();
+        SetDirtyFlag(true);
         return wID;
     }
 
@@ -368,6 +482,9 @@ namespace ignite
         }
 
         m_WidgetItems[wID] = image;
+        image->MarkLayoutDirty();
+        image->MarkPaintDirty();
+        SetDirtyFlag(true);
         return wID;
     }
 
@@ -383,6 +500,9 @@ namespace ignite
         }
 
         m_WidgetItems[wID] = box;
+        box->MarkLayoutDirty();
+        box->MarkPaintDirty();
+        SetDirtyFlag(true);
         return wID;
     }
 
@@ -398,6 +518,9 @@ namespace ignite
         }
 
         m_WidgetItems[wID] = overlay;
+        overlay->MarkLayoutDirty();
+        overlay->MarkPaintDirty();
+        SetDirtyFlag(true);
         return wID;
     }
 
@@ -439,7 +562,133 @@ namespace ignite
         // Attach to new parent
         item->parent = newParent;
         newParent->children.push_back(item);
+        if (m_Root)
+        {
+            m_Root->MarkLayoutDirty();
+            m_Root->MarkPaintDirty();
+        }
+        SetDirtyFlag(true);
         return true;
+    }
+
+    bool WidgetCanvas::ReorderItem(WidgetID draggedId, WidgetID targetId, bool insertAfter)
+    {
+        if (draggedId == targetId)
+            return false;
+
+        const auto draggedIt = m_WidgetItems.find(draggedId);
+        const auto targetIt = m_WidgetItems.find(targetId);
+        if (draggedIt == m_WidgetItems.end() || targetIt == m_WidgetItems.end())
+            return false;
+
+        Ref<IWidgetItem> dragged = draggedIt->second;
+        Ref<IWidgetItem> target = targetIt->second;
+        if (!dragged || !target || !target->parent)
+            return false;
+
+        // Cannot reorder root
+        if (m_Root && dragged.get() == m_Root.get())
+            return false;
+
+        // Prevent moving an item inside its own descendant
+        IWidgetItem *check = target->parent;
+        while (check)
+        {
+            if (check == dragged.get())
+                return false;
+            check = check->parent;
+        }
+
+        // Remove dragged from current parent
+        if (dragged->parent)
+        {
+            auto &oldSiblings = dragged->parent->children;
+            oldSiblings.erase(std::remove_if(oldSiblings.begin(), oldSiblings.end(),
+                [&](const Ref<IWidgetItem> &c) { return c.get() == dragged.get(); }),
+                oldSiblings.end());
+        }
+
+        // Assign new parent
+        IWidgetItem *newParent = target->parent;
+        dragged->parent = newParent;
+
+        // Insert into newParent->children relative to target
+        auto &newSiblings = newParent->children;
+        auto insertIt = std::find_if(newSiblings.begin(), newSiblings.end(),
+            [&](const Ref<IWidgetItem> &c) { return c.get() == target.get(); });
+
+        if (insertIt != newSiblings.end())
+        {
+            if (insertAfter)
+                ++insertIt;
+            newSiblings.insert(insertIt, dragged);
+        }
+        else
+        {
+            newSiblings.push_back(dragged);
+        }
+
+        if (m_Root)
+        {
+            m_Root->MarkLayoutDirty();
+            m_Root->MarkPaintDirty();
+        }
+        SetDirtyFlag(true);
+        return true;
+    }
+
+    bool WidgetCanvas::MoveItemUp(WidgetID id)
+    {
+        const auto it = m_WidgetItems.find(id);
+        if (it == m_WidgetItems.end() || !it->second || !it->second->parent)
+            return false;
+
+        Ref<IWidgetItem> item = it->second;
+        auto &siblings = item->parent->children;
+
+        for (size_t i = 1; i < siblings.size(); ++i)
+        {
+            if (siblings[i].get() == item.get())
+            {
+                std::swap(siblings[i], siblings[i - 1]);
+                if (m_Root)
+                {
+                    m_Root->MarkLayoutDirty();
+                    m_Root->MarkPaintDirty();
+                }
+                SetDirtyFlag(true);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool WidgetCanvas::MoveItemDown(WidgetID id)
+    {
+        const auto it = m_WidgetItems.find(id);
+        if (it == m_WidgetItems.end() || !it->second || !it->second->parent)
+            return false;
+
+        Ref<IWidgetItem> item = it->second;
+        auto &siblings = item->parent->children;
+
+        for (size_t i = 0; i + 1 < siblings.size(); ++i)
+        {
+            if (siblings[i].get() == item.get())
+            {
+                std::swap(siblings[i], siblings[i + 1]);
+                if (m_Root)
+                {
+                    m_Root->MarkLayoutDirty();
+                    m_Root->MarkPaintDirty();
+                }
+                SetDirtyFlag(true);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     WidgetContainer *WidgetCanvas::CreateRoot(uint32_t width, uint32_t height)
@@ -449,8 +698,10 @@ namespace ignite
             m_ViewportSize = { width, height };
             const WidgetID wID = GetNextItemId();
             m_Root = CreateRef<WidgetContainer>(wID);
-            m_Root->position = glm::vec2(0.0f);
-            m_Root->size = glm::vec2(static_cast<float>(width), static_cast<float>(height));
+            m_Root->SetPosition(glm::vec2(0.0f));
+            m_Root->SetSize(glm::vec2(static_cast<float>(width), static_cast<float>(height)));
+            m_Root->layout.flex.direction = FlexDirection::Column;
+            m_Root->layout.flex.justifyContent = JustifyContent::SpaceBetween;
             m_WidgetItems[wID] = m_Root;
         }
 
@@ -466,20 +717,53 @@ namespace ignite
         }
 
         const Ref<IWidgetItem> item = it->second;
-        if (item && item->parent)
+        if (!item)
         {
-            auto &siblings = item->parent->children;
+            return false;
+        }
+
+        IWidgetItem *parentPtr = item->parent;
+
+        // Recursive lambda to collect and remove item and all descendant children from m_WidgetItems
+        std::function<void(const Ref<IWidgetItem> &)> removeSubtree = [&](const Ref<IWidgetItem> &node)
+        {
+            if (!node)
+                return;
+
+            for (const Ref<IWidgetItem> &child : node->children)
+            {
+                removeSubtree(child);
+            }
+
+            m_WidgetItems.erase(node->id);
+        };
+
+        if (parentPtr)
+        {
+            auto &siblings = parentPtr->children;
             siblings.erase(std::remove_if(siblings.begin(), siblings.end(), [&](const Ref<IWidgetItem> &child)
             {
                 return child.get() == item.get();
             }), siblings.end());
+
+            parentPtr->MarkLayoutDirty();
+            parentPtr->MarkPaintDirty();
         }
 
-        if (item && m_Root && m_Root.get() == item.get())
+        if (m_Root && m_Root.get() == item.get())
         {
             m_Root = nullptr;
         }
 
-        return m_WidgetItems.erase(id) > 0;
+        removeSubtree(item);
+
+        if (m_Root)
+        {
+            m_Root->MarkLayoutDirty();
+            m_Root->MarkPaintDirty();
+        }
+
+        SetDirtyFlag(true);
+        return true;
     }
 }

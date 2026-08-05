@@ -17,6 +17,14 @@ namespace ignite
     class WidgetRenderer;
     class SkeletalMeshComponent;
 
+	struct CameraWidgetInputState
+	{
+		uint32_t mouseX = 0;
+		uint32_t mouseY = 0;
+		bool hovered = false;
+		bool useOverride = false;
+	};
+
 	struct CameraRenderTarget
 	{
 		Ref<RenderTarget> sceneRT;         // MSAA render target (sampleCount > 1) or regular
@@ -40,6 +48,7 @@ namespace ignite
         
         void Render(ICamera *camera, FrameContext *frameContext, bool drawDebug);
         
+        void SetCameraWidgetMousePosition(ICamera *camera, uint32_t mouseX, uint32_t mouseY, bool hovered);
         void SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
         void SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
@@ -70,7 +79,7 @@ namespace ignite
     private:
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug);
-        void UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
+        void UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
 		void DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
         void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false);
 
@@ -160,6 +169,8 @@ namespace ignite
 
         std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> m_CompositeBindingSetCache;
         std::unordered_map<DebugGridBindingKey, nvrhi::BindingSetHandle, DebugGridBindingKeyHash> m_DebugGridBindingSetCache;
+
+        std::unordered_map<ICamera *, CameraWidgetInputState> m_CameraInputStates;
 
         uint32_t m_EditorWidgetMouseX = 0;
         uint32_t m_EditorWidgetMouseY = 0;

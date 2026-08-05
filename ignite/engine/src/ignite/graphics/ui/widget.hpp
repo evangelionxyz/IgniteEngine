@@ -65,6 +65,125 @@ namespace ignite
         COUNT
     };
 
+    enum class SizeMode : uint8_t
+    {
+        Auto = 0,
+        Fixed,
+        Fill,
+        Percent
+    };
+
+    enum class FlexDirection : uint8_t
+    {
+        Row = 0,
+        Column
+    };
+
+    enum class JustifyContent : uint8_t
+    {
+        Start = 0,
+        Center,
+        End,
+        SpaceBetween,
+        SpaceAround
+    };
+
+    enum class AlignItems : uint8_t
+    {
+        Start = 0,
+        Center,
+        End,
+        Stretch
+    };
+
+    enum class AlignSelf : uint8_t
+    {
+        Auto = 0,
+        Start,
+        Center,
+        End,
+        Stretch
+    };
+
+    enum class FlexWrap : uint8_t
+    {
+        NoWrap = 0,
+        Wrap
+    };
+
+    enum class PositionType : uint8_t
+    {
+        Relative = 0,
+        Absolute,
+        Fixed
+    };
+
+    enum class OverflowMode : uint8_t
+    {
+        Visible = 0,
+        Hidden,
+        Clip,
+        Scroll
+    };
+
+    enum class VisibilityMode : uint8_t
+    {
+        Visible = 0,
+        Hidden,
+        Collapsed
+    };
+
+    struct FlexProperties
+    {
+        FlexDirection direction = FlexDirection::Column;
+        JustifyContent justifyContent = JustifyContent::Start;
+        AlignItems alignItems = AlignItems::Start;
+        AlignSelf alignSelf = AlignSelf::Auto;
+        FlexWrap wrap = FlexWrap::NoWrap;
+        float grow = 0.0f;
+        float shrink = 1.0f;
+        float basis = -1.0f; // -1 = auto
+        float gap = 0.0f;
+    };
+
+    struct UILayout
+    {
+        glm::vec2 position = glm::vec2(0.0f);
+        SizeMode widthMode = SizeMode::Fixed;
+        SizeMode heightMode = SizeMode::Fixed;
+        float width = 150.0f;
+        float height = 50.0f;
+        float minWidth = 0.0f;
+        float minHeight = 0.0f;
+        float maxWidth = 10000.0f;
+        float maxHeight = 10000.0f;
+        glm::vec4 margin = glm::vec4(0.0f);  // top, right, bottom, left
+        glm::vec4 padding = glm::vec4(0.0f); // top, right, bottom, left
+        HorizontalAlignment horizontalAlignment = HorizontalAlignment::Left;
+        VerticalAlignment verticalAlignment = VerticalAlignment::Top;
+        FlexProperties flex;
+        PositionType positionType = PositionType::Relative;
+        OverflowMode overflow = OverflowMode::Visible;
+        VisibilityMode visibility = VisibilityMode::Visible;
+    };
+
+    struct Box
+    {
+        Rect content;
+        Rect padding;
+        Rect border;
+        Rect margin;
+    };
+
+    struct UIStyle
+    {
+        glm::vec4 backgroundColor = glm::vec4(0.0f);
+        glm::vec4 borderColor = glm::vec4(0.0f);
+        float borderWidth = 0.0f;
+        float cornerRadius = 0.0f;
+        float opacity = 1.0f;
+    };
+
     enum class WidgetType : uint8_t
     {
         Container = 0,
@@ -80,7 +199,7 @@ namespace ignite
     typedef int WidgetID;
 
     // Base widget item
-    class IWidgetItem : public std::enable_shared_from_this<IWidgetItem>
+    class IGN_API IWidgetItem : public std::enable_shared_from_this<IWidgetItem>
     {
     protected:
         std::function<void()> m_OnClick;
@@ -98,18 +217,16 @@ namespace ignite
         std::string name; // widget name
         WidgetID id = -1;
 
-        // Layout info
-        glm::vec2 position = glm::vec2(0.0f); // x, y
-        glm::vec2 size = glm::vec2(150.0f, 50.0f); // width, height
-        float padding = 0.0f;
-        float margin = 0.0f;
+        // Layout & Style info
+        UILayout layout;
+        UIStyle baseStyle;
+        Box box;
+
         int zIndex = 0;
-
-        VerticalAlignment VAlignment = VerticalAlignment::Top;
-        HorizontalAlignment HAlignment = HorizontalAlignment::Left;
-
         Rect worldRect;
-        bool visible = true;
+
+        bool m_DirtyLayout = true;
+        bool m_DirtyPaint = true;
 
     public:
         virtual ~IWidgetItem() = default;
@@ -128,44 +245,92 @@ namespace ignite
             children.emplace_back(child);
 
             auto *ptr = child.get();
+            MarkLayoutDirty();
             return ptr;
         }
 
         virtual void Measure() { }
-        virtual void Arrange(const Rect &parentArea) { }
+        virtual void Arrange(const Rect &parentArea)
+        {
+            worldRect = CalculateAlignedRect(parentArea);
+
+            box.margin  = worldRect;
+            box.border  = Rect(box.margin.min + glm::vec2(layout.margin.w, layout.margin.x),
+                               box.margin.max - glm::vec2(layout.margin.y, layout.margin.z));
+            box.padding = Rect(box.border.min + glm::vec2(baseStyle.borderWidth),
+                               box.border.max - glm::vec2(baseStyle.borderWidth));
+            box.content = Rect(box.padding.min + glm::vec2(layout.padding.w, layout.padding.x),
+                               box.padding.max - glm::vec2(layout.padding.y, layout.padding.z));
+        }
         virtual bool HitTest(int px, int py) { return false; }
 
-        void SetVisible(bool isVisible) { visible = isVisible; }
-        bool IsVisible() const { return visible; }
+        void MarkLayoutDirty()
+        {
+            m_DirtyLayout = true;
+            if (parent)
+            {
+                parent->MarkLayoutDirty();
+            }
+        }
+
+        void MarkPaintDirty()
+        {
+            m_DirtyPaint = true;
+        }
+
+        void SetVisible(bool isVisible)
+        {
+            layout.visibility = isVisible ? VisibilityMode::Visible : VisibilityMode::Hidden;
+            MarkLayoutDirty();
+            MarkPaintDirty();
+        }
+
+        bool IsVisible() const
+        {
+            return layout.visibility == VisibilityMode::Visible;
+        }
+
+        bool IsCollapsed() const
+        {
+            return layout.visibility == VisibilityMode::Collapsed;
+        }
+
         const Rect &GetAlignedRect() const { return worldRect; }
+
+        glm::vec2 GetPosition() const { return layout.position; }
+        void SetPosition(const glm::vec2 &pos) { layout.position = pos; MarkLayoutDirty(); }
+        glm::vec2 GetSize() const { return glm::vec2(layout.width, layout.height); }
+        void SetSize(const glm::vec2 &sz) { layout.width = sz.x; layout.height = sz.y; MarkLayoutDirty(); }
 
         Rect CalculateAlignedRect(const Rect &parentArea) const
         {
-            const glm::vec2 marginVec = glm::vec2(margin);
-            const glm::vec2 availableMin = parentArea.min + marginVec;
-            const glm::vec2 availableMax = parentArea.max - marginVec;
+            // top = margin.x, right = margin.y, bottom = margin.z, left = margin.w
+            const glm::vec2 marginMin = glm::vec2(layout.margin.w, layout.margin.x);
+            const glm::vec2 marginMax = glm::vec2(layout.margin.y, layout.margin.z);
+            const glm::vec2 availableMin = parentArea.min + marginMin;
+            const glm::vec2 availableMax = parentArea.max - marginMax;
             const glm::vec2 availableSize = glm::max(availableMax - availableMin, glm::vec2(0.0f));
 
-            glm::vec2 resolvedSize = size;
+            glm::vec2 resolvedSize = glm::vec2(layout.width, layout.height);
             glm::vec2 alignedMin = availableMin;
 
-            switch (HAlignment)
+            switch (layout.horizontalAlignment)
             {
                 case HorizontalAlignment::Left: break;
-                case HorizontalAlignment::Center: alignedMin.x += (availableSize.x - size.x) / 2.0f; break;
-                case HorizontalAlignment::Right: alignedMin.x += (availableSize.x - size.x); break;
+                case HorizontalAlignment::Center: alignedMin.x += (availableSize.x - resolvedSize.x) / 2.0f; break;
+                case HorizontalAlignment::Right: alignedMin.x += (availableSize.x - resolvedSize.x); break;
                 case HorizontalAlignment::ExpandHorizontally: resolvedSize.x = availableSize.x; break;
             }
 
-            switch (VAlignment)
+            switch (layout.verticalAlignment)
             {
                 case VerticalAlignment::Top: break;
-                case VerticalAlignment::Middle: alignedMin.y += (availableSize.y - size.y) / 2.0f; break;
-                case VerticalAlignment::Bottom: alignedMin.y += (availableSize.y - size.y); break;
+                case VerticalAlignment::Middle: alignedMin.y += (availableSize.y - resolvedSize.y) / 2.0f; break;
+                case VerticalAlignment::Bottom: alignedMin.y += (availableSize.y - resolvedSize.y); break;
                 case VerticalAlignment::ExpandVertically: resolvedSize.y = availableSize.y; break;
             }
 
-            alignedMin += position;
+            alignedMin += layout.position;
             return { alignedMin, alignedMin + resolvedSize };
         }
 

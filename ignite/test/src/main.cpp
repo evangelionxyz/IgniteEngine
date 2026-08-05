@@ -17,6 +17,10 @@
 #include "ignite/animation/blend_space.hpp"
 #include "ignite/animation/animation_montage.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
+#include "ignite/graphics/ui/widget_canvas.hpp"
+#include "ignite/graphics/ui/widget_container.hpp"
+#include "ignite/graphics/ui/widget_button.hpp"
+#include "ignite/graphics/ui/widget_label.hpp"
 
 #include <string>
 #include <filesystem>
@@ -1214,6 +1218,75 @@ public class LiveTestScript : Entity
     EXPECT_TRUE(sc.runtimeScriptInstance->GetFieldValue<bool>("HotReloaded"));
 
     scene->OnStop();
+}
+
+// -------------------------------------------------
+// UI Layout Engine Tests
+// -------------------------------------------------
+TEST(UILayoutEngine, FlexAndInvalidationAndSerialization)
+{
+    // Test 1: Flex Grow Distribution & Box Model
+    Ref<WidgetContainer> rootContainer = CreateRef<WidgetContainer>(1);
+    rootContainer->layout.widthMode = SizeMode::Fixed;
+    rootContainer->layout.width = 300.0f;
+    rootContainer->layout.heightMode = SizeMode::Fixed;
+    rootContainer->layout.height = 100.0f;
+    rootContainer->layout.flex.direction = FlexDirection::Row;
+    rootContainer->layout.flex.gap = 0.0f;
+
+    WidgetButton *child1 = rootContainer->AddChild<WidgetButton>("Child1", 2);
+    child1->layout.widthMode = SizeMode::Fixed;
+    child1->layout.width = 50.0f;
+    child1->layout.flex.grow = 1.0f;
+
+    WidgetButton *child2 = rootContainer->AddChild<WidgetButton>("Child2", 3);
+    child2->layout.widthMode = SizeMode::Fixed;
+    child2->layout.width = 50.0f;
+    child2->layout.flex.grow = 3.0f;
+
+    rootContainer->Measure();
+    rootContainer->Arrange(Rect(0.0f, 0.0f, 300.0f, 100.0f));
+
+    // Remaining space = 300 - (50 + 50) = 200.
+    // Child 1 grows by 200 * (1/4) = 50 -> final width 100.
+    // Child 2 grows by 200 * (3/4) = 150 -> final width 200.
+    EXPECT_FLOAT_EQ(child1->box.margin.GetSize().x, 100.0f);
+    EXPECT_FLOAT_EQ(child2->box.margin.GetSize().x, 200.0f);
+
+    // Test 2: Invalidation Flag Propagation
+    rootContainer->m_DirtyLayout = false;
+    child1->m_DirtyLayout = false;
+    child1->SetPosition({ 10.0f, 10.0f }); // SetPosition calls MarkLayoutDirty()
+    EXPECT_TRUE(child1->m_DirtyLayout);
+    EXPECT_TRUE(rootContainer->m_DirtyLayout);
+
+    // Test 3: Serialization & Backward Compatibility
+    ignite::Path filepath = "test-resources/temp/test_ui_layout.widget";
+    if (!ignite::Path::exists(filepath.parent_path()))
+    {
+        ignite::Path::create_directories(filepath.parent_path());
+    }
+
+    Ref<WidgetCanvas> canvas = CreateRef<WidgetCanvas>(nullptr);
+    WidgetContainer *canvasRoot = canvas->CreateRoot(1280, 720);
+    canvasRoot->layout.flex.direction = FlexDirection::Column;
+    canvasRoot->layout.padding = glm::vec4(10.0f, 15.0f, 10.0f, 15.0f);
+    canvasRoot->baseStyle.backgroundColor = glm::vec4(0.2f, 0.3f, 0.4f, 1.0f);
+
+    WidgetLabel *label = canvasRoot->AddChild<WidgetLabel>("Title Label", canvas->GetNextItemId());
+    label->layout.widthMode = SizeMode::Auto;
+    label->baseStyle.opacity = 0.9f;
+
+    ASSERT_TRUE(canvas->Serialize(filepath));
+
+    Ref<WidgetCanvas> loadedCanvas = WidgetCanvas::Deserialize(filepath);
+    ASSERT_NE(loadedCanvas, nullptr);
+    ASSERT_NE(loadedCanvas->GetRoot(), nullptr);
+
+    EXPECT_EQ(loadedCanvas->GetRoot()->layout.flex.direction, FlexDirection::Column);
+    EXPECT_FLOAT_EQ(loadedCanvas->GetRoot()->layout.padding.x, 10.0f);
+    EXPECT_FLOAT_EQ(loadedCanvas->GetRoot()->layout.padding.y, 15.0f);
+    EXPECT_FLOAT_EQ(loadedCanvas->GetRoot()->baseStyle.backgroundColor.r, 0.2f);
 }
 
 int main(int argc, char **argv)
