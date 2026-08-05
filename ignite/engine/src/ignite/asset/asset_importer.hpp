@@ -105,6 +105,7 @@ namespace ignite
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo &createInfo, AssetManager *assetManager);
         static Ref<FmodSound> ImportAudio(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
+        static Ref<TerrainData> ImportTerrain(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
     };
 }
 

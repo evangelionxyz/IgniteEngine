@@ -801,7 +801,7 @@ namespace ignite
         return destEntity;
     }
 
-    Entity SceneManager::InstantiatePrefab(Scene *scene, const Ref<Prefab> &prefab)
+    Entity SceneManager::InstantiatePrefab(Scene *scene, const Ref<Prefab> &prefab, Entity parent)
     {
         if (!scene || !prefab || !prefab->GetPrefabScene())
             return { entt::null, nullptr };
@@ -820,6 +820,137 @@ namespace ignite
             return { entt::null, nullptr };
 
         Entity instanceRoot = CloneEntityTree(scene, prefab->GetPrefabScene().get(), prefabRoot);
+        if (instanceRoot.IsValid())
+        {
+            if (!instanceRoot.HasComponent<PrefabComponent>())
+            {
+                instanceRoot.AddComponent<PrefabComponent>(prefab->handle, prefabRoot.GetUUID());
+            }
+            else
+            {
+                auto &comp = instanceRoot.GetComponent<PrefabComponent>();
+                comp.prefabHandle = prefab->handle;
+                comp.prefabEntityUUID = prefabRoot.GetUUID();
+            }
+
+            if (parent.IsValid())
+            {
+                AddChild(scene, parent, instanceRoot);
+            }
+        }
+
+        scene->SetDirtyFlag(true);
         return instanceRoot;
+    }
+
+    void SceneManager::SyncAllPrefabInstances(Scene *scene, AssetHandle prefabHandle)
+    {
+        if (!scene || prefabHandle == AssetHandle(0))
+            return;
+
+        AssetWorker::SubmitJob([scene, prefabHandle]()
+        {
+            auto assetManager = AssetManager::GetInstance();
+            if (!assetManager)
+                return;
+
+            Ref<Prefab> prefab = assetManager->GetAssetImmediate<Prefab>(prefabHandle);
+            if (!prefab || !prefab->GetPrefabScene())
+                return;
+
+            Application::SubmitToMainThread([scene, prefabHandle, prefab]()
+            {
+                std::vector<Entity> instancesToSync;
+                if (scene->registry)
+                {
+                    auto view = scene->registry->view<PrefabComponent>();
+                    for (entt::entity e : view)
+                    {
+                        const auto &comp = view.get<PrefabComponent>(e);
+                        if (comp.prefabHandle == prefabHandle)
+                        {
+                            Entity entity{ e, scene };
+                            if (entity.GetParentUUID() == UUID(0))
+                            {
+                                instancesToSync.push_back(entity);
+                            }
+                            else
+                            {
+                                Entity parent = GetEntity(scene, entity.GetParentUUID());
+                                if (!parent.IsValid() || !parent.HasComponent<PrefabComponent>() || parent.GetComponent<PrefabComponent>().prefabHandle != prefabHandle)
+                                {
+                                    instancesToSync.push_back(entity);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (Entity instanceRoot : instancesToSync)
+                {
+                    if (!instanceRoot.IsValid())
+                        continue;
+
+                    const auto &idComp = instanceRoot.GetComponent<IDComponent>();
+                    UUID parentUUID = idComp.parent;
+                    std::string entityName = idComp.name;
+                    TransformComponent oldTransform = instanceRoot.GetComponent<TransformComponent>();
+
+                    Entity newRoot = InstantiatePrefab(scene, prefab);
+                    if (newRoot.IsValid())
+                    {
+                        newRoot.GetComponent<TransformComponent>() = oldTransform;
+                        newRoot.GetComponent<IDComponent>().name = entityName;
+
+                        if (parentUUID != UUID(0))
+                        {
+                            Entity parent = GetEntity(scene, parentUUID);
+                            if (parent.IsValid())
+                            {
+                                AddChild(scene, parent, newRoot);
+                            }
+                        }
+
+                        DestroyEntity(scene, instanceRoot);
+                    }
+                }
+            });
+        });
+    }
+
+    void SceneManager::ApplyPrefabChanges(Entity entity, Scene *scene, Project *project)
+    {
+        if (!entity.IsValid() || !scene || !entity.HasComponent<PrefabComponent>())
+            return;
+
+        AssetHandle prefabHandle = entity.GetComponent<PrefabComponent>().prefabHandle;
+        if (prefabHandle == AssetHandle(0))
+            return;
+
+        AssetWorker::SubmitJob([e = entity, prefabHandle, scene, project]()
+        {
+            auto assetManager = AssetManager::GetInstance();
+            if (!assetManager)
+                return;
+
+            Ref<Prefab> prefab = assetManager->GetAssetImmediate<Prefab>(prefabHandle);
+            if (!prefab)
+                return;
+
+            Application::SubmitToMainThread([e, prefabHandle, scene, project, prefab]()
+            {
+                if (prefab->UpdateFromEntity(e, scene, project))
+                {
+                    const auto &meta = AssetManager::GetInstance()->GetMetaData(prefabHandle);
+                    if (!meta.filepath.empty())
+                    {
+                        ignite::Path fullPath = project ? project->GetProjectFilepath(meta.filepath) : meta.filepath;
+                        prefab->Serialize(fullPath);
+                    }
+
+                    SyncAllPrefabInstances(scene, prefabHandle);
+                }
+            });
+        });
     }
 } // namespace ignite

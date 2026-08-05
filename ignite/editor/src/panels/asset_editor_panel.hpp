@@ -79,6 +79,7 @@ namespace ignite
         void UIBlendSpaceEditor(UI::AssetEditorData &assetData);
         void UITextureEditor(UI::AssetEditorData &assetData);
         void UIMaterialEditor(UI::AssetEditorData &assetData);
+        void UITerrainDataEditor(UI::AssetEditorData &assetData);
 
         void UIScriptableObjectEditor(UI::AssetEditorData &assetData);
 

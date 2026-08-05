@@ -44,6 +44,7 @@ namespace ignite
         CompType_CharacterController,
         CompType_Terrain,
         CompType_HeightFieldCollider,
+        CompType_Prefab,
 
         CompType_COUNT
     };

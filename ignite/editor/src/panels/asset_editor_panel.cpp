@@ -43,6 +43,8 @@
 #include "ignite/project/project.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
+#include "ignite/terrain/terrain.hpp"
+#include "ignite/terrain/terrain_builder.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/objects/material.hpp"
@@ -875,6 +877,11 @@ namespace ignite
                     UIMaterialEditor(assetData);
                     break;
                 }
+                case AssetType::Terrain:
+                {
+                    UITerrainDataEditor(assetData);
+                    break;
+                }
                 case AssetType::ScriptableObject:
                 {
                     UIScriptableObjectEditor(assetData);
@@ -1018,6 +1025,13 @@ namespace ignite
                 m_CreateRequest.asset = CreateRef<Material>();
                 break;
             }
+            case AssetType::Terrain:
+            {
+                auto ter = CreateRef<TerrainData>();
+                ter->InitFlat(64, 100.0f, 50.0f);
+                m_CreateRequest.asset = ter;
+                break;
+            }
             case AssetType::Material2D:
             {
                 m_CreateRequest.asset = CreateRef<Material2D>();
@@ -1129,6 +1143,21 @@ namespace ignite
                     if (asset)
                     {
                         asset->name = finalAssetName;
+                        created = asset->Serialize(fullAssetPath);
+                        if (created)
+                        {
+                            asset->SetDirtyFlag(false);
+                            asset->SetReadyFlag(true);
+                            createdAsset = asset;
+                        }
+                    }
+                    break;
+                }
+                case AssetType::Terrain:
+                {
+                    Ref<TerrainData> asset = createdAsset->As<TerrainData>();
+                    if (asset)
+                    {
                         created = asset->Serialize(fullAssetPath);
                         if (created)
                         {
@@ -4727,6 +4756,109 @@ namespace ignite
         assetData.requestFocus = false;
     }
 
+    void AssetEditorPanel::UITerrainDataEditor(UI::AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(600.0f, 400.0f), ImVec2(400.0f, 300.0f), 0))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                Ref<TerrainData> terrain = assetData.asset ? assetData.asset->As<TerrainData>() : nullptr;
+                if (terrain)
+                {
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 4.0f));
+
+                    if (ImGui::TreeNodeEx("Terrain Data Properties", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        int res = static_cast<int>(terrain->resolution);
+                        if (UI::DrawIntControl("Resolution", &res, 1, 16, 2048))
+                        {
+                            terrain->resolution = static_cast<uint32_t>(std::max(16, res));
+                            terrain->InitFlat(terrain->resolution, terrain->worldSize, terrain->maxHeight);
+                            terrain->SetDirtyFlag(true);
+                        }
+
+                        if (UI::DrawFloatControl("World Size", &terrain->worldSize, 1.0f, 1.0f, 10000.0f))
+                        {
+                            terrain->SetDirtyFlag(true);
+                        }
+
+                        if (UI::DrawFloatControl("Max Height", &terrain->maxHeight, 1.0f, 0.0f, 5000.0f))
+                        {
+                            terrain->SetDirtyFlag(true);
+                        }
+
+                        auto assetManager = AssetManager::GetInstance();
+                        std::string label = assetManager ? assetManager->GetAssetDisplayName(terrain->heightmapTextureHandle) : "";
+                        if (label.empty())
+                        {
+                            label = "None";
+                        }
+
+                        UI::DrawButtonWithColumn("Heightmap Texture", label.c_str(), nullptr, [&, this]()
+                        {
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                {
+                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                    AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                    if (metadata.type == AssetType::Texture)
+                                    {
+                                        terrain->LoadFromTexture(handle);
+                                        terrain->SetDirtyFlag(true);
+                                    }
+                                }
+                                ImGui::EndDragDropTarget();
+                            }
+
+                            if (terrain->heightmapTextureHandle != AssetHandle(0))
+                            {
+                                ImGui::SameLine();
+                                if (ImGui::Button("X##ClearTex"))
+                                {
+                                    terrain->heightmapTextureHandle = AssetHandle(0);
+                                    terrain->SetDirtyFlag(true);
+                                }
+                            }
+                        });
+
+                        if (ImGui::Button("Rebuild Flat Terrain", ImVec2(-1.0f, 0.0f)))
+                        {
+                            terrain->InitFlat(terrain->resolution, terrain->worldSize, terrain->maxHeight);
+                            terrain->SetDirtyFlag(true);
+                        }
+
+                        static float noiseFreq = 0.05f;
+                        static int noiseSeed = 1337;
+                        UI::DrawFloatControl("Noise Frequency", &noiseFreq, 0.05f, 0.001f, 5.0f);
+                        UI::DrawIntControl("Noise Seed", &noiseSeed, 1, 0, 99999);
+
+                        if (ImGui::Button("Generate Noise Terrain", ImVec2(-1.0f, 0.0f)))
+                        {
+                            TerrainBuilder::GenerateProcedural(*terrain, noiseFreq, noiseSeed);
+                            terrain->SetDirtyFlag(true);
+                        }
+
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::PopStyleVar();
+                }
+                else
+                {
+                    UI::DrawCenteredText("Loading terrain asset...");
+                }
+            }
+        }
+
+        UIAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
 #pragma endregion !3D_STUFF
 
     bool AssetEditorPanel::SaveAsset(UI::AssetEditorData &assetData)
@@ -4910,6 +5042,16 @@ namespace ignite
                 if (!asset)
                     return false;
                 asset->InvalidateBindingSet();
+                if (!asset->Serialize(savePath))
+                    return false;
+                asset->NotifyChange();
+                return saveDefaultMeta();
+            }
+            case AssetType::Terrain:
+            {
+                Ref<TerrainData> asset = assetData.asset->As<TerrainData>();
+                if (!asset)
+                    return false;
                 if (!asset->Serialize(savePath))
                     return false;
                 asset->NotifyChange();
@@ -5131,6 +5273,14 @@ namespace ignite
             {
                 m_CreateRequest.asset = CreateRef<Material>();
                 std::memcpy(m_CreateRequest.nameBuffer, "NewMaterial", sizeof("NewMaterial"));
+                break;
+            }
+            case AssetType::Terrain:
+            {
+                auto ter = CreateRef<TerrainData>();
+                ter->InitFlat(64, 100.0f, 50.0f);
+                m_CreateRequest.asset = ter;
+                std::memcpy(m_CreateRequest.nameBuffer, "NewTerrainData", sizeof("NewTerrainData"));
                 break;
             }
             case AssetType::Material2D:

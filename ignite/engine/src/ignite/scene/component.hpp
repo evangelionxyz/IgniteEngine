@@ -77,6 +77,7 @@ namespace ignite
         { "Character Controller", CompType_CharacterController },
         { "Terrain", CompType_Terrain },
         { "HeightField Collider", CompType_HeightFieldCollider },
+        { "Prefab", CompType_Prefab },
     };
 
     enum EntityType : uint8_t
@@ -196,6 +197,7 @@ namespace ignite
             case CompType_SpotLight: return "CompType_SpotLight";
             case CompType_CharacterController: return "CompType_CharacterController";
             case CompType_Terrain: return "CompType_Terrain";
+            case CompType_Prefab: return "CompType_Prefab";
             case CompType_Invalid:
             default: return "Invalid Component";
         }
@@ -845,7 +847,7 @@ namespace ignite
         uint32_t chunkCount = 4;
         uint32_t lodLevels = 3;
 
-        // TODO: heightmap handle should takes image from ContentBrowser
+        // TODO: heightmap handle should takes image or .ter file from ContentBrowser
         AssetHandle heightmapHandle = AssetHandle(0);
         AssetHandle materialHandle = AssetHandle(0);
 
@@ -890,6 +892,19 @@ namespace ignite
         Animator2DComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_Animator2D)
+    };
+
+    class PrefabComponent : public IComponent
+    {
+    public:
+        AssetHandle prefabHandle = AssetHandle(0);
+        UUID prefabEntityUUID = UUID(0);
+
+        PrefabComponent() = default;
+        PrefabComponent(AssetHandle handle, UUID entityUUID = UUID(0))
+            : prefabHandle(handle), prefabEntityUUID(entityUUID) {}
+
+        COMPONENT_CLASS_TYPE(CompType_Prefab)
     };
 
 }

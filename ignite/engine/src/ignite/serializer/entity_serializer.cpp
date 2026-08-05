@@ -352,6 +352,11 @@ namespace ignite
                     sr.AddKeyValue("LodLevels", comp.lodLevels);
                     sr.AddKeyValue("HeightmapHandle", static_cast<uint64_t>(comp.heightmapHandle));
                     sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(comp.materialHandle));
+
+                    if (comp.heightmapHandle == AssetHandle(0) && comp.data && !comp.data->heightmap.empty())
+                    {
+                        sr.AddKeyValue("Heightmap", comp.data->heightmap);
+                    }
                 }
                 sr.EndMap();
             }
@@ -799,6 +804,17 @@ namespace ignite
                 }
                 sr.EndMap();
             }
+
+            if (entity.HasComponent<PrefabComponent>())
+            {
+                const auto &comp = entity.GetComponent<PrefabComponent>();
+                sr.BeginMap("PrefabComponent");
+                {
+                    sr.AddKeyValue("PrefabHandle", static_cast<uint64_t>(comp.prefabHandle));
+                    sr.AddKeyValue("PrefabEntityUUID", static_cast<uint64_t>(comp.prefabEntityUUID));
+                }
+                sr.EndMap();
+            }
         }
         sr.EndMap(); // END Entity
     }
@@ -957,7 +973,37 @@ namespace ignite
             {
                 comp.data = CreateRef<TerrainData>();
             }
-            comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
+
+            if (comp.heightmapHandle != AssetHandle(0))
+            {
+                auto asset = AssetManager::GetInstance()->GetAssetImmediate<Asset>(comp.heightmapHandle);
+                if (asset && asset->GetAssetType() == AssetType::Terrain)
+                {
+                    comp.data = asset->As<TerrainData>();
+                    if (comp.data)
+                    {
+                        comp.resolution = comp.data->resolution;
+                        comp.worldSize = comp.data->worldSize;
+                        comp.maxHeight = comp.data->maxHeight;
+                    }
+                }
+                else if (asset && asset->GetAssetType() == AssetType::Texture)
+                {
+                    comp.data->LoadFromTexture(comp.heightmapHandle);
+                }
+            }
+            else if (auto hNode = node["Heightmap"])
+            {
+                comp.data->resolution = comp.resolution;
+                comp.data->worldSize = comp.worldSize;
+                comp.data->maxHeight = comp.maxHeight;
+                comp.data->heightmap = hNode.as<std::vector<float>>();
+                comp.data->dirty = true;
+            }
+            else
+            {
+                comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
+            }
             comp.gpuInitialized = false;
         }
 
@@ -1332,6 +1378,13 @@ namespace ignite
                     }
                 }
             }
+        }
+
+        if (YAML::Node node = entityNode["PrefabComponent"])
+        {
+            auto &comp = desEntity.AddComponent<PrefabComponent>();
+            if (auto n = node["PrefabHandle"]) comp.prefabHandle = AssetHandle(n.as<uint64_t>());
+            if (auto n = node["PrefabEntityUUID"]) comp.prefabEntityUUID = UUID(n.as<uint64_t>());
         }
 
         return desEntity;

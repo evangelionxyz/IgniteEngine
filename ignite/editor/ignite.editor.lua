@@ -184,7 +184,8 @@ project "Ignite.Editor"
     filter { "system:windows", "toolset:msc*"}
         disablewarnings { "4099" }
         buildoptions {
-            "/utf-8"
+            "/utf-8",
+            "/bigobj"
         }
 
     filter "system:windows"

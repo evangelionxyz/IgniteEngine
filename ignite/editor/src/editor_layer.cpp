@@ -144,8 +144,8 @@ namespace ignite
     {
         Layer::OnDetach();
 
-		if (s_Instance == this)
-			s_Instance = nullptr;
+        if (s_Instance == this)
+            s_Instance = nullptr;
 
         // Close project
         CloseCurrentProject();
@@ -446,10 +446,7 @@ namespace ignite
             {
                 if (control)
                 {
-                    if (shift)
-                        SaveProjectAs();
-                    else
-                        SaveProject();
+                    SaveProject();
                 }
                 break;
             }
@@ -766,10 +763,10 @@ namespace ignite
                             DeviceManager::GetInstance()->EnableVsync();
                     });
                 }
-				if (ImGui::MenuItem("Screenshot", nullptr, false, m_ActiveProject != nullptr))
-				{
-					m_State.takeScreenshot = true;
-				}
+                if (ImGui::MenuItem("Screenshot", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    m_State.takeScreenshot = true;
+                }
                 ImGui::EndMenu();
             }
 
@@ -1015,9 +1012,9 @@ namespace ignite
 
                         if (log.level >= 0 && log.level < spdlog::level::n_levels)
                         {
-							ImGui::PushStyleColor(ImGuiCol_Text, color);
-							ImGui::TextWrapped("%s", log.message.c_str());
-							ImGui::PopStyleColor();
+                            ImGui::PushStyleColor(ImGuiCol_Text, color);
+                            ImGui::TextWrapped("%s", log.message.c_str());
+                            ImGui::PopStyleColor();
                         }
                     }
                 }
@@ -1041,48 +1038,35 @@ namespace ignite
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
     {
         if (m_ActiveScene == scene)
-        {
             return;
-        }
 
         // Update active scene
         if (m_ActiveProject)
         {
             if (scene)
-            {
                 scene->PreloadReferencedAssets();
-            }
         }
 
         // Clear references in all systems before changing active scene
         if (m_ScenePanel)
-        {
             m_ScenePanel->SetActiveScene(nullptr);
-        }
 
         m_SceneRenderer->SetActiveScene(nullptr);
 
         if (m_ActiveProject)
-        {
             m_ActiveProject->SetActiveScene(nullptr);
-        }
 
         // Set new scene
         m_ActiveScene = scene;
 
         // Update all systems with new scene
         if (m_ScenePanel)
-        {
             m_ScenePanel->SetActiveScene(scene.get());
-        }
         
         if (m_ActiveProject)
-        {
             m_ActiveProject->SetActiveScene(scene);
-        }
 
         m_SceneRenderer->SetActiveScene(scene);
-
         GameUISystem::SetSceneContext(scene.get());
     }
 
@@ -1093,25 +1077,30 @@ namespace ignite
             ExitPrefabIsolation(true);
         }
 
-        auto assetManager = AssetManager::GetInstance();
-        if (!assetManager)
-            return;
-
-        Ref<Prefab> prefab = assetManager->GetAsset<Prefab>(prefabHandle);
-        if (!prefab || !prefab->GetPrefabScene())
+        AssetWorker::SubmitJob([this, handle = prefabHandle]()
         {
-            LOG_ERROR("[Editor] Failed to load prefab for isolation editing!");
-            return;
-        }
+            auto assetManager = AssetManager::GetInstance();
+            if (!assetManager)
+                return;
 
-        m_MainSceneBeforeIsolation = m_ActiveScene;
-        m_EditingPrefab = prefab;
-        m_EditingPrefabHandle = prefabHandle;
-        m_InPrefabIsolationMode = true;
+            Ref<Prefab> prefab = assetManager->GetAssetImmediate<Prefab>(handle);
+            if (!prefab || !prefab->GetPrefabScene())
+            {
+                LOG_ERROR("[Editor] Failed to load prefab for isolation editing!");
+                return;
+            }
 
-        SetActiveScene(prefab->GetPrefabScene());
+            m_MainSceneBeforeIsolation = m_ActiveScene;
+            m_EditingPrefab = prefab;
+            m_EditingPrefabHandle = handle;
+            m_InPrefabIsolationMode = true;
 
-        SetStatusText(fmt::format("Editing Prefab: {}", assetManager->GetAssetDisplayName(prefabHandle)));
+            Application::SubmitToMainThread([this, pr = prefab, assetManager, handle]()
+            {
+                SetActiveScene(pr->GetPrefabScene());
+                // SetStatusText(fmt::format("Editing Prefab: {}", assetManager->GetAssetDisplayName(handle)));
+            });
+        });
     }
 
     void EditorLayer::ExitPrefabIsolation(bool save)
@@ -1120,7 +1109,9 @@ namespace ignite
             return;
 
         auto assetManager = AssetManager::GetInstance();
-        if (save && m_EditingPrefab && m_EditingPrefabHandle != AssetHandle(0))
+        bool isDirty = m_EditingPrefab && m_EditingPrefab->GetPrefabScene() && m_EditingPrefab->GetPrefabScene()->IsDirty();
+
+        if (save && isDirty && m_EditingPrefab && m_EditingPrefabHandle != AssetHandle(0))
         {
             const auto &meta = assetManager->GetMetaData(m_EditingPrefabHandle);
             if (!meta.filepath.empty())
@@ -1133,6 +1124,7 @@ namespace ignite
         }
 
         Ref<Scene> previousMainScene = m_MainSceneBeforeIsolation;
+        AssetHandle editingHandle = m_EditingPrefabHandle;
 
         m_InPrefabIsolationMode = false;
         m_EditingPrefab = nullptr;
@@ -1141,6 +1133,10 @@ namespace ignite
 
         if (previousMainScene)
         {
+            if (save && isDirty && editingHandle != AssetHandle(0))
+            {
+                SceneManager::SyncAllPrefabInstances(previousMainScene.get(), editingHandle);
+            }
             SetActiveScene(previousMainScene);
         }
     }
@@ -1196,13 +1192,30 @@ namespace ignite
 
     void EditorLayer::SaveScene()
     {
-        if (m_CurrentSceneFilePath.empty())
+        // Prefab Scene
+        if (m_InPrefabIsolationMode)
         {
-            SaveSceneAs();
+            if (m_EditingPrefabHandle != AssetHandle(0))
+            {
+                // Get filepath to serialize
+                const auto &filepath = AssetManager::GetInstance()->GetFilepath(m_EditingPrefabHandle);
+                const auto &absPath = m_ActiveProject->GetProjectFilepath(filepath);
+                if (ignite::Path::exists(absPath))
+                    m_EditingPrefab->Serialize(absPath);
+            }
         }
-        else
+
+        // Main Scene
+        else 
         {
-            SaveScene(m_CurrentSceneFilePath);
+            if (m_CurrentSceneFilePath.empty())
+            {
+                SaveSceneAs();
+            }
+            else
+            {
+                SaveScene(m_CurrentSceneFilePath);
+            }
         }
     }
 
@@ -1230,53 +1243,70 @@ namespace ignite
 
     void EditorLayer::OpenScene(const ignite::Path &filepath)
     {
-        AssetHandle openSceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
-
-        if (m_CurrentSceneHandle == openSceneHandle)
+        AssetHandle sceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
+        if (m_CurrentSceneHandle == sceneHandle)
+        {
+            LOG_WARN("Dismiss opening current scene {0}", filepath.generic_string());
             return;
-
-        m_CurrentSceneHandle = openSceneHandle;
-        if (m_EditorScene)
-        {
-            m_EditorScene->OnStop();
         }
 
-        OnSceneStop();
+        m_CurrentSceneHandle = sceneHandle;
 
-        if (Ref<Scene> openScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get()))
+        // Submit heavy I/O work to asset worker
+        AssetWorker::SubmitJob([this, filepath, sceneHandle]()
         {
-            // Clear active scene references before loading new one
-            SetActiveScene(nullptr);
-            
-            // Reset old scene
-            m_EditorScene.reset();
-            m_ActiveScene.reset();
-            
-            // Unload unused assets from previous scene
-            if (m_ActiveProject)
+            AssetWorker::ReportStatus(std::format("Loading scene {}...", filepath.filename().string()), 0.5f);
+
+            // Load scene on worker thread (I/O happens here)
+            Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
+            if (loadedScene)
             {
-                AssetManager::GetInstance()->UnloadUnusedAssets();
+                // Submit UI update back to main thread
+                Application::SubmitToMainThread([this, loadedScene, filepath]() mutable
+                {
+                    // Stop scene
+                    if (m_EditorScene)
+                        m_EditorScene->OnStop();
+
+                    if (m_ActiveScene)
+                        m_ActiveScene->OnStop();
+
+                    // Clear active scene references
+                    SetActiveScene(nullptr);
+
+                    // Reset old scene
+                    m_EditorScene.reset();
+                    m_ActiveScene.reset();
+
+                    // Unload unused assets
+                    if (m_ActiveProject)
+                        AssetManager::GetInstance()->UnloadUnusedAssets();
+
+                    // Copy and activate new scene
+                    m_EditorScene = SceneManager::Copy(loadedScene);
+                    m_EditorScene->SetDirtyFlag(false);
+
+                    SetActiveScene(m_EditorScene);
+
+                    m_CurrentSceneFilePath = filepath;
+
+                    AssetWorker::ReportStatus("Ready", 0.0f);
+                });
             }
-            
-            m_EditorScene = SceneManager::Copy(openScene);
-            m_EditorScene->SetDirtyFlag(false);
-
-            SetActiveScene(m_EditorScene);
-
-            m_CurrentSceneFilePath = filepath;
-        }
+            else
+            {
+                LOG_ERROR("[Editor] Failed to load scene: {}", filepath.generic_string());
+            }
+        });
     }
 
     void EditorLayer::SaveProject()
     {
         if (m_ActiveProject)
         {
+			SaveScene();
             m_ActiveProject->Serialize(m_CurrentProjectFilepath);
         }
-    }
-
-    void EditorLayer::SaveProjectAs()
-    {
     }
 
     void EditorLayer::OpenProject()
@@ -1300,8 +1330,11 @@ namespace ignite
         SaveProject();
 
         // Stop scene
-        if (m_EditorScene) m_EditorScene->OnStop();
-        m_ActiveScene->OnStop();
+        if (m_EditorScene)
+            m_EditorScene->OnStop();
+
+        if (m_ActiveScene)
+            m_ActiveScene->OnStop();
 
         SetActiveScene(nullptr);
 
@@ -1318,9 +1351,9 @@ namespace ignite
         // Reset everything
         m_ActiveProject.reset();
         m_CurrentProjectFilepath.clear();
-		m_MainSceneBeforeIsolation.reset();
-		m_EditingPrefab.reset();
-		m_InPrefabIsolationMode = false;
+        m_MainSceneBeforeIsolation.reset();
+        m_EditingPrefab.reset();
+        m_InPrefabIsolationMode = false;
         m_CurrentSceneFilePath.clear();
 
         m_EditingPrefabHandle = AssetHandle(0);
@@ -1331,7 +1364,7 @@ namespace ignite
     {
         if (filepath == m_CurrentProjectFilepath)
         {
-            LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
+            LOG_WARN("Dismiss opening current project {0}", filepath.generic_string());
             return;
         }
 
@@ -1343,16 +1376,18 @@ namespace ignite
 
         AssetWorker::SubmitJob([this, filepath]()
         {
-			if (const Ref<Project> openedProject = Project::Deserialize(filepath))
-			{
-				// Subscribe Build Solution callback
-				m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
-					{ OnProjectReadySignal(signal); });
+            if (const Ref<Project> openedProject = Project::Deserialize(filepath))
+            {
+                // Subscribe Build Solution callback
+                m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
+                {
+                    OnProjectReadySignal(signal);
+                });
 
-				m_ActiveProject = openedProject;
-				m_CurrentProjectFilepath = filepath;
-				openedProject->InitScriptEngine();
-			}
+                m_ActiveProject = openedProject;
+                m_CurrentProjectFilepath = filepath;
+                openedProject->InitScriptEngine();
+            }
         });
     }
 
@@ -1380,6 +1415,7 @@ namespace ignite
 
         if (m_ActiveScene)
             m_ActiveScene->OnStop();
+
         SetActiveScene(m_EditorScene);
     }
 
@@ -1441,7 +1477,7 @@ namespace ignite
 
     void EditorLayer::OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter)
     {
-        EditorLayer *editor = (EditorLayer *)userData;
+        auto editor = (EditorLayer *)userData;
 
         // Check for errors
         if (editor == nullptr || filelist == nullptr)
@@ -1461,11 +1497,10 @@ namespace ignite
         std::string filepath = filelist[0];
         if (!filepath.empty())
         {
-            
             Application::SubmitToMainThread([editor, file = filepath, userData]()
             {
                 SignalBus::Emit<FileImportPayload>(
-                    FileImportPayload{ 
+                    FileImportPayload{
                         .type = ImportType::Open,
                         .status = FileStatus::Success, 
                         .metadata = AssetMetaData(file, AssetType::Scene), 
@@ -1640,73 +1675,11 @@ namespace ignite
             if (payload.metadata.type == AssetType::Scene)
             {
                 // Submit scene loading to asset worker
-                ignite::Path filepath = payload.metadata.filepath;
-                AssetHandle sceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
-
-                if (m_CurrentSceneHandle == sceneHandle)
-                    break;
-
-                m_CurrentSceneHandle = sceneHandle;
-
-                // Submit heavy I/O work to asset worker
-                AssetWorker::SubmitJob([this, filepath, sceneHandle]()
-                    {
-                        AssetWorker::ReportStatus(std::format("Loading scene {}...", filepath.filename().string()), 0.5f);
-
-                        // Load scene on worker thread (I/O happens here)
-                        Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
-                        if (loadedScene)
-                        {
-                            // Submit UI update back to main thread
-                            Application::SubmitToMainThread([this, loadedScene, filepath]() mutable
-                                {
-                                    AssetWorker::ReportStatus("Finalizing scene load...", 0.9f);
-
-                                    if (m_EditorScene)
-                                    {
-                                        m_EditorScene->OnStop();
-                                    }
-
-                                    OnSceneStop();
-
-                                    // Clear active scene references
-                                    SetActiveScene(nullptr);
-
-                                    // Reset old scene
-                                    m_EditorScene.reset();
-                                    m_ActiveScene.reset();
-
-                                    // Unload unused assets
-                                    if (m_ActiveProject)
-                                    {
-                                        AssetManager::GetInstance()->UnloadUnusedAssets();
-                                    }
-
-                                    // Copy and activate new scene
-                                    m_EditorScene = SceneManager::Copy(loadedScene);
-                                    m_EditorScene->SetDirtyFlag(false);
-                                    SetActiveScene(m_EditorScene);
-                                    m_CurrentSceneFilePath = filepath;
-
-                                    AssetWorker::ReportStatus("Ready", 0.0f);
-                                });
-                        }
-                        else
-                        {
-                            LOG_ERROR("[Editor] Failed to load scene: {}", filepath.generic_string());
-                        }
-                    });
+                OpenScene(payload.metadata.filepath);
             }
             else if (payload.metadata.type == AssetType::Project)
             {
                 ignite::Path filepath = payload.metadata.filepath;
-
-                if (filepath == m_CurrentProjectFilepath)
-                {
-                    LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
-                    break;
-                }
-
                 OpenProject(filepath);
             }
             break;
@@ -1725,10 +1698,6 @@ namespace ignite
                     LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
                     RefreshContentBrowsers();
                 });
-            }
-            else if (payload.metadata.type == AssetType::Project)
-            {
-                SaveProjectAs();
             }
             break;
         }
@@ -2393,16 +2362,16 @@ namespace ignite
                     ImGui::TreePop();
                 }
 
-				if (ImGui::TreeNodeEx("Render scale"))
-				{
+                if (ImGui::TreeNodeEx("Render scale"))
+                {
                     UI::DrawFloatControl("Factor", &renderSettings.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
-					if (UI::DrawButtonWithColumn("", "Apply"))
-					{
-						m_State.gameplayRequestToResize = true;
-						m_State.editorRequestToResize = true;
-					}
-					ImGui::TreePop();
-				}
+                    if (UI::DrawButtonWithColumn("", "Apply"))
+                    {
+                        m_State.gameplayRequestToResize = true;
+                        m_State.editorRequestToResize = true;
+                    }
+                    ImGui::TreePop();
+                }
 
                 if (ImGui::TreeNodeEx("Shading"))
                 {

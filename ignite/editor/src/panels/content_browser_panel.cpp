@@ -615,7 +615,11 @@ namespace ignite
                                             Ref<Prefab> prefab = Prefab::CreateFromEntity(entity, activeScene, project);
                                             if (prefab && prefab->Serialize(targetPath))
                                             {
-                                                m_AssetManager->ImportAsset(targetPath);
+                                                AssetHandle handle = m_AssetManager->ImportAsset(targetPath);
+                                                if (handle != AssetHandle(0) && !entity.HasComponent<PrefabComponent>())
+                                                {
+                                                    entity.AddComponent<PrefabComponent>(handle, prefab->GetRootEntityUUID());
+                                                }
                                                 RefreshFiles();
                                             }
                                         }
@@ -747,6 +751,11 @@ namespace ignite
                     }
 
                     ImGui::EndMenu();
+                }
+
+                if (ImGui::MenuItem("Terrain"))
+                {
+                    DispatchCreateAssetEditorEvent(AssetType::Terrain, m_CurrentDirectory);
                 }
 
                 // ----- Scriptable Object submenu (dynamic, from [CreateAssetMenu]) -----
@@ -2577,6 +2586,7 @@ namespace ignite
             case AssetType::Animation2D: return s_SharedIcons["anim_2d"];
             case AssetType::AnimatorController: return s_SharedIcons["anim_ctrl"];
             case AssetType::AnimatorController2D: return s_SharedIcons["anim_ctrl_2d"];
+            case AssetType::Terrain: return s_SharedIcons["mesh"];
             default: break;
         }
 

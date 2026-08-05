@@ -68,6 +68,7 @@ namespace ignite
         { AssetType::Animation2D, AssetImporter::ImportAnimation2D },
         { AssetType::AnimatorController2D, AssetImporter::ImportAnimatorController2D },
         { AssetType::ScriptableObject, AssetImporter::ImportScriptableObject },
+        { AssetType::Terrain, AssetImporter::ImportTerrain },
     };
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
@@ -962,5 +963,16 @@ namespace ignite
             prefab->SetReadyFlag(true);
         }
         return prefab;
+    }
+
+    Ref<TerrainData> AssetImporter::ImportTerrain(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        Ref<TerrainData> terrain = TerrainData::Deserialize(metadata.filepath);
+        if (terrain)
+        {
+            terrain->handle = handle;
+            terrain->SetReadyFlag(true);
+        }
+        return terrain;
     }
 }

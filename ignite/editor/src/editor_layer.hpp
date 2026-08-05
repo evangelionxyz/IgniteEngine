@@ -98,7 +98,6 @@ namespace ignite
         void OpenScene(const ignite::Path &filepath);
         
         void SaveProject();
-        void SaveProjectAs();
         void OpenProject();
         void CloseCurrentProject();
         void OpenProject(const ignite::Path &filepath);

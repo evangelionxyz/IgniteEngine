@@ -68,7 +68,7 @@ namespace ignite {
 
     bool Gizmo::IsHovered() const
     {
-        return ImGuizmo::IsOver();
+        return ImGuizmo::IsOver(m_Operation);
     }
 
 }

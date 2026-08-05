@@ -608,6 +608,7 @@ namespace ignite
         case AssetType::AnimatorController2D:
         case AssetType::ScriptableObject:
         case AssetType::Prefab:
+        case AssetType::Terrain:
         {
             isValidType = true;
 

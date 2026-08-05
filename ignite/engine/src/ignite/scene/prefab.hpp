@@ -26,6 +26,7 @@ namespace ignite
         static Ref<Prefab> Deserialize(const ignite::Path &filepath, Project *project);
 
         static Ref<Prefab> CreateFromEntity(Entity entity, Scene *scene, Project *project);
+        bool UpdateFromEntity(Entity entity, Scene *scene, Project *project);
         static Entity Instantiate(const Ref<Prefab> &prefab, Scene *targetScene);
 
         static AssetType GetStaticType() { return AssetType::Prefab; }

@@ -254,6 +254,26 @@ namespace ignite
                             }
                         }
                     }
+                    else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                    {
+                        if (payload->DataSize == sizeof(AssetHandle))
+                        {
+                            AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                            AssetMetaData metadata = assetManager->GetMetaData(handle);
+                            if (metadata.type == AssetType::Prefab)
+                            {
+                                Ref<Prefab> prefab = assetManager->GetAsset<Prefab>(handle);
+                                if (prefab)
+                                {
+                                    Entity instantiated = SceneManager::InstantiatePrefab(m_Scene, prefab);
+                                    if (instantiated.IsValid())
+                                    {
+                                        SetSelectedEntity(instantiated);
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     ImGui::EndDragDropTarget();
                 }
@@ -551,6 +571,27 @@ namespace ignite
                         }
                     }
                 }
+                else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                {
+                    if (payload->DataSize == sizeof(AssetHandle))
+                    {
+                        AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                        auto am = AssetManager::GetInstance();
+                        AssetMetaData metadata = am ? am->GetMetaData(handle) : AssetMetaData();
+                        if (metadata.type == AssetType::Prefab)
+                        {
+                            Ref<Prefab> prefab = am ? am->GetAsset<Prefab>(handle) : nullptr;
+                            if (prefab)
+                            {
+                                Entity instantiated = SceneManager::InstantiatePrefab(m_Scene, prefab, entity);
+                                if (instantiated.IsValid())
+                                {
+                                    SetSelectedEntity(instantiated);
+                                }
+                            }
+                        }
+                    }
+                }
 
                 ImGui::EndDragDropTarget();
             }
@@ -657,6 +698,90 @@ namespace ignite
                 UI::State visibleState = UI::DrawCheckbox("Visible", &comp.visible);
 
             }, false); // false: not allowed to remove the component
+
+            RenderComponent<PrefabComponent>("Prefab", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<PrefabComponent>();
+                const bool isPrefabValid = c.prefabHandle != AssetHandle(0);
+                std::string prefabName = isPrefabValid ? assetManager->GetAssetDisplayName(c.prefabHandle) : "Drag Prefab Asset Here";
+
+                UI::DrawButtonWithColumn("Prefab Asset", prefabName.c_str(), nullptr, [&]()
+                {
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            if (payload->DataSize == sizeof(AssetHandle))
+                            {
+                                AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                if (metadata.type == AssetType::Prefab)
+                                {
+                                    c.prefabHandle = handle;
+                                    SceneManager::SyncAllPrefabInstances(m_Scene, handle);
+                                }
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    if (c.prefabHandle != AssetHandle(0))
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X##ClearPrefab"))
+                        {
+                            c.prefabHandle = AssetHandle(0);
+                        }
+                    }
+                });
+
+                ImGui::Spacing();
+                if (UI::DrawButton("Apply to Prefab", { 120.0f, 28.0f }))
+                {
+                    SceneManager::ApplyPrefabChanges(selectedEntity, m_Scene, m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr);
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Save local changes to .ixprefab file and sync all scene instances.");
+                }
+
+                ImGui::SameLine();
+                if (UI::DrawButton("Revert", { 80.0f, 28.0f }))
+                {
+                    if (isPrefabValid)
+                    {
+                        SceneManager::SyncAllPrefabInstances(m_Scene, c.prefabHandle);
+                    }
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Discard local changes and reload from .ixprefab asset.");
+                }
+
+                ImGui::SameLine();
+                if (UI::DrawButton("Unpack", { 80.0f, 28.0f }))
+                {
+                    selectedEntity.RemoveComponent<PrefabComponent>();
+                    SetSelectedEntity(selectedEntity);
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Break link to prefab asset and turn entity into normal scene object.");
+                }
+
+                ImGui::SameLine();
+                if (UI::DrawButton("Open", { 60.0f, 28.0f }))
+                {
+                    if (isPrefabValid && m_EditorLayer)
+                    {
+                        m_EditorLayer->EnterPrefabIsolation(c.prefabHandle);
+                    }
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Open prefab asset in Isolation Mode editor.");
+                }
+            });
 
             RenderComponent<WidgetComponent>("Widget", selectedEntity, [&]()
             {
@@ -2690,68 +2815,150 @@ namespace ignite
                 TerrainComponent compBefore = c;
 
                 bool rebuildGPU = false;
+                const bool hasExternalHeightmap = c.heightmapHandle != AssetHandle(0);
 
-                int res = static_cast<int>(c.resolution);
-                if (UI::DrawIntControl("Resolution", &res, 1, 16, 2048))
+                if (ImGui::TreeNodeEx("Heightmap", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    c.resolution = static_cast<uint32_t>(std::max(16, res));
-                    if (!c.data)
+                    std::string label = assetManager->GetAssetDisplayName(c.heightmapHandle);
+                    if (label.empty())
                     {
-                        c.data = CreateRef<TerrainData>();
+                        label = "None (Embedded / Procedural)";
                     }
-                    c.data->InitFlat(c.resolution, c.worldSize, c.maxHeight);
-                    rebuildGPU = true;
-                }
 
-                if (UI::DrawFloatControl("World Size", &c.worldSize, 1.0f, 1.0f, 10000.0f))
-                {
-                    if (c.data)
+                    UI::DrawButtonWithColumn("Heightmap Data / Texture", label.c_str(), nullptr, [&, this]()
                     {
-                        c.data->worldSize = c.worldSize;
-                    }
-                    rebuildGPU = true;
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            {
+                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                if (metadata.type == AssetType::Terrain)
+                                {
+                                    c.heightmapHandle = handle;
+                                    auto asset = assetManager->GetAsset<TerrainData>(handle);
+                                    if (asset)
+                                    {
+                                        c.data = asset;
+                                        c.resolution = asset->resolution;
+                                        c.worldSize = asset->worldSize;
+                                        c.maxHeight = asset->maxHeight;
+                                    }
+                                    rebuildGPU = true;
+                                }
+                                else if (metadata.type == AssetType::Texture)
+                                {
+                                    c.heightmapHandle = handle;
+                                    if (!c.data) c.data = CreateRef<TerrainData>();
+                                    c.data->LoadFromTexture(handle);
+                                    c.resolution = c.data->resolution;
+                                    rebuildGPU = true;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+
+                        if (hasExternalHeightmap)
+                        {
+                            ImGui::SameLine();
+                            if (ImGui::Button("X##ClearHeightmap"))
+                            {
+                                c.heightmapHandle = AssetHandle(0);
+                                rebuildGPU = true;
+                            }
+                        }
+                    });
+
+                    ImGui::TreePop();
                 }
 
-                if (UI::DrawFloatControl("Max Height", &c.maxHeight, 1.0f, 0.0f, 5000.0f))
+                if (ImGui::TreeNodeEx("Properties", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    if (c.data)
+                    if (hasExternalHeightmap)
                     {
-                        c.data->maxHeight = c.maxHeight;
+                        ImGui::BeginDisabled();
                     }
-                    rebuildGPU = true;
-                }
 
-                int chunkCount = static_cast<int>(c.chunkCount);
-                if (UI::DrawIntControl("Chunk Count", &chunkCount, 1, 1, 64))
-                {
-                    c.chunkCount = static_cast<uint32_t>(std::max(1, chunkCount));
-                    rebuildGPU = true;
-                }
-
-                int lodLevels = static_cast<int>(c.lodLevels);
-                if (UI::DrawIntControl("LOD Levels", &lodLevels, 1, 1, 10))
-                {
-                    c.lodLevels = static_cast<uint32_t>(std::max(1, lodLevels));
-                    rebuildGPU = true;
-                }
-
-                if (ImGui::Button("Rebuild Flat Terrain", ImVec2(-1.0f, 0.0f)))
-                {
-                    if (!c.data)
+                    int res = static_cast<int>(c.resolution);
+                    if (UI::DrawIntControl("Resolution", &res, 1, 16, 2048))
                     {
-                        c.data = CreateRef<TerrainData>();
+                        c.resolution = static_cast<uint32_t>(std::max(16, res));
+                        if (!c.data)
+                        {
+                            c.data = CreateRef<TerrainData>();
+                        }
+                        c.data->InitFlat(c.resolution, c.worldSize, c.maxHeight);
+                        rebuildGPU = true;
                     }
-                    c.data->InitFlat(c.resolution, c.worldSize, c.maxHeight);
-                    rebuildGPU = true;
-                }
 
-                UI::DrawFloatControl("Noise Frequency", &c.noiseFrequency, 0.05f, 0.001f, 5.0f);
-                UI::DrawIntControl("Noise Seed", &c.noiseSeed, 1, 0, 99999);
+                    if (hasExternalHeightmap)
+                    {
+                        ImGui::EndDisabled();
+                    }
 
-                if (ImGui::Button("Generate Noise Terrain", ImVec2(-1.0f, 0.0f)))
-                {
-                    TerrainBuilder::GenerateProcedural(c, c.noiseFrequency, c.noiseSeed);
-                    rebuildGPU = true;
+                    if (UI::DrawFloatControl("World Size", &c.worldSize, 1.0f, 1.0f, 10000.0f))
+                    {
+                        if (c.data)
+                        {
+                            c.data->worldSize = c.worldSize;
+                        }
+                        rebuildGPU = true;
+                    }
+
+                    if (UI::DrawFloatControl("Max Height", &c.maxHeight, 1.0f, 0.0f, 5000.0f))
+                    {
+                        if (c.data)
+                        {
+                            c.data->maxHeight = c.maxHeight;
+                        }
+                        rebuildGPU = true;
+                    }
+
+                    int chunkCount = static_cast<int>(c.chunkCount);
+                    if (UI::DrawIntControl("Chunk Count", &chunkCount, 1, 1, 64))
+                    {
+                        c.chunkCount = static_cast<uint32_t>(std::max(1, chunkCount));
+                        rebuildGPU = true;
+                    }
+
+                    int lodLevels = static_cast<int>(c.lodLevels);
+                    if (UI::DrawIntControl("LOD Levels", &lodLevels, 1, 1, 10))
+                    {
+                        c.lodLevels = static_cast<uint32_t>(std::max(1, lodLevels));
+                        rebuildGPU = true;
+                    }
+
+                    if (hasExternalHeightmap)
+                    {
+                        ImGui::BeginDisabled();
+                    }
+
+                    if (ImGui::Button("Rebuild Flat Terrain", ImVec2(-1.0f, 0.0f)))
+                    {
+                        if (!c.data)
+                        {
+                            c.data = CreateRef<TerrainData>();
+                        }
+                        c.data->InitFlat(c.resolution, c.worldSize, c.maxHeight);
+                        rebuildGPU = true;
+                    }
+
+                    UI::DrawFloatControl("Noise Frequency", &c.noiseFrequency, 0.05f, 0.001f, 5.0f);
+                    UI::DrawIntControl("Noise Seed", &c.noiseSeed, 1, 0, 99999);
+
+                    if (ImGui::Button("Generate Noise Terrain", ImVec2(-1.0f, 0.0f)))
+                    {
+                        TerrainBuilder::GenerateProcedural(c, c.noiseFrequency, c.noiseSeed);
+                        rebuildGPU = true;
+                    }
+
+                    if (hasExternalHeightmap)
+                    {
+                        ImGui::EndDisabled();
+                    }
+
+                    ImGui::TreePop();
                 }
 
                 if (ImGui::TreeNodeEx("Renderer", ImGuiTreeNodeFlags_DefaultOpen))
@@ -2807,7 +3014,7 @@ namespace ignite
                 static std::string compNameFilterResultStr;
                 static std::set<std::pair<std::string, CompType>> filteredCompName;
 
-                ImGui::SetKeyboardFocusHere();
+                // ImGui::SetKeyboardFocusHere();
                 ImGui::InputTextWithHint("##component_name", "Component", buffer, sizeof(buffer) + 1, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
 
                 compNameFilterResultStr = std::string(buffer);
@@ -2899,6 +3106,9 @@ namespace ignite
                         break;
                     case CompType_HeightFieldCollider:
                         entity.AddComponent<HeightFieldColliderComponent>();
+                        break;
+                    case CompType_Prefab:
+                        entity.AddComponent<PrefabComponent>();
                         break;
                     case CompType_AudioSource:
                         entity.AddComponent<AudioSourceComponent>();
@@ -3323,7 +3533,18 @@ namespace ignite
                                     if (metadata.type == AssetType::Scene)
                                     {
                                         const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
-                                        m_EditorLayer->OpenScene(filepath);
+                                        Application::SubmitToMainThread([this, file = filepath]()
+                                        {
+                                            SignalBus::Emit<FileImportPayload>(
+                                                FileImportPayload{
+                                                    .type = ImportType::Open,
+                                                    .status = FileStatus::Success,
+                                                    .metadata = AssetMetaData(file, AssetType::Scene),
+                                                    .userData = nullptr
+                                                }
+                                            );
+                                        });
+                                        // m_EditorLayer->OpenScene(filepath);
                                     }
                                     else if (metadata.type == AssetType::Prefab)
                                     {

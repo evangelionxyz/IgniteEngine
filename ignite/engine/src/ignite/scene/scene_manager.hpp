@@ -54,7 +54,9 @@ namespace ignite
         static Entity GetEntity(Scene *scene, const std::string &name);
         static Entity DuplicateEntity(Scene *scene, Entity entity, bool addToParent = true);
         static Entity CloneEntityTree(Scene *destScene, Scene *srcScene, Entity srcRoot);
-        static Entity InstantiatePrefab(Scene *scene, const Ref<Prefab> &prefab);
+        static Entity InstantiatePrefab(Scene *scene, const Ref<Prefab> &prefab, Entity parent = {});
+        static void SyncAllPrefabInstances(Scene *scene, AssetHandle prefabHandle);
+        static void ApplyPrefabChanges(Entity entity, Scene *scene, Project *project);
 
         static bool AddChild(Scene *scene, Entity destination, Entity source);
         static bool ChildExists(Scene *scene, Entity destination, Entity source);

@@ -14,6 +14,7 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/terrain/terrain.hpp"
 
 #include "ignite/core/path.hpp"
 #include <algorithm>
@@ -453,6 +454,60 @@ namespace ignite
 
             inFile.close();
             return mat;
+        }
+
+        static std::vector<std::byte> SerializeTerrain(const TerrainData *terrain, const ignite::Path &filepath)
+        {
+            std::vector<std::byte> buffer;
+
+            AppendRaw(buffer, terrain->resolution);
+            AppendRaw(buffer, terrain->worldSize);
+            AppendRaw(buffer, terrain->maxHeight);
+            AppendRaw(buffer, static_cast<uint64_t>(terrain->heightmapTextureHandle));
+
+            uint32_t heightCount = static_cast<uint32_t>(terrain->heightmap.size());
+            AppendRaw(buffer, heightCount);
+            if (heightCount > 0)
+            {
+                AppendBytes(buffer, terrain->heightmap.data(), heightCount * sizeof(float));
+            }
+
+            std::ofstream of(filepath, std::ios::binary);
+            of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
+            of.close();
+
+            return buffer;
+        }
+
+        static Ref<TerrainData> DeserializeTerrain(const ignite::Path &filepath)
+        {
+            std::ifstream inFile(filepath, std::ios::binary);
+            if (!inFile)
+            {
+                return nullptr;
+            }
+
+            Ref<TerrainData> terrain = CreateRef<TerrainData>();
+
+            ReadRaw(inFile, &terrain->resolution);
+            ReadRaw(inFile, &terrain->worldSize);
+            ReadRaw(inFile, &terrain->maxHeight);
+
+            uint64_t texHandle = 0;
+            ReadRaw(inFile, &texHandle);
+            terrain->heightmapTextureHandle = AssetHandle(texHandle);
+
+            uint32_t heightCount = 0;
+            ReadRaw(inFile, &heightCount);
+            if (heightCount > 0)
+            {
+                terrain->heightmap.resize(heightCount);
+                ReadRaw(inFile, terrain->heightmap.data(), heightCount * sizeof(float));
+            }
+
+            inFile.close();
+            terrain->dirty = true;
+            return terrain;
         }
 
         template<typename MeshType_T, MeshVertex VertexType_T>

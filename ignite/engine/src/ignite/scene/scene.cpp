@@ -1445,8 +1445,27 @@ namespace ignite
         if (!comp.data)
         {
             comp.data = CreateRef<TerrainData>();
+            if (comp.heightmapHandle != AssetHandle(0))
+            {
+                auto asset = AssetManager::GetInstance()->GetAssetImmediate<Asset>(comp.heightmapHandle);
+                if (asset && asset->GetAssetType() == AssetType::Terrain)
+                {
+                    comp.data = asset->As<TerrainData>();
+                }
+                else if (asset && asset->GetAssetType() == AssetType::Texture)
+                {
+                    comp.data->LoadFromTexture(comp.heightmapHandle);
+                }
+                else
+                {
+                    comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
+                }
+            }
+            else
+            {
+                comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
+            }
         }
-        comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
         comp.gpuInitialized = false;
     }
 
@@ -1477,5 +1496,10 @@ namespace ignite
     IGN_API void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent &comp)
     {
         comp.camera.UpdateProjection(m_ViewportWidth, m_ViewportHeight);
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<PrefabComponent>(Entity entity, PrefabComponent &comp)
+    {
     }
 }

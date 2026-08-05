@@ -44,16 +44,10 @@ namespace ignite
         }
     }
 
-    void TerrainBuilder::GenerateProcedural(TerrainComponent &comp, float frequency, int seed)
+    void TerrainBuilder::GenerateProcedural(TerrainData &data, float frequency, int seed)
     {
-        if (!comp.data)
-        {
-            comp.data = CreateRef<TerrainData>();
-            comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
-        }
-
-        uint32_t res = comp.resolution;
-        comp.data->heightmap.resize(static_cast<size_t>(res) * static_cast<size_t>(res));
+        uint32_t res = std::max(2u, data.resolution);
+        data.heightmap.resize(static_cast<size_t>(res) * static_cast<size_t>(res));
 
         auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
         auto fnFractal = FastNoise::New<FastNoise::FractalFBm>();
@@ -65,7 +59,7 @@ namespace ignite
             fnFractal->SetLacunarity(2.0f);
 
             FastNoise::OutputMinMax minMax = fnFractal->GenUniformGrid2D(
-                comp.data->heightmap.data(),
+                data.heightmap.data(),
                 0, 0,
                 static_cast<int>(res), static_cast<int>(res),
                 frequency, frequency,
@@ -75,7 +69,7 @@ namespace ignite
             float range = minMax.max - minMax.min;
             if (range > 0.00001f)
             {
-                for (float &val : comp.data->heightmap)
+                for (float &val : data.heightmap)
                 {
                     val = (val - minMax.min) / range;
                 }
@@ -91,13 +85,28 @@ namespace ignite
                     float fx = static_cast<float>(x) * frequency;
                     float fz = static_cast<float>(z) * frequency;
                     float val = std::sin(fx) * std::cos(fz) * 0.5f + 0.5f;
-                    comp.data->SetHeight(x, z, val);
+                    data.SetHeight(x, z, val);
                 }
             }
             LOG_INFO("[TerrainBuilder] Generated fallback procedural terrain ({}x{})", res, res);
         }
 
-        comp.data->dirty = true;
+        data.dirty = true;
+    }
+
+    void TerrainBuilder::GenerateProcedural(TerrainComponent &comp, float frequency, int seed)
+    {
+        if (!comp.data)
+        {
+            comp.data = CreateRef<TerrainData>();
+            comp.data->InitFlat(comp.resolution, comp.worldSize, comp.maxHeight);
+        }
+
+        comp.data->resolution = comp.resolution;
+        comp.data->worldSize = comp.worldSize;
+        comp.data->maxHeight = comp.maxHeight;
+
+        GenerateProcedural(*comp.data, frequency, seed);
         comp.gpuInitialized = false;
     }
 }

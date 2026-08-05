@@ -42,6 +42,9 @@ namespace ignite
         sr.EndMap(); // END
 
         sr.Serialize();
+
+        m_PrefabScene->SetDirtyFlag(false); // Prefab Scene
+        SetDirtyFlag(false); // Prefab
         return true;
     }
 
@@ -89,6 +92,8 @@ namespace ignite
             }
         }
 
+		prefab->SetDirtyFlag(false); // Prefab
+        prefab->GetPrefabScene()->SetDirtyFlag(false); // Prefab scene
         return prefab;
     }
 
@@ -101,6 +106,9 @@ namespace ignite
         Entity clonedRoot = SceneManager::CloneEntityTree(prefab->m_PrefabScene.get(), scene, entity);
         if (clonedRoot.IsValid())
         {
+            if (clonedRoot.HasComponent<PrefabComponent>())
+                clonedRoot.RemoveComponent<PrefabComponent>();
+
             prefab->m_RootEntityUUID = clonedRoot.GetUUID();
             // Reset world position of cloned root relative to origin for clean prefab editing
             auto &tr = clonedRoot.GetComponent<TransformComponent>();
@@ -111,6 +119,30 @@ namespace ignite
         }
 
         return prefab;
+    }
+
+    bool Prefab::UpdateFromEntity(Entity entity, Scene *scene, Project *project)
+    {
+        if (!entity.IsValid() || !scene)
+            return false;
+
+        m_PrefabScene = Scene::Create(project);
+        Entity clonedRoot = SceneManager::CloneEntityTree(m_PrefabScene.get(), scene, entity);
+        if (clonedRoot.IsValid())
+        {
+            if (clonedRoot.HasComponent<PrefabComponent>())
+                clonedRoot.RemoveComponent<PrefabComponent>();
+
+            m_RootEntityUUID = clonedRoot.GetUUID();
+            auto &tr = clonedRoot.GetComponent<TransformComponent>();
+            tr.local.translation = glm::vec3(0.0f);
+            tr.local.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            tr.local.scale = glm::vec3(1.0f);
+            tr.world = tr.local;
+            return true;
+        }
+
+        return false;
     }
 
     Entity Prefab::Instantiate(const Ref<Prefab> &prefab, Scene *targetScene)

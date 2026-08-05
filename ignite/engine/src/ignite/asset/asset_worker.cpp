@@ -122,11 +122,11 @@ namespace ignite
             }
             catch (const std::exception &e)
             {
-                LOG_ERROR("[Asset Manager] Worker thread exception: {}", e.what());
+                LOG_ASSERT(false, "[Asset Manager] Worker thread exception: {}", e.what());
             }
             catch (...)
             {
-                LOG_ERROR("[Asset Manager] Worker thread exception: unknown error");
+                LOG_ASSERT(false, "[Asset Manager] Worker thread exception: unknown error");
             }
 
             if (--s_ActiveJobs == 0)

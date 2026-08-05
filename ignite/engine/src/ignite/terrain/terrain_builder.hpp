@@ -20,6 +20,7 @@ namespace ignite
         void Paint();
 
         void Generate();
+        static void GenerateProcedural(TerrainData &data, float frequency = 0.2f, int seed = 1337);
         static void GenerateProcedural(TerrainComponent &comp, float frequency = 0.2f, int seed = 1337);
 
     private:

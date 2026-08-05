@@ -1,7 +1,9 @@
-// Copyright (c) 2026 Evangelion Manuhutu
 #include "ignite_pch.hpp"
 #include "terrain.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/graphics/texture.hpp"
+#include "ignite/serializer/binary_serializer.hpp"
 #include <stb_image.h>
 #include <glm/glm.hpp>
 #include <algorithm>
@@ -19,7 +21,7 @@ namespace ignite
 
     float TerrainData::GetHeight(uint32_t x, uint32_t z) const
     {
-        if (x >= resolution || z >= resolution)
+        if (x >= resolution || z >= resolution || heightmap.empty())
         {
             return 0.0f;
         }
@@ -28,7 +30,7 @@ namespace ignite
 
     void TerrainData::SetHeight(uint32_t x, uint32_t z, float val)
     {
-        if (x >= resolution || z >= resolution)
+        if (x >= resolution || z >= resolution || heightmap.empty())
         {
             return;
         }
@@ -128,5 +130,41 @@ namespace ignite
 
         glm::vec3 n(hL - hR, 2.0f * delta, hD - hU);
         return glm::normalize(n);
+    }
+
+    bool TerrainData::LoadFromTexture(AssetHandle textureHandle)
+    {
+        heightmapTextureHandle = textureHandle;
+        if (textureHandle == AssetHandle(0))
+            return false;
+
+        Ref<Texture> tex = AssetManager::GetInstance()->GetAssetImmediate<Texture>(textureHandle);
+        if (!tex)
+            return false;
+
+        const auto &filepath = tex->GetFilepath();
+        if (filepath.empty() || !Path::exists(filepath))
+            return false;
+
+        return LoadHeightmap(filepath.generic_string());
+    }
+
+    bool TerrainData::Serialize(const ignite::Path &filepath)
+    {
+        BinarySerializer::SerializeTerrain(this, filepath);
+        SetReadyFlag(true);
+        SetDirtyFlag(false);
+        return true;
+    }
+
+    Ref<TerrainData> TerrainData::Deserialize(const ignite::Path &filepath)
+    {
+        Ref<TerrainData> data = BinarySerializer::DeserializeTerrain(filepath);
+        if (data)
+        {
+            data->SetReadyFlag(true);
+            data->SetDirtyFlag(false);
+        }
+        return data;
     }
 }

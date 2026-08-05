@@ -57,6 +57,7 @@ namespace ignite
         Animation2D,          // .anim2d  - single 2D animation clip
         AnimatorController2D, // .ac2d    - 2D animator state machine
         Prefab,               // .ixprefab - engine prefab asset
+        Terrain,              // .ter - terrain data asset
     };
 
     enum class AssetState
@@ -101,6 +102,7 @@ namespace ignite
             case ignite::AssetType::AnimatorController: return "AnimatorController";
             case ignite::AssetType::AnimatorController2D: return "AnimatorController2D";
             case ignite::AssetType::Prefab: return "Prefab";
+            case ignite::AssetType::Terrain: return "Terrain";
             case ignite::AssetType::Invalid:
             default: return "Invalid";
         }
@@ -137,6 +139,7 @@ namespace ignite
         if (typeStr == "AnimatorController")  return AssetType::AnimatorController;
         if (typeStr == "AnimatorController2D")  return AssetType::AnimatorController2D;
         if (typeStr == "Prefab") return AssetType::Prefab;
+        if (typeStr == "Terrain") return AssetType::Terrain;
         if (typeStr == "ScriptableObject")       return AssetType::ScriptableObject;
         return AssetType::Invalid;
     }
@@ -192,6 +195,7 @@ namespace ignite
         { ".anim2d", AssetType::Animation2D},
         { ".ac",   AssetType::AnimatorController},
         { ".ac2d",   AssetType::AnimatorController2D},
+        { ".ter",   AssetType::Terrain},
     };
 
     // Binary Extensions
@@ -221,6 +225,7 @@ namespace ignite
         case AssetType::Animation2D: return ".anim2d";
         case AssetType::AnimatorController: return ".ac";
         case AssetType::AnimatorController2D: return ".ac2d";
+        case AssetType::Terrain: return ".ter";
         default: return ".invalid";
         }
     }
