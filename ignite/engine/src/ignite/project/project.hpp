@@ -42,6 +42,7 @@ namespace ignite
         ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
 
 		physics::Physics3DType physics3DType = physics::Physics3DType::Jolt;
+		physics::Physics3DSettings physicsSettings;
         ProjectConfiguration configuration = ProjectConfiguration::Debug;
     };
 

@@ -536,6 +536,7 @@ namespace ignite
 
         physics::MotionQuality motionQuality = physics::MotionQuality::Discrete;
         physics::BodyType bodyType = physics::BodyType::Static;
+        uint32_t layer = 0;
 
         bool useGravity = true;
         bool rotateX = true, rotateY = true, rotateZ = true;
@@ -566,6 +567,7 @@ namespace ignite
         RigidbodyComponent(const RigidbodyComponent &other)
             : motionQuality(other.motionQuality)
             , bodyType(other.bodyType)
+            , layer(other.layer)
             , useGravity(other.useGravity)
             , rotateX(other.rotateX), rotateY(other.rotateY), rotateZ(other.rotateZ)
             , moveX(other.moveX), moveY(other.moveY), moveZ(other.moveZ)
@@ -596,6 +598,7 @@ namespace ignite
             {
                 motionQuality = other.motionQuality;
                 bodyType = other.bodyType;
+                layer = other.layer;
                 useGravity = other.useGravity;
                 rotateX = other.rotateX; rotateY = other.rotateY; rotateZ = other.rotateZ;
                 moveX = other.moveX; moveY = other.moveY; moveZ = other.moveZ;

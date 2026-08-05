@@ -75,9 +75,54 @@ namespace ignite::physics
 		uint64_t userData = 0;
 	};
 
+	static constexpr uint32_t MAX_PHYSICS_LAYERS = 32;
+
 	struct Physics3DSettings
 	{
 		glm::vec3 gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+		uint32_t layerCount = 16;
+		std::array<std::string, MAX_PHYSICS_LAYERS> layerNames = {
+			"Default", "Static", "Kinematic", "Player", "Enemy", "Trigger", "Vehicle", "Water",
+			"Layer 8", "Layer 9", "Layer 10", "Layer 11", "Layer 12", "Layer 13", "Layer 14", "Layer 15",
+			"Layer 16", "Layer 17", "Layer 18", "Layer 19", "Layer 20", "Layer 21", "Layer 22", "Layer 23",
+			"Layer 24", "Layer 25", "Layer 26", "Layer 27", "Layer 28", "Layer 29", "Layer 30", "Layer 31"
+		};
+		std::array<uint32_t, MAX_PHYSICS_LAYERS> collisionMasks = []() {
+			std::array<uint32_t, MAX_PHYSICS_LAYERS> masks{};
+			for (size_t i = 0; i < MAX_PHYSICS_LAYERS; ++i)
+				masks[i] = 0xFFFFFFFF;
+			return masks;
+		}();
+
+		bool CanLayersCollide(uint32_t layerA, uint32_t layerB) const
+		{
+			if (layerA >= MAX_PHYSICS_LAYERS || layerB >= MAX_PHYSICS_LAYERS)
+				return false;
+			return (collisionMasks[layerA] & (1u << layerB)) != 0;
+		}
+
+		void SetLayerCollision(uint32_t layerA, uint32_t layerB, bool canCollide)
+		{
+			if (layerA >= MAX_PHYSICS_LAYERS || layerB >= MAX_PHYSICS_LAYERS)
+				return;
+			if (canCollide)
+			{
+				collisionMasks[layerA] |= (1u << layerB);
+				collisionMasks[layerB] |= (1u << layerA);
+			}
+			else
+			{
+				collisionMasks[layerA] &= ~(1u << layerB);
+				collisionMasks[layerB] &= ~(1u << layerA);
+			}
+		}
+
+		uint32_t GetLayerMask(uint32_t layer) const
+		{
+			if (layer >= MAX_PHYSICS_LAYERS)
+				return 0xFFFFFFFF;
+			return collisionMasks[layer];
+		}
 	};
 
 	struct CollisionEvent
@@ -103,6 +148,7 @@ namespace ignite::physics
 	{
 		BodyType bodyType = BodyType::Dynamic;
 		MotionQuality motionQuality = MotionQuality::Discrete;
+		uint32_t layer = 0;
 
 		bool useGravity = true;
 		bool rotateX = true, rotateY = true, rotateZ = true;

@@ -259,6 +259,23 @@ R"(<Project>
             else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
             projectSr.AddKeyValue("Configuration", configStr);
 
+            projectSr.BeginMap("Physics");
+            projectSr.AddKeyValue("Gravity", m_Info.physicsSettings.gravity);
+            projectSr.AddKeyValue("LayerCount", m_Info.physicsSettings.layerCount);
+            projectSr.BeginSequence("LayerNames");
+            for (uint32_t i = 0; i < physics::MAX_PHYSICS_LAYERS; ++i)
+            {
+                projectSr.AddValue(m_Info.physicsSettings.layerNames[i]);
+            }
+            projectSr.EndSequence();
+            projectSr.BeginSequence("CollisionMasks");
+            for (uint32_t i = 0; i < physics::MAX_PHYSICS_LAYERS; ++i)
+            {
+                projectSr.AddValue(m_Info.physicsSettings.collisionMasks[i]);
+            }
+            projectSr.EndSequence();
+            projectSr.EndMap();
+
             projectSr.EndMap();
         }
 
@@ -350,6 +367,34 @@ R"(<Project>
         else
         {
             info.configuration = ProjectConfiguration::Debug;
+        }
+
+        if (YAML::Node physNode = projectNode["Physics"])
+        {
+            if (auto n = physNode["Gravity"]) info.physicsSettings.gravity = n.as<glm::vec3>();
+            if (auto n = physNode["LayerCount"]) info.physicsSettings.layerCount = n.as<uint32_t>();
+            if (YAML::Node namesNode = physNode["LayerNames"])
+            {
+                uint32_t idx = 0;
+                for (YAML::Node nameNode : namesNode)
+                {
+                    if (idx < physics::MAX_PHYSICS_LAYERS)
+                    {
+                        info.physicsSettings.layerNames[idx++] = nameNode.as<std::string>();
+                    }
+                }
+            }
+            if (YAML::Node masksNode = physNode["CollisionMasks"])
+            {
+                uint32_t idx = 0;
+                for (YAML::Node maskNode : masksNode)
+                {
+                    if (idx < physics::MAX_PHYSICS_LAYERS)
+                    {
+                        info.physicsSettings.collisionMasks[idx++] = maskNode.as<uint32_t>();
+                    }
+                }
+            }
         }
 
         Ref<Project> project = Project::Create(info);

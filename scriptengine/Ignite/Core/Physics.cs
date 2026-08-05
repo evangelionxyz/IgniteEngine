@@ -65,10 +65,10 @@ public static class Physics
         return new Ray(origin, direction);
     }
 
-    public static bool Raycast(Ray ray, float maxDistance, out RaycastHit hit)
+    public static bool Raycast(Ray ray, float maxDistance, out RaycastHit hit, uint layerMask = 0xFFFFFFFF)
     {
         ulong entityID = ComponentInternalCalls.Scene_Raycast(
-            ray.Origin, ray.Direction, maxDistance,
+            ray.Origin, ray.Direction, maxDistance, layerMask,
             out Mathf.Vector3 hitPoint, out Mathf.Vector3 hitNormal);
 
         if (entityID == 0)
@@ -86,15 +86,15 @@ public static class Physics
         return true;
     }
 
-    public static bool Raycast(Ray ray, out RaycastHit hit, float maxDistance = 1000f)
+    public static bool Raycast(Ray ray, out RaycastHit hit, float maxDistance = 1000f, uint layerMask = 0xFFFFFFFF)
     {
-        return Raycast(ray, maxDistance, out hit);
+        return Raycast(ray, maxDistance, out hit, layerMask);
     }
 
-    public static Entity? Raycast(Ray ray, float maxDistance = 1000f)
+    public static Entity? Raycast(Ray ray, float maxDistance = 1000f, uint layerMask = 0xFFFFFFFF)
     {
         ulong entityID = ComponentInternalCalls.Scene_Raycast(
-            ray.Origin, ray.Direction, maxDistance,
+            ray.Origin, ray.Direction, maxDistance, layerMask,
             out _, out _);
         return entityID != 0 ? new Entity(entityID) : null;
     }

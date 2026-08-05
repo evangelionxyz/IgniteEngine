@@ -59,6 +59,10 @@ namespace ignite
         Entity ShowEntityContextMenu();
         void RenderEntityNode(Entity entity);
         
+        void SetHierarchyDirty() { m_HierarchyDirty = true; }
+        void SortHierarchy(std::vector<Entity>& entities);
+        int GetMaxParentDepth(Entity entity);
+        
         void RenderInspector();
         void UpdateCameraInput(float deltaTime);
         void DestroyEntity(Entity entity);
@@ -129,6 +133,10 @@ namespace ignite
 
         bool m_SceneFocused;
         int m_SceneFocusCooldown;
+
+        bool m_HierarchyDirty = true;
+        size_t m_LastEntityCount = 0;
+        std::vector<Entity> m_RootEntities;
 
         friend class EditorLayer;
     };

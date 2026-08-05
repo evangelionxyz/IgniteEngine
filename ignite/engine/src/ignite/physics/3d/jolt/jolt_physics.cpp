@@ -33,6 +33,7 @@ namespace ignite::physics
 		m_ContactListener = CreateScope<JoltContactListener>();
 		m_BodyActivationListener = CreateScope<JoltBodyActivationListener>();
 
+		m_ObjectLayerPairFilter.settings = &m_Settings;
 		m_PhysicsSystem.Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints,
 			m_BroadPhaseLayer, m_ObjectVsBroadPhaseLayerFilter, m_ObjectLayerPairFilter);
 
@@ -55,6 +56,8 @@ namespace ignite::physics
 	void JoltPhysics::SimulationStart(const Physics3DSettings &settings)
 	{
 		IGN_PROFILE_FUNCTION();
+		m_Settings = settings;
+		m_ObjectLayerPairFilter.settings = &m_Settings;
 		m_PhysicsSystem.SetGravity({ settings.gravity.x, settings.gravity.y, settings.gravity.z });
 		m_PhysicsSystem.OptimizeBroadPhase();
 	}
@@ -113,7 +116,7 @@ namespace ignite::physics
 			JPH::RVec3(transform.position.x, transform.position.y, transform.position.z),
 			JPH::Quat(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w),
 			desc.bodyType == BodyType::Kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic,
-			Layers::MOVING
+			static_cast<JPH::ObjectLayer>(desc.layer)
 		);
 
 		bodySettings.mUserData = userData;
@@ -155,7 +158,7 @@ namespace ignite::physics
 			JPH::RVec3(transform.position.x, transform.position.y, transform.position.z),
 			JPH::Quat(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w),
 			JPH::EMotionType::Static,
-			Layers::NON_MOVING
+			static_cast<JPH::ObjectLayer>(desc.layer)
 		);
 
 		bodySettings.mUserData = userData;
@@ -239,7 +242,17 @@ namespace ignite::physics
 		}
 	}
 
-	bool JoltPhysics::Raycast(const Ray &ray, RaycastHit &outHit, float maxDistance)
+	class JoltRaycastLayerFilter : public JPH::ObjectLayerFilter
+	{
+	public:
+		uint32_t mask = 0xFFFFFFFF;
+		virtual bool ShouldCollide(JPH::ObjectLayer inLayer) const override
+		{
+			return (mask & (1u << static_cast<uint32_t>(inLayer))) != 0;
+		}
+	};
+
+	bool JoltPhysics::Raycast(const Ray &ray, RaycastHit &outHit, float maxDistance, uint32_t layerMask)
 	{
 		JPH::RRayCast rayCast(
 			JPH::RVec3(ray.origin.x, ray.origin.y, ray.origin.z),
@@ -247,7 +260,10 @@ namespace ignite::physics
 		);
 
 		JPH::RayCastResult hit;
-		if (m_PhysicsSystem.GetNarrowPhaseQuery().CastRay(rayCast, hit))
+		JoltRaycastLayerFilter layerFilter;
+		layerFilter.mask = layerMask;
+
+		if (m_PhysicsSystem.GetNarrowPhaseQuery().CastRay(rayCast, hit, JPH::SpecifiedBroadPhaseLayerFilter(BroadPhaseLayers::MOVING), layerFilter))
 		{
 			outHit.fraction = hit.mFraction;
 			JPH::Vec3 hitPos = rayCast.GetPointOnRay(hit.mFraction);

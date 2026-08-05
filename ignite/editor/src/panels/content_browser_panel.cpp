@@ -832,10 +832,16 @@ namespace ignite
             m_ShowCreateFolderModal = false;
         }
 
+        static bool focusCreateFolder = true;
         if (ImGui::BeginPopupModal("Create Folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::Text("Create folder in: %s", m_CurrentDirectory.generic_string().c_str());
             ImGui::Spacing();
+            if (focusCreateFolder)
+            {
+                ImGui::SetKeyboardFocusHere();
+                focusCreateFolder = false;
+            }
             const bool submitByEnter = ImGui::InputText("Folder Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
             ImGui::Separator();
@@ -867,6 +873,10 @@ namespace ignite
             }
             ImGui::EndPopup();
         }
+        else
+        {
+            focusCreateFolder = true;
+        }
 
         // Create C# Script Modal
         if (m_ShowCreateScriptModal)
@@ -875,10 +885,16 @@ namespace ignite
             m_ShowCreateScriptModal = false;
         }
 
+        static bool focusCreateScript = true;
         if (ImGui::BeginPopupModal("Create C# Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::Text("Create script in: %s", m_CurrentDirectory.generic_string().c_str());
             ImGui::Spacing();
+            if (focusCreateScript)
+            {
+                ImGui::SetKeyboardFocusHere();
+                focusCreateScript = false;
+            }
             const bool submitByEnter = ImGui::InputText("Script Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
             ImGui::Separator();
@@ -906,6 +922,10 @@ namespace ignite
             }
             ImGui::EndPopup();
         }
+        else
+        {
+            focusCreateScript = true;
+        }
 
         // Create Scriptable Object Modal
         if (m_ShowCreateScriptableObjectModal)
@@ -914,11 +934,17 @@ namespace ignite
             m_ShowCreateScriptableObjectModal = false;
         }
 
+        static bool focusCreateSO = true;
         if (ImGui::BeginPopupModal("Create Scriptable Object", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::Text("Class: %s", m_PendingScriptableObjectClassName.c_str());
             ImGui::Text("Location: %s", m_CurrentDirectory.generic_string().c_str());
             ImGui::Spacing();
+            if (focusCreateSO)
+            {
+                ImGui::SetKeyboardFocusHere();
+                focusCreateSO = false;
+            }
             const bool submitByEnter = ImGui::InputText("Asset Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
             ImGui::Separator();
@@ -949,6 +975,10 @@ namespace ignite
             }
             ImGui::EndPopup();
         }
+        else
+        {
+            focusCreateSO = true;
+        }
 
         // Rename Modal
         if (m_ShowRenameModal)
@@ -957,6 +987,7 @@ namespace ignite
             m_ShowRenameModal = false;
         }
 
+        static bool focusRename = true;
         if (ImGui::BeginPopupModal("Rename Item", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
             if (!m_SelectedItems.empty())
@@ -967,6 +998,11 @@ namespace ignite
 
                 ImGui::Text("Rename: %s", itemPath.filename().generic_string().c_str());
                 ImGui::Spacing();
+                if (focusRename)
+                {
+                    ImGui::SetKeyboardFocusHere();
+                    focusRename = false;
+                }
                 const bool submitByEnter = ImGui::InputText("New Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
                 ImGui::Separator();
@@ -1052,6 +1088,10 @@ namespace ignite
             }
             
             ImGui::EndPopup();
+        }
+        else
+        {
+            focusRename = true;
         }
 
         // Delete Confirmation Modal

@@ -70,6 +70,12 @@ public static class CoreNativeAPI
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void SetBoolFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] bool value);
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void GetUInt32Fn(ulong entityID, out uint result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void SetUInt32Fn(ulong entityID, uint value);
+
 
         // ================================
         // Vectors & Quaternion

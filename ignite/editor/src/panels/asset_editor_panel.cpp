@@ -1074,7 +1074,7 @@ namespace ignite
             }
         }
 
-        // Asset creation pop-up
+        static bool focusCreateAsset = true;
         ImGui::OpenPopup("Create Asset");
         if (ImGui::BeginPopupModal("Create Asset", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
@@ -1087,6 +1087,11 @@ namespace ignite
             }
 
             const std::string extension = GetAssetExtensionFromType(m_CreateRequest.type);
+            if (focusCreateAsset)
+            {
+                ImGui::SetKeyboardFocusHere();
+                focusCreateAsset = false;
+            }
             const bool submitByEnter = ImGui::InputText("Name", m_CreateRequest.nameBuffer, sizeof(m_CreateRequest.nameBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
             std::string assetName = m_CreateRequest.nameBuffer;
@@ -1365,6 +1370,10 @@ namespace ignite
             }
 
             ImGui::EndPopup();
+        }
+        else
+        {
+            focusCreateAsset = true;
         }
 
         if (!m_CreateRequest.open)

@@ -185,6 +185,8 @@ public static class ComponentInternalCalls
     private static CoreNativeAPI.Funcs.GetBoolFn? s_RigidbodyGetApplyGyroscopicForce;
     private static CoreNativeAPI.Funcs.SetBoolFn? s_RigidbodySetApplyGyroscopicForce;
     private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_RigidbodySetAngularVelocity;
+    private static CoreNativeAPI.Funcs.GetUInt32Fn? s_RigidbodyGetLayer;
+    private static CoreNativeAPI.Funcs.SetUInt32Fn? s_RigidbodySetLayer;
 
     // BoxColliderComponent
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_BoxColliderGetCenter;
@@ -431,6 +433,8 @@ public static class ComponentInternalCalls
         s_RigidbodyGetApplyGyroscopicForce = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.RigidbodyComponent_GetApplyGyroscopicForce);
         s_RigidbodySetApplyGyroscopicForce = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetBoolFn>(api.RigidbodyComponent_SetApplyGyroscopicForce);
         s_RigidbodySetAngularVelocity = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.RigidbodyComponent_SetAngularVelocity);
+        s_RigidbodyGetLayer = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetUInt32Fn>(api.RigidbodyComponent_GetLayer);
+        s_RigidbodySetLayer = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetUInt32Fn>(api.RigidbodyComponent_SetLayer);
 
         // BoxColliderComponent
         s_BoxColliderGetCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.BoxColliderComponent_GetCenter);
@@ -599,7 +603,7 @@ public static class ComponentInternalCalls
         outDirection = NativeObject.ToManaged(dir);
     }
 
-    internal static unsafe ulong Scene_Raycast(Mathf.Vector3 origin, Mathf.Vector3 direction, float maxDistance,
+    internal static unsafe ulong Scene_Raycast(Mathf.Vector3 origin, Mathf.Vector3 direction, float maxDistance, uint layerMask,
                                                out Mathf.Vector3 hitPoint, out Mathf.Vector3 hitNormal)
     {
         EnsureInitialized();
@@ -609,7 +613,7 @@ public static class ComponentInternalCalls
         NativeObject.Vector3 nHitNormal = default;
         ulong id = s_SceneRaycast!(
             ref nOrigin, ref nDirection,
-            maxDistance, &nHitPoint, &nHitNormal);
+            maxDistance, layerMask, &nHitPoint, &nHitNormal);
         hitPoint  = NativeObject.ToManaged(nHitPoint);
         hitNormal = NativeObject.ToManaged(nHitNormal);
         return id;
@@ -1545,6 +1549,18 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         s_RigidbodyGetType!(entityID, out result);
+    }
+
+    internal static void RigidbodyComponent_GetLayer(ulong entityID, out uint result)
+    {
+        EnsureInitialized();
+        s_RigidbodyGetLayer!(entityID, out result);
+    }
+
+    internal static void RigidbodyComponent_SetLayer(ulong entityID, uint value)
+    {
+        EnsureInitialized();
+        s_RigidbodySetLayer!(entityID, value);
     }
 
     internal static void RigidbodyComponent_SetType(ulong entityID, int value)

@@ -263,6 +263,13 @@ namespace ignite
         if (m_Physics3D)
         {
             physics::Physics3DSettings pSettings;
+            if (auto assetManager = AssetManager::GetInstance())
+            {
+                if (auto project = assetManager->LockActiveProject())
+                {
+                    pSettings = project->GetInfo().physicsSettings;
+                }
+            }
             m_Physics3D->SimulationStart(pSettings);
 
             auto createCollider = [&](Entity entity, const TransformComponent &tr) -> Ref<physics::PhysicsCollider>
@@ -375,6 +382,7 @@ namespace ignite
                 physics::RigidBodyDesc rbDesc;
                 rbDesc.bodyType = rb.bodyType;
                 rbDesc.motionQuality = rb.motionQuality;
+                rbDesc.layer = rb.layer;
                 rbDesc.useGravity = rb.useGravity;
                 rbDesc.mass = rb.mass;
                 rbDesc.friction = rb.friction;

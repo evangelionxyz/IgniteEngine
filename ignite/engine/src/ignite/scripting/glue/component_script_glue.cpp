@@ -78,7 +78,7 @@ namespace ignite
             if (outDirection) *outDirection = rayDir;
         }
 
-        static uint64_t Scene_Raycast(const glm::vec3 *origin, const glm::vec3 *direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal)
+        static uint64_t Scene_Raycast(const glm::vec3 *origin, const glm::vec3 *direction, float maxDistance, uint32_t layerMask, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal)
         {
             if (outHitPoint) *outHitPoint = glm::vec3(0.0f);
             if (outHitNormal) *outHitNormal = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -89,7 +89,7 @@ namespace ignite
 
             physics::Ray ray{ *origin, *direction };
             physics::RaycastHit hit;
-            if (!scene->GetPhysics3D()->Raycast(ray, hit, maxDistance))
+            if (!scene->GetPhysics3D()->Raycast(ray, hit, maxDistance, layerMask))
                 return 0;
 
             if (outHitPoint)
@@ -2530,6 +2530,25 @@ namespace ignite
             }
         }
 
+        static void RigidbodyComponent_GetLayer(uint64_t entityID, uint32_t *result)
+        {
+            if (!result) return;
+            *result = 0;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            *result = entity.GetComponent<RigidbodyComponent>().layer;
+        }
+
+        static void RigidbodyComponent_SetLayer(uint64_t entityID, uint32_t value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.layer = value;
+        }
+
         static void RigidbodyComponent_SetLinearVelocity(uint64_t entityID, const glm::vec3 *value)
         {
             if (!value) return;
@@ -3909,6 +3928,8 @@ namespace ignite
             &RigidbodyComponent_GetApplyGyroscopicForce,
             &RigidbodyComponent_SetApplyGyroscopicForce,
             &RigidbodyComponent_SetAngularVelocity,
+            &RigidbodyComponent_GetLayer,
+            &RigidbodyComponent_SetLayer,
 
             &BoxColliderComponent_GetCenter,
             &BoxColliderComponent_SetCenter,

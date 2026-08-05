@@ -17,6 +17,16 @@ public sealed class RigidbodyComponent : IComponent
         set => ComponentInternalCalls.RigidbodyComponent_SetType(Entity!.ID, (int)value);
     }
 
+    public uint Layer
+    {
+        get
+        {
+            ComponentInternalCalls.RigidbodyComponent_GetLayer(Entity!.ID, out uint result);
+            return result;
+        }
+        set => ComponentInternalCalls.RigidbodyComponent_SetLayer(Entity!.ID, value);
+    }
+
     public MotionQuality MotionQuality
     {
         get

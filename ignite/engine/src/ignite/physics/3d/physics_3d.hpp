@@ -37,7 +37,7 @@ namespace ignite::physics
 		virtual void DestroyCollider(Ref<PhysicsCollider> collider) = 0;
 		virtual void DestroyCharacterController(Ref<PhysicsCharacterController> character) = 0;
 
-		virtual bool Raycast(const Ray &ray, RaycastHit &outHit, float maxDistance = 1000.0f) = 0;
+		virtual bool Raycast(const Ray &ray, RaycastHit &outHit, float maxDistance = 1000.0f, uint32_t layerMask = 0xFFFFFFFF) = 0;
 
 		virtual std::vector<CollisionEvent> DrainCollisionEvents() = 0;
 		virtual std::vector<BodyActivationEvent> DrainActivationEvents() = 0;

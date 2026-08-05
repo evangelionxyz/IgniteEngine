@@ -155,6 +155,44 @@ namespace ignite
 
         m_Scene = scene;
         m_SelectedEntities.clear();
+        m_HierarchyDirty = true;
+    }
+
+    int ScenePanel::GetMaxParentDepth(Entity entity)
+    {
+        int depth = 0;
+        Entity current = entity;
+        while (current.HasComponent<IDComponent>() && current.GetComponent<IDComponent>().parent != UUID(0))
+        {
+            current = SceneManager::GetEntity(m_Scene, current.GetComponent<IDComponent>().parent);
+            depth++;
+        }
+        return depth;
+    }
+
+    void ScenePanel::SortHierarchy(std::vector<Entity>& entities)
+    {
+        std::sort(entities.begin(), entities.end(), [](auto a, auto b)
+        {
+            return a.GetComponent<IDComponent>().name < b.GetComponent<IDComponent>().name;
+        });
+
+        for (auto& entity : entities)
+        {
+            IDComponent& id = entity.GetComponent<IDComponent>();
+            if (!id.children.empty())
+            {
+                std::vector<Entity> children;
+                for (auto childUuid : id.children)
+                    children.push_back(SceneManager::GetEntity(m_Scene, childUuid));
+                
+                SortHierarchy(children);
+                
+                id.children.clear();
+                for (auto& child : children)
+                    id.children.push_back(child.GetUUID());
+            }
+        }
     }
 
     void ScenePanel::OnGuiRender()
@@ -200,19 +238,21 @@ namespace ignite
 
         auto assetManager = AssetManager::GetInstance();
 
-        const ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_NoClip | ImGuiTableFlags_PadOuterX
-            | ImGuiTableFlags_NoPadInnerX | ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_Resizable;
+        constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersOuter
+                                             | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_HighlightHoveredColumn;
 
         if (ImGui::BeginTable("entity_hierarchy_table", 1, tableFlags))
         {
-            ImGui::TableSetupScrollFreeze(0, 1);
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_NoReorder | ImGuiTableColumnFlags_WidthStretch);
+
+            constexpr int maxStickyScrollRows = 2;
+            ImGui::TableSetupScrollFreeze(0, maxStickyScrollRows);
             ImGui::TableHeadersRow();
 
-            ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, { 0.000f, 0.245f, 0.409f, 1.000f });
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, { 0.000f, 0.000f, 0.000f, 0.620f });
-            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.000f, 0.243f, 0.408f, 1.000f });
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
+            // ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, { 0.000f, 0.245f, 0.409f, 1.000f });
+            // ImGui::PushStyleColor(ImGuiCol_FrameBg, { 0.000f, 0.000f, 0.000f, 0.620f });
+            // ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.000f, 0.243f, 0.408f, 1.000f });
+            // ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
             // Root tree node
             
@@ -285,6 +325,12 @@ namespace ignite
                             rootEntities.emplace_back(e, m_Scene);
                     });
 
+                if (m_HierarchyDirty)
+                {
+                    SortHierarchy(rootEntities);
+                    m_HierarchyDirty = false;
+                }
+
                 for (const Entity &entity : rootEntities)
                     RenderEntityNode(entity);
 
@@ -294,8 +340,8 @@ namespace ignite
                 ImGui::TreePop();
             }
 
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor(3);
+            // ImGui::PopStyleVar();
+            // ImGui::PopStyleColor(3);
 
             // Context menu for creating entities
             if (ImGui::BeginPopupContextWindow("create_entity_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
@@ -401,6 +447,11 @@ namespace ignite
                 }
             }
             ImGui::EndMenu();
+        }
+
+        if (entity.IsValid())
+        {
+            SetHierarchyDirty();
         }
 
         return entity;
@@ -567,6 +618,7 @@ namespace ignite
                                 // Record the re-parent for undo
                                 CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
                                     m_Scene, droppedEntity.GetUUID(), oldParent, newParent));
+                                SetHierarchyDirty();
                             }
                         }
                     }
@@ -587,6 +639,7 @@ namespace ignite
                                 if (instantiated.IsValid())
                                 {
                                     SetSelectedEntity(instantiated);
+                                    SetHierarchyDirty();
                                 }
                             }
                         }
@@ -1800,6 +1853,32 @@ namespace ignite
                         c.dirty = true;
                     }
 
+                    if (auto assetManager = AssetManager::GetInstance())
+                    {
+                        if (auto project = assetManager->LockActiveProject())
+                        {
+                            const auto &physSettings = project->GetInfo().physicsSettings;
+                            std::vector<const char *> layerLabels;
+                            layerLabels.reserve(physSettings.layerCount);
+                            for (uint32_t i = 0; i < physSettings.layerCount; ++i)
+                            {
+                                layerLabels.push_back(physSettings.layerNames[i].c_str());
+                            }
+
+                            int layerIndex = static_cast<int>(c.layer);
+                            if (layerIndex >= static_cast<int>(physSettings.layerCount))
+                            {
+                                layerIndex = 0;
+                            }
+
+                            if (UI::DrawComboBox("Physics Layer", layerLabels.data(), static_cast<int>(layerLabels.size()), &layerIndex))
+                            {
+                                c.layer = static_cast<uint32_t>(layerIndex);
+                                c.dirty = true;
+                            }
+                        }
+                    }
+
                     c.dirty |= UI::DrawFloatControl("Gravity Factor", &c.gravityFactor, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
                     c.dirty |= UI::DrawFloatControl("Mass", &c.mass, 0.0025f, FLT_MIN, FLT_MAX, 1.0f);
                     c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
@@ -3008,13 +3087,19 @@ namespace ignite
                 }
             });
 
+            static bool focusComponentInput = true;
+
             if (ImGui::BeginPopup("##add_component_context", ImGuiWindowFlags_NoDecoration))
             {
                 static char buffer[256] = { 0 };
                 static std::string compNameFilterResultStr;
                 static std::set<std::pair<std::string, CompType>> filteredCompName;
 
-                // ImGui::SetKeyboardFocusHere();
+                if (focusComponentInput)
+                {
+                    ImGui::SetKeyboardFocusHere();
+                    focusComponentInput = false;
+                }
                 ImGui::InputTextWithHint("##component_name", "Component", buffer, sizeof(buffer) + 1, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
 
                 compNameFilterResultStr = std::string(buffer);
@@ -3123,6 +3208,8 @@ namespace ignite
                     }
                 };
 
+                ImGui::BeginChildEx("##component_list", ImGui::GetCurrentWindow()->GetID("##component_list"), ImVec2(-1, 128.0f), ImGuiChildFlags_None, ImGuiWindowFlags_None);
+
                 if (compNameFilterResultStr.empty())
                 {
                     for (const auto &[strName, type] : s_ComponentsName)
@@ -3143,7 +3230,14 @@ namespace ignite
                         ImGui::CloseCurrentPopup();
                     }
                 }
+
+                ImGui::EndChild();
+
                 ImGui::EndPopup();
+            }
+            else
+            {
+                focusComponentInput = true;
             }
         }
 
@@ -4671,6 +4765,7 @@ namespace ignite
     void ScenePanel::DestroyEntity(Entity entity)
     {
         CommandManager::ExecuteCommand(CreateScope<EntityDestroyCommand>(m_Scene, entity));
+        SetHierarchyDirty();
     }
 
     void ScenePanel::ClearSelection()
@@ -4746,5 +4841,6 @@ namespace ignite
                 SceneManager::DuplicateEntity(m_Scene, entity);
             }
         }
+        SetHierarchyDirty();
     }
 }

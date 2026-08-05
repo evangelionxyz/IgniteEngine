@@ -38,7 +38,7 @@ namespace ignite::physics
 	{
 		static constexpr JPH::ObjectLayer NON_MOVING = 0;
 		static constexpr JPH::ObjectLayer MOVING = 1;
-		static constexpr JPH::ObjectLayer NUM_LAYERS = 2;
+		static constexpr JPH::ObjectLayer NUM_LAYERS = MAX_PHYSICS_LAYERS;
 	}
 
 	namespace BroadPhaseLayers
@@ -51,16 +51,15 @@ namespace ignite::physics
 	class JoltObjectLayerPairFilterImpl : public JPH::ObjectLayerPairFilter
 	{
 	public:
+		const Physics3DSettings *settings = nullptr;
+
 		virtual bool ShouldCollide(JPH::ObjectLayer inObject1, JPH::ObjectLayer inObject2) const override
 		{
-			switch (inObject1)
+			if (settings)
 			{
-			case Layers::NON_MOVING: return inObject2 == Layers::MOVING;
-			case Layers::MOVING: return true;
-			default:
-				JPH_ASSERT(false);
-				return false;
+				return settings->CanLayersCollide(static_cast<uint32_t>(inObject1), static_cast<uint32_t>(inObject2));
 			}
+			return true;
 		}
 	};
 
@@ -69,8 +68,10 @@ namespace ignite::physics
 	public:
 		JoltBroadPhaseLayerInterfaceImpl()
 		{
-			m_ObjectToBP[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
-			m_ObjectToBP[Layers::MOVING] = BroadPhaseLayers::MOVING;
+			for (uint32_t i = 0; i < MAX_PHYSICS_LAYERS; ++i)
+			{
+				m_ObjectToBP[i] = BroadPhaseLayers::MOVING;
+			}
 		}
 
 		virtual uint32_t GetNumBroadPhaseLayers() const override
@@ -80,8 +81,9 @@ namespace ignite::physics
 
 		virtual JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer inLayer) const override
 		{
-			LOG_ASSERT(inLayer < Layers::NUM_LAYERS, "[Jolt] Invalid Layer");
-			return m_ObjectToBP[inLayer];
+			if (inLayer < MAX_PHYSICS_LAYERS)
+				return m_ObjectToBP[inLayer];
+			return BroadPhaseLayers::MOVING;
 		}
 
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
@@ -97,7 +99,7 @@ namespace ignite::physics
 #endif
 
 	private:
-		JPH::BroadPhaseLayer m_ObjectToBP[Layers::NUM_LAYERS];
+		JPH::BroadPhaseLayer m_ObjectToBP[MAX_PHYSICS_LAYERS];
 	};
 
 	class JoltObjectVsBroadPhaseLayerFilterImpl : public JPH::ObjectVsBroadPhaseLayerFilter
@@ -105,14 +107,7 @@ namespace ignite::physics
 	public:
 		virtual bool ShouldCollide(JPH::ObjectLayer inLayer1, JPH::BroadPhaseLayer inLayer2) const override
 		{
-			switch (inLayer1)
-			{
-			case Layers::NON_MOVING: return inLayer2 == BroadPhaseLayers::MOVING;
-			case Layers::MOVING: return true;
-			default:
-				LOG_ASSERT(false, "Invalid layer!");
-				return false;
-			}
+			return true;
 		}
 	};
 
@@ -232,7 +227,7 @@ namespace ignite::physics
 		virtual void DestroyCollider(Ref<PhysicsCollider> collider) override;
 		virtual void DestroyCharacterController(Ref<PhysicsCharacterController> character) override;
 
-		virtual bool Raycast(const Ray &ray, RaycastHit &outHit, float maxDistance = 1000.0f) override;
+		virtual bool Raycast(const Ray &ray, RaycastHit &outHit, float maxDistance = 1000.0f, uint32_t layerMask = 0xFFFFFFFF) override;
 
 		virtual std::vector<CollisionEvent> DrainCollisionEvents() override;
 		virtual std::vector<BodyActivationEvent> DrainActivationEvents() override;
@@ -241,6 +236,8 @@ namespace ignite::physics
 		JPH::BodyInterface *GetBodyInterface() const;
 
 	private:
+		Physics3DSettings m_Settings;
+
 		JPH::BodyInterface *m_BodyInterface = nullptr;
 		JPH::PhysicsSystem m_PhysicsSystem;
 

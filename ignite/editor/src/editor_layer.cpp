@@ -1304,7 +1304,7 @@ namespace ignite
     {
         if (m_ActiveProject)
         {
-			SaveScene();
+            SaveScene();
             m_ActiveProject->Serialize(m_CurrentProjectFilepath);
         }
     }
@@ -1842,28 +1842,106 @@ namespace ignite
 
             if (ImGui::BeginTabBar("##settings_tabs", ImGuiTabBarFlags_Reorderable))
             {
-                if (ImGui::BeginTabItem("Pipeline"))
+                if (ImGui::BeginTabItem("Physics"))
                 {
-                    // Raster settings
-                    static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
-                    const char *currentFillMode = rasterFillStr[static_cast<i32>(m_State.rasterFillMode)];
-                    if (ImGui::BeginCombo("Fill", currentFillMode))
+                    if (auto assetManager = AssetManager::GetInstance())
                     {
-                        for (size_t i = 0; i < std::size(rasterFillStr); ++i)
+                        if (auto project = assetManager->LockActiveProject())
                         {
-                            bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
-                            if (ImGui::Selectable(rasterFillStr[i], isSelected))
+                            auto &physSettings = project->GetInfo().physicsSettings;
+
+                            ImGui::Text("Global Settings");
+                            if (ImGui::DragFloat3("Gravity", &physSettings.gravity.x, 0.1f))
                             {
-                                m_State.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
-                                m_SceneRenderer->SetFillMode(m_State.rasterFillMode);
+                                project->SetDirtyFlag(true);
                             }
 
-                            if (isSelected)
+                            constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersOuter
+                                                                 | ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX
+                                                                 | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_HighlightHoveredColumn;
+                            constexpr ImGuiTableColumnFlags columnFlags = ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_NoHeaderWidth;
+
+                            ImGui::Spacing();
+                            ImGui::Separator();
+                            ImGui::Spacing();
+
+                            ImGui::Text("Physics Layers (%u / %u slots)", physSettings.layerCount, physics::MAX_PHYSICS_LAYERS);
+
+                            ImGui::SameLine();
+                            if (ImGui::Button("Add Layer Slot") && physSettings.layerCount < physics::MAX_PHYSICS_LAYERS)
                             {
-                                ImGui::SetItemDefaultFocus();
+                                physSettings.layerCount++;
+                                project->SetDirtyFlag(true);
+                            }
+
+                            ImGui::SameLine();
+                            if (ImGui::Button("Remove Layer Slot") && physSettings.layerCount > 1)
+                            {
+                                physSettings.layerCount--;
+                                project->SetDirtyFlag(true);
+                            }
+
+                            if (ImGui::TreeNodeEx("Layer Names", ImGuiTreeNodeFlags_DefaultOpen))
+                            {
+                                ImGui::BeginChild("##physics_layer_names", ImVec2(-1.0f, 256.0f));
+                                for (uint32_t i = 0; i < physSettings.layerCount; ++i)
+                                {
+                                    char buf[128];
+                                    strncpy_s(buf, physSettings.layerNames[i].c_str(), sizeof(buf));
+                                    std::string label = std::format("Layer {}##layer_name_{}", i, i);
+                                    if (ImGui::InputText(label.c_str(), buf, sizeof(buf)))
+                                    {
+                                        physSettings.layerNames[i] = buf;
+                                        project->SetDirtyFlag(true);
+                                    }
+                                }
+                                ImGui::EndChild();
+                                ImGui::TreePop();
+                            }
+
+                            ImGui::Spacing();
+                            if (ImGui::TreeNodeEx("Collision Matrix", ImGuiTreeNodeFlags_DefaultOpen))
+                            {
+                                const uint32_t count = physSettings.layerCount;
+                                if (ImGui::BeginTable("##collision_matrix_table", count, tableFlags))
+                                {
+                                    // Layer label
+                                    ImGui::TableSetupColumn("Layer", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_NoReorder);
+
+                                    // Iterate the second layer to compare with the first
+                                    for (uint32_t j = 1; j < count; ++j)
+                                        ImGui::TableSetupColumn(physSettings.layerNames[j].c_str(), columnFlags);
+
+                                    constexpr int frozenRows = 2;
+                                    constexpr int frozenCols = 1;
+                                    ImGui::TableSetupScrollFreeze(frozenCols, frozenRows);
+
+                                    ImGui::TableAngledHeadersRow();
+                                    ImGui::TableHeadersRow();
+
+                                    for (uint32_t row = 0; row < count; ++row)
+                                    {
+                                        ImGui::TableNextRow();
+                                        ImGui::TableSetColumnIndex(0);
+                                        ImGui::TextUnformatted(physSettings.layerNames[row].c_str());
+
+                                        for (uint32_t column = 1; column < count; ++column)
+                                        {
+                                            ImGui::TableSetColumnIndex(column);
+                                            bool canCollide = physSettings.CanLayersCollide(row, column);
+                                            std::string checkId = std::format("##col_{}_{}", row, column);
+                                            if (ImGui::Checkbox(checkId.c_str(), &canCollide))
+                                            {
+                                                physSettings.SetLayerCollision(row, column, canCollide);
+                                                project->SetDirtyFlag(true);
+                                            }
+                                        }
+                                    }
+                                    ImGui::EndTable();
+                                }
+                                ImGui::TreePop();
                             }
                         }
-                        ImGui::EndCombo();
                     }
                     ImGui::EndTabItem();
                 }

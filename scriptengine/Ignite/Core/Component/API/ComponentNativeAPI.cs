@@ -190,6 +190,8 @@ public static class ComponentNativeAPI
         public IntPtr RigidbodyComponent_GetApplyGyroscopicForce;
         public IntPtr RigidbodyComponent_SetApplyGyroscopicForce;
         public IntPtr RigidbodyComponent_SetAngularVelocity;
+        public IntPtr RigidbodyComponent_GetLayer;
+        public IntPtr RigidbodyComponent_SetLayer;
 
         // BoxColliderComponent
         public IntPtr BoxColliderComponent_GetCenter;
@@ -261,7 +263,7 @@ public static class ComponentNativeAPI
         public delegate void SceneGetScreenToWorldRayFn(float x, float y, out NativeObject.Vector3 outOrigin, out NativeObject.Vector3 outDirection);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public unsafe delegate ulong SceneRaycastFn(ref NativeObject.Vector3 origin, ref NativeObject.Vector3 direction, float maxDistance, NativeObject.Vector3* outHitPoint, NativeObject.Vector3* outHitNormal);
+        public unsafe delegate ulong SceneRaycastFn(ref NativeObject.Vector3 origin, ref NativeObject.Vector3 direction, float maxDistance, uint layerMask, NativeObject.Vector3* outHitPoint, NativeObject.Vector3* outHitNormal);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate ulong SceneGetPrimaryCameraFn();

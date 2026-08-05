@@ -531,6 +531,7 @@ namespace ignite
                 {
                     sr.AddKeyValue("MotionQuality", static_cast<int>(comp.motionQuality));
                     sr.AddKeyValue("BodyType", static_cast<int>(comp.bodyType));
+                    sr.AddKeyValue("Layer", comp.layer);
                     sr.AddKeyValue("UseGravity", comp.useGravity);
                     sr.AddKeyValue("RotateX", comp.rotateX);
                     sr.AddKeyValue("RotateY", comp.rotateY);
@@ -1139,6 +1140,7 @@ namespace ignite
             auto &comp = desEntity.AddComponent<RigidbodyComponent>();
             if (auto n = node["MotionQuality"]) comp.motionQuality = static_cast<physics::MotionQuality>(n.as<int>());
             if (auto n = node["BodyType"]) comp.bodyType = static_cast<physics::BodyType>(n.as<int>());
+            if (auto n = node["Layer"]) comp.layer = n.as<uint32_t>();
             if (auto n = node["UseGravity"]) comp.useGravity = n.as<bool>();
             if (auto n = node["RotateX"]) comp.rotateX = n.as<bool>();
             if (auto n = node["RotateY"]) comp.rotateY = n.as<bool>();
