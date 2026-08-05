@@ -1263,7 +1263,16 @@ namespace ignite
                     if (cacheIt == m_EntityObjectIndexCache.end())
                         continue;
 
-                    const nvrhi::BindingSetHandle materialBindingSet = m_RuntimeMaterial->GetBindingSet();
+                    Ref<Material> material = ResolveAsset<Material>(tc.materialHandle);
+                    if (material && uploadedMaterialsThisPass.insert(material.get()).second)
+                        material->UploadToGpu(cmd);
+
+                    if (material && !material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
+                        continue;
+
+                    const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                        ? material->GetBindingSet() : m_RuntimeMaterial->GetBindingSet();
+
                     if (!materialBindingSet)
                         continue;
 
@@ -1278,16 +1287,6 @@ namespace ignite
 
                         AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
                         if (!frustum.IsAABBVisible(worldBounds))
-                            continue;
-
-                        // TODO: Implement material
-                        Ref<Material> material = m_RuntimeMaterial;
-                        if (material && uploadedMaterialsThisPass.insert(material.get()).second)
-                            material->UploadToGpu(cmd);
-
-                        const nvrhi::BindingSetHandle materialBindingSet = material->GetBindingSet();
-
-                        if (!materialBindingSet)
                             continue;
 
                         const uint32_t objectIndex = cacheIt->second[idx];

@@ -2754,6 +2754,42 @@ namespace ignite
                     rebuildGPU = true;
                 }
 
+                if (ImGui::TreeNodeEx("Renderer", ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    const bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
+                    std::string label = assetManager->GetAssetDisplayName(c.materialHandle);
+                    UI::DrawButtonWithColumn("Material", label.c_str(), nullptr, [&, this]()
+                    {
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            {
+                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                if (metadata.type == AssetType::Material)
+                                {
+                                    c.materialHandle = handle;
+                                    c.dirty = true;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+
+                        if (isMaterialLoaded)
+                        {
+                            ImGui::SameLine();
+                            if (ImGui::Button("X##ClearMaterial"))
+                            {
+                                c.materialHandle = AssetHandle(0);
+                                c.dirty = true;
+                            }
+                        }
+                    });
+
+                    ImGui::TreePop();
+                }
+
                 if (rebuildGPU)
                 {
                     c.gpuInitialized = false;

@@ -1009,39 +1009,55 @@ namespace ignite
         Project *project = m_EditorLayer->GetActiveProject().get();
 		auto assetManager = AssetManager::GetInstance();
 
-        if (m_CreateRequest.type == AssetType::Material2D && !m_CreateRequest.asset)
+        if (!m_CreateRequest.asset)
         {
-            m_CreateRequest.asset = CreateRef<Material2D>();
-        }
-
-        if (m_CreateRequest.type == AssetType::SpriteSheet && !m_CreateRequest.asset)
-        {
-            m_CreateRequest.asset = CreateRef<SpriteSheet>();
-        }
-
-        if (m_CreateRequest.type == AssetType::BlendSpace && !m_CreateRequest.asset)
-        {
-            m_CreateRequest.asset = CreateRef<BlendSpace>();
-        }
-
-        if (m_CreateRequest.type == AssetType::AnimationMontage && !m_CreateRequest.asset)
-        {
-            m_CreateRequest.asset = CreateRef<AnimationMontage>();
-        }
-
-        if (m_CreateRequest.type == AssetType::LocomotionController && !m_CreateRequest.asset)
-        {
-            m_CreateRequest.asset = CreateRef<LocomotionController>();
-        }
-
-        if (m_CreateRequest.type == AssetType::AnimatorController && !m_CreateRequest.asset)
-        {
-            m_CreateRequest.asset = AnimatorController::Create();
-        }
-
-        if (m_CreateRequest.type == AssetType::Widget && !m_CreateRequest.asset)
-        {
-            m_CreateRequest.asset = CreateRef<WidgetCanvas>(nullptr);
+            switch (m_CreateRequest.type)
+            {
+            case AssetType::Material:
+            {
+                m_CreateRequest.asset = CreateRef<Material>();
+                break;
+            }
+            case AssetType::Material2D:
+            {
+                m_CreateRequest.asset = CreateRef<Material2D>();
+                break;
+            }
+            case AssetType::SpriteSheet:
+            {
+                m_CreateRequest.asset = CreateRef<SpriteSheet>();
+                break;
+            }
+            case AssetType::BlendSpace:
+            {
+                m_CreateRequest.asset = CreateRef<BlendSpace>();
+                break;
+            }
+            case AssetType::AnimationMontage:
+            {
+                m_CreateRequest.asset = CreateRef<AnimationMontage>();
+                break;
+            }
+            case AssetType::LocomotionController:
+            {
+                m_CreateRequest.asset = CreateRef<LocomotionController>();
+                break;
+            }
+            case AssetType::AnimatorController:
+            {
+                m_CreateRequest.asset = AnimatorController::Create();
+                break;
+            }
+            case AssetType::Widget:
+            {
+                m_CreateRequest.asset = CreateRef<WidgetCanvas>(nullptr);
+                break;
+            }
+            case AssetType::Invalid:
+            default:
+                LOG_ASSERT(false, "[Asset Editor] Invalid asset type or not implemented yet! {}", AssetTypeToString(m_CreateRequest.type));
+                break;
+            }
         }
 
         // Asset creation pop-up
@@ -1079,30 +1095,51 @@ namespace ignite
                 ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Name is not available.");
             }
 
-            auto tryCreateAsset = [&]()
+            auto tryCreateAsset = [&]() -> bool
             {
                 std::string finalAssetName = m_CreateRequest.nameBuffer;
                 if (finalAssetName.empty())
                 {
-                    return;
+                    return false;
                 }
 
                 ignite::Path proposed(finalAssetName);
                 finalAssetName = proposed.stem().string();
                 if (finalAssetName.empty())
                 {
-                    return;
+                    return false;
                 }
 
                 const ignite::Path fullAssetPath = targetDirectory / (finalAssetName + extension);
                 if (ignite::Path::exists(fullAssetPath))
                 {
-                    return;
+                    return false;
                 }
 
                 bool created = false;
                 Ref<Asset> createdAsset = m_CreateRequest.asset;
-                if (m_CreateRequest.type == AssetType::Material2D)
+                if (!createdAsset)
+                    return false;
+
+                switch (m_CreateRequest.type)
+                {
+                case AssetType::Material:
+                {
+                    Ref<Material> asset = createdAsset->As<Material>();
+                    if (asset)
+                    {
+                        asset->name = finalAssetName;
+                        created = asset->Serialize(fullAssetPath);
+                        if (created)
+                        {
+                            asset->SetDirtyFlag(false);
+                            asset->SetReadyFlag(true);
+                            createdAsset = asset;
+                        }
+                    }
+                    break;
+                }
+                case AssetType::Material2D:
                 {
                     Ref<Material2D> asset = createdAsset->As<Material2D>();
                     if (asset)
@@ -1116,8 +1153,9 @@ namespace ignite
                             createdAsset = asset;
                         }
                     }
+                    break;
                 }
-                else if (m_CreateRequest.type == AssetType::Widget)
+                case AssetType::Widget:
                 {
                     Ref<WidgetCanvas> asset = createdAsset->As<WidgetCanvas>();
                     if (asset)
@@ -1131,8 +1169,9 @@ namespace ignite
                             createdAsset = asset;
                         }
                     }
+                    break;
                 }
-                else if (m_CreateRequest.type == AssetType::AnimatorController)
+                case AssetType::AnimatorController:
                 {
                     Ref<AnimatorController> asset = createdAsset->As<AnimatorController>();
                     if (asset)
@@ -1145,8 +1184,9 @@ namespace ignite
                             createdAsset = asset;
                         }
                     }
+                    break;
                 }
-                else if (m_CreateRequest.type == AssetType::BlendSpace)
+                case AssetType::BlendSpace:
                 {
                     Ref<BlendSpace> asset = createdAsset->As<BlendSpace>();
                     if (asset)
@@ -1159,8 +1199,9 @@ namespace ignite
                             createdAsset = asset;
                         }
                     }
+                    break;
                 }
-                else if (m_CreateRequest.type == AssetType::LocomotionController)
+                case AssetType::LocomotionController:
                 {
                     Ref<LocomotionController> asset = createdAsset->As<LocomotionController>();
                     if (asset)
@@ -1174,8 +1215,9 @@ namespace ignite
                             createdAsset = asset;
                         }
                     }
+                    break;
                 }
-                else if (m_CreateRequest.type == AssetType::SpriteSheet)
+                case AssetType::SpriteSheet:
                 {
                     Ref<SpriteSheet> asset = createdAsset->As<SpriteSheet>();
                     if (asset)
@@ -1188,8 +1230,9 @@ namespace ignite
                             createdAsset = asset;
                         }
                     }
+                    break;
                 }
-                else if (m_CreateRequest.type == AssetType::Animation2D)
+                case AssetType::Animation2D:
                 {
                     Ref<Animation2D> asset = createdAsset->As<Animation2D>();
                     if (asset)
@@ -1202,8 +1245,9 @@ namespace ignite
                             createdAsset = asset;
                         }
                     }
+                    break;
                 }
-                else if (m_CreateRequest.type == AssetType::AnimatorController2D)
+                case AssetType::AnimatorController2D:
                 {
                     Ref<AnimatorController2D> asset = createdAsset->As<AnimatorController2D>();
                     if (asset)
@@ -1216,6 +1260,12 @@ namespace ignite
                             createdAsset = asset;
                         }
                     }
+                    break;
+                }
+                case AssetType::Invalid:
+                default:
+                    LOG_ASSERT(false, "[Asset Editor] Invalid asset type or not implemented yet! {}", AssetTypeToString(m_CreateRequest.type));
+                    break;
                 }
 
                 if (created && createdAsset)
@@ -1242,7 +1292,6 @@ namespace ignite
                         data.requestFocus = true;
                         data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
 
-
                         InitializeSceneData(data);
 
                         m_Assets.push_back(std::move(data));
@@ -1252,6 +1301,8 @@ namespace ignite
                         m_EditorLayer->RefreshContentBrowsers();
                     });
                 }
+
+                return created;
             };
 
             const bool canCreate = hasValidName && isNameAvailable;
@@ -1269,7 +1320,11 @@ namespace ignite
 
             if ((submitByEnter || submitByButton) && canCreate)
             {
-                tryCreateAsset();
+                if (!tryCreateAsset())
+                {
+                    m_CreateRequest = {};
+                    ImGui::CloseCurrentPopup();
+                }
             }
 
             ImGui::SameLine();
@@ -5070,59 +5125,75 @@ namespace ignite
         m_CreateRequest.targetDirectory = signal.targetDirectory;
         m_CreateRequest.open = true;
 
-        if (m_CreateRequest.type == AssetType::Material2D)
+        switch (signal.type)
         {
-            m_CreateRequest.asset = CreateRef<Material2D>();
-            std::memcpy(m_CreateRequest.nameBuffer, "NewMaterial2D", sizeof("NewMaterial2D"));
+            case AssetType::Material:
+            {
+                m_CreateRequest.asset = CreateRef<Material>();
+                std::memcpy(m_CreateRequest.nameBuffer, "NewMaterial", sizeof("NewMaterial"));
+                break;
+            }
+            case AssetType::Material2D:
+            {
+                m_CreateRequest.asset = CreateRef<Material2D>();
+                std::memcpy(m_CreateRequest.nameBuffer, "NewMaterial2D", sizeof("NewMaterial2D"));
+                break;
+            }
+            case AssetType::SpriteSheet:
+            {
+                m_CreateRequest.asset = CreateRef<SpriteSheet>();
+                std::memcpy(m_CreateRequest.nameBuffer, "NewSpriteSheet", sizeof("NewSpriteSheet"));
+                break;
+            }
+            case AssetType::Animation2D:
+            {
+                m_CreateRequest.asset = Animation2D::Create("NewAnimation2D");
+                std::memcpy(m_CreateRequest.nameBuffer, "NewAnimation2D", sizeof("NewAnimation2D"));
+                break;
+            }
+            case AssetType::AnimatorController2D:
+            {
+                m_CreateRequest.asset = AnimatorController2D::Create();
+                std::memcpy(m_CreateRequest.nameBuffer, "NewAnimatorController", sizeof("NewAnimatorController"));
+                break;
+            }
+            case AssetType::AnimatorController:
+            {
+                m_CreateRequest.asset = AnimatorController::Create();
+                std::memcpy(m_CreateRequest.nameBuffer, "NewAnimatorController3D", sizeof("NewAnimatorController3D"));
+                break;
+            }
+            case AssetType::BlendSpace:
+            {
+                m_CreateRequest.asset = CreateRef<BlendSpace>();
+                std::memcpy(m_CreateRequest.nameBuffer, "NewBlendSpace", sizeof("NewBlendSpace"));
+                break;
+            }
+            case AssetType::AnimationMontage:
+            {
+                m_CreateRequest.asset = CreateRef<AnimationMontage>();
+                std::memcpy(m_CreateRequest.nameBuffer, "NewAnimationMontage", sizeof("NewAnimationMontage"));
+                break;
+            }
+            case AssetType::LocomotionController:
+            {
+                m_CreateRequest.asset = CreateRef<LocomotionController>();
+                std::memcpy(m_CreateRequest.nameBuffer, "NewLocomotion", sizeof("NewLocomotion"));
+                break;
+            }
+            case AssetType::Widget:
+            {
+                m_CreateRequest.asset = CreateRef<WidgetCanvas>(nullptr);
+                std::memcpy(m_CreateRequest.nameBuffer, "NewWidget", sizeof("NewWidget"));
+                break;
+            }
+            case AssetType::Invalid:
+            default:
+                LOG_ASSERT(false, "[Asset Editor] Invalid asset type or not implemented yet! {}", AssetTypeToString(signal.type));
+                break;
         }
 
-        if (m_CreateRequest.type == AssetType::SpriteSheet)
-        {
-            m_CreateRequest.asset = CreateRef<SpriteSheet>();
-            std::memcpy(m_CreateRequest.nameBuffer, "NewSpriteSheet", sizeof("NewSpriteSheet"));
-        }
-
-        if (m_CreateRequest.type == AssetType::Animation2D)
-        {
-            m_CreateRequest.asset = Animation2D::Create("NewAnimation2D");
-            std::memcpy(m_CreateRequest.nameBuffer, "NewAnimation2D", sizeof("NewAnimation2D"));
-        }
-
-        if (m_CreateRequest.type == AssetType::AnimatorController2D)
-        {
-            m_CreateRequest.asset = AnimatorController2D::Create();
-            std::memcpy(m_CreateRequest.nameBuffer, "NewAnimatorController", sizeof("NewAnimatorController"));
-        }
-
-        if (m_CreateRequest.type == AssetType::AnimatorController)
-        {
-            m_CreateRequest.asset = AnimatorController::Create();
-            std::memcpy(m_CreateRequest.nameBuffer, "NewAnimatorController3D", sizeof("NewAnimatorController3D"));
-        }
-
-        if (m_CreateRequest.type == AssetType::BlendSpace)
-        {
-            m_CreateRequest.asset = CreateRef<BlendSpace>();
-            std::memcpy(m_CreateRequest.nameBuffer, "NewBlendSpace", sizeof("NewBlendSpace"));
-        }
-
-        if (m_CreateRequest.type == AssetType::AnimationMontage)
-        {
-            m_CreateRequest.asset = CreateRef<AnimationMontage>();
-            std::memcpy(m_CreateRequest.nameBuffer, "NewAnimationMontage", sizeof("NewAnimationMontage"));
-        }
-
-        if (m_CreateRequest.type == AssetType::LocomotionController)
-        {
-            m_CreateRequest.asset = CreateRef<LocomotionController>();
-            std::memcpy(m_CreateRequest.nameBuffer, "NewLocomotion", sizeof("NewLocomotion"));
-        }
-
-        if (m_CreateRequest.type == AssetType::Widget)
-        {
-            m_CreateRequest.asset = CreateRef<WidgetCanvas>(nullptr);
-            std::memcpy(m_CreateRequest.nameBuffer, "NewWidget", sizeof("NewWidget"));
-        }
+        
 
         return true;
     }

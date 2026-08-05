@@ -351,6 +351,7 @@ namespace ignite
                     sr.AddKeyValue("ChunkCount", comp.chunkCount);
                     sr.AddKeyValue("LodLevels", comp.lodLevels);
                     sr.AddKeyValue("HeightmapHandle", static_cast<uint64_t>(comp.heightmapHandle));
+                    sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(comp.materialHandle));
                 }
                 sr.EndMap();
             }
@@ -950,6 +951,7 @@ namespace ignite
             if (auto n = node["ChunkCount"]) comp.chunkCount = n.as<uint32_t>();
             if (auto n = node["LodLevels"]) comp.lodLevels = n.as<uint32_t>();
             if (auto n = node["HeightmapHandle"]) comp.heightmapHandle = AssetHandle(n.as<uint64_t>());
+            if (auto n = node["MaterialHandle"]) comp.materialHandle = AssetHandle(n.as<uint64_t>());
 
             if (!comp.data)
             {

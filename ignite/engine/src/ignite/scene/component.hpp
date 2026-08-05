@@ -847,6 +847,7 @@ namespace ignite
 
         // TODO: heightmap handle should takes image from ContentBrowser
         AssetHandle heightmapHandle = AssetHandle(0);
+        AssetHandle materialHandle = AssetHandle(0);
 
         Ref<TerrainData> data = nullptr;
         std::vector<TerrainChunk> chunks;

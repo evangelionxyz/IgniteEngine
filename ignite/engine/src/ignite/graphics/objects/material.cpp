@@ -74,7 +74,7 @@ namespace ignite
 		bool allTexturesReady = isTextureReady(baseColorTextureHandle, baseColor, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(emissiveTextureHandle, emissive, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(metallicTextureHandle, metallic, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(roughnessTextureHandle, roughness, Renderer::GetBlackTexture());
+        allTexturesReady &= isTextureReady(roughnessTextureHandle, roughness, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(normalTextureHandle, normal, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(occlusionTextureHandle, occlusion, Renderer::GetWhiteTexture());
 
@@ -141,12 +141,11 @@ namespace ignite
         };
 
         uint32_t whiteIdx = Renderer::GetWhiteTexture() ? Renderer::GetWhiteTexture()->GetBindlessIndex() : 0;
-        uint32_t blackIdx = Renderer::GetBlackTexture() ? Renderer::GetBlackTexture()->GetBindlessIndex() : 0;
 
         gpuData.baseColorTextureIndex = getBindlessIndex(baseColorTextureHandle, whiteIdx);
         gpuData.emissiveTextureIndex = getBindlessIndex(emissiveTextureHandle, whiteIdx);
         gpuData.metallicTextureIndex = getBindlessIndex(metallicTextureHandle, whiteIdx);
-        gpuData.roughnessTextureIndex = getBindlessIndex(roughnessTextureHandle, blackIdx);
+        gpuData.roughnessTextureIndex = getBindlessIndex(roughnessTextureHandle, whiteIdx);
         gpuData.normalTextureIndex = getBindlessIndex(normalTextureHandle, whiteIdx);
         gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);
 

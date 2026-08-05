@@ -55,7 +55,7 @@ namespace ignite
         DebugGridStyle worldGrid2D;
 
         bool showBoundingBox = false;
-        bool showPhysicsCollider = true;
+        bool showPhysicsCollider = false;
 
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
         MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
