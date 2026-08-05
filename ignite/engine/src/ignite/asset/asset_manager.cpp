@@ -11,6 +11,8 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
+#include "ignite/scene/component.hpp"
+#include "ignite/terrain/terrain.hpp"
 
 #include "ignite_rs/core.h"
 #include <fbxsdk.h>
@@ -399,6 +401,38 @@ namespace ignite
                         }
                         return true;
                     };
+
+                m_OnChangeCallbacks.push(std::move(onChangeFunc));
+                break;
+            }
+            case AssetType::Terrain:
+            {
+                auto onChangeFunc = [this, signal]() -> bool
+                {
+                    auto activeScene = LockActiveProject()->LockActiveScene();
+                    if (!activeScene || !activeScene->registry)
+                        return true;
+
+                    Ref<TerrainData> terrainAsset = GetAsset<TerrainData>(signal.handle);
+
+                    auto terrainView = activeScene->registry->view<TerrainComponent>();
+                    for (auto entity : terrainView)
+                    {
+                        auto &comp = terrainView.get<TerrainComponent>(entity);
+                        if (comp.heightmapHandle == signal.handle || (comp.data && comp.data->handle == signal.handle))
+                        {
+                            if (terrainAsset)
+                            {
+                                comp.data = terrainAsset;
+                                comp.resolution = terrainAsset->resolution;
+                                comp.worldSize = terrainAsset->worldSize;
+                                comp.maxHeight = terrainAsset->maxHeight;
+                            }
+                            comp.ReleaseGPU();
+                        }
+                    }
+                    return true;
+                };
 
                 m_OnChangeCallbacks.push(std::move(onChangeFunc));
                 break;

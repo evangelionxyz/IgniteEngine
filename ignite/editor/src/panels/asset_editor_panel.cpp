@@ -4776,16 +4776,19 @@ namespace ignite
                             terrain->resolution = static_cast<uint32_t>(std::max(16, res));
                             terrain->InitFlat(terrain->resolution, terrain->worldSize, terrain->maxHeight);
                             terrain->SetDirtyFlag(true);
+                            terrain->NotifyChange();
                         }
 
                         if (UI::DrawFloatControl("World Size", &terrain->worldSize, 1.0f, 1.0f, 10000.0f))
                         {
                             terrain->SetDirtyFlag(true);
+                            terrain->NotifyChange();
                         }
 
                         if (UI::DrawFloatControl("Max Height", &terrain->maxHeight, 1.0f, 0.0f, 5000.0f))
                         {
                             terrain->SetDirtyFlag(true);
+                            terrain->NotifyChange();
                         }
 
                         auto assetManager = AssetManager::GetInstance();
@@ -4808,6 +4811,7 @@ namespace ignite
                                     {
                                         terrain->LoadFromTexture(handle);
                                         terrain->SetDirtyFlag(true);
+                                        terrain->NotifyChange();
                                     }
                                 }
                                 ImGui::EndDragDropTarget();
@@ -4820,6 +4824,7 @@ namespace ignite
                                 {
                                     terrain->heightmapTextureHandle = AssetHandle(0);
                                     terrain->SetDirtyFlag(true);
+                                    terrain->NotifyChange();
                                 }
                             }
                         });
@@ -4828,6 +4833,7 @@ namespace ignite
                         {
                             terrain->InitFlat(terrain->resolution, terrain->worldSize, terrain->maxHeight);
                             terrain->SetDirtyFlag(true);
+                            terrain->NotifyChange();
                         }
 
                         static float noiseFreq = 0.05f;
@@ -4839,6 +4845,7 @@ namespace ignite
                         {
                             TerrainBuilder::GenerateProcedural(*terrain, noiseFreq, noiseSeed);
                             terrain->SetDirtyFlag(true);
+                            terrain->NotifyChange();
                         }
 
                         ImGui::TreePop();

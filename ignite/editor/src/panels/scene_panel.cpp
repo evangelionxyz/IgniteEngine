@@ -3380,24 +3380,25 @@ namespace ignite
 
                     const float fps = ImGui::GetIO().Framerate;
                     std::string statusStr = std::format("FPS {:.5}", fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFF00FF00, statusStr.c_str());
 
                     yPosition += padding;
                     statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFF00FF00, statusStr.c_str());
                 }
+
+                // UI Input
+				if (activeSceneRenderer)
+				{
+					const auto localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
+					const auto localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
+					activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+					activeSceneRenderer->SetCameraWidgetMousePosition(&m_EditorCamera, localMouseX, localMouseY, imageHovered);
+				}
 
                 // Mouse picking from viewport object-id attachment (on mouse down only)
                 if (!m_Scene->IsPlaying())
                 {
-                    if (activeSceneRenderer)
-                    {
-                        const auto localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
-                        const auto localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
-                        activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
-                        activeSceneRenderer->SetCameraWidgetMousePosition(&m_EditorCamera, localMouseX, localMouseY, imageHovered);
-                    }
-                    
                     if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
                     {
                         if (clickedIconEntity.IsValid())
@@ -4051,15 +4052,11 @@ namespace ignite
                             float yPosition = 6.0f;
                             const float fps = ImGui::GetIO().Framerate;
                             std::string statusStr = std::format("FPS {:.5}", fps);
-                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
+							drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFF00FF00, statusStr.c_str());
 
                             yPosition += padding;
                             statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
-
-                            yPosition += padding;
-                            statusStr = std::format("Viewport x: {} y: {} w: {} h: {}", baseImagePos.x, baseImagePos.y, baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
-                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFF00FF00, statusStr.c_str());
                         }
 
                         ImGui::SetCursorScreenPos(baseImagePos);
