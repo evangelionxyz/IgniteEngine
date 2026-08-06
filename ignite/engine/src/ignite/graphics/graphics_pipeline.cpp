@@ -41,6 +41,10 @@ namespace ignite
 
         // create graphics pipeline
         nvrhi::RenderState renderState;
+        for (int ti = 0; ti < 8; ++ti)
+        {
+            renderState.blendState.targets[ti].colorWriteMask = m_Params.colorWriteMask[ti];
+        }
         renderState.blendState.targets[0].blendEnable = m_Params.enableBlend;
         renderState.blendState.targets[0].srcBlend = m_Params.srcBlend;
         renderState.blendState.targets[0].destBlend = m_Params.destBlend;

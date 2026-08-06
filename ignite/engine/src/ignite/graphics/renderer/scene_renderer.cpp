@@ -2536,6 +2536,7 @@ namespace ignite
         params.fillMode = fillMode;
         params.depthFunc = nvrhi::ComparisonFunc::Always;
         params.cullMode = nvrhi::RasterCullMode::Front;
+        params.colorWriteMask[0] = nvrhi::ColorMask::None;
 
         Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, true);
         Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, true);

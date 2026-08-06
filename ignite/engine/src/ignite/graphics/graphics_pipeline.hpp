@@ -39,6 +39,13 @@ namespace ignite {
 
         bool enableScissor = false;
         bool enableDepthClip = false;
+
+        nvrhi::ColorMask colorWriteMask[8] = {
+            nvrhi::ColorMask::All, nvrhi::ColorMask::All,
+            nvrhi::ColorMask::All, nvrhi::ColorMask::All,
+            nvrhi::ColorMask::All, nvrhi::ColorMask::All,
+            nvrhi::ColorMask::All, nvrhi::ColorMask::All
+        };
     };
 
     class GraphicsPipeline
