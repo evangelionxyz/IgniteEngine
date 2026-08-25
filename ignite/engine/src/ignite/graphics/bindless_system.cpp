@@ -20,6 +20,7 @@ namespace ignite
     uint32_t BindlessSystem::s_NextIndex = 1; // 0 is reserved for fallback/white texture
     std::mutex BindlessSystem::s_Mutex;
     bool BindlessSystem::s_Initialized = false;
+    bool BindlessSystem::s_FallbackBound = false;
 
     void BindlessSystem::Initialize(nvrhi::IDevice* device)
     {
@@ -27,6 +28,7 @@ namespace ignite
         if (s_Initialized) return;
 
         s_Device = device;
+        s_FallbackBound = false;
 
         nvrhi::BindlessLayoutDesc layoutDesc;
         layoutDesc.setVisibility(nvrhi::ShaderType::All);
@@ -70,6 +72,7 @@ namespace ignite
         s_CurrentFrame = 0;
         s_NextIndex = 1;
         s_Device = nullptr;
+        s_FallbackBound = false;
         s_Initialized = false;
         LOG_INFO("[BindlessSystem] Shutdown completed");
     }
@@ -107,6 +110,19 @@ namespace ignite
         s_DeferredFrees.push_back({ index, s_CurrentFrame });
     }
 
+    bool BindlessSystem::HasPendingWrites()
+    {
+        std::lock_guard<std::mutex> lock(s_Mutex);
+        if (!s_Initialized) return false;
+
+        if (!s_FallbackBound && Renderer::GetWhiteTexture() && Renderer::GetWhiteTexture()->GetHandle())
+        {
+            return true;
+        }
+
+        return !s_PendingWrites.empty() || !s_DeferredFrees.empty();
+    }
+
     void BindlessSystem::FlushPendingWrites()
     {
         std::lock_guard<std::mutex> lock(s_Mutex);
@@ -116,11 +132,10 @@ namespace ignite
 
         nvrhi::ITexture* fallbackTex = Renderer::GetWhiteTexture() ? Renderer::GetWhiteTexture()->GetHandle() : nullptr;
         
-        static bool fallbackBound = false;
-        if (!fallbackBound && fallbackTex)
+        if (!s_FallbackBound && fallbackTex)
         {
             s_Device->writeDescriptorTable(s_DescriptorTable, nvrhi::BindingSetItem::Texture_SRV(0, fallbackTex));
-            fallbackBound = true;
+            s_FallbackBound = true;
         }
 
         for (const auto& write : s_PendingWrites)

@@ -13,55 +13,8 @@
 
 namespace ignite
 {
-    // Helper: push every field from a C++ ScriptableObject into a managed instance already registered under (assetHandle) in MochiSharp.
-    void ScriptInstance::PopulateSOFields(ScriptHost *host, uint64_t instanceId, const ScriptableObject &so)
-    {
-        for (const auto &[fieldName, instanceField] : so.GetFields())
-        {
-            const ScriptField &field = instanceField.field;
-            switch (field.Type)
-            {
-            case ScriptFieldType::Bool:    { auto v = instanceField.GetValue<bool>();      host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Byte:    { auto v = instanceField.GetValue<uint8_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::SByte:   { auto v = instanceField.GetValue<int8_t>();    host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Short:   { auto v = instanceField.GetValue<int16_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::UShort:  { auto v = instanceField.GetValue<uint16_t>();  host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Int:     { auto v = instanceField.GetValue<int32_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::UInt:    { auto v = instanceField.GetValue<uint32_t>();  host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Long:    { auto v = instanceField.GetValue<int64_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::ULong:   { auto v = instanceField.GetValue<uint64_t>();  host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Float:   { auto v = instanceField.GetValue<float>();     host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Double:  { auto v = instanceField.GetValue<double>();    host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Vector2: { auto v = instanceField.GetValue<glm::vec2>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Vector3: { auto v = instanceField.GetValue<glm::vec3>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Vector4:
-            case ScriptFieldType::Color:   { auto v = instanceField.GetValue<glm::vec4>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Quat:    { auto v = instanceField.GetValue<glm::quat>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Enum:    { auto v = instanceField.GetValue<int32_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
-            case ScriptFieldType::Entity:
-            case ScriptFieldType::Asset:
-            {
-                // Both Entity and Asset reference types are stored as uint64_t IDs.
-                // MochiSharp's TryReadFieldValueFromBuffer will reconstruct the managed
-                // reference via ctor(ulong) / _instances lookup.
-                auto v = instanceField.GetValue<uint64_t>();
-                if (v != 0)
-                    host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v));
-                break;
-            }
-            case ScriptFieldType::String:
-            {
-                auto str = instanceField.GetValue<std::string>();
-                host->SetInstanceFieldValue(instanceId, fieldName, str.data(), (int)str.size());
-                break;
-            }
-            default: break;
-            }
-        }
-    }
-
-    ScriptInstance::ScriptInstance(Ref<ScriptClass> scriptClass, ScriptInstanceID instanceID)
-        : m_ScriptClass(scriptClass), m_InstanceId(instanceID)
+    ScriptInstance::ScriptInstance(Ref<ScriptClass> scriptClass, ScriptInstanceID instanceId)
+        : m_ScriptClass(scriptClass), m_InstanceId(instanceId)
     {
         IGN_PROFILE_FUNCTION();
         m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
@@ -86,15 +39,14 @@ namespace ignite
         m_OnCollisionStayMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionStayNative");
         m_OnCollisionExitMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionExitNative");
 
-		// Bind internal body activation callback
-		m_OnBodyActivatedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnBodyActivatedNative");
-		m_OnBodyDeactivatedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnBodyDeactivatedNative");
+        // Bind internal body activation callback
+        m_OnBodyActivatedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnBodyActivatedNative");
+        m_OnBodyDeactivatedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnBodyDeactivatedNative");
 
         // Set Entity ID on managed instance if available
-        const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID");
-        if (setIdMethod)
+        if (const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID"))
         {
-            const uint64_t entityId = static_cast<uint64_t>(m_InstanceId);
+            const auto entityId = m_InstanceId;
             void *args[] = { const_cast<uint64_t *>(&entityId) };
             m_ScriptHost->Invoke(setIdMethod, args, 1, nullptr);
         }
@@ -246,8 +198,7 @@ namespace ignite
             {
                 if (fieldHadValue)
                 {
-                    uint64_t id = instanceField.GetValue<uint64_t>();
-                    if (id != 0)
+                    if (uint64_t id = instanceField.GetValue<uint64_t>(); id != 0)
                     {
                         // For Asset (ScriptableObject) fields: pre-create the managed instance and
                         // populate its fields from the C++ asset so C# can access them directly.
@@ -302,6 +253,53 @@ namespace ignite
         }
     }
 
+    // Helper: push every field from a C++ ScriptableObject into a managed instance already registered under (assetHandle) in MochiSharp.
+    void ScriptInstance::PopulateSOFields(ScriptHost *host, const uint64_t instanceId, const ScriptableObject &so)
+    {
+        for (const auto &[fieldName, instanceField] : so.GetFields())
+        {
+            const ScriptField &field = instanceField.field;
+            switch (field.Type)
+            {
+            case ScriptFieldType::Bool:    { auto v = instanceField.GetValue<bool>();      host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Byte:    { auto v = instanceField.GetValue<uint8_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::SByte:   { auto v = instanceField.GetValue<int8_t>();    host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Short:   { auto v = instanceField.GetValue<int16_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::UShort:  { auto v = instanceField.GetValue<uint16_t>();  host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Int:     { auto v = instanceField.GetValue<int32_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::UInt:    { auto v = instanceField.GetValue<uint32_t>();  host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Long:    { auto v = instanceField.GetValue<int64_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::ULong:   { auto v = instanceField.GetValue<uint64_t>();  host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Float:   { auto v = instanceField.GetValue<float>();     host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Double:  { auto v = instanceField.GetValue<double>();    host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Vector2: { auto v = instanceField.GetValue<glm::vec2>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Vector3: { auto v = instanceField.GetValue<glm::vec3>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Vector4:
+            case ScriptFieldType::Color:   { auto v = instanceField.GetValue<glm::vec4>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Quat:    { auto v = instanceField.GetValue<glm::quat>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Enum:    { auto v = instanceField.GetValue<int32_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Entity:
+            case ScriptFieldType::Asset:
+            {
+                // Both Entity and Asset reference types are stored as uint64_t IDs.
+                // MochiSharp's TryReadFieldValueFromBuffer will reconstruct the managed
+                // reference via ctor(ulong) / _instances lookup.
+                auto v = instanceField.GetValue<uint64_t>();
+                if (v != 0)
+                    host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v));
+                break;
+            }
+            case ScriptFieldType::String:
+            {
+                auto str = instanceField.GetValue<std::string>();
+                host->SetInstanceFieldValue(instanceId, fieldName, str.data(), static_cast<int>(str.size()));
+                break;
+            }
+            default: break;
+            }
+        }
+    }
+
     void ScriptInstance::InvokeOnCreate()
     {
         IGN_PROFILE_FUNCTION();
@@ -316,7 +314,7 @@ namespace ignite
     }
 
 	void ScriptInstance::InvokeOnDestroy()
-	{
+    {
         IGN_PROFILE_FUNCTION();
         if (m_OnDestroyMethodId)
         {
@@ -326,7 +324,7 @@ namespace ignite
                 m_OnDestroyMethodId = 0;
             }
         }
-	}
+    }
 
 	void ScriptInstance::InvokeOnUpdate(float time)
     {
@@ -343,37 +341,37 @@ namespace ignite
     }
 
 	void ScriptInstance::InvokeOnFixedUpdate()
-	{
-		IGN_PROFILE_FUNCTION();
+    {
+        IGN_PROFILE_FUNCTION();
         if (m_OnFixedUpdateMethodId)
         {
-			if(!m_ScriptHost->Invoke(m_OnFixedUpdateMethodId, nullptr, 0, nullptr))
-			{
-				LOG_ERROR("[Script Instance] OnFixedUpdate invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+            if(!m_ScriptHost->Invoke(m_OnFixedUpdateMethodId, nullptr, 0, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnFixedUpdate invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
                 m_OnFixedUpdateMethodId = 0;
-			}
+            }
         }
-	}
+    }
 
 	void ScriptInstance::InvokeOnHotReload()
-	{
-		IGN_PROFILE_FUNCTION();
+    {
+        IGN_PROFILE_FUNCTION();
         if (m_OnHotReloadMethodId)
         {
-			if (!m_ScriptHost->Invoke(m_OnHotReloadMethodId, nullptr, 0, nullptr))
-			{
-				LOG_ERROR("[Script Instance] OnHotReload invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+            if (!m_ScriptHost->Invoke(m_OnHotReloadMethodId, nullptr, 0, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnHotReload invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
                 m_OnHotReloadMethodId = 0;
-			}
+            }
         }
-	}
+    }
 
-	void ScriptInstance::InvokeOnCollisionEnter(uint64_t otherEntityID)
+	void ScriptInstance::InvokeOnCollisionEnter(uint64_t otherEntityId)
     {
         IGN_PROFILE_FUNCTION();
         if (m_OnCollisionEnterMethodId)
         {
-            void *args[] = { &otherEntityID };
+            void *args[] = { &otherEntityId };
             if (!m_ScriptHost->Invoke(m_OnCollisionEnterMethodId, args, 1, nullptr))
             {
                 LOG_ERROR("[Script Instance] OnCollisionEnter invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
@@ -382,12 +380,12 @@ namespace ignite
         }
     }
 
-    void ScriptInstance::InvokeOnCollisionStay(uint64_t otherEntityID)
+    void ScriptInstance::InvokeOnCollisionStay(uint64_t otherEntityId)
     {
         IGN_PROFILE_FUNCTION();
         if (m_OnCollisionStayMethodId)
         {
-            void *args[] = { &otherEntityID };
+            void *args[] = { &otherEntityId };
             if (!m_ScriptHost->Invoke(m_OnCollisionStayMethodId, args, 1, nullptr))
             {
                 LOG_ERROR("[Script Instance] OnCollisionStay invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
@@ -396,12 +394,12 @@ namespace ignite
         }
     }
 
-    void ScriptInstance::InvokeOnCollisionExit(uint64_t otherEntityID)
+    void ScriptInstance::InvokeOnCollisionExit(uint64_t otherEntityId)
     {
         IGN_PROFILE_FUNCTION();
         if (m_OnCollisionExitMethodId)
         {
-            void *args[] = { &otherEntityID };
+            void *args[] = { &otherEntityId };
             if (!m_ScriptHost->Invoke(m_OnCollisionExitMethodId, args, 1, nullptr))
             {
                 LOG_ERROR("[Script Instance] OnCollisionExit invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
@@ -411,29 +409,29 @@ namespace ignite
     }
 
 	void ScriptInstance::InvokeOnBodyActivated()
-	{
-		IGN_PROFILE_FUNCTION();
-		if (m_OnBodyActivatedMethodId)
-		{
-			if (!m_ScriptHost->Invoke(m_OnBodyActivatedMethodId, nullptr, 0, nullptr))
-			{
-				LOG_ERROR("[Script Instance] OnBodyActivated invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
-				m_OnBodyActivatedMethodId = 0;
-			}
-		}
-	}
+    {
+        IGN_PROFILE_FUNCTION();
+        if (m_OnBodyActivatedMethodId)
+        {
+            if (!m_ScriptHost->Invoke(m_OnBodyActivatedMethodId, nullptr, 0, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnBodyActivated invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnBodyActivatedMethodId = 0;
+            }
+        }
+    }
 
 	void ScriptInstance::InvokeOnBodyDeactivated()
-	{
-		IGN_PROFILE_FUNCTION();
-		if (m_OnBodyDeactivatedMethodId)
-		{
-			if (!m_ScriptHost->Invoke(m_OnBodyDeactivatedMethodId, nullptr, 0, nullptr))
-			{
-				LOG_ERROR("[Script Instance] OnBodyDeactivated invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
-				m_OnBodyDeactivatedMethodId = 0;
-			}
-		}
-	}
+    {
+        IGN_PROFILE_FUNCTION();
+        if (m_OnBodyDeactivatedMethodId)
+        {
+            if (!m_ScriptHost->Invoke(m_OnBodyDeactivatedMethodId, nullptr, 0, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnBodyDeactivated invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnBodyDeactivatedMethodId = 0;
+            }
+        }
+    }
 
 }

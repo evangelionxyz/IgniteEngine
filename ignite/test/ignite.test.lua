@@ -20,6 +20,7 @@ project "Ignite.Test"
     links {
         "gtest",
         "Ignite.Engine",
+        "Ignite.Physics",
         "JOLT",
         "ZLIB",
         "yaml-cpp",
@@ -42,6 +43,8 @@ project "Ignite.Test"
     includedirs {
         "src",
         "%{wks.location}/ignite/engine/src",
+        "%{wks.location}/ignite/physics/src",
+        "%{wks.location}/ignite/physics/src/ignite",
         "%{wks.location}/crates/src/include",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",

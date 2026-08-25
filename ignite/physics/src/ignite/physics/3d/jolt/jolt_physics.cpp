@@ -41,7 +41,7 @@ namespace ignite::physics
 		m_PhysicsSystem.SetContactListener(m_ContactListener.get());
 		m_BodyInterface = &m_PhysicsSystem.GetBodyInterface();
 
-		LOG_WARN("[Jolt Physics] Initialized");
+		IGN_PHYSICS_WARN("[Jolt Physics] Initialized");
 	}
 
 	JoltPhysics::~JoltPhysics()
@@ -50,7 +50,7 @@ namespace ignite::physics
 		delete JPH::Factory::sInstance;
 		JPH::Factory::sInstance = nullptr;
 
-		LOG_WARN("[Jolt Physics] Shutdown");
+		IGN_PHYSICS_WARN("[Jolt Physics] Shutdown");
 	}
 
 	void JoltPhysics::SimulationStart(const Physics3DSettings &settings)

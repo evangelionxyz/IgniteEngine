@@ -117,13 +117,9 @@ namespace ignite
         deviceParams.startMaximized = m_CreateInfo.maximized;
         deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
-        deviceParams.enableDebugRuntime = true;
-        deviceParams.enableNvrhiValidationLayer = true;
-        deviceParams.enableGPUValidation = true;
-#else
         deviceParams.enableDebugRuntime = false;
         deviceParams.enableNvrhiValidationLayer = false;
-        deviceParams.enableGPUValidation = false;
+        // deviceParams.enableGPUValidation = true;
 #endif
         deviceParams.swapChainBufferCount = 3; // TRIPLE BUFFER
         deviceParams.enablePerMonitorDPI = true;
@@ -539,16 +535,16 @@ namespace ignite
                             m_RenderComplete = false;
                         }
 
-                        if (m_CreateInfo.useGui && m_ImGuiLayer)
-                        {
-                            IGN_PROFILE_SCOPE("MainThread::ImGuiRenderPlatformWindows");
-                            m_ImGuiLayer->RenderPlatformWindows();
-                        }
-                        
                         bool presented = false;
                         {
                             IGN_PROFILE_SCOPE("MainThread::Present");
                             presented = deviceManager->Present();
+                        }
+
+                        if (m_CreateInfo.useGui && m_ImGuiLayer)
+                        {
+                            IGN_PROFILE_SCOPE("MainThread::ImGuiRenderPlatformWindows");
+                            m_ImGuiLayer->RenderPlatformWindows();
                         }
 
                         if (!presented)

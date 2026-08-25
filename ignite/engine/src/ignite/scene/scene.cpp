@@ -174,8 +174,6 @@ namespace ignite
         registry = new entt::registry();
 
         m_Physics2D = project->GetPhysics2D();
-        m_Physics2D->SetScene(this);
-
         m_Physics3D = project->GetPhysics3D();
 
 		m_AssetManager = AssetManager::GetInstance();
@@ -191,7 +189,7 @@ namespace ignite
         // Remove signal
 		SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
         m_AssetChangeToken = kInvalidSignalToken;
-        
+
         m_Physics3D = nullptr;
 		m_Physics2D = nullptr;
 
@@ -244,7 +242,7 @@ namespace ignite
 			if (sound)
 			{
 				RebuildAudioSourceDspChain(as, sound);
-                
+
                 sound->Stop();
 
                 if (as.playOnStart)
@@ -255,10 +253,17 @@ namespace ignite
 				sound->SetPan(as.pan);
 				sound->SetMode(as.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
 			}
-            
+
         }
 
-        m_Physics2D->SimulationStart(this);
+        if (m_Physics2D)
+        {
+            m_Physics2D->SimulationStart();
+            for (entt::entity e : registry->view<Rigidbody2DComponent>())
+            {
+                CreatePhysics2DBody(Entity{ e, this });
+            }
+        }
 
         if (m_Physics3D)
         {
@@ -298,7 +303,7 @@ namespace ignite
                 else if (entity.HasComponent<CapsuleColliderComponent>())
                 {
                     auto &capsule = entity.GetComponent<CapsuleColliderComponent>();
-                    
+
 					const float maxScale = glm::compMax(glm::abs(tr.world.scale));
 					const float radius = capsule.radius * maxScale;
 
@@ -506,7 +511,7 @@ namespace ignite
 
         m_State = ESceneState::Stop;
 
-        m_StepFrame = 0; 
+        m_StepFrame = 0;
         timeInSeconds = 0.0f;
 
 		registry->view<AudioSourceComponent>().each([this](entt::entity e, AudioSourceComponent &as)
@@ -521,7 +526,7 @@ namespace ignite
 				    sound->Stop();
             }
 		});
-        
+
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity { e, this };
@@ -539,8 +544,15 @@ namespace ignite
         }
 
         m_SharedAnimatorRuntime.clear();
-        
-        m_Physics2D->SimulationStop();
+
+        if (m_Physics2D)
+        {
+            for (entt::entity e : registry->view<Rigidbody2DComponent>())
+            {
+                DestroyPhysics2DBody(Entity{ e, this });
+            }
+            m_Physics2D->SimulationStop();
+        }
         if (m_Physics3D)
         {
             m_Physics3D->SimulationStop();
@@ -613,7 +625,7 @@ namespace ignite
         glm::mat4 worldMatrix = parentWorldTransform * transform.local.GetMatrix();
 
         Transform::Decompose(worldMatrix, transform.world);
-        
+
         transform.dirty = false;
 
         for (const UUID &childUUID : id.children)
@@ -628,7 +640,7 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         timeInSeconds += deltaTime;
         m_StepFrame++;
-    
+
         UpdateTransforms(deltaTime);
     }
 
@@ -638,7 +650,7 @@ namespace ignite
 		// 	IGN_PROFILE_SCOPE("Scene::Physics2D");
 		// 	m_Physics2D->Simulate(1.0f / 60.0f);
 		// }
-        // 
+        //
 		// {
 		// 	IGN_PROFILE_SCOPE("Scene::Physics3D");
 		// 	m_JoltScene->Simulate(1.0f / 60.0f);
@@ -654,11 +666,11 @@ namespace ignite
             if (cam.primary)
                 return Entity { entity, this };
         }
-        
+
         return Entity{};
     }
 
-    Ref<WidgetCanvas> Scene::GetRootWidget()
+    Ref<WidgetCanvas> Scene::GetRootWidget() const
     {
         const auto &widgetView = registry->view<WidgetComponent>();
         for (const auto e : widgetView)
@@ -711,7 +723,120 @@ namespace ignite
             // Update physics
             {
                 IGN_PROFILE_SCOPE("Scene::Physics2D");
-                m_Physics2D->Simulate(deltaTime);
+                if (m_Physics2D)
+                {
+                    m_Physics2D->Simulate(deltaTime);
+
+                    for (const auto e : registry->view<Rigidbody2DComponent>())
+                    {
+                        TransformComponent &tr = registry->get<TransformComponent>(e);
+                        Rigidbody2DComponent &rb = registry->get<Rigidbody2DComponent>(e);
+
+                        if (rb.isGizmoDragging)
+                            continue;
+
+                        if (rb.dirty && m_Physics2D->IsValidBody(rb.bodyId))
+                        {
+                            m_Physics2D->SetLinearVelocity(rb.bodyId, rb.linearVelocity);
+                            m_Physics2D->SetAngularVelocity(rb.bodyId, rb.angularVelocity);
+                            m_Physics2D->SetGravityScale(rb.bodyId, rb.gravityScale);
+                            m_Physics2D->SetLinearDamping(rb.bodyId, rb.linearDamping);
+                            m_Physics2D->SetAngularDamping(rb.bodyId, rb.angularDamping);
+                            m_Physics2D->SetAwake(rb.bodyId, rb.isAwake);
+                            rb.isEnabled ? m_Physics2D->ActivateBody(rb.bodyId) : m_Physics2D->DeactivateBody(rb.bodyId);
+                            m_Physics2D->SetEnableSleep(rb.bodyId, rb.isEnableSleep);
+                            m_Physics2D->SetMotionLock(rb.bodyId, false, false, rb.fixedRotation);
+                            rb.dirty = false;
+                        }
+
+                        if (registry->any_of<BoxCollider2DComponent>(e))
+                        {
+                            BoxCollider2DComponent &bc = registry->get<BoxCollider2DComponent>(e);
+                            if (bc.dirty && b2Shape_IsValid(bc.shapeId))
+                            {
+                                b2Shape_SetFriction(bc.shapeId, bc.friction);
+                                b2Shape_SetDensity(bc.shapeId, bc.density, true);
+                                b2Shape_SetRestitution(bc.shapeId, bc.restitution);
+
+                                float width = glm::abs(bc.size.x * tr.world.scale.x);
+                                float height = glm::abs(bc.size.y * tr.world.scale.y);
+
+                                width = glm::max(width, glm::epsilon<float>());
+                                height = glm::max(height, glm::epsilon<float>());
+                                const b2Vec2 offset = { bc.offset.x * tr.world.scale.x, bc.offset.y * tr.world.scale.y };
+                                const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
+                                b2Shape_SetPolygon(bc.shapeId, &boxShape);
+                                bc.dirty = false;
+                            }
+                        }
+
+                        if (registry->any_of<CircleCollider2DComponent>(e))
+                        {
+                            CircleCollider2DComponent &cc = registry->get<CircleCollider2DComponent>(e);
+                            if (cc.dirty && b2Shape_IsValid(cc.shapeId))
+                            {
+                                b2Shape_SetFriction(cc.shapeId, cc.friction);
+                                b2Shape_SetDensity(cc.shapeId, cc.density, true);
+                                b2Shape_SetRestitution(cc.shapeId, cc.restitution);
+
+                                const b2Circle circleShape = {
+                                    .center = { cc.center.x, cc.center.y },
+                                    .radius = cc.radius
+                                };
+                                b2Shape_SetCircle(cc.shapeId, &circleShape);
+                                cc.dirty = false;
+                            }
+                        }
+
+                        if (m_Physics2D->IsValidBody(rb.bodyId))
+                        {
+                            glm::vec2 pos = m_Physics2D->GetPosition(rb.bodyId);
+                            float rotAngle = m_Physics2D->GetRotation(rb.bodyId);
+
+                            glm::vec3 worldTranslation = { pos.x, pos.y, tr.world.translation.z };
+                            glm::quat worldRotation = glm::quat({ 0.0f, 0.0f, rotAngle });
+
+                            IDComponent &idc = registry->get<IDComponent>(e);
+                            if (idc.parent != 0)
+                            {
+                                Entity parentEntity = SceneManager::GetEntity(this, idc.parent);
+                                if (parentEntity && parentEntity.HasComponent<TransformComponent>())
+                                {
+                                    const auto &parentTr = parentEntity.GetComponent<TransformComponent>();
+                                    glm::mat4 parentWorldMatrix = parentTr.world.GetMatrix();
+                                    glm::mat4 invParentWorldMatrix = glm::inverse(parentWorldMatrix);
+
+                                    glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), worldTranslation) * glm::toMat4(worldRotation) * glm::scale(glm::mat4(1.0f), tr.world.scale);
+                                    glm::mat4 childLocalMatrix = invParentWorldMatrix * childWorldMatrix;
+
+                                    glm::vec3 savedLocalScale = tr.local.scale;
+                                    Transform::Decompose(childLocalMatrix, tr.local);
+                                    tr.local.scale = savedLocalScale;
+
+                                    tr.world.translation = worldTranslation;
+                                    tr.world.rotation = worldRotation;
+                                }
+                                else
+                                {
+                                    tr.local.translation = worldTranslation;
+                                    tr.local.rotation = worldRotation;
+                                    tr.world.translation = worldTranslation;
+                                    tr.world.rotation = worldRotation;
+                                }
+                            }
+                            else
+                            {
+                                tr.local.translation = worldTranslation;
+                                tr.local.rotation = worldRotation;
+                                tr.world.translation = worldTranslation;
+                                tr.world.rotation = worldRotation;
+                            }
+
+                            rb.linearVelocity = m_Physics2D->GetLinearVelocity(rb.bodyId);
+                            rb.angularVelocity = m_Physics2D->GetAngularVelocity(rb.bodyId);
+                        }
+                    }
+                }
             }
 
             {
@@ -853,7 +978,7 @@ namespace ignite
                     {
                         if (ev.userDataA == 0 || ev.userDataB == 0)
                             continue;
-                       
+
                         auto dispatch = [&ev](Ref<ScriptInstance> scriptInstance, uint64_t otherId)
                         {
                             if (!scriptInstance)
@@ -876,7 +1001,7 @@ namespace ignite
                     {
                         if (ev.userData == 0)
                             continue;
-                        
+
                         auto scriptInstance = getScriptInstance(ev.userData);
                         if (!scriptInstance)
                             continue;
@@ -901,8 +1026,8 @@ namespace ignite
         }
     }
 
-	void Scene::OnFixedUpdateRuntimeSimulate()
-	{
+	void Scene::OnFixedUpdateRuntimeSimulate() const
+    {
 		{
 			IGN_PROFILE_SCOPE("Scene::Script OnFixedUpdate");
 			registry->view<ScriptComponent>().each([](entt::entity e, ScriptComponent &script)
@@ -918,7 +1043,7 @@ namespace ignite
         return CreateRef<Scene>(project);
     }
 
-    Environment *Scene::GetEnvironment()
+    Environment *Scene::GetEnvironment() const
     {
         auto view = registry->view<WorldEnvironment>();
         WorldEnvironment *fallback = nullptr;
@@ -934,7 +1059,7 @@ namespace ignite
         return fallback ? fallback->environment.get() : nullptr;
     }
 
-    WorldEnvironment *Scene::GetActiveWorldEnvironment()
+    WorldEnvironment *Scene::GetActiveWorldEnvironment() const
     {
         auto view = registry->view<WorldEnvironment>();
         WorldEnvironment *fallback = nullptr;
@@ -1056,7 +1181,7 @@ namespace ignite
             for (auto ent : skeletalMeshView)
             {
                 auto &smc = skeletalMeshView.get<SkeletalMeshComponent>(ent);
-                
+
                 // Reset
                 if (smc.runtimeAnimatorHandle == signal.handle)
                 {
@@ -1082,10 +1207,10 @@ namespace ignite
                 continue;
 
             auto mesh = m_AssetManager->GetAsset<SkeletalMesh>(smc.handle);
-            
+
             if (!mesh)
                 continue;
-            
+
 			const auto worldMatrix = tr.world.GetMatrix();
 			smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
 			smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
@@ -1178,7 +1303,7 @@ namespace ignite
                 if (!sharedRuntime->finalTransforms.empty())
                 {
                     smc.finalBoneTransforms = sharedRuntime->finalTransforms;
-                    
+
                     // ==== Socket system: Cache global joint transforms ====
                     smc.globalJointTransforms.resize(sharedRuntime->globalPoses.size());
                     for (size_t i = 0; i < sharedRuntime->globalPoses.size(); ++i)
@@ -1313,6 +1438,110 @@ namespace ignite
                 animComp.elapsed = 0.0f;
                 animComp.stateElapsed = 0.0f;
                 animComp.stateNormalized = 0.0f;
+            }
+        }
+    }
+
+    void Scene::CreatePhysics2DBody(Entity entity) const
+    {
+        if (!m_Physics2D || !entity.HasComponent<Rigidbody2DComponent>())
+            return;
+
+        auto &tr = entity.GetComponent<TransformComponent>();
+        auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+
+        b2BodyDef bodyDef = b2DefaultBodyDef();
+        bodyDef.type = static_cast<b2BodyType>(rb.bodyType);
+        bodyDef.position = { tr.world.translation.x, tr.world.translation.y };
+        bodyDef.rotation = b2MakeRot(glm::eulerAngles(tr.world.rotation).z);
+        bodyDef.angularVelocity = rb.angularVelocity;
+        bodyDef.linearVelocity.x = rb.linearVelocity.x;
+        bodyDef.linearVelocity.y = rb.linearVelocity.y;
+        bodyDef.gravityScale = rb.gravityScale;
+        bodyDef.angularDamping = rb.angularDamping;
+        bodyDef.linearDamping = rb.linearDamping;
+        bodyDef.isEnabled = rb.isEnabled;
+        bodyDef.isAwake = rb.isAwake;
+        bodyDef.motionLocks.angularZ = rb.fixedRotation;
+        bodyDef.allowFastRotation = rb.allowFastRotation;
+
+        entt::entity e = entity;
+        rb.bodyId = m_Physics2D->CreateBody(bodyDef);
+        if (m_Physics2D->IsValidBody(rb.bodyId))
+        {
+            b2Body_SetUserData(rb.bodyId, reinterpret_cast<void*>(static_cast<uintptr_t>(e)));
+
+            // create box collider
+            if (entity.HasComponent<BoxCollider2DComponent>())
+            {
+                auto &bc = entity.GetComponent<BoxCollider2DComponent>();
+                b2ShapeDef shapeDef = b2DefaultShapeDef();
+                shapeDef.density = bc.density;
+                shapeDef.material.friction = bc.friction;
+                shapeDef.material.restitution = bc.restitution;
+                shapeDef.isSensor = bc.isSensor;
+
+                float width = glm::max(glm::abs(bc.size.x * tr.world.scale.x), glm::epsilon<float>());
+                float height = glm::max(glm::abs(bc.size.y * tr.world.scale.y), glm::epsilon<float>());
+                const b2Vec2 offset = { bc.offset.x, bc.offset.y };
+                b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
+
+                bc.shapeId = m_Physics2D->CreateBoxCollider(rb.bodyId, shapeDef, boxShape);
+                if (b2Shape_IsValid(bc.shapeId))
+                    b2Shape_SetUserData(bc.shapeId, reinterpret_cast<void*>(static_cast<uintptr_t>(e)));
+            }
+
+            // create circle collider
+            if (entity.HasComponent<CircleCollider2DComponent>())
+            {
+                auto &cc = entity.GetComponent<CircleCollider2DComponent>();
+                b2ShapeDef shapeDef = b2DefaultShapeDef();
+                shapeDef.density = cc.density;
+                shapeDef.material.friction = cc.friction;
+                shapeDef.material.restitution = cc.restitution;
+                shapeDef.isSensor = cc.isSensor;
+
+                b2Circle circleShape = {
+                    .center = { cc.center.x, cc.center.y },
+                    .radius = cc.radius * glm::max(tr.world.scale.x, tr.world.scale.y)
+                };
+
+                cc.shapeId = m_Physics2D->CreateCircleCollider(rb.bodyId, shapeDef, circleShape);
+                if (b2Shape_IsValid(cc.shapeId))
+                    b2Shape_SetUserData(cc.shapeId, reinterpret_cast<void*>(static_cast<uintptr_t>(e)));
+            }
+        }
+    }
+
+    void Scene::DestroyPhysics2DBody(Entity entity) const
+    {
+        if (!m_Physics2D)
+            return;
+
+        if (entity.HasComponent<BoxCollider2DComponent>())
+        {
+            if (auto &c = entity.GetComponent<BoxCollider2DComponent>(); b2Shape_IsValid(c.shapeId))
+            {
+                m_Physics2D->DestroyShape(c.shapeId, false);
+                c.shapeId = b2_nullShapeId;
+            }
+        }
+
+        if (entity.HasComponent<CircleCollider2DComponent>())
+        {
+            if (auto &c = entity.GetComponent<CircleCollider2DComponent>(); b2Shape_IsValid(c.shapeId))
+            {
+                m_Physics2D->DestroyShape(c.shapeId, false);
+                c.shapeId = b2_nullShapeId;
+            }
+        }
+
+        if (entity.HasComponent<Rigidbody2DComponent>())
+        {
+            if (auto &rb = entity.GetComponent<Rigidbody2DComponent>(); m_Physics2D->IsValidBody(rb.bodyId))
+            {
+                m_Physics2D->DestroyBody(rb.bodyId);
+                rb.bodyId = b2_nullBodyId;
             }
         }
     }

@@ -33,7 +33,7 @@ namespace ignite
         bool ResetLoadContext();
 
         // Register method signatures for script methods
-        void RegisterSignatures();
+        void RegisterSignatures() const;
 
         // Initialize C# InternalCalls bridge with native callbacks
         bool InitializeCoreInternalCalls();
@@ -44,7 +44,7 @@ namespace ignite
         void DestroyInstance(uint64_t instanceId);
 
         std::string GetInstanceFields(uint64_t instanceId);
-        std::string GetTypeFields(const std::string &typeName);
+        std::string GetTypeFields(const std::string &typeName) const;
         bool ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &typeName);
         bool GetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, void *buffer, int bufferSize);
         bool SetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, const void *buffer, int bufferSize);
@@ -63,9 +63,9 @@ namespace ignite
         bool Invoke(int methodId, const void *argsPtr, int argCount, void *returnPtr);
 
         // Get all non-abstract classes derived from baseType in an assembly
-        std::string GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType);
-        std::string GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType);
-        std::string GetFieldUIAttribute(const std::string &classFullName, const std::string &attributeTypeName);
+        std::string GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType) const;
+        std::string GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType) const;
+        std::string GetFieldUIAttribute(const std::string &classFullName, const std::string &attributeTypeName) const;
 
         // Check if initialized
         bool IsInitialized() const { return m_Initialized; }
@@ -106,8 +106,8 @@ namespace ignite
     private:
         mochi::ManagedAssembly *LoadAssemblyInternal(const ignite::Path &assemblyPath, mochi::ManagedAssembly *&targetSlot);
         mochi::Type *FindType(const std::string &typeName) const;
-        std::optional<MethodBinding> CreateMethodBinding(MethodBinding::Kind kind, uint64_t instanceId, mochi::Type *type, const std::string &methodName) const;
-        mochi::Type *FindFieldType(mochi::ManagedObject &instance, const std::string &fieldName);
+        static std::optional<MethodBinding> CreateMethodBinding(MethodBinding::Kind kind, uint64_t instanceId, mochi::Type *type, const std::string &methodName);
+        static mochi::Type *FindFieldType(mochi::ManagedObject &instance, const std::string &fieldName);
         bool IsReferenceType(const mochi::Type &type) const;
         mochi::ManagedObject *EnsureReferenceInstance(uint64_t instanceId, const mochi::Type &type);
         mochi::Type *GetReflectionBridgeType() const;

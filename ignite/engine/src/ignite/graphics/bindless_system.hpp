@@ -25,6 +25,7 @@ namespace ignite
         static nvrhi::BindingLayoutHandle GetDummyLayout();
         static nvrhi::BindingSetHandle GetDummyBindingSet();
         static void FlushPendingWrites();
+        static bool HasPendingWrites();
 
     private:
         struct PendingWrite
@@ -50,6 +51,7 @@ namespace ignite
         static uint32_t s_NextIndex;
         static std::mutex s_Mutex;
         static bool s_Initialized;
+        static bool s_FallbackBound;
     };
 }
 

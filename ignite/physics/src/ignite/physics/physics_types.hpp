@@ -8,6 +8,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <cstdint>
+#include <string>
+#include <array>
 #include <vector>
 
 namespace ignite::physics

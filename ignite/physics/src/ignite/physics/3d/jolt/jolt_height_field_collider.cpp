@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 #include "ignite_pch.hpp"
 #include "jolt_height_field_collider.hpp"
-#include "ignite/core/logger.hpp"
+#include "ignite/physics/physics_log.hpp"
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
@@ -17,7 +17,7 @@ namespace ignite::physics
 	{
 		if (m_Heights.empty() || m_SampleCount < 2 || m_Heights.size() != static_cast<size_t>(m_SampleCount) * static_cast<size_t>(m_SampleCount))
 		{
-			LOG_ERROR("[JoltHeightFieldCollider] Invalid sample data or count for heightfield collider!");
+			IGN_PHYSICS_ERROR("[JoltHeightFieldCollider] Invalid sample data or count for heightfield collider!");
 			return;
 		}
 
@@ -35,7 +35,7 @@ namespace ignite::physics
 		}
 		else
 		{
-			LOG_ERROR("[JoltHeightFieldCollider] Failed to create Jolt HeightFieldShape: {}", result.GetError().c_str());
+			IGN_PHYSICS_ERROR("[JoltHeightFieldCollider] Failed to create Jolt HeightFieldShape: {}", result.GetError().c_str());
 		}
 	}
 

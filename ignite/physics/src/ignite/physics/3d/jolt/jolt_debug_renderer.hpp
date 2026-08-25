@@ -5,25 +5,25 @@
 #define IGN_JOLT_DEBUG_RENDERER_HPP
 
 #include "ignite/core/base.hpp"
-#include "ignite/graphics/renderer/renderer_2d.hpp"
-
+#include <functional>
+#include <glm/glm.hpp>
 #include <Jolt/Jolt.h>
 
 #ifdef JPH_DEBUG_RENDERER
 
 #include <Jolt/Renderer/DebugRendererSimple.h>
-#include <glm/glm.hpp>
 
 namespace ignite::physics
 {
+    using DrawLineFunc = std::function<void(const glm::vec3 &from, const glm::vec3 &to, const glm::vec4 &color)>;
+
     class IGN_API JoltDebugRenderer : public JPH::DebugRendererSimple
     {
     public:
         JoltDebugRenderer();
         virtual ~JoltDebugRenderer() override = default;
 
-        void BeginBatch(Renderer2D *renderer2D);
-        void EndBatch();
+        void SetDrawLineCallback(const DrawLineFunc &callback) { m_DrawLineCallback = callback; }
 
         // Implement JPH::DebugRenderer / DebugRendererSimple interface
         virtual void DrawLine(JPH::RVec3Arg inFrom, JPH::RVec3Arg inTo, JPH::ColorArg inColor) override;
@@ -31,7 +31,7 @@ namespace ignite::physics
         virtual void DrawText3D(JPH::RVec3Arg inPosition, const JPH::string_view &inString, JPH::ColorArg inColor, float inHeight = 0.5f) override;
 
     private:
-        Renderer2D *m_Renderer2D = nullptr;
+        DrawLineFunc m_DrawLineCallback;
     };
 }
 

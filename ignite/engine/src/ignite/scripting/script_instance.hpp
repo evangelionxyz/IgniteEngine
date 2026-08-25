@@ -22,7 +22,7 @@ namespace ignite
     class IGN_API ScriptInstance
     {
     public:
-        ScriptInstance(Ref<ScriptClass> scriptClass, ScriptInstanceID instanceID);
+        ScriptInstance(Ref<ScriptClass> scriptClass, ScriptInstanceID instanceId);
 
         static void PopulateSOFields(ScriptHost *host, uint64_t instanceId, const ScriptableObject &so);
 
@@ -33,15 +33,15 @@ namespace ignite
         void InvokeOnHotReload();
 
         // Collision lifecycle callbacks
-        void InvokeOnCollisionEnter(uint64_t otherEntityID);
-        void InvokeOnCollisionStay(uint64_t otherEntityID);
-        void InvokeOnCollisionExit(uint64_t otherEntityID);
+        void InvokeOnCollisionEnter(uint64_t otherEntityId);
+        void InvokeOnCollisionStay(uint64_t otherEntityId);
+        void InvokeOnCollisionExit(uint64_t otherEntityId);
 
         void InvokeOnBodyActivated();
         void InvokeOnBodyDeactivated();
 
         const Ref<ScriptClass> &GetScriptClass() const { return m_ScriptClass; }
-        ScriptInstanceID GetInstanceID() const { return m_InstanceId; }
+        ScriptInstanceID GetInstanceId() const { return m_InstanceId; }
 
         template<typename T>
         T GetFieldValue(const std::string &fieldName)
@@ -105,7 +105,7 @@ namespace ignite
             }
 
             memset(s_FieldValueBuffer, 0, sizeof(s_FieldValueBuffer));
-            size_t copyLen = std::min(value.size(), sizeof(s_FieldValueBuffer) - 1);
+            const size_t copyLen = std::min(value.size(), sizeof(s_FieldValueBuffer) - 1);
             if (copyLen > 0)
                 memcpy(s_FieldValueBuffer, value.data(), copyLen);
             s_FieldValueBuffer[copyLen] = '\0';

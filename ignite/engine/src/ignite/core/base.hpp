@@ -3,6 +3,8 @@
 #ifndef IGN_BASE_HPP
 #define IGN_BASE_HPP
 
+#include <cstdint>
+
 #ifdef _MSC_VER
 #pragma warning(disable:4251)
 #endif

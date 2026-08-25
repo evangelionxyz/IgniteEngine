@@ -8,14 +8,12 @@
 #include "panels/asset_editor_panel.hpp"
 #include "ext/editor_ui.hpp"
 #include "ignite/core/command.hpp"
-#include "ignite/graphics/renderer/renderer_2d.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scene/prefab.hpp"
 #include "ignite/scripting/script_engine.hpp"
-#include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/imgui/imgui_nvrhi.hpp"
@@ -23,17 +21,18 @@
 #include "ignite/graphics/shader.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
 #include "ignite/globals/globals.hpp"
+#include "editor_context.hpp"
 #include "stb_image_write.h"
 
 #include <algorithm>
-#include <mutex>
-#include <spdlog/spdlog.h>
 #include <cmath>
 #include <format>
 #include <limits>
 #include <string_view>
 #include <unordered_set>
+
 #include <SDL3/SDL_dialog.h>
+#include <spdlog/spdlog.h>
 
 namespace ignite
 {
@@ -77,6 +76,7 @@ namespace ignite
         : Layer(name), m_StatusText("Ready")
     {
         s_Instance = this;
+        EditorContext::Init();
     }
 
     EditorLayer::~EditorLayer()
@@ -85,6 +85,8 @@ namespace ignite
         {
             cm->Clear();
         }
+
+        EditorContext::Shutdown();
     }
 
     void EditorLayer::OnAttach()
@@ -108,14 +110,16 @@ namespace ignite
         app->PushLayer(m_AssetEditorPanel);
 
         AddContentBrowserPanel();
-        
+
         AssetWorker::SetStatusCallback([this](std::string_view status, float progress)
         {
             Application::SubmitToMainThread([this, s = std::string(status), progress]()
             {
                 SetStatusText(s);
                 if (progress >= 0.0f)
+                {
                     SetLoadingProgress(progress);
+                }
             });
         });
 
@@ -145,7 +149,9 @@ namespace ignite
         Layer::OnDetach();
 
         if (s_Instance == this)
+        {
             s_Instance = nullptr;
+        }
 
         // Close project
         CloseCurrentProject();
@@ -192,7 +198,7 @@ namespace ignite
         }
     }
 
-    void EditorLayer::ReloadContentBrowserPanels()
+    void EditorLayer::ReloadContentBrowserPanels() const
     {
         if (!m_ActiveProject)
         {
@@ -222,14 +228,14 @@ namespace ignite
         return openCount;
     }
 
-    void EditorLayer::OnUpdate(float deltaTime)
+    void EditorLayer::OnUpdate(const float deltaTime)
     {
         Layer::OnUpdate(deltaTime);
 
-        // use int, to prevent unsigned values
-        for (int i = (int)m_ContentBrowserPanels.size() - 1; i >= 0; --i)
+        // using int type, to prevent unsigned values
+        for (int i = static_cast<int>(m_ContentBrowserPanels.size()) - 1; i >= 0; --i)
         {
-            ContentBrowserPanel *panel = m_ContentBrowserPanels[(size_t)i];
+            ContentBrowserPanel *panel = m_ContentBrowserPanels[static_cast<size_t>(i)];
             if (panel == nullptr)
             {
                 m_ContentBrowserPanels.erase(m_ContentBrowserPanels.begin() + i);
@@ -241,10 +247,10 @@ namespace ignite
             {
                 if (m_ContentBrowserPanelsPendingRemoval.insert(panel).second)
                 {
-                    auto it = std::ranges::find(m_ContentBrowserPanels, panel);
-                    if (it != m_ContentBrowserPanels.end())
+                if (auto it = std::ranges::find(m_ContentBrowserPanels, panel);
+                    it != m_ContentBrowserPanels.end())
                     {
-                        // Erase first then pop the layer
+                        // Erase then pop the layer
                         it = m_ContentBrowserPanels.erase(it);
                         Application::GetInstance()->PopLayer(panel);
                     }
@@ -275,22 +281,14 @@ namespace ignite
                 AddContentBrowserPanel();
                 --m_PendingContentBrowserPanelsToAdd;
             }
-
-            for (ContentBrowserPanel *contentBrowserPanel : m_ContentBrowserPanels)
-            {
-                if (contentBrowserPanel && contentBrowserPanel->IsOpen())
-                {
-                    contentBrowserPanel->OnUpdate(deltaTime);
-                }
-            }
         }
-        
+
         AssetManager::GetInstance()->OnUpdate(deltaTime);
 
         // update panels
         if (m_ActiveScene)
         {
-            // multi select entity
+            // multi-select entity
             m_State.multiSelect = InputSystem::IsModifierPressed(KeyMod::LeftShift);
 
             switch (m_ActiveScene->GetState())
@@ -330,13 +328,14 @@ namespace ignite
 
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
-        dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnMouseButtonPressed));
     }
 
     void EditorLayer::OnSDLEvent(SDL_Event *evt)
     {
         if (!m_SceneRenderer)
+        {
             return;
+        }
 
         SDL_Event modifiedEvent = *evt;
         if (m_ScenePanel && (evt->type == SDL_EVENT_MOUSE_MOTION || evt->type == SDL_EVENT_MOUSE_BUTTON_DOWN || evt->type == SDL_EVENT_MOUSE_BUTTON_UP))
@@ -361,14 +360,15 @@ namespace ignite
         bool shift = InputSystem::IsModifierPressed(KeyMod::LeftShift);
 
         if (ImGui::GetIO().WantTextInput)
+        {
             return false;
+        }
 
         switch (event.GetKeyCode())
         {
             case Key::F:
             {
-                Entity entity = m_ScenePanel->GetSelectedEntity();
-                if (entity.IsValid())
+                if (Entity entity = m_ScenePanel->GetSelectedEntity())
                 {
                     auto &cam = m_ScenePanel->GetViewportCamera();
                     auto &tr = entity.GetComponent<TransformComponent>();
@@ -378,48 +378,48 @@ namespace ignite
 
                     if (entity.HasComponent<StaticMeshComponent>())
                     {
-                        const auto &smc = entity.GetComponent<StaticMeshComponent>();
-                        if (smc.handle != AssetHandle(0))
+                      if (const auto &smc = entity.GetComponent<StaticMeshComponent>();
+                          smc.handle != AssetHandle(0))
                         {
                             if (auto mesh = AssetManager::GetInstance()->GetAsset<StaticMesh>(smc.handle))
                             {
-                                const auto &aabb = smc.worldAABB;
-                                focusCenter = (aabb.min + aabb.max) * 0.5f;
-                                halfExtents = glm::abs(aabb.max - aabb.min) * 0.5f;
+                                const auto &[min, max] = smc.worldAABB;
+                                focusCenter = (min + max) * 0.5f;
+                                halfExtents = glm::abs(max - min) * 0.5f;
                             }
                         }
                     }
                     else if (entity.HasComponent<SkeletalMeshComponent>())
                     {
-                        const auto &smc = entity.GetComponent<SkeletalMeshComponent>();
-                        if (smc.handle != AssetHandle(0))
+                        if (const auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+                            smc.handle != AssetHandle(0))
                         {
                             if (auto mesh = AssetManager::GetInstance()->GetAsset<SkeletalMesh>(smc.handle))
                             {
-                                const auto &aabb = smc.worldAABB;
-                                focusCenter = (aabb.min + aabb.max) * 0.5f;
-                                halfExtents = glm::abs(aabb.max - aabb.min) * 0.5f;
+                                const auto &[min, max] = smc.worldAABB;
+                                focusCenter = (min + max) * 0.5f;
+                                halfExtents = glm::abs(max - min) * 0.5f;
                             }
                         }
                     }
                     else if (entity.HasComponent<TerrainComponent>())
                     {
-                        const auto &tr = entity.GetComponent<TransformComponent>();
                         const auto &tc = entity.GetComponent<TerrainComponent>();
 
-                        glm::vec3 minPos = glm::vec3(std::numeric_limits<float>::max());
-                        glm::vec3 maxPos = glm::vec3(std::numeric_limits<float>::min());
+                        auto minPos = glm::vec3(std::numeric_limits<float>::max());
+                        auto maxPos = glm::vec3(std::numeric_limits<float>::min());
 
                         for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
                         {
                             auto &chunk = tc.chunks[idx];
                             if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
+                            {
                                 continue;
+                            }
 
-                            AABB aabb = chunk.bounds.Transform(tr.world.GetMatrix());
-
-                            minPos = glm::min(minPos, aabb.min);
-                            maxPos = glm::max(maxPos, aabb.max);
+                            auto [min, max] = chunk.bounds.Transform(tr.world.GetMatrix());
+                            minPos = glm::min(minPos, min);
+                            maxPos = glm::max(maxPos, max);
                         }
 
                         focusCenter = (minPos + maxPos) * 0.5f;
@@ -453,25 +453,33 @@ namespace ignite
             case Key::Q:
             {
                 if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
+                {
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
+                }
                 break;
             }
             case Key::T:
             {
                 if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
+                {
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::TRANSLATE);
+                }
                 break;
             }
             case Key::R:
             {
                 if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
+                {
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::ROTATE);
+                }
                 break;
             }
             case Key::E:
             {
                 if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
+                {
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::SCALE);
+                }
                 break;
             }
             case Key::F5:
@@ -497,7 +505,9 @@ namespace ignite
             case Key::D:
             {
                 if (control)
+                {
                     m_ScenePanel->DuplicateSelectedEntity();
+                }
                 break;
             }
             case Key::Z:
@@ -505,19 +515,18 @@ namespace ignite
                 if (control)
                 {
                     if (shift)
+                    {
                         Application::GetCommandManager()->Redo();
+                    }
                     else
+                    {
                         Application::GetCommandManager()->Undo();
+                    }
                 }
                 break;
             }
             default: break;
         }
-        return false;
-    }
-
-    bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent &event)
-    {
         return false;
     }
 
@@ -818,7 +827,7 @@ namespace ignite
                 {
                     for (size_t i = 0; i < std::size(configNames); ++i)
                     {
-                        if (ImGui::MenuItem(configNames[i], nullptr, nullptr, i != (size_t)m_ActiveProject->GetConfiguration()))
+                        if (ImGui::MenuItem(configNames[i], nullptr, nullptr, i != static_cast<size_t>(m_ActiveProject->GetConfiguration())))
                         {
                             m_ActiveProject->GetInfo().configuration = static_cast<ProjectConfiguration>(i);
                             AssetWorker::SubmitJob([this]()
@@ -832,7 +841,7 @@ namespace ignite
                     ImGui::EndMenu();
                 }
                 ImGui::EndMenu();
-            
+
             }
 
             ImGui::EndMenuBar();
@@ -846,14 +855,14 @@ namespace ignite
 
         // Reserve space for status bar
         constexpr float statusBarHeight = 32.0f;
-        
+
         {
             // RENDER TOOL BAR
             ImGui::BeginChild("##toolbar_child", {0.0f, statusBarHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
             m_ScenePanel->RenderToolbar();
             ImGui::EndChild();
         }
-        
+
         UIProjectCreation();
 
         ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -948,14 +957,14 @@ namespace ignite
         const auto bottomStatusBarAvail = ImGui::GetContentRegionMax();
         // Status bar at bottom
         ImGui::BeginChild("##status_bar", { 0.0f, bottomStatusBarAvail.y }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
-        
+
         ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
         if (ImGui::Button("+ Content Browser"))
         {
             ++m_PendingContentBrowserPanelsToAdd;
         }
         ImGui::EndDisabled();
-        
+
         if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
         {
             ImGui::SameLine();
@@ -966,7 +975,7 @@ namespace ignite
         ImGui::SameLine();
         ImGui::TextUnformatted(m_StatusText.c_str());
 
-        const std::string versionStr = std::format("Version: {}", Application::GetVersionString());
+        const std::string versionStr = std::format("FPS: {:.7} | Version: {}", ImGui::GetIO().Framerate, Application::GetVersionString());
         float versionWidth = ImGui::CalcTextSize(versionStr.c_str()).x;
         ImGui::SameLine(ImGui::GetWindowWidth() - versionWidth - 10.0f);
         ImGui::TextUnformatted(versionStr.c_str());
@@ -1062,7 +1071,7 @@ namespace ignite
         // Update all systems with new scene
         if (m_ScenePanel)
             m_ScenePanel->SetActiveScene(scene.get());
-        
+
         if (m_ActiveProject)
             m_ActiveProject->SetActiveScene(scene);
 
@@ -1172,17 +1181,17 @@ namespace ignite
 
         // Clear active scene first to release references in renderer and panels
         SetActiveScene(nullptr);
-        
+
         // Reset scenes - this should trigger destructors
         m_EditorScene.reset();
         m_ActiveScene.reset();
-        
+
         // Unload unused assets (assets not referenced by anything else)
         if (m_ActiveProject)
         {
             AssetManager::GetInstance()->UnloadUnusedAssets();
         }
-        
+
         // Create new editor scene
         m_EditorScene = Scene::Create(m_ActiveProject.get());
 
@@ -1206,7 +1215,7 @@ namespace ignite
         }
 
         // Main Scene
-        else 
+        else
         {
             if (m_CurrentSceneFilePath.empty())
             {
@@ -1433,7 +1442,7 @@ namespace ignite
 
     void EditorLayer::OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter)
     {
-        auto *editor = (EditorLayer *)userData;
+        auto *editor = static_cast<EditorLayer*>(userData);
 
         // Check for errors
         if (editor == nullptr || filelist == nullptr)
@@ -1464,9 +1473,9 @@ namespace ignite
             Application::SubmitToMainThread([editor, file = filepath, userData]()
             {
                 SignalBus::Emit<FileImportPayload>(
-                    FileImportPayload{ 
-                        .type = ImportType::Save, 
-                        .status = FileStatus::Success, 
+                    FileImportPayload{
+                        .type = ImportType::Save,
+                        .status = FileStatus::Success,
                         .metadata = AssetMetaData(file, AssetType::Scene),
                         .userData = userData
                     }
@@ -1477,7 +1486,7 @@ namespace ignite
 
     void EditorLayer::OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter)
     {
-        auto editor = (EditorLayer *)userData;
+        auto editor = static_cast<EditorLayer*>(userData);
 
         // Check for errors
         if (editor == nullptr || filelist == nullptr)
@@ -1502,9 +1511,9 @@ namespace ignite
                 SignalBus::Emit<FileImportPayload>(
                     FileImportPayload{
                         .type = ImportType::Open,
-                        .status = FileStatus::Success, 
-                        .metadata = AssetMetaData(file, AssetType::Scene), 
-                        .userData = userData 
+                        .status = FileStatus::Success,
+                        .metadata = AssetMetaData(file, AssetType::Scene),
+                        .userData = userData
                     }
                 );
             });
@@ -1513,7 +1522,7 @@ namespace ignite
 
     void EditorLayer::OnProjectSaveFileSelected(void *userData, const char *const *filelist, int filter)
     {
-        EditorLayer *editor = (EditorLayer *)userData;
+        EditorLayer *editor = static_cast<EditorLayer*>(userData);
 
         // Check for errors
         if (editor == nullptr || filelist == nullptr)
@@ -1542,10 +1551,10 @@ namespace ignite
             Application::SubmitToMainThread([editor, file = filepath, userData]()
             {
                 SignalBus::Emit<FileImportPayload>(
-                    FileImportPayload{ 
-                        .type = ImportType::Save, 
-                        .status = FileStatus::Success, 
-                        .metadata = AssetMetaData(file, AssetType::Project), 
+                    FileImportPayload{
+                        .type = ImportType::Save,
+                        .status = FileStatus::Success,
+                        .metadata = AssetMetaData(file, AssetType::Project),
                         .userData = userData
                     }
                 );
@@ -1555,7 +1564,7 @@ namespace ignite
 
     void EditorLayer::OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter)
     {
-        auto *editor = (EditorLayer *)userData;
+        auto *editor = static_cast<EditorLayer*>(userData);
 
         // Check for errors
         if (filelist == nullptr)
@@ -1571,16 +1580,15 @@ namespace ignite
             return;
         }
 
-        std::string filepath = filelist[0];
-        if (!filepath.empty())
+        if (std::string filepath = filelist[0]; !filepath.empty())
         {
             Application::SubmitToMainThread([editor, file = filepath, userData]()
             {
                 SignalBus::Emit<FileImportPayload>(
                     FileImportPayload{
-                        .type = ImportType::Open, 
-                        .status = FileStatus::Success, 
-                        .metadata = AssetMetaData(file, AssetType::Project), 
+                        .type = ImportType::Open,
+                        .status = FileStatus::Success,
+                        .metadata = AssetMetaData(file, AssetType::Project),
                         .userData = userData
                     }
                 );
@@ -1985,9 +1993,9 @@ namespace ignite
             std::unordered_map<AssetType, size_t> memoryUsage;
 
             // Display table
-            constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg 
+            constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg
                 | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable;
-            
+
             if (ImGui::BeginTable("asset_statistics_memory_usage", 2, ImGuiTableFlags_SizingStretchProp | tableFlags))
             {
                 ImGui::TableNextRow();
@@ -2030,7 +2038,7 @@ namespace ignite
                 {
                     if (type != AssetType::Invalid)
                     {
-                        float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
+                        float percentage = registeredCounts[type] > 0 ? static_cast<float>(count) / registeredCounts[type] * 100.0f : 0.0f;
 
                         // Color code by type
                         ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
@@ -2058,11 +2066,11 @@ namespace ignite
                 ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Total Loaded: %d", totalLoaded);
 
                 // Memory usage bar
-                const float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
-                const auto memoryLoadText = std::format("Memory Load: {} %", (int)(loadRatio * 100));
+                const float loadRatio = totalRegistered > 0 ? static_cast<float>(totalLoaded) / totalRegistered : 0.0f;
+                const auto memoryLoadText = std::format("Memory Load: {} %", static_cast<int>(loadRatio * 100));
                 const float textWidth = ImGui::CalcTextSize(memoryLoadText.c_str()).x + 16.0f;
                 ImGui::ProgressBar(loadRatio, ImVec2(textWidth, 0.0f), memoryLoadText.c_str());
-                
+
                 ImGui::EndTable();
             }
 
@@ -2088,17 +2096,17 @@ namespace ignite
                 ImGui::SameLine();
 
                 // Type filter dropdown
-                const char *typeNames[] = { 
-                    "All", 
-                    "Scene", 
-                    "Texture", 
-                    "Material", 
-                    "StaticMesh", 
-                    "SkeletalMesh", 
-                    "SkeletalAnimation", 
-                    "BlendSpace", 
-                    "Prefab", 
-                    "Audio", 
+                const char *typeNames[] = {
+                    "All",
+                    "Scene",
+                    "Texture",
+                    "Material",
+                    "StaticMesh",
+                    "SkeletalMesh",
+                    "SkeletalAnimation",
+                    "BlendSpace",
+                    "Prefab",
+                    "Audio",
                     "Skeleton"
                 };
 
@@ -2112,7 +2120,7 @@ namespace ignite
                     AssetType::SkeletalAnimation,
                     AssetType::BlendSpace,
                     AssetType::Prefab,
-                    AssetType::Audio, 
+                    AssetType::Audio,
                     AssetType::Skeleton
                 };
 
@@ -2212,7 +2220,7 @@ namespace ignite
                     // Column 0: Handle (TreeNode)
                     ImGui::TableNextColumn();
                     ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                    ImGui::TreeNodeEx((void*)(uint64_t)handle, treeNodeFlags, "%llu", static_cast<uint64_t>(handle));
+                    ImGui::TreeNodeEx((void*)static_cast<uint64_t>(handle), treeNodeFlags, "%llu", static_cast<uint64_t>(handle));
 
                     // Column 1: Type with color coding
                     ImGui::TableNextColumn();
@@ -2411,7 +2419,7 @@ namespace ignite
         if (ImGui::TreeNodeEx("Render Settings", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
             auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
-            
+
             if (ImGui::TreeNodeEx("Visibility"))
             {
                 UI::DrawCheckbox("Bounding Box", &renderSettings.showBoundingBox);
@@ -2478,7 +2486,7 @@ namespace ignite
 
                     ImGui::TreePop();
                 }
-                
+
                 ImGui::TreePop();
             }
 
@@ -2488,10 +2496,12 @@ namespace ignite
         ImGui::End();
     }
 
-    void EditorLayer::ProcessCameraViewportResize(ICamera *camera, const glm::uvec2 &desiredSize, bool &isResizing, int &resizingFrame, bool &requestToResize)
+    void EditorLayer::ProcessCameraViewportResize(ICamera *camera, const glm::uvec2 &desiredSize, bool &isResizing, int &resizingFrame, bool &requestToResize) const
     {
         if (!camera || desiredSize.x == 0 || desiredSize.y == 0)
+        {
             return;
+        }
 
         auto target = m_SceneRenderer ? m_SceneRenderer->GetRenderTarget(camera) : nullptr;
         const glm::uvec2 cameraSize = camera->GetViewportSize();

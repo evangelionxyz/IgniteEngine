@@ -12,6 +12,7 @@
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/scene/component.hpp"
+#include "ignite/scene/scene.hpp"
 #include "ignite/terrain/terrain.hpp"
 
 #include "ignite_rs/core.h"

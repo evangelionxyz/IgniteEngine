@@ -67,18 +67,11 @@ float3 SampleSceneWithChromAb(float2 uv)
     return float3(r, g, b);
 }
 
-float3 ApplyFog(float3 color, float depth, float2 uv)
+float3 ApplyFogWithDistance(float3 color, float viewDistance, float2 uv)
 {
     if (fogDensity <= 0.0f)
         return color;
 
-    // Convert depth to view space distance
-    float4 clipSpace = float4(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f, depth, 1.0f);
-    float4 viewSpace = mul(projectionInv, clipSpace);
-    viewSpace /= viewSpace.w;
-
-    float viewDistance = abs(viewSpace.z);
-    
     // 1. Linear fog for base distance fade
     float linearFog = saturate((viewDistance - fogStart) / max(fogEnd - fogStart, 1e-4f));
     
@@ -107,20 +100,27 @@ float3 ApplyFog(float3 color, float depth, float2 uv)
     return lerp(atmosphericColor, color, fogFactor);
 }
 
+float CalculateViewDistance(float depth, float2 uv)
+{
+    float4 clipSpace = float4(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f, depth, 1.0f);
+    float4 viewSpace = mul(projectionInv, clipSpace);
+    viewSpace /= viewSpace.w;
+    return abs(viewSpace.z);
+}
+
 float4 main(VSOutput input) : SV_Target
 {
     float3 sceneColor = SampleSceneWithChromAb(input.uv);
 
-    float depth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-    
-    // Convert depth to view space distance
-    float4 clipSpace = float4(input.uv.x * 2.0f - 1.0f, 1.0f - input.uv.y * 2.0f, depth, 1.0f);
-    float4 viewSpace = mul(projectionInv, clipSpace);
-    viewSpace /= viewSpace.w;
-    float dist = abs(viewSpace.z);
+    const bool hasFog = (fogDensity > 0.0f);
+    const bool hasDOF = (enableDOF > 0);
+    const bool hasSSAO = (chromAbParams.y > 0.5f);
 
-    if (enableDOF > 0)
+    if (hasDOF)
     {
+        float depth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
+        float dist = CalculateViewDistance(depth, input.uv);
+
         // Calculate circle of confusion (CoC)
         float distanceFromFocus = abs(dist - focalDistance);
         float coc = 0.0f;
@@ -148,14 +148,18 @@ float4 main(VSOutput input) : SV_Target
                     {
                         float3 sampleColor = SampleSceneWithChromAb(suv);
                         
-                        if (chromAbParams.y > 0.5f)
+                        if (hasSSAO)
                         {
                             float ao = ssaoTexture.SampleLevel(linearSampler, suv, 0.0f).r;
                             sampleColor *= lerp(1.0f, ao, chromAbParams.z);
                         }
 
-                        float sampleDepth = depthTexture.SampleLevel(linearSampler, suv, 0.0f).r;
-                        sampleColor = ApplyFog(sampleColor, sampleDepth, suv);
+                        if (hasFog)
+                        {
+                            float sampleDepth = depthTexture.SampleLevel(linearSampler, suv, 0.0f).r;
+                            float sampleDist = CalculateViewDistance(sampleDepth, suv);
+                            sampleColor = ApplyFogWithDistance(sampleColor, sampleDist, suv);
+                        }
                         accum += float4(sampleColor, 1.0f);
                         totalWeight += 1.0f;
                     }
@@ -166,22 +170,30 @@ float4 main(VSOutput input) : SV_Target
         }
         else
         {
-            if (chromAbParams.y > 0.5f)
+            if (hasSSAO)
             {
                 float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
                 sceneColor *= lerp(1.0f, ao, chromAbParams.z);
             }
-            sceneColor = ApplyFog(sceneColor, depth, input.uv);
+            if (hasFog)
+            {
+                sceneColor = ApplyFogWithDistance(sceneColor, dist, input.uv);
+            }
         }
     }
     else
     {
-        if (chromAbParams.y > 0.5f)
+        if (hasSSAO)
         {
             float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
             sceneColor *= lerp(1.0f, ao, chromAbParams.z);
         }
-        sceneColor = ApplyFog(sceneColor, depth, input.uv);
+        if (hasFog)
+        {
+            float depth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
+            float dist = CalculateViewDistance(depth, input.uv);
+            sceneColor = ApplyFogWithDistance(sceneColor, dist, input.uv);
+        }
     }
 
     if (flags.x > 0.5f)

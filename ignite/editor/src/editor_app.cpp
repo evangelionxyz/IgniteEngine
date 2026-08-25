@@ -11,7 +11,7 @@ public:
     explicit EditorApp(const ignite::ApplicationCreateInfo &createInfo)
         : Application(createInfo)
     {
-        if (ImGuiContext *sharedContext = ignite::Application::GetImGuiContext())
+        if (ImGuiContext *sharedContext = GetImGuiContext())
         {
             ImGui::SetCurrentContext(sharedContext);
         }
@@ -25,12 +25,12 @@ namespace ignite
     Application *CreateApplication(const ApplicationCommandLineArgs args)
     {
         ApplicationCreateInfo createInfo{};
-        
+
+        // Engine Versioning
         createInfo.version = version::MakeVersion(0, 1, 0);
-        
+
         createInfo.cmdLineArgs = args;
         createInfo.name = "Ignite Editor";
-        // Engine Versioning
         createInfo.width = 1640;
         createInfo.height = 940;
         createInfo.useGui = true;

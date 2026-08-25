@@ -4,7 +4,6 @@
 
 #include "script_engine.hpp"
 #include "glue/component_script_glue.hpp"
-#include "glue/core_script_glue.hpp"
 #include "script_class.hpp"
 #include "script_host.hpp"
 #include "ignite/scene/component.hpp"
@@ -12,9 +11,10 @@
 #include "ignite/project/project.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/string_utils.hpp"
-#include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/core/signals/signals.hpp"
+
+#include <utility>
 
 namespace ignite
 {
@@ -49,7 +49,7 @@ namespace ignite
         {"Ignite.Mathf+Quaternion", ScriptFieldType::Quat},
         {"Ignite.Mathf+Color",   ScriptFieldType::Color},
         {"Ignite.Entity",        ScriptFieldType::Entity},
-        
+
         {"Ignite.ScriptableObject", ScriptFieldType::Asset},
         {"Ignite.AssetHandle", ScriptFieldType::Asset},
         {"Ignite.Asset", ScriptFieldType::Asset},
@@ -91,11 +91,13 @@ namespace ignite
         Scope<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         std::chrono::time_point<std::chrono::file_clock> appAssemblyLastWriteTime{};
         ProjectConfiguration currentProjectConfig;
-        bool isReady = false;
         bool assemblyReloadingPending = false;
         bool assemblyReloadDeferred = false;
         bool hotReloadPending = false;
         bool hasAppAssemblyLastWriteTime = false;
+
+        bool coreAssemblyLoaded = false;
+        bool appAssemblyLoaded = false;
 
         // Entity script
         ScriptClassMap entityClasses;
@@ -108,139 +110,49 @@ namespace ignite
         std::vector<ScriptableObjectMenuEntry> scriptableObjectMenuEntries;
 
         // Hot-reload: captured List<Entity> / List<Asset> field IDs
-        // Key: instanceID -> (fieldName -> pipe-separated entity IDs string)
+        // Key: instanceId -> (fieldName -> pipe-separated entity IDs string)
         std::unordered_map<ScriptInstanceID, std::unordered_map<std::string, std::string>> capturedEntityListFields;
+
+        Project *project = nullptr;
+        Scene *scene = nullptr;
     };
 
-    ScriptEngineData *scriptEngineData = nullptr;
-    ScriptEngine *scriptEngine = nullptr;
-
-    FileStatus ScriptEngine::EnsureAppAssembly()
-    {
-        LOG_ASSERT(!m_Project->GetScriptModulePath().empty(), "[Script Engine] App Assembly should not empty!");
-
-        // Load immediately if the App Assembly (.dll) exists.
-        // This ensures the editor loads the default scene successfully on startup
-        // if a valid DLL is already present, without waiting for/blocking on a rebuild
- 
-        auto modulePath = m_Project->GetScriptModulePath();
-        if (ignite::Path::exists(modulePath))
-        {
-            // Clean up any leftover slow-path subscription from a previous call
-            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
-            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
-
-            // Load App Assembly immediately (we may be on a worker thread)
-            scriptEngineData->isReady = LoadAppAssembly(modulePath);
-            const bool ready = scriptEngineData->isReady;
-            Application::SubmitToMainThread([ready]()
-                {
-                    SignalBus::Emit(SuccessResultSignal{ ready, SignalType::Project });
-                });
-            return FileStatus::Success;
-        }
-
-        // Slow path: DLL does not exist yet. Deregister any leftover subscription.
-        SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
-        scriptEngineData->solutionBuildToken = kInvalidSignalToken;
-
-        // Register Build Solution callback — one-shot, only fires on ScriptEngine signal
-        scriptEngineData->solutionBuildToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
-        {
-            // Guard: only handle the "build finished" notification, not any re-emitted Project signals
-            if (signal.type != SignalType::ScriptEngine)
-                return;
-
-            // One-shot: unsubscribe immediately so cascading Project emits don't re-trigger this
-            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
-            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
-
-            LOG_ASSERT(signal.isSuccess, "[Script Engine] Failed to build solution!");
-            if (signal.isSuccess)
-            {
-                scriptEngineData->isReady = LoadAppAssembly(m_Project->GetScriptModulePath());
-            }
-
-            // We are already on the main thread (called from project.cpp's SubmitToMainThread),
-            // so emit Project signal directly — no need for another SubmitToMainThread.
-            SignalBus::Emit(SuccessResultSignal{ signal.isSuccess && scriptEngineData->isReady, SignalType::Project });
-        });
-        
-        // Run the build and load the App Assembly if success
-        LOG_DEBUG("Building Visual Studio Solution...");
-        m_Project->BuildSolution(true);
-        return FileStatus::Pending;
-    }
-
-    void ScriptEngine::InitHostFxr()
-    {
-        if (!scriptEngineData->scriptHost)
-        {
-            scriptEngineData->scriptHost = CreateScope<ScriptHost>();
-        }
-
-        // Find the runtimeconfig.json for MochiSharp.Managed
-        const ignite::Path configPath = m_Project->GetDirectory() / "Bin/MochiSharp.Managed.runtimeconfig.json";
-
-        if (!std::filesystem::exists(configPath.string()))
-        {
-            LOG_ERROR("[Script Engine] HostFXR config not found: {}", configPath.generic_string());
-            return;
-        }
-
-        if (!scriptEngineData->scriptHost->Init(configPath))
-        {
-            LOG_ERROR("[Script Engine] Failed to initialize HostFXR");
-            return;
-        }
-
-        LOG_WARN("[Script Engine] HostFXR Initialized");
-    }
-
-    void ScriptEngine::ShutdownHostFxr()
-    {
-        if (!scriptEngineData)
-        {
-            return;
-        }
-
-        scriptEngineData->scriptHost.reset();
-
-        LOG_WARN("[Script Engine] HostFXR Shutdown");
-    }
+    static ScriptEngineData *scriptEngineData = nullptr;
+    static ScriptEngine *scriptEngine = nullptr;
 
     ScriptEngine::ScriptEngine(Project *project)
-        : m_Project(project), m_Scene(nullptr)
     {
         scriptEngine = this;
+
         if (scriptEngineData)
         {
+            scriptEngineData->project = project;
+            scriptEngineData->scene = nullptr;
+
             ReloadAssembly();
             return;
         }
 
         scriptEngineData = new ScriptEngineData();
 
+        scriptEngineData->project = project;
+        scriptEngineData->scene = nullptr;
+
         InitHostFxr();
 
-        scriptEngineData->mochiSharpAssemblyFilepath = m_Project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
+        scriptEngineData->mochiSharpAssemblyFilepath = scriptEngineData->project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
+        scriptEngineData->currentProjectConfig = scriptEngineData->project->GetConfiguration();
 
         // Script Core Assembly (Ignite.ScriptEngine.dll)
-        scriptEngineData->coreAssemblyFilepath = m_Project->GetScriptBinDirectory() / "Ignite.ScriptEngine.dll";
+        scriptEngineData->coreAssemblyFilepath = scriptEngineData->project->GetScriptBinDirectory() / "Ignite.ScriptEngine.dll";
         LOG_ASSERT(ignite::Path::exists(scriptEngineData->coreAssemblyFilepath), "[Script Engine] Script core assembly not found!");
-        if (!LoadCoreAssembly(scriptEngineData->coreAssemblyFilepath))
-        {
-            LOG_ASSERT(false, "[Script Engine] Failed to reload core assembly '{}'", scriptEngineData->coreAssemblyFilepath.generic_string());
-            return;
-        }
 
         // Register method signatures AFTER Core Assembly is loaded
         scriptEngineData->scriptHost->RegisterSignatures();
         LOG_INFO("[Script Engine] Registered method signatures");
 
         // Build solution if the App Assembly is not available yet
-        EnsureAppAssembly();
-        scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
+        EnsureAppAssembly(true);
     }
 
     ScriptEngine::~ScriptEngine()
@@ -272,52 +184,32 @@ namespace ignite
     {
         LOG_ASSERT(!filepath.empty(), "[Script Engine] Core Assembly should not empty!");
 
-        if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
-            return false;
+        // Skip reload
+        if (scriptEngineData->coreAssemblyLoaded)
+            return true;
 
-        // Register glue functions and components via HostFXR
-        ComponentScriptGlue::RegisterFunctions();
-        ComponentScriptGlue::RegisterComponents();
+        scriptEngineData->coreAssemblyLoaded = scriptEngineData->scriptHost->LoadAssembly(filepath);
 
-        LOG_WARN("[Script Engine] Core assembly loaded: {}", filepath.generic_string());
-        return true;
-    }
-
-    void ScriptEngine::OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType)
-    {
-        if (!scriptEngineData->assemblyReloadingPending && eventType == filewatch::Event::modified)
+        if (scriptEngineData->coreAssemblyLoaded)
         {
-            scriptEngineData->assemblyReloadingPending = true;
-
-            Application::SubmitToMainThread([]()
-            {
-                if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsRunning())
-                {
-                    scriptEngineData->hotReloadPending = true;
-                    scriptEngineData->assemblyReloadingPending = false;
-                    LOG_INFO("[Script Engine] App assembly change detected during play. Hot reload scheduled for frame end.");
-                    return;
-                }
-
-                // Reset the last-write-time guard BEFORE destroying the watcher.
-                // This ensures that LoadAppAssembly's WaitForFileNewerThan check uses
-                // a zeroed baseline and waits for the truly new timestamp rather than
-                // accepting a partial/in-progress write that already bumped the timestamp.
-                scriptEngineData->hasAppAssemblyLastWriteTime = false;
-                scriptEngineData->appAssemblyLastWriteTime = {};
-
-                scriptEngineData->appAssemblyFileWatcher.reset();
-                scriptEngine->ReloadAssembly();
-                scriptEngineData->assemblyReloadingPending = false;
-            });
+            // Register glue functions and components via HostFXR
+            ComponentScriptGlue::RegisterFunctions();
+            ComponentScriptGlue::RegisterComponents();
+            LOG_WARN("[Script Engine] Core assembly loaded: {}", filepath.generic_string());
         }
+
+        LOG_ASSERT(scriptEngineData->coreAssemblyLoaded, "[Script Engine] Failed to load Core Assembly \"Ignite.ScriptEngine.dll\" on path: \"{}\"", filepath.string());
+        return scriptEngineData->coreAssemblyLoaded;
     }
 
     bool ScriptEngine::LoadAppAssembly(const ignite::Path &filepath)
     {
+        // NOTE: Always makesure Core assembly is loaded
+        LoadCoreAssembly(scriptEngineData->coreAssemblyFilepath);
+
         LOG_ASSERT(!filepath.empty(), "[Script Engine] App Assembly should not empty!");
 
-        if (scriptEngineData->hasAppAssemblyLastWriteTime && scriptEngineData->currentProjectConfig == m_Project->GetConfiguration())
+        if (scriptEngineData->hasAppAssemblyLastWriteTime && scriptEngineData->currentProjectConfig == scriptEngineData->project->GetConfiguration())
         {
             if (!ignite::Path::WaitForFileNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
             {
@@ -391,18 +283,18 @@ namespace ignite
 
     bool ScriptEngine::ReloadAssembly()
     {
-        scriptEngineData->isReady = false;
+        scriptEngineData->appAssemblyLoaded = false;
 
         // CRITICAL: Destroy all script instances BEFORE reloading the assembly
         // This prevents TargetException due to managed objects holding old type references
         if (!scriptEngineData->entityScriptInstances.empty())
         {
             // Destroy all instances first (calls OnDestroy on each)
-            for (auto &[instanceID, instance] : scriptEngineData->entityScriptInstances)
+            for (const auto& instanceId : scriptEngineData->entityScriptInstances | std::views::keys)
             {
                 if (scriptEngineData->scriptHost)
                 {
-                    scriptEngineData->scriptHost->DestroyInstance(instanceID);
+                    scriptEngineData->scriptHost->DestroyInstance(instanceId);
                 }
             }
             // Clear the instances map
@@ -442,105 +334,19 @@ namespace ignite
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
         EnsureAppAssembly();
-        scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
+        scriptEngineData->currentProjectConfig = scriptEngineData->project->GetConfiguration();
 
         return true;
     }
 
-    void ScriptEngine::SetSceneContext(Scene *scene)
-    {
-        m_Scene = scene;
-    }
-
-    void ScriptEngine::ClearSceneContext()
-    {
-        if (!scriptEngineData)
-            return;
-
-        for (auto &instance : scriptEngineData->entityScriptInstances)
-        {
-            scriptEngineData->scriptHost->DestroyInstance(instance.second->GetInstanceID());
-        }
-
-        scriptEngineData->entityScriptInstances.clear();
-
-        if (scriptEngineData->assemblyReloadDeferred)
-        {
-            scriptEngineData->assemblyReloadDeferred = false;
-            scriptEngineData->appAssemblyFileWatcher.reset();
-            ReloadAssembly();
-        }
-
-        m_Scene = nullptr;
-    }
-
-    bool ScriptEngine::IsEntityClassExists(const std::string &fullClassName)
-    {
-        if (scriptEngineData)
-            return scriptEngineData->entityClasses.contains(fullClassName);
-        return false;
-    }
-
-    bool ScriptEngine::IsHotReloadPending() const
+    bool ScriptEngine::IsHotReloadPending()
     {
         return scriptEngineData ? scriptEngineData->hotReloadPending : false;
     }
 
-    void ScriptEngine::CaptureAllInstanceFieldValues()
-    {
-        if (!scriptEngineData || !scriptEngineData->scriptHost)
-            return;
-
-        char buffer[64];
-        for (auto &[instanceID, scriptInstance] : scriptEngineData->entityScriptInstances)
-        {
-            if (!scriptInstance)
-                continue;
-
-            auto scriptClass = scriptInstance->GetScriptClass();
-            if (!scriptClass)
-                continue;
-
-            auto *instanceFields = scriptClass->GetInstanceFieldsById(instanceID);
-            if (!instanceFields)
-                continue;
-
-            for (auto &[fieldName, instanceField] : *instanceFields)
-            {
-                if (instanceField.field.Type == ScriptFieldType::Invalid)
-                    continue;
-
-                // Entity and Asset fields are reference types: GetInstanceFieldValue always
-                // returns 0 for them (MochiSharp can't marshal GC references into a raw buffer).
-                // Their uint64_t IDs are already correctly stored in the C++ buffer from when
-                // the field was first assigned, so skip the capture to avoid overwriting them.
-                if (instanceField.field.Type == ScriptFieldType::Entity ||
-                    instanceField.field.Type == ScriptFieldType::Asset)
-                    continue;
-
-                // List<Entity> and List<Asset>: read the entity IDs via the managed reflection
-                // bridge before the ALC is torn down, so we can reconstruct the list after reload.
-                if (instanceField.field.Type == ScriptFieldType::List_Entity ||
-                    instanceField.field.Type == ScriptFieldType::List_Asset)
-                {
-                    std::string ids = scriptEngineData->scriptHost->GetEntityListFieldIds(instanceID, fieldName);
-                    LOG_ASSERT(!ids.empty(), "[Script Engine] IDs is empty! This can be a bug!");
-                    scriptEngineData->capturedEntityListFields[instanceID][fieldName] = std::move(ids);
-                    continue;
-                }
-
-                memset(buffer, 0, sizeof(buffer));
-                if (scriptEngineData->scriptHost->GetInstanceFieldValue(instanceID, fieldName, buffer, sizeof(buffer)))
-                {
-                    instanceField.SetValueRaw(buffer, sizeof(buffer));
-                }
-            }
-        }
-    }
-
     void ScriptEngine::HotReloadAssembly()
     {
-        if (!scriptEngineData || !m_Scene)
+        if (!scriptEngineData || !scriptEngineData->scene)
             return;
 
         LOG_INFO("[Script Engine] Hot reloading app assembly in play mode...");
@@ -551,20 +357,21 @@ namespace ignite
         // 2. Snapshot current active script components in the scene
         struct ScriptEntitySnapshot
         {
+            ScriptInstanceID instanceId;
             entt::entity entity;
-            ScriptInstanceID instanceID;
             std::string className;
         };
+
         std::vector<ScriptEntitySnapshot> scriptSnapshots;
 
-        if (m_Scene && m_Scene->registry)
+        if (scriptEngineData->scene && scriptEngineData->scene->registry)
         {
-            m_Scene->registry->view<ScriptComponent>().each([this, &scriptSnapshots](entt::entity e, ScriptComponent &script)
+            scriptEngineData->scene->registry->view<ScriptComponent>().each([&scriptSnapshots](entt::entity enttEntity, ScriptComponent &script)
             {
                 if (script.runtimeScriptInstance)
                 {
-                    Entity entity{ e, m_Scene };
-                    scriptSnapshots.push_back({ e, entity.GetUUID(), script.className });
+                    Entity entity{ enttEntity, scriptEngineData->scene };
+                    scriptSnapshots.push_back({ entity.GetUUID(), enttEntity, script.className });
                     script.runtimeScriptInstance = nullptr;
                 }
             });
@@ -587,18 +394,17 @@ namespace ignite
         }
 
         // 5. Re-create script instances for entities without calling OnCreate
-        for (const auto &snap : scriptSnapshots)
+        for (const auto & [instanceId, entity, className] : scriptSnapshots)
         {
-            if (m_Scene->registry->valid(snap.entity))
+            if (scriptEngineData->scene->registry->valid(entity))
             {
-                auto &script = m_Scene->registry->get<ScriptComponent>(snap.entity);
-                script.runtimeScriptInstance = OnCreateEntityInstance(snap.instanceID, snap.className, /*invokeOnCreate=*/false);
+                auto &script = scriptEngineData->scene->registry->get<ScriptComponent>(entity);
+                script.runtimeScriptInstance = OnCreateEntityInstance(instanceId, className, /*invokeOnCreate=*/false);
 
                 if (script.runtimeScriptInstance)
                 {
                     auto scriptClass = script.runtimeScriptInstance->GetScriptClass();
-                    auto *instanceFields = scriptClass->GetInstanceFieldsById(snap.instanceID);
-                    if (instanceFields)
+                    if (auto *instanceFields = scriptClass->GetInstanceFieldsById(instanceId))
                     {
                         for (auto &[fieldName, instanceField] : *instanceFields)
                         {
@@ -609,28 +415,28 @@ namespace ignite
                             // those references in its OnHotReload() override.
                             switch (instanceField.field.Type)
                             {
-                                case ScriptFieldType::Bool:    { auto v = instanceField.GetValue<bool>();     scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Byte:    { auto v = instanceField.GetValue<uint8_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::SByte:   { auto v = instanceField.GetValue<int8_t>();   scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Char:    { auto v = instanceField.GetValue<char16_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Short:   { auto v = instanceField.GetValue<int16_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::UShort:  { auto v = instanceField.GetValue<uint16_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Int:     { auto v = instanceField.GetValue<int32_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::UInt:    { auto v = instanceField.GetValue<uint32_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Long:    { auto v = instanceField.GetValue<int64_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::ULong:   { auto v = instanceField.GetValue<uint64_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Float:   { auto v = instanceField.GetValue<float>();    scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Double:  { auto v = instanceField.GetValue<double>();   scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Vector2: { auto v = instanceField.GetValue<glm::vec2>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Vector3: { auto v = instanceField.GetValue<glm::vec3>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Vector4: { auto v = instanceField.GetValue<glm::vec4>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Color:   { auto v = instanceField.GetValue<glm::vec4>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Quat:    { auto v = instanceField.GetValue<glm::quat>();scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
-                                case ScriptFieldType::Enum:    { auto v = instanceField.GetValue<int32_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Bool:    { auto v = instanceField.GetValue<bool>();     scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Byte:    { auto v = instanceField.GetValue<uint8_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::SByte:   { auto v = instanceField.GetValue<int8_t>();   scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Char:    { auto v = instanceField.GetValue<char16_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Short:   { auto v = instanceField.GetValue<int16_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::UShort:  { auto v = instanceField.GetValue<uint16_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Int:     { auto v = instanceField.GetValue<int32_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::UInt:    { auto v = instanceField.GetValue<uint32_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Long:    { auto v = instanceField.GetValue<int64_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::ULong:   { auto v = instanceField.GetValue<uint64_t>(); scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Float:   { auto v = instanceField.GetValue<float>();    scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Double:  { auto v = instanceField.GetValue<double>();   scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Vector2: { auto v = instanceField.GetValue<glm::vec2>();scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Vector3: { auto v = instanceField.GetValue<glm::vec3>();scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Vector4: { auto v = instanceField.GetValue<glm::vec4>();scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Color:   { auto v = instanceField.GetValue<glm::vec4>();scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Quat:    { auto v = instanceField.GetValue<glm::quat>();scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+                                case ScriptFieldType::Enum:    { auto v = instanceField.GetValue<int32_t>();  scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
                                 case ScriptFieldType::String:
                                 {
                                     auto str = instanceField.GetValue<std::string>();
-                                    scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, str.data(), (int)str.size());
+                                    scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, str.data(), static_cast<int>(str.size()));
                                     break;
                                 }
                                 // Entity and Asset fields are stored as uint64_t IDs in the C++ buffer
@@ -640,7 +446,7 @@ namespace ignite
                                 {
                                     auto id = instanceField.GetValue<uint64_t>();
                                     if (id != 0)
-                                        scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &id, sizeof(id));
+                                        scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &id, sizeof(id));
                                     break;
                                 }
                                 case ScriptFieldType::Asset:
@@ -650,9 +456,8 @@ namespace ignite
                                     {
                                         // Re-create the managed ScriptableObject sub-instance in the new ALC
                                         // so MochiSharp can resolve the reference via its _instances lookup.
-                                        Scene *scene = m_Scene;
-                                        AssetManager *am = scene ? scene->GetAssetManager() : nullptr;
-                                        if (am && am->IsAssetHandleValid(AssetHandle(id)))
+                                        Scene *scene = scriptEngineData->scene;
+                                        if (AssetManager *am = scene ? scene->GetAssetManager() : nullptr; am && am->IsAssetHandleValid(AssetHandle(id)))
                                         {
                                             auto so = am->GetAssetImmediate<ScriptableObject>(AssetHandle(id));
                                             if (so)
@@ -667,24 +472,25 @@ namespace ignite
                                                 }
                                             }
                                         }
-                                        scriptEngineData->scriptHost->SetInstanceFieldValue(snap.instanceID, fieldName, &id, sizeof(id));
+                                        scriptEngineData->scriptHost->SetInstanceFieldValue(instanceId, fieldName, &id, sizeof(id));
                                     }
                                     break;
                                 }
-                                default: break;
+                                default:
+                                    std::unreachable();
                             }
                         }
                     }
 
                     // 6. Restore List<Entity> / List<Asset> fields captured before the ALC unload.
                     // The managed bridge reconstructs each list from the pipe-separated entity IDs.
-                    auto capturedListIt = scriptEngineData->capturedEntityListFields.find(snap.instanceID);
+                    auto capturedListIt = scriptEngineData->capturedEntityListFields.find(instanceId);
                     if (capturedListIt != scriptEngineData->capturedEntityListFields.end())
                     {
                         for (auto &[fieldName, ids] : capturedListIt->second)
                         {
                             if (!ids.empty())
-                                scriptEngineData->scriptHost->SetEntityListField(snap.instanceID, fieldName, ids);
+                                scriptEngineData->scriptHost->SetEntityListField(instanceId, fieldName, ids);
                         }
                     }
 
@@ -699,16 +505,49 @@ namespace ignite
         LOG_INFO("[Script Engine] App assembly hot reload complete! {} script instances updated.", scriptSnapshots.size());
     }
 
-    Ref<ScriptInstance> ScriptEngine::OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className, bool invokeOnCreate)
+    void ScriptEngine::SetSceneContext(Scene *scene)
+    {
+        scriptEngineData->scene = scene;
+    }
+
+    void ScriptEngine::ClearSceneContext()
+    {
+        if (!scriptEngineData)
+            return;
+
+        for (const auto& val : scriptEngineData->entityScriptInstances | std::views::values)
+        {
+            scriptEngineData->scriptHost->DestroyInstance(val->GetInstanceId());
+        }
+
+        scriptEngineData->entityScriptInstances.clear();
+
+        if (scriptEngineData->assemblyReloadDeferred)
+        {
+            scriptEngineData->assemblyReloadDeferred = false;
+            scriptEngineData->appAssemblyFileWatcher.reset();
+            ReloadAssembly();
+        }
+
+        scriptEngineData->scene = nullptr;
+    }
+
+    bool ScriptEngine::IsEntityClassExists(const std::string &fullClassName)
+    {
+        if (scriptEngineData)
+            return scriptEngineData->entityClasses.contains(fullClassName);
+        return false;
+    }
+
+    Ref<ScriptInstance> ScriptEngine::OnCreateEntityInstance(ScriptInstanceID instanceId, const std::string &className, bool invokeOnCreate)
     {
         IGN_PROFILE_FUNCTION();
 
         if (IsEntityClassExists(className))
         {
-            auto scriptInstance = CreateRef<ScriptInstance>(scriptEngineData->entityClasses[className], instanceID);
-            scriptEngineData->entityScriptInstances[instanceID] = scriptInstance;
+            auto scriptInstance = CreateRef<ScriptInstance>(scriptEngineData->entityClasses[className], instanceId);
+            scriptEngineData->entityScriptInstances[instanceId] = scriptInstance;
 
-            // C# On Create Function
             if (invokeOnCreate)
                 scriptInstance->InvokeOnCreate();
             return scriptInstance;
@@ -717,20 +556,19 @@ namespace ignite
         return nullptr;
     }
 
-    void ScriptEngine::OnDestroyEntityInstance(ScriptInstanceID instanceID)
+    void ScriptEngine::OnDestroyEntityInstance(const ScriptInstanceID instanceId)
     {
         IGN_PROFILE_FUNCTION();
 
-        auto &scriptInstance = scriptEngineData->entityScriptInstances[instanceID];
-        if (scriptInstance)
+        if (const auto &scriptInstance = scriptEngineData->entityScriptInstances[instanceId])
             scriptInstance->InvokeOnDestroy();
 
         if (scriptEngineData->scriptHost)
         {
-            scriptEngineData->scriptHost->DestroyInstance(instanceID);
+            scriptEngineData->scriptHost->DestroyInstance(instanceId);
         }
 
-        scriptEngineData->entityScriptInstances.erase(instanceID);
+        scriptEngineData->entityScriptInstances.erase(instanceId);
     }
 
     Ref<ScriptClass> ScriptEngine::GetEntityClassByName(const std::string &name)
@@ -746,21 +584,21 @@ namespace ignite
         return scriptEngineData->entityClasses;
     }
 
-    const std::vector<std::string> &ScriptEngine::GetEntityScriptClassStorage()
+    Ref<ScriptInstance> ScriptEngine::GetEntityScriptInstance(ScriptInstanceID instanceId)
     {
-        return scriptEngineData->entityScriptClassStorage;
-    }
-
-    Ref<ScriptInstance> ScriptEngine::GetEntityScriptInstance(ScriptInstanceID instanceID)
-    {
-        const auto &it = scriptEngineData->entityScriptInstances.find(instanceID);
+        const auto &it = scriptEngineData->entityScriptInstances.find(instanceId);
         if (it == scriptEngineData->entityScriptInstances.end())
         {
-            LOG_ERROR("[Script Engine] Failed to find {}", instanceID);
+            LOG_ERROR("[Script Engine] Failed to find {}", instanceId);
             return nullptr;
         }
 
         return it->second;
+    }
+
+    const std::vector<std::string> &ScriptEngine::GetEntityScriptClassStorage()
+    {
+        return scriptEngineData->entityScriptClassStorage;
     }
 
     bool ScriptEngine::IsScriptableObjectClassExists(const std::string &fullClassName)
@@ -796,7 +634,7 @@ namespace ignite
         if (!scriptEngineData || !scriptEngineData->scriptHost)
             return;
 
-        const std::string rawData = scriptEngineData->scriptHost->GetCreateAssetMenuData(m_Project->GetScriptModulePath(), kScriptableObjectTypeName);
+        const std::string rawData = scriptEngineData->scriptHost->GetCreateAssetMenuData(scriptEngineData->project->GetScriptModulePath(), kScriptableObjectTypeName);
 
         if (rawData.empty())
             return;
@@ -821,7 +659,7 @@ namespace ignite
                     menuEntry.menuName = entry.substr(sep2 + 1);
                     scriptEngineData->scriptableObjectMenuEntries.push_back(menuEntry);
                     LOG_TRACE("[Script Engine] CreateAssetMenu: class='{}' file='{}' menu='{}'",
-                        menuEntry.className, menuEntry.fileName, menuEntry.menuName);
+                              menuEntry.className, menuEntry.fileName, menuEntry.menuName);
                 }
             }
 
@@ -832,17 +670,17 @@ namespace ignite
         LOG_INFO("[Script Engine] Found {} CreateAssetMenu entries", scriptEngineData->scriptableObjectMenuEntries.size());
     }
 
-    bool ScriptEngine::IsReady() const
+    bool ScriptEngine::IsReady()
     {
         if (!scriptEngineData)
             return false;
 
-        return scriptEngineData->isReady;
+        return scriptEngineData->appAssemblyLoaded && scriptEngineData->coreAssemblyLoaded;
     }
 
     Scene *ScriptEngine::GetSceneContext()
     {
-        return m_Scene;
+        return scriptEngineData->scene;
     }
 
     ScriptHost *ScriptEngine::GetScriptHost()
@@ -853,6 +691,132 @@ namespace ignite
     ScriptEngine *ScriptEngine::GetInstance()
     {
         return scriptEngine;
+    }
+
+    FileStatus ScriptEngine::EnsureAppAssembly(bool waitForBuild)
+    {
+        LOG_ASSERT(!scriptEngineData->project->GetScriptModulePath().empty(), "[Script Engine] App Assembly should not empty!");
+
+        // For initial project load/create, force asynchronous build first so app assembly
+        // is loaded only after dependencies and build outputs are updated.
+        if (!waitForBuild)
+        {
+            auto modulePath = scriptEngineData->project->GetScriptModulePath();
+            if (ignite::Path::exists(modulePath))
+            {
+                // Clean up any leftover slow-path subscription from a previous call
+                SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+                scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+                // Load App Assembly immediately (we may be on a worker thread)
+                scriptEngineData->appAssemblyLoaded = LoadAppAssembly(modulePath);
+                const bool ready = scriptEngineData->appAssemblyLoaded;
+                Application::SubmitToMainThread([ready]()
+                {
+                    SignalBus::Emit(SuccessResultSignal{ ready, SignalType::Project });
+                });
+                return FileStatus::Success;
+            }
+        }
+
+        // Build path (forced at project open/create, or when DLL does not exist):
+        // Deregister any leftover subscription.
+        SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+        scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+        // Register Build Solution callback — one-shot, only fires on ScriptEngine signal
+        scriptEngineData->solutionBuildToken = SignalBus::Subscribe<SuccessResultSignal>([](const SuccessResultSignal &signal)
+        {
+            // Guard: only handle the "build finished" notification, not any re-emitted Project signals
+            if (signal.type != SignalType::ScriptEngine)
+                return;
+
+            // One-shot: unsubscribe immediately so cascading Project emits don't re-trigger this
+            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+            LOG_ASSERT(signal.isSuccess, "[Script Engine] Failed to build solution!");
+            if (signal.isSuccess)
+            {
+                scriptEngineData->appAssemblyLoaded = LoadAppAssembly(scriptEngineData->project->GetScriptModulePath());
+            }
+
+            // We are already on the main thread (called from project.cpp's SubmitToMainThread),
+            // so emit Project signal directly — no need for another SubmitToMainThread.
+            SignalBus::Emit(SuccessResultSignal{ signal.isSuccess && scriptEngineData->appAssemblyLoaded, SignalType::Project });
+        });
+
+        // Run the build and load the App Assembly if success
+        LOG_DEBUG("Building Visual Studio Solution...");
+        scriptEngineData->project->BuildSolution(true);
+        return FileStatus::Pending;
+    }
+
+    void ScriptEngine::InitHostFxr()
+    {
+        if (!scriptEngineData->scriptHost)
+        {
+            scriptEngineData->scriptHost = CreateScope<ScriptHost>();
+        }
+
+        // Find the runtimeconfig.json for MochiSharp.Managed
+        const ignite::Path configPath = scriptEngineData->project->GetDirectory() / "Bin/MochiSharp.Managed.runtimeconfig.json";
+
+        if (!std::filesystem::exists(configPath.string()))
+        {
+            LOG_ERROR("[Script Engine] HostFXR config not found: {}", configPath.generic_string());
+            return;
+        }
+
+        if (!scriptEngineData->scriptHost->Init(configPath))
+        {
+            LOG_ERROR("[Script Engine] Failed to initialize HostFXR");
+            return;
+        }
+
+        LOG_WARN("[Script Engine] HostFXR Initialized");
+    }
+
+    void ScriptEngine::ShutdownHostFxr()
+    {
+        if (!scriptEngineData)
+        {
+            return;
+        }
+
+        scriptEngineData->scriptHost.reset();
+
+        LOG_WARN("[Script Engine] HostFXR Shutdown");
+    }
+
+    void ScriptEngine::OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType)
+    {
+        if (!scriptEngineData->assemblyReloadingPending && eventType == filewatch::Event::modified)
+        {
+            scriptEngineData->assemblyReloadingPending = true;
+
+            Application::SubmitToMainThread([]()
+            {
+                if (scriptEngineData->scene && scriptEngineData->scene->IsRunning())
+                {
+                    scriptEngineData->hotReloadPending = true;
+                    scriptEngineData->assemblyReloadingPending = false;
+                    LOG_INFO("[Script Engine] App assembly change detected during play. Hot reload scheduled for frame end.");
+                    return;
+                }
+
+                // Reset the last-write-time guard BEFORE destroying the watcher.
+                // This ensures that LoadAppAssembly's WaitForFileNewerThan check uses
+                // a zeroed baseline and waits for the truly new timestamp rather than
+                // accepting a partial/in-progress write that already bumped the timestamp.
+                scriptEngineData->hasAppAssemblyLastWriteTime = false;
+                scriptEngineData->appAssemblyLastWriteTime = {};
+
+                scriptEngineData->appAssemblyFileWatcher.reset();
+                scriptEngine->ReloadAssembly();
+                scriptEngineData->assemblyReloadingPending = false;
+            });
+        }
     }
 
     void ScriptEngine::LoadAppAssemblyClasses()
@@ -890,11 +854,13 @@ namespace ignite
         // Clear
         outClasses.clear();
 
-        const std::string appAssemblyName = m_Project->GetScriptModulePath().stem().string();
-        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(m_Project->GetScriptModulePath(), classFullName);
+        const std::string appAssemblyName = scriptEngineData->project->GetScriptModulePath().stem().string();
+        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->project->GetScriptModulePath(), classFullName);
         if (derivedTypes.empty())
         {
-            LOG_ERROR("[Script Engine] No derived script classes found in {} for '{}'", m_Project->GetScriptModulePath().generic_string(), classFullName);
+            LOG_WARN("[Script Engine] No derived script classes found in {} for '{}'",
+                scriptEngineData->project->GetScriptModulePath().generic_string(), classFullName);
+
             return;
         }
 
@@ -903,8 +869,7 @@ namespace ignite
         while (start <= derivedTypes.size())
         {
             const size_t end = derivedTypes.find('|', start);
-            const std::string fullName = (end == std::string::npos) ? derivedTypes.substr(start) : derivedTypes.substr(start, end - start);
-            if (!fullName.empty())
+            if (const std::string fullName = (end == std::string::npos) ? derivedTypes.substr(start) : derivedTypes.substr(start, end - start); !fullName.empty())
             {
                 const size_t lastDot = fullName.find_last_of('.');
                 const std::string classNamespace = (lastDot == std::string::npos) ? "" : fullName.substr(0, lastDot);
@@ -927,28 +892,21 @@ namespace ignite
                         if (parts.size() >= 6)
                         {
                             const std::string &fName = parts[0];
-                            try
-                            {
-                                float minVal = std::stof(parts[4]);
-                                float maxVal = std::stof(parts[5]);
-                                uiSliderMap[fName] = { minVal, maxVal };
-                            }
-                            catch (...) {}
+                            float minVal = std::stof(parts[4]);
+                            float maxVal = std::stof(parts[5]);
+                            uiSliderMap[fName] = { minVal, maxVal };
                         }
                     }
                 }
 
                 // Get field typename
                 const std::string fieldMetadata = scriptEngineData->scriptHost->GetTypeFields(fullName);
-                size_t fieldStart = 0;
-                auto fieldEntries = stringutils::SplitString(fieldMetadata, '|');
-                for (const auto &fieldEntry : fieldEntries)
+                for (auto fieldEntries = stringutils::SplitString(fieldMetadata, '|'); const auto &fieldEntry : fieldEntries)
                 {
                     if (fieldEntry.empty())
                         continue;
 
-                    auto parts = stringutils::SplitString(fieldEntry, '~');
-                    if (parts.size() >= 4)
+                    if (auto parts = stringutils::SplitString(fieldEntry, '~'); parts.size() >= 4)
                     {
                         const std::string &fieldName = parts[0];
                         const std::string &managedTypeName = parts[1];
@@ -968,25 +926,19 @@ namespace ignite
                             if (parts.size() >= 7)
                             {
                                 field.EnumNames = stringutils::SplitString(parts[5], ',');
-                                auto valStrings = stringutils::SplitString(parts[6], ',');
-                                for (const auto &vs : valStrings)
+                                for (auto valStrings = stringutils::SplitString(parts[6], ','); const auto &vs : valStrings)
                                 {
-                                    try
-                                    {
-                                        field.EnumValues.push_back(std::stoi(vs));
-                                    }
-                                    catch (...) { }
+                                    field.EnumValues.push_back(std::stoi(vs));
                                 }
                             }
                         }
                         else
                         {
-                            const auto fieldTypeIt = s_ScriptFieldTypeMap.find(managedTypeName);
-                            if (fieldTypeIt != s_ScriptFieldTypeMap.end())
+                            if (const auto fieldTypeIt = s_ScriptFieldTypeMap.find(managedTypeName); fieldTypeIt != s_ScriptFieldTypeMap.end())
                             {
                                 field.Type = fieldTypeIt->second;
                             }
-                            else if (scriptEngineData->scriptableObjectClasses.count(managedTypeName))
+                            else if (scriptEngineData->scriptableObjectClasses.contains(managedTypeName))
                             {
                                 // Field is a specific ScriptableObject subclass (same assembly)
                                 field.Type = ScriptFieldType::Asset;
@@ -1000,17 +952,16 @@ namespace ignite
                                 field.ListElementTypeName = elementType;
 
                                 // Try direct map lookup (covers all primitive + engine types)
-                                const auto listTypeIt = s_ScriptFieldTypeMap.find(managedTypeName);
-                                if (listTypeIt != s_ScriptFieldTypeMap.end())
+                                if (const auto listTypeIt = s_ScriptFieldTypeMap.find(managedTypeName); listTypeIt != s_ScriptFieldTypeMap.end())
                                 {
                                     field.Type = listTypeIt->second;
                                 }
-                                else if (scriptEngineData->scriptableObjectClasses.count(elementType))
+                                else if (scriptEngineData->scriptableObjectClasses.contains(elementType))
                                 {
                                     // List of a specific ScriptableObject subclass
                                     field.Type = ScriptFieldType::List_Asset;
                                 }
-                                else if (scriptEngineData->entityClasses.count(elementType))
+                                else if (scriptEngineData->entityClasses.contains(elementType))
                                 {
                                     // List of a custom entity script class (treat as List<Entity>)
                                     field.Type = ScriptFieldType::List_Entity;
@@ -1119,7 +1070,7 @@ namespace ignite
             if (!scriptEngineData->scriptHost->CreateInstance(id, so->GetClassName()))
             {
                 LOG_WARN("[Script Engine] Failed to recreate managed SO instance '{}' (handle={})",
-                    so->GetClassName(), id);
+                         so->GetClassName(), id);
                 continue;
             }
 
@@ -1148,6 +1099,58 @@ namespace ignite
             }
 
             LOG_TRACE("[Script Engine] Refreshed ScriptableObject '{}' (handle={})", so->GetClassName(), id);
+        }
+    }
+
+    void ScriptEngine::CaptureAllInstanceFieldValues()
+    {
+        if (!scriptEngineData || !scriptEngineData->scriptHost)
+            return;
+
+        char buffer[64];
+        for (auto &[instanceId, scriptInstance] : scriptEngineData->entityScriptInstances)
+        {
+            if (!scriptInstance)
+                continue;
+
+            auto scriptClass = scriptInstance->GetScriptClass();
+            if (!scriptClass)
+                continue;
+
+            auto *instanceFields = scriptClass->GetInstanceFieldsById(instanceId);
+            if (!instanceFields)
+                continue;
+
+            for (auto &[fieldName, instanceField] : *instanceFields)
+            {
+                if (instanceField.field.Type == ScriptFieldType::Invalid)
+                    continue;
+
+                // Entity and Asset fields are reference types: GetInstanceFieldValue always
+                // returns 0 for them (MochiSharp can't marshal GC references into a raw buffer).
+                // Their uint64_t IDs are already correctly stored in the C++ buffer from when
+                // the field was first assigned, so skip the capture to avoid overwriting them.
+                if (instanceField.field.Type == ScriptFieldType::Entity ||
+                    instanceField.field.Type == ScriptFieldType::Asset)
+                    continue;
+
+                // List<Entity> and List<Asset>: read the entity IDs via the managed reflection
+                // bridge before the ALC is torn down, so we can reconstruct the list after reload.
+                if (instanceField.field.Type == ScriptFieldType::List_Entity ||
+                    instanceField.field.Type == ScriptFieldType::List_Asset)
+                {
+                    std::string ids = scriptEngineData->scriptHost->GetEntityListFieldIds(instanceId, fieldName);
+                    LOG_ASSERT(!ids.empty(), "[Script Engine] IDs is empty! This can be a bug!");
+                    scriptEngineData->capturedEntityListFields[instanceId][fieldName] = std::move(ids);
+                    continue;
+                }
+
+                memset(buffer, 0, sizeof(buffer));
+                if (scriptEngineData->scriptHost->GetInstanceFieldValue(instanceId, fieldName, buffer, sizeof(buffer)))
+                {
+                    instanceField.SetValueRaw(buffer, sizeof(buffer));
+                }
+            }
         }
     }
 }

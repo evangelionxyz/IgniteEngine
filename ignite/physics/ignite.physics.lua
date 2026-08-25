@@ -19,15 +19,48 @@ project "Ignite.Physics"
     includedirs {
         "src",
         "src/ignite",
+        "%{wks.location}/ignite/engine/src",
         "%{wks.location}/crates/src/include",
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
+        "%{IncludeDir.BOX2D}",
+        "%{IncludeDir.SPDLOG}",
+        "%{IncludeDir.ENTT}",
+        "%{IncludeDir.NVRHI}",
+        "%{IncludeDir.FILEWATCHER}",
+        "%{IncludeDir.OPENEXR}",
+        "%{IncludeDir.IMATH}",
+        "%{IncludeDir.YAMLCPP}",
+        "%{IncludeDir.TINYGLTF}",
+        "%{IncludeDir.ASSIMP}",
+        "%{IncludeDir.FMOD}",
+        "%{IncludeDir.SDL3}",
+        "%{IncludeDir.IMGUI}",
+        "%{IncludeDir.IMGUIZMO}",
+        "%{IncludeDir.STB}",
+        "%{IncludeDir.ZLIB}",
+        "%{IncludeDir.JSON}",
+        "%{IncludeDir.MSDFGEN}",
+        "%{IncludeDir.FREETYPE}",
+        "%{IncludeDir.TRACY}",
+        "%{IncludeDir.FBX_SDK}",
+        "%{IncludeDir.UmbraShaderCompiler}",
+        "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
+        "%{IncludeDir.NVRHI_DIRECTX_HEADERS}",
+        "%{IncludeDir.VULKAN_SDK}",
+        "%{IncludeDir.MochiSharpNative}",
+        "%{IncludeDir.Hostfxr}",
+        "%{IncludeDir.MSDFATLASGEN}",
+        "%{IncludeDir.FASTNOISE2}",
+        "%{IncludeDir.FASTSIMD}",
+        "%{IncludeDir.FASTSIMD_CONFIG}",
     }
 
     libdirs { "%{cfg.targetdir}" }
 
     links {
         "JOLT",
+        "BOX2D",
         "SPDLOG",
         "ignite_core.dll.lib", -- rust based
     }

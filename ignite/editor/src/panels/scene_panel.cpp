@@ -3473,7 +3473,7 @@ namespace ignite
                     float yPosition = 6.0f;
 
                     const float fps = ImGui::GetIO().Framerate;
-                    std::string statusStr = std::format("FPS {:.5}", fps);
+                    std::string statusStr = std::format("FPS {:.7}", fps);
                     drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFF00FF00, statusStr.c_str());
 
                     yPosition += padding;
@@ -4145,7 +4145,7 @@ namespace ignite
                             constexpr float padding = 18.0f;
                             float yPosition = 6.0f;
                             const float fps = ImGui::GetIO().Framerate;
-                            std::string statusStr = std::format("FPS {:.5}", fps);
+                            std::string statusStr = std::format("FPS {:.7}", fps);
 							drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFF00FF00, statusStr.c_str());
 
                             yPosition += padding;

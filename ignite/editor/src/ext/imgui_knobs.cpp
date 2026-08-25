@@ -43,12 +43,12 @@ namespace ImGuiKnobs
                 radius = _radius;
                 if (flags & ImGuiKnobFlags_Logarithmic)
                 {
-                    float v = ImMax(ImMin(*p_value, v_max), v_min);
+                    const float v = ImMax(ImMin(*p_value, v_max), v_min);
                     t = (ImLog(ImAbs(v)) - ImLog(ImAbs(v_min))) / (ImLog(ImAbs(v_max)) - ImLog(ImAbs(v_min)));
                 }
                 else
                 {
-                    t = ((float)*p_value - v_min) / (v_max - v_min);
+                    t = (static_cast<float>(*p_value) - v_min) / (v_max - v_min);
                 }
                 auto screen_pos = ImGui::GetCursorScreenPos();
 
@@ -145,7 +145,7 @@ namespace ImGuiKnobs
                 // for this we clamp lower limit to avoid hitting zero like it is done in ImGui::SliderBehaviorT
                 const bool is_floating_point = (data_type == ImGuiDataType_Float) || (data_type == ImGuiDataType_Double);
                 const int decimal_precision = is_floating_point ? ImParseFormatPrecision(format, 3) : 1;
-                v_min = ImPow(0.1f, (float)decimal_precision);
+                v_min = ImPow(0.1f, static_cast<float>(decimal_precision));
                 v_max = ImMax(v_min, v_max); // this ensures that in the cornercase v_max is still at least ge v_min
                 *p_value = ImMax(ImMin(*p_value, v_max), v_min); // this ensures that in the cornercase p_value is within the range
             }
@@ -184,7 +184,7 @@ namespace ImGuiKnobs
 
             // Draw tooltip
             if (flags & ImGuiKnobFlags_ValueTooltip &&
-                (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) || ImGui::IsItemActive())) 
+                (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) || ImGui::IsItemActive()))
             {
                 ImGui::BeginTooltip();
                 ImGui::Text(format, *p_value);

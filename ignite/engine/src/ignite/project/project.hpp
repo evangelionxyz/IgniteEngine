@@ -29,7 +29,7 @@ namespace ignite
         Release,
         Shipping
     };
-    
+
     struct ProjectInfo
     {
         std::string name;
@@ -47,7 +47,7 @@ namespace ignite
     };
 
     using ProjectCallbackFn = std::function<void(bool)>;
-    
+
     class IGN_API Project : public Asset
     {
     public:
@@ -56,16 +56,16 @@ namespace ignite
         ~Project() override;
 
         void InitScriptEngine();
-        
+
         ignite::Path GetProjectFilepath(const ignite::Path &filepath) const;
         ignite::Path GetProjectRelativeFilepath(const ignite::Path &filepath) const;
-        
+
         void CopyCoreDependencies();
 
         void SetActiveScene(const Ref<Scene> &scene);
         void SetDefaultScene(AssetHandle handle);
-        void BuildSolution(bool forceRebuild = false);
-        
+        void BuildSolution(bool forceRebuild = false) const;
+
         void CreateCSharpScript(const ignite::Path &filepath);
         void CreateScriptableObject(const std::string &className, const std::string &fileName, const ignite::Path &targetDirectory);
         void RegenerateCSharpProject() const;
@@ -106,7 +106,7 @@ namespace ignite
 
         WeakRef<Scene> GetActiveSceneWeak() const { return m_ActiveScene; }
 		Ref<Scene> LockActiveScene() const { return m_ActiveScene; }
-		
+
         physics::Physics3D *GetPhysics3D() { return m_Physics3D.get(); }
 		physics::Physics2D *GetPhysics2D() { return m_Physics2D.get(); }
 

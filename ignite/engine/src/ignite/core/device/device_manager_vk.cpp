@@ -368,6 +368,7 @@ namespace ignite
         if (m_DeviceParameters.headlessDevice)
             return true;
 
+        if (BindlessSystem::HasPendingWrites())
         {
             std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
             BindlessSystem::FlushPendingWrites();
@@ -378,9 +379,8 @@ namespace ignite
             auto query = m_FramesInFlight.front();
             m_FramesInFlight.pop();
 
-            IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::WaitEventQuery");
             {
-                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::WaitEventQuery");
                 m_NvrhiDevice->waitEventQuery(query);
             }
 
@@ -476,7 +476,7 @@ namespace ignite
             IGN_PROFILE_SCOPE("DeviceManager_VK::Present::PresentKHR");
             if (m_PresentQueueFamily == m_GraphicsQueueFamily)
             {
-                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                // std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
                 res = m_PresentQueue.presentKHR(&info);
             }
             else

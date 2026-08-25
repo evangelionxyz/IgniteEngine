@@ -24,6 +24,9 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
+#include "ignite/scene/entity.hpp"
+#include "ignite/scene/component.hpp"
+#include "ignite/scene/scene.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
@@ -185,6 +188,156 @@ namespace ignite
         }
     }
 
+    RenderPlan SceneRenderer::BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera)
+    {
+        RenderPlan plan;
+        plan.isGameCamera = isGameCamera;
+
+        if (!m_Scene || !m_Scene->registry)
+            return plan;
+
+        auto registry = m_Scene->registry;
+
+        // 1. Check for Meshes (Static & Skeletal)
+        {
+            auto staticMeshView = registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
+            for (entt::entity e : staticMeshView)
+            {
+                const auto &[tr, rc, smc] = registry->get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+                if (rc.visible && smc.handle != AssetHandle(0))
+                {
+                    plan.hasMeshes = true;
+                    break;
+                }
+            }
+
+            if (!plan.hasMeshes)
+            {
+                auto skelMeshView = registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
+                for (entt::entity e : skelMeshView)
+                {
+                    const auto &[tr, rc, smc] = registry->get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+                    if (rc.visible && smc.handle != AssetHandle(0))
+                    {
+                        plan.hasMeshes = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2. Check for 2D Renderables (Sprites, Circles, Text)
+        {
+            auto spriteView = registry->view<TransformComponent, RenderingComponent, Sprite2DComponent>();
+            for (entt::entity e : spriteView)
+            {
+                const auto &[tr, rc, sprite] = registry->get<TransformComponent, RenderingComponent, Sprite2DComponent>(e);
+                if (rc.visible)
+                {
+                    plan.has2D = true;
+                    break;
+                }
+            }
+
+            if (!plan.has2D)
+            {
+                auto circleView = registry->view<TransformComponent, RenderingComponent, Circle2DComponent>();
+                for (entt::entity e : circleView)
+                {
+                    const auto &[tr, rc, circle] = registry->get<TransformComponent, RenderingComponent, Circle2DComponent>(e);
+                    if (rc.visible)
+                    {
+                        plan.has2D = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!plan.has2D)
+            {
+                auto textView = registry->view<TransformComponent, RenderingComponent, TextComponent>();
+                for (entt::entity e : textView)
+                {
+                    const auto &[tr, rc, text] = registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                    if (rc.visible && !text.text.empty() && text.fontHandle != AssetHandle(0))
+                    {
+                        plan.has2D = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 3. Check for Terrain
+        {
+            auto terrainView = registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
+            for (entt::entity e : terrainView)
+            {
+                const auto &[tr, rc, tc] = registry->get<TransformComponent, RenderingComponent, TerrainComponent>(e);
+                if (rc.visible && tc.data && !tc.data->heightmap.empty())
+                {
+                    plan.hasTerrain = true;
+                    break;
+                }
+            }
+        }
+
+        // 4. Check for World Environment / Sky
+        if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
+        {
+            plan.hasEnvironment = true;
+        }
+
+        // 5. Check for Widgets
+        if (m_Scene->GetRootWidget() != nullptr)
+        {
+            plan.hasWidgets = true;
+        }
+
+        // 6. Check for Active Directional Light with Cascaded Shadows
+        {
+            auto lightView = registry->view<TransformComponent, DirectionalLightComponent>();
+            for (entt::entity e : lightView)
+            {
+                const auto &light = registry->get<DirectionalLightComponent>(e);
+                if (light.cascadeShadow)
+                {
+                    plan.hasActiveShadows = true;
+                    break;
+                }
+            }
+        }
+
+        // 7. Check for Selection / Object ID
+        plan.requiresObjectId = !m_SelectedEntities.empty();
+
+        // 8. Check for Debug Overlays
+        if (drawDebug && (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider))
+        {
+            plan.requiresDebugOverlay = true;
+        }
+
+        // 9. Check for Grid
+        if (drawDebug)
+        {
+            if (camera && camera->projectionType == ProjectionType::Orthographic)
+            {
+                plan.requiresGrid = sceneRenderSettings.worldGrid2D.enabled;
+            }
+            else
+            {
+                plan.requiresGrid = sceneRenderSettings.worldGrid3D.enabled;
+            }
+        }
+
+        // 10. Post processing requirements
+        plan.requiresBloom = postProcessing.enableBloom;
+        plan.requiresSSAO = postProcessing.enableSSAO;
+        plan.requiresTAA = postProcessing.taaProperties.enable;
+
+        return plan;
+    }
+
     void SceneRenderer::Render(ICamera *camera, FrameContext *frameContext, bool drawDebug)
     {
         IGN_PROFILE_FUNCTION();
@@ -224,10 +377,8 @@ namespace ignite
             postProcessing.msaaProperties.sampleCount = sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : postProcessing.msaaProperties.sampleCount;
             postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
 
-            // IMPORTANT!!!!
-            // Write frame context buffers before using them
             glm::mat4 projection = camera->GetProjection();
-            if (postProcessing.taaProperties.enable)
+            if (postProcessing.taaProperties.enable && target->sceneRT)
             {
                 const glm::vec2 jitter = GetTAAJitter(m_TAAFrameIndex,
                     target->sceneRT->GetWidth(),
@@ -235,6 +386,52 @@ namespace ignite
                 projection[2][0] += jitter.x;
                 projection[2][1] += jitter.y;
             }
+
+            // 1. Build render plan for this camera / frame
+            RenderPlan plan = BuildRenderPlan(camera, drawDebug, postProcessing, isGameCamera);
+
+            // 2. Empty-Scene Fast Path
+            if (plan.IsEmptyScene())
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::EmptySceneFastPath");
+
+                CameraBufferData cameraData = { projection, camera->GetView(), glm::vec4(camera->position, 1.0f) };
+                frameContext->cameraBuffer.SetData(cmd, &cameraData, sizeof(cameraData));
+                frameContext->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(m_SceneGPUData));
+
+                CSM_GPUData sceneCascadeData = {};
+                sceneCascadeData.cascadeIndex = -1;
+                sceneCascadeData.shadowStrength = 0.0f;
+                frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
+
+                const glm::vec4 bgColor = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
+                target->compositeRT->ClearColorAttachmentFloat(cmd, 0, bgColor);
+
+                if (plan.requiresGrid)
+                {
+                    nvrhi::IFramebuffer *compositeFb = target->compositeRT->GetFramebuffer();
+                    if (camera->projectionType == ProjectionType::Orthographic)
+                    {
+                        DrawDebugGrid(cmd, compositeFb, frameContext, sceneRenderSettings.worldGrid2D, true);
+                    }
+                    else
+                    {
+                        DrawDebugGrid(cmd, compositeFb, frameContext, sceneRenderSettings.worldGrid3D, false);
+                    }
+                }
+
+                cmd->setTextureState(*target->compositeRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->commitBarriers();
+                cmd->close();
+
+                {
+                    std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+                    m_Device->executeCommandList(cmd);
+                }
+                return;
+            }
+
+            // Full render path
             CameraBufferData cameraData = { projection, camera->GetView(), glm::vec4(camera->position, 1.0f) };
             {
 				IGN_PROFILE_SCOPE("SceneRenderer::WriteFrameData");
@@ -242,7 +439,10 @@ namespace ignite
 			    frameContext->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(m_SceneGPUData));
             }
 
-            PreallocateGPUData(cmd, frameContext);
+            if (plan.hasMeshes || plan.hasTerrain)
+            {
+                PreallocateGPUData(cmd, frameContext);
+            }
 
 			if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
 			{
@@ -250,21 +450,36 @@ namespace ignite
 				m_WorldEnvironment->gpuInitialized = true;
 			}
 
-            // Clear Render Targets
-            // far depth = 1.0f == LessOrEqual
-            {
-                target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
-                target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
+            const auto width = target->compositeRT ? target->compositeRT->GetWidth() : m_ViewportWidth;
+            const auto height = target->compositeRT ? target->compositeRT->GetHeight() : m_ViewportHeight;
+            const auto renderWidth = target->sceneRT ? target->sceneRT->GetWidth() : width;
+            const auto renderHeight = target->sceneRT ? target->sceneRT->GetHeight() : height;
 
+            // Clear Render Targets (feature-gated)
+            {
                 target->sceneRT->ClearColorAttachmentFloat(cmd, 0);
-                target->sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                if (plan.requiresObjectId)
+                {
+                    target->sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                }
                 target->sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
+
+                if (plan.hasWidgets)
+                {
+                    EnsureWidgetRT(target, width, height);
+                    target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                }
+
+                if (plan.requiresDebugOverlay)
+                {
+                    EnsureDebugRT(target, renderWidth, renderHeight);
+                    target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                }
 
                 target->compositeRT->ClearColorAttachmentFloat(cmd, 0);
                 target->compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
-
-                target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
-                target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
             }
 
             nvrhi::IFramebuffer *sceneFramebuffer = target->sceneRT->GetFramebuffer();
@@ -290,9 +505,13 @@ namespace ignite
             }
 
             ColorPass(cmd, camera, frameContext, sceneFramebuffer, drawDebug);
-            UIPass(cmd, camera, target->widgetRT->GetFramebuffer(), frameContext);
 
-            if (drawDebug)
+            if (plan.hasWidgets && target->widgetRT)
+            {
+                UIPass(cmd, camera, target->widgetRT->GetFramebuffer(), frameContext);
+            }
+
+            if (plan.requiresDebugOverlay && target->debugRT)
             {
                 nvrhi::IFramebuffer *debugFramebuffer = target->debugRT->GetFramebuffer().Get();
                 DebugPass(cmd, camera, debugFramebuffer, frameContext);
@@ -300,12 +519,15 @@ namespace ignite
 
             // Transition color and depth attachments to ShaderResource before they are read by post-processing
             cmd->setTextureState(*target->sceneRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-            cmd->setTextureState(*target->sceneRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            if (target->sceneRT->GetColorAttachment(1))
+                cmd->setTextureState(*target->sceneRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
             cmd->setTextureState(*target->sceneRT->GetDepthAttachment(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
 
-            cmd->setTextureState(*target->widgetRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-            cmd->setTextureState(*target->debugRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-            if (target->debugRT->GetColorAttachment(1))
+            if (target->widgetRT && target->widgetRT->GetColorAttachment(0))
+                cmd->setTextureState(*target->widgetRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            if (target->debugRT && target->debugRT->GetColorAttachment(0))
+                cmd->setTextureState(*target->debugRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            if (target->debugRT && target->debugRT->GetColorAttachment(1))
             {
                 cmd->setTextureState(*target->debugRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
             }
@@ -335,17 +557,14 @@ namespace ignite
                 cmd->commitBarriers();
             }
 
-            const auto width = target->sceneRT->GetWidth();
-            const auto height = target->sceneRT->GetHeight();
-
             // Skip selection highlights/outlines for the game camera (gameplay viewport).
             // This avoids running OutlineJFA compute shaders and recreating the outline texture for the game's resolution.
             Ref<Texture> edgeTexture = nullptr;
             if (!isGameCamera && m_OutlineJFA && !m_SelectedEntities.empty())
             {
-                if (!m_OutlineJFA->GetOutputTexture() || m_OutlineJFA->GetOutputTexture()->GetWidth() != static_cast<int>(width) || m_OutlineJFA->GetOutputTexture()->GetHeight() != static_cast<int>(height))
+                if (!m_OutlineJFA->GetOutputTexture() || m_OutlineJFA->GetOutputTexture()->GetWidth() != static_cast<int>(renderWidth) || m_OutlineJFA->GetOutputTexture()->GetHeight() != static_cast<int>(renderHeight))
                 {
-                    m_OutlineJFA->CreateOutputTexture(width, height);
+                    m_OutlineJFA->CreateOutputTexture(renderWidth, renderHeight);
                 }
 
                 // Use the resolved (single-sample) object-ID texture for JFA outline
@@ -363,7 +582,7 @@ namespace ignite
                     jfaParams.outlineColor = glm::vec4(1.0f, 0.5f, 0.1f, 1.0f);
                     jfaParams.selectedCount = selectedCount;
 
-                    m_OutlineJFA->ExecuteCompute(cmd, jfaParams, width, height);
+                    m_OutlineJFA->ExecuteCompute(cmd, jfaParams, renderWidth, renderHeight);
                     edgeTexture = m_OutlineJFA->GetOutputTexture();
                 }
             }
@@ -379,7 +598,7 @@ namespace ignite
                 bloomInstance->settings.radius = postProcessing.bloomRadius;
                 bloomInstance->settings.threshold = postProcessing.bloomThreshold;
                 bloomInstance->settings.iterations = postProcessing.bloomIterations;
-                bloomInstance->Resize(width, height);
+                bloomInstance->Resize(renderWidth, renderHeight);
                 // Bloom reads from the resolved (single-sample) texture
                 Ref<Texture> bloomSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
                 bloomInstance->Build(cmd, bloomSrc, m_CompositeVertexBuffer);
@@ -392,7 +611,7 @@ namespace ignite
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::HBAOPass", 0x404040FF);
                 const auto &SSAOs = GetOrCreateSSAOs(cmd, camera);
                 Ref<SSAO> ssaoInstance = SSAOs[frameContext->frameIndexInFlight];
-                ssaoInstance->Resize(width, height);
+                ssaoInstance->Resize(renderWidth, renderHeight);
                 ssaoInstance->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
                 ssaoTexture = ssaoInstance->GetAOTexture();
             }
@@ -402,20 +621,24 @@ namespace ignite
                 CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive);
             }
 
-            if (postProcessing.taaProperties.enable && target->taaHistoryRT[frameContext->frameIndexInFlight])
+            if (postProcessing.taaProperties.enable)
             {
-                IGN_PROFILE_SCOPE("SceneRenderer::TAAHistoryCopy");
-                Ref<Texture> compositeColor = target->compositeRT->GetColorAttachment(0);
-                Ref<Texture> historyColor = target->taaHistoryRT[frameContext->frameIndexInFlight]->GetColorAttachment(0);
-                cmd->setTextureState(*compositeColor, nvrhi::AllSubresources, nvrhi::ResourceStates::CopySource);
-                cmd->setTextureState(*historyColor, nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
-                cmd->commitBarriers();
-                cmd->copyTexture(*historyColor, nvrhi::TextureSlice(), *compositeColor, nvrhi::TextureSlice());
-                cmd->setTextureState(*historyColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-                cmd->setTextureState(*compositeColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-                cmd->commitBarriers();
-                target->taaHistoryValid = true;
-                ++m_TAAFrameIndex;
+                EnsureTAAHistoryRT(target, width, height);
+                if (target->taaHistoryRT[frameContext->frameIndexInFlight])
+                {
+                    IGN_PROFILE_SCOPE("SceneRenderer::TAAHistoryCopy");
+                    Ref<Texture> compositeColor = target->compositeRT->GetColorAttachment(0);
+                    Ref<Texture> historyColor = target->taaHistoryRT[frameContext->frameIndexInFlight]->GetColorAttachment(0);
+                    cmd->setTextureState(*compositeColor, nvrhi::AllSubresources, nvrhi::ResourceStates::CopySource);
+                    cmd->setTextureState(*historyColor, nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
+                    cmd->commitBarriers();
+                    cmd->copyTexture(*historyColor, nvrhi::TextureSlice(), *compositeColor, nvrhi::TextureSlice());
+                    cmd->setTextureState(*historyColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                    cmd->setTextureState(*compositeColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                    cmd->commitBarriers();
+                    target->taaHistoryValid = true;
+                    ++m_TAAFrameIndex;
+                }
             }
 
             cmd->close();
@@ -721,11 +944,14 @@ namespace ignite
             {
                 auto &target = it->second;
 
-                target->sceneRT->Resize(renderWidth, renderHeight);
+                if (target->sceneRT)
+                    target->sceneRT->Resize(renderWidth, renderHeight);
                 if (target->sceneResolvedRT)
                     target->sceneResolvedRT->Resize(renderWidth, renderHeight);
-                target->widgetRT->Resize(width, height);
-                target->compositeRT->Resize(width, height);
+                if (target->widgetRT)
+                    target->widgetRT->Resize(width, height);
+                if (target->compositeRT)
+                    target->compositeRT->Resize(width, height);
                 for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
                 {
                     if (historyRT)
@@ -733,8 +959,11 @@ namespace ignite
                 }
                 target->taaHistoryValid = false;
 
-                target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
-                target->debugRT->Resize(renderWidth, renderHeight);
+                if (target->debugRT)
+                {
+                    target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT ? target->sceneRT->GetDepthAttachment() : nullptr;
+                    target->debugRT->Resize(renderWidth, renderHeight);
+                }
             }
         }
 
@@ -863,23 +1092,14 @@ namespace ignite
             break;
         }
 
-        // If no directional light is found, we still need to write default cascade data to the frame context buffer
+        // If no directional light has cascaded shadows enabled, write default disabled CSM buffer and return immediately
         if (!cascadeShadow)
         {
             CSM_GPUData sceneCascadeData = {};
             sceneCascadeData.cascadeIndex = -1;
             sceneCascadeData.shadowStrength = 0.0f;
-            // Write the cascade data to the frame context buffer for use in the main scene pass
             frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
-
-            for (int i = 0; i < NUM_CASCADES; ++i)
-            {
-                IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
-                CSM_GPUData cascadeGpuData = {};
-                cascadeGpuData.cascadeIndex = i;
-                frameContext->csmPerCascadeBuffers[i].SetData(cmd, &cascadeGpuData, sizeof(cascadeGpuData));
-                m_CascadedShadowMap->BeginCascade(cmd, i, frameContext->frameIndexInFlight);
-            }
+            return;
         }
         else
         {
@@ -2823,21 +3043,22 @@ namespace ignite
         Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
         Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
         Ref<Texture> taaHistory = taaHistoryTexture ? taaHistoryTexture : Renderer::GetBlackTexture();
-        Ref<Texture> depth = target->sceneRT->GetDepthAttachment() ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
-        Ref<Texture> debug = target->debugRT->GetColorAttachment(0) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
+        Ref<Texture> depth = (target->sceneRT && target->sceneRT->GetDepthAttachment()) ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
+        Ref<Texture> debug = (target->debugRT && target->debugRT->GetColorAttachment(0)) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
+        Ref<Texture> widget = (target->widgetRT && target->widgetRT->GetColorAttachment(0)) ? target->widgetRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
 
         // When MSAA is active use the resolved single-sample textures for the composite pass
         const bool hasResolved = useResolvedScene && target->sceneResolvedRT;
-        Ref<Texture> sceneColor = (hasResolved ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0));
+        Ref<Texture> sceneColor = (hasResolved ? target->sceneResolvedRT->GetColorAttachment(0) : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : Renderer::GetBlackTexture()));
         Ref<Texture> objectIDTex = hasResolved
             ? (target->sceneResolvedRT->GetColorAttachment(1) ? target->sceneResolvedRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture())
-            : (target->sceneRT->GetColorAttachment(1) ? target->sceneRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture());
+            : ((target->sceneRT && target->sceneRT->GetColorAttachment(1)) ? target->sceneRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture());
 
         CompositeBindingKey key
         {
             bindingLayout,
             *sceneColor,
-            *target->widgetRT->GetColorAttachment(0),
+            *widget,
             *edge,
             *bloom,
             *ssao,
@@ -2860,7 +3081,7 @@ namespace ignite
         // Composite Binding set
         auto bindingSetDesc = nvrhi::BindingSetDesc();
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, *sceneColor));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, *target->widgetRT->GetColorAttachment(0)));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, *widget));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, *edge));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, *bloom));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, *ssao));
@@ -2879,6 +3100,75 @@ namespace ignite
         return bindingSet;
     }
 
+    void SceneRenderer::EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
+    {
+        if (!target->widgetRT)
+        {
+            RenderTargetCreateInfo widgetRTCreateInfo = {};
+            widgetRTCreateInfo.width = width;
+            widgetRTCreateInfo.height = height;
+            widgetRTCreateInfo.attachments =
+            {
+                FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite },
+                FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget },
+            };
+            target->widgetRT = RenderTarget::Create(widgetRTCreateInfo, "[Scene Renderer] Widget RT");
+        }
+        else if (target->widgetRT->GetWidth() != width || target->widgetRT->GetHeight() != height)
+        {
+            target->widgetRT->Resize(width, height);
+        }
+    }
+
+    void SceneRenderer::EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight)
+    {
+        if (!target->debugRT)
+        {
+            RenderTargetCreateInfo debugRTCreateInfo = {};
+            debugRTCreateInfo.width = renderWidth;
+            debugRTCreateInfo.height = renderHeight;
+            debugRTCreateInfo.attachments =
+            {
+                FramebufferAttachments{ "[Scene DebugAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget },
+                FramebufferAttachments{ "[Scene DebugObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget },
+                FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }
+            };
+            debugRTCreateInfo.depthAttachmentOverride = target->sceneRT ? target->sceneRT->GetDepthAttachment() : nullptr;
+            target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
+        }
+        else if (target->debugRT->GetWidth() != renderWidth || target->debugRT->GetHeight() != renderHeight)
+        {
+            target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT ? target->sceneRT->GetDepthAttachment() : nullptr;
+            target->debugRT->Resize(renderWidth, renderHeight);
+        }
+    }
+
+    void SceneRenderer::EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
+    {
+        if (!target->taaHistoryRT[0])
+        {
+            RenderTargetCreateInfo taaHistoryRTCreateInfo = {};
+            taaHistoryRTCreateInfo.width = width;
+            taaHistoryRTCreateInfo.height = height;
+            taaHistoryRTCreateInfo.attachments =
+            {
+                FramebufferAttachments{ "[TAA History Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::ShaderResource }
+            };
+            for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
+            {
+                historyRT = RenderTarget::Create(taaHistoryRTCreateInfo, "[Scene Renderer] TAA History RT");
+            }
+        }
+        else if (target->taaHistoryRT[0]->GetWidth() != width || target->taaHistoryRT[0]->GetHeight() != height)
+        {
+            for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
+            {
+                if (historyRT)
+                    historyRT->Resize(width, height);
+            }
+        }
+    }
+
     Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
     {
         auto it = m_RenderTargets.find(camera);
@@ -2888,7 +3178,7 @@ namespace ignite
         Ref<CameraRenderTarget> target = CreateRef<CameraRenderTarget>();
 
         // Determine MSAA sample count from camera or scene settings
-        const PostProcessing &pp = camera->postProcessing;
+        const PostProcessing &pp = camera ? camera->postProcessing : PostProcessing{};
         const bool msaaEnabled = pp.msaaProperties.enable || sceneRenderSettings.msaaProperties.enable;
         const int sampleCount = msaaEnabled
             ? (sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : pp.msaaProperties.sampleCount)
@@ -2901,9 +3191,9 @@ namespace ignite
         sceneRTCreateInfo.sampleCount = sampleCount;
         sceneRTCreateInfo.attachments =
         {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget}, // HDR Main Color
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
+            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget }, // HDR Main Color
+            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget } // Object ID
         };
 
         target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
@@ -2921,45 +3211,18 @@ namespace ignite
             target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
         }
 
-        // Widget RT
-        RenderTargetCreateInfo widgetRTCreateInfo = {};
-        widgetRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
-        };
-        target->widgetRT = RenderTarget::Create(widgetRTCreateInfo, "[Scene Renderer] Widget RT");
-
+        // Composite RT (always needed for final output)
         RenderTargetCreateInfo compositeRTCreateInfo = {};
         compositeRTCreateInfo.attachments =
         {
-            FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
+            FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
         };
-
         target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
 
-        RenderTargetCreateInfo taaHistoryRTCreateInfo = {};
-        taaHistoryRTCreateInfo.attachments =
+        if (!m_WidgetRenderer)
         {
-            FramebufferAttachments{ "[TAA History Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::ShaderResource }
-        };
-        for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
-        {
-            historyRT = RenderTarget::Create(taaHistoryRTCreateInfo, "[Scene Renderer] TAA History RT");
+            m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
         }
-
-        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
-
-        RenderTargetCreateInfo debugRTCreateInfo = {};
-        debugRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DebugAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget },
-            FramebufferAttachments{ "[Scene DebugObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget },
-            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }
-        };
-
-        debugRTCreateInfo.depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
-        target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
 
         m_RenderTargets.emplace(camera, target);
 

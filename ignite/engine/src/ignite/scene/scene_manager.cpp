@@ -8,6 +8,7 @@
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
 #include "entity.hpp"
+#include "component.hpp"
 #include "entity_command_manager.hpp"
 #include "entity_destroy_command.hpp"
 
@@ -364,7 +365,7 @@ namespace ignite
 			if (auto dynActor = rb.dynamicActor.lock()) dynActor->DestroyBody();
 			if (auto statActor = rb.staticActor.lock()) statActor->DestroyBody();
 		}
-		scene->GetPhysics2D()->DestroyEntity(entity);
+		scene->DestroyPhysics2DBody(entity);
 
         IDComponent idComp = entity.GetComponent<IDComponent>();
 
@@ -506,7 +507,7 @@ namespace ignite
                 }
             }
 
-		    scene->GetPhysics2D()->InstantiateEntity(newEntity);
+		    scene->CreatePhysics2DBody(newEntity);
         }
 
         if (!scene->IsRunning())

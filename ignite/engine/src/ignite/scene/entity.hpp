@@ -73,12 +73,12 @@ namespace ignite
             return m_Scene->registry->valid(m_Handle);
         }
 
-        operator bool() const { return IsValid(); }
+        explicit operator bool() const { return IsValid(); }
 
         operator entt::entity() const { return m_Handle; }
-        operator int32_t() const { return static_cast<int32_t>(m_Handle); }
-        operator uint32_t() const { return static_cast<uint32_t>(m_Handle); }
-        operator uint64_t() const { return static_cast<uint64_t>(m_Handle); }
+        explicit operator int32_t() const { return static_cast<int32_t>(m_Handle); }
+        explicit operator uint32_t() const { return static_cast<uint32_t>(m_Handle); }
+        explicit operator uint64_t() const { return static_cast<uint64_t>(m_Handle); }
 
         bool operator==(const Entity &other) const { return other.m_Handle == m_Handle && other.m_Scene == m_Scene; }
         bool operator!=(const Entity &other) const { return !(*this == other); }

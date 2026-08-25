@@ -25,6 +25,8 @@ project "Ignite.Engine"
     includedirs {
         "src",
         "src/ignite",
+        "%{wks.location}/ignite/physics/src",
+        "%{wks.location}/ignite/physics/src/ignite",
         "%{wks.location}/ignite/ignite.renderer/src",
         "%{wks.location}/crates/src/include",
         "%{IncludeDir.SDL3}",
@@ -68,6 +70,7 @@ project "Ignite.Engine"
     libdirs { "%{cfg.targetdir}" }
 
     links {
+        "Ignite.Physics",
         "IMGUI",
         "BOX2D",
         "STB",

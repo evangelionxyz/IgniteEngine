@@ -9,11 +9,11 @@
 #include "ignite/graphics/hash_keys.hpp"
 #include "batch_builder.hpp"
 #include "ignite/terrain/terrain_renderer.hpp"
-
-#include "ignite/scene/entity.hpp"
+#include <entt/entt.hpp>
 
 namespace ignite
 {
+    class Entity;
     class WidgetRenderer;
     class SkeletalMeshComponent;
 
@@ -36,6 +36,33 @@ namespace ignite
         bool taaHistoryValid = false;
         int msaaSampleCount = 1;           // Tracks the current MSAA sample count (1 = no MSAA)
 	};
+
+    struct RenderPlan
+    {
+        bool hasMeshes = false;
+        bool has2D = false;
+        bool hasTerrain = false;
+        bool hasEnvironment = false;
+        bool hasWidgets = false;
+        bool hasActiveShadows = false;
+        bool requiresObjectId = false;
+        bool requiresDebugOverlay = false;
+        bool requiresGrid = false;
+        bool requiresBloom = false;
+        bool requiresSSAO = false;
+        bool requiresTAA = false;
+        bool isGameCamera = false;
+
+        bool HasRenderables() const
+        {
+            return hasMeshes || has2D || hasTerrain || hasEnvironment;
+        }
+
+        bool IsEmptyScene() const
+        {
+            return !HasRenderables() && !hasWidgets && !requiresDebugOverlay && !requiresObjectId;
+        }
+    };
 
     class IGN_API SceneRenderer : public ISceneRenderer
     {
@@ -77,6 +104,11 @@ namespace ignite
         void PreallocateGPUData(nvrhi::ICommandList *cmd, FrameContext *frameContext);
 
     private:
+        RenderPlan BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera);
+        void EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
+        void EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
+        void EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
+
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug);
         void UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);

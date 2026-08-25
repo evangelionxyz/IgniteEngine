@@ -51,6 +51,7 @@ end
 
     include "../ignite/editor/ignite.editor.lua"
     include "../ignite/engine/ignite.engine.lua"
+    include "../ignite/physics/ignite.physics.lua"
     include "../ignite/test/ignite.test.lua"
     include "../scriptengine/ignite.scriptengine.lua"
     include "../crates/ignite_rs.lua"
@@ -124,14 +125,16 @@ premake.override(premake.action, "call", function(base, name)
         for prj in premake.workspace.eachproject(wks) do
             if prj.language == "C#" then
                 local binPath = path.join(wksLocation, "bin")
+                local relBin = path.getrelative(prj.location, binPath)
                 local propsFile = path.join(prj.location, "Directory.Build.props")
 
                 local f = io.open(propsFile, "w")
                 if f then
                     f:write("<Project>\n")
                     f:write("  <PropertyGroup>\n")
-                    f:write("    <BaseOutputPath>$(MSBuildThisFileDirectory)../bin</BaseOutputPath>\n")
-                    f:write("    <IntermediateOutputPath>$(MSBuildThisFileDirectory)../bin/objs/$(MSBuildProjectName)/</IntermediateOutputPath>\n")
+                    f:write(string.format("    <BaseOutputPath>$(MSBuildThisFileDirectory)%s/</BaseOutputPath>\n", relBin))
+                    f:write(string.format("    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)%s/objs/$(MSBuildProjectName)/</BaseIntermediateOutputPath>\n", relBin))
+                    f:write(string.format("    <IntermediateOutputPath>$(MSBuildThisFileDirectory)%s/objs/$(Configuration)/$(MSBuildProjectName)/</IntermediateOutputPath>\n", relBin))
                     f:write("    <DebugType>pdbonly</DebugType>\n")
                     f:write("    <Nullable>enable</Nullable>\n")
                     f:write("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>\n")

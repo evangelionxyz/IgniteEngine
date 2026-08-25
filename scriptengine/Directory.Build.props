@@ -1,7 +1,8 @@
 <Project>
   <PropertyGroup>
-    <BaseOutputPath>$(MSBuildThisFileDirectory)../bin</BaseOutputPath>
-    <IntermediateOutputPath>$(MSBuildThisFileDirectory)../bin/objs/$(MSBuildProjectName)/</IntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../bin/objs/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$(MSBuildThisFileDirectory)../bin/objs/$(Configuration)/$(MSBuildProjectName)/</IntermediateOutputPath>
     <DebugType>pdbonly</DebugType>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

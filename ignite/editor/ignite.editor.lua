@@ -22,6 +22,7 @@ project "Ignite.Editor"
 
     links {
         "Ignite.Engine",
+        "Ignite.Physics",
         "JOLT",
         "ZLIB",
         "yaml-cpp",
@@ -44,6 +45,8 @@ project "Ignite.Editor"
     includedirs {
         "src",
         "%{wks.location}/ignite/engine/src",
+        "%{wks.location}/ignite/physics/src",
+        "%{wks.location}/ignite/physics/src/ignite",
         "%{wks.location}/crates/src/include",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",

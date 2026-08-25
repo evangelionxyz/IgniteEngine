@@ -187,7 +187,7 @@ namespace ignite
         return true;
     }
 
-    void ScriptHost::RegisterSignatures()
+    void ScriptHost::RegisterSignatures() const
     {
         if (!m_Initialized)
         {
@@ -207,7 +207,7 @@ namespace ignite
         }
 
         const auto *api = CoreScriptGlue::GetAPI();
-        const auto apiPtr = (uint64_t)api;
+        const auto apiPtr = reinterpret_cast<uint64_t>(api);
 
         const int methodId = BindStaticMethod("Ignite.Core.CoreInternalCalls", "Initialize");
         if (methodId == 0)
@@ -236,7 +236,7 @@ namespace ignite
         }
 
         const auto *api = ComponentScriptGlue::GetAPI();
-        const auto apiPtr = (uint64_t)api;
+        const auto apiPtr = reinterpret_cast<uint64_t>(api);
 
         const int methodId = BindStaticMethod("Ignite.Core.Component.ComponentInternalCalls", "Initialize");
         if (methodId == 0)
@@ -262,7 +262,7 @@ namespace ignite
         return it != m_TypeMap.end() ? it->second : nullptr;
     }
 
-    std::optional<ScriptHost::MethodBinding> ScriptHost::CreateMethodBinding(MethodBinding::Kind kind, uint64_t instanceId, mochi::Type *type, const std::string &methodName) const
+    std::optional<ScriptHost::MethodBinding> ScriptHost::CreateMethodBinding(MethodBinding::Kind kind, uint64_t instanceId, mochi::Type *type, const std::string &methodName)
     {
         if (!type)
         {
@@ -279,7 +279,7 @@ namespace ignite
 
             if (result.has_value())
             {
-                LOG_ERROR("[Script Host] Failed to bind method '{}.{}': multiple overloads match by name", 
+                LOG_ERROR("[Script Host] Failed to bind method '{}.{}': multiple overloads match by name",
                     static_cast<std::string>(type->GetFullName()), methodName);
                 return std::nullopt;
             }
@@ -371,7 +371,7 @@ namespace ignite
 
     bool ScriptHost::IsReferenceType(const mochi::Type &type) const
     {
-        const std::string fullName = static_cast<std::string>(type.GetFullName());
+        const auto fullName = static_cast<std::string>(type.GetFullName());
         if (m_ReferenceTypeNames.contains(fullName))
         {
             return true;
@@ -396,7 +396,7 @@ namespace ignite
             return nullptr;
         }
 
-        if (auto it = m_InstanceMap.find(instanceId); it != m_InstanceMap.end())
+        if (const auto it = m_InstanceMap.find(instanceId); it != m_InstanceMap.end())
         {
             return &it->second;
         }
@@ -433,7 +433,7 @@ namespace ignite
 
     std::string ScriptHost::GetInstanceFields(uint64_t instanceId)
     {
-        auto it = m_InstanceMap.find(instanceId);
+        const auto it = m_InstanceMap.find(instanceId);
         if (it == m_InstanceMap.end())
         {
             return {};
@@ -447,7 +447,7 @@ namespace ignite
         return FindType("Ignite.Core.ScriptReflectionBridge");
     }
 
-    std::string ScriptHost::GetTypeFields(const std::string &typeName)
+    std::string ScriptHost::GetTypeFields(const std::string &typeName) const
     {
         mochi::Type *bridgeType = GetReflectionBridgeType();
         if (!bridgeType)
@@ -611,7 +611,7 @@ namespace ignite
             return 0;
         }
 
-        auto binding = CreateMethodBinding(MethodBinding::Kind::Static, 0, type, methodName);
+        const auto binding = CreateMethodBinding(MethodBinding::Kind::Static, 0, type, methodName);
         if (!binding.has_value())
         {
             return 0;
@@ -638,14 +638,14 @@ namespace ignite
             return false;
         }
 
-        auto parameters = argCount > 0 ? (const void **)(const_cast<void *>(argsPtr)) : nullptr;
+        const auto parameters = argCount > 0 ? static_cast<const void**>(const_cast<void*>(argsPtr)) : nullptr;
         auto methodName = mochi::String::New(bindingIt->second.methodName);
 
         switch (bindingIt->second.kind)
         {
             case MethodBinding::Kind::Instance:
             {
-                auto instanceIt = m_InstanceMap.find(bindingIt->second.instanceId);
+                const auto instanceIt = m_InstanceMap.find(bindingIt->second.instanceId);
                 if (instanceIt == m_InstanceMap.end())
                 {
                     mochi::String::Free(methodName);
@@ -699,7 +699,7 @@ namespace ignite
         return true;
     }
 
-    std::string ScriptHost::GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType)
+    std::string ScriptHost::GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType) const
     {
         mochi::Type *bridgeType = GetReflectionBridgeType();
         if (!bridgeType)
@@ -708,7 +708,7 @@ namespace ignite
         return InvokeStaticStringMethod(*bridgeType, "GetDerivedTypes", assemblyPath.stem().string(), baseType);
     }
 
-    std::string ScriptHost::GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType)
+    std::string ScriptHost::GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType) const
     {
         mochi::Type *bridgeType = GetReflectionBridgeType();
         if (!bridgeType)
@@ -717,7 +717,7 @@ namespace ignite
         return InvokeStaticStringMethod(*bridgeType, "GetCreateAssetMenuData", assemblyPath.stem().string(), baseType);
     }
 
-    std::string ScriptHost::GetFieldUIAttribute(const std::string &classFullName, const std::string &attributeTypeName)
+    std::string ScriptHost::GetFieldUIAttribute(const std::string &classFullName, const std::string &attributeTypeName) const
     {
         mochi::Type *bridgeType = GetReflectionBridgeType();
         if (!bridgeType)
@@ -741,7 +741,7 @@ namespace ignite
         // void* into an 'object' parameter.
         auto managedFieldName = mochi::String::New(fieldName);
         mochi::String result;
-        const mochi::ManagedType paramTypes[] = { mochi::ManagedType::String };
+        constexpr mochi::ManagedType paramTypes[] = { mochi::ManagedType::String };
         const void *params[] = { managedFieldName.Data() ? &managedFieldName : nullptr };
         auto methodName = mochi::String::New("GetEntityListFieldIds");
         mochi::s_ManagedFunctions.InvokeMethodRetFptr(instanceIt->second.m_Handle, methodName, params, paramTypes, 1, &result);
@@ -755,12 +755,12 @@ namespace ignite
         return ids;
     }
 
-    bool ScriptHost::SetEntityListField(uint64_t instanceId, const std::string &fieldName, const std::string &pipeSeparatedIds)
+    bool ScriptHost::SetEntityListField(const uint64_t instanceId, const std::string &fieldName, const std::string &pipeSeparatedIds)
     {
         if (!m_Initialized || fieldName.empty())
             return false;
 
-        auto instanceIt = m_InstanceMap.find(instanceId);
+        const auto instanceIt = m_InstanceMap.find(instanceId);
         if (instanceIt == m_InstanceMap.end())
             return false;
 
@@ -768,7 +768,7 @@ namespace ignite
         // on the managed object, same reasoning as GetEntityListFieldIds above.
         auto managedFieldName = mochi::String::New(fieldName);
         auto managedIds = mochi::String::New(pipeSeparatedIds);
-        const mochi::ManagedType paramTypes[] = { mochi::ManagedType::String, mochi::ManagedType::String };
+        constexpr mochi::ManagedType paramTypes[] = { mochi::ManagedType::String, mochi::ManagedType::String };
         const void *params[] = {
             managedFieldName.Data() ? &managedFieldName : nullptr,
             managedIds.Data()       ? &managedIds       : nullptr

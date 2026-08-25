@@ -59,10 +59,10 @@ namespace ignite
 
         void UpdateTransforms(float deltaTime);
         void UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform);
-        
+
         void OnUpdateRuntimeSimulate(float deltaTime);
-        void OnFixedUpdateRuntimeSimulate();
-        
+        void OnFixedUpdateRuntimeSimulate() const;
+
         void OnUpdateEdit(float deltaTime);
         void OnFixedUpdateEdit();
 
@@ -77,24 +77,27 @@ namespace ignite
         inline Project *GetProject() { return m_Project; }
         inline AssetManager *GetAssetManager() { return m_AssetManager; }
 
-        Ref<WidgetCanvas> GetRootWidget();
+        Ref<WidgetCanvas> GetRootWidget() const;
 
         entt::registry *registry;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
-        
+
         inline bool IsPaused() const { return m_State == ESceneState::Paused; }
 		inline bool IsStopped() const { return m_State == ESceneState::Stop; }
         inline bool IsSimulating() const { return m_State == ESceneState::Simulate; }
 		inline bool IsPlaying() const { return m_State == ESceneState::Play; }
         inline bool IsRunning() const { return m_State == ESceneState::Play || m_State == ESceneState::Simulate; }
-        
+
         static Ref<Scene> Create(Project *project);
-        
+
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
-        Environment *GetEnvironment();
-        WorldEnvironment *GetActiveWorldEnvironment();
+        Environment *GetEnvironment() const;
+        WorldEnvironment *GetActiveWorldEnvironment() const;
 		physics::Physics2D *GetPhysics2D() { return m_Physics2D; }
         physics::Physics3D *GetPhysics3D() { return m_Physics3D; }
+
+        void CreatePhysics2DBody(Entity entity) const;
+        void DestroyPhysics2DBody(Entity entity) const;
 
         std::unordered_set<AssetHandle> CollectReferencedAssetHandles() const;
         void PreloadReferencedAssets();

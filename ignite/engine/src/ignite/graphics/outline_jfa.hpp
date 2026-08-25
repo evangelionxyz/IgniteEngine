@@ -70,6 +70,7 @@ namespace ignite
         Ref<Texture> m_JFAPing;
         Ref<Texture> m_JFAPong;
         Ref<Texture> m_OutputTexture;
+        nvrhi::ITexture *m_CurrentObjectIDTexture = nullptr;
     };
 }
 

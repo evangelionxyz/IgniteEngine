@@ -72,21 +72,20 @@ namespace ignite
         };
 
     public:
-        EditorLayer(const std::string &name);
-        ~EditorLayer();
+        explicit EditorLayer(const std::string &name);
+        virtual ~EditorLayer() override;
 
-        void OnAttach() override;
-        void OnDetach() override;
-        void OnUpdate(float deltaTime) override;
-        void OnEvent(Event &e) override;
-        void OnSDLEvent(SDL_Event *evt) override;
+        virtual void OnAttach() override;
+        virtual void OnDetach() override;
+        virtual void OnUpdate(float deltaTime) override;
+        virtual void OnEvent(Event &e) override;
+        virtual void OnSDLEvent(SDL_Event *evt) override;
 
         bool OnKeyPressedEvent(KeyPressedEvent &event);
-        bool OnMouseButtonPressed(MouseButtonPressedEvent &event);
-		bool OnMouseMovedEvent(MouseMovedEvent &event);
+	    bool OnMouseMovedEvent(MouseMovedEvent &event);
 
-        void OnRender(nvrhi::IFramebuffer *framebuffer) override;
-        void OnGuiRender() override;
+        virtual void OnRender(nvrhi::IFramebuffer *framebuffer) override;
+        virtual void OnGuiRender() override;
         void OnScenePlay();
         void OnSceneStop();
         void OnSceneSimulate();
@@ -96,7 +95,7 @@ namespace ignite
         void SaveScene(const ignite::Path &filepath) const;
         void OpenScene();
         void OpenScene(const ignite::Path &filepath);
-        
+
         void SaveProject();
         void OpenProject();
         void CloseCurrentProject();
@@ -106,14 +105,15 @@ namespace ignite
 
         void EnterPrefabIsolation(AssetHandle prefabHandle);
         void ExitPrefabIsolation(bool save = true);
+
         bool IsInPrefabIsolation() const { return m_InPrefabIsolationMode; }
-        Ref<Prefab> GetEditingPrefab() const { return m_EditingPrefab; }
-        AssetHandle GetEditingPrefabHandle() const { return m_EditingPrefabHandle; }
+        [[nodiscard]] Ref<Prefab> GetEditingPrefab() const { return m_EditingPrefab; }
+        [[nodiscard]] AssetHandle GetEditingPrefabHandle() const { return m_EditingPrefabHandle; }
 
         static EditorLayer *GetInstance() { return s_Instance; }
 
-        Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
-        Ref<Project> GetActiveProject() const { return m_ActiveProject; }
+        [[nodiscard]] Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
+        [[nodiscard]] Ref<Project> GetActiveProject() const { return m_ActiveProject; }
 
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
         ICamera *GetEditorPlayCamera() { return &m_EditorPlayCamera; }
@@ -122,9 +122,9 @@ namespace ignite
         EditorState &GetState() { return m_State; }
 
         void RefreshContentBrowsers();
-        
-        void SetStatusText(std::string_view text) { m_StatusText = text; }
-        void SetLoadingProgress(float progress) { m_LoadingProgress = progress; }
+
+        void SetStatusText(const std::string_view text) { m_StatusText = text; }
+        void SetLoadingProgress(const float progress) { m_LoadingProgress = progress; }
 
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
@@ -140,14 +140,14 @@ namespace ignite
 
         void OnFileImport(const FileImportPayload &payload);
         void AddContentBrowserPanel();
-        void ReloadContentBrowserPanels();
+        void ReloadContentBrowserPanels() const;
         uint32_t GetOpenContentBrowserCount() const;
 
         void UIProjectCreation();
         void UISettings();
         void UISceneRenderer();
 
-        void ProcessCameraViewportResize(ICamera *camera, const glm::uvec2 &desiredSize, bool &isResizing, int &resizingFrame, bool &requestToResize);
+        void ProcessCameraViewportResize(ICamera *camera, const glm::uvec2 &desiredSize, bool &isResizing, int &resizingFrame, bool &requestToResize) const;
 
         ScenePanel *m_ScenePanel;
         AssetImporterPanel *m_AssetImporterPanel;
@@ -178,7 +178,7 @@ namespace ignite
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::CommandListHandle m_Cmd;
         glm::vec2 m_CurrentFramebufferSize;
-            
+
         nvrhi::IDevice *m_Device = nullptr;
 
         AssetHandle m_CurrentSceneHandle = AssetHandle(0);
@@ -190,7 +190,7 @@ namespace ignite
 
         SignalToken m_FileImportSignalToken = kInvalidSignalToken;
         SignalToken m_ProjectReadySignalToken = kInvalidSignalToken;
-        
+
         std::string m_StatusText;
         float m_LoadingProgress = 0.0f;
 

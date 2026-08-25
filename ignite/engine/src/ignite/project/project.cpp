@@ -12,6 +12,7 @@
 #include "ignite/core/application.hpp"
 #include "ignite/core/time.hpp"
 #include "ignite/physics/3d/physics_3d.hpp"
+#include "ignite/physics/physics_log.hpp"
 
 #include "ignite/serializer/serializer.hpp"
 
@@ -47,7 +48,7 @@ public class {CLASS_NAME} : Entity
 }
 )";
 
-    static std::string s_SlnxTemplate = 
+    static std::string s_SlnxTemplate =
 R"(<Solution Description="Visual Studio slnx" Version="1.4">
   <Configurations>
     <BuildType Name="Debug" />
@@ -127,7 +128,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 </Project>
 )";
 
-    static std::string s_BuildProps = 
+    static std::string s_BuildProps =
 R"(<Project>
     <PropertyGroup>
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -143,6 +144,17 @@ R"(<Project>
     {
         GenerateProject();
 
+        physics::PhysicsLog::SetCallback([](physics::PhysicsLogLevel level, const std::string &message)
+        {
+            switch (level)
+            {
+                case physics::PhysicsLogLevel::Trace: LOG_TRACE("{}", message); break;
+                case physics::PhysicsLogLevel::Info:  LOG_INFO("{}", message); break;
+                case physics::PhysicsLogLevel::Warn:  LOG_WARN("{}", message); break;
+                case physics::PhysicsLogLevel::Error: LOG_ERROR("{}", message); break;
+            }
+        });
+
         m_Physics2D = CreateScope<physics::Physics2D>();
         m_Physics3D = physics::Physics3D::Create(m_Info.physics3DType);
     }
@@ -153,7 +165,7 @@ R"(<Project>
     }
 
     Project::~Project()
-    {		
+    {
         m_CoreDependencyWatchers.clear();
         if (m_ScriptEngine)
             delete m_ScriptEngine;
@@ -410,7 +422,7 @@ R"(<Project>
             YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
 
 			assetManager->SetActiveProject(project);
-            
+
             const YAML::Node assetNodes = assetRegNode["Assets"];
 
             Timer timer;
@@ -488,7 +500,7 @@ R"(<Project>
         m_CoreDependencyWatchers.clear();
 
         const ignite::Path exeDir = vfs::GetExecutableDirectory();
-        for (const auto &[dep, upToDate] : m_CoreDependencies)
+        for (const auto& dep : m_CoreDependencies | std::views::keys)
         {
             const ignite::Path depFilename = exeDir / dep;
             if (!ignite::Path::exists(depFilename))
@@ -507,8 +519,8 @@ R"(<Project>
             return;
 
         {
-            std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
-            auto it = m_CoreDependenciesPending.find(path);
+            std::lock_guard lock(m_CoreDependencyMutex);
+            const auto it = m_CoreDependenciesPending.find(path);
             if (it == m_CoreDependenciesPending.end() || !it->second)
                 return;
             it->second = false;
@@ -523,7 +535,7 @@ R"(<Project>
             if (!ignite::Path::exists(sourcePath))
             {
                 LOG_ERROR("[Project] Dependency {} is not found!", sourcePath.generic_string());
-                std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
+                std::lock_guard lock(m_CoreDependencyMutex);
                 m_CoreDependenciesPending[path] = true;
                 return;
             }
@@ -575,7 +587,7 @@ R"(<Project>
             }
 
             {
-                std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
+                std::lock_guard lock(m_CoreDependencyMutex);
                 m_CoreDependenciesPending[path] = true;
             }
 
@@ -584,8 +596,8 @@ R"(<Project>
 
             auto checkPendingDeps = [this]() -> bool
             {
-                std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
-                for (const auto &[dep, ready] : m_CoreDependenciesPending)
+                std::lock_guard lock(m_CoreDependencyMutex);
+                for (const auto& ready : m_CoreDependenciesPending | std::views::values)
                 {
                     if (!ready)
                         return false;
@@ -602,7 +614,7 @@ R"(<Project>
         });
     }
 
-    void Project::BuildSolution(bool forceRebuild)
+    void Project::BuildSolution(bool forceRebuild) const
     {
         AssetWorker::SubmitJob([this, forceRebuild]()
         {
@@ -655,7 +667,7 @@ R"(<Project>
 
         std::string scriptTemplate = s_CSSharpScriptTemplate;
         stringutils::ReplaceWith(scriptTemplate, "{PROJECT_NAME}", m_Info.name);
-        
+
         std::string className = filepath.stem().string();
         stringutils::ReplaceWith(scriptTemplate, "{CLASS_NAME}", className);
 

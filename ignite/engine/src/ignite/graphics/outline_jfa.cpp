@@ -144,25 +144,9 @@ namespace ignite
         createInfoRGBA.isUAV = true;
 
         m_OutputTexture = Texture::Create(createInfoRGBA, "[JFA] Output Texture");
-    }
 
-    void OutlineJFA::UpdateBindingSet(const Ref<Texture> &objectIDTexture)
-    {
+        // Recreate static flood and outline binding sets once upon texture allocation
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        // Seed Binding Set
-        {
-            nvrhi::BindingSetDesc desc;
-            desc.bindings =
-            {
-                nvrhi::BindingSetItem::ConstantBuffer(0, m_SeedCB->GetHandle()),
-                nvrhi::BindingSetItem::Texture_SRV(0, objectIDTexture->GetHandle()),
-                nvrhi::BindingSetItem::StructuredBuffer_SRV(1, m_SelectedIDBuffer),
-                nvrhi::BindingSetItem::Texture_UAV(0, m_JFAPing->GetHandle()),
-            };
-            m_SeedBindingSet = device->createBindingSet(desc, m_SeedBindingLayout);
-            LOG_ASSERT(m_SeedBindingSet, "[JFA] Failed to create seed binding set");
-        }
 
         // Flood Binding Sets (Ping->Pong and Pong->Ping)
         {
@@ -205,10 +189,44 @@ namespace ignite
             };
             m_OutlineBindingSetPong = device->createBindingSet(descPong, m_OutlineBindingLayout);
         }
+
+        // Invalidate cached seed binding set so it rebinds to the new Ping texture
+        m_CurrentObjectIDTexture = nullptr;
+        m_SeedBindingSet = nullptr;
+    }
+
+    void OutlineJFA::UpdateBindingSet(const Ref<Texture> &objectIDTexture)
+    {
+        if (!objectIDTexture || !m_JFAPing)
+            return;
+
+        // Skip recreating descriptor sets if object ID texture and ping texture haven't changed
+        if (m_CurrentObjectIDTexture == objectIDTexture->GetHandle().Get() && m_SeedBindingSet != nullptr)
+            return;
+
+        m_CurrentObjectIDTexture = objectIDTexture->GetHandle().Get();
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        // Seed Binding Set
+        {
+            nvrhi::BindingSetDesc desc;
+            desc.bindings =
+            {
+                nvrhi::BindingSetItem::ConstantBuffer(0, m_SeedCB->GetHandle()),
+                nvrhi::BindingSetItem::Texture_SRV(0, objectIDTexture->GetHandle()),
+                nvrhi::BindingSetItem::StructuredBuffer_SRV(1, m_SelectedIDBuffer),
+                nvrhi::BindingSetItem::Texture_UAV(0, m_JFAPing->GetHandle()),
+            };
+            m_SeedBindingSet = device->createBindingSet(desc, m_SeedBindingLayout);
+            LOG_ASSERT(m_SeedBindingSet, "[JFA] Failed to create seed binding set");
+        }
     }
 
     void OutlineJFA::ExecuteCompute(nvrhi::ICommandList *commandList, const OutlineJFAParameter &params, uint32_t width, uint32_t height)
     {
+        IGN_PROFILE_FUNCTION();
+
         uint32_t groupsX = (width + 7) / 8;
         uint32_t groupsY = (height + 7) / 8;
 
@@ -227,13 +245,17 @@ namespace ignite
         commandList->dispatch(groupsX, groupsY, 1);
 
         // 2. Flood Passes
-        uint32_t maxDim = std::max(width, height);
-        int32_t stepSize = 1;
-        while (stepSize * 2 < static_cast<int32_t>(maxDim))
+        // For outline rendering, we only need to propagate seeds up to the outline reach (~2x outline width for diagonal coverage).
+        // Capping max step size to 64 avoids executing 7+ redundant full-screen dispatches and barrier commits per frame.
+        int32_t targetStep = static_cast<int32_t>(std::ceil(params.outlineWidth * 2.0f));
+        targetStep = std::max(1, std::min(targetStep, 64));
+        int32_t maxStep = 1;
+        while (maxStep < targetStep)
         {
-            stepSize *= 2;
+            maxStep *= 2;
         }
 
+        int32_t stepSize = maxStep;
         bool pingIsSource = true;
         while (stepSize >= 1)
         {

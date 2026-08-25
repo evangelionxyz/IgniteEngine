@@ -2,6 +2,7 @@
 #include "ignite_pch.hpp"
 #include "physics_3d.hpp"
 #include "jolt/jolt_physics.hpp"
+#include "ignite/physics/physics_log.hpp"
 
 namespace ignite::physics
 {
@@ -12,7 +13,7 @@ namespace ignite::physics
 		case Physics3DType::Jolt:
 			return CreateScope<JoltPhysics>();
 		default:
-			LOG_ERROR("[Physics3D] Unknown 3D Physics engine type: {}", static_cast<int>(type));
+			IGN_PHYSICS_ERROR("[Physics3D] Unknown 3D Physics engine type: {}", static_cast<int>(type));
 			return nullptr;
 		}
 	}

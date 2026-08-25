@@ -13,21 +13,21 @@ namespace ignite
     {
         Invalid = 0,
         Entity,
-        Bool, 
+        Bool,
         Char,
         String,
-        Byte, 
+        Byte,
         SByte,
-        Short, 
-        UShort, 
-        Int, 
+        Short,
+        UShort,
+        Int,
         UInt,
-        Long, 
+        Long,
         ULong,
-        Float, 
+        Float,
         Double,
-        Vector2, 
-        Vector3, 
+        Vector2,
+        Vector3,
         Vector4,
         Quat,
         Color,
@@ -57,7 +57,7 @@ namespace ignite
         List_Asset,
     };
 
-    static std::string ScriptFieldTypeToString(ScriptFieldType type)
+    static std::string ScriptFieldTypeToString(const ScriptFieldType type)
     {
         switch (type)
         {
@@ -107,7 +107,7 @@ namespace ignite
         }
     }
 
-	static ScriptFieldType ScriptFieldTypeFromString(std::string &typeStr)
+	static ScriptFieldType ScriptFieldTypeFromString(const std::string &typeStr)
 	{
         if (typeStr == "Entity") return ScriptFieldType::Entity;
         if (typeStr == "Bool") return ScriptFieldType::Bool;
@@ -229,28 +229,28 @@ namespace ignite
 
         // Specialization for std::string stored in the fixed buffer (truncated to fit)
         template<>
-        inline std::string GetValue<std::string>() const
+        std::string GetValue<std::string>() const
         {
             // Ensure null-terminated
-            const size_t maxLen = sizeof(m_Buffer);
+            const auto maxLen = sizeof(m_Buffer);
             size_t len = 0;
             while (len < maxLen && m_Buffer[len] != '\0') ++len;
             return std::string(m_Buffer, static_cast<size_t>(len));
         }
 
         template<>
-        inline void SetValue<std::string>(std::string value)
+        void SetValue<std::string>(const std::string value)
         {
             // Truncate to fit into buffer (reserve one byte for null)
-            size_t maxCopy = sizeof(m_Buffer) - 1;
-            size_t copyLen = std::min(value.size(), maxCopy);
+            const size_t maxCopy = sizeof(m_Buffer) - 1;
+            const size_t copyLen = std::min(value.size(), maxCopy);
             memset(m_Buffer, 0, sizeof(m_Buffer));
             if (copyLen > 0)
                 memcpy(m_Buffer, value.data(), copyLen);
             m_Buffer[copyLen] = '\0';
         }
 
-        void SetValueRaw(const void *buffer, size_t size)
+        void SetValueRaw(const void *buffer, const size_t size)
         {
             memset(m_Buffer, 0, sizeof(m_Buffer));
             if (buffer && size > 0)

@@ -8,7 +8,7 @@
 namespace ignite
 {
     ScriptClass::ScriptClass(const std::string &classNamespace, const std::string &className, const std::string &assemblyName)
-        : m_ClassNamespace(classNamespace), m_ClassName(className), m_AssemblyName(assemblyName)
+        : m_ClassName(className), m_ClassNamespace(classNamespace), m_AssemblyName(assemblyName)
     {
         m_FullName = m_ClassName;
         if (!m_ClassNamespace.empty())
@@ -19,7 +19,7 @@ namespace ignite
         m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
     }
 
-    int ScriptClass::BindInstanceMethod(uint64_t instanceId, const std::string &methodName)
+    int ScriptClass::BindInstanceMethod(const uint64_t instanceId, const std::string &methodName) const
     {
         if (!m_ScriptHost)
         {
@@ -29,7 +29,7 @@ namespace ignite
         return m_ScriptHost->BindInstanceMethod(instanceId, methodName);
     }
 
-    int ScriptClass::BindStaticMethod(const std::string &methodName)
+    int ScriptClass::BindStaticMethod(const std::string &methodName) const
     {
         if (!m_ScriptHost)
         {
@@ -41,14 +41,14 @@ namespace ignite
 
     void ScriptClass::InsertField(const std::string &fieldName, const ScriptField &field)
     {
-        if (m_Fields.find(fieldName) == m_Fields.end())
+        if (!m_Fields.contains(fieldName))
         {
             m_OrderedFieldNames.push_back(fieldName);
         }
         m_Fields[fieldName] = field;
     }
 
-	void ScriptClass::InsertInstanceFields(uint64_t instanceId, const std::unordered_map<std::string, ScriptInstanceField> &instanceFields)
+	void ScriptClass::InsertInstanceFields(const uint64_t instanceId, const std::unordered_map<std::string, ScriptInstanceField> &instanceFields)
 	{
         m_InstancesFields[instanceId] = instanceFields;
     }

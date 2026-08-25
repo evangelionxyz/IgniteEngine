@@ -19,68 +19,62 @@
 
 namespace ignite
 {
-    class Project;
-    class Scene;
-
     using ScriptClassMap = std::unordered_map<std::string, Ref<ScriptClass>>;
 
     class IGN_API ScriptEngine
     {
     public:
-        ScriptEngine(Project *project);
+        explicit ScriptEngine(Project *project);
         ~ScriptEngine();
 
-        bool LoadCoreAssembly(const ignite::Path &filepath);
-        bool LoadAppAssembly(const ignite::Path &filepath);
+        static bool LoadCoreAssembly(const ignite::Path &filepath);
+        static bool LoadAppAssembly(const ignite::Path &filepath);
 
-        bool ReloadAssembly();
-        bool IsHotReloadPending() const;
-        void HotReloadAssembly();
+        static bool ReloadAssembly();
+        static bool IsHotReloadPending();
+        static void HotReloadAssembly();
 
-        void SetSceneContext(Scene *scene);
-        void ClearSceneContext();
-        
+        static void SetSceneContext(Scene *scene);
+        static void ClearSceneContext();
+
         // Entity script
-        bool IsEntityClassExists(const std::string &fullClassName);
-        Ref<ScriptInstance> OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className, bool invokeOnCreate = true);
-        void OnDestroyEntityInstance(ScriptInstanceID instanceID);
+        static bool IsEntityClassExists(const std::string &fullClassName);
+        static Ref<ScriptInstance> OnCreateEntityInstance(ScriptInstanceID instanceId, const std::string &className, bool invokeOnCreate = true);
+        static void OnDestroyEntityInstance(ScriptInstanceID instanceId);
 
-        Ref<ScriptClass> GetEntityClassByName(const std::string &name);
-        const ScriptClassMap &GetEntityClasses();
-        Ref<ScriptInstance> GetEntityScriptInstance(ScriptInstanceID instanceID);
-        const std::vector<std::string> &GetEntityScriptClassStorage();
+        static Ref<ScriptClass> GetEntityClassByName(const std::string &name);
+        static const ScriptClassMap &GetEntityClasses();
+        static Ref<ScriptInstance> GetEntityScriptInstance(ScriptInstanceID instanceId);
+        static const std::vector<std::string> &GetEntityScriptClassStorage();
 
         // Scriptable Object script
-        bool IsScriptableObjectClassExists(const std::string &fullClassName);
-        Ref<ScriptClass> GetScriptableObjectClassByName(const std::string &name);
-        const ScriptClassMap &GetScriptableObjectClasses();
-        const std::vector<std::string> &GetScriptableObjectClassStorage();
+        static bool IsScriptableObjectClassExists(const std::string &fullClassName);
+        static Ref<ScriptClass> GetScriptableObjectClassByName(const std::string &name);
+        static const ScriptClassMap &GetScriptableObjectClasses();
+        static const std::vector<std::string> &GetScriptableObjectClassStorage();
 
         // Returns all menu entries gathered from [CreateAssetMenu] attributes
-        const std::vector<ScriptableObjectMenuEntry> &GetScriptableObjectMenuEntries();
-        void RefreshScriptableObjectMenuEntries();
+        static const std::vector<ScriptableObjectMenuEntry> &GetScriptableObjectMenuEntries();
+        static void RefreshScriptableObjectMenuEntries();
 
-        bool IsReady() const;
+        static bool IsReady();
 
-        Scene *GetSceneContext();
-        ScriptHost *GetScriptHost();
+        static Scene *GetSceneContext();
+        static ScriptHost *GetScriptHost();
 
         static ScriptEngine *GetInstance();
 
     private:
-        FileStatus EnsureAppAssembly();
+        static FileStatus EnsureAppAssembly(bool waitForBuild = false);
 
-        void InitHostFxr();
-        void ShutdownHostFxr();
+        static void InitHostFxr();
+        static void ShutdownHostFxr();
         static void OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType);
 
-        void LoadAppAssemblyClasses();
-        void LoadAppClasses(const std::string &classFullName, ScriptClassMap &outClasses);
-        void RefreshScriptableObjectInstances();
-        void CaptureAllInstanceFieldValues();
-
-        Project *m_Project;
-        Scene *m_Scene;
+        static void LoadAppAssemblyClasses();
+        static void LoadAppClasses(const std::string &classFullName, ScriptClassMap &outClasses);
+        static void RefreshScriptableObjectInstances();
+        static void CaptureAllInstanceFieldValues();
 
         friend class ScriptClass;
     };

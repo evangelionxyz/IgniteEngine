@@ -11,8 +11,8 @@ indent_size = 4
 
 # Xml config files
 [*.{props,targets,config,nuspec,vsixmanifest,vsct}]
-indent_style = tab
-indent_size = 3
+indent_style = space
+indent_size = 4
 
 [*.{cs,cpp,h,hpp,ixx}]
 indent_style = space

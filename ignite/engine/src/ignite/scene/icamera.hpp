@@ -84,7 +84,7 @@ namespace ignite
         float aoIntensity = 2.0f;   // blend strength when applied in post (1.0 = natural)
         float aoPower = 5.0f;      // curve/power for contrast
 
-		// Anti-aliasing 
+		// Anti-aliasing
 		TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
 		MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
 		float renderScale = 1.0f;      // Internal scene resolution scale, composite remains native size
@@ -115,8 +115,8 @@ namespace ignite
         virtual void UpdateProjection(uint32_t width, uint32_t height);
 
         // Directly set the view matrix (used for mirror/proxy cameras that copy another camera's view)
-        void SetView(const glm::mat4 &view) { m_View = view; }
-       
+        virtual void SetView(const glm::mat4 &view) { m_View = view; }
+
         virtual glm::vec3 GetUpDirection() const;
         virtual glm::vec3 GetRightDirection() const;
         virtual glm::vec3 GetForwardDirection() const;
@@ -124,8 +124,8 @@ namespace ignite
         virtual glm::mat4 &GetProjection();
         virtual glm::mat4 GetView();
 
-        inline bool IsPerspective() const { return projectionType == ProjectionType::Perspective; }
-        inline const glm::uvec2 &GetViewportSize() const { return m_ViewportSize; }
+        bool IsPerspective() const { return projectionType == ProjectionType::Perspective; }
+        const glm::uvec2 &GetViewportSize() const { return m_ViewportSize; }
 
         float pitch = 0.0f; // rotation around X axis
         float yaw = 0.0f; // rotation around Y axis

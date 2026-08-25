@@ -11,18 +11,17 @@ namespace ignite
     class EditorCamera : public ICamera
     {
     public:
-
         enum class NavigationMode
         {
-            Orbit,
-			Fly,
-			Mode2D
+            Orbit = 0,
+			Fly = 1,
+			Mode2D = 2
         };
 
         EditorCamera() = default;
-        EditorCamera(const std::string &name);
+        explicit EditorCamera(const std::string &name);
 
-		void SetView(const glm::mat4 &view);
+        virtual void SetView(const glm::mat4 &view) override;
 
 		void UpdateMouseState();
 		void UpdateSphericalPosition();
@@ -36,7 +35,7 @@ namespace ignite
 		void SetNavigationMode(NavigationMode mode);
 		NavigationMode GetNavigationMode() const { return m_NavigationMode; }
 
-		void SetPanSnapValue(float snap) { m_PanSnapValue = snap; }
+		void SetPanSnapValue(const float snap) { m_PanSnapValue = snap; }
 		float GetPanSnapValue() const { return m_PanSnapValue; }
 
 		virtual void UpdateView() override;
@@ -46,7 +45,7 @@ namespace ignite
 
 		void SetTarget(const glm::vec3 &target) { m_Target = target; }
 		void FocusTarget(const glm::vec3 &target, float distance);
-		const glm::vec3 &GetTarget() { return m_Target; }
+		const glm::vec3 &GetTarget() const { return m_Target; }
 
 		virtual glm::vec3 GetUpDirection() const override;
 		virtual glm::vec3 GetRightDirection() const override;
@@ -68,7 +67,7 @@ namespace ignite
 		float m_FocusSpeed = 8.0f;
 		bool m_FocusActive = false;
 		NavigationMode m_NavigationMode = NavigationMode::Orbit;
-		
+
 		std::string m_Name;
     };
 }
