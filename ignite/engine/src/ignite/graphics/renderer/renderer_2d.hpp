@@ -54,6 +54,7 @@ namespace ignite
 
         void Begin(nvrhi::ICommandList *cmd);
         void Flush(nvrhi::IFramebuffer *framebuffer, const nvrhi::BufferHandle &cameraBuffer);
+        void FlushSelect(nvrhi::IFramebuffer *framebuffer, const nvrhi::BufferHandle &cameraBuffer);
         void End();
 
         void SetFillMode(nvrhi::RasterFillMode mode) { m_FillMode = mode; ClearPipelineCache(); }
@@ -101,6 +102,10 @@ namespace ignite
         Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
         Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer);
 
+        Ref<GraphicsPipeline> GetQuadSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetTextSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetCircleSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+
         nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &lightingBuffer);
         nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &lightingBuffer);
 		nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer);
@@ -120,6 +125,10 @@ namespace ignite
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadPSOCache;
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CirclePSOCache;
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextPSOCache;
+
+		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadSelectPSOCache;
+		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CircleSelectPSOCache;
+		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextSelectPSOCache;
 
 		std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> m_QuadBindingSetCache;
 		std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> m_TextBindingSetCache;

@@ -502,6 +502,10 @@ namespace ignite
         m_CirclePSOCache.clear();
         m_TextPSOCache.clear();
 
+        m_QuadSelectPSOCache.clear();
+        m_CircleSelectPSOCache.clear();
+        m_TextSelectPSOCache.clear();
+
         m_QuadBindingSetCache.clear();
         m_LineBindingSetCache.clear();
         m_CircleBindingSetCache.clear();
@@ -631,6 +635,95 @@ namespace ignite
             m_TextBatch.vertexBuffer->SetData(m_Cmd, m_TextBatch.vertexBufferBase, bufferSize);
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
+
+            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots,
+                cameraBuffer, m_Material2DLightingBuffer.GetHandle());
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .addBindingSet(BindlessSystem::GetDummyBindingSet())
+                .addBindingSet(BindlessSystem::GetDescriptorTable())
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_TextBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_TextBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_TextBatch.indexCount;
+            args.instanceCount = 1;
+
+            m_Cmd->drawIndexed(args);
+        }
+    }
+
+    void Renderer2D::FlushSelect(nvrhi::IFramebuffer *framebuffer, const nvrhi::BufferHandle &cameraBuffer)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!framebuffer)
+            return;
+
+        const nvrhi::Viewport &viewport = framebuffer->getFramebufferInfo().getViewport();
+
+        if (m_CircleBatch.indexCount > 0)
+        {
+            const size_t bufferSize = reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferBase);
+            m_CircleBatch.vertexBuffer->SetData(m_Cmd, m_CircleBatch.vertexBufferBase, bufferSize);
+
+            Ref<GraphicsPipeline> gp = GetCircleSelectPipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0), cameraBuffer);
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_CircleBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_CircleBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_CircleBatch.indexCount;
+            args.instanceCount = 1;
+
+            m_Cmd->drawIndexed(args);
+        }
+
+        if (m_QuadBatch.indexCount > 0)
+        {
+            const size_t bufferSize = reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferBase);
+            m_QuadBatch.vertexBuffer->SetData(m_Cmd, m_QuadBatch.vertexBufferBase, bufferSize);
+
+            Ref<GraphicsPipeline> gp = GetQuadSelectPipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots,
+                cameraBuffer, m_Material2DLightingBuffer.GetHandle());
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .addBindingSet(BindlessSystem::GetDummyBindingSet())
+                .addBindingSet(BindlessSystem::GetDescriptorTable())
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_QuadBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_QuadBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_QuadBatch.indexCount;
+            args.instanceCount = 1;
+
+            m_Cmd->drawIndexed(args);
+        }
+
+        if (m_TextBatch.indexCount > 0)
+        {
+            const size_t bufferSize = reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferBase);
+            m_TextBatch.vertexBuffer->SetData(m_Cmd, m_TextBatch.vertexBufferBase, bufferSize);
+
+            Ref<GraphicsPipeline> gp = GetTextSelectPipelineForFB(framebuffer, m_FillMode);
 
             nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots,
                 cameraBuffer, m_Material2DLightingBuffer.GetHandle());
@@ -1266,6 +1359,133 @@ namespace ignite
             .Build(framebuffer, params);
 
         m_CirclePSOCache.emplace(key, gp);
+
+        return gp;
+    }
+
+    Ref<GraphicsPipeline> Renderer2D::GetQuadSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        auto key = MakeFramebufferKey(framebuffer);
+        auto it = m_QuadSelectPSOCache.find(key);
+        if (it != m_QuadSelectPSOCache.end())
+            return it->second;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = false;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::None;
+        params.depthFunc = nvrhi::ComparisonFunc::Always;
+        params.colorWriteMask[0] = nvrhi::ColorMask::None;
+
+        nvrhi::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // camera
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1)); // material 2d - not volatile
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
+
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_quad.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_quad.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Quad Select Pipeline");
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .AddBindingLayout(BindlessSystem::GetDummyLayout())
+            .AddBindingLayout(BindlessSystem::GetBindingLayout())
+            .Build(framebuffer, params);
+
+        m_QuadSelectPSOCache.emplace(key, gp);
+
+        return gp;
+    }
+
+    Ref<GraphicsPipeline> Renderer2D::GetTextSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        auto key = MakeFramebufferKey(framebuffer);
+        auto it = m_TextSelectPSOCache.find(key);
+        if (it != m_TextSelectPSOCache.end())
+            return it->second;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = false;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::None;
+        params.depthFunc = nvrhi::ComparisonFunc::Always;
+        params.colorWriteMask[0] = nvrhi::ColorMask::None;
+
+        nvrhi::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // camera buffer - volatile
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)); // lighting buffer - volatile
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
+
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Text Select Pipeline");
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .AddBindingLayout(BindlessSystem::GetDummyLayout())
+            .AddBindingLayout(BindlessSystem::GetBindingLayout())
+            .Build(framebuffer, params);
+
+        m_TextSelectPSOCache.emplace(key, gp);
+
+        return gp;
+    }
+
+    Ref<GraphicsPipeline> Renderer2D::GetCircleSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        auto key = MakeFramebufferKey(framebuffer);
+        auto it = m_CircleSelectPSOCache.find(key);
+        if (it != m_CircleSelectPSOCache.end())
+            return it->second;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = false;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::None;
+        params.depthFunc = nvrhi::ComparisonFunc::Always;
+        params.colorWriteMask[0] = nvrhi::ColorMask::None;
+
+        nvrhi::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // camera buffer - volatile
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_circle.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_circle.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Circle Select Pipeline");
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .Build(framebuffer, params);
+
+        m_CircleSelectPSOCache.emplace(key, gp);
 
         return gp;
     }

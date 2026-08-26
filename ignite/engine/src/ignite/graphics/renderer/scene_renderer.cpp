@@ -2951,6 +2951,234 @@ namespace ignite
                 args.instanceCount = 1;
                 cmd->drawIndexed(args);
             }
+
+            // Socket attachments
+            if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+            {
+                Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
+                if (skeleton)
+                {
+                    for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                    {
+                        if (attachedMeshHandle == AssetHandle(0))
+                            continue;
+
+                        auto attachedMeshAsset = ResolveAsset<Asset>(attachedMeshHandle);
+                        if (!attachedMeshAsset)
+                            continue;
+
+                        auto attachedStaticMesh = std::dynamic_pointer_cast<StaticMesh>(attachedMeshAsset);
+                        if (attachedStaticMesh)
+                        {
+                            auto socketCacheIt = m_SocketObjectIndexCache.find(std::make_pair(e, socketName));
+                            if (socketCacheIt == m_SocketObjectIndexCache.end())
+                                continue;
+
+                            const auto &attachedInstances = attachedStaticMesh->GetMeshInstances();
+                            for (size_t attIdx = 0; attIdx < attachedInstances.size(); ++attIdx)
+                            {
+                                if (attIdx >= socketCacheIt->second.size())
+                                    break;
+
+                                auto &meshInstance = attachedInstances[attIdx];
+                                auto &primitive = meshInstance->GetPrimitive();
+                                if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
+                                    continue;
+
+                                const uint32_t objectIndex = socketCacheIt->second[attIdx];
+                                uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &objectIndex, 1);
+
+                                Ref<Material> material = ResolveMeshMaterial(static_cast<int>(attIdx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                                if (material && uploadedMaterialsThisPass.insert(material.get()).second)
+                                {
+                                    material->UploadToGpu(cmd);
+                                }
+
+                                const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                                    ? material->GetBindingSet()
+                                    : m_RuntimeMaterial->GetBindingSet();
+
+                                if (!materialBindingSet)
+                                    continue;
+
+                                nvrhi::GraphicsState graphicsState;
+                                graphicsState.pipeline = *staticSelectPSO;
+                                graphicsState.framebuffer = framebuffer;
+                                graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+                                graphicsState.bindings = { frameContext->staticMeshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
+                                graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ *primitive->vertexBuffer, 0, 0 } };
+                                graphicsState.setIndexBuffer({ *primitive->indexBuffer, nvrhi::Format::R32_UINT });
+
+                                cmd->setGraphicsState(graphicsState);
+                                cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+
+                                nvrhi::DrawArguments args;
+                                args.setVertexCount(primitive->indexBuffer->GetCount());
+                                args.instanceCount = 1;
+                                cmd->drawIndexed(args);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Draw selected terrain
+        auto terrainView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
+        for (entt::entity e : terrainView)
+        {
+            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+            if (std::ranges::find(m_SelectedEntities, objectID) == m_SelectedEntities.end())
+                continue;
+
+            const auto &[tr, rc, tc] = terrainView.get<TransformComponent, RenderingComponent, TerrainComponent>(e);
+            if (!rc.visible)
+                continue;
+
+            auto cacheIt = m_EntityObjectIndexCache.find(e);
+            if (cacheIt == m_EntityObjectIndexCache.end())
+                continue;
+
+            Ref<Material> material = ResolveAsset<Material>(tc.materialHandle);
+            if (material && uploadedMaterialsThisPass.insert(material.get()).second)
+            {
+                material->UploadToGpu(cmd);
+            }
+
+            const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                ? material->GetBindingSet()
+                : m_RuntimeMaterial->GetBindingSet();
+
+            if (!materialBindingSet)
+                continue;
+
+            for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
+            {
+                if (idx >= cacheIt->second.size())
+                    break;
+
+                auto &chunk = tc.chunks[idx];
+                if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
+                    continue;
+
+                const uint32_t objectIndex = cacheIt->second[idx];
+                uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &objectIndex, 1);
+
+                nvrhi::GraphicsState graphicsState;
+                graphicsState.pipeline = *staticSelectPSO;
+                graphicsState.framebuffer = framebuffer;
+                graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+                graphicsState.bindings = { frameContext->staticMeshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
+                graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ *chunk.primitive->vertexBuffer, 0, 0 } };
+                graphicsState.setIndexBuffer({ *chunk.primitive->indexBuffer, nvrhi::Format::R32_UINT });
+
+                cmd->setGraphicsState(graphicsState);
+                cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+
+                nvrhi::DrawArguments args;
+                args.setVertexCount(chunk.primitive->indexBuffer->GetCount());
+                args.instanceCount = 1;
+                cmd->drawIndexed(args);
+            }
+        }
+
+        // 4. Draw selected 2D renderables (Circles, Quads/Sprites, Text)
+        if (m_Renderer2D)
+        {
+            bool hasSelected2D = false;
+            m_Renderer2D->Begin(cmd);
+
+            auto circle2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, Circle2DComponent>();
+            for (entt::entity e : circle2DView)
+            {
+                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                if (std::ranges::find(m_SelectedEntities, objectID) == m_SelectedEntities.end())
+                    continue;
+
+                const auto &[tr, rc, circle] = m_Scene->registry->get<TransformComponent, RenderingComponent, Circle2DComponent>(e);
+                if (!rc.visible)
+                    continue;
+
+                m_Renderer2D->DrawCircle(tr.world.GetMatrix(), circle.color, circle.thickness, circle.fade, objectID);
+                hasSelected2D = true;
+            }
+
+            auto quad2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, Sprite2DComponent>();
+            for (entt::entity e : quad2DView)
+            {
+                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                if (std::ranges::find(m_SelectedEntities, objectID) == m_SelectedEntities.end())
+                    continue;
+
+                const auto &[tr, rc, sprite] = m_Scene->registry->get<TransformComponent, RenderingComponent, Sprite2DComponent>(e);
+                if (!rc.visible)
+                    continue;
+
+                glm::vec2 uv0 = sprite.uv0;
+                glm::vec2 uv1 = sprite.uv1;
+                if (sprite.flipY)
+                {
+                    std::swap(uv0.y, uv1.y);
+                }
+                if (sprite.flipX)
+                {
+                    std::swap(uv0.x, uv1.x);
+                }
+
+                Ref<Material2D> mat2d = ResolveAsset<Material2D>(sprite.materialHandle);
+                if (mat2d)
+                {
+                    Ref<Texture> texture = ResolveAsset<Texture>(mat2d->textureHandle);
+                    m_Renderer2D->DrawQuad(tr.world.GetMatrix(), mat2d->data.baseColor,
+                        mat2d->data.additiveColor, mat2d->data.type, texture, uv0, uv1,
+                        mat2d->data.tilingFactor, objectID);
+                }
+                else
+                {
+                    Ref<Texture> texture = ResolveAsset<Texture>(sprite.handle);
+                    m_Renderer2D->DrawQuad(tr.world.GetMatrix(), sprite.color,
+                        texture, uv0, uv1, sprite.tilingFactor, objectID);
+                }
+                hasSelected2D = true;
+            }
+
+            auto textView = m_Scene->registry->view<TransformComponent, RenderingComponent, TextComponent>();
+            for (entt::entity e : textView)
+            {
+                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                if (std::ranges::find(m_SelectedEntities, objectID) == m_SelectedEntities.end())
+                    continue;
+
+                const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                if (!rc.visible || text.fontHandle == AssetHandle(0) || text.text.empty())
+                    continue;
+
+                auto font = ResolveAsset<Font>(text.fontHandle);
+                if (!font)
+                    continue;
+
+                Ref<Texture> fontAtlas = font->GetAtlasTexture();
+                if (!fontAtlas || !fontAtlas->IsReady())
+                    continue;
+
+                glm::vec4 textColor = text.color;
+                if (text.material2dHandle != AssetHandle(0))
+                {
+                    if (auto material2d = ResolveAsset<Material2D>(text.material2dHandle))
+                    {
+                        textColor = text.color + material2d->data.baseColor;
+                    }
+                }
+
+                m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(), text.kerning, text.lineSpacing, objectID);
+                hasSelected2D = true;
+            }
+
+            if (hasSelected2D)
+            {
+                m_Renderer2D->FlushSelect(framebuffer, frameContext->cameraBuffer);
+            }
+            m_Renderer2D->End();
         }
     }
 
