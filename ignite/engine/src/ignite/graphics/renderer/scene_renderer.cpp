@@ -406,6 +406,18 @@ namespace ignite
                 const glm::vec4 bgColor = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
                 target->compositeRT->ClearColorAttachmentFloat(cmd, 0, bgColor);
 
+                if (target->previousPlan.requiresDebugOverlay && target->debugRT)
+                {
+                    target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                }
+
+                if (target->previousPlan.hasWidgets && target->widgetRT)
+                {
+                    target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                }
+
                 if (plan.requiresGrid)
                 {
                     nvrhi::IFramebuffer *compositeFb = target->compositeRT->GetFramebuffer();
@@ -427,6 +439,8 @@ namespace ignite
                     std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
                     m_Device->executeCommandList(cmd);
                 }
+
+                target->previousPlan = plan;
                 return;
             }
 
@@ -457,7 +471,7 @@ namespace ignite
             // Clear Render Targets (feature-gated)
             {
                 target->sceneRT->ClearColorAttachmentFloat(cmd, 0);
-                if (plan.requiresObjectId)
+                if (plan.requiresObjectId || target->previousPlan.requiresObjectId)
                 {
                     target->sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
@@ -469,10 +483,20 @@ namespace ignite
                     target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
+                else if (target->previousPlan.hasWidgets && target->widgetRT)
+                {
+                    target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                }
 
                 if (plan.requiresDebugOverlay)
                 {
                     EnsureDebugRT(target, renderWidth, renderHeight);
+                    target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                }
+                else if (target->previousPlan.requiresDebugOverlay && target->debugRT)
+                {
                     target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
@@ -639,6 +663,8 @@ namespace ignite
                     ++m_TAAFrameIndex;
                 }
             }
+
+            target->previousPlan = plan;
 
             cmd->close();
         }

@@ -26,18 +26,6 @@ namespace ignite
 		bool useOverride = false;
 	};
 
-	struct CameraRenderTarget
-	{
-		Ref<RenderTarget> sceneRT;         // MSAA render target (sampleCount > 1) or regular
-		Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
-		Ref<RenderTarget> widgetRT;
-		Ref<RenderTarget> compositeRT;
-		Ref<RenderTarget> debugRT;
-        Ref<RenderTarget> taaHistoryRT[3];
-        bool taaHistoryValid = false;
-        int msaaSampleCount = 1;           // Tracks the current MSAA sample count (1 = no MSAA)
-	};
-
     struct RenderPlan
     {
         bool hasMeshes = false;
@@ -64,6 +52,19 @@ namespace ignite
             return !HasRenderables() && !hasWidgets && !requiresDebugOverlay && !requiresObjectId;
         }
     };
+
+	struct CameraRenderTarget
+	{
+		Ref<RenderTarget> sceneRT;         // MSAA render target (sampleCount > 1) or regular
+		Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
+		Ref<RenderTarget> widgetRT;
+		Ref<RenderTarget> compositeRT;
+		Ref<RenderTarget> debugRT;
+        Ref<RenderTarget> taaHistoryRT[3];
+        bool taaHistoryValid = false;
+        int msaaSampleCount = 1;           // Tracks the current MSAA sample count (1 = no MSAA)
+        RenderPlan previousPlan;
+	};
 
     class IGN_API SceneRenderer : public ISceneRenderer
     {
