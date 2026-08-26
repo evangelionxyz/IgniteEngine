@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
-#ifndef IGN_LOGGER_HPP
-#define IGN_LOGGER_HPP
+#ifndef IGN_CORE_LOGGER_HPP
+#define IGN_CORE_LOGGER_HPP
 
-#include "base.hpp"
-#include "types.hpp"
+#include "ignite/core/base.hpp"
+
 #include <fstream>
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-#include "ignite/core/path.hpp"
+#include <filesystem>
 
 #ifndef GLM_ENABLE_EXPERIMENTAL
 #define GLM_ENABLE_EXPERIMENTAL
 #endif
+
 #include <glm/gtx/string_cast.hpp>
 
 namespace ignite
@@ -26,7 +27,7 @@ namespace ignite
         std::string message;
     };
 
-    class IGN_API Logger
+    class IGN_CORE_API Logger
     {
     public:
         static void Init();
@@ -40,7 +41,7 @@ namespace ignite
 
 namespace fmt {
 template<>
-struct formatter<ignite::Path>
+struct formatter<std::filesystem::path>
 {
     template<typename ParseContext>
     constexpr auto parse(ParseContext &ctx)
@@ -49,7 +50,7 @@ struct formatter<ignite::Path>
     }
 
     template<typename FormatContext>
-    auto format(const ignite::Path &filepath, FormatContext &ctx) const
+    auto format(const std::filesystem::path &filepath, FormatContext &ctx) const
     {
         return fmt::format_to(ctx.out(), "{}", filepath.generic_string());
     }

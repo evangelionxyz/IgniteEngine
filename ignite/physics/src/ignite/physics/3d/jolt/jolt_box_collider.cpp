@@ -1,11 +1,14 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_box_collider.hpp"
+
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/Shape/SubShapeID.h>
+
+#include "ignite/core/logger.hpp"
 
 namespace ignite::physics
 {
@@ -13,8 +16,11 @@ namespace ignite::physics
 	{
 		JPH::BoxShapeSettings boxSettings(JPH::Vec3(halfExtents.x, halfExtents.y, halfExtents.z));
 		auto boxResult = boxSettings.Create();
-		if (!boxResult.IsValid())
+        if (!boxResult.IsValid())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Failed to create Box shape!");
 			return nullptr;
+        }
 
 		JPH::ShapeRefC innerShape = boxResult.Get();
 		if (center != glm::vec3(0.0f))

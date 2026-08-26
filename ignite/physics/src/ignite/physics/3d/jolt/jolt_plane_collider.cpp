@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_plane_collider.hpp"
 #include <Jolt/Physics/Collision/Shape/PlaneShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
@@ -7,14 +7,19 @@
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/Shape/SubShapeID.h>
 
+#include "ignite/core/logger.hpp"
+
 namespace ignite::physics
 {
 	static JPH::ShapeRefC CreatePlaneShape(const glm::vec3 &center, const glm::vec3 &scale)
 	{
 		JPH::PlaneShapeSettings planeSettings(JPH::Plane(JPH::Vec3(0.0f, 1.0f, 0.0f), 0.0f), nullptr, scale.x);
 		auto planeResult = planeSettings.Create();
-		if (!planeResult.IsValid())
+        if (!planeResult.IsValid())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Failed to create Plane Shape!");
 			return nullptr;
+        }
 
 		JPH::ShapeRefC innerShape = planeResult.Get();
 		if (center != glm::vec3(0.0f))

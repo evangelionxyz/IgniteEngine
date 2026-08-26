@@ -72,9 +72,9 @@ namespace ignite
                 // Use runtime linking to avoid compilation issues on older SDKs
                 typedef BOOL(WINAPI *SetProcessDpiAwarenessContextFunc)(DPI_AWARENESS_CONTEXT);
                 HMODULE user32 = GetModuleHandleA("user32.dll");
-                SetProcessDpiAwarenessContextFunc setProcessDpiAwarenessContext = 
+                SetProcessDpiAwarenessContextFunc setProcessDpiAwarenessContext =
                     (SetProcessDpiAwarenessContextFunc)GetProcAddress(user32, "SetProcessDpiAwarenessContext");
-                
+
                 if (setProcessDpiAwarenessContext)
                 {
                     // Try to set per-monitor DPI aware V2 (Windows 10 1703+)
@@ -171,7 +171,7 @@ namespace ignite
         ResizeSwapChain();
         CreateBackBuffers();
     }
-    
+
     void DeviceManager::DisableVsync()
     {
         m_DeviceParameters.vsyncEnable = false;

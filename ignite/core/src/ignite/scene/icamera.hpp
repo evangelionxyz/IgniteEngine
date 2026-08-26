@@ -1,12 +1,14 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
-#ifndef IGN_ICAMERA_HPP
-#define IGN_ICAMERA_HPP
+#ifndef IGN_CORE_ICAMERA_HPP
+#define IGN_CORE_ICAMERA_HPP
 
 #include "ignite/core/base.hpp"
+
 #include "ignite/core/types.hpp"
 #include "ignite/math/math.hpp"
+
 #include <string>
 
 namespace ignite
@@ -105,7 +107,7 @@ namespace ignite
         bool enabledDOF = false;
     };
 
-    class IGN_API ICamera
+    class IGN_CORE_API ICamera
     {
     public:
         ICamera();

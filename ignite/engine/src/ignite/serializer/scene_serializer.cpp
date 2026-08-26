@@ -28,7 +28,7 @@ namespace ignite
     {
     }
 
-    bool SceneSerializer::Serialize(const ignite::Path &filepath)
+    bool SceneSerializer::Serialize(const std::filesystem::path &filepath)
     {
         if (!m_Scene || !m_Project)
             return false;
@@ -128,9 +128,9 @@ namespace ignite
         return true;
     }
 
-    Ref<Scene> SceneSerializer::Deserialize(const ignite::Path &filepath, Project *project)
+    Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath, Project *project)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[Scene SR] File does not exists!\n{}", filepath.generic_string());
             return nullptr;

@@ -4,18 +4,25 @@
 #ifndef EDITOR_LAYER_HPP
 #define EDITOR_LAYER_HPP
 
-#include <nvrhi/nvrhi.h>
-#include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/layer.hpp"
-#include "ignite/scene/icamera.hpp"
-#include "ignite/ignite.hpp"
-#include "ignite/graphics/renderer/scene_renderer.hpp"
-#include "ignite/serializer/serializer.hpp"
-#include "ignite/serializer/scene_serializer.hpp"
-#include "ignite/core/signals/signals.hpp"
 #include "ignite/project/project.hpp"
-#include "ignite/scene/scene.hpp"
-#include "states.hpp"
+#include "ignite/core/input/event.hpp"
+#include "ignite/core/input/mouse_event.hpp"
+#include "ignite/core/input/app_event.hpp"
+#include "ignite/core/input/key_event.hpp"
+
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/signals/signals.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
+
+#include "ignite/core/application.hpp"
+#include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/renderer.hpp"
+
+#include "ignite/graphics/renderer/scene_renderer.hpp"
+#include "ignite/graphics/renderer/asset_scene_renderer.hpp"
+
+#include <nvrhi/nvrhi.h>
 
 #include <future>
 #include <optional>
@@ -28,8 +35,6 @@ namespace ignite
     class AssetImporterPanel;
     class AssetEditorPanel;
     class ContentBrowserPanel;
-
-	static constexpr std::string_view kActiveSceneAssetOwner = "editor.active-scene";
 
     class EditorLayer final : public Layer
     {
@@ -79,27 +84,27 @@ namespace ignite
         virtual void OnDetach() override;
         virtual void OnUpdate(float deltaTime) override;
         virtual void OnEvent(Event &e) override;
-        virtual void OnSDLEvent(SDL_Event *evt) override;
 
         bool OnKeyPressedEvent(KeyPressedEvent &event);
 	    bool OnMouseMovedEvent(MouseMovedEvent &event);
 
         virtual void OnRender(nvrhi::IFramebuffer *framebuffer) override;
         virtual void OnGuiRender() override;
+
         void OnScenePlay();
         void OnSceneStop();
         void OnSceneSimulate();
         void NewScene();
         void SaveScene();
         void SaveSceneAs();
-        void SaveScene(const ignite::Path &filepath) const;
+        void SaveScene(const std::filesystem::path &filepath) const;
         void OpenScene();
-        void OpenScene(const ignite::Path &filepath);
+        void OpenScene(const std::filesystem::path &filepath);
 
         void SaveProject();
         void OpenProject();
         void CloseCurrentProject();
-        void OpenProject(const ignite::Path &filepath);
+        void OpenProject(const std::filesystem::path &filepath);
 
         void SetActiveScene(const Ref<Scene> &scene);
 
@@ -166,13 +171,10 @@ namespace ignite
         Ref<Project> m_ActiveProject;
         EditorState m_State;
 
-        // Mirror camera used when rendering game camera view into the Editor Viewport during Play mode.
-        // Shares the game camera's view matrix but has its own projection sized to the Editor Viewport,
-        // so resizing the Editor Viewport and Game Viewport remain fully independent.
         ICamera m_EditorPlayCamera;
 
-        ignite::Path m_CurrentSceneFilePath;
-    	ignite::Path m_CurrentProjectFilepath;
+        std::filesystem::path m_CurrentSceneFilePath;
+    	std::filesystem::path m_CurrentProjectFilepath;
 
         nvrhi::BufferHandle m_DebugRenderBuffer;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;

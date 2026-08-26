@@ -1,15 +1,17 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
-
-#include <imgui.h>
-#include <ImGuizmo.h>
+#ifndef IGN_GIZMO_HPP
+#define IGN_GIZMO_HPP
 
 #include "ignite/scene/icamera.hpp"
 #include "ignite/math/math.hpp"
 
-namespace ignite {
-    
+#include <imgui.h>
+#include <ImGuizmo.h>
+
+namespace ignite
+{
     struct IGN_API GizmoInfo
     {
         glm::mat4 cameraView;
@@ -47,3 +49,5 @@ namespace ignite {
         ImGuizmo::OPERATION m_Operation = ImGuizmo::OPERATION::NONE;
     };
 }
+
+#endif

@@ -386,7 +386,7 @@ namespace ignite
         GraphicsPipelineParams params;
         params.fillMode = nvrhi::RasterFillMode::Solid;
         params.cullMode = nvrhi::RasterCullMode::None;
-        
+
         params.enableBlend = true; // Explicitly enable blending for ImGui
         params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
         params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
@@ -446,7 +446,7 @@ namespace ignite
 
         // Calculate size needed for expanded vertices
         size_t expandedVertexSize = drawData->TotalVtxCount * sizeof(ImGuiVertexData);
-        
+
         if (!ReallocateBuffer(vertexBuffer, expandedVertexSize,
             (drawData->TotalVtxCount + 5000) * sizeof(ImGuiVertexData),
             false))
@@ -470,23 +470,23 @@ namespace ignite
         for (int n = 0; n < drawData->CmdListsCount; ++n)
         {
             const ImDrawList *cmdList = drawData->CmdLists[n];
-            
+
             // Convert ImDrawVert to ImGuiVertexData (expand ImU32 color to float4)
             for (int i = 0; i < cmdList->VtxBuffer.Size; ++i)
             {
                 const ImDrawVert& src = cmdList->VtxBuffer[i];
                 ImGuiVertexData& dst = vtxDst[i];
-                
+
                 dst.position = glm::vec2(src.pos.x, src.pos.y);
                 dst.texCoord = glm::vec2(src.uv.x, src.uv.y);
-                
+
                 // Convert packed RGBA ImU32 to float4
                 dst.color.r = ((src.col >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
                 dst.color.g = ((src.col >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
                 dst.color.b = ((src.col >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
                 dst.color.a = ((src.col >> IM_COL32_A_SHIFT) & 0xFF) / 255.0f;
             }
-            
+
             std::memcpy(idxDst, cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size * sizeof(ImDrawIdx));
 
             vtxDst += cmdList->VtxBuffer.Size;

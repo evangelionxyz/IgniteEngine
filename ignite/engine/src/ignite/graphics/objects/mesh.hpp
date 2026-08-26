@@ -5,7 +5,6 @@
 
 #include "ignite/core/base.hpp"
 #include "ignite/core/logger.hpp"
-#include "ignite/core/path.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/buffers/vertex_buffer.hpp"
 #include "ignite/graphics/buffers/index_buffer.hpp"
@@ -172,7 +171,7 @@ namespace ignite
 
         void SetName(const std::string &name) { m_Name = name; }
         void SetMaterial(const AssetHandle &assetHandle);
-        
+
         const std::string &GetName() { return m_Name; }
         const AssetHandle &GetMaterialAssetHandle() const { return m_MaterialHandle; }
 
@@ -221,7 +220,7 @@ namespace ignite
     {
     public:
         virtual ~Mesh() = default;
-        
+
         virtual const AABB &CalculateLocalAABB() = 0;
 
         static AssetType GetStaticType() { return AssetType::Mesh; }
@@ -244,15 +243,15 @@ namespace ignite
         void SetMeshInstances(const std::vector<Ref<StaticMeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }
         void AddMeshInstance(const Ref<StaticMeshInstance> &meshInstance) { m_MeshInstances.push_back(meshInstance); }
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<StaticMesh> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<StaticMesh> Deserialize(const std::filesystem::path &filepath);
 
         virtual const AABB &CalculateLocalAABB() override;
     private:
         std::vector<Ref<StaticMeshInstance>> m_MeshInstances;
     };
 
-    class IGN_API SkeletalMesh : public Mesh 
+    class IGN_API SkeletalMesh : public Mesh
     {
     public:
         SkeletalMesh() = default;
@@ -272,8 +271,8 @@ namespace ignite
         void SetAnimator(AssetHandle animatorHandle);
         AssetHandle GetAnimatorHandle() const { return m_AnimatorHandle; }
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<SkeletalMesh> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<SkeletalMesh> Deserialize(const std::filesystem::path &filepath);
 
         virtual const AABB &CalculateLocalAABB() override;
     private:
@@ -290,10 +289,10 @@ namespace ignite
         static Ref<Material> LoadMaterial(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
             const std::vector<std::pair<std::string, Ref<Texture>>> &loadedTextures, std::array<MeshMaterialTextureMap, 5> &textureMap,
             const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex);
-        
+
         template<MeshVertex VertexType_T>
         static void LoadVertexData(std::vector<VertexType_T>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
-        
+
         static void LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
 
         // Generic loader
@@ -334,12 +333,12 @@ namespace ignite
         // Generic loader
         template<MeshVertex VertexType_T>
         static void LoadSceneGraph(const std::string &filename, MeshScene<VertexType_T> &outScene, AssetManager *assetManager, bool importSkeletonAndAnimations = true);
-        
+
         static void LoadSkeletonOnly(const std::string &filename, Ref<Skeleton> &skeleton, AssetManager *assetManager);
         static void LoadAnimationsOnly(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations, AssetManager *assetManager);
 
         template<MeshVertex VertexType_T>
-        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene<VertexType_T> &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const ignite::Path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData = true);
+        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene<VertexType_T> &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData = true);
 
         static Ref<Skeleton> LoadSkeleton(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult, float scaleFactor);
         static void LoadAnimations(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations, float scaleFactor);
@@ -352,9 +351,9 @@ namespace ignite
         template<MeshVertex VertexType_T>
         static void ProcessMeshGeometry(fbxsdk::FbxMesh *fbxMesh, const fbxsdk::FbxAMatrix &meshGeom, float scaleFactor, const std::vector<FBXBoneInfluence> &controlPointInfluence, bool importSkinningData, std::vector<VertexType_T> &vertices, std::vector<uint32_t> &indices);
         static void LinkUnskinnedMeshToSkeleton(fbxsdk::FbxNode *node, const MeshNode<VertexMeshAnim> &meshNode, Ref<SkeletalMeshInstance> &meshInstance, MeshScene<VertexMeshAnim> &outScene, fbxsdk::FbxScene *fbxScene);
-        
+
         template<MeshVertex VertexType_T>
-        static int ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const ignite::Path &sourceDir);
+        static int ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const std::filesystem::path &sourceDir);
     };
 
     class IGN_API MeshLoader

@@ -135,7 +135,7 @@ namespace ignite
         createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         createInfo.keepInitialState = true;
         createInfo.isUAV = true;
-        
+
         m_OutputTexture = Texture::Create(createInfo, "[Edge Detection] Output Texture");
 
     	auto samplerDesc = nvrhi::SamplerDesc();

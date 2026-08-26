@@ -23,8 +23,8 @@ namespace ignite
 
         WidgetID GetNextItemId();
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<WidgetCanvas> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<WidgetCanvas> Deserialize(const std::filesystem::path &filepath);
 
         inline void SetViewportSize(uint32_t width, uint32_t height)
         {

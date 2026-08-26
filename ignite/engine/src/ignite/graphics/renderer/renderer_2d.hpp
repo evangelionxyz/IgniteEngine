@@ -72,7 +72,7 @@ namespace ignite
         void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
         void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
 
-        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, 
+        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture,
             const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
 
         void SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights);
@@ -89,12 +89,12 @@ namespace ignite
         void InitTextData();
 
         void ClearPipelineCache();
-        
+
         uint32_t GetOrInsertQuadTexture(const Ref<Texture> &texture);
         uint32_t GetOrInsertFontTexture(const Ref<Texture> &texture);
-        
+
         static Ref<Renderer2D> Create();
-        
+
     private:
         Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
         Ref<GraphicsPipeline> GetTextPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);

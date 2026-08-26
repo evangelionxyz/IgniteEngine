@@ -4,16 +4,16 @@
 #ifndef IGN_APPLICATION_HPP
 #define IGN_APPLICATION_HPP
 
-#include "base.hpp"
+#include "ignite/core/base.hpp"
+#include "ignite/core/logger.hpp"
+#include "ignite/core/types.hpp"
+
 #include "layer.hpp"
 #include "layer_stack.hpp"
-#include "logger.hpp"
-#include "types.hpp"
 #include "subsystem.hpp"
 #include "device/device_manager.hpp"
-#include "ignite/core/vfs/vfs.hpp"
-#include "ignite/core/input/event.hpp"
-#include "ignite/core/path.hpp"
+#include "vfs/vfs.hpp"
+#include "input/event.hpp"
 
 #include <queue>
 #include <mutex>

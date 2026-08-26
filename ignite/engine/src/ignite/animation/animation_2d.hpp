@@ -5,10 +5,11 @@
 #define IGN_ANIMATION_2D_HPP
 
 #include "ignite/asset/asset.hpp"
+#include "ignite/core/types.hpp"
+
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
-#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -46,8 +47,8 @@ namespace ignite
         // Returns normalized playback position [0..1]
         float GetNormalizedTime() const;
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<Animation2D> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Animation2D> Deserialize(const std::filesystem::path &filepath);
         static Ref<Animation2D> Create(const std::string &name);
 
         virtual AssetType GetAssetType() override { return AssetType::Animation2D; }

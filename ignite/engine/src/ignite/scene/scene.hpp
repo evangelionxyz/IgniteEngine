@@ -7,7 +7,6 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <entt/entt.hpp>
 
-#include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"

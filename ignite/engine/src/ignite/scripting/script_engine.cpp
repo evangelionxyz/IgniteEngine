@@ -83,8 +83,8 @@ namespace ignite
     {
         Scope<ScriptHost> scriptHost;
 
-        ignite::Path mochiSharpAssemblyFilepath;
-        ignite::Path coreAssemblyFilepath;
+        std::filesystem::path mochiSharpAssemblyFilepath;
+        std::filesystem::path coreAssemblyFilepath;
 
         SignalToken solutionBuildToken;
 
@@ -145,7 +145,7 @@ namespace ignite
 
         // Script Core Assembly (Ignite.ScriptEngine.dll)
         scriptEngineData->coreAssemblyFilepath = scriptEngineData->project->GetScriptBinDirectory() / "Ignite.ScriptEngine.dll";
-        LOG_ASSERT(ignite::Path::exists(scriptEngineData->coreAssemblyFilepath), "[Script Engine] Script core assembly not found!");
+        LOG_ASSERT(std::filesystem::exists(scriptEngineData->coreAssemblyFilepath), "[Script Engine] Script core assembly not found!");
 
         // Register method signatures AFTER Core Assembly is loaded
         scriptEngineData->scriptHost->RegisterSignatures();
@@ -180,7 +180,7 @@ namespace ignite
         LOG_WARN("[Script Engine] Shutdown");
     }
 
-    bool ScriptEngine::LoadCoreAssembly(const ignite::Path &filepath)
+    bool ScriptEngine::LoadCoreAssembly(const std::filesystem::path &filepath)
     {
         LOG_ASSERT(!filepath.empty(), "[Script Engine] Core Assembly should not empty!");
 
@@ -202,7 +202,7 @@ namespace ignite
         return scriptEngineData->coreAssemblyLoaded;
     }
 
-    bool ScriptEngine::LoadAppAssembly(const ignite::Path &filepath)
+    bool ScriptEngine::LoadAppAssembly(const std::filesystem::path &filepath)
     {
         // NOTE: Always makesure Core assembly is loaded
         LoadCoreAssembly(scriptEngineData->coreAssemblyFilepath);
@@ -211,7 +211,7 @@ namespace ignite
 
         if (scriptEngineData->hasAppAssemblyLastWriteTime && scriptEngineData->currentProjectConfig == scriptEngineData->project->GetConfiguration())
         {
-            if (!ignite::Path::WaitForFileNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
+            if (!vfs::WaitForFileNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
             {
                 // The DLL timestamp never advanced past the previously-loaded version.
                 // Loading now would give us the same (or a partial) binary — bail out.
@@ -220,7 +220,7 @@ namespace ignite
             }
         }
 
-        if (!ignite::Path::WaitForFileReady(filepath))
+        if (!vfs::WaitForFileReady(filepath))
         {
             LOG_WARN("[Script Engine] App assembly may still be updating: {}", filepath.generic_string());
             return false;
@@ -260,11 +260,11 @@ namespace ignite
 
         // Create App Assembly File-watcher
         LOG_WARN("[Script Engine] Watching App Assembly '{}'", filepath.string());
-        scriptEngineData->appAssemblyFileWatcher = ignite::Path::WatchFile(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
+        scriptEngineData->appAssemblyFileWatcher = vfs::WatchFile(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
-        std::chrono::time_point<std::chrono::file_clock> currentWriteTime {};
-        if (ignite::Path::TryGetFileWriteTime(filepath, currentWriteTime))
+        std::chrono::time_point<std::chrono::file_clock> currentWriteTime{};
+        if (vfs::TryGetFileWriteTime(filepath, currentWriteTime))
         {
             scriptEngineData->appAssemblyLastWriteTime = currentWriteTime;
             scriptEngineData->hasAppAssemblyLastWriteTime = true;
@@ -702,7 +702,7 @@ namespace ignite
         if (!waitForBuild)
         {
             auto modulePath = scriptEngineData->project->GetScriptModulePath();
-            if (ignite::Path::exists(modulePath))
+            if (std::filesystem::exists(modulePath))
             {
                 // Clean up any leftover slow-path subscription from a previous call
                 SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
@@ -760,7 +760,7 @@ namespace ignite
         }
 
         // Find the runtimeconfig.json for MochiSharp.Managed
-        const ignite::Path configPath = scriptEngineData->project->GetDirectory() / "Bin/MochiSharp.Managed.runtimeconfig.json";
+        const std::filesystem::path configPath = scriptEngineData->project->GetDirectory() / "Bin/MochiSharp.Managed.runtimeconfig.json";
 
         if (!std::filesystem::exists(configPath.string()))
         {

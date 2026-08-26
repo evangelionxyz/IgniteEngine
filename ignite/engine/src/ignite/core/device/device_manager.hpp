@@ -89,7 +89,7 @@ namespace ignite
         int adapterIndex = -1;
         bool supportExplicitDisplayScaling = false;
         bool resizeWindowWithDisplayScale = false;
-        
+
         nvrhi::IMessageCallback *messageCallback = nullptr;
 
 #ifdef PLATFORM_WINDOWS
@@ -157,12 +157,12 @@ namespace ignite
         DeviceParameters &GetDeviceParameters() { return m_DeviceParameters; }
         double GetAverageFrameTimeSeconds() const { return m_AverageFrameTime; }
         double GetPreviousFrameTimestamp() const { return m_PreviousFrameTimestamp; }
-        
+
         void SetFrameTimeUpdateInterval(double seconds) { m_AverageTimeUpdateInterval = seconds; }
         void SetEnableRenderDuringWindowMovement(bool val) { m_EnableRenderDuringWindowMovement = val; }
         void SetDPISacaleFactors(float x, float y);
 		void SetHeadLessDevice(bool headless) { m_DeviceParameters.headlessDevice = headless; }
-        
+
         inline bool IsVsyncEnabled() const { return m_DeviceParameters.vsyncEnable; }
         void EnableVsync();
         void DisableVsync();

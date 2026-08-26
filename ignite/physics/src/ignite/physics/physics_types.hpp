@@ -5,6 +5,7 @@
 
 #include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <cstdint>
@@ -61,20 +62,6 @@ namespace ignite::physics
 	{
 		glm::vec3 position = { 0.0f, 0.0f, 0.0f };
 		glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-	};
-
-	struct Ray
-	{
-		glm::vec3 origin = glm::vec3(0.0f);
-		glm::vec3 direction = glm::vec3(0.0f, 0.0f, -1.0f);
-	};
-
-	struct RaycastHit
-	{
-		float fraction = 1.0f;
-		glm::vec3 hitPoint = {};
-		glm::vec3 hitNormal = {};
-		uint64_t userData = 0;
 	};
 
 	static constexpr uint32_t MAX_PHYSICS_LAYERS = 32;

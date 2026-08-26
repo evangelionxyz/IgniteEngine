@@ -5,6 +5,7 @@
 #include "window.hpp"
 #include "stb_image.h"
 #include "ignite/core/logger.hpp"
+
 #include "ignite/core/input/app_event.hpp"
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/input/key_event.hpp"
@@ -375,7 +376,7 @@ namespace ignite
             }
             break;
         }
-            
+
         }
 
         for (const Ref<Joystick>& j : JoystickManager::GetConnectedJoystick())
@@ -434,7 +435,7 @@ namespace ignite
         if (m_Window)
 		    SDL_RestoreWindow(m_Window);
     }
-    
+
     void Window::Shutdown()
     {
 		m_Looping = false;

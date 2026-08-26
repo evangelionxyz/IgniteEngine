@@ -9,7 +9,7 @@
 
 namespace ignite
 {    
-    Serializer::Serializer(const ignite::Path &filepath)
+    Serializer::Serializer(const std::filesystem::path &filepath)
         : m_Filepath(filepath)
     {
     }
@@ -24,7 +24,7 @@ namespace ignite
         outFile.close();
     }
 
-    void Serializer::Serialize(const ignite::Path &filepath)
+    void Serializer::Serialize(const std::filesystem::path &filepath)
     {
         m_Filepath = filepath;
 
@@ -66,7 +66,7 @@ namespace ignite
         m_Emitter << YAML::EndSeq;
     }
 
-    YAML::Node Serializer::Deserialize(const ignite::Path &filepath)
+    YAML::Node Serializer::Deserialize(const std::filesystem::path &filepath)
     {
         std::ifstream inFile(filepath);
         std::stringstream buffer;

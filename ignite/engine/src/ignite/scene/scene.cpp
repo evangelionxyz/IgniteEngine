@@ -1465,12 +1465,9 @@ namespace ignite
         bodyDef.motionLocks.angularZ = rb.fixedRotation;
         bodyDef.allowFastRotation = rb.allowFastRotation;
 
-        entt::entity e = entity;
         rb.bodyId = m_Physics2D->CreateBody(bodyDef);
         if (m_Physics2D->IsValidBody(rb.bodyId))
         {
-            b2Body_SetUserData(rb.bodyId, reinterpret_cast<void*>(static_cast<uintptr_t>(e)));
-
             // create box collider
             if (entity.HasComponent<BoxCollider2DComponent>())
             {
@@ -1487,8 +1484,6 @@ namespace ignite
                 b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
 
                 bc.shapeId = m_Physics2D->CreateBoxCollider(rb.bodyId, shapeDef, boxShape);
-                if (b2Shape_IsValid(bc.shapeId))
-                    b2Shape_SetUserData(bc.shapeId, reinterpret_cast<void*>(static_cast<uintptr_t>(e)));
             }
 
             // create circle collider
@@ -1507,8 +1502,6 @@ namespace ignite
                 };
 
                 cc.shapeId = m_Physics2D->CreateCircleCollider(rb.bodyId, shapeDef, circleShape);
-                if (b2Shape_IsValid(cc.shapeId))
-                    b2Shape_SetUserData(cc.shapeId, reinterpret_cast<void*>(static_cast<uintptr_t>(e)));
             }
         }
     }

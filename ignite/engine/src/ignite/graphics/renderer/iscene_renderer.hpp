@@ -87,7 +87,7 @@ namespace ignite
         glm::vec4 vignetteParams = glm::vec4(0.0f); // x=radius, y=softness, z=intensity, w=chromAbAmount
         glm::vec4 chromAbParams = glm::vec4(0.0f); // x=chromAbRadial, y=enableSSAO, z=ssaoIntensity
         glm::vec4 vignetteColor = glm::vec4(0.0f);
-        
+
         int tonemapMode = 0;
         float exposure = 1.1f;
         float gamma = 2.2f;
@@ -181,7 +181,7 @@ namespace ignite
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<OutlineJFA> m_OutlineJFA;
-        
+
         ConstantBuffer m_CompositePostProcessBuffer;
         ConstantBuffer m_DebugGridBuffer;
         ConstantBuffer m_CascadedShadowMapBuffer;

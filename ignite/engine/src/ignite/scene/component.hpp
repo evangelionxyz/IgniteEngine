@@ -222,8 +222,8 @@ namespace ignite
 
         void RemoveChild(UUID childId)
         {
-            std::erase_if(children, [childId](const UUID id) 
-            { 
+            std::erase_if(children, [childId](const UUID id)
+            {
                 return id == childId;
             });
         }
@@ -389,7 +389,7 @@ namespace ignite
 
         bool flipY = false;
         bool flipX = false;
-        
+
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
     };
 

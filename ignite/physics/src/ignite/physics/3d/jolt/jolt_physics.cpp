@@ -1,13 +1,14 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_physics.hpp"
-#include "ignite/core/types.hpp"
-#include "ignite/core/profiler/profiler.hpp"
 
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+
+#include "ignite/core/types.hpp"
+#include "ignite/core/logger.hpp"
 
 namespace ignite::physics
 {
@@ -41,7 +42,7 @@ namespace ignite::physics
 		m_PhysicsSystem.SetContactListener(m_ContactListener.get());
 		m_BodyInterface = &m_PhysicsSystem.GetBodyInterface();
 
-		IGN_PHYSICS_WARN("[Jolt Physics] Initialized");
+        LOG_WARN("[Jolt Physics] Physics Initialized");
 	}
 
 	JoltPhysics::~JoltPhysics()
@@ -50,21 +51,24 @@ namespace ignite::physics
 		delete JPH::Factory::sInstance;
 		JPH::Factory::sInstance = nullptr;
 
-		IGN_PHYSICS_WARN("[Jolt Physics] Shutdown");
+        LOG_WARN("[Jolt Physics] Physics Shutdown");
 	}
 
 	void JoltPhysics::SimulationStart(const Physics3DSettings &settings)
 	{
-		IGN_PROFILE_FUNCTION();
 		m_Settings = settings;
 		m_ObjectLayerPairFilter.settings = &m_Settings;
 		m_PhysicsSystem.SetGravity({ settings.gravity.x, settings.gravity.y, settings.gravity.z });
 		m_PhysicsSystem.OptimizeBroadPhase();
+
+
+        LOG_TRACE("[Jolt Physics] Simulation Started");
+        LOG_TRACE("    Gravity: {} {} {}", settings.gravity.x, settings.gravity.y, settings.gravity.z);
+
 	}
 
 	void JoltPhysics::SimulationStop()
 	{
-		IGN_PROFILE_FUNCTION();
 		for (auto &b : m_DynamicBodies)
 			if (b) b->DestroyBody();
 		for (auto &b : m_StaticBodies)
@@ -73,11 +77,12 @@ namespace ignite::physics
 		m_DynamicBodies.clear();
 		m_StaticBodies.clear();
 		m_CharacterControllers.clear();
+
+        LOG_TRACE("[Jolt Physics] Simulation Stopped");
 	}
 
 	void JoltPhysics::Simulate(float deltaTime)
 	{
-		IGN_PROFILE_FUNCTION();
 		constexpr int cCollisionSteps = 1;
 		m_PhysicsSystem.Update(deltaTime, cCollisionSteps, m_TempAllocator.get(), m_JobSystem.get());
 	}
@@ -137,7 +142,11 @@ namespace ignite::physics
 		if (desc.moveZ) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::TranslationZ;
 
 		JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
-		if (!body) return nullptr;
+        LOG_ASSERT(body, "[Jolt Physics] Failed to create Dynamic Body!");
+        if (!body)
+        {
+            return nullptr;
+        }
 
 		m_BodyInterface->AddBody(body->GetID(), JPH::EActivation::Activate);
 		auto bodyRef = CreateRef<JoltDynamicPhysicsBody>(body->GetID().GetIndexAndSequenceNumber(), m_BodyInterface);
@@ -166,8 +175,11 @@ namespace ignite::physics
 		bodySettings.mRestitution = desc.restitution;
 
 		JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
-		if (!body)
+        LOG_ASSERT(body, "[Jolt Physics] Failed to create Static Body!");
+        if (!body)
+        {
 			return nullptr;
+        }
 
 		m_BodyInterface->AddBody(body->GetID(), JPH::EActivation::Activate);
 		auto bodyRef = CreateRef<JoltStaticPhysicsBody>(body->GetID().GetIndexAndSequenceNumber(), m_BodyInterface);

@@ -7,7 +7,6 @@
 #include "ignite/asset/asset.hpp"
 #include "animator/animator.hpp"
 #include "keyframes.hpp"
-
 #include "ignite/math/transform.hpp"
 
 #include <string>
@@ -78,8 +77,8 @@ namespace ignite
         std::unordered_map<int, AnimationChannel> channels;
         std::vector<AnimationTimelineEvent> timelineEvents;
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<SkeletalAnimation> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<SkeletalAnimation> Deserialize(const std::filesystem::path &filepath);
 
         void SetSkeletonHandle(const AssetHandle &skeletonHandle);
         const AssetHandle &GetSkeletonHandle() const { return m_SkeletonHandle; }

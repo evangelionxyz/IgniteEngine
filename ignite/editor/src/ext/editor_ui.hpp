@@ -4,24 +4,19 @@
 #ifndef IGN_EDITOR_UI_HPP
 #define IGN_EDITOR_UI_HPP
 
-#ifndef IMGUI_DEFINE_MATH_OPERATORS
-#define IMGUI_DEFINE_MATH_OPERATORS
-#endif
-
 #include "states.hpp"
-#include "ignite/asset/asset.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/graphics/texture.hpp"
 
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
+    #define IMGUI_DEFINE_MATH_OPERATORS
+#endif
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <glm/glm.hpp>
 
+#include <glm/glm.hpp>
 #include <functional>
 #include <initializer_list>
-
-namespace ignite
-{
-    class AssetManager;
-}
 
 namespace ignite::UI
 {
@@ -919,8 +914,8 @@ namespace ignite::UI
             {
                 for (float x = previewMin.x; x < previewMax.x; x += tileSize)
                 {
-                    const int ix = static_cast<int>((x - previewMin.x) / tileSize);
-                    const int iy = static_cast<int>((y - previewMin.y) / tileSize);
+                    const auto ix = static_cast<int>((x - previewMin.x) / tileSize);
+                    const auto iy = static_cast<int>((y - previewMin.y) / tileSize);
                     const ImU32 color = ((ix + iy) % 2 == 0) ? dark : light;
                     drawList->AddRectFilled(ImVec2(x, y), ImVec2(std::min(x + tileSize, previewMax.x), std::min(y + tileSize, previewMax.y)), color);
                 }

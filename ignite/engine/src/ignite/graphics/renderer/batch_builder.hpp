@@ -13,16 +13,12 @@
 
 namespace ignite
 {
-    // -----------------------------------------------------------------------
-    // BatchKey — uniquely identifies a group of instances that can share a
-    // single instanced draw call (same geometry + material + pipeline).
-    // -----------------------------------------------------------------------
     struct BatchKey
     {
-        nvrhi::IBuffer      *vertexBuffer;
-        nvrhi::IBuffer      *indexBuffer;
-        nvrhi::IBindingSet  *meshBindingSet;   // camera / object / scene bindings
-        nvrhi::IBindingSet  *materialBindingSet;
+        nvrhi::IBuffer *vertexBuffer;
+        nvrhi::IBuffer *indexBuffer;
+        nvrhi::IBindingSet *meshBindingSet;   // camera / object / scene bindings
+        nvrhi::IBindingSet *materialBindingSet;
         nvrhi::IGraphicsPipeline *pipeline;
 
         bool operator==(const BatchKey &o) const noexcept
@@ -59,10 +55,10 @@ namespace ignite
     // -----------------------------------------------------------------------
     struct DrawBatch
     {
-        nvrhi::BufferHandle       vertexBuffer;
-        nvrhi::BufferHandle       indexBuffer;
-        nvrhi::BindingSetHandle   meshBindingSet;
-        nvrhi::BindingSetHandle   materialBindingSet;
+        nvrhi::BufferHandle vertexBuffer;
+        nvrhi::BufferHandle indexBuffer;
+        nvrhi::BindingSetHandle meshBindingSet;
+        nvrhi::BindingSetHandle materialBindingSet;
         nvrhi::GraphicsPipelineHandle pipeline;
 
         uint32_t indexCount = 0;

@@ -169,7 +169,7 @@ namespace ignite
 
         const uint32_t targetByVertices = std::max(batch.minCount,
             static_cast<uint32_t>(std::max<uint32_t>(1, usedVertices) * 2 / std::max<uint32_t>(1, batch.verticesPerObject)));
-        
+
         const uint32_t targetByIndices = batch.indicesPerObject > 0
             ? std::max(batch.minCount, static_cast<uint32_t>(std::max<uint32_t>(1, usedIndices) * 2 / std::max<uint32_t>(1, batch.indicesPerObject)))
             : batch.minCount;
@@ -631,7 +631,7 @@ namespace ignite
             m_TextBatch.vertexBuffer->SetData(m_Cmd, m_TextBatch.vertexBufferBase, bufferSize);
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
-            
+
             nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots,
                 cameraBuffer, m_Material2DLightingBuffer.GetHandle());
 

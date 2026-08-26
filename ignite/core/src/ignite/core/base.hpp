@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#ifndef IGN_BASE_HPP
-#define IGN_BASE_HPP
+#ifndef IGN_CORE_BASE_HPP
+#define IGN_CORE_BASE_HPP
 
 #include <cstdint>
 
@@ -9,24 +9,67 @@
 #pragma warning(disable:4251)
 #endif
 
+
+// Windows Platform
 #ifdef _WIN32
     #ifndef PLATFORM_WINDOWS
         #define PLATFORM_WINDOWS
     #endif
+
+    // Ignite ENGINE
     #ifdef IGN_DLL_EXPORTS
         #define IGN_API __declspec(dllexport)
     #else
         #define IGN_API __declspec(dllimport)
     #endif
+
+    // Ignite CORE
+    #ifdef IGN_CORE_DLL_EXPORTS
+        #define IGN_CORE_API __declspec(dllexport)
+    #else
+        #define IGN_CORE_API __declspec(dllimport)
+    #endif
+
+    // Ignite PHYSICS
+    #ifdef IGN_PHYSICS_DLL_EXPORTS
+        #define IGN_PHYSICS_API __declspec(dllexport)
+    #else
+        #define IGN_PHYSICS_API __declspec(dllimport)
+    #endif
+
+// Linux Platform
 #elif __linux__ || __GNUG__
     #ifndef PLATFORM_LINUX
         #define PLATFORM_LINUX
     #endif
+
     #ifdef IGN_DLL_EXPORTS
         #define IGN_API __attribute__((visibility("default")))
     #else
         #define IGN_API
     #endif
+
+    // Ignite ENGINE
+    #ifdef IGN_DLL_EXPORTS
+        #define IGN_API __attribute__((visibility("default")))
+    #else
+        #define IGN_API
+    #endif
+
+    // Ignite CORE
+    #ifdef IGN_CORE_DLL_EXPORTS
+        #define IGN_CORE_API __attribute__((visibility("default")))
+    #else
+        #define IGN_CORE_API
+    #endif
+
+    // Ignite PHYSICS
+    #ifdef IGN_PHYSICS_DLL_EXPORTS
+        #define IGN_PHYSICS_API __attribute__((visibility("default")))
+    #else
+        #define IGN_PHYSICS_API
+    #endif
+
 #endif
 
 #if defined(_DEBUG) || defined(IGN_DEBUG_BUILD)
@@ -61,9 +104,9 @@
 #define BIND_CLASS_EVENT_FN(fn) [this](auto&&... args) -> decltype(auto) { return this->fn(std::forward<decltype(args)>(args)...); }
 
 // Versioning macros
-// 
+//
 // [ major ][ minor ][ patch ]
-// 
+//
 // 31          22 21          12 11           0
 // + ------------ - +------------ - +------------ - +
 // |     major    |     minor     |     patch     |

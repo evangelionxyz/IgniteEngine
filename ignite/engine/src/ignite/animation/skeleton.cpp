@@ -5,7 +5,6 @@
 #include "skeleton.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
 
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 namespace ignite
@@ -76,14 +75,14 @@ namespace ignite
         return joints[static_cast<size_t>(socket.parentJointId)].globalTransform * socketLocal;
     }
 
-    bool Skeleton::Serialize(const ignite::Path &filepath)
+    bool Skeleton::Serialize(const std::filesystem::path &filepath)
     {
         BinarySerializer::SerializeSkeleton(this, filepath);
         SetDirtyFlag(false);
         return true;
     }
 
-    Ref<Skeleton> Skeleton::Deserialize(const ignite::Path &filepath)
+    Ref<Skeleton> Skeleton::Deserialize(const std::filesystem::path &filepath)
     {
         auto skeleton = BinarySerializer::DeserializeSkeleton(filepath);
         if (skeleton)

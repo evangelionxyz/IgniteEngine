@@ -7,7 +7,6 @@
 #include "ignite/graphics/ui/widget_container.hpp"
 #include "ignite/graphics/renderer/asset_scene_renderer.hpp"
 
-#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 
 namespace ignite::UI

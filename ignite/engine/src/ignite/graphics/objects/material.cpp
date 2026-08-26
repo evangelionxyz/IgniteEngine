@@ -163,7 +163,7 @@ namespace ignite
         return m_BindingSetDirty;
     }
 
-    bool Material::Serialize(const ignite::Path &filepath)
+    bool Material::Serialize(const std::filesystem::path &filepath)
     {
         Serializer sr(filepath);
 
@@ -203,7 +203,7 @@ namespace ignite
         return true;
     }
 
-    Ref<Material> Material::Deserialize(const ignite::Path &filepath)
+    Ref<Material> Material::Deserialize(const std::filesystem::path &filepath)
     {
         YAML::Node fileNode = Serializer::Deserialize(filepath);
         YAML::Node materialNode = fileNode["Material"];

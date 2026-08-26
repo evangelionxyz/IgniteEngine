@@ -3,8 +3,10 @@
 #ifndef IGN_HASHING_HPP
 #define IGN_HASHING_HPP
 
-#include "base.hpp"
+#include "ignite/core/base.hpp"
+
 #include "ignite_rs/core_utils.h"
+
 #include <vector>
 #include <cstdint>
 #include <functional>

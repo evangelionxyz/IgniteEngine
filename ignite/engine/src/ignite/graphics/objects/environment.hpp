@@ -5,10 +5,10 @@
 #define IGN_ENVIRONMENT_HPP
 
 #include "ignite/graphics/texture.hpp"
-#include "ignite/asset/asset.hpp"
 #include "ignite/graphics/buffers/index_buffer.hpp"
 #include "ignite/graphics/buffers/vertex_buffer.hpp"
-#include "ignite/core/base.hpp"
+
+#include <glm/glm.hpp>
 
 #include <array>
 #include <string>

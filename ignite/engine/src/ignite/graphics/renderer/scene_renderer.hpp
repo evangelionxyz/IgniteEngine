@@ -9,6 +9,7 @@
 #include "ignite/graphics/hash_keys.hpp"
 #include "batch_builder.hpp"
 #include "ignite/terrain/terrain_renderer.hpp"
+#include "ignite/scene/icamera.hpp"
 #include <entt/entt.hpp>
 
 namespace ignite
@@ -72,9 +73,9 @@ namespace ignite
 
         void BeginFrame();
         void SetActiveScene(const Ref<Scene> &scene);
-        
+
         void Render(ICamera *camera, FrameContext *frameContext, bool drawDebug);
-        
+
         void SetCameraWidgetMousePosition(ICamera *camera, uint32_t mouseX, uint32_t mouseY, bool hovered);
         void SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
         void SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
@@ -182,7 +183,7 @@ namespace ignite
         nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &gridBuffer);
         nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
             Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler, bool useResolvedScene = false);
-        
+
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
 		std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);
 		std::vector<Ref<SSAO>> GetOrCreateSSAOs(nvrhi::ICommandList *cmd, ICamera *camera);

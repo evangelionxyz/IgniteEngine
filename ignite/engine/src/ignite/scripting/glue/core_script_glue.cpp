@@ -40,7 +40,7 @@ namespace ignite
                 case spdlog::level::err: LOG_ERROR("{}", messageStr); break;
             }
         }
-        
+
         static bool Input_IsKeyPressed(uint32_t keyCode)
         {
             return InputSystem::IsKeyPressed(static_cast<KeyCode>(keyCode));
@@ -143,7 +143,7 @@ namespace ignite
             }
             return false;
         }
-        
+
         static bool AssetManager_IsAssetLoaded(uint64_t handle)
         {
             if (Scene *scene = GetSceneContext())

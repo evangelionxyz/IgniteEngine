@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "ignite/core/base.hpp"
-#include "ignite/core/path.hpp"
 
 namespace ignite
 {

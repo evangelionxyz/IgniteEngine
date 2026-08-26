@@ -11,7 +11,6 @@
 
 namespace ignite
 {
-
 	class ObjectAllocator
 	{
 	public:

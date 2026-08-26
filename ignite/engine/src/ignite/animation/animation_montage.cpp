@@ -73,7 +73,7 @@ namespace ignite
         m_SkeletonHandle = skeletonHandle;
     }
 
-    bool AnimationMontage::Serialize(const ignite::Path &filepath)
+    bool AnimationMontage::Serialize(const std::filesystem::path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -131,9 +131,9 @@ namespace ignite
         return true;
     }
 
-    Ref<AnimationMontage> AnimationMontage::Deserialize(const ignite::Path &filepath)
+    Ref<AnimationMontage> AnimationMontage::Deserialize(const std::filesystem::path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[AnimationMontage] File does not exist: {}", filepath.string());
             return nullptr;

@@ -83,13 +83,13 @@ namespace ignite
         VulkanExtensionSet enabledExtensions =
         {
             // instance
-            { 
+            {
                 VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
             },
             // layers
-            { }, 
+            { },
             // device
-            { VK_KHR_MAINTENANCE1_EXTENSION_NAME } 
+            { VK_KHR_MAINTENANCE1_EXTENSION_NAME }
         };
 
         // optional extensions
@@ -99,7 +99,7 @@ namespace ignite
             {
                 VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
                 VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME
-            }, 
+            },
             // layers
             { },
             // device
@@ -112,7 +112,7 @@ namespace ignite
                 VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
                 VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
                 VK_NV_MESH_SHADER_EXTENSION_NAME,
-             } 
+             }
         };
 
         std::unordered_set<std::string> m_RayTracingExtensions =

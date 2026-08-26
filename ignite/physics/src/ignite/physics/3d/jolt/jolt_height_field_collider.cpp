@@ -1,11 +1,12 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_height_field_collider.hpp"
-#include "ignite/physics/physics_log.hpp"
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/Shape/SubShapeID.h>
+
+#include "ignite/core/logger.hpp"
 
 namespace ignite::physics
 {
@@ -17,7 +18,7 @@ namespace ignite::physics
 	{
 		if (m_Heights.empty() || m_SampleCount < 2 || m_Heights.size() != static_cast<size_t>(m_SampleCount) * static_cast<size_t>(m_SampleCount))
 		{
-			IGN_PHYSICS_ERROR("[JoltHeightFieldCollider] Invalid sample data or count for heightfield collider!");
+			LOG_ASSERT(false, "[JoltHeightFieldCollider] Invalid sample data or count for heightfield collider!");
 			return;
 		}
 
@@ -29,14 +30,13 @@ namespace ignite::physics
 		);
 
 		auto result = shapeSettings.Create();
-		if (result.IsValid())
+		if (!result.IsValid())
 		{
-			m_Shape = result.Get();
+			LOG_ASSERT(false, "[JoltHeightFieldCollider] Failed to create Jolt HeightFieldShape: {}", result.GetError().c_str());
+            return;
 		}
-		else
-		{
-			IGN_PHYSICS_ERROR("[JoltHeightFieldCollider] Failed to create Jolt HeightFieldShape: {}", result.GetError().c_str());
-		}
+
+		m_Shape = result.Get();
 	}
 
 	void JoltHeightFieldCollider::CalculateAABB(AABB &outAABB)

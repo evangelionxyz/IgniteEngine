@@ -1,36 +1,10 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 #ifndef IGN_TEXTURE_HPP
 #define IGN_TEXTURE_HPP
 
-#include "ignite/core/base.hpp"
-#include "ignite/core/logger.hpp"
 #include "ignite/asset/asset.hpp"
-#include "ignite/core/types.hpp"
-#include "ignite/core/buffer.hpp"
-#include "ignite/core/path.hpp"
 #include "mip_generator.hpp"
 
 #include <openexr.h>
@@ -91,7 +65,7 @@ namespace ignite
             return value;
         }
 
-        static bool IsExrFile(const ignite::Path &filepath)
+        static bool IsExrFile(const std::filesystem::path &filepath)
         {
             return ToLowerCopy(filepath.extension().string()) == ".exr";
         }
@@ -177,7 +151,7 @@ namespace ignite
             }
         }
 
-        IGN_API bool LoadEXRTexture(const ignite::Path &filepath, int &outWidth, int &outHeight, nvrhi::Format &outFormat, std::vector<uint8_t> &data);
+        IGN_API bool LoadEXRTexture(const std::filesystem::path &filepath, int &outWidth, int &outHeight, nvrhi::Format &outFormat, std::vector<uint8_t> &data);
 
         // Utility function to flip image buffer vertically
         void FlipImageBuffer(std::vector<uint8_t> &data, int width, int height, int rowPitch);
@@ -189,20 +163,20 @@ namespace ignite
         Texture() = default;
         Texture(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
         Texture(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
-        Texture(const ignite::Path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         ~Texture() override;
 
         static Ref<Texture> Create();
         static Ref<Texture> Create(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
         static Ref<Texture> Create(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
-        static Ref<Texture> Create(const ignite::Path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         static TextureCreateInfo GetDefaultCreateInfo(const AssetMetaData &metadata);
-        static ignite::Path GetMetaPath(Project *project, const AssetMetaData &metadata);
-        static ignite::Path GetLegacyMetaPath(Project *project, const AssetMetaData &metadata);
-        static bool LoadCreateInfoFile(const ignite::Path &filepath, TextureCreateInfo &outCreateInfo);
-        static bool SerializeMetaFile(const ignite::Path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo);
+        static std::filesystem::path GetMetaPath(Project *project, const AssetMetaData &metadata);
+        static std::filesystem::path GetLegacyMetaPath(Project *project, const AssetMetaData &metadata);
+        static bool LoadCreateInfoFile(const std::filesystem::path &filepath, TextureCreateInfo &outCreateInfo);
+        static bool SerializeMetaFile(const std::filesystem::path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo);
 
         void SetData(nvrhi::ICommandList *cmd, uint32_t channelCount);
         void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);
@@ -229,7 +203,7 @@ namespace ignite
         nvrhi::Format GetFormat() const { return m_CreateInfo.format; }
 
         const std::string &GetDebugName() const { return m_DebugName; }
-        const ignite::Path &GetFilepath() { return m_Filepath; }
+        const std::filesystem::path &GetFilepath() { return m_Filepath; }
 
         const std::vector<uint8_t> &GetBuffer() { return m_Buffer; }
         static AssetType GetStaticType() { return AssetType::Texture; }
@@ -247,7 +221,7 @@ namespace ignite
 
         std::vector<uint8_t> m_Buffer;
         TextureCreateInfo m_CreateInfo;
-        ignite::Path m_Filepath;
+        std::filesystem::path m_Filepath;
         nvrhi::TextureHandle m_Handle;
         nvrhi::SamplerHandle m_Sampler;
         std::string m_DebugName;

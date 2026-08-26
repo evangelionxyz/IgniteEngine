@@ -12,7 +12,7 @@ namespace JPH
 
 namespace ignite::physics
 {
-	class IGN_API JoltDynamicPhysicsBody : public PhysicsDynamicActor
+	class IGN_PHYSICS_API JoltDynamicPhysicsBody : public PhysicsDynamicActor
 	{
 	public:
 		JoltDynamicPhysicsBody(uint32_t bodyId, JPH::BodyInterface *bodyInterface);

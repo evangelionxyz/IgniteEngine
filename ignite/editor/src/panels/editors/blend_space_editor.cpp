@@ -15,9 +15,6 @@
 #include "editor_layer.hpp"
 #include "ignite/core/logger.hpp"
 
-#include <imgui.h>
-#include <imgui_internal.h>
-
 namespace ignite
 {
     // Returns the display string for a smoothing type enum value.
@@ -328,7 +325,7 @@ namespace ignite
         auto gridToScreen = [&](const glm::vec2 &gridPos) -> ImVec2
         {
             float normX = (gridPos.x - minVal.x) / valRange.x;
-            float normY = 1.0f - (gridPos.y - minVal.y) / valRange.y; 
+            float normY = 1.0f - (gridPos.y - minVal.y) / valRange.y;
             return ImVec2(gridMin.x + normX * gridRectSize.x, gridMin.y + normY * gridRectSize.y);
         };
 

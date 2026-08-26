@@ -29,7 +29,7 @@ namespace ignite
     public:
         explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
         virtual ~ScenePanel() override;
-        
+
         void SetActiveScene(Scene *scene);
 
         void OnUpdate(float deltaTime) override;
@@ -50,7 +50,7 @@ namespace ignite
         void SetGizmoMode(ImGuizmo::MODE mode);
 
         bool IsGizmoBeingUse() const { return m_Data.isGizmoBeingUse; }
-        
+
         EditorCamera &GetViewportCamera() { return m_EditorCamera; }
 
         const glm::vec2 &GetViewportMousePos() const { return m_ViewportData.mousePos; }
@@ -58,11 +58,11 @@ namespace ignite
         void RenderHierarchy();
         Entity ShowEntityContextMenu();
         void RenderEntityNode(Entity entity);
-        
+
         void SetHierarchyDirty() { m_HierarchyDirty = true; }
         void SortHierarchy(std::vector<Entity>& entities);
         int GetMaxParentDepth(Entity entity);
-        
+
         void RenderInspector();
         void UpdateCameraInput(float deltaTime);
         void DestroyEntity(Entity entity);
@@ -73,7 +73,7 @@ namespace ignite
         Entity GetSelectedEntity();
 
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
-        
+
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
 

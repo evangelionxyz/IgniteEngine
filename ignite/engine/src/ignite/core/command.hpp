@@ -1,42 +1,24 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef IGN_COMMAND_HPP
+#define IGN_COMMAND_HPP
 
 #include <functional>
 #include <stack>
 #include <deque>
 
-#include "base.hpp"
-#include "types.hpp"
+#include "ignite/core/base.hpp"
+#include "ignite/core/buffer.hpp"
+#include "ignite/core/types.hpp"
 
 namespace ignite
 {
     using CommandFunc = std::function<void()>;
 
-    enum CommandState 
-    { 
-        CommandState_Create, 
+    enum CommandState
+    {
+        CommandState_Create,
         CommandState_Destroy,
         CommandState_Renaming
     };
@@ -53,7 +35,7 @@ namespace ignite
     {
     public:
         CommandManager();
-        
+
         static IGN_API CommandManager *GetInstance();
 
         // AddCommand — push a pre-executed command (already applied, just record for undo)
@@ -116,3 +98,5 @@ namespace ignite
         int m_MaxStackSize = 100;
     };
 }
+
+#endif

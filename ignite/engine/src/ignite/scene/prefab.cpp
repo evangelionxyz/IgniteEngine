@@ -15,7 +15,7 @@ namespace ignite
         m_PrefabScene = Scene::Create(project);
     }
 
-    bool Prefab::Serialize(const ignite::Path &filepath)
+    bool Prefab::Serialize(const std::filesystem::path &filepath)
     {
         if (!m_PrefabScene)
             return false;
@@ -48,9 +48,9 @@ namespace ignite
         return true;
     }
 
-    Ref<Prefab> Prefab::Deserialize(const ignite::Path &filepath, Project *project)
+    Ref<Prefab> Prefab::Deserialize(const std::filesystem::path &filepath, Project *project)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[Prefab] File does not exist: {}", filepath.generic_string());
             return nullptr;

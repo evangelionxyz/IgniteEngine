@@ -165,10 +165,8 @@ namespace ignite
         return m_FbxSdkManager;
     }
 
-    AssetHandle AssetManager::ImportAsset(const ignite::Path &filepath)
+    AssetHandle AssetManager::ImportAsset(const std::filesystem::path &filepath)
     {
-        IGN_PROFILE_FUNCTION();
-
         // Invalid
         if (GetAssetTypeFromExtension(filepath.extension().generic_string()) == AssetType::Invalid)
         {
@@ -204,7 +202,7 @@ namespace ignite
         return handle;
     }
 
-    AssetHandle AssetManager::ImportAssetImmedate(const ignite::Path &filepath)
+    AssetHandle AssetManager::ImportAssetImmedate(const std::filesystem::path &filepath)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -327,7 +325,7 @@ namespace ignite
             if (!metadata.filepath.empty())
             {
                 // Asset Handle by Path
-                const ignite::Path absoluteMetadataPath = activeProject ? activeProject->GetProjectFilepath(metadata.filepath) : metadata.filepath;
+                const std::filesystem::path absoluteMetadataPath = activeProject ? activeProject->GetProjectFilepath(metadata.filepath) : metadata.filepath;
                 m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
             }
         }
@@ -518,7 +516,7 @@ namespace ignite
         return GetMetaData(handle).type;
     }
 
-    const AssetMetaData &AssetManager::GetMetaData(const ignite::Path &filepath, AssetHandle &outHandle)
+    const AssetMetaData &AssetManager::GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle)
     {
         outHandle = GetAssetHandle(filepath);
         if (m_AssetRegistry.contains(outHandle))
@@ -537,7 +535,7 @@ namespace ignite
         return s_NullMetaData;
     }
 
-    AssetHandle AssetManager::GetAssetHandle(const ignite::Path &filepath)
+    AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path &filepath)
     {
         const auto &absoluteFilepath = std::filesystem::absolute(LockActiveProject()->GetProjectFilepath(filepath).string());
 
@@ -551,7 +549,7 @@ namespace ignite
         return AssetHandle(0);
     }
 
-    const ignite::Path &AssetManager::GetFilepath(AssetHandle handle) const
+    const std::filesystem::path &AssetManager::GetFilepath(AssetHandle handle) const
     {
         return GetMetaData(handle).filepath;
     }

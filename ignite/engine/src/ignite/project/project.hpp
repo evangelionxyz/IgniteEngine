@@ -15,7 +15,7 @@
 #include <atomic>
 #include <string>
 #include <mutex>
-#include "ignite/core/path.hpp"
+
 #include "FileWatch.hpp"
 
 namespace ignite
@@ -35,11 +35,11 @@ namespace ignite
         std::string name;
         AssetHandle defaultSceneHandle = AssetHandle(0);
 
-        ignite::Path filepath; // the actual project file (.ixproj)
-        ignite::Path rootDirectory; // project directory
-        ignite::Path assetDirectory = "Assets";
-        ignite::Path scriptsDirectory = "Scripts";
-        ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
+        std::filesystem::path filepath; // the actual project file (.ixproj)
+        std::filesystem::path rootDirectory; // project directory
+        std::filesystem::path assetDirectory = "Assets";
+        std::filesystem::path scriptsDirectory = "Scripts";
+        std::filesystem::path assetRegistryFilepath = "AssetRegistry.ixreg";
 
 		physics::Physics3DType physics3DType = physics::Physics3DType::Jolt;
 		physics::Physics3DSettings physicsSettings;
@@ -57,8 +57,8 @@ namespace ignite
 
         void InitScriptEngine();
 
-        ignite::Path GetProjectFilepath(const ignite::Path &filepath) const;
-        ignite::Path GetProjectRelativeFilepath(const ignite::Path &filepath) const;
+        std::filesystem::path GetProjectFilepath(const std::filesystem::path &filepath) const;
+        std::filesystem::path GetProjectRelativeFilepath(const std::filesystem::path &filepath) const;
 
         void CopyCoreDependencies();
 
@@ -66,27 +66,27 @@ namespace ignite
         void SetDefaultScene(AssetHandle handle);
         void BuildSolution(bool forceRebuild = false) const;
 
-        void CreateCSharpScript(const ignite::Path &filepath);
-        void CreateScriptableObject(const std::string &className, const std::string &fileName, const ignite::Path &targetDirectory);
+        void CreateCSharpScript(const std::filesystem::path &filepath);
+        void CreateScriptableObject(const std::string &className, const std::string &fileName, const std::filesystem::path &targetDirectory);
         void RegenerateCSharpProject() const;
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
-        ignite::Path GetFilepath() const { return m_Info.rootDirectory / m_Info.filepath; }
+        std::filesystem::path GetFilepath() const { return m_Info.rootDirectory / m_Info.filepath; }
 
-        const ignite::Path &GetDirectory() const { return m_Info.rootDirectory; }
+        const std::filesystem::path &GetDirectory() const { return m_Info.rootDirectory; }
 
-        ignite::Path GetSolutionFilepath() const { return m_Info.rootDirectory / std::string(m_Info.name + ".slnx"); }
+        std::filesystem::path GetSolutionFilepath() const { return m_Info.rootDirectory / std::string(m_Info.name + ".slnx"); }
 
-        ignite::Path GetAssetDirectory() const { return m_Info.rootDirectory / m_Info.assetDirectory; }
+        std::filesystem::path GetAssetDirectory() const { return m_Info.rootDirectory / m_Info.assetDirectory; }
 
-        ignite::Path GetScriptsDirectory() const { return m_Info.rootDirectory / m_Info.scriptsDirectory; }
+        std::filesystem::path GetScriptsDirectory() const { return m_Info.rootDirectory / m_Info.scriptsDirectory; }
 
-        ignite::Path GetScriptBinDirectory() const { return m_Info.rootDirectory / "Bin"; }
+        std::filesystem::path GetScriptBinDirectory() const { return m_Info.rootDirectory / "Bin"; }
 
-        ignite::Path GetCacheDirectory() const { return m_Info.rootDirectory / ".cache"; }
+        std::filesystem::path GetCacheDirectory() const { return m_Info.rootDirectory / ".cache"; }
 
-        ignite::Path GetScriptModulePath() const
+        std::filesystem::path GetScriptModulePath() const
         {
             std::string configDir = "Debug";
             if (m_Info.configuration == ProjectConfiguration::Release) configDir = "Release";
@@ -96,8 +96,8 @@ namespace ignite
 
         const std::string GetAssetDisplayName(AssetHandle handle) const;
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<Project> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Project> Deserialize(const std::filesystem::path &filepath);
 
         MaterialManager &GetMaterialManager() { return m_MaterialManager; }
 

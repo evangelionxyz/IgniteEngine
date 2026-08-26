@@ -25,17 +25,17 @@ namespace ignite
 {
     namespace
     {
-        bool IsMeshImportDialogFile(const ignite::Path &filepath)
+        bool IsMeshImportDialogFile(const std::filesystem::path &filepath)
         {
             return GetAssetTypeFromExtension(stringutils::ToLower(filepath.extension().string())) == AssetType::Mesh;
         }
 
-        bool IsTextureImportDialogFile(const ignite::Path &filepath)
+        bool IsTextureImportDialogFile(const std::filesystem::path &filepath)
         {
             return GetAssetTypeFromExtension(stringutils::ToLower(filepath.extension().string())) == AssetType::Texture;
         }
 
-        bool IsFontImportDialogFile(const ignite::Path &filepath)
+        bool IsFontImportDialogFile(const std::filesystem::path &filepath)
         {
             return GetAssetTypeFromExtension(stringutils::ToLower(filepath.extension().string())) == AssetType::Font;
         }
@@ -253,7 +253,7 @@ namespace ignite
 				ImGui::Checkbox("Force Rebuild ?", &m_StaticMeshImportPayload.forceRebuild);
 				ImGui::EndTabItem();
 			}
-            
+
 			if (ImGui::BeginTabItem("Skeletal Mesh"))
 			{
 				m_MeshImportType = AssetType::SkeletalMesh;
@@ -313,7 +313,7 @@ namespace ignite
             ImGui::EndTabBar();
         }
 
-        
+
     }
 
     void AssetImporterPanel::DrawTextureImportOptions(const FileImportPayload &payload)
@@ -392,7 +392,7 @@ namespace ignite
 					    break;
                     default:
                     {
-					    const ignite::Path importedPath = PrepareAssetForImport(jobData);
+					    const std::filesystem::path importedPath = PrepareAssetForImport(jobData);
 
 					    if (importedPath.empty())
 					    {
@@ -400,7 +400,7 @@ namespace ignite
 						    return;
 					    }
 
-					    const ignite::Path relativePath = project->GetProjectFilepath(importedPath);
+					    const std::filesystem::path relativePath = project->GetProjectFilepath(importedPath);
 					    AssetHandle finalHandle = jobAssetManager->GetAssetHandle(relativePath);
 					    if (finalHandle == AssetHandle(0))
 					    {
@@ -505,28 +505,28 @@ namespace ignite
         }
     }
 
-    ignite::Path AssetImporterPanel::PrepareAssetForImport(const FileImportPayload &payload) const
+    std::filesystem::path AssetImporterPanel::PrepareAssetForImport(const FileImportPayload &payload) const
     {
         auto project = m_EditorLayer->GetActiveProject();
         if (!project)
             return {};
 
         std::error_code ec;
-        const ignite::Path sourcePath = std::filesystem::weakly_canonical(payload.metadata.filepath.string(), ec).string();
-        if (ec || !ignite::Path::exists(sourcePath))
+        const std::filesystem::path sourcePath = std::filesystem::weakly_canonical(payload.metadata.filepath.string(), ec).string();
+        if (ec || !std::filesystem::exists(sourcePath))
         {
             LOG_ERROR("[Asset Importer] File does not exist '{}'", payload.metadata.filepath.generic_string());
             return {};
         }
 
-        const ignite::Path assetDirectory = std::filesystem::weakly_canonical(project->GetAssetDirectory().string(), ec).string();
+        const std::filesystem::path assetDirectory = std::filesystem::weakly_canonical(project->GetAssetDirectory().string(), ec).string();
         if (ec)
             return {};
 
         if (IsPathWithin(sourcePath.string(), assetDirectory.string()))
             return sourcePath;
 
-        ignite::Path targetDirectory = m_TargetDirectory;
+        std::filesystem::path targetDirectory = m_TargetDirectory;
         if (targetDirectory.empty())
             targetDirectory = project->GetAssetDirectory();
 
@@ -537,8 +537,8 @@ namespace ignite
             return {};
         }
 
-        ignite::Path destinationPath = targetDirectory / sourcePath.filename();
-        if (ignite::Path::exists(destinationPath))
+        std::filesystem::path destinationPath = targetDirectory / sourcePath.filename();
+        if (std::filesystem::exists(destinationPath))
         {
             destinationPath = BuildUniquePath(targetDirectory, sourcePath.stem().string(), sourcePath.extension().string());
         }
@@ -553,7 +553,7 @@ namespace ignite
         return destinationPath;
     }
 
-	bool AssetImporterPanel::ImportStaticMesh(const ignite::Path &filepath)
+	bool AssetImporterPanel::ImportStaticMesh(const std::filesystem::path &filepath)
 	{
 		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
@@ -563,7 +563,7 @@ namespace ignite
 		}
 
 		auto assetManager = AssetManager::GetInstance();
-		const ignite::Path meshRelativePath = project->GetProjectFilepath(filepath);
+		const std::filesystem::path meshRelativePath = project->GetProjectFilepath(filepath);
 
 		AssetHandle handle = assetManager->GetAssetHandle(meshRelativePath);
 		if (handle == AssetHandle(0))
@@ -585,7 +585,7 @@ namespace ignite
         return true;
 	}
 
-	bool AssetImporterPanel::ImportSkeletalMesh(const ignite::Path &filepath)
+	bool AssetImporterPanel::ImportSkeletalMesh(const std::filesystem::path &filepath)
 	{
 		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
@@ -595,7 +595,7 @@ namespace ignite
 		}
 
 		auto assetManager = AssetManager::GetInstance();
-		const ignite::Path skmRelativePath = project->GetProjectFilepath(filepath);
+		const std::filesystem::path skmRelativePath = project->GetProjectFilepath(filepath);
 
 		AssetHandle handle = assetManager->GetAssetHandle(skmRelativePath);
 		if (handle == AssetHandle(0))
@@ -617,11 +617,11 @@ namespace ignite
         return true;
 	}
 
-	ignite::Path AssetImporterPanel::BuildUniquePath(const ignite::Path &directory, const std::string &baseName, const std::string &extension) const
+	std::filesystem::path AssetImporterPanel::BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const
     {
         IGN_PROFILE_FUNCTION();
-        ignite::Path candidate = directory / (baseName + extension);
-        if (!ignite::Path::exists(candidate))
+        std::filesystem::path candidate = directory / (baseName + extension);
+        if (!std::filesystem::exists(candidate))
         {
             return candidate;
         }
@@ -630,7 +630,7 @@ namespace ignite
         while (true)
         {
             candidate = directory / std::format("{}_{}{}", baseName, suffix, extension);
-            if (!ignite::Path::exists(candidate))
+            if (!std::filesystem::exists(candidate))
             {
                 return candidate;
             }

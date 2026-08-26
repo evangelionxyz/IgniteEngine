@@ -132,7 +132,7 @@ TEST(RustInterop, LoggingBridge)
 
     // Unregister callback
     EXPECT_EQ(ignite_rs_log_unregister_callback(), IgniteResult_Ok);
-    
+
     // Calling log after unregistering should return ErrNotFound
     EXPECT_EQ(ignite_rs_log(IgniteLogLevel_Info, "Should fail"), IgniteResult_ErrNotFound);
 }

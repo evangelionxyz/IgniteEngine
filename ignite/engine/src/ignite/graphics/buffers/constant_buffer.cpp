@@ -43,7 +43,7 @@ namespace ignite
             m_Handle = nullptr;
         }
     }
-    
+
 	void ConstantBuffer::SetData(nvrhi::ICommandList *cmd, void *data, size_t dataSize, const size_t offset)
     {
         cmd->writeBuffer(m_Handle, data, dataSize, offset);
@@ -53,5 +53,5 @@ namespace ignite
     {
         return CreateRef<ConstantBuffer>(size, isVolatile, maxVersion, debugName);
     }
-    
-} // namespace ignite
+
+}

@@ -8,7 +8,6 @@
 
 #include <vector>
 #include <sstream>
-#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -17,8 +16,9 @@ namespace ignite
     public:
         WindowResizeEvent(unsigned int width, unsigned int height)
             : m_Width(width), m_Height(height) {}
-        u32 GetWidth() const { return m_Width; }
-        u32 GetHeight() const { return m_Height; }
+
+        uint32_t GetWidth() const { return m_Width; }
+        uint32_t GetHeight() const { return m_Height; }
         std::string ToString() const override
         {
             std::stringstream ss;
@@ -68,17 +68,18 @@ namespace ignite
     class WindowDropEvent final : public Event
     {
     public:
-        explicit WindowDropEvent(const std::vector<ignite::Path> &paths)
+        explicit WindowDropEvent(const std::vector<std::filesystem::path> &paths)
             : m_Paths(paths) {}
-        explicit WindowDropEvent(std::vector <ignite::Path> &&paths)
+
+        explicit WindowDropEvent(std::vector <std::filesystem::path> &&paths)
             : m_Paths(std::move(paths)) {}
 
-        const std::vector<ignite::Path> &GetPaths() const { return m_Paths; }
+        const std::vector<std::filesystem::path> &GetPaths() const { return m_Paths; }
 
         EVENT_CLASS_TYPE(WindowDrop);
         EVENT_CLASS_CATEGORY(EventCategoryApplication);
     private:
-        std::vector<ignite::Path> m_Paths;
+        std::vector<std::filesystem::path> m_Paths;
     };
 
     class WindowMaximizedEvent final : public Event

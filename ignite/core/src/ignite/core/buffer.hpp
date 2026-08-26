@@ -1,21 +1,19 @@
 // Copyright (c) 2025 Evangelion Manuhutu
 #pragma once
-#ifndef IGN_BUFFER_HPP
-#define IGN_BUFFER_HPP
+#ifndef IGN_CORE_BUFFER_HPP
+#define IGN_CORE_BUFFER_HPP
 
-#include "base.hpp"
+#include "ignite/core/base.hpp"
 
 #include <cstdint>
-#include <cstdlib>
-#include <vector>
-#include <span>
 #include <cstring>
-
-#include "ignite/core/profiler/profiler.hpp"
+#include <cstdlib>
+#include <span>
+#include <vector>
 
 namespace ignite
 {
-    class IGN_API IBuffer
+    class IBuffer
     {
     public:
         IBuffer() = default;
@@ -25,7 +23,6 @@ namespace ignite
             if (!other.IsEmpty())
             {
                 m_Data = other.m_Data;
-                IGN_PROFILE_ALLOC_N(Data(), Size(), "CPU Buffer");
             }
         }
 
@@ -42,7 +39,6 @@ namespace ignite
                 if (!other.IsEmpty())
                 {
                     m_Data = other.m_Data;
-                    IGN_PROFILE_ALLOC_N(Data(), Size(), "CPU Buffer");
                 }
             }
             return *this;
@@ -68,7 +64,7 @@ namespace ignite
 
         [[nodiscard]]
         virtual const uint8_t *Data() { return m_Data.data(); }
-        
+
         [[nodiscard]]
         virtual const size_t Size() const { return m_Data.size(); }
 
@@ -88,17 +84,12 @@ namespace ignite
         {
             Release();
             m_Data.resize(size);
-            if (m_Data.data() && size > 0)
-            {
-                IGN_PROFILE_ALLOC_N(Data(), size, "CPU Buffer");
-            }
         }
 
         virtual void Release()
         {
             if (!IsEmpty())
             {
-                IGN_PROFILE_FREE_N(Data(), "CPU Buffer");
                 m_Data.clear();
                 m_Data.shrink_to_fit(); // Forces deallocation of capacity
             }
@@ -118,7 +109,7 @@ namespace ignite
         std::vector<uint8_t> m_Data;
     };
 
-    class IGN_API Buffer : public IBuffer
+    class Buffer : public IBuffer
     {
     public:
         Buffer() = default;
@@ -182,7 +173,7 @@ namespace ignite
         }
     };
 
-    class IGN_API ScopedBuffer
+    class ScopedBuffer
     {
     public:
         ScopedBuffer(Buffer buffer)

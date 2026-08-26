@@ -99,8 +99,8 @@ namespace ignite
         void SetMaskedJoints(const std::vector<int32_t> &joints) { m_MaskedJoints = joints; SetDirtyFlag(true); }
         const std::vector<int32_t> &GetMaskedJoints() const { return m_MaskedJoints; }
 
-        virtual bool Serialize(const ignite::Path &filepath);
-        static Ref<AnimationMontage> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath);
+        static Ref<AnimationMontage> Deserialize(const std::filesystem::path &filepath);
 
         static AssetType GetStaticType() { return AssetType::AnimationMontage; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

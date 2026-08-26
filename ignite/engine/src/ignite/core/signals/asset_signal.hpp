@@ -5,7 +5,6 @@
 #define IGN_ASSET_SIGNAL_HPP
 
 #include "ignite/asset/asset_importer.hpp"
-#include "ignite/core/path.hpp"
 
 #include <vector>
 
@@ -24,7 +23,7 @@ namespace ignite
     struct AssetImportSignal
     {
         std::vector<FileImportPayload> payloads;
-		ignite::Path targetDirectory;
+		std::filesystem::path targetDirectory;
     };
 
     // Fired when the user double-clicks an asset in the content browser to
@@ -40,7 +39,7 @@ namespace ignite
     struct AssetEditorCreateSignal
     {
         AssetType type = AssetType::Invalid;
-        ignite::Path targetDirectory;
+        std::filesystem::path targetDirectory;
     };
 }
 

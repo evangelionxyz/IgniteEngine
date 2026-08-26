@@ -15,7 +15,7 @@
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
-#include "ignite/core/path.hpp"
+
 
 namespace ignite
 {

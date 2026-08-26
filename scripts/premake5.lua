@@ -51,10 +51,14 @@ end
 
     include "../ignite/editor/ignite.editor.lua"
     include "../ignite/engine/ignite.engine.lua"
+    include "../ignite/core/ignite.core.lua"
     include "../ignite/physics/ignite.physics.lua"
     include "../ignite/test/ignite.test.lua"
     include "../scriptengine/ignite.scriptengine.lua"
+    
+    -- Rust
     include "../crates/ignite_rs.lua"
+
     include "mochisharp-native.lua"
     include "mochisharp-managed.lua"
 

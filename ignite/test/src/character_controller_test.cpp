@@ -16,14 +16,14 @@ using namespace ignite;
 
 static Ref<Project> CreateTestProject(const std::string &projectName)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp" / projectName;
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp" / projectName;
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = projectName;
@@ -68,7 +68,7 @@ TEST(CharacterController, SerializationRoundtrip)
 
     Ref<Scene> scene = CreateRef<Scene>(project.get());
     Entity originalEntity = SceneManager::CreateEntity(scene.get(), "TestCharacter", EntityType_Node);
-    
+
     auto &cc = originalEntity.AddComponent<CharacterControllerComponent>();
     cc.radius = 0.75f;
     cc.height = 1.8f;
@@ -81,7 +81,7 @@ TEST(CharacterController, SerializationRoundtrip)
     cc.up = glm::vec3(0.0f, 1.0f, 0.0f);
     cc.linearVelocity = glm::vec3(1.0f, 2.0f, 3.0f);
 
-    ignite::Path tempPath = vfs::GetExecutableDirectory() / "test_character.yaml";
+    std::filesystem::path tempPath = vfs::GetExecutableDirectory() / "test_character.yaml";
     Serializer sr(tempPath);
     EntitySerializer::SerializeEntity(sr, originalEntity);
     sr.Serialize();
@@ -107,7 +107,7 @@ TEST(CharacterController, SerializationRoundtrip)
     EXPECT_FLOAT_EQ(desCC.linearVelocity.y, 2.0f);
     EXPECT_FLOAT_EQ(desCC.linearVelocity.z, 3.0f);
 
-    if (ignite::Path::exists(tempPath))
+    if (std::filesystem::exists(tempPath))
     {
         std::filesystem::remove(tempPath.string());
     }

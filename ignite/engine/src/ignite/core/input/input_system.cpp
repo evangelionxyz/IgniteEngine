@@ -7,8 +7,10 @@
 #include "ignite/graphics/window.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/logger.hpp"
-#include <SDL3/SDL.h>
+
 #include "ignite/project/input_mapping.hpp"
+
+#include <SDL3/SDL.h>
 
 namespace ignite
 {

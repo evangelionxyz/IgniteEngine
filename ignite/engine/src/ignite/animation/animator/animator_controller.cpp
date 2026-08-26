@@ -131,7 +131,7 @@ namespace ignite
 		return nullptr;
     }
 
-    bool AnimatorController::Serialize(const ignite::Path &filepath)
+    bool AnimatorController::Serialize(const std::filesystem::path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -227,9 +227,9 @@ namespace ignite
         return true;
     }
 
-    Ref<AnimatorController> AnimatorController::Deserialize(const ignite::Path &filepath)
+    Ref<AnimatorController> AnimatorController::Deserialize(const std::filesystem::path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[AnimatorController] File does not exists {}", filepath.string());
             return nullptr;
@@ -372,8 +372,8 @@ namespace ignite
 
         if (runtime.currentStateName.empty())
         {
-            runtime.currentStateName = !defaultState.empty() 
-                ? defaultState 
+            runtime.currentStateName = !defaultState.empty()
+                ? defaultState
                 : (states.empty() ? std::string{} : states.begin()->first); // get key of state
             runtime.stateElapsed = 0.0f;
             runtime.stateNormalized = 0.0f;
@@ -434,7 +434,7 @@ namespace ignite
 
         runtime.previousStateNormalized = runtime.stateNormalized;
         runtime.stateElapsed += deltaTime;
-        
+
         // Calculate effective weighted duration of current motion
         float effectiveDuration = 0.0f;
         {
@@ -457,7 +457,7 @@ namespace ignite
 				runtime.stateNormalized = 0.0f;
 			}
         }
-        
+
 
         // Trigger Animation Events (e.g., Audio actions)
         const float prevNorm = runtime.previousStateNormalized;
@@ -656,7 +656,7 @@ namespace ignite
 				}
 			}
         }
-        
+
 
         // =========================================================================
         // Step 1: Check Active Motion Flags (Root Motion & In-Place)
@@ -818,7 +818,7 @@ namespace ignite
 				runtime.finalTransforms[i] = runtime.globalPoses[i].GetMatrix() * skeleton->joints[i].inverseBindPose;
 			}
         }
-        
+
 
         return true;
     }

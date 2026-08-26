@@ -18,6 +18,7 @@
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/font.hpp"
+#include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/math/transform.hpp"
@@ -100,7 +101,7 @@ namespace ignite
         m_EditorCamera.UpdateView();
         m_EditorCamera.UpdateProjection(width, height);
         m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
-        
+
         m_EditorCamera2D = m_EditorCamera;
         m_EditorCamera3D = m_EditorCamera;
         m_EditorCamera2D->SetNavigationMode(EditorCamera::NavigationMode::Mode2D);
@@ -185,9 +186,9 @@ namespace ignite
                 std::vector<Entity> children;
                 for (auto childUuid : id.children)
                     children.push_back(SceneManager::GetEntity(m_Scene, childUuid));
-                
+
                 SortHierarchy(children);
-                
+
                 id.children.clear();
                 for (auto& child : children)
                     id.children.push_back(child.GetUUID());
@@ -255,7 +256,7 @@ namespace ignite
             // ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
             // Root tree node
-            
+
             const auto sceneName = m_EditorLayer->IsInPrefabIsolation() ? "Prefab" : assetManager->GetAssetDisplayName(m_Scene->handle);
             const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
                 | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns | ImGuiTreeNodeFlags_DefaultOpen;
@@ -514,7 +515,7 @@ namespace ignite
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, { 0.435f, 0.287f, 0.000f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_Header, { 0.000f, 0.305f, 0.453f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, { 0.780f, 0.520f, 0.000f, 1.000f });
-        
+
         const bool opened = ImGui::TreeNodeEx((void *)imguiPushId, flags, "%s", idComp.name.c_str());
         if (isSelected && entity.GetUUID() == m_TrackingSelectedEntity && s_LastAutoScrolledTarget != m_TrackingSelectedEntity)
         {
@@ -524,7 +525,7 @@ namespace ignite
             }
             s_LastAutoScrolledTarget = m_TrackingSelectedEntity;
         }
-        
+
         ImGui::PopStyleColor(3);
 
         if (!m_Scene->IsRunning() || true)
@@ -544,7 +545,7 @@ namespace ignite
 
                     ImGui::EndMenu();
                 }
-                
+
                 auto deletString = std::format("Delete ({})", m_SelectedEntities.size());
                 if (ImGui::MenuItem(deletString.c_str()))
                 {
@@ -582,7 +583,7 @@ namespace ignite
                     }
                 }
 
-                ImGui::SetDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM, 
+                ImGui::SetDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM,
                     selectedUUIDs.data(),
                     selectedUUIDs.size() * sizeof(UUID));
 
@@ -680,7 +681,7 @@ namespace ignite
         {
             auto project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
             auto assetManager = AssetManager::GetInstance();
-            
+
             // Main Component
             // ID Component
             auto &idComp = selectedEntity.GetComponent<IDComponent>();
@@ -996,13 +997,13 @@ namespace ignite
                     UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
                     UI::DrawFloatControl("Shadow Distance", &c.shadowDistance, 1.0f, 10.0f, 2000.0f);
 
-                    static const char *resolutionLabels[] = 
-                    { 
-                        "Low - 512px", 
-                        "Medium - 1024px", 
-                        "High - 2048px", 
+                    static const char *resolutionLabels[] =
+                    {
+                        "Low - 512px",
+                        "Medium - 1024px",
+                        "High - 2048px",
                         "Ultra - 4096px",
-                        "Ultimate - 8192px" 
+                        "Ultimate - 8192px"
                     };
 
                     UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &c.shadowResolution);
@@ -1784,7 +1785,7 @@ namespace ignite
             RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
-                
+
                 static std::array<const char *, 3> bodyTypeStr = { "Static", "Kinematic", "Dynamic" };
                 int bodyTypeIndex = static_cast<int>(c.bodyType);
                 if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), &bodyTypeIndex))
@@ -2102,7 +2103,7 @@ namespace ignite
                             }
                         }
                     });;
-                
+
                 if (isLoaded)
                 {
                     if (Ref<FmodSound> sound = assetManager->GetAsset<FmodSound>(c.handle))
@@ -2120,7 +2121,7 @@ namespace ignite
                             sound->SetPan(c.pan);
                             sound->SetMode(c.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
                         }
-                        
+
                         ImGui::SameLine();
                         if (ImGui::Button("Stop"))
                         {
@@ -4140,7 +4141,7 @@ namespace ignite
                             drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
                             drawList->PopClipRect();
                         }
-                        
+
                         {
                             constexpr float padding = 18.0f;
                             float yPosition = 6.0f;
@@ -4172,7 +4173,7 @@ namespace ignite
 
     void ScenePanel::RenderToolbar()
     {
-        // TOOLBAR: 
+        // TOOLBAR:
         constexpr ImVec2 buttonSize = { 28.0f, 28.0f };
         static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
         int cameraModeIndex = 0;
@@ -4304,7 +4305,7 @@ namespace ignite
             if (isScenePlaying)
             {
                 Application::SubmitToMainThread([this]()
-                    { 
+                    {
                         m_EditorLayer->OnSceneStop();
                         m_SceneFocused = false;
                     });
@@ -4316,10 +4317,10 @@ namespace ignite
             }
             else
             {
-                Application::SubmitToMainThread([this]() 
-                    { 
-                        m_EditorLayer->OnScenePlay(); 
-                        m_SceneFocused = true; 
+                Application::SubmitToMainThread([this]()
+                    {
+                        m_EditorLayer->OnScenePlay();
+                        m_SceneFocused = true;
                     });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
@@ -4339,9 +4340,9 @@ namespace ignite
             if (isSceneSimulate)
             {
                 Application::SubmitToMainThread([this]()
-                    { 
+                    {
                         m_EditorLayer->OnSceneStop();
-                        m_SceneFocused = false; 
+                        m_SceneFocused = false;
                     });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
@@ -4352,9 +4353,9 @@ namespace ignite
             else
             {
                 Application::SubmitToMainThread([this]()
-                    { 
+                    {
                         m_EditorLayer->OnSceneSimulate();
-                        m_SceneFocused = true; 
+                        m_SceneFocused = true;
                     });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
@@ -4458,7 +4459,7 @@ namespace ignite
         drawList->AddPolyline(screenCorners.data(), static_cast<int>(screenCorners.size()), boundsColor, ImDrawFlags_Closed, 2.0f);
 
         const ImVec2 mousePos = ImGui::GetMousePos();
-        const bool mouseInViewport = 
+        const bool mouseInViewport =
             mousePos.x >= globals::GEditor::EditorViewport.min.x && mousePos.x <= (globals::GEditor::EditorViewport.min.x + globals::GEditor::EditorViewport.max.x) &&
             mousePos.y >= globals::GEditor::EditorViewport.min.y && mousePos.y <= (globals::GEditor::EditorViewport.min.y + globals::GEditor::EditorViewport.max.y);
 

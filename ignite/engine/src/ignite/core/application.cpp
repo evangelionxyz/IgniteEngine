@@ -5,6 +5,7 @@
 #include "application.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "input/app_event.hpp"
+
 #include "ignite/imgui/imgui_layer.hpp"
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/graphics/renderer.hpp"
@@ -106,7 +107,7 @@ namespace ignite
         }
 
         // Create native filesystem
-        const ignite::Path exePath = m_CreateInfo.cmdLineArgs[0];
+        const std::filesystem::path exePath = m_CreateInfo.cmdLineArgs[0];
         m_AppNativeFileSystem = CreateRef<vfs::NativeFileSystem>();
         m_AppRelativeFilesystem = CreateRef<vfs::RelativeFileSystem>(m_AppNativeFileSystem, exePath.parent_path());
 
@@ -225,7 +226,7 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
 
         std::queue<std::pair<std::function<void()>, std::string>> pending;
-        
+
         {
             std::lock_guard lock(m_ThreadFuncsMutex);
             pending.swap(m_ThreadFuncs);
@@ -439,7 +440,7 @@ namespace ignite
         IGN_PROFILE_SCOPE("Application::Run");
         DeviceManager *deviceManager = m_Window->GetDeviceManager();
         nvrhi::IDevice *device = deviceManager->GetDevice();
-        
+
         // Start render thread
         if (!m_CreateInfo.headless)
         {
@@ -451,9 +452,9 @@ namespace ignite
             unsigned long long id = std::stoull(ss.str());
             LOG_WARN("[Application] Render thread: {}", id);
         }
-        
+
         SDL_Event sdlEvent;
-        
+
         while (m_Window->IsLooping())
         {
             IGN_PROFILE_SCOPE("MainThread::Frame");
@@ -476,11 +477,6 @@ namespace ignite
                 if (m_CreateInfo.useGui)
                 {
                     m_ImGuiLayer->PollEvent(sdlEvent);
-                }
-
-                for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
-                {
-                    (*layer)->OnSDLEvent(&sdlEvent);
                 }
             }
 
@@ -523,7 +519,7 @@ namespace ignite
                             m_CurrentFrameReady = true;
                         }
                         m_FrameCV.notify_one();
-                        
+
                         {
                             IGN_PROFILE_SCOPE("MainThread::WaitForRenderComplete");
                             std::unique_lock<std::mutex> lock(m_FrameMutex);
@@ -552,7 +548,7 @@ namespace ignite
                     }
                 }
             }
-            
+
             // Flush Rust-side deferred operations before frame ends
             ignite_rs_engine_end_frame();
 

@@ -14,7 +14,7 @@ namespace JPH
 
 namespace ignite::physics
 {
-	class IGN_API JoltCharacterController : public PhysicsCharacterController
+	class IGN_PHYSICS_API JoltCharacterController : public PhysicsCharacterController
 	{
 	public:
 		JoltCharacterController(const CharacterControllerDesc &desc, uint64_t userData, JPH::PhysicsSystem *physicsSystem, JPH::TempAllocator *tempAllocator);

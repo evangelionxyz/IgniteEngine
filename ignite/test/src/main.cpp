@@ -39,10 +39,10 @@ using namespace ignite;
 // -------------------------------------------------
 TEST(BlendSpace, 2DEvaluationAndSerialization)
 {
-    ignite::Path filepath = "test-resources/temp/test_blendspace.bs2d";
-    if (!ignite::Path::exists(filepath.parent_path()))
+    std::filesystem::path filepath = "test-resources/temp/test_blendspace.bs2d";
+    if (!std::filesystem::exists(filepath.parent_path()))
     {
-        ignite::Path::create_directories(filepath.parent_path());
+        std::filesystem::create_directories(filepath.parent_path());
     }
 
     Ref<BlendSpace> bs = BlendSpace::Create();
@@ -188,10 +188,10 @@ TEST(AnimatorController, BlendSpaceParameterEvaluation)
 
 TEST(AnimationMontage, NotifyCallbackSerializationAndCompat)
 {
-    ignite::Path filepath = "test-resources/temp/test_montage_v2.montage";
-    if (!ignite::Path::exists(filepath.parent_path()))
+    std::filesystem::path filepath = "test-resources/temp/test_montage_v2.montage";
+    if (!std::filesystem::exists(filepath.parent_path()))
     {
-        ignite::Path::create_directories(filepath.parent_path());
+        std::filesystem::create_directories(filepath.parent_path());
     }
 
     Ref<AnimationMontage> montage = CreateRef<AnimationMontage>();
@@ -255,27 +255,27 @@ TEST(AnimationMontage, NotifyCallbackTimestepTrigger)
 
 TEST(InputSerializer, SerializeDeserialize)
 {
-    ignite::Path filepath = "test-resources/temp/test_input_system.json";
-    
-    if (!ignite::Path::exists(filepath.parent_path()))
+    std::filesystem::path filepath = "test-resources/temp/test_input_system.json";
+
+    if (!std::filesystem::exists(filepath.parent_path()))
     {
-        ignite::Path::create_directories(filepath.parent_path());
+        std::filesystem::create_directories(filepath.parent_path());
     }
 
     Ref<InputMapping> inputSystem = CreateRef<InputMapping>();
-    
+
     // Add some input mappings
     inputSystem->MapKey(Key::Space, "Jump");
     inputSystem->MapKey(Key::W, "MoveForward");
     inputSystem->MapKey(Key::S, "MoveBackward");
-    
+
     // Serialize the InputMapping to a file
     ASSERT_TRUE(inputSystem->Serialize(filepath));
 
     // Deserialize the InputMapping from the file
     Ref<InputMapping> deserializedInputMapping = InputMapping::Deserialize(filepath);
     ASSERT_NE(deserializedInputMapping, nullptr);
-    
+
     // Check that the deserialized input mappings match the original
     EXPECT_EQ(deserializedInputMapping->m_KeyMappings.size(), inputSystem->m_KeyMappings.size());
     for (const auto &[key, action] : inputSystem->m_KeyMappings)
@@ -291,15 +291,15 @@ TEST(InputSerializer, SerializeDeserialize)
 // -------------------------------------------------
 TEST(EngineTests, ProjectCreation)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/ProjectCreation";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/ProjectCreation";
 
     // Clean up any existing directory
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "TestProject";
@@ -314,14 +314,14 @@ TEST(EngineTests, ProjectCreation)
     ASSERT_NE(project, nullptr);
 
     // Verify project directories were created
-    EXPECT_TRUE(ignite::Path::exists(project->GetAssetDirectory()));
-    EXPECT_TRUE(ignite::Path::exists(project->GetScriptsDirectory()));
-    EXPECT_TRUE(ignite::Path::exists(project->GetScriptBinDirectory()));
+    EXPECT_TRUE(std::filesystem::exists(project->GetAssetDirectory()));
+    EXPECT_TRUE(std::filesystem::exists(project->GetScriptsDirectory()));
+    EXPECT_TRUE(std::filesystem::exists(project->GetScriptBinDirectory()));
 
     // Verify generated visual studio project files
-    EXPECT_TRUE(ignite::Path::exists(project->GetSolutionFilepath()));
-    EXPECT_TRUE(ignite::Path::exists(projectDir / "TestProject.csproj"));
-    EXPECT_TRUE(ignite::Path::exists(projectDir / "Directory.Build.props"));
+    EXPECT_TRUE(std::filesystem::exists(project->GetSolutionFilepath()));
+    EXPECT_TRUE(std::filesystem::exists(projectDir / "TestProject.csproj"));
+    EXPECT_TRUE(std::filesystem::exists(projectDir / "Directory.Build.props"));
 }
 
 // -------------------------------------------------
@@ -329,14 +329,14 @@ TEST(EngineTests, ProjectCreation)
 // -------------------------------------------------
 TEST(EngineTests, AssetManager)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/AssetManager";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/AssetManager";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "AssetManagerProject";
@@ -357,8 +357,8 @@ TEST(EngineTests, AssetManager)
     for (auto texFilepath : { "test_image.png" })
     {
         // Create a dummy image asset under Assets (.png extension maps to AssetType::Texture)
-        ignite::Path assetFilepath = project->GetProjectFilepath(project->GetAssetDirectory() / texFilepath);
-        ignite::Path::create_directories(assetFilepath.parent_path());
+        std::filesystem::path assetFilepath = project->GetProjectFilepath(project->GetAssetDirectory() / texFilepath);
+        std::filesystem::create_directories(assetFilepath.parent_path());
         {
             std::ofstream file(assetFilepath.generic_string());
             file << "Fake PNG Data";
@@ -375,7 +375,7 @@ TEST(EngineTests, AssetManager)
         EXPECT_EQ(meta.type, AssetType::Texture);
         EXPECT_EQ(project->GetProjectRelativeFilepath(meta.filepath).generic_string(), std::format("Assets/{}", texFilepath));
     }
-    
+
 }
 
 // -------------------------------------------------
@@ -383,14 +383,14 @@ TEST(EngineTests, AssetManager)
 // -------------------------------------------------
 TEST(EngineTests, Serialization)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/SerializationProject";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/SerializationProject";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "SerializationProject";
@@ -403,7 +403,7 @@ TEST(EngineTests, Serialization)
 
     Ref<Project> project = Project::Create(info);
     ASSERT_NE(project, nullptr);
-    
+
     // Set default scene handle and serialize
     AssetHandle testSceneHandle(42);
     project->SetDefaultScene(testSceneHandle);
@@ -424,14 +424,14 @@ TEST(EngineTests, Serialization)
 // -------------------------------------------------
 TEST(EngineTests, CSharpScripting)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/ScriptingProject";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/ScriptingProject";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "ScriptingProject";
@@ -449,9 +449,9 @@ TEST(EngineTests, CSharpScripting)
     project->InitScriptEngine();
 
     // Create a new C# script
-    ignite::Path scriptFilepath = project->GetScriptsDirectory() / "Player.cs";
+    std::filesystem::path scriptFilepath = project->GetScriptsDirectory() / "Player.cs";
     project->CreateCSharpScript(scriptFilepath);
-    EXPECT_TRUE(ignite::Path::exists(scriptFilepath));
+    EXPECT_TRUE(std::filesystem::exists(scriptFilepath));
 
     // Wait for compilation & script engine loading assembly
     auto scriptEngine = project->GetScriptEngine();
@@ -478,14 +478,14 @@ TEST(EngineTests, CSharpScripting)
 // -------------------------------------------------
 TEST(EngineTests, ActionInputSystem)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/ActionInputProject";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/ActionInputProject";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "ActionInputProject";
@@ -503,7 +503,7 @@ TEST(EngineTests, ActionInputSystem)
     project->InitScriptEngine();
 
     // Create a new C# script ActionTest.cs
-    ignite::Path scriptFilepath = project->GetScriptsDirectory() / "ActionTest.cs";
+    std::filesystem::path scriptFilepath = project->GetScriptsDirectory() / "ActionTest.cs";
     {
         std::ofstream out(scriptFilepath.generic_string());
         out << R"(using Ignite;
@@ -547,7 +547,7 @@ public class ActionTest : Entity
     Ref<InputMapping> mapping = CreateRef<InputMapping>();
     mapping->MapKey(Key::Space, "Jump");
     mapping->MapKey(Key::F, "Fire");
-    
+
     InputSystem::SetInputMapping(mapping);
 
     // Verify initial C++ side mapping state
@@ -574,14 +574,14 @@ public class ActionTest : Entity
 // -------------------------------------------------
 TEST(EngineTests, AnimatorScriptingIntegration)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/AnimatorScriptProject";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/AnimatorScriptProject";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "AnimatorScriptProject";
@@ -598,7 +598,7 @@ TEST(EngineTests, AnimatorScriptingIntegration)
     project->InitScriptEngine();
 
     // Create C# script AnimationTest.cs
-    ignite::Path scriptFilepath = project->GetScriptsDirectory() / "AnimationTest.cs";
+    std::filesystem::path scriptFilepath = project->GetScriptsDirectory() / "AnimationTest.cs";
     {
         std::ofstream out(scriptFilepath.generic_string());
         out << R"(using Ignite;
@@ -661,7 +661,7 @@ public class AnimationTest : Entity
     controller->params["IsMoving"] = { .name = "IsMoving", .boolVal = false, .type = AnimParam::Type::Bool };
     controller->params["StateIndex"] = { .name = "StateIndex", .intVal = 0, .type = AnimParam::Type::Int };
     controller->params["StateName"] = { .name = "StateName", .strVal = "", .type = AnimParam::Type::String };
-    
+
 
     AnimState blendState;
     blendState.name = "WalkRunState";
@@ -701,14 +701,14 @@ public class AnimationTest : Entity
 // -------------------------------------------------
 TEST(SceneTransition, BasicTransition)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/SceneTransitionBasic";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/SceneTransitionBasic";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "SceneTransitionBasicProject";
@@ -791,14 +791,14 @@ TEST(SceneTransition, BasicTransition)
 
 TEST(SceneTransition, SharedAssetRetained)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/SceneTransitionShared";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/SceneTransitionShared";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "SceneTransitionSharedProject";
@@ -857,7 +857,7 @@ TEST(SceneTransition, SharedAssetRetained)
     textureMeta.type = AssetType::Texture;
     textureMeta.filepath = "Assets/SharedTexture.png";
     assetManager->AssignMetaData(sharedTextureHandle, textureMeta);
-    
+
     Ref<Asset> dummyTexture = CreateRef<Asset>();
     dummyTexture->SetReadyFlag(true);
     assetManager->AssignAsset(sharedTextureHandle, dummyTexture);
@@ -883,14 +883,14 @@ TEST(SceneTransition, SharedAssetRetained)
 
 TEST(SceneTransition, InvalidHandleRejected)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/SceneTransitionInvalid";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/SceneTransitionInvalid";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "SceneTransitionInvalidProject";
@@ -947,12 +947,12 @@ TEST(SceneTransition, InvalidHandleRejected)
 // -------------------------------------------------
 TEST(EngineTests, ScriptHotReload)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/ScriptHotReloadProject";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/ScriptHotReloadProject";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
         std::filesystem::remove_all(projectDir.string());
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "ScriptHotReloadProject";
@@ -967,7 +967,7 @@ TEST(EngineTests, ScriptHotReload)
     ASSERT_NE(project, nullptr);
 
     // --- Write initial Player.cs (one public field) ---
-    ignite::Path playerScript = project->GetScriptsDirectory() / "Player.cs";
+    std::filesystem::path playerScript = project->GetScriptsDirectory() / "Player.cs";
     {
         std::ofstream out(playerScript.generic_string());
         out << R"(using Ignite;
@@ -980,7 +980,7 @@ public class Player : Entity
     }
 
     // --- Write initial GameSettings.cs (ScriptableObject, one public field) ---
-    ignite::Path settingsScript = project->GetScriptsDirectory() / "GameSettings.cs";
+    std::filesystem::path settingsScript = project->GetScriptsDirectory() / "GameSettings.cs";
     {
         std::ofstream out(settingsScript.generic_string());
         out << R"(using Ignite;
@@ -1115,14 +1115,14 @@ public class GameSettings : ScriptableObject
 // -------------------------------------------------
 TEST(EngineTests, ScriptEngineLivePlayModeHotReload)
 {
-    ignite::Path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
-    ignite::Path projectDir = testResourcesRoot / "temp/LiveHotReloadProject";
+    std::filesystem::path testResourcesRoot = vfs::GetExecutableDirectory() / "test-resources";
+    std::filesystem::path projectDir = testResourcesRoot / "temp/LiveHotReloadProject";
 
-    if (ignite::Path::exists(projectDir))
+    if (std::filesystem::exists(projectDir))
     {
         std::filesystem::remove_all(projectDir.string());
     }
-    ignite::Path::create_directories(projectDir);
+    std::filesystem::create_directories(projectDir);
 
     ProjectInfo info;
     info.name = "LiveHotReloadProject";
@@ -1139,7 +1139,7 @@ TEST(EngineTests, ScriptEngineLivePlayModeHotReload)
     project->InitScriptEngine();
 
     // Create C# script LiveTestScript.cs
-    ignite::Path scriptFilepath = project->GetScriptsDirectory() / "LiveTestScript.cs";
+    std::filesystem::path scriptFilepath = project->GetScriptsDirectory() / "LiveTestScript.cs";
     {
         std::ofstream out(scriptFilepath.generic_string());
         out << R"(using Ignite;
@@ -1261,10 +1261,10 @@ TEST(UILayoutEngine, FlexAndInvalidationAndSerialization)
     EXPECT_TRUE(rootContainer->m_DirtyLayout);
 
     // Test 3: Serialization & Backward Compatibility
-    ignite::Path filepath = "test-resources/temp/test_ui_layout.widget";
-    if (!ignite::Path::exists(filepath.parent_path()))
+    std::filesystem::path filepath = "test-resources/temp/test_ui_layout.widget";
+    if (!std::filesystem::exists(filepath.parent_path()))
     {
-        ignite::Path::create_directories(filepath.parent_path());
+        std::filesystem::create_directories(filepath.parent_path());
     }
 
     Ref<WidgetCanvas> canvas = CreateRef<WidgetCanvas>(nullptr);

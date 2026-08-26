@@ -26,8 +26,8 @@ namespace ignite
 		std::unordered_map<MouseCode, std::string> m_MouseMappings;
 		std::unordered_map<uint8_t, std::string> m_JoystickMappings;
 
-		virtual bool Serialize(const ignite::Path &filepath) override;
-		static Ref<InputMapping> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+		static Ref<InputMapping> Deserialize(const std::filesystem::path &filepath);
 
 		static AssetType GetStaticAssetType() { return AssetType::InputMapping; }
 		virtual AssetType GetAssetType() override { return GetStaticAssetType(); }

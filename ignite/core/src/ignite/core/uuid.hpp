@@ -1,16 +1,16 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
-#ifndef IGN_UUID_HPP
-#define IGN_UUID_HPP
+#ifndef IGN_CORE_UUID_HPP
+#define IGN_CORE_UUID_HPP
+
+#include "ignite/core/base.hpp"
 
 #include <functional>
-#include "base.hpp"
-#include "types.hpp"
 
 namespace ignite
 {
-    class IGN_API UUID
+    class IGN_CORE_API UUID
     {
     public:
         UUID();

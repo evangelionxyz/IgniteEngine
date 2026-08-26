@@ -4,13 +4,14 @@
 #define IGN_JOLT_HEIGHT_FIELD_COLLIDER_HPP
 
 #include "ignite/physics/3d/physics_collider.hpp"
+
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 #include <vector>
 
 namespace ignite::physics
 {
-	class IGN_API JoltHeightFieldCollider : public PhysicsHeightFieldCollider
+	class IGN_PHYSICS_API JoltHeightFieldCollider : public PhysicsHeightFieldCollider
 	{
 	public:
 		explicit JoltHeightFieldCollider(const HeightFieldColliderDesc &desc);

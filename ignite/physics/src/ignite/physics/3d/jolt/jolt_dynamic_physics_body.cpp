@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_dynamic_physics_body.hpp"
 
 #include <Jolt/Jolt.h>

@@ -4,12 +4,13 @@
 #define IGN_JOLT_CAPSULE_COLLIDER_HPP
 
 #include "ignite/physics/3d/physics_collider.hpp"
+
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 
 namespace ignite::physics
 {
-	class IGN_API JoltCapsuleCollider : public PhysicsCapsuleCollider
+	class IGN_PHYSICS_API JoltCapsuleCollider : public PhysicsCapsuleCollider
 	{
 	public:
 		explicit JoltCapsuleCollider(const CapsuleColliderDesc &desc);

@@ -34,7 +34,7 @@ namespace ignite
         layoutDesc.setVisibility(nvrhi::ShaderType::All);
         layoutDesc.setLayoutType(nvrhi::BindlessLayoutDesc::LayoutType::MutableSrvUavCbv);
         layoutDesc.setMaxCapacity(16384);
-        
+
         s_BindlessLayout = device->createBindlessLayout(layoutDesc);
         LOG_ASSERT(s_BindlessLayout, "[BindlessSystem] Failed to create bindless layout");
 
@@ -131,7 +131,7 @@ namespace ignite
         s_CurrentFrame++;
 
         nvrhi::ITexture* fallbackTex = Renderer::GetWhiteTexture() ? Renderer::GetWhiteTexture()->GetHandle() : nullptr;
-        
+
         if (!s_FallbackBound && fallbackTex)
         {
             s_Device->writeDescriptorTable(s_DescriptorTable, nvrhi::BindingSetItem::Texture_SRV(0, fallbackTex));

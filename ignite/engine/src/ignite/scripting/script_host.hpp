@@ -9,7 +9,6 @@
 
 #include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
-#include "ignite/core/path.hpp"
 
 #include <string>
 #include <memory>
@@ -26,10 +25,10 @@ namespace ignite
         ~ScriptHost();
 
         // Initialize the .NET runtime with the specified config
-        bool Init(const ignite::Path &configPath);
+        bool Init(const std::filesystem::path &configPath);
 
         // Load a .NET assembly (core or app)
-        bool LoadAssembly(const ignite::Path &assemblyPath);
+        bool LoadAssembly(const std::filesystem::path &assemblyPath);
         bool ResetLoadContext();
 
         // Register method signatures for script methods
@@ -63,8 +62,8 @@ namespace ignite
         bool Invoke(int methodId, const void *argsPtr, int argCount, void *returnPtr);
 
         // Get all non-abstract classes derived from baseType in an assembly
-        std::string GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType) const;
-        std::string GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType) const;
+        std::string GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType) const;
+        std::string GetCreateAssetMenuData(const std::filesystem::path &assemblyPath, const std::string &baseType) const;
         std::string GetFieldUIAttribute(const std::string &classFullName, const std::string &attributeTypeName) const;
 
         // Check if initialized
@@ -93,7 +92,7 @@ namespace ignite
         Scope<mochi::AssemblyLoadContext> m_LoadContext;
         mochi::ManagedAssembly *m_CoreAssembly = nullptr;
         mochi::ManagedAssembly *m_AppAssembly = nullptr;
-        ignite::Path m_BaseDir;
+        std::filesystem::path m_BaseDir;
         std::unordered_map<uint64_t, mochi::ManagedObject> m_InstanceMap;
         std::unordered_map<std::string, mochi::Type *> m_TypeMap;
         std::unordered_map<int, MethodBinding> m_MethodBindings;
@@ -104,7 +103,7 @@ namespace ignite
         int m_ReloadCounter = 0;
 
     private:
-        mochi::ManagedAssembly *LoadAssemblyInternal(const ignite::Path &assemblyPath, mochi::ManagedAssembly *&targetSlot);
+        mochi::ManagedAssembly *LoadAssemblyInternal(const std::filesystem::path &assemblyPath, mochi::ManagedAssembly *&targetSlot);
         mochi::Type *FindType(const std::string &typeName) const;
         static std::optional<MethodBinding> CreateMethodBinding(MethodBinding::Kind kind, uint64_t instanceId, mochi::Type *type, const std::string &methodName);
         static mochi::Type *FindFieldType(mochi::ManagedObject &instance, const std::string &fieldName);

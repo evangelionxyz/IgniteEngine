@@ -13,6 +13,7 @@
 #include "asset_editor_panel.hpp"
 
 #include <stack>
+#include <queue>
 #include <map>
 #include <unordered_set>
 
@@ -24,14 +25,15 @@ namespace ignite
     struct FileTreeNode
     {
         AssetHandle handle = AssetHandle(0);
-        ignite::Path path;
+        std::filesystem::path path;
+
         // path, index
-        std::map<ignite::Path, uint32_t> children;
+        std::map<std::filesystem::path, uint32_t> children;
         std::vector<uint32_t> sortedChildren;
         uint32_t parent = static_cast<uint32_t>(-1);
         bool isDeleted = false;
 
-        FileTreeNode(const ignite::Path &path, AssetHandle handle)
+        FileTreeNode(const std::filesystem::path &path, AssetHandle handle)
             : path(path), handle(handle)
         {
         }
@@ -61,41 +63,41 @@ namespace ignite
     private:
         void RefreshEntryPathList();
         void RefreshAssetTree();
-        void LoadAssetTree(const ignite::Path &directory);
+        void LoadAssetTree(const std::filesystem::path &directory);
         void RebuildSortedTreeCache();
 
         void UIRenderFileTree(FileTreeNode *node);
-        void UIRenderFileButton(const ignite::Path &item);
+        void UIRenderFileButton(const std::filesystem::path &item);
         void UIRenderNavigationBar();
 		void UIRenderContextMenu();
 		void UIRenderPopupModals();
 
-        void PruneMissingNodes(uint32_t nodeIndex, const ignite::Path &basePath);
-        void PruneMissingNodesAlt(uint32_t nodeIndex, const ignite::Path &basePath);
-        void CollectNodesToDelete(uint32_t nodeIndex, const ignite::Path &basePath, std::vector<uint32_t> &nodesToDelete);
+        void PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path &basePath);
+        void PruneMissingNodesAlt(uint32_t nodeIndex, const std::filesystem::path &basePath);
+        void CollectNodesToDelete(uint32_t nodeIndex, const std::filesystem::path &basePath, std::vector<uint32_t> &nodesToDelete);
         void CollectNodeAndDescendants(uint32_t nodeIndex, std::vector<uint32_t> &nodesToDelete);
         void MarkNodeDeletedRecursive(uint32_t nodeIndex);
         void DeleteSingleNode(uint32_t nodeIndex);
         void UpdateIndicesAfterDeletion(uint32_t deletedIndex);
         void CompactTree();
 
-        void DragDropSource(const ignite::Path &filepath);
+        void DragDropSource(const std::filesystem::path &filepath);
         void CreateNewPrefab();
-        bool DuplicateItem(const ignite::Path &filepath);
-        bool MoveOrCopyPathToDirectory(const ignite::Path &sourcePath, const ignite::Path &targetDirectory, bool moveItem);
-        bool MoveOrCopySelectionToDirectory(const ignite::Path &targetDirectory, bool moveItem);
-        void UpdateSelection(const ignite::Path &filepath);
-        std::vector<ignite::Path> GetDragSourcePaths(const ignite::Path &draggedPath) const;
-        void QueueMoveCopyPopup(const ignite::Path &draggedPath, const ignite::Path &targetDirectory);
+        bool DuplicateItem(const std::filesystem::path &filepath);
+        bool MoveOrCopyPathToDirectory(const std::filesystem::path &sourcePath, const std::filesystem::path &targetDirectory, bool moveItem);
+        bool MoveOrCopySelectionToDirectory(const std::filesystem::path &targetDirectory, bool moveItem);
+        void UpdateSelection(const std::filesystem::path &filepath);
+        std::vector<std::filesystem::path> GetDragSourcePaths(const std::filesystem::path &draggedPath) const;
+        void QueueMoveCopyPopup(const std::filesystem::path &draggedPath, const std::filesystem::path &targetDirectory);
 
         static void OnImportAssetDialog(void *userData, const char * const *fileList, int filter);
 
-        ignite::Path GetNodeFullpath(uint32_t nodeIndex) const;
-        
-        bool IsImageFile(const ignite::Path &filepath) const;
-        Ref<Texture> GetOrCreateThumbnail(const ignite::Path &filepath, bool isDirectory);
+        std::filesystem::path GetNodeFullpath(uint32_t nodeIndex) const;
+
+        bool IsImageFile(const std::filesystem::path &filepath) const;
+        Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath, bool isDirectory);
         ImVec2 CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const;
-        void StartThumbnailLoad(const ignite::Path &filepath);
+        void StartThumbnailLoad(const std::filesystem::path &filepath);
         void UnloadUnusedThumbnails();
         void ClearThumbnails();
 
@@ -108,28 +110,28 @@ namespace ignite
         int m_ThumbnailSize = 72;
         int m_LastThumbnailSize = 72;
 
-        ignite::Path m_BaseDirectory;
-        ignite::Path m_CurrentDirectory;
-        ignite::Path m_SelectedFileTree;
+        std::filesystem::path m_BaseDirectory;
+        std::filesystem::path m_CurrentDirectory;
+        std::filesystem::path m_SelectedFileTree;
 
-        std::stack<ignite::Path> m_BackwardPathStack;
-        std::stack<ignite::Path> m_ForwardPathStack;
-        std::vector<ignite::Path> m_PathEntryList;
+        std::stack<std::filesystem::path> m_BackwardPathStack;
+        std::stack<std::filesystem::path> m_ForwardPathStack;
+        std::vector<std::filesystem::path> m_PathEntryList;
 
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
-        std::unordered_map<ignite::Path, FileThumbnail> m_Thumbnails;
-        std::queue<ignite::Path> m_PendingThumbnailLoads;
-        std::unordered_set<ignite::Path> m_ThumbnailLoadsInFlight;
+        std::unordered_map<std::filesystem::path, FileThumbnail> m_Thumbnails;
+        std::queue<std::filesystem::path> m_PendingThumbnailLoads;
+        std::unordered_set<std::filesystem::path> m_ThumbnailLoadsInFlight;
         uint64_t m_ThumbnailLoadGeneration = 0;
-        
+
         uint64_t m_CurrentFrame = 0;
         static constexpr uint64_t s_ThumbnailUnloadFrameThreshold = 300; // Unload after 5 seconds at 60fps
 
         static uint32_t s_InstanceCount;
         static std::unordered_map<std::string, Ref<Texture>> s_SharedIcons;
-        static std::unordered_map<ignite::Path, FileThumbnail> s_SharedThumbnails;
-        static std::queue<ignite::Path> s_SharedPendingThumbnailLoads;
-        static std::unordered_set<ignite::Path> s_SharedThumbnailLoadsInFlight;
+        static std::unordered_map<std::filesystem::path, FileThumbnail> s_SharedThumbnails;
+        static std::queue<std::filesystem::path> s_SharedPendingThumbnailLoads;
+        static std::unordered_set<std::filesystem::path> s_SharedThumbnailLoadsInFlight;
         static uint64_t s_SharedThumbnailLoadGeneration;
         static uint64_t s_SharedCurrentFrame;
 
@@ -142,10 +144,10 @@ namespace ignite
         bool m_ShowRenameModal = false;
         bool m_ShowDeleteModal = false;
         bool m_ShowMoveCopyPopup = false;
-        std::vector<ignite::Path> m_SelectedItems;
-        std::vector<ignite::Path> m_ActiveDragItems;
-        std::vector<ignite::Path> m_PendingDragDropSources;
-        ignite::Path m_PendingDragDropTargetDirectory;
+        std::vector<std::filesystem::path> m_SelectedItems;
+        std::vector<std::filesystem::path> m_ActiveDragItems;
+        std::vector<std::filesystem::path> m_PendingDragDropSources;
+        std::filesystem::path m_PendingDragDropTargetDirectory;
         char m_PopupInputBuffer[1024] = { 0 }; // used for create/rename names
     };
 }

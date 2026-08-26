@@ -187,7 +187,7 @@ TEST_F(WidgetSystemTest, CanvasRoot_DefaultSpaceBetween)
 // -----------------------------------------------------------------------------
 TEST_F(WidgetSystemTest, Serialization_FullRoundtrip)
 {
-    ignite::Path filepath = "test-resources/temp/widget_full_test.wdgt";
+    std::filesystem::path filepath = "test-resources/temp/widget_full_test.wdgt";
 
     Ref<WidgetCanvas> canvasSrc = CreateRef<WidgetCanvas>();
     WidgetContainer *root = canvasSrc->CreateRoot(1920, 1080);

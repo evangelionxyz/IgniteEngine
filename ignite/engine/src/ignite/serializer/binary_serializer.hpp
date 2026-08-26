@@ -16,7 +16,6 @@
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/terrain/terrain.hpp"
 
-#include "ignite/core/path.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -143,7 +142,7 @@ namespace ignite
             return (end - current) >= static_cast<std::streamoff>(neededBytes);
         }
 
-        static bool SerializeTextureToPNG(const Ref<Texture> &texture, const ignite::Path &filepath)
+        static bool SerializeTextureToPNG(const Ref<Texture> &texture, const std::filesystem::path &filepath)
         {
             if (!texture)
                 return false;
@@ -167,8 +166,8 @@ namespace ignite
             }
             else
             {
-                const ignite::Path &sourceFilepath = texture->GetFilepath();
-                if (sourceFilepath.empty() || !ignite::Path::exists(sourceFilepath))
+                const std::filesystem::path &sourceFilepath = texture->GetFilepath();
+                if (sourceFilepath.empty() || !std::filesystem::exists(sourceFilepath))
                     return false;
 
                 int sourceWidth = 0;
@@ -192,7 +191,7 @@ namespace ignite
             return result == 1;
         }
 
-        static bool SerializeTextureToEXR(const Ref<Texture> &texture, const ignite::Path &filepath)
+        static bool SerializeTextureToEXR(const Ref<Texture> &texture, const std::filesystem::path &filepath)
         {
             if (!texture)
             {
@@ -219,40 +218,40 @@ namespace ignite
             std::vector<float> alpha(pixelCount, 1.0f);
 
             const auto fillFromFloatRGBA = [&]() -> bool
-            {
-                if (buffer.Size() < pixelCount * 4u * sizeof(float))
                 {
-                    return false;
-                }
+                    if (buffer.Size() < pixelCount * 4u * sizeof(float))
+                    {
+                        return false;
+                    }
 
-                const auto src = (const float *)buffer.Data();
-                for (size_t i = 0; i < pixelCount; ++i)
-                {
-                    red[i] = src[i * 4u + 0u];
-                    green[i] = src[i * 4u + 1u];
-                    blue[i] = src[i * 4u + 2u];
-                    alpha[i] = src[i * 4u + 3u];
-                }
-                return true;
-            };
+                    const auto src = (const float *)buffer.Data();
+                    for (size_t i = 0; i < pixelCount; ++i)
+                    {
+                        red[i] = src[i * 4u + 0u];
+                        green[i] = src[i * 4u + 1u];
+                        blue[i] = src[i * 4u + 2u];
+                        alpha[i] = src[i * 4u + 3u];
+                    }
+                    return true;
+                };
 
             const auto fillFromByteRGBA = [&]() -> bool
-            {
-                if (buffer.Size() < pixelCount * 4u)
                 {
-                    return false;
-                }
+                    if (buffer.Size() < pixelCount * 4u)
+                    {
+                        return false;
+                    }
 
-                const uint8_t *src = buffer.Data();
-                for (size_t i = 0; i < pixelCount; ++i)
-                {
-                    red[i] = static_cast<float>(src[i * 4u + 0u]) / 255.0f;
-                    green[i] = static_cast<float>(src[i * 4u + 1u]) / 255.0f;
-                    blue[i] = static_cast<float>(src[i * 4u + 2u]) / 255.0f;
-                    alpha[i] = static_cast<float>(src[i * 4u + 3u]) / 255.0f;
-                }
-                return true;
-            };
+                    const uint8_t *src = buffer.Data();
+                    for (size_t i = 0; i < pixelCount; ++i)
+                    {
+                        red[i] = static_cast<float>(src[i * 4u + 0u]) / 255.0f;
+                        green[i] = static_cast<float>(src[i * 4u + 1u]) / 255.0f;
+                        blue[i] = static_cast<float>(src[i * 4u + 2u]) / 255.0f;
+                        alpha[i] = static_cast<float>(src[i * 4u + 3u]) / 255.0f;
+                    }
+                    return true;
+                };
 
             bool bufferDecoded = false;
             if (texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT)
@@ -393,7 +392,7 @@ namespace ignite
             return success;
         }
 
-        static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const ignite::Path &filepath)
+        static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -417,11 +416,11 @@ namespace ignite
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             of.close();
-      
+
             return buffer;
         }
 
-        static Ref<Material> DeserializeMaterial(const ignite::Path &filepath)
+        static Ref<Material> DeserializeMaterial(const std::filesystem::path &filepath)
         {
             Ref<Material> mat = CreateRef<Material>();
             std::ifstream inFile(filepath, std::ios::binary);
@@ -435,19 +434,19 @@ namespace ignite
             // Read name
             uint32_t nameSize = 0;
             ReadRaw(inFile, &nameSize);
-            
+
             mat->name = ReadString(inFile, nameSize);
 
             // Read type
             MaterialType matType;
-			ReadRaw(inFile, &matType);
+            ReadRaw(inFile, &matType);
             mat->SetType(matType);
 
-			ReadRaw(inFile, &mat->baseColorTextureHandle);
-			ReadRaw(inFile, &mat->emissiveTextureHandle);
+            ReadRaw(inFile, &mat->baseColorTextureHandle);
+            ReadRaw(inFile, &mat->emissiveTextureHandle);
             ReadRaw(inFile, &mat->metallicTextureHandle);
             ReadRaw(inFile, &mat->roughnessTextureHandle);
-			ReadRaw(inFile, &mat->normalTextureHandle);
+            ReadRaw(inFile, &mat->normalTextureHandle);
             ReadRaw(inFile, &mat->occlusionTextureHandle);
 
             ReadRaw(inFile, &mat->gpuData);
@@ -456,7 +455,7 @@ namespace ignite
             return mat;
         }
 
-        static std::vector<std::byte> SerializeTerrain(const TerrainData *terrain, const ignite::Path &filepath)
+        static std::vector<std::byte> SerializeTerrain(const TerrainData *terrain, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -479,7 +478,7 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<TerrainData> DeserializeTerrain(const ignite::Path &filepath)
+        static Ref<TerrainData> DeserializeTerrain(const std::filesystem::path &filepath)
         {
             std::ifstream inFile(filepath, std::ios::binary);
             if (!inFile)
@@ -511,8 +510,8 @@ namespace ignite
         }
 
         template<typename MeshType_T, MeshVertex VertexType_T>
-	    requires std::is_base_of<Mesh, MeshType_T>::value
-        static std::vector<std::byte> SerializeMesh(const MeshType_T *mesh, const ignite::Path &filepath)
+            requires std::is_base_of<Mesh, MeshType_T>::value
+        static std::vector<std::byte> SerializeMesh(const MeshType_T *mesh, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -539,10 +538,10 @@ namespace ignite
                     AppendRaw(buffer, vertex.color);
 
                     if constexpr (SkeletalMeshVertex<VertexType_T>)
-					{
-						AppendRaw(buffer, vertex.boneIDs);
-						AppendRaw(buffer, vertex.weights);
-					}
+                    {
+                        AppendRaw(buffer, vertex.boneIDs);
+                        AppendRaw(buffer, vertex.weights);
+                    }
                 }
 
                 AppendBytes(buffer, primitive->indices.data(), indicesCount * sizeof(uint32_t));
@@ -573,13 +572,13 @@ namespace ignite
             }
 
             if constexpr (SkeletalMeshVertex<VertexType_T>)
-			{
-				const uint64_t skeletonHandle = static_cast<uint64_t>(mesh->GetSkeletonHandle());
-				AppendRaw(buffer, skeletonHandle);
+            {
+                const uint64_t skeletonHandle = static_cast<uint64_t>(mesh->GetSkeletonHandle());
+                AppendRaw(buffer, skeletonHandle);
 
-				const uint64_t animatorHandle = static_cast<uint64_t>(mesh->GetAnimatorHandle());
-				AppendRaw(buffer, animatorHandle);
-			}
+                const uint64_t animatorHandle = static_cast<uint64_t>(mesh->GetAnimatorHandle());
+                AppendRaw(buffer, animatorHandle);
+            }
 
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
@@ -588,9 +587,9 @@ namespace ignite
             return buffer;
         }
 
-		template<typename MeshType_T, MeshVertex VertexType_T>
-        requires std::is_base_of<Mesh, MeshType_T>::value
-        static Ref<MeshType_T> DeserializeMesh(const ignite::Path &filepath)
+        template<typename MeshType_T, MeshVertex VertexType_T>
+            requires std::is_base_of<Mesh, MeshType_T>::value
+        static Ref<MeshType_T> DeserializeMesh(const std::filesystem::path &filepath)
         {
             std::ifstream inFile(filepath, std::ios::binary);
             if (!inFile)
@@ -620,12 +619,12 @@ namespace ignite
                     ReadRaw(inFile, &vertex.bitangent);
                     ReadRaw(inFile, &vertex.uv);
                     ReadRaw(inFile, &vertex.color);
-					
+
                     if constexpr (SkeletalMeshVertex<VertexType_T>)
-					{
-						ReadRaw(inFile, &vertex.boneIDs);
-						ReadRaw(inFile, &vertex.weights);
-					}
+                    {
+                        ReadRaw(inFile, &vertex.boneIDs);
+                        ReadRaw(inFile, &vertex.weights);
+                    }
 
                     primitive->vertices.push_back(vertex);
                 }
@@ -669,17 +668,17 @@ namespace ignite
 
             if constexpr (SkeletalMeshVertex<VertexType_T>)
             {
-				uint64_t skeletonHandle = 0;
-				if (ReadRaw(inFile, &skeletonHandle) && skeletonHandle != 0)
-				{
-					mesh->SetSkeleton(AssetHandle(skeletonHandle));
-				}
+                uint64_t skeletonHandle = 0;
+                if (ReadRaw(inFile, &skeletonHandle) && skeletonHandle != 0)
+                {
+                    mesh->SetSkeleton(AssetHandle(skeletonHandle));
+                }
 
-				uint64_t animatorHandle = 0;
-				if (ReadRaw(inFile, &animatorHandle) && animatorHandle != 0)
-				{
-					mesh->SetAnimator(AssetHandle(animatorHandle));
-				}
+                uint64_t animatorHandle = 0;
+                if (ReadRaw(inFile, &animatorHandle) && animatorHandle != 0)
+                {
+                    mesh->SetAnimator(AssetHandle(animatorHandle));
+                }
             }
 
             mesh->CalculateLocalAABB();
@@ -688,7 +687,7 @@ namespace ignite
             return mesh;
         }
 
-        static std::vector<std::byte> SerializeSkeletalAnimation(SkeletalAnimation *anim, const ignite::Path &filepath)
+        static std::vector<std::byte> SerializeSkeletalAnimation(SkeletalAnimation *anim, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -713,8 +712,8 @@ namespace ignite
                 uint32_t scaleFrameCountFrameCount = static_cast<uint32_t>(channel.scaleKeys.frames.size());
 
                 // write total frame data size for validation
-                uint32_t framesDataSize = 
-                      translationFrameCount * sizeof(KeyFrame<glm::vec3>)
+                uint32_t framesDataSize =
+                    translationFrameCount * sizeof(KeyFrame<glm::vec3>)
                     + rotationFrameCount * sizeof(KeyFrame<glm::quat>)
                     + scaleFrameCountFrameCount * sizeof(KeyFrame<glm::vec3>);
 
@@ -779,7 +778,7 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<SkeletalAnimation> DeserializeSkeletalAnimation(const ignite::Path &filepath)
+        static Ref<SkeletalAnimation> DeserializeSkeletalAnimation(const std::filesystem::path &filepath)
         {
             Ref<SkeletalAnimation> anim = CreateRef<SkeletalAnimation>();
 
@@ -809,7 +808,7 @@ namespace ignite
             {
                 // read joint index
                 int jointIndex = -1;
-				ReadRaw(inFile, &jointIndex);
+                ReadRaw(inFile, &jointIndex);
 
                 AnimationChannel channel{};
 
@@ -828,8 +827,8 @@ namespace ignite
                 {
                     KeyFrame<glm::vec3> frame{};
 
-					ReadRaw(inFile, &frame.Value);
-					ReadRaw(inFile, &frame.Timestamp);
+                    ReadRaw(inFile, &frame.Value);
+                    ReadRaw(inFile, &frame.Timestamp);
 
                     totalChannelByteSize += sizeof(frame);
 
@@ -838,15 +837,15 @@ namespace ignite
 
                 // process rotation keys
                 uint32_t rotationFrameCount = 0;
-				ReadRaw(inFile, &rotationFrameCount);
+                ReadRaw(inFile, &rotationFrameCount);
 
                 channel.rotationKeys.frames.reserve(rotationFrameCount);
                 for (uint32_t frameIdx = 0; frameIdx < rotationFrameCount; ++frameIdx)
                 {
                     KeyFrame<glm::quat> frame{};
 
-					ReadRaw(inFile, &frame.Value);
-					ReadRaw(inFile, &frame.Timestamp);
+                    ReadRaw(inFile, &frame.Value);
+                    ReadRaw(inFile, &frame.Timestamp);
 
                     totalChannelByteSize += sizeof(frame);
 
@@ -862,8 +861,8 @@ namespace ignite
                 {
                     KeyFrame<glm::vec3> frame{};
 
-					ReadRaw(inFile, &frame.Value);
-					ReadRaw(inFile, &frame.Timestamp);
+                    ReadRaw(inFile, &frame.Value);
+                    ReadRaw(inFile, &frame.Timestamp);
 
                     totalChannelByteSize += sizeof(frame);
 
@@ -927,7 +926,7 @@ namespace ignite
             return anim;
         }
 
-        static std::vector<std::byte> SerializeSkeleton(Skeleton *skeleton, const ignite::Path &filepath)
+        static std::vector<std::byte> SerializeSkeleton(Skeleton *skeleton, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -979,7 +978,7 @@ namespace ignite
             uint32_t stringSize = static_cast<uint32_t>(stringTable.size());
             AppendRaw(buffer, stringSize);
 
-			AppendBytes(buffer, stringTable.data(), stringSize);
+            AppendBytes(buffer, stringTable.data(), stringSize);
 
             // sockets
             uint32_t socketCount = static_cast<uint32_t>(skeleton->sockets.size());
@@ -1014,7 +1013,7 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<Skeleton> DeserializeSkeleton(const ignite::Path &filepath)
+        static Ref<Skeleton> DeserializeSkeleton(const std::filesystem::path &filepath)
         {
             Ref<Skeleton> skeleton = CreateRef<Skeleton>();
 

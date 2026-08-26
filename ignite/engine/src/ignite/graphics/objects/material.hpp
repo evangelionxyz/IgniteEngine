@@ -50,7 +50,7 @@ namespace ignite
         void InvalidateBindingSet() { m_BindingSetDirty = true; m_BindingSet = nullptr; m_BindingSets.clear(); }
         bool IsBindingSetDirty() const { return m_BindingSetDirty; }
         void SetBindingSetClean() { m_BindingSetDirty = false; }
-        
+
         nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
         Ref<ConstantBuffer> GetGPUDataBuffer() { return m_GPUDataBuffer; }
         MaterialType GetType() const { return m_Type; }
@@ -61,8 +61,8 @@ namespace ignite
 		static AssetType GetStaticType() { return AssetType::Material; }
 		virtual AssetType GetAssetType() override { return GetStaticType(); }
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<Material> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Material> Deserialize(const std::filesystem::path &filepath);
 
     private:
         void EnsureGpuResources();

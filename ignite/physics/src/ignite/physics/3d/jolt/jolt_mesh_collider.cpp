@@ -1,12 +1,15 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_mesh_collider.hpp"
+
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/Shape/SubShapeID.h>
+
+#include "ignite/core/logger.hpp"
 
 namespace ignite::physics
 {
@@ -28,6 +31,7 @@ namespace ignite::physics
 		{
 			JPH::ConvexHullShapeSettings shapeSettings(joltVerts.data(), static_cast<int>(joltVerts.size()));
 			auto result = shapeSettings.Create();
+            LOG_ASSERT(result.IsValid(), "[Jolt Physics] Failed to create Convex hull shape!");
 			if (result.IsValid())
 			{
 				innerShape = result.Get();
@@ -48,6 +52,7 @@ namespace ignite::physics
 
 			JPH::MeshShapeSettings shapeSettings(triangles);
 			auto result = shapeSettings.Create();
+            LOG_ASSERT(result.IsValid(), "[Jolt Physics] Failed to create Mesh shape!");
 			if (result.IsValid())
 			{
 				innerShape = result.Get();

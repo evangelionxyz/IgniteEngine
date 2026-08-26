@@ -55,7 +55,7 @@ namespace ignite
         ImportType type = ImportType::None;
         FileStatus status = FileStatus::Unknown;
         AssetMetaData metadata;
-        ignite::Path targetDirectory;
+        std::filesystem::path targetDirectory;
         void *userData = nullptr;
     };
 

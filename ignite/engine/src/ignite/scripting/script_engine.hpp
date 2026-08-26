@@ -13,7 +13,6 @@
 #include "FileWatch.hpp"
 
 #include "ignite/core/base.hpp"
-#include "ignite/core/path.hpp"
 #include <string>
 #include <unordered_map>
 
@@ -27,8 +26,8 @@ namespace ignite
         explicit ScriptEngine(Project *project);
         ~ScriptEngine();
 
-        static bool LoadCoreAssembly(const ignite::Path &filepath);
-        static bool LoadAppAssembly(const ignite::Path &filepath);
+        static bool LoadCoreAssembly(const std::filesystem::path &filepath);
+        static bool LoadAppAssembly(const std::filesystem::path &filepath);
 
         static bool ReloadAssembly();
         static bool IsHotReloadPending();

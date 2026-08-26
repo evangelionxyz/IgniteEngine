@@ -104,7 +104,7 @@ namespace ignite
         bool CreateSwapChain() override;
         void DestroyDeviceAndSwapChain() override;
         void ResizeSwapChain() override;
-        
+
         nvrhi::ITexture *GetCurrentBackBuffer() override;
         nvrhi::ITexture *GetBackBuffer(uint32_t index) override;
         nvrhi::ITexture *GetBackDepthBuffer(uint32_t index) override;

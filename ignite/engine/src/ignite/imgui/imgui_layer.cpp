@@ -62,7 +62,7 @@ namespace ignite
         if (m_Buffer)
         {
             fontConfig.FontDataOwnedByAtlas = false;
-            m_ImFont = m_IsCompressed 
+            m_ImFont = m_IsCompressed
                 ? io.Fonts->AddFontFromMemoryCompressedTTF(m_Buffer.Data(), static_cast<int>(m_Buffer.Size()), 0.0f, &fontConfig)
                 : io.Fonts->AddFontFromMemoryTTF((void *)m_Buffer.Data(), static_cast<int>(m_Buffer.Size()), 0.0f, &fontConfig);
         }
@@ -93,7 +93,7 @@ namespace ignite
         ImGui::CreateContext();
 
         auto rfs = Application::GeRelativeFileSystem();
-        ignite::Path fontPath = "resources/fonts/segoeui.ttf";
+        std::filesystem::path fontPath = "resources/fonts/segoeui.ttf";
         LOG_ASSERT(rfs->FileExists(fontPath), "[ImGui Layer] font does not found");
 
         Buffer fileBuffer = rfs->ReadFile(fontPath);
@@ -345,13 +345,13 @@ namespace ignite
                 ImGuiIO &io = ImGui::GetIO();
                 io.Fonts->Clear();
                 io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
-                
+
                 m_Font->ReleaseScaledFont();
             }
-            
+
             // Always recreate font with new scale
             m_Font->CreateScaledFont(m_SupportExplicitDisplayScaling ? scaleX : 1.0f);
-            
+
             // Reset style to original and apply new scaling
             if (m_SupportExplicitDisplayScaling)
             {

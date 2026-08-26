@@ -143,13 +143,13 @@ namespace ignite
             return false;
 
         const auto &filepath = tex->GetFilepath();
-        if (filepath.empty() || !Path::exists(filepath))
+        if (filepath.empty() || !std::filesystem::exists(filepath))
             return false;
 
         return LoadHeightmap(filepath.generic_string());
     }
 
-    bool TerrainData::Serialize(const ignite::Path &filepath)
+    bool TerrainData::Serialize(const std::filesystem::path &filepath)
     {
         BinarySerializer::SerializeTerrain(this, filepath);
         SetReadyFlag(true);
@@ -157,7 +157,7 @@ namespace ignite
         return true;
     }
 
-    Ref<TerrainData> TerrainData::Deserialize(const ignite::Path &filepath)
+    Ref<TerrainData> TerrainData::Deserialize(const std::filesystem::path &filepath)
     {
         Ref<TerrainData> data = BinarySerializer::DeserializeTerrain(filepath);
         if (data)

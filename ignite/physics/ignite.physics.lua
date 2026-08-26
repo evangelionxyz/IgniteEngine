@@ -19,55 +19,28 @@ project "Ignite.Physics"
     includedirs {
         "src",
         "src/ignite",
-        "%{wks.location}/ignite/engine/src",
+        
+        "%{wks.location}/ignite/core/src",
         "%{wks.location}/crates/src/include",
+
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.BOX2D}",
         "%{IncludeDir.SPDLOG}",
-        "%{IncludeDir.ENTT}",
-        "%{IncludeDir.NVRHI}",
-        "%{IncludeDir.FILEWATCHER}",
-        "%{IncludeDir.OPENEXR}",
-        "%{IncludeDir.IMATH}",
-        "%{IncludeDir.YAMLCPP}",
-        "%{IncludeDir.TINYGLTF}",
-        "%{IncludeDir.ASSIMP}",
-        "%{IncludeDir.FMOD}",
-        "%{IncludeDir.SDL3}",
-        "%{IncludeDir.IMGUI}",
-        "%{IncludeDir.IMGUIZMO}",
-        "%{IncludeDir.STB}",
-        "%{IncludeDir.ZLIB}",
-        "%{IncludeDir.JSON}",
-        "%{IncludeDir.MSDFGEN}",
-        "%{IncludeDir.FREETYPE}",
-        "%{IncludeDir.TRACY}",
-        "%{IncludeDir.FBX_SDK}",
-        "%{IncludeDir.UmbraShaderCompiler}",
-        "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
-        "%{IncludeDir.NVRHI_DIRECTX_HEADERS}",
-        "%{IncludeDir.VULKAN_SDK}",
-        "%{IncludeDir.MochiSharpNative}",
-        "%{IncludeDir.Hostfxr}",
-        "%{IncludeDir.MSDFATLASGEN}",
-        "%{IncludeDir.FASTNOISE2}",
-        "%{IncludeDir.FASTSIMD}",
-        "%{IncludeDir.FASTSIMD_CONFIG}",
     }
 
     libdirs { "%{cfg.targetdir}" }
 
     links {
+        "Ignite.Core",
         "JOLT",
         "BOX2D",
         "SPDLOG",
-        "ignite_core.dll.lib", -- rust based
     }
 
     defines {
-        "IGN_DLL_EXPORTS",
-        "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
+        "IGN_PHYSICS_DLL_EXPORTS",
+        
         "JPH_SHARED_LIBRARY",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
@@ -75,35 +48,6 @@ project "Ignite.Physics"
         "JPH_OBJECT_STREAM",
         "GLM_FORCE_SSE2"
     }
-
-    -- build rust and SDL
-    filter "configurations:Debug or Debug-Profiling"
-        libdirs { "%{wks.location}/crates/target/debug" }
-        prebuildcommands {
-            -- Configure and Build SDL
-            'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
-
-            -- Build Rust
-            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
-            copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
-        }
-
-    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
-        libdirs { "%{wks.location}/crates/target/release" }
-        prebuildcommands {
-            -- Configure and Build SDL
-            'cmake -S "%{SDL3_SOURCE_DIR}" -B "%{SDL3_SOURCE_DIR}/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
-            'cmake --build "%{SDL3_SOURCE_DIR}/build" --config "Release"',
-            
-            -- Build Rust
-            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
-            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
-        }
-
-    filter {}
 
     --linux
     filter "system:linux"
@@ -115,31 +59,11 @@ project "Ignite.Physics"
         libdirs {
             "/usr/lib",
             "/usr/local/lib",
-            "%{LibraryDir.FBX_SDK}/release",
-            "%{LibraryDir.FMOD_LINUX}",
-            "%{LibraryDir.VULKAN_SDK}",
-            "%{LibraryDir.SDL3_LINUX}"
         }
         includedirs {
             "/usr/include",
-            "%{IncludeDir.OPENEXR_LINUX}",
-            "%{IncludeDir.IMATH_LINUX}"
         }
         links {
-            "vulkan",
-            "shaderc",
-            "shaderc_util",
-            "spirv-cross-core",
-            "spirv-cross-glsl",
-            "nethost",
-            "SDL3",
-            "OpenEXRUtil",
-            "OpenEXR",
-            "OpenEXRCore",
-            "IlmThread",
-            "Iex",
-            "Imath",
-            "xml2",
             "pthread",
             "dl",
             "m",
@@ -148,11 +72,6 @@ project "Ignite.Physics"
         }
         -- Set rpath to $ORIGIN so the binary finds .so files next to itself
         linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
-        postbuildcommands {
-            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}")
-        }
 
     --windows
     filter { "system:windows", "toolset:msc*"}
@@ -165,54 +84,12 @@ project "Ignite.Physics"
     filter "system:windows"
         systemversion "latest"
         links {
-            "d3d12.lib",
-            "dxgi.lib",
-            "d3dcompiler",
-            "dxguid",
-            "%{Library.winmm}",
-            "%{Library.winsock}",
-            "%{Library.winversion}",
-            "%{Library.bcrypt}",
-            "%{Library.vulkan}",
-            "%{Library.mono}",
-            "%{Library.ASSIMP}",
-            "%{Library.FMOD}",
-            "%{Library.Iex}",
-            "%{Library.OpenEXR}",
-            "%{Library.OpenEXRCore}",
-            "%{Library.OpenEXRUtil}",
-            "%{Library.IlmThread}",
-            "%{Library.Imath}",
-            "%{Library.SDL3}"
         }
         defines {
             "PLATFORM_WINDOWS",
             "NOMINMAX",
-            "IGNITE_WITH_DX12",
-            "IGNITE_WITH_VULKAN",
-            "_CRT_SECURE_NO_WARNINGS",
             "WIN32",
             "_WINDOWS"
-        }
-
-        postbuildcommands {
-            copy_file("%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll", "%{cfg.targetdir}"),
-
-            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/deflate.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/OpenJPH/lib/win32/openjph.0.26.dll", "%{cfg.targetdir}"),
-
-            copy_file("%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll", "%{cfg.targetdir}"),
-
-            -- Copying dotnet libraries
-            copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/hostfxr.dll", "%{cfg.targetdir}")
         }
 
         filter "configurations:Debug"
@@ -234,49 +111,6 @@ project "Ignite.Physics"
                 "_DEBUG"
             }
 
-        filter { "system:windows", "configurations:Debug or Debug-Profiling" }
-            links {
-                "%{Library.ShaderC_Debug}",
-                "%{Library.SPIRV_Cross_Core_Debug}",
-                "%{Library.SPIRV_Cross_CPP_Debug}",
-                "%{Library.SPIRV_Cross_MSL_Debug}",
-                "%{Library.SPIRV_Cross_C_Debug}",
-                "%{Library.SPIRV_Cross_GLSL_Debug}",
-                "%{Library.SPIRV_Cross_HLSL_Debug}",
-                "%{Library.SPIRV_Cross_Reflect_Debug}",
-                "%{Library.SPIRV_Cross_Util_Debug}",
-                "%{Library.SPIRV_Tools_Debug}",
-                "%{Library.OpenEXR}",
-                "%{Library.OpenEXRCore}",
-                "%{Library.OpenEXRUtil}",
-                "%{Library.Iex}",
-                "%{Library.IlmThread}",
-                "%{Library.Imath}",
-                "%{Library.FBX_SDK_DEBUG}",
-                "%{Library.FBX_XML_DEBUG}",
-                "%{Library.FBX_ALEMBIC_DEBUG}"
-            }
-            postbuildcommands {
-                copy_file("%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
-            }
-
-
-        filter { "system:linux", "configurations:Debug or Debug-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
-            links { "fmodL" }
-            linkoptions { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}/libfbxsdk.a" }
-            postbuildcommands {
-                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13", "%{cfg.targetdir}")
-            }
-
-
         filter "configurations:Release"
             runtime "release"
             optimize "on"
@@ -296,43 +130,6 @@ project "Ignite.Physics"
                 "NDEBUG"
             }
 
-        filter { "system:windows", "configurations:Release or Release-Profiling" }
-            links {
-                "%{Library.ShaderC}",
-                "%{Library.SPIRV_Cross_Core}",
-                "%{Library.SPIRV_Cross_CPP}",
-                "%{Library.SPIRV_Cross_MSL}",
-                "%{Library.SPIRV_Cross_C}",
-                "%{Library.SPIRV_Cross_GLSL}",
-                "%{Library.SPIRV_Cross_HLSL}",
-                "%{Library.SPIRV_Cross_Reflect}",
-                "%{Library.SPIRV_Cross_Util}",
-                "%{Library.SPIRV_Tools}",
-                "%{Library.OpenEXR}",
-                "%{Library.OpenEXRCore}",
-                "%{Library.OpenEXRUtil}",
-                "%{Library.Iex}",
-                "%{Library.IlmThread}",
-                "%{Library.Imath}",
-                "%{Library.FBX_SDK}",
-                "%{Library.FBX_XML}",
-                "%{Library.FBX_ALEMBIC}"
-            }
-            postbuildcommands {
-                copy_file("%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
-            }
-            
-
-        filter { "system:linux", "configurations:Release or Release-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-            links { "fmod" }
-            linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
-
         filter "configurations:Shipping"
             runtime "release"
             optimize "speed"
@@ -350,37 +147,3 @@ project "Ignite.Physics"
                 "IGN_SHIPPING_BUILD",
                 "NDEBUG"
             }
-
-        filter { "system:windows", "configurations:Shipping or Shipping-Profiling" }
-            links {
-                "%{Library.ShaderC}",
-                "%{Library.SPIRV_Cross_Core}",
-                "%{Library.SPIRV_Cross_C}",
-                "%{Library.SPIRV_Cross_GLSL}",
-                "%{Library.SPIRV_Cross_HLSL}",
-                "%{Library.SPIRV_Cross_Reflect}",
-                "%{Library.SPIRV_Cross_Util}",
-                "%{Library.SPIRV_Tools}",
-                "%{Library.OpenEXR}",
-                "%{Library.OpenEXRCore}",
-                "%{Library.OpenEXRUtil}",
-                "%{Library.Iex}",
-                "%{Library.IlmThread}",
-                "%{Library.Imath}",
-                "%{Library.FBX_SDK}",
-                "%{Library.FBX_XML}",
-                "%{Library.FBX_ALEMBIC}"
-            }
-            postbuildcommands {
-                copy_file("%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
-            }
-
-        filter { "system:linux", "configurations:Shipping or Shipping-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-            links { "fmod" }
-            linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }

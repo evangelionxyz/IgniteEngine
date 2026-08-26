@@ -1,7 +1,5 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "ignite_pch.hpp"
-
 #include "frustum.hpp"
 #include "ignite/scene/icamera.hpp"
 
@@ -16,12 +14,12 @@ namespace ignite {
         Update(view_projection);
     }
 
-	Frustum::Frustum(ICamera *camera)
-	{
-		Update(camera->GetProjection() * camera->GetView());
-	}
+    Frustum::Frustum(ICamera *camera)
+    {
+        Update(camera->GetProjection() * camera->GetView());
+    }
 
-	void Frustum::Update(const glm::mat4 &view_projection)
+    void Frustum::Update(const glm::mat4 &view_projection)
     {
         m_ViewProjection = view_projection;
 
@@ -171,10 +169,10 @@ namespace ignite {
 #endif
     }
 
-	bool Frustum::IsAABBVisible(const AABB &aabb) const
-	{
-		return IsAABBVisible(aabb.min, aabb.max);
-	}
+    bool Frustum::IsAABBVisible(const AABB &aabb) const
+    {
+        return IsAABBVisible(aabb.min, aabb.max);
+    }
 
     void Frustum::IsAABBVisibleBatch(const AABB *aabbs, size_t count, uint8_t *outVisibilityResults) const
     {
@@ -184,7 +182,7 @@ namespace ignite {
         }
     }
 
-	std::vector<std::pair<glm::vec3, glm::vec3>> Frustum::GetEdges() const
+    std::vector<std::pair<glm::vec3, glm::vec3>> Frustum::GetEdges() const
     {
         return
         {

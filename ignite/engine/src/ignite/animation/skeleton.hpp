@@ -7,14 +7,14 @@
 #include "ignite/core/uuid.hpp"
 #include "ignite/asset/asset.hpp"
 
+#include "ignite/graphics/vertex_data.hpp"
+#include "ignite/graphics/gpu_data.hpp"
+#include "ignite/math/transform.hpp"
+
 #include <unordered_map>
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
-
-#include "ignite/graphics/vertex_data.hpp"
-#include "ignite/graphics/gpu_data.hpp"
-#include "ignite/math/transform.hpp"
 
 namespace ignite
 {
@@ -29,7 +29,7 @@ namespace ignite
         std::string name;
         int32_t id; // index in joints array
         int32_t parentJointId; // parent in skeleton hierarchy (-1 for root)
-        
+
         Transform defaultTransform;
 
         // on runtime calculation
@@ -59,8 +59,8 @@ namespace ignite
         void RebuildSocketMap();
         glm::mat4 GetSocketWorldTransform(const std::string &socketName) const;
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<Skeleton> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Skeleton> Deserialize(const std::filesystem::path &filepath);
 
         static AssetType GetStaticType() { return AssetType::Skeleton; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

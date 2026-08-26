@@ -22,8 +22,8 @@ namespace ignite
         UUID GetRootEntityUUID() const { return m_RootEntityUUID; }
         void SetRootEntityUUID(UUID uuid) { m_RootEntityUUID = uuid; }
 
-        bool Serialize(const ignite::Path &filepath) override;
-        static Ref<Prefab> Deserialize(const ignite::Path &filepath, Project *project);
+        bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Prefab> Deserialize(const std::filesystem::path &filepath, Project *project);
 
         static Ref<Prefab> CreateFromEntity(Entity entity, Scene *scene, Project *project);
         bool UpdateFromEntity(Entity entity, Scene *scene, Project *project);

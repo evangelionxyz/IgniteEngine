@@ -1,15 +1,17 @@
 // Copyright (c) 2026 Evangelion Manuhutu
+
 #pragma once
 #ifndef IGN_JOLT_MESH_COLLIDER_HPP
 #define IGN_JOLT_MESH_COLLIDER_HPP
 
 #include "ignite/physics/3d/physics_collider.hpp"
+
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 
 namespace ignite::physics
 {
-	class IGN_API JoltMeshCollider : public PhysicsMeshCollider
+	class IGN_PHYSICS_API JoltMeshCollider : public PhysicsMeshCollider
 	{
 	public:
 		explicit JoltMeshCollider(const MeshColliderDesc &desc);

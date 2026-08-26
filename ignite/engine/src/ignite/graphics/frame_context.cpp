@@ -3,12 +3,10 @@
 #include "ignite_pch.hpp"
 #include "frame_context.hpp"
 #include "ignite/scene/icamera.hpp"
-
 #include "ignite/core/logger.hpp"
 
 namespace ignite
 {
-
 	uint32_t ObjectAllocator::Allocate(nvrhi::ICommandList *cmd, const Mesh_GPUData &data)
 	{
 		const uint32_t index = m_ObjectCount++;

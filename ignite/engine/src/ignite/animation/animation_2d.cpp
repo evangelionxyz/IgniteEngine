@@ -66,7 +66,7 @@ namespace ignite
         return std::min(elapsed_total / totalDuration, 1.0f);
     }
 
-    bool Animation2D::Serialize(const ignite::Path &filepath)
+    bool Animation2D::Serialize(const std::filesystem::path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -102,9 +102,9 @@ namespace ignite
         return true;
     }
 
-    Ref<Animation2D> Animation2D::Deserialize(const ignite::Path &filepath)
+    Ref<Animation2D> Animation2D::Deserialize(const std::filesystem::path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[Animation2D] File does not exist: {}", filepath.string());
             return nullptr;

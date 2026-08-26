@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_character_controller.hpp"
+
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/Reference.h>
 #include <Jolt/Core/TempAllocator.h>
@@ -8,6 +9,8 @@
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+
+#include "ignite/core/logger.hpp"
 
 namespace ignite::physics
 {
@@ -36,7 +39,7 @@ namespace ignite::physics
 		, m_PhysicsSystem(physicsSystem)
 		, m_TempAllocator(tempAllocator)
 	{
-		if (!m_PhysicsSystem) return;
+        LOG_ASSERT(m_PhysicsSystem, "[Jolt Physics] Physics system is not valid!");
 
 		JPH::CapsuleShapeSettings capsuleSettings(desc.halfHeight, desc.radius);
 		JPH::ShapeRefC innerShape = capsuleSettings.Create().Get();

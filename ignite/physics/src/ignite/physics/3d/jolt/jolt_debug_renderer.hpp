@@ -5,6 +5,7 @@
 #define IGN_JOLT_DEBUG_RENDERER_HPP
 
 #include "ignite/core/base.hpp"
+
 #include <functional>
 #include <glm/glm.hpp>
 #include <Jolt/Jolt.h>
@@ -17,7 +18,7 @@ namespace ignite::physics
 {
     using DrawLineFunc = std::function<void(const glm::vec3 &from, const glm::vec3 &to, const glm::vec4 &color)>;
 
-    class IGN_API JoltDebugRenderer : public JPH::DebugRendererSimple
+    class IGN_PHYSICS_API JoltDebugRenderer : public JPH::DebugRendererSimple
     {
     public:
         JoltDebugRenderer();

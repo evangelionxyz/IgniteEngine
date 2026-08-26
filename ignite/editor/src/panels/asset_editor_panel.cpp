@@ -158,14 +158,14 @@ namespace ignite
 
         static Ref<Material> s_SkeletonPreviewMaterial;
 
-        static ignite::Path BuildAssetMetaPath(Project *project, const AssetMetaData &metadata)
+        static std::filesystem::path BuildAssetMetaPath(Project *project, const AssetMetaData &metadata)
         {
             if (!project)
             {
                 return {};
             }
 
-            ignite::Path assetPath = project->GetProjectFilepath(metadata.filepath);
+            std::filesystem::path assetPath = project->GetProjectFilepath(metadata.filepath);
             assetPath += ".meta";
             return assetPath;
         }
@@ -179,7 +179,7 @@ namespace ignite
                 return;
             }
 
-            const ignite::Path metaPath = BuildAssetMetaPath(project, metadata);
+            const std::filesystem::path metaPath = BuildAssetMetaPath(project, metadata);
             if (metaPath.empty())
             {
                 return;
@@ -206,8 +206,8 @@ namespace ignite
                 return false;
             }
 
-            const ignite::Path metadataPath = BuildAssetMetaPath(project, metadata);
-            if (metadataPath.empty() || !ignite::Path::exists(metadataPath))
+            const std::filesystem::path metadataPath = BuildAssetMetaPath(project, metadata);
+            if (metadataPath.empty() || !std::filesystem::exists(metadataPath))
             {
                 return false;
             }
@@ -557,7 +557,7 @@ namespace ignite
                             previewState.previewMeshHandle = animState.previewMeshHandle;
                             previewState.cachedPreviewMesh.reset();
                         }
-                        else if (previewState.previewMeshHandle != AssetHandle(0) && animState.previewMeshHandle != AssetHandle(0) && 
+                        else if (previewState.previewMeshHandle != AssetHandle(0) && animState.previewMeshHandle != AssetHandle(0) &&
                             animState.previewMeshHandle != previewState.previewMeshHandle)
                         {
                             animState.previewMeshHandle = previewState.previewMeshHandle;
@@ -758,11 +758,11 @@ namespace ignite
         for (auto &assetData : m_Assets)
         {
             if (!assetData.sceneData.viewportVisible || !assetData.isOpen
-                || (assetData.metadata.type != AssetType::Material 
-                    && assetData.metadata.type != AssetType::Mesh 
-                    && assetData.metadata.type != AssetType::SkeletalMesh 
+                || (assetData.metadata.type != AssetType::Material
+                    && assetData.metadata.type != AssetType::Mesh
+                    && assetData.metadata.type != AssetType::SkeletalMesh
                     && assetData.metadata.type != AssetType::StaticMesh
-                    && assetData.metadata.type != AssetType::Skeleton 
+                    && assetData.metadata.type != AssetType::Skeleton
                     && assetData.metadata.type != AssetType::Widget
                     && assetData.metadata.type != AssetType::SkeletalAnimation
                     && assetData.metadata.type != AssetType::AnimationMontage))
@@ -1080,10 +1080,10 @@ namespace ignite
         {
             ImGui::Text("Asset Type: %s", AssetTypeToString(m_CreateRequest.type).c_str());
 
-            ignite::Path targetDirectory = m_CreateRequest.targetDirectory.empty() ? project->GetAssetDirectory() : m_CreateRequest.targetDirectory;
-            if (!ignite::Path::exists(targetDirectory))
+            std::filesystem::path targetDirectory = m_CreateRequest.targetDirectory.empty() ? project->GetAssetDirectory() : m_CreateRequest.targetDirectory;
+            if (!std::filesystem::exists(targetDirectory))
             {
-                ignite::Path::create_directories(targetDirectory);
+                std::filesystem::create_directories(targetDirectory);
             }
 
             const std::string extension = GetAssetExtensionFromType(m_CreateRequest.type);
@@ -1097,13 +1097,13 @@ namespace ignite
             std::string assetName = m_CreateRequest.nameBuffer;
             if (!assetName.empty())
             {
-                ignite::Path proposed(assetName);
+                std::filesystem::path proposed(assetName);
                 assetName = proposed.stem().string();
             }
 
             const bool hasValidName = !assetName.empty();
-            const ignite::Path requestedPath = targetDirectory / (assetName + extension);
-            const bool isNameAvailable = hasValidName && !ignite::Path::exists(requestedPath);
+            const std::filesystem::path requestedPath = targetDirectory / (assetName + extension);
+            const bool isNameAvailable = hasValidName && !std::filesystem::exists(requestedPath);
 
             if (!hasValidName)
             {
@@ -1122,15 +1122,15 @@ namespace ignite
                     return false;
                 }
 
-                ignite::Path proposed(finalAssetName);
+                std::filesystem::path proposed(finalAssetName);
                 finalAssetName = proposed.stem().string();
                 if (finalAssetName.empty())
                 {
                     return false;
                 }
 
-                const ignite::Path fullAssetPath = targetDirectory / (finalAssetName + extension);
-                if (ignite::Path::exists(fullAssetPath))
+                const std::filesystem::path fullAssetPath = targetDirectory / (finalAssetName + extension);
+                if (std::filesystem::exists(fullAssetPath))
                 {
                     return false;
                 }
@@ -3644,7 +3644,7 @@ namespace ignite
 
 									ImGui::PushID(static_cast<int>(i));
                                     const std::string meshInstanceName = std::format("{} (Submesh {})", instance->GetName(), i);
-									
+
 									std::string materialButtonLabel = "Drop Material Here";
 									AssetHandle materialHandle = instance->GetMaterialAssetHandle();
 									if (materialHandle != AssetHandle(0))
@@ -4549,10 +4549,10 @@ namespace ignite
                                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
                                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
                                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
-                                
+
                                 ImGui::BeginChild("##skeleton_tl_splitter", { 0.0f, splitterH });
                                 ImGui::Button("##skeleton_tl_splitter_btn", ImVec2(-1.0f, -1.0f));
-                                
+
                                 if (ImGui::IsItemHovered() || ImGui::IsItemActive())
                                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
 
@@ -4885,8 +4885,8 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        const ignite::Path savePath = project->GetProjectFilepath(assetData.metadata.filepath);
-        const ignite::Path metaPath = BuildAssetMetaPath(project, assetData.metadata);
+        const std::filesystem::path savePath = project->GetProjectFilepath(assetData.metadata.filepath);
+        const std::filesystem::path metaPath = BuildAssetMetaPath(project, assetData.metadata);
 
         auto saveDefaultMeta = [&]()
         {
@@ -5044,7 +5044,7 @@ namespace ignite
 
                 if (!asset->Serialize(savePath))
                     return false;
-                
+
                 const auto key = static_cast<uint64_t>(asset->handle);
                 if (s_AnimatorControllerEditorState.contains(key))
                     SaveAnimatorControllerEditorMeta(project, asset, assetData.metadata, s_AnimatorControllerEditorState[key]);
@@ -5190,10 +5190,10 @@ namespace ignite
         });
     }
 
-    ignite::Path AssetEditorPanel::BuildUniqueAssetPath(const ignite::Path &baseDirectory, const std::string &baseName, const std::string &extension) const
+    std::filesystem::path AssetEditorPanel::BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const
     {
-        ignite::Path candidate = baseDirectory / (baseName + extension);
-        if (!ignite::Path::exists(candidate))
+        std::filesystem::path candidate = baseDirectory / (baseName + extension);
+        if (!std::filesystem::exists(candidate))
         {
             return candidate;
         }
@@ -5202,7 +5202,7 @@ namespace ignite
         while (true)
         {
             candidate = baseDirectory / std::format("{}_{}{}", baseName, suffix, extension);
-            if (!ignite::Path::exists(candidate))
+            if (!std::filesystem::exists(candidate))
             {
                 return candidate;
             }
@@ -5359,7 +5359,7 @@ namespace ignite
                 break;
         }
 
-        
+
 
         return true;
     }

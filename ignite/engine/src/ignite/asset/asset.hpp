@@ -4,13 +4,13 @@
 #ifndef IGN_ASSET_HPP
 #define IGN_ASSET_HPP
 
-#include "ignite/core/base.hpp"
 #include "ignite/core/uuid.hpp"
-#include "ignite/core/path.hpp"
+#include "ignite/core/types.hpp"
 
 #include <string>
 #include <map>
 #include <functional>
+#include <filesystem>
 
 namespace ignite
 {
@@ -154,7 +154,7 @@ namespace ignite
         { ".ixscene", AssetType::Scene },
         { ".ixprefab", AssetType::Prefab },
         { ".ixso", AssetType::ScriptableObject },
-        
+
         // Textures
         { ".jpg", AssetType::Texture },
         { ".png", AssetType::Texture },
@@ -163,11 +163,11 @@ namespace ignite
         { ".hdr", AssetType::Texture },
 
         { ".ixsp", AssetType::SpriteSheet },
-        
+
         // Fonts
         { ".otf", AssetType::Font },
         { ".ttf", AssetType::Font },
-        
+
         // audio
         { ".mp3", AssetType::Audio },
         { ".flac", AssetType::Audio },
@@ -265,12 +265,12 @@ namespace ignite
     {
     public:
         AssetMetaData() = default;
-        AssetMetaData(const ignite::Path &filepath, const AssetType type)
+        AssetMetaData(const std::filesystem::path &filepath, const AssetType type)
             : filepath(filepath), type(type)
         {
         }
 
-        ignite::Path filepath;
+        std::filesystem::path filepath;
         AssetType type = AssetType::Invalid;
     };
 
@@ -289,8 +289,8 @@ namespace ignite
             return std::dynamic_pointer_cast<T>(shared_from_this());
         }
 
-        virtual bool Serialize(const ignite::Path &filepath) { return true; }
-        virtual bool SerializeMetaFile(const ignite::Path &filepath, const MetaSerializer &customSerializer = nullptr) const;
+        virtual bool Serialize(const std::filesystem::path &filepath) { return true; }
+        virtual bool SerializeMetaFile(const std::filesystem::path &filepath, const MetaSerializer &customSerializer = nullptr) const;
 
         virtual AssetType GetAssetType() { return AssetType::Invalid; }
 

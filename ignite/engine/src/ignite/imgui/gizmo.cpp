@@ -9,8 +9,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace ignite {
-
+namespace ignite
+{
     void Gizmo::SetInfo(const GizmoInfo &info)
     {
         m_GizmoInfo = info;

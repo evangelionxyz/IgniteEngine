@@ -2,26 +2,32 @@
 
 #include "pch.hpp"
 #include "editor_layer.hpp"
+#include "ext/editor_ui.hpp"
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
 #include "panels/asset_importer_panel.hpp"
 #include "panels/asset_editor_panel.hpp"
-#include "ext/editor_ui.hpp"
-#include "ignite/core/command.hpp"
-#include "ignite/graphics/renderer.hpp"
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
-#include "ignite/scene/prefab.hpp"
-#include "ignite/scripting/script_engine.hpp"
+#include "ignite/core/command.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/core/platform_utils.hpp"
+#include "ignite/core/time.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/scene/prefab.hpp"
+#include "ignite/scene/scene_manager.hpp"
+#include "ignite/scripting/script_engine.hpp"
 #include "ignite/imgui/imgui_nvrhi.hpp"
 #include "ignite/imgui/imgui_layer.hpp"
+#include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/shader.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
+#include "ignite/graphics/window.hpp"
 #include "ignite/globals/globals.hpp"
+#include "ignite/serializer/scene_serializer.hpp"
 #include "editor_context.hpp"
+
 #include "stb_image_write.h"
 
 #include <algorithm>
@@ -330,6 +336,7 @@ namespace ignite
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
     }
 
+#if 0
     void EditorLayer::OnSDLEvent(SDL_Event *evt)
     {
         if (!m_SceneRenderer)
@@ -353,6 +360,8 @@ namespace ignite
             }
         }
     }
+
+#endif
 
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)
     {
@@ -1126,7 +1135,7 @@ namespace ignite
             if (!meta.filepath.empty())
             {
                 auto project = m_ActiveProject;
-                ignite::Path fullPath = project ? project->GetProjectFilepath(meta.filepath) : meta.filepath;
+                std::filesystem::path fullPath = project ? project->GetProjectFilepath(meta.filepath) : meta.filepath;
                 m_EditingPrefab->Serialize(fullPath);
                 SetStatusText(fmt::format("Saved Prefab: {}", meta.filepath.filename().string()));
             }
@@ -1209,7 +1218,7 @@ namespace ignite
                 // Get filepath to serialize
                 const auto &filepath = AssetManager::GetInstance()->GetFilepath(m_EditingPrefabHandle);
                 const auto &absPath = m_ActiveProject->GetProjectFilepath(filepath);
-                if (ignite::Path::exists(absPath))
+                if (std::filesystem::exists(absPath))
                     m_EditingPrefab->Serialize(absPath);
             }
         }
@@ -1228,7 +1237,7 @@ namespace ignite
         }
     }
 
-    void EditorLayer::SaveScene(const ignite::Path &filepath) const
+    void EditorLayer::SaveScene(const std::filesystem::path &filepath) const
     {
         SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
         serializer.Serialize(filepath);
@@ -1250,7 +1259,7 @@ namespace ignite
             nullptr, false);
     }
 
-    void EditorLayer::OpenScene(const ignite::Path &filepath)
+    void EditorLayer::OpenScene(const std::filesystem::path &filepath)
     {
         AssetHandle sceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
         if (m_CurrentSceneHandle == sceneHandle)
@@ -1369,7 +1378,7 @@ namespace ignite
         m_CurrentSceneHandle = AssetHandle(0);
     }
 
-    void EditorLayer::OpenProject(const ignite::Path &filepath)
+    void EditorLayer::OpenProject(const std::filesystem::path &filepath)
     {
         if (filepath == m_CurrentProjectFilepath)
         {
@@ -1629,7 +1638,7 @@ namespace ignite
         if (!filepath.empty())
         {
             auto *editor = static_cast<EditorLayer *>(userData);
-            editor->m_State.projectCreateInfo.filepath = ignite::Path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
+            editor->m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
         }
     }
 
@@ -1687,7 +1696,7 @@ namespace ignite
             }
             else if (payload.metadata.type == AssetType::Project)
             {
-                ignite::Path filepath = payload.metadata.filepath;
+                std::filesystem::path filepath = payload.metadata.filepath;
                 OpenProject(filepath);
             }
             break;
@@ -1697,7 +1706,7 @@ namespace ignite
             if (payload.metadata.type == AssetType::Scene)
             {
                 // Submit scene save to asset worker
-                ignite::Path filepath = payload.metadata.filepath;
+                std::filesystem::path filepath = payload.metadata.filepath;
 
                 // AssetWorker::SubmitJob([this, filepath]()
                 Application::SubmitToMainThread([this, filepath]()
@@ -1748,12 +1757,18 @@ namespace ignite
             // Path input with Browse button
             ImGui::PushItemWidth(-120);
             std::string pathStr = m_State.projectCreateInfo.filepath.generic_string();
-            char pathBuf[1024] = {};
-            if (!pathStr.empty()) strncpy(pathBuf, pathStr.c_str(), sizeof(pathBuf) - 1);
-            if (ImGui::InputText("##ProjectLocation", pathBuf, sizeof(pathBuf)))
+
+            std::array<char, 1024> pathBuf = {};
+            if (!pathStr.empty())
             {
-                m_State.projectCreateInfo.filepath = ignite::Path(pathBuf);
+                strncpy(pathBuf.data(), pathStr.c_str(), sizeof(pathBuf) - 1);
             }
+
+            if (ImGui::InputText("##ProjectLocation", pathBuf.data(), sizeof(pathBuf)))
+            {
+                m_State.projectCreateInfo.filepath = pathBuf.data();
+            }
+
             ImGui::PopItemWidth();
             ImGui::SameLine();
             if (ImGui::Button("Browse"))
@@ -1761,7 +1776,7 @@ namespace ignite
                 std::string filepath = FileDialogs::SelectFolder();
                 if (!filepath.empty())
                 {
-                    m_State.projectCreateInfo.filepath = ignite::Path(filepath) / m_State.projectCreateInfo.name;
+                    m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / m_State.projectCreateInfo.name;
                 }
             }
 

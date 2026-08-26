@@ -4,7 +4,6 @@
 #define IGN_SERIALIZER_HPP
 
 #include "ignite/core/uuid.hpp"
-#include "ignite/core/path.hpp"
 #include "ignite/math/math.hpp"
 
 #include "ignite/animation/skeletal_animation.hpp"
@@ -17,6 +16,7 @@
 
 #include <glm/glm.hpp>
 #include <string>
+#include <filesystem>
 
 namespace YAML
 {
@@ -296,10 +296,10 @@ namespace ignite
     class IGN_API Serializer
     {
     public:
-        explicit Serializer(const ignite::Path &filepath);
+        explicit Serializer(const std::filesystem::path &filepath);
 
         void Serialize() const;
-        void Serialize(const ignite::Path &filepath);
+        void Serialize(const std::filesystem::path &filepath);
 
         void BeginMap();
         void BeginMap(const std::string &mapName);
@@ -321,9 +321,9 @@ namespace ignite
             m_Emitter << value;
         }
 
-        static YAML::Node Deserialize(const ignite::Path &filepath);
+        static YAML::Node Deserialize(const std::filesystem::path &filepath);
 
-        const ignite::Path &GetFilepath() const { return m_Filepath; }
+        const std::filesystem::path &GetFilepath() const { return m_Filepath; }
 
         static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
         {
@@ -354,7 +354,7 @@ namespace ignite
 
     private:
         YAML::Emitter m_Emitter;
-        ignite::Path m_Filepath;
+        std::filesystem::path m_Filepath;
     };
 }
 

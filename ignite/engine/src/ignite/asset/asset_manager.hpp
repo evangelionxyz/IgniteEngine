@@ -45,8 +45,8 @@ namespace ignite
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
 
-        AssetHandle ImportAsset(const ignite::Path &filepath);
-        AssetHandle ImportAssetImmedate(const ignite::Path &filepath);
+        AssetHandle ImportAsset(const std::filesystem::path &filepath);
+        AssetHandle ImportAssetImmedate(const std::filesystem::path &filepath);
 
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
 
@@ -139,7 +139,7 @@ namespace ignite
 
             return nullptr;
         }
-        
+
         template<typename T = Asset>
         Ref<T> GetAssetImmediate(AssetHandle handle)
         {
@@ -169,14 +169,14 @@ namespace ignite
 
         AssetType GetAssetType(AssetHandle handle) const;
 
-        const AssetMetaData &GetMetaData(const ignite::Path &filepath, AssetHandle &outHandle);
+        const AssetMetaData &GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle);
         const AssetMetaData &GetMetaData(AssetHandle handle) const;
-        
-        AssetHandle GetAssetHandle(const ignite::Path &filepath);
-        
-        const ignite::Path &GetFilepath(AssetHandle handle) const;
+
+        AssetHandle GetAssetHandle(const std::filesystem::path &filepath);
+
+        const std::filesystem::path &GetFilepath(AssetHandle handle) const;
         bool IsAssetHandleValid(AssetHandle handle) const;
-        
+
         // Asset lifecycle management
         void UnloadAsset(AssetHandle handle);
         void UnloadUnusedAssets();
@@ -186,7 +186,7 @@ namespace ignite
         bool IsAssetLoaded(AssetHandle handle) const;
         bool IsAssetLoading(AssetHandle handle) const;
         const std::unordered_map<AssetHandle, Ref<Asset>>& GetLoadedAssets() const { return m_LoadedAssets; }
-    
+
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
         WeakRef<Project> GetActiveProjectWeak() const { return m_Project; }
@@ -219,7 +219,7 @@ namespace ignite
         mutable std::mutex m_AssetMutex;
 
         float assetUnloadTimer = 0.0f;
-        
+
         std::unordered_map<std::string, AssetHandle> m_AssetHandleByPath;
 
         std::queue<std::function<bool()>> m_OnChangeCallbacks;

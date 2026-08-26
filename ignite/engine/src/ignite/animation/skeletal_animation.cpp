@@ -95,14 +95,14 @@ namespace ignite
 
 	SkeletalAnimation::~SkeletalAnimation() = default;
 
-	bool SkeletalAnimation::Serialize(const ignite::Path &filepath)
-	{
-		BinarySerializer::SerializeSkeletalAnimation(this, filepath);
+	bool SkeletalAnimation::Serialize(const std::filesystem::path &filepath)
+    {
+        BinarySerializer::SerializeSkeletalAnimation(this, filepath);
         SetDirtyFlag(false);
-		return true;
-	}
+        return true;
+    }
 
-	Ref<SkeletalAnimation> SkeletalAnimation::Deserialize(const ignite::Path &filepath)
+    Ref<SkeletalAnimation> SkeletalAnimation::Deserialize(const std::filesystem::path &filepath)
 	{
         return BinarySerializer::DeserializeSkeletalAnimation(filepath);
 	}

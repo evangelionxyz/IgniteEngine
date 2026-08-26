@@ -4,7 +4,7 @@
 #ifndef IGN_SIGNAL_BUS_HPP
 #define IGN_SIGNAL_BUS_HPP
 
-#include "base.hpp"
+#include "ignite/core/base.hpp"
 #include <cstdint>
 #include <functional>
 #include <vector>

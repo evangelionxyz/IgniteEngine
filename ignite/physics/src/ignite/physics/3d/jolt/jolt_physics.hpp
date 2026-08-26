@@ -3,8 +3,8 @@
 #ifndef IGN_JOLT_PHYSICS_HPP
 #define IGN_JOLT_PHYSICS_HPP
 
-#include "ignite/physics/physics_log.hpp"
 #include "ignite/physics/3d/physics_3d.hpp"
+
 #include "jolt_dynamic_physics_body.hpp"
 #include "jolt_static_physics_body.hpp"
 #include "jolt_box_collider.hpp"
@@ -200,7 +200,7 @@ namespace ignite::physics
 		std::vector<BodyActivationEvent> m_PendingEvents;
 	};
 
-	class IGN_API JoltPhysics : public Physics3D
+	class IGN_PHYSICS_API JoltPhysics : public Physics3D
 	{
 	public:
 		JoltPhysics();

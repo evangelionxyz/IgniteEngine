@@ -6,13 +6,14 @@
 
 #include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
+
 #include "ignite/physics/physics_types.hpp"
 #include <box2d/box2d.h>
 #include <glm/glm.hpp>
 
 namespace ignite::physics
 {
-    class IGN_API Physics2D
+    class IGN_PHYSICS_API Physics2D
     {
     public:
         Physics2D();

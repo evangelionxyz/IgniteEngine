@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#ifndef IGN_AABB_HPP
-#define IGN_AABB_HPP
+#ifndef IGN_CORE_AABB_HPP
+#define IGN_CORE_AABB_HPP
 
 #include "ignite/core/base.hpp"
 
@@ -17,7 +17,7 @@ namespace ignite
 {
     class MeshInstance;
 
-    struct IGN_API AABB
+    struct IGN_CORE_API AABB
     {
         glm::vec3 min = glm::vec3(0.0f);
         glm::vec3 max = glm::vec3(0.0f);
@@ -31,13 +31,13 @@ namespace ignite
         }
 
         const glm::vec3 GetCenter() const
-        { 
-            return (min + max) / 2.0f; 
+        {
+            return (min + max) / 2.0f;
         }
 
         const glm::vec3 GetSize() const
-        { 
-            return max - min; 
+        {
+            return max - min;
         }
 
         inline bool RayIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection) const

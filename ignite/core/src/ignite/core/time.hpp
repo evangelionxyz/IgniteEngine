@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef IGN_CORE_TIME_HPP
+#define IGN_CORE_TIME_HPP
 
-#ifndef IGN_TIME_HPP
-#define IGN_TIME_HPP
+#include "ignite/core/buffer.hpp"
 
-#include "types.hpp"
 #include <chrono>
 #include <ctime>
 

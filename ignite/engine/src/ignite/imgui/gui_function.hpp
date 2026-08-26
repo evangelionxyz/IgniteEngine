@@ -4,18 +4,16 @@
 #ifndef IGN_GUI_FUNCTION_HPP
 #define IGN_GUI_FUNCTION_HPP
 
-#ifndef IMGUI_DEFINE_MATH_OPERATORS
-#   define IMGUI_DEFINE_MATH_OPERATORS
-#endif
+#include "ignite/math/math.hpp"
 
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
+    #define IMGUI_DEFINE_MATH_OPERATORS
+#endif
 #include <imgui.h>
 #include <imgui_internal.h>
 
-#include "ignite/math/math.hpp"
-
 namespace ignite
 {
-
     struct EditorWidget
     {
         template<typename T>

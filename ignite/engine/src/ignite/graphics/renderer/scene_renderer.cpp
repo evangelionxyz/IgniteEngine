@@ -6,7 +6,6 @@
 #include "scene_renderer.hpp"
 #include "ignite/graphics/bindless_system.hpp"
 #include "ignite/graphics/binding_cache.hpp"
-#include "ignite/scene/icamera.hpp"
 #include "ignite/math/frustum.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/skeleton.hpp"
@@ -2666,7 +2665,7 @@ namespace ignite
 
 	Ref<GraphicsPipeline> SceneRenderer::GetOrCreateCMSPSO(
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
-        nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath, const char *pixelShaderPath, 
+        nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath, const char *pixelShaderPath,
         EBindingLayout meshLayout)
 	{
         if (!framebuffer)
@@ -3451,7 +3450,7 @@ namespace ignite
 				gpuData.transformation = parentTransform * meshTransform;
 				gpuData.normal = normalMatrix;
             }
-            
+
 			gpuData.objectID = objectID;
 
             uint32_t PushConstant_ObjectIndex = 0;
@@ -3562,7 +3561,7 @@ namespace ignite
                     graphicsState.setIndexBuffer({ *primitive->indexBuffer, nvrhi::Format::R32_UINT });
 
                     cmd->setGraphicsState(graphicsState);
-					
+
 					if constexpr (!isSkeletal)
 					{
 						uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &PushConstant_ObjectIndex, 1);

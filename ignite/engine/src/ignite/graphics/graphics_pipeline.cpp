@@ -36,7 +36,7 @@ namespace ignite
         nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
 
         LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline");
-        
+
         m_Params = params;
 
         // create graphics pipeline
@@ -90,7 +90,7 @@ namespace ignite
         {
             pipelineDesc.setInputLayout(m_InputLayout);
         }
-        
+
         pipelineDesc.setRenderState(renderState);
         pipelineDesc.primType = m_Params.primitiveType;
 

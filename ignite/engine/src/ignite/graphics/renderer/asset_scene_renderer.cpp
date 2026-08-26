@@ -18,6 +18,8 @@
 #include "ignite/graphics/objects/procedural_sky.hpp"
 #include "ignite/graphics/bindless_system.hpp"
 
+#include "ignite/scene/icamera.hpp"
+
 #include <type_traits>
 
 namespace ignite

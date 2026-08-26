@@ -4,6 +4,7 @@
 #define IGN_BINDING_SET_HPP
 
 #include "ignite/core/types.hpp"
+
 #include <nvrhi/nvrhi.h>
 #include <string>
 

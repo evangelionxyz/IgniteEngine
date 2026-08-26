@@ -2,6 +2,7 @@
 
 #include "ignite_pch.hpp"
 
+#include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 
 #include "ignite/graphics/texture.hpp"

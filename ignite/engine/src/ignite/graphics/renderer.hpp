@@ -30,7 +30,7 @@ namespace ignite
     enum class EBindingLayout
     {
         MESH_STATIC = 1,
-        MESH_ANIM, 
+        MESH_ANIM,
         MATERIAL,
         ENVIRONMENT,
     };
@@ -85,7 +85,7 @@ namespace ignite
         void ResetStatistics();
 
 		static FrameContext *GetCurrentFrameContext();
-        
+
         static Ref<Texture> GetWhiteTexture();
         static Ref<Texture> GetBlackTexture();
         static Ref<Texture> GetMagentaTexture();

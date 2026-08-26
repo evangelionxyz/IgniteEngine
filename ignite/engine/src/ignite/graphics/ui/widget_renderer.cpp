@@ -22,6 +22,7 @@
 #include "ignite/scene/component.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/scene/scene.hpp"
+#include "ignite/scene/icamera.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 

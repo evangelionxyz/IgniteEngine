@@ -7,7 +7,7 @@
 #include "ipanel.hpp"
 #include "asset_editor_data.hpp"
 
-#include "ignite/core/path.hpp"
+
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/input/mouse_event.hpp"
 #include "ignite/core/signal_bus.hpp"
@@ -35,7 +35,7 @@ namespace ignite
 	{
 		Ref<Asset> asset;
 		AssetType type = AssetType::Invalid;
-		ignite::Path targetDirectory;
+		std::filesystem::path targetDirectory;
 		char nameBuffer[256] = "NewAsset";
 		bool open = false;
 	};
@@ -86,7 +86,7 @@ namespace ignite
         bool SaveAsset(UI::AssetEditorData &assetData);
         void UICreateAssetPopup();
         void InitializeSceneData(UI::AssetEditorData &assetData);
-        ignite::Path BuildUniqueAssetPath(const ignite::Path &baseDirectory, const std::string &baseName, const std::string &extension) const;
+        std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const;
 
         std::vector<UI::AssetEditorData> m_Assets;
         CreateAssetRequest m_CreateRequest;

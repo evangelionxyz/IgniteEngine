@@ -173,7 +173,7 @@ namespace ignite
         return CreateRef<ScriptableObject>(className);
     }
 
-    bool ScriptableObject::Serialize(const ignite::Path &filepath)
+    bool ScriptableObject::Serialize(const std::filesystem::path &filepath)
     {
         Serializer sr(filepath);
 
@@ -250,9 +250,9 @@ namespace ignite
         return true;
     }
 
-    Ref<ScriptableObject> ScriptableObject::Deserialize(const ignite::Path &filepath)
+    Ref<ScriptableObject> ScriptableObject::Deserialize(const std::filesystem::path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[ScriptableObject] File does not exist: {}", filepath.generic_string());
             return nullptr;

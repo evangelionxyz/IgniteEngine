@@ -30,7 +30,7 @@ namespace ignite
         return m_NextWidgetItemId++;
     }
 
-    bool WidgetCanvas::Serialize(const ignite::Path &filepath)
+    bool WidgetCanvas::Serialize(const std::filesystem::path &filepath)
     {
         Serializer sr(filepath);
         sr.BeginMap();
@@ -160,9 +160,9 @@ namespace ignite
         return true;
     }
 
-    Ref<WidgetCanvas> WidgetCanvas::Deserialize(const ignite::Path &filepath)
+    Ref<WidgetCanvas> WidgetCanvas::Deserialize(const std::filesystem::path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             return nullptr;
         }

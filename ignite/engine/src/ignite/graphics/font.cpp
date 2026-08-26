@@ -107,7 +107,7 @@ namespace ignite
         return atlas;
     }
 
-    Font::Font(const ignite::Path &filepath)
+    Font::Font(const std::filesystem::path &filepath)
     {
         m_Ready = false;
         LoadGlyphs(filepath);
@@ -118,7 +118,7 @@ namespace ignite
         m_Glyphs.clear();
     }
 
-	Ref<Font> Font::Create(const ignite::Path &filepath)
+	Ref<Font> Font::Create(const std::filesystem::path &filepath)
 	{
 		return CreateRef<Font>(filepath);
 	}
@@ -188,7 +188,7 @@ namespace ignite
 		return glm::vec2(static_cast<float>(maxX), static_cast<float>(-minY));
 	}
 
-	void Font::LoadGlyphs(const ignite::Path &filepath)
+	void Font::LoadGlyphs(const std::filesystem::path &filepath)
 	{
         msdfgen::FreetypeHandle *ft = msdfgen::initializeFreetype();
 
@@ -254,7 +254,7 @@ namespace ignite
                     : coloringSeed;
 
                 glyphs[i].edgeColoring(msdfgen::edgeColoringInkTrap, DEFAULT_ANGLE_THRESHOLD, glyphSeed);
-                
+
                 return true;
             }, static_cast<int>(m_Glyphs.size())).finish(THREAD_COUNT);
 

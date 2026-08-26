@@ -7,8 +7,9 @@
 #include "texture.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
-#include <ignite/core/logger.hpp>
-#include <ignite/core/types.hpp>
+#include "ignite/core/logger.hpp"
+#include "ignite/core/types.hpp"
+
 #include <nvrhi/nvrhi.h>
 #include <nvrhi/utils.h>
 

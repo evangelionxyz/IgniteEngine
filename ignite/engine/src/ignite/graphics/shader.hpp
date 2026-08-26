@@ -15,7 +15,6 @@
 
 #include <nvrhi/nvrhi.h>
 #include <initializer_list>
-#include "ignite/core/path.hpp"
 #include <string>
 
 namespace ignite
@@ -135,7 +134,7 @@ namespace ignite
     {
     public:
         Shader() = default;
-        Shader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
+        Shader(const std::filesystem::path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
 
 		const inline std::vector<nvrhi::VertexAttributeDesc> &GetVertexAttributes() { return m_VertexAttributes; }
         inline nvrhi::ShaderHandle GetHandle() { return m_Handle; }
@@ -145,14 +144,14 @@ namespace ignite
         bool Recompile();
 
         // Compile or Get shader code from cached binary data (.spirv/.dxil).
-        static std::vector<uint8_t> CompileOrGetShader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryPoint);
-        
+        static std::vector<uint8_t> CompileOrGetShader(const std::filesystem::path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryPoint);
+
         // Helper for reflecting shader code and construct the NVRHI Vertex Attributes
         // Returns UMBRA Shader Reflection Info
         static umbra::ShaderReflectionInfo Reflect(UMBRA_ShaderType shaderType, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
-        
+
         // Create interface
-        static Ref<Shader> Create(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
+        static Ref<Shader> Create(const std::filesystem::path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
 
         // DX Compiler Instance, automatically create if not created yet.
         static Ref<umbra::DXCInstance> GetDXCInstance();
@@ -165,12 +164,12 @@ namespace ignite
     private:
         static void InitShaderData();
         static void ShutdownShaderData();
-    
+
     private:
         UMBRA_ShaderType m_Type;
         nvrhi::ShaderDesc m_ShaderDesc;
         nvrhi::ShaderHandle m_Handle = nullptr;
-        ignite::Path m_Filepath;
+        std::filesystem::path m_Filepath;
         std::string m_Name;
 
         umbra::ShaderReflectionInfo m_ReflectionInfo;

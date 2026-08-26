@@ -3,7 +3,7 @@
 #ifndef IGN_SUBSYSTEM_HPP
 #define IGN_SUBSYSTEM_HPP
 
-#include "base.hpp"
+#include "ignite/core/base.hpp"
 
 namespace ignite
 {

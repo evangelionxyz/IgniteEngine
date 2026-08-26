@@ -11,7 +11,7 @@
 
 namespace ignite::physics
 {
-	class IGN_API Physics3D
+	class IGN_PHYSICS_API Physics3D
 	{
 	public:
 		virtual ~Physics3D() = default;

@@ -13,7 +13,7 @@
 
 namespace ignite
 {
-    bool LocomotionController::Serialize(const ignite::Path &filepath)
+    bool LocomotionController::Serialize(const std::filesystem::path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -48,9 +48,9 @@ namespace ignite
         return true;
     }
 
-    Ref<LocomotionController> LocomotionController::Deserialize(const ignite::Path &filepath)
+    Ref<LocomotionController> LocomotionController::Deserialize(const std::filesystem::path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             return nullptr;
         }

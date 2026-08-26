@@ -7,7 +7,7 @@
 
 namespace ignite
 {
-	bool SpriteSheet::Serialize(const ignite::Path &filepath)
+	bool SpriteSheet::Serialize(const std::filesystem::path &filepath)
 	{
 		YAML::Emitter out;
 		out << YAML::BeginMap;
@@ -38,9 +38,9 @@ namespace ignite
 		return true;
 	}
 
-	Ref<SpriteSheet> SpriteSheet::Deserialize(const ignite::Path &filepath)
+	Ref<SpriteSheet> SpriteSheet::Deserialize(const std::filesystem::path &filepath)
 	{
-		if (!ignite::Path::exists(filepath))
+		if (!std::filesystem::exists(filepath))
 		{
 			return nullptr;
 		}

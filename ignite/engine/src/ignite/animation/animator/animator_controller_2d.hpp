@@ -11,7 +11,6 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
-#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -43,8 +42,8 @@ namespace ignite
         AnimState2D       *FindState(const std::string &name);
         const AnimState2D *FindState(const std::string &name) const;
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<AnimatorController2D> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<AnimatorController2D> Deserialize(const std::filesystem::path &filepath);
         static Ref<AnimatorController2D> Create();
 
         static AssetType GetStaticAssetType() { return AssetType::AnimatorController2D; }

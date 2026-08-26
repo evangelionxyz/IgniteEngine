@@ -39,7 +39,7 @@ namespace ignite
 		m_JoystickMappings.erase(button);
 	}
 
-	bool InputMapping::Serialize(const ignite::Path &filepath)
+	bool InputMapping::Serialize(const std::filesystem::path &filepath)
 	{
 		nlohmann::json j;
 		j["Version"] = 1;
@@ -75,7 +75,7 @@ namespace ignite
 		return true;
 	}
 
-	Ref<InputMapping> InputMapping::Deserialize(const ignite::Path &filepath)
+	Ref<InputMapping> InputMapping::Deserialize(const std::filesystem::path &filepath)
 	{
 		std::ifstream file(filepath.generic_string(), std::ios::in);
 		if (!file.is_open())

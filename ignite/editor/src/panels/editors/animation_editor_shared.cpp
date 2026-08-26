@@ -505,7 +505,7 @@ namespace ignite::UI
 			}
 		}
 	}
-	
+
 	void AnimPlaybackControls::Draw(bool &playing, bool &loop, float &timeSeconds, float totalDuration, bool enabled /*= true*/)
 	{
 		ImGui::BeginDisabled(!enabled);

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu 
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 #ifndef IGN_GRAPHICS_PIPELINE_HPP

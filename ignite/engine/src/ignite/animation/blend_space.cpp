@@ -200,7 +200,7 @@ namespace ignite
         };
 
         std::vector<Candidate> candidates;
-        
+
         const glm::vec2 clamped = ClampInput(input);
         const glm::vec2 normInput = NormalizePosition(clamped);
 
@@ -255,7 +255,7 @@ namespace ignite
         return result;
     }
 
-    bool BlendSpace::Serialize(const ignite::Path &filepath)
+    bool BlendSpace::Serialize(const std::filesystem::path &filepath)
     {
         Serializer sr(filepath);
 
@@ -271,13 +271,13 @@ namespace ignite
         // Grid
         sr.AddKeyValue("GridDivisionsX", gridDivisions.x);
         sr.AddKeyValue("GridDivisionsY", gridDivisions.y);
-        sr.AddKeyValue("SnapToGrid",     snapToGrid);
+        sr.AddKeyValue("SnapToGrid", snapToGrid);
 
         // Smoothing
         sr.AddKeyValue("SmoothingTimeX", smoothingTime.x);
         sr.AddKeyValue("SmoothingTimeY", smoothingTime.y);
-        sr.AddKeyValue("SmoothingType",  static_cast<int>(smoothingType));
-        sr.AddKeyValue("DampingRatio",   dampingRatio);
+        sr.AddKeyValue("SmoothingType", static_cast<int>(smoothingType));
+        sr.AddKeyValue("DampingRatio", dampingRatio);
 
         sr.BeginSequence("Samples");
         for (auto &sample : samples)
@@ -298,9 +298,9 @@ namespace ignite
         return true;
     }
 
-    Ref<BlendSpace> BlendSpace::Deserialize(const ignite::Path &filepath)
+    Ref<BlendSpace> BlendSpace::Deserialize(const std::filesystem::path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
             return nullptr;
 
         YAML::Node root = YAML::LoadFile(filepath.string());

@@ -24,12 +24,12 @@ project "Project Generator"
 
 	filter "system:windows"
 		prebuildcommands {
-			"premake5 vs2026 --file=%{wks.location}/scripts/premake5.lua",
+			-- "premake5 vs2026 --file=%{wks.location}/scripts/premake5.lua",
 			-- "premake5 vs2026 --file=%{wks.location}/scripts/premake5-managed.lua",
 		}
 
 	filter "system:linux"
 		prebuildcommands {
-			"premake5 gmake --file=%{wks.location}/scripts/premake5.lua",
+			-- "premake5 gmake --file=%{wks.location}/scripts/premake5.lua",
 			-- "premake5 gmake --file=%{wks.location}/scripts/premake5-managed.lua",
 		}

@@ -45,14 +45,8 @@ namespace ignite
         void DrawPreviewSkeletalMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
 
         template<typename MeshT>
-        void DrawPreviewMeshImpl(
-            const Ref<MeshT>           &mesh,
-            nvrhi::ICommandList        *cmd,
-            nvrhi::IFramebuffer        *framebuffer,
-            FrameContext               *frameContext,
-            const char                 *vertexShaderPath,
-            const char                 *pixelShaderPath,
-            EBindingLayout              meshBindingLayout,
+        void DrawPreviewMeshImpl(const Ref<MeshT> &mesh, nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer,
+            FrameContext *frameContext, const char *vertexShaderPath, const char *pixelShaderPath, EBindingLayout meshBindingLayout,
             std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> &opaqueCache,
             std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> &transparentCache);
 

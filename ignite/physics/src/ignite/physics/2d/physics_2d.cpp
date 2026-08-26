@@ -1,13 +1,12 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "physics_2d.hpp"
+#include "ignite/core/logger.hpp"
 
 namespace ignite::physics
 {
     Physics2D::Physics2D()
     {
-        b2WorldDef worldDef = b2DefaultWorldDef();
-        m_WorldId = b2CreateWorld(&worldDef);
     }
 
     Physics2D::~Physics2D()
@@ -17,11 +16,17 @@ namespace ignite::physics
 
     void Physics2D::SimulationStart()
     {
-        if (B2_IS_NULL(m_WorldId))
+        if (b2World_IsValid(m_WorldId))
         {
-            b2WorldDef worldDef = b2DefaultWorldDef();
-            m_WorldId = b2CreateWorld(&worldDef);
+            b2DestroyWorld(m_WorldId);
         }
+
+        b2WorldDef worldDef = b2DefaultWorldDef();
+        m_WorldId = b2CreateWorld(&worldDef);
+
+        LOG_ASSERT(b2World_IsValid(m_WorldId), "[Physics 2D] Failed to create b2Body");
+        LOG_TRACE("[Physics 2D] World Created");
+        LOG_TRACE("[Physics 2D] Simulation Started");
     }
 
     void Physics2D::SimulationStop()
@@ -31,6 +36,8 @@ namespace ignite::physics
             b2DestroyWorld(m_WorldId);
         }
         m_WorldId = b2_nullWorldId;
+
+        LOG_TRACE("[Physics 2D] Simulation Stopped");
     }
 
     void Physics2D::Simulate(float deltaTime)
@@ -45,7 +52,10 @@ namespace ignite::physics
     b2BodyId Physics2D::CreateBody(const b2BodyDef &bodyDef)
     {
         if (!b2World_IsValid(m_WorldId))
+        {
+            LOG_ERROR("[Physics 2D] Failed to create body");
             return b2_nullBodyId;
+        }
 
         return b2CreateBody(m_WorldId, &bodyDef);
     }
@@ -61,7 +71,10 @@ namespace ignite::physics
     b2ShapeId Physics2D::CreateBoxCollider(b2BodyId bodyId, const b2ShapeDef &shapeDef, const b2Polygon &box)
     {
         if (!b2Body_IsValid(bodyId))
+        {
+            LOG_ERROR("[Physics 2D] Failed to create box collider");
             return b2_nullShapeId;
+        }
 
         return b2CreatePolygonShape(bodyId, &shapeDef, &box);
     }
@@ -69,7 +82,10 @@ namespace ignite::physics
     b2ShapeId Physics2D::CreateCircleCollider(b2BodyId bodyId, const b2ShapeDef &shapeDef, const b2Circle &circle)
     {
         if (!b2Body_IsValid(bodyId))
+        {
+            LOG_ERROR("[Physics 2D] Failed to create circle collider");
             return b2_nullShapeId;
+        }
 
         return b2CreateCircleShape(bodyId, &shapeDef, &circle);
     }

@@ -10,7 +10,6 @@
 #include "texture.hpp"
 
 #include <vector>
-#include "ignite/core/path.hpp"
 
 #include <msdf-atlas-gen.h>
 #include <glm/glm.hpp>
@@ -21,13 +20,13 @@ namespace ignite
     {
     public:
 
-        Font(const ignite::Path &filepath);
+        Font(const std::filesystem::path &filepath);
         virtual ~Font() override;
 
-        static Ref<Font> Create(const ignite::Path &filepath);
+        static Ref<Font> Create(const std::filesystem::path &filepath);
 
         const Ref<Texture> GetAtlasTexture() const { return m_AtlasTexture; }
-        
+
         const std::vector<msdf_atlas::GlyphGeometry> &GetGlyphs() { return m_Glyphs; }
         const msdf_atlas::FontGeometry &GetGeometry() { return m_FontGeometry; }
 
@@ -37,7 +36,7 @@ namespace ignite
         AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
-        void LoadGlyphs(const ignite::Path &filepath);
+        void LoadGlyphs(const std::filesystem::path &filepath);
 
 		std::vector<msdf_atlas::GlyphGeometry> m_Glyphs;
 		msdf_atlas::FontGeometry m_FontGeometry;

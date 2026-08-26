@@ -22,8 +22,8 @@ namespace ignite
         static void CreateShaderCachedDirectoryIfNeeded()
         {
             static std::string cachedDirectory = GetShaderCacheDirectory();
-            if (!ignite::Path::exists(cachedDirectory))
-                ignite::Path::create_directories(cachedDirectory);
+            if (!std::filesystem::exists(cachedDirectory))
+                std::filesystem::create_directories(cachedDirectory);
         }
 
         static void ShaderDebugLog(UMBRA_LogType type, const char *message, void *userData)
@@ -50,7 +50,7 @@ namespace ignite
             return "[Shader] Unreachable, Invalid Graphics API";
         }
     }
-    
+
     void Shader::InitShaderData()
     {
         umbra::ShaderCompiler::SetLogCallback(ShaderDebugLog, nullptr);
@@ -63,7 +63,7 @@ namespace ignite
         umbra::ShaderCompiler::ClearLogCallback();
     }
 
-    Shader::Shader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
+    Shader::Shader(const std::filesystem::path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
         : m_Filepath(filepath), m_Type(shaderType)
     {
         CreateShaderCachedDirectoryIfNeeded();
@@ -117,10 +117,10 @@ namespace ignite
         return newShaderHandle != nullptr;
     }
 
-    std::vector<uint8_t> Shader::CompileOrGetShader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
+    std::vector<uint8_t> Shader::CompileOrGetShader(const std::filesystem::path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
     {
-        LOG_ASSERT(ignite::Path::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
-        
+        LOG_ASSERT(std::filesystem::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
+
         const nvrhi::GraphicsAPI api = DeviceManager::GetInstance()->GetGraphicsAPI();
 
         umbra::CompilerOptions options = {};
@@ -141,9 +141,9 @@ namespace ignite
         options.sRegShift = 128; // NVRHI Compatible
         options.bRegShift = 256; // NVRHI Compatible
         options.uRegShift = 384; // NVRHI Compatible
-        
+
         options.AddCompilerOptions("-Zpc"); // Force column-major matrix packing matching GLM
-        
+
         // Important!!!!
         if (api == nvrhi::GraphicsAPI::VULKAN)
         {
@@ -154,8 +154,8 @@ namespace ignite
         }
 
         std::vector<uint8_t> shaderCode;
-        ignite::Path cacheFilepath = (options.outputFilepath / options.filepath.filename().replace_extension(GetShaderExtension(api))).generic_string();
-        if (ignite::Path::exists(cacheFilepath) && !recompile)
+        std::filesystem::path cacheFilepath = (options.outputFilepath / options.filepath.filename().replace_extension(GetShaderExtension(api))).generic_string();
+        if (std::filesystem::exists(cacheFilepath) && !recompile)
         {
             std::ifstream file(cacheFilepath, std::ios::binary);
             file.seekg(0, std::ios::end);
@@ -224,7 +224,7 @@ namespace ignite
                 attr.bufferIndex = vertexAttr.bufferIndex;
                 attr.isInstanced = false;
                 attr.elementStride = vertexAttr.elementStride;
-                
+
                 outVertexAttributes.push_back(attr);
             }
 
@@ -283,7 +283,7 @@ namespace ignite
             if (header[0] != 0x43425844)
             {
                 LOG_WARN("[Shader Reflect] Blob doesn't appear to be DXBC/DXIL format. First 4 bytes: 0x{:08X}", header[0]);
-                
+
                 // Some shader compilers might wrap the DXIL in different containers
                 // Try to find DXBC signature within the first few bytes
                 bool foundDXBC = false;
@@ -297,7 +297,7 @@ namespace ignite
                         break;
                     }
                 }
-                
+
                 if (!foundDXBC)
                 {
                     LOG_ERROR("[Shader Reflect] No DXBC signature found in blob. This might not be a valid DXIL shader.");
@@ -344,11 +344,11 @@ namespace ignite
         {
             result = D3DReflect(shaderCode.data(), shaderCode.size(), IID_PPV_ARGS(reflection.GetAddressOf()));
         }
-        
+
         if (FAILED(result))
         {
             LOG_ERROR("[Shader Reflect] D3DReflect failed with HRESULT: 0x{:08X}", static_cast<uint32_t>(result));
-            
+
             switch (result)
             {
                 case E_INVALIDARG:
@@ -375,7 +375,7 @@ namespace ignite
                     LOG_ERROR("  - Unknown error code: 0x{:08X}", static_cast<uint32_t>(result));
                     break;
             }
-            
+
             LOG_ERROR("[Shader Reflect] Possible causes:");
             LOG_ERROR("  1. ShaderMake might be producing a different format than DXIL");
             LOG_ERROR("  2. The shader compilation might have failed silently");
@@ -399,7 +399,7 @@ namespace ignite
         }
 
         LOG_WARN("[Shader Reflect] {} Shader", GetShaderTypeString(type));
-        
+
         // Extract version info manually - D3D12 uses different version encoding
         UINT majorVersion = (shaderDesc.Version >> 4) & 0xF;
         UINT minorVersion = shaderDesc.Version & 0xF;
@@ -417,9 +417,9 @@ namespace ignite
                 result = cbuffer->GetDesc(&cbufferDesc);
                 if (SUCCEEDED(result))
                 {
-                    LOG_TRACE("  [CBV] Name: {}, Size: {}, Variables: {}", 
-                        cbufferDesc.Name ? cbufferDesc.Name : "unnamed", 
-                        cbufferDesc.Size, 
+                    LOG_TRACE("  [CBV] Name: {}, Size: {}, Variables: {}",
+                        cbufferDesc.Name ? cbufferDesc.Name : "unnamed",
+                        cbufferDesc.Size,
                         cbufferDesc.Variables);
                 }
             }
@@ -480,7 +480,7 @@ namespace ignite
                         break;
                 }
 
-                LOG_TRACE("  [{}] Name: {}, Register: {}, Space: {}, Count: {}", 
+                LOG_TRACE("  [{}] Name: {}, Register: {}, Space: {}, Count: {}",
                     resourceType,
                     bindDesc.Name ? bindDesc.Name : "unnamed",
                     bindDesc.BindPoint,
@@ -512,7 +512,7 @@ namespace ignite
             result = reflection->GetInputParameterDesc(i, &paramDesc);
             if (SUCCEEDED(result))
             {
-                LOG_TRACE("  [Input] Semantic: {}{}, Register: {}, Mask: 0x{:X}", 
+                LOG_TRACE("  [Input] Semantic: {}{}, Register: {}, Mask: 0x{:X}",
                     paramDesc.SemanticName ? paramDesc.SemanticName : "unknown",
                     paramDesc.SemanticIndex,
                     paramDesc.Register,
@@ -631,7 +631,7 @@ namespace ignite
             result = reflection->GetOutputParameterDesc(i, &paramDesc);
             if (SUCCEEDED(result))
             {
-                LOG_TRACE("  [Output] Semantic: {}{}, Register: {}, Mask: 0x{:X}", 
+                LOG_TRACE("  [Output] Semantic: {}{}, Register: {}, Mask: 0x{:X}",
                     paramDesc.SemanticName ? paramDesc.SemanticName : "unknown",
                     paramDesc.SemanticIndex,
                     paramDesc.Register,
@@ -643,7 +643,7 @@ namespace ignite
         // Push constants in D3D12 are typically implemented as root constants
         // which can be detected by looking for constant buffers with special properties
         // or by examining the root signature (not available through shader reflection alone)
-        
+
         LOG_TRACE("   Root constants would need root signature analysis (not available in shader reflection)");
 #else
         LOG_WARN("[Shader Reflect] DXIL reflection is only available on Windows platform");
@@ -652,10 +652,10 @@ namespace ignite
     }
 #endif
 
-    Ref<Shader> Shader::Create(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
+    Ref<Shader> Shader::Create(const std::filesystem::path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
     {
         // Try to get cached Shader Object
-        ShaderKey key = { filepath.filename(), entryName, shaderType };
+        ShaderKey key = { filepath.filename().string(), entryName, shaderType};
         auto shaderIt = s_ShaderCache.find(key);
         if (shaderIt != s_ShaderCache.end())
             return shaderIt->second;

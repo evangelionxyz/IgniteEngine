@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "icamera.hpp"
+#include "ignite/scene/icamera.hpp"
 
 namespace ignite
 {

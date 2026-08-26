@@ -29,7 +29,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 
 namespace ignite
-{    
+{
     static std::string GenerateUniqueName(const std::string &name, const std::vector<std::string> &names, std::unordered_map<std::string, uint32_t> &strMap)
     {
         // iterate names for the first time
@@ -132,12 +132,12 @@ namespace ignite
 
         CommandManager::AddCommand(
             CreateScope<EntityManagerCommand>(
-                createFunc, 
-                destroyFunc, 
+                createFunc,
+                destroyFunc,
                 CommandState_Create
             )
         );
-       
+
         return createdEntity;
     }
 
@@ -259,12 +259,12 @@ namespace ignite
 
         CommandManager::AddCommand(
             CreateScope<EntityManagerCommand>(
-                createFunc, 
-                destroyFunc, 
+                createFunc,
+                destroyFunc,
                 CommandState_Create
             )
         );
-       
+
         return createdEntity;
     }
 
@@ -297,8 +297,8 @@ namespace ignite
 
         CommandManager::AddCommand(
             CreateScope<EntityManagerCommand>(
-                createFunc, 
-                destroyFunc, 
+                createFunc,
+                destroyFunc,
                 CommandState_Create
             )
         );
@@ -378,7 +378,7 @@ namespace ignite
 
         scene->registry->destroy(entity);
         scene->entities.erase(idComp.uuid);
-        
+
         // remove from parent
         if (idComp.parent != UUID(0))
         {
@@ -413,7 +413,7 @@ namespace ignite
             Entity newChildEntity = DuplicateEntity(scene, GetEntity(scene, cid), false); // add to parent false
 
             IDComponent &childId = newChildEntity.GetComponent<IDComponent>();
-            
+
             // add this child to new entity
             newEntityIDComp.AddChild(childId.uuid);
 
@@ -664,7 +664,7 @@ namespace ignite
 
         // Do not copy entities (it will be created when creating entity)
         // newScene->entities = other->entities;
-        
+
         // Do not copy registered comps
         // newScene->registeredComps = other->registeredComps;
 
@@ -945,7 +945,7 @@ namespace ignite
                     const auto &meta = AssetManager::GetInstance()->GetMetaData(prefabHandle);
                     if (!meta.filepath.empty())
                     {
-                        ignite::Path fullPath = project ? project->GetProjectFilepath(meta.filepath) : meta.filepath;
+                        std::filesystem::path fullPath = project ? project->GetProjectFilepath(meta.filepath) : meta.filepath;
                         prefab->Serialize(fullPath);
                     }
 

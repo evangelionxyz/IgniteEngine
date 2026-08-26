@@ -59,7 +59,7 @@ namespace ignite
                 return;
 
             auto &cc = cameraEntity.GetComponent<CameraComponent>();
-            
+
             glm::vec2 viewportSize = globals::GEditor::GameViewport.max;
             if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
                 return;
@@ -87,14 +87,14 @@ namespace ignite
             if (!scene || !scene->GetPhysics3D() || !origin || !direction)
                 return 0;
 
-            physics::Ray ray{ *origin, *direction };
-            physics::RaycastHit hit;
+            Ray ray{ *origin, *direction };
+            RaycastHit hit;
             if (!scene->GetPhysics3D()->Raycast(ray, hit, maxDistance, layerMask))
                 return 0;
 
             if (outHitPoint)
                 *outHitPoint = hit.hitPoint;
-            
+
             if (outHitNormal)
                 *outHitNormal = hit.hitNormal;
 
@@ -3476,7 +3476,7 @@ namespace ignite
             auto &smc = entity.GetComponent<SkeletalMeshComponent>();
             if (smc.runtimeAnimatorInstance)
                 smc.runtimeAnimatorInstance->SetParamFloat(paramName, value);
-            
+
             auto it = smc.runtimeParams.find(paramName);
             if (it != smc.runtimeParams.end())
             {
@@ -3495,10 +3495,10 @@ namespace ignite
 
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
-            
+
             if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
                 return;
-            
+
             auto &smc = entity.GetComponent<SkeletalMeshComponent>();
             if (smc.runtimeAnimatorInstance)
             {
@@ -3520,12 +3520,12 @@ namespace ignite
         {
             if (!paramName)
                 return;
-            
+
             Entity entity = GetEntityByID(entityID);
-            
+
             if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
                 return;
-            
+
             auto &smc = entity.GetComponent<SkeletalMeshComponent>();
             if (smc.runtimeAnimatorInstance)
             {
@@ -3553,7 +3553,7 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
                 return;
-            
+
             auto &smc = entity.GetComponent<SkeletalMeshComponent>();
             if (smc.runtimeAnimatorInstance)
             {
@@ -3575,7 +3575,7 @@ namespace ignite
         {
             if (!paramName)
                 return;
-            
+
             Entity entity = GetEntityByID(entityID);
 
             if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
@@ -3628,21 +3628,21 @@ namespace ignite
         {
             if (!paramName || !value)
                 return;
-            
+
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<SkeletalMeshComponent>())
                 return;
-            
+
             auto &smc = entity.GetComponent<SkeletalMeshComponent>();
             if (smc.runtimeAnimatorInstance)
                 smc.runtimeAnimatorInstance->SetParamString(paramName, value);
-            
+
             auto it = smc.runtimeParams.find(paramName);
             if (it != smc.runtimeParams.end())
             {
                 it->second.strVal = value;
             }
-            else 
+            else
             {
                 smc.runtimeParams[paramName] = { paramName, value, 0.0f, 0, false, AnimParam::Type::String };
             }

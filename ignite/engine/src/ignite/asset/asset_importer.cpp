@@ -89,7 +89,7 @@ namespace ignite
 
     Ref<SpriteSheet> AssetImporter::ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
-        if (!ignite::Path::exists(metadata.filepath))
+        if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
@@ -115,13 +115,13 @@ namespace ignite
         if (!project)
             return nullptr;
 
-        ignite::Path fontFilepath = metadata.filepath;
-        if (!ignite::Path::exists(fontFilepath))
+        std::filesystem::path fontFilepath = metadata.filepath;
+        if (!std::filesystem::exists(fontFilepath))
         {
             fontFilepath = project->GetProjectFilepath(metadata.filepath);
         }
 
-        if (!ignite::Path::exists(fontFilepath))
+        if (!std::filesystem::exists(fontFilepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
@@ -140,7 +140,7 @@ namespace ignite
 
     Ref<WidgetCanvas> AssetImporter::ImportWidget(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
-        if (!ignite::Path::exists(metadata.filepath))
+        if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
@@ -222,7 +222,7 @@ namespace ignite
 
     Ref<SkeletalMesh> AssetImporter::ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const SkeletalMeshImportPayload &payload)
     {
-        if (!ignite::Path::exists(metadata.filepath))
+        if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
@@ -237,12 +237,12 @@ namespace ignite
         if (!project)
             return nullptr;
 
-        const ignite::Path projectAssetPath = project->GetAssetDirectory();
-        const ignite::Path outputRootDirectory = payload.targetDirectory.empty() ? projectAssetPath : payload.targetDirectory;
-        const ignite::Path filename = metadata.filepath.stem();
-        const ignite::Path meshBinaryPath = outputRootDirectory / (filename.string() + skeletalMeshBinExt);
-        const ignite::Path skeletonPath = outputRootDirectory / (filename.string() + skeletonBinExt);
-        const ignite::Path meshRelativePath = project->GetProjectFilepath(meshBinaryPath);
+        const std::filesystem::path projectAssetPath = project->GetAssetDirectory();
+        const std::filesystem::path outputRootDirectory = payload.targetDirectory.empty() ? projectAssetPath : payload.targetDirectory;
+        const std::filesystem::path filename = metadata.filepath.stem();
+        const std::filesystem::path meshBinaryPath = outputRootDirectory / (filename.string() + skeletalMeshBinExt);
+        const std::filesystem::path skeletonPath = outputRootDirectory / (filename.string() + skeletonBinExt);
+        const std::filesystem::path meshRelativePath = project->GetProjectFilepath(meshBinaryPath);
 
         Ref<SkeletalMesh> asset;
 
@@ -277,7 +277,7 @@ namespace ignite
         }
 
         // Fast path: use cached binaries generated in dedicated folders.
-        if (!payload.forceRebuild && ignite::Path::exists(meshBinaryPath) && ignite::Path::exists(skeletonPath))
+        if (!payload.forceRebuild && std::filesystem::exists(meshBinaryPath) && std::filesystem::exists(skeletonPath))
         {
             asset = SkeletalMesh::Deserialize(meshBinaryPath);
             if (!asset)
@@ -305,8 +305,8 @@ namespace ignite
             }
 
             // animations
-            std::vector<ignite::Path> animationFiles;
-            if (ignite::Path::exists(outputRootDirectory))
+            std::vector<std::filesystem::path> animationFiles;
+            if (std::filesystem::exists(outputRootDirectory))
             {
                 for (const auto &entry : std::filesystem::directory_iterator(outputRootDirectory.string()))
                 {
@@ -354,7 +354,8 @@ namespace ignite
         MeshScene<VertexMeshAnim> meshScene;
         MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene, assetManager);
 
-        if (!ignite::Path::exists(outputRootDirectory)) ignite::Path::create_directory(outputRootDirectory);
+        if (!std::filesystem::exists(outputRootDirectory))
+            std::filesystem::create_directory(outputRootDirectory);
 
         // Import textures and materials from the same FBX parse used for skeleton/animation,
         // so bone IDs and skeleton mapping stay consistent.
@@ -388,7 +389,7 @@ namespace ignite
 
                     const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
                     const std::string textureExtension = writeEXR ? ".exr" : ".png";
-                    const ignite::Path textureOutputFullPath = outputRootDirectory / (name + textureExtension);
+                    const std::filesystem::path textureOutputFullPath = outputRootDirectory / (name + textureExtension);
                     const auto relativeTexturePath = project->GetProjectFilepath(textureOutputFullPath);
 
                     AssetHandle textureHandle = assetManager->GetAssetHandle(relativeTexturePath);
@@ -444,7 +445,7 @@ namespace ignite
                 mat->occlusionTextureHandle = materialTextureHandles[i][4];
 
                 const std::string materialFilename = mat->name + materialBinExt;
-                const ignite::Path materialBinFullPath = outputRootDirectory / materialFilename;
+                const std::filesystem::path materialBinFullPath = outputRootDirectory / materialFilename;
 
                 // Serialize Material
                 mat->Serialize(materialBinFullPath);
@@ -517,7 +518,7 @@ namespace ignite
 
                 animation->SetSkeletonHandle(meshScene.skeleton ? meshScene.skeleton->handle : AssetHandle(0));
 
-                ignite::Path animationPath = outputRootDirectory / (animation->name + animationBinExt);
+                std::filesystem::path animationPath = outputRootDirectory / (animation->name + animationBinExt);
                 animation->Serialize(animationPath);
 
                 AssetHandle animationHandle = AssetHandle();
@@ -549,7 +550,7 @@ namespace ignite
 
     Ref<StaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const StaticMeshImportPayload &payload)
     {
-        if (!ignite::Path::exists(metadata.filepath))
+        if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
@@ -562,11 +563,11 @@ namespace ignite
         if (!project)
             return nullptr;
 
-        const ignite::Path projectAssetPath = project->GetAssetDirectory();
-        const ignite::Path outputRootDirectory = payload.targetDirectory.empty() ? projectAssetPath : payload.targetDirectory;
-        const ignite::Path filename = metadata.filepath.stem();
-        const ignite::Path meshBinaryPath = outputRootDirectory / (filename.string() + staticMeshBinExt);
-        const ignite::Path meshRelativePath = project->GetProjectFilepath(meshBinaryPath);
+        const std::filesystem::path projectAssetPath = project->GetAssetDirectory();
+        const std::filesystem::path outputRootDirectory = payload.targetDirectory.empty() ? projectAssetPath : payload.targetDirectory;
+        const std::filesystem::path filename = metadata.filepath.stem();
+        const std::filesystem::path meshBinaryPath = outputRootDirectory / (filename.string() + staticMeshBinExt);
+        const std::filesystem::path meshRelativePath = project->GetProjectFilepath(meshBinaryPath);
 
         Ref<StaticMesh> asset;
 
@@ -601,7 +602,7 @@ namespace ignite
         }
 
         // Fast path: use cached binaries generated in dedicated folders.
-        if (!payload.forceRebuild && ignite::Path::exists(meshBinaryPath))
+        if (!payload.forceRebuild && std::filesystem::exists(meshBinaryPath))
         {
             asset = StaticMesh::Deserialize(meshBinaryPath);
             if (!asset)
@@ -619,7 +620,8 @@ namespace ignite
         MeshScene<VertexMeshStatic> meshScene;
         MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene, assetManager);
 
-        if (!ignite::Path::exists(outputRootDirectory)) ignite::Path::create_directory(outputRootDirectory);
+        if (!std::filesystem::exists(outputRootDirectory))
+            std::filesystem::create_directory(outputRootDirectory);
 
         // Import textures and materials from the same FBX parse used for skeleton/animation,
         // so bone IDs and skeleton mapping stay consistent.
@@ -653,7 +655,7 @@ namespace ignite
 
                     const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
                     const std::string textureExtension = writeEXR ? ".exr" : ".png";
-                    const ignite::Path textureOutputFullPath = outputRootDirectory / (name + textureExtension);
+                    const std::filesystem::path textureOutputFullPath = outputRootDirectory / (name + textureExtension);
                     const auto relativeTexturePath = project->GetProjectFilepath(textureOutputFullPath);
 
                     AssetHandle textureHandle = assetManager->GetAssetHandle(relativeTexturePath);
@@ -709,7 +711,7 @@ namespace ignite
                 mat->occlusionTextureHandle = materialTextureHandles[i][4];
 
                 const std::string materialFilename = mat->name + materialBinExt;
-                const ignite::Path materialBinFullPath = outputRootDirectory / materialFilename;
+                const std::filesystem::path materialBinFullPath = outputRootDirectory / materialFilename;
 
                 // Serialize Material
                 mat->Serialize(materialBinFullPath);
@@ -781,7 +783,7 @@ namespace ignite
 
     Ref<Animation2D> AssetImporter::ImportAnimation2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
-        if (!ignite::Path::exists(metadata.filepath))
+        if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
@@ -799,7 +801,7 @@ namespace ignite
 
     Ref<AnimatorController2D> AssetImporter::ImportAnimatorController2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
-        if (!ignite::Path::exists(metadata.filepath))
+        if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
@@ -817,7 +819,7 @@ namespace ignite
 
     Ref<AnimatorController> AssetImporter::ImportAnimatorController(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
-        if (!ignite::Path::exists(metadata.filepath))
+        if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
@@ -858,7 +860,7 @@ namespace ignite
 
     Ref<ScriptableObject> AssetImporter::ImportScriptableObject(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
-        if (!ignite::Path::exists(metadata.filepath))
+        if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("[AssetImporter] ScriptableObject file does not exist: {}", metadata.filepath.generic_string());
             return nullptr;

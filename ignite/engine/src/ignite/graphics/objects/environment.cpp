@@ -3,22 +3,18 @@
 #include "ignite_pch.hpp"
 
 #include "environment.hpp"
-#include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/binding_cache.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
-#include "ignite/scene/icamera.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/device/device_manager.hpp"
-#include "ignite/core/signal_bus.hpp"
-#include "ignite/core/signals/asset_signal.hpp"
-
-#include <stb_image.h>
 
 #include "procedural_sky.hpp"
+
+#include <stb_image.h>
 
 namespace ignite
 {
@@ -135,7 +131,7 @@ namespace ignite
 		// clock wise Vertices
 		m_Vertices =
 		{
-			glm::vec3(1.0f,  1.0f,  1.0f), // top right    front  
+			glm::vec3(1.0f,  1.0f,  1.0f), // top right    front
 			glm::vec3(1.0f,  1.0f, -1.0f), // top right    back
 			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
 			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front

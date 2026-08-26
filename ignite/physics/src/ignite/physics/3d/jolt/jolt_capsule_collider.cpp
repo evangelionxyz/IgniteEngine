@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_capsule_collider.hpp"
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
@@ -7,14 +7,19 @@
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/Shape/SubShapeID.h>
 
+#include "ignite/core/logger.hpp"
+
 namespace ignite::physics
 {
 	static JPH::ShapeRefC CreateCapsuleShape(const glm::vec3 &center, float radius, float halfHeight)
 	{
 		JPH::CapsuleShapeSettings capsuleSettings(halfHeight, radius);
 		auto capsuleResult = capsuleSettings.Create();
-		if (!capsuleResult.IsValid())
-			return nullptr;
+        if (!capsuleResult.IsValid())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Failed to create Capsule Shape!");
+            return nullptr;
+        }
 
 		JPH::ShapeRefC innerShape = capsuleResult.Get();
 		if (center != glm::vec3(0.0f))

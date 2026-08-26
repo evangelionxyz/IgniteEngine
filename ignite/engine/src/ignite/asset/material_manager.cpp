@@ -57,7 +57,7 @@ namespace ignite
         clonedMat->name = newName;
         // clonedMat->handle = AssetHandle(); // Generate new handle
         m_Materials[newName] = clonedMat;
-        
+
         return clonedMat;
     }
 
@@ -89,7 +89,7 @@ namespace ignite
                     ++assetIt;
                 }
             }
-            
+
             m_Materials.erase(it);
             LOG_INFO("[MaterialManager] Removed material '{}'", name);
         }
@@ -119,7 +119,7 @@ namespace ignite
 
         // material->handle = handle;
         m_AssetToMaterialMap[handle] = material->name;
-        
+
         if (!HasMaterial(material->name))
         {
             m_Materials[material->name] = material;
@@ -143,7 +143,7 @@ namespace ignite
         return nullptr;
     }
 
-    bool MaterialManager::SaveMaterial(const std::string &name, const ignite::Path &filepath)
+    bool MaterialManager::SaveMaterial(const std::string &name, const std::filesystem::path &filepath)
     {
         auto material = GetMaterial(name);
         if (!material)
@@ -157,7 +157,7 @@ namespace ignite
         return false;
     }
 
-    Ref<Material> MaterialManager::LoadMaterial(const ignite::Path &filepath)
+    Ref<Material> MaterialManager::LoadMaterial(const std::filesystem::path &filepath)
     {
         // TODO: Implement material deserialization
         LOG_INFO("[MaterialManager] Material deserialization not yet implemented");
@@ -179,11 +179,11 @@ namespace ignite
 
         int counter = 1;
         std::string uniqueName;
-        do 
+        do
         {
             uniqueName = std::format("{}_{}", baseName, counter);
             counter++;
-        } 
+        }
         while (HasMaterial(uniqueName));
 
         return uniqueName;

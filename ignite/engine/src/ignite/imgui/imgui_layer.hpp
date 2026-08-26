@@ -15,8 +15,6 @@
 #include "ignite/core/buffer.hpp"
 
 #include <SDL3/SDL.h>
-
-#include "ignite/core/path.hpp"
 #include <optional>
 
 namespace ignite
@@ -87,7 +85,7 @@ namespace ignite
         bool m_BlockEvents = false;
 
         DeviceManager *m_DeviceManager = nullptr;
-        
+
         // Store original style for proper scaling
         ImGuiStyle m_OriginalStyle;
         float m_CurrentDPIScale = 1.0f;

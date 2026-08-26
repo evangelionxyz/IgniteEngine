@@ -1,9 +1,10 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
 #include "bloom.hpp"
 
+#include "ignite/core/profiler/profiler.hpp"
 #include "buffers/vertex_buffer.hpp"
 #include "shader.hpp"
 #include "texture.hpp"

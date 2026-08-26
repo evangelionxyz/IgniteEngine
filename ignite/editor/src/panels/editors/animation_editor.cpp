@@ -103,7 +103,7 @@ namespace ignite
                     const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
                     const bool hasChannel = animation->channels.contains(jointId);
 
-                    const ImGuiTreeNodeFlags jointTreeNodeFlags = ImGuiTreeNodeFlags_OpenOnArrow 
+                    const ImGuiTreeNodeFlags jointTreeNodeFlags = ImGuiTreeNodeFlags_OpenOnArrow
                         | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen
                         | (hasChildren ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_Leaf)
                         | (isSelected ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
@@ -212,10 +212,10 @@ namespace ignite
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
-                
+
                 ImGui::BeginChild("##anim_tl_splitter", { 0.0f, splitterH });
                 ImGui::Button("##anim_tl_splitter_btn", ImVec2(-1.0f, -1.0f));
-                
+
                 if (ImGui::IsItemHovered() || ImGui::IsItemActive())
                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
 

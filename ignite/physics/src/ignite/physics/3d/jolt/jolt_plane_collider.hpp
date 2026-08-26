@@ -9,7 +9,7 @@
 
 namespace ignite::physics
 {
-	class IGN_API JoltPlaneCollider : public PhysicsPlaneCollider
+	class IGN_PHYSICS_API JoltPlaneCollider : public PhysicsPlaneCollider
 	{
 	public:
 		explicit JoltPlaneCollider(const PlaneColliderDesc &desc);

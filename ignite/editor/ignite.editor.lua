@@ -22,6 +22,7 @@ project "Ignite.Editor"
 
     links {
         "Ignite.Engine",
+        "Ignite.Core",
         "Ignite.Physics",
         "JOLT",
         "ZLIB",
@@ -44,10 +45,12 @@ project "Ignite.Editor"
 
     includedirs {
         "src",
+        "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/engine/src",
         "%{wks.location}/ignite/physics/src",
-        "%{wks.location}/ignite/physics/src/ignite",
+
         "%{wks.location}/crates/src/include",
+
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -86,6 +89,7 @@ project "Ignite.Editor"
     }
 
     defines {
+        "IMGUI_DEFINE_MATH_OPERATORS",
         "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
         "NVRHI_SHARED_LIBRARY_INCLUDE",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
@@ -98,9 +102,6 @@ project "Ignite.Editor"
     -- build rust
     filter "configurations:Debug or Debug-Profiling"
         libdirs { "%{wks.location}/crates/target/debug" }
-        prebuildcommands {
-            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"'
-        }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
             copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
@@ -108,9 +109,6 @@ project "Ignite.Editor"
 
     filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
         libdirs { "%{wks.location}/crates/target/release" }
-        prebuildcommands {
-            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"'
-        }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
             copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")

@@ -107,8 +107,8 @@ namespace ignite
         glm::vec2 AdvanceSmoothedInput(const glm::vec2 &rawInput, glm::vec2 &smoothedInput,
             glm::vec2 &velocity, float deltaTime) const;
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<BlendSpace> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<BlendSpace> Deserialize(const std::filesystem::path &filepath);
 
         static AssetType GetStaticType() { return AssetType::BlendSpace; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

@@ -1,9 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "ignite_pch.hpp"
-
 #include "math.hpp"
-#include "ignite/scene/component.hpp"
+
+#include "ignite/scene/icamera.hpp"
 
 namespace ignite
 {
@@ -127,7 +126,7 @@ namespace ignite
         glm::vec4 clipPos = viewProjection * modelPos;
         glm::vec3 ndcPos = glm::vec3(clipPos) / clipPos.w;
 
-        return 
+        return
         {
             (ndcPos.x + 1.0f) * 0.5f * screenSize.x,
             (1.0f - ndcPos.y) * 0.5f * screenSize.y,
@@ -241,17 +240,17 @@ namespace ignite
         return origin + rayDir * t;
     }
 
-	bool Math::RaySphereIntersection(const physics::Ray &ray, const glm::vec3 &sphereCenter, float sphereRadius)
+    bool Math::RaySphereIntersection(const Ray &ray, const glm::vec3 &sphereCenter, float sphereRadius)
     {
         glm::vec3 oc = ray.origin - sphereCenter;
-		float a = glm::dot(ray.direction, ray.direction);
+        float a = glm::dot(ray.direction, ray.direction);
         float b = 2.0f * glm::dot(oc, ray.direction);
         float c = glm::dot(oc, oc) - sphereRadius * sphereRadius;
         float discriminant = b * b - 4 * a * c;
         return (discriminant > 0);
     }
 
-    bool Math::RayPlaneIntersection(const physics::Ray &ray, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t)
+    bool Math::RayPlaneIntersection(const Ray &ray, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t)
     {
         float denom = glm::dot(planeNormal, ray.direction);
         if (glm::abs(denom) > 1e-5f)
@@ -264,7 +263,7 @@ namespace ignite
         return false;
     }
 
-    bool Math::RayQuadIntersection(const physics::Ray &ray, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t)
+    bool Math::RayQuadIntersection(const Ray &ray, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t)
     {
         glm::vec3 edge1 = v1 - v0;
         glm::vec3 edge2 = v3 - v0;

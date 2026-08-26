@@ -20,7 +20,7 @@
 namespace ignite
 {
     struct FmodSound;
-    
+
     class IGN_API FmodAudio : public Subsystem
     {
     public:
@@ -34,7 +34,7 @@ namespace ignite
 
         static FMOD::ChannelGroup *CreateChannelGroup(const std::string &name);
         static std::unordered_map<std::string, FMOD::ChannelGroup *> GetChannelGroupMap();
-        
+
         static FMOD::ChannelGroup *GetChannelGroup(const std::string &name);
         static FmodAudio &GetInstance();
         static FMOD::System *GetFmodSystem();
@@ -50,7 +50,7 @@ namespace ignite
         FMOD_VECTOR listenerVel;
         FMOD_VECTOR listenerForward;
         FMOD_VECTOR listenerUp;
-        
+
     };
 }
 

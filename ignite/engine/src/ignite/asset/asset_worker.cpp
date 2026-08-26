@@ -44,7 +44,7 @@ namespace ignite
             LOG_WARN("[Asset Manager] Worker [{0}]: {1}", i, id);
         }
     }
-    
+
     void AssetWorker::SetStatusCallback(StatusCallback callback)
     {
         s_StatusCallback = callback;

@@ -2,6 +2,8 @@
 
 #include "ignite_pch.hpp"
 
+#include "ignite/core/profiler/profiler.hpp"
+
 #include "outline_jfa.hpp"
 #include "texture.hpp"
 #include "shader.hpp"

@@ -1,11 +1,12 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
-#ifndef IGN_FRUSTUM_HPP
-#define IGN_FRUSTUM_HPP
+#ifndef IGN_CORE_FRUSTUM_HPP
+#define IGN_CORE_FRUSTUM_HPP
 
 #include "ignite/core/base.hpp"
 #include "aabb.hpp"
+
 #include <glm/glm.hpp>
 #include <array>
 
@@ -13,7 +14,7 @@ namespace ignite
 {
 	class ICamera;
 
-    class IGN_API Frustum
+    class IGN_CORE_API Frustum
     {
     public:
         enum class Plane

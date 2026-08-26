@@ -1,27 +1,8 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef SCENE_MANAGER_HPP
+#define SCENE_MANAGER_HPP
 
 #include "ignite/core/base.hpp"
 #include "component_group.hpp"
@@ -37,7 +18,7 @@ namespace ignite
     {
     public:
         static Entity CreateEntity(Scene *scene, const std::string &name, EntityType type, UUID uuid = UUID());
-        
+
         static Entity CreateSprite(Scene *scene, const std::string &name, UUID uuid = UUID());
         static Entity CreateCircle(Scene *scene, const std::string &name, UUID uuid = UUID());
         static Entity CreatePointLight2D(Scene *scene, const std::string &name, UUID uuid = UUID());
@@ -88,13 +69,13 @@ namespace ignite
                 }(), ...
             );
         }
-    
+
         template<typename... Component>
         static void CopyComponent(ComponentGroup<Component...>, entt::registry *destRegistry, entt::registry *srcRegistry, const EntityMap &entityMap)
         {
             CopyComponent<Component...>(destRegistry, srcRegistry, entityMap);
         }
-    
+
         template <typename... Component>
         static void CopyComponentIfExists(Entity dstEntity, Entity srcEntity)
         {
@@ -106,7 +87,7 @@ namespace ignite
                 }
             }(), ...);
         }
-    
+
         template<typename... Component>
         static void CopyComponentIfExists(ComponentGroup<Component...>, Entity dstEntity, Entity srcEntity)
         {
@@ -122,3 +103,4 @@ namespace ignite
     };
 }
 
+#endif

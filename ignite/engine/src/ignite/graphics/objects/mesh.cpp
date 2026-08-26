@@ -179,7 +179,7 @@ namespace ignite
         }
 
         static bool TryLoadFBXTextureFromProperty(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames,
-            const ignite::Path &sourceDir, FBXMeshLoader::MaterialLoader &materialLoader, MeshMaterialTextureMap &textureMap)
+            const std::filesystem::path &sourceDir, FBXMeshLoader::MaterialLoader &materialLoader, MeshMaterialTextureMap &textureMap)
         {
             if (!material)
             {
@@ -208,7 +208,7 @@ namespace ignite
                         continue;
                     }
 
-                    ignite::Path texturePath = fbxTexture->GetFileName();
+                    std::filesystem::path texturePath = fbxTexture->GetFileName();
                     if (texturePath.empty())
                     {
                         texturePath = fbxTexture->GetRelativeFileName();
@@ -225,7 +225,7 @@ namespace ignite
                     }
 
                     texturePath = texturePath.lexically_normal();
-                    if (!ignite::Path::exists(texturePath))
+                    if (!std::filesystem::exists(texturePath))
                     {
                         continue;
                     }
@@ -480,14 +480,14 @@ namespace ignite
         m_MeshInstances.clear();
     }
 
-    bool StaticMesh::Serialize(const ignite::Path &filepath)
+    bool StaticMesh::Serialize(const std::filesystem::path &filepath)
     {
         BinarySerializer::SerializeMesh<StaticMesh, VertexMeshStatic>(this, filepath);
         SetDirtyFlag(false);
         return true;
     }
 
-    Ref<StaticMesh> StaticMesh::Deserialize(const ignite::Path &filepath)
+    Ref<StaticMesh> StaticMesh::Deserialize(const std::filesystem::path &filepath)
     {
         return BinarySerializer::DeserializeMesh<StaticMesh, VertexMeshStatic>(filepath);
     }
@@ -539,14 +539,14 @@ namespace ignite
         m_AnimatorHandle = animatorHandle;
     }
 
-    bool SkeletalMesh::Serialize(const ignite::Path &filepath)
+    bool SkeletalMesh::Serialize(const std::filesystem::path &filepath)
     {
         BinarySerializer::SerializeMesh<SkeletalMesh, VertexMeshAnim>(this, filepath);
         SetDirtyFlag(false);
         return true;
     }
 
-    Ref<SkeletalMesh> SkeletalMesh::Deserialize(const ignite::Path &filepath)
+    Ref<SkeletalMesh> SkeletalMesh::Deserialize(const std::filesystem::path &filepath)
     {
         return BinarySerializer::DeserializeMesh<SkeletalMesh, VertexMeshAnim>(filepath);
     }
@@ -1529,7 +1529,7 @@ namespace ignite
                 outScene.animations.clear();
             }
 
-            const ignite::Path sourceDir = ignite::Path(filename).parent_path();
+            const std::filesystem::path sourceDir = std::filesystem::path(filename).parent_path();
 
             MaterialLoader materialLoader;
             FbxNode *rootNode = fbxScene->GetRootNode();
@@ -1991,7 +1991,7 @@ namespace ignite
     }
 
     template<MeshVertex VertexType_T>
-    int FBXMeshLoader::ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const ignite::Path &sourceDir)
+    int FBXMeshLoader::ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const std::filesystem::path &sourceDir)
     {
         FbxSurfaceMaterial *fbxMaterial = node->GetMaterialCount() > 0 ? node->GetMaterial(0) : nullptr;
         int sceneMaterialIndex = -1;
@@ -2024,7 +2024,7 @@ namespace ignite
     }
 
     template<MeshVertex VertexType_T>
-    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const ignite::Path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
+    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
     {
         if (!node)
         {
@@ -2373,7 +2373,7 @@ namespace ignite
     template<MeshVertex VertexType_T>
     void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene<VertexType_T> &outScene, AssetManager *assetManager)
     {
-        const std::string extension = ToLowerCopy(ignite::Path(filename).extension().string());
+        const std::string extension = ToLowerCopy(std::filesystem::path(filename).extension().string());
         if (extension == ".fbx")
         {
             FBXMeshLoader::LoadSceneGraph<VertexType_T>(filename, outScene, assetManager);

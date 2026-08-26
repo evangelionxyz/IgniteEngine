@@ -5,6 +5,7 @@
 #define IGN_BINDLESS_SYSTEM_HPP
 
 #include "ignite/core/base.hpp"
+
 #include <nvrhi/nvrhi.h>
 #include <vector>
 #include <mutex>

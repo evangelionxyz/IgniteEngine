@@ -7,7 +7,7 @@
 
 namespace ignite::physics
 {
-	class IGN_API PhysicsDynamicActor
+	class IGN_PHYSICS_API PhysicsDynamicActor
 	{
 	public:
 		virtual ~PhysicsDynamicActor() = default;

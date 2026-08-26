@@ -8,6 +8,7 @@
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/math/aabb.hpp"
 #include "ignite/asset/asset.hpp"
+
 #include <vector>
 #include <cstdint>
 
@@ -47,8 +48,8 @@ namespace ignite
         static AssetType GetStaticType() { return AssetType::Terrain; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
-        virtual bool Serialize(const ignite::Path &filepath) override;
-        static Ref<TerrainData> Deserialize(const ignite::Path &filepath);
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<TerrainData> Deserialize(const std::filesystem::path &filepath);
     };
 
     class IGN_API TerrainChunk

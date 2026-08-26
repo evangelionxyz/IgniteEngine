@@ -12,7 +12,7 @@
 
 #include <queue>
 #include <vector>
-#include "ignite/core/path.hpp"
+
 #include <unordered_map>
 #include <optional>
 #include <atomic>
@@ -43,14 +43,14 @@ namespace ignite
 		void ImportCurrentAsset();
 		void SkipCurrentAsset();
 
-		ignite::Path PrepareAssetForImport(const FileImportPayload &payload) const;
+		std::filesystem::path PrepareAssetForImport(const FileImportPayload &payload) const;
 
-		bool ImportStaticMesh(const ignite::Path &filepath);
-		bool ImportSkeletalMesh(const ignite::Path &filepath);
+		bool ImportStaticMesh(const std::filesystem::path &filepath);
+		bool ImportSkeletalMesh(const std::filesystem::path &filepath);
 
-		ignite::Path BuildUniquePath(const ignite::Path &directory, const std::string &baseName, const std::string &extension) const;
+		std::filesystem::path BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const;
 
-		ignite::Path m_TargetDirectory;
+		std::filesystem::path m_TargetDirectory;
 		std::unordered_map<AssetType, std::queue<FileImportPayload>> m_ImportQueues;
 		std::vector<AssetType> m_ImportTypeOrder;
 		size_t m_CurrentTypeQueueIndex = 0;

@@ -7,7 +7,7 @@
 
 namespace ignite::physics
 {
-	class IGN_API PhysicsCharacterController
+	class IGN_PHYSICS_API PhysicsCharacterController
 	{
 	public:
 		virtual ~PhysicsCharacterController() = default;

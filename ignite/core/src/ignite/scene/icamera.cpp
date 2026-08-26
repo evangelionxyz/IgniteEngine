@@ -1,11 +1,7 @@
-// Copyright (c) 2026 Evangelion Manuhutu 
-
-#include "ignite_pch.hpp"
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "icamera.hpp"
 #include "ignite/core/logger.hpp"
-#include "ignite/core/application.hpp"
-#include <nvrhi/nvrhi.h>
 
 namespace ignite
 {
@@ -36,7 +32,7 @@ namespace ignite
 
         m_ViewportSize = { width, height };
 		const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
-        
+
         switch (projectionType)
         {
             case ProjectionType::Orthographic:

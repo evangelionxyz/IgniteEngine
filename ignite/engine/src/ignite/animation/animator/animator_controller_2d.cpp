@@ -68,7 +68,7 @@ namespace ignite
     // -----------------------------------------------------------------------
     // Serialize
     // -----------------------------------------------------------------------
-    bool AnimatorController2D::Serialize(const ignite::Path &filepath)
+    bool AnimatorController2D::Serialize(const std::filesystem::path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -167,9 +167,9 @@ namespace ignite
     // -----------------------------------------------------------------------
     // Deserialize
     // -----------------------------------------------------------------------
-    Ref<AnimatorController2D> AnimatorController2D::Deserialize(const ignite::Path &filepath)
+    Ref<AnimatorController2D> AnimatorController2D::Deserialize(const std::filesystem::path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
+        if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[AnimCtrl2D] File does not exist: {}", filepath.string());
             return nullptr;

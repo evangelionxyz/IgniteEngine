@@ -20,6 +20,7 @@ project "Ignite.Test"
     links {
         "gtest",
         "Ignite.Engine",
+        "Ignite.Core",
         "Ignite.Physics",
         "JOLT",
         "ZLIB",
@@ -42,6 +43,7 @@ project "Ignite.Test"
 
     includedirs {
         "src",
+        "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/engine/src",
         "%{wks.location}/ignite/physics/src",
         "%{wks.location}/ignite/physics/src/ignite",

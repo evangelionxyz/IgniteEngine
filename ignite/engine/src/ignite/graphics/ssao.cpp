@@ -177,7 +177,7 @@ namespace ignite
         m_BlurComputePipeline = buildComputePipeline(m_BlurComputeShader, m_BlurLayout);
     }
 
-    void SSAO::Build(nvrhi::ICommandList *cmd, const Ref<Texture> &depthTexture, ICamera *camera, 
+    void SSAO::Build(nvrhi::ICommandList *cmd, const Ref<Texture> &depthTexture, ICamera *camera,
         const PostProcessing &settings, const Ref<VertexBuffer> &fullscreenVertexBuffer)
     {
         if (!cmd || !depthTexture) return;

@@ -72,7 +72,7 @@ namespace ignite
         m_Initialized = false;
     }
 
-    bool ScriptHost::Init(const ignite::Path &configPath)
+    bool ScriptHost::Init(const std::filesystem::path &configPath)
     {
         if (m_Initialized)
         {
@@ -80,7 +80,7 @@ namespace ignite
             return true;
         }
 
-        if (!ignite::Path::exists(configPath))
+        if (!std::filesystem::exists(configPath))
         {
             LOG_ERROR("[Script Host] MochiSharp runtime config not found: {}", configPath.generic_string());
             return false;
@@ -107,7 +107,7 @@ namespace ignite
         return true;
     }
 
-    mochi::ManagedAssembly *ScriptHost::LoadAssemblyInternal(const ignite::Path &assemblyPath, mochi::ManagedAssembly *&targetSlot)
+    mochi::ManagedAssembly *ScriptHost::LoadAssemblyInternal(const std::filesystem::path &assemblyPath, mochi::ManagedAssembly *&targetSlot)
     {
         if (!m_LoadContext)
         {
@@ -134,7 +134,7 @@ namespace ignite
         return &assembly;
     }
 
-    bool ScriptHost::LoadAssembly(const ignite::Path &assemblyPath)
+    bool ScriptHost::LoadAssembly(const std::filesystem::path &assemblyPath)
     {
         if (!m_Initialized)
         {
@@ -699,7 +699,7 @@ namespace ignite
         return true;
     }
 
-    std::string ScriptHost::GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType) const
+    std::string ScriptHost::GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType) const
     {
         mochi::Type *bridgeType = GetReflectionBridgeType();
         if (!bridgeType)
@@ -708,7 +708,7 @@ namespace ignite
         return InvokeStaticStringMethod(*bridgeType, "GetDerivedTypes", assemblyPath.stem().string(), baseType);
     }
 
-    std::string ScriptHost::GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType) const
+    std::string ScriptHost::GetCreateAssetMenuData(const std::filesystem::path &assemblyPath, const std::string &baseType) const
     {
         mochi::Type *bridgeType = GetReflectionBridgeType();
         if (!bridgeType)

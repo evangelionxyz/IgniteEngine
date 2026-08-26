@@ -4,6 +4,6 @@
 
 #include "gui_function.hpp"
 
-namespace ignite {
-
+namespace ignite
+{
 }

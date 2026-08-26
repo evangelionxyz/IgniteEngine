@@ -25,10 +25,11 @@ project "Ignite.Engine"
     includedirs {
         "src",
         "src/ignite",
+        "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/physics/src",
-        "%{wks.location}/ignite/physics/src/ignite",
-        "%{wks.location}/ignite/ignite.renderer/src",
+        
         "%{wks.location}/crates/src/include",
+
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -71,6 +72,7 @@ project "Ignite.Engine"
 
     links {
         "Ignite.Physics",
+        "Ignite.Core",
         "IMGUI",
         "BOX2D",
         "STB",
@@ -86,7 +88,7 @@ project "Ignite.Engine"
         "tracy",
         "MochiSharp.Native",
         "UmbraShaderCompiler",
-
+        
         "ignite_core.dll.lib", -- rust based
     }
 

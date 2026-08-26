@@ -1,15 +1,14 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
-#ifndef IGN_MATH_HPP
-#define IGN_MATH_HPP
+#ifndef IGN_CORE_MATH_HPP
+#define IGN_CORE_MATH_HPP
 
 #include "ignite/core/base.hpp"
 
 #ifndef GLM_ENABLE_EXPERIMENTAL
-#define GLM_ENABLE_EXPERIMENTAL
+    #define GLM_ENABLE_EXPERIMENTAL
 #endif
-
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -20,27 +19,27 @@
 #include <glm/gtx/hash.hpp>
 
 #include "obb.hpp"
-#include "ignite/physics/3d/physics_3d.hpp"
+#include "ray.hpp"
 
 #ifndef IMGUI_DEFINE_MATH_OPERATORS
-#define IMGUI_DEFINE_MATH_OPERATORS
+    #define IMGUI_DEFINE_MATH_OPERATORS
 #endif
-#include "imgui.h"
+#include <imgui.h>
 
 namespace ignite
 {
     class ICamera;
     struct Rect;
 
-    class IGN_API Math
+    class IGN_CORE_API Math
     {
     public:
         static bool DecomposeTransform(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::quat &outRotation, glm::vec3 &outScale);
         static bool DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &outScale);
         static bool ProjectWorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen);
-        static bool RaySphereIntersection(const physics::Ray &ray, const glm::vec3 &sphereCenter, float sphereRadius);
-        static bool RayPlaneIntersection(const physics::Ray &ray, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t);
-        static bool RayQuadIntersection(const physics::Ray &ray, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t);
+        static bool RaySphereIntersection(const Ray &ray, const glm::vec3 &sphereCenter, float sphereRadius);
+        static bool RayPlaneIntersection(const Ray &ray, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t);
+        static bool RayQuadIntersection(const Ray &ray, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t);
         static glm::vec3 Normalize(const glm::vec3 &v);
         static glm::vec3 WorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &modelTransform, const glm::mat4 &viewProjection, const glm::vec2 &screenSize);
         static glm::vec2 GetNormalizedDeviceCoord(const glm::vec2 &mouse, const glm::vec2 &screen);
@@ -57,7 +56,7 @@ namespace ignite
         static glm::vec3 SnapToGrid(glm::vec3 position, float texel_size);
     };
 
-    struct IGN_API Rect
+    struct IGN_CORE_API Rect
     {
         glm::vec2 min;
         glm::vec2 max;
@@ -76,7 +75,7 @@ namespace ignite
             return { min - rhs.min, max - rhs.max };
         }
 
-        inline Rect operator*(const Rect &rhs) const 
+        inline Rect operator*(const Rect &rhs) const
         {
             return { min * rhs.min, max * rhs.max };
         }
@@ -100,8 +99,8 @@ namespace ignite
         void SetMax(const glm::vec2 &max_) { this->max = max_; }
         void SetMax(float x, float y) { max.x = x; max.y = y; }
 
-        const glm::vec2 GetCenter() const 
-        { 
+        const glm::vec2 GetCenter() const
+        {
             return { (min.x + max.x) / 2.0f, (min.y + max.y) / 2.0f };
         }
 
@@ -113,7 +112,7 @@ namespace ignite
 
 	using Viewport = Rect;
 
-    struct IGN_API Margin
+    struct IGN_CORE_API Margin
     {
         float top, bottom, left, right;
         Margin() : top(0.0f), bottom(0.0f), left(0.0f), right(0.0f) {}

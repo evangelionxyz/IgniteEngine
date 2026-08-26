@@ -1,6 +1,7 @@
 //Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #include "pch.hpp"
+
 #include <ignite/entry_point.hpp>
 #include <ignite/core/application.hpp>
 #include "editor_layer.hpp"

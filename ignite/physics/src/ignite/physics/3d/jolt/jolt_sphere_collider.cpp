@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Evangelion Manuhutu
-#include "ignite_pch.hpp"
+
 #include "jolt_sphere_collider.hpp"
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
@@ -7,14 +7,19 @@
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/Shape/SubShapeID.h>
 
+#include "ignite/core/logger.hpp"
+
 namespace ignite::physics
 {
 	static JPH::ShapeRefC CreateSphereShape(const glm::vec3 &center, float radius)
 	{
 		JPH::SphereShapeSettings sphereSettings(radius);
 		auto sphereResult = sphereSettings.Create();
-		if (!sphereResult.IsValid())
+        if (!sphereResult.IsValid())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Failed to create Sphere Shape!");
 			return nullptr;
+        }
 
 		JPH::ShapeRefC innerShape = sphereResult.Get();
 		if (center != glm::vec3(0.0f))
