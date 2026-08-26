@@ -15,7 +15,10 @@
 
 #include <nvrhi/nvrhi.h>
 
-#define IMGUI_DEFINE_MATH_OPERATORS
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
+    #define IMGUI_DEFINE_MATH_OPERATORS
+#endif
+
 #include <imgui.h>
 
 namespace ignite

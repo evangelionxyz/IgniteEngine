@@ -40,10 +40,15 @@ namespace ignite
             return 0;
         }
 
-        std::error_code ec;
-        const auto absolutePath = LockActiveProject()->GetProjectFilepath(metadata.filepath);
-        const uint64_t size = std::filesystem::file_size(absolutePath.string(), ec);
-        return ec ? 0 : size;
+        if (auto project = LockActiveProject())
+        {
+            std::error_code ec;
+            const auto absolutePath = project->GetProjectFilepath(metadata.filepath);
+            const uint64_t size = std::filesystem::file_size(absolutePath.string(), ec);
+            return ec ? 0 : size;    
+        }
+
+        return 0;
     }
 
     bool AssetManager::IsAssetLoaded(AssetHandle handle) const
@@ -537,13 +542,16 @@ namespace ignite
 
     AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path &filepath)
     {
-        const auto &absoluteFilepath = std::filesystem::absolute(LockActiveProject()->GetProjectFilepath(filepath).string());
-
-        std::unique_lock lock(m_AssetMutex);
-        auto it = m_AssetHandleByPath.find(absoluteFilepath.generic_string());
-        if (it != m_AssetHandleByPath.end())
+        if (auto project = LockActiveProject())
         {
-            return it->second;
+            const auto &absoluteFilepath = std::filesystem::absolute(project->GetProjectFilepath(filepath).string());
+
+            std::unique_lock lock(m_AssetMutex);
+            auto it = m_AssetHandleByPath.find(absoluteFilepath.generic_string());
+            if (it != m_AssetHandleByPath.end())
+            {
+                return it->second;
+            }
         }
 
         return AssetHandle(0);

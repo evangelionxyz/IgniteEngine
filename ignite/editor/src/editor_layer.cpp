@@ -18,7 +18,6 @@
 #include "ignite/scene/prefab.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
-#include "ignite/imgui/imgui_nvrhi.hpp"
 #include "ignite/imgui/imgui_layer.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/shader.hpp"
