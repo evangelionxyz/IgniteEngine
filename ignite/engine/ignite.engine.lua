@@ -107,10 +107,6 @@ project "Ignite.Engine"
     filter "configurations:Debug or Debug-Profiling"
         libdirs { wks_absolute .. "/crates/target/debug" }
         prebuildcommands {
-            -- Configure and Build SDL
-            'cmake -S "' .. SDL3_SOURCE_DIR .. '" -B "' .. SDL3_SOURCE_DIR .. '/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "' .. SDL3_SOURCE_DIR .. '/build" --config "Debug"',
-
             -- Configure and Build FastNoise2
             'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug',
             'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Debug"',
@@ -124,10 +120,6 @@ project "Ignite.Engine"
     filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
         libdirs { wks_absolute .. "/crates/target/release" }
         prebuildcommands {
-            -- Configure and Build SDL
-            'cmake -S "' .. SDL3_SOURCE_DIR .. '" -B "' .. SDL3_SOURCE_DIR .. '/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
-            'cmake --build "' .. SDL3_SOURCE_DIR .. '/build" --config "Release"',
-
             -- Configure and Build FastNoise2
             'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
             'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Release"',
