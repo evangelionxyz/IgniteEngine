@@ -1322,7 +1322,12 @@ namespace ignite
     {
         if (m_ActiveProject)
         {
-            SaveScene();
+            // Ignore triggering SaveAs(...) call
+            // Auto save if there is a valid scene path
+            if (!m_CurrentSceneFilePath.empty())
+            {
+                SaveScene();
+            }
             m_ActiveProject->Serialize(m_CurrentProjectFilepath);
         }
     }
