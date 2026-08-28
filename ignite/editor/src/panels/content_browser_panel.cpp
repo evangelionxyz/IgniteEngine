@@ -1284,17 +1284,24 @@ namespace ignite
 
             if (ImGui::MenuItem("Move"))
             {
-                MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, true);
-                m_PendingDragDropSources.clear();
-                m_PendingDragDropTargetDirectory.clear();
+                AssetWorker::SubmitJob([this]
+                {
+                    MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, true);
+                    m_PendingDragDropSources.clear();
+                    m_PendingDragDropTargetDirectory.clear();
+                });
+                
                 ImGui::CloseCurrentPopup();
             }
 
             if (ImGui::MenuItem("Copy"))
             {
-                MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, false);
-                m_PendingDragDropSources.clear();
-                m_PendingDragDropTargetDirectory.clear();
+                AssetWorker::SubmitJob([this]
+                {
+                    MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, false);
+                    m_PendingDragDropSources.clear();
+                    m_PendingDragDropTargetDirectory.clear();
+                });
                 ImGui::CloseCurrentPopup();
             }
 
@@ -2110,6 +2117,7 @@ namespace ignite
                     updatedMetadata.filepath = rebasedPath;
                     m_AssetManager->AssignMetaData(assetHandle, updatedMetadata);
                 }
+                
             }
             else
             {
