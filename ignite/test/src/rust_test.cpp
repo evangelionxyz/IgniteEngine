@@ -1,7 +1,11 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "rust_test.hpp"
+
+#include "ignite_rs/core.h"
+#include "ignite_rs/asset.h"
+
 #include "ignite/core/logger.hpp"
+
 #include <gtest/gtest.h>
 #include <vector>
 #include <string>

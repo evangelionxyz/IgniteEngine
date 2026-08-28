@@ -9,10 +9,9 @@
 #include "ignite/core/subsystem.hpp"
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/signals/asset_signal.hpp"
-#include "asset_worker.hpp"
 
 #include <map>
-#include <unordered_set>
+#include <memory>
 #include <vector>
 #include <thread>
 #include <functional>
@@ -21,6 +20,9 @@
 #include <string_view>
 #include <atomic>
 
+#include <cppcoro/async_scope.hpp>
+#include <cppcoro/shared_task.hpp>
+
 namespace fbxsdk
 {
     class FbxManager;
@@ -28,9 +30,28 @@ namespace fbxsdk
 
 namespace ignite
 {
+    class Project;
+
     using AssetRegistry = std::map<AssetHandle, AssetMetaData>;
 
-    class Project;
+    struct AssetStatus
+    {
+        AssetState state = AssetState::Unloaded;
+        float progress = 0.0f;
+        std::string error;
+    };
+
+    struct AssetRecord
+    {
+        AssetMetaData metadata;
+        Ref<Asset> asset;
+        std::atomic<AssetState> state{AssetState::Unloaded};
+        std::string error;
+        float progress = 0.0f;
+        std::atomic<std::uint64_t> generation{ 0 };
+        cppcoro::shared_task<Ref<Asset>> loadTask;
+    };
+
 
 	class IGN_API AssetManager : public Subsystem
     {
@@ -43,7 +64,7 @@ namespace ignite
         void SetActiveProject(const Ref<Project> &project);
         void SyncFromRust();
 
-        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
+        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, bool cacheResult = true);
 
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
         AssetHandle ImportAssetImmedate(const std::filesystem::path &filepath);
@@ -67,6 +88,21 @@ namespace ignite
                         oldAsset = m_LoadedAssets.at(handle);
                     }
                     m_LoadedAssets[handle] = asset;
+
+                    auto &record = m_AssetRecords[handle];
+                    if (!record)
+                    {
+                        record = std::make_shared<AssetRecord>();
+                        if (const auto metadataIt = m_AssetRegistry.find(handle); metadataIt != m_AssetRegistry.end())
+                        {
+                            record->metadata = metadataIt->second;
+                        }
+                    }
+
+                    record->asset = asset;
+                    record->error.clear();
+                    record->progress = 1.0f;
+                    record->state.store(AssetState::Ready, std::memory_order_release);
                 }
             }
         }
@@ -75,6 +111,13 @@ namespace ignite
         void LoadAssetAsync(AssetHandle handle);
         void LoadAssetImmediate(AssetHandle handle);
 
+        cppcoro::shared_task<Ref<Asset>> RequestAssetAsync(AssetHandle handle);
+        Ref<Asset> TryGetAsset(AssetHandle handle) const;
+        AssetState GetAssetState(AssetHandle handle) const;
+        AssetStatus GetAssetStatus(AssetHandle handle) const;
+        bool RetryAsset(AssetHandle handle);
+        void CancelAssetLoad(AssetHandle handle);
+
         void OnUpdate(float deltaTime);
 
         void OnAssetChangeSignal(const AssetChangeSignal &signal);
@@ -82,89 +125,19 @@ namespace ignite
         template<typename T = Asset>
         Ref<T> GetAsset(AssetHandle handle)
         {
-            if (!IsAssetHandleValid(handle))
+            if (Ref<Asset> asset = TryGetAsset(handle))
             {
-                return nullptr;
+                return std::static_pointer_cast<T>(asset);
             }
 
-            AssetMetaData metadata;
-            // Protect all reads/writes to LoadedAssets and LoadingAssets
-            {
-                if (m_LoadedAssets.contains(handle))
-                {
-                    return std::static_pointer_cast<T>(m_LoadedAssets.at(handle));
-                }
-
-                if (m_LoadingAssets.contains(handle))
-                {
-                    return nullptr;
-                }
-
-                m_LoadingAssets.insert(handle);
-
-                // Capture metadata while holding the lock so AssetRegistry read is safe
-                if (m_AssetRegistry.contains(handle))
-                {
-                    metadata = m_AssetRegistry.at(handle);
-                }
-            }
-
-            // Submit import work to worker thread
-            AssetWorker::SubmitJob(std::format("Loading {}...", metadata.filepath.filename().string()), [this, handle, metadata]()
-            {
-                try
-                {
-                    // Do the heavy I/O work on worker thread
-                    Ref<Asset> asset = Import(handle, metadata);
-                    if (asset)
-                    {
-                        std::stringstream ss;
-                        ss << std::this_thread::get_id();
-                        unsigned long long threadId = std::stoull(ss.str());
-                        LOG_TRACE("[Asset Manager] Asset loaded on worker thread [{0}]: {1} ({2})",
-                            threadId, static_cast<uint64_t>(handle), metadata.filepath.generic_string());
-                    }
-                }
-                catch (const std::exception &e)
-                {
-                    LOG_ASSERT(false, "[Asset Manager] Failed to import asset {} \"{}\": {}",
-                        static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
-                }
-
-                {
-                    std::unique_lock lock(m_AssetMutex);
-                    m_LoadingAssets.erase(handle);
-                }
-            });
-
+            (void)RequestAssetAsync(handle);
             return nullptr;
         }
 
         template<typename T = Asset>
         Ref<T> GetAssetImmediate(AssetHandle handle)
         {
-            VerifyNotRenderThread();
-
-            if (!IsAssetHandleValid(handle))
-            {
-                return nullptr;
-            }
-
-            // Check if already loaded
-            {
-                std::unique_lock lock(m_AssetMutex);
-                if (m_LoadedAssets.contains(handle))
-                {
-                    return std::static_pointer_cast<T>(m_LoadedAssets.at(handle));
-                }
-            }
-
-            // Synchronous load - blocks calling thread
-            const AssetMetaData metadata = GetMetaData(handle);
-            LOG_TRACE("[Asset Manager] Synchronous asset load requested: {}", metadata.filepath.generic_string());
-
-            Ref<Asset> asset = Import(handle, metadata);
-            return std::static_pointer_cast<T>(asset);
+            return std::static_pointer_cast<T>(GetAssetImmediateInternal(handle));
         }
 
         AssetType GetAssetType(AssetHandle handle) const;
@@ -189,9 +162,17 @@ namespace ignite
 
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
-        WeakRef<Project> GetActiveProjectWeak() const { return m_Project; }
+        WeakRef<Project> GetActiveProjectWeak() const
+        {
+            std::lock_guard<std::mutex> lock(m_ProjectMutex);
+            return m_Project;
+        }
 
-        Ref<Project> LockActiveProject() const { return m_Project.lock(); }
+        Ref<Project> LockActiveProject() const
+        {
+            std::lock_guard<std::mutex> lock(m_ProjectMutex);
+            return m_Project.lock();
+        }
 
         static AssetManager *GetInstance();
 
@@ -203,20 +184,32 @@ namespace ignite
     private:
         static void VerifyNotRenderThread();
 
+        Ref<Asset> GetAssetImmediateInternal(AssetHandle handle);
+        cppcoro::shared_task<Ref<Asset>> LoadAssetPipeline(AssetHandle handle, AssetMetaData metadata,
+            Ref<AssetRecord> record, std::uint64_t managerGeneration, std::uint64_t requestGeneration);
+        bool IsRequestCurrent(const Ref<AssetRecord> &record, std::uint64_t managerGeneration, std::uint64_t requestGeneration) const;
+        void SetRecordState(const Ref<AssetRecord> &record, AssetState state, float progress, std::string error = {});
+
         std::atomic<uint64_t> m_ActiveLoadBytes{ 0 };
         std::mutex m_ThrottleMutex;
         std::condition_variable m_ThrottleCV;
 
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
-        std::unordered_set<AssetHandle> m_LoadingAssets;
+        std::unordered_map<AssetHandle, Ref<AssetRecord>> m_AssetRecords;
         WeakRef<Project> m_Project;
+
+        cppcoro::async_scope m_LoadScope;
+        std::mutex m_LoadScopeMutex;
+        std::atomic<std::uint64_t> m_Generation{ 1 };
+        std::atomic<bool> m_ShuttingDown{ false };
 
         fbxsdk::FbxManager *m_FbxSdkManager = nullptr;
         std::atomic<bool> m_UnloadPaused = false;
 
         std::mutex m_FbxSdkMutex;
         mutable std::mutex m_AssetMutex;
+        mutable std::mutex m_ProjectMutex;
 
         float assetUnloadTimer = 0.0f;
 

@@ -19,10 +19,10 @@ project "Ignite.Physics"
     includedirs {
         "src",
         "src/ignite",
-        
         "%{wks.location}/ignite/core/src",
         "%{wks.location}/crates/src/include",
 
+        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.BOX2D}",
@@ -36,17 +36,18 @@ project "Ignite.Physics"
         "JOLT",
         "BOX2D",
         "SPDLOG",
+        "cppcoro",
     }
 
     defines {
         "IGN_PHYSICS_DLL_EXPORTS",
-        
         "JPH_SHARED_LIBRARY",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2"
+        "GLM_FORCE_SSE2",
+        "_WIN32_WINNT=0x0A00",
     }
 
     --linux

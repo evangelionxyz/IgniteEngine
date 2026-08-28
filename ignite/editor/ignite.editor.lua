@@ -39,6 +39,7 @@ project "Ignite.Editor"
         "freetype",
         "tracy",
         "MochiSharp.Native",
+        "cppcoro",
 
         "ignite_core.dll.lib", -- rust based
     }
@@ -85,6 +86,7 @@ project "Ignite.Editor"
         "%{IncludeDir.Hostfxr}",
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.FASTSIMD}",
+        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.FASTSIMD_CONFIG}"
     }
 
@@ -220,7 +222,8 @@ project "Ignite.Editor"
             "NOMINMAX",
             "_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING",
             "_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS",
-            "_CRT_SECURE_NO_WARNINGS"
+            "_CRT_SECURE_NO_WARNINGS",
+            "_WIN32_WINNT=0x0A00",
         }
 
     links { "d3dcompiler", "dxcompiler", "delayimp" }
@@ -234,7 +237,7 @@ project "Ignite.Editor"
             "DEBUG",
             "_DEBUG"
         }
-    
+
     filter "configurations:Debug-Profiling"
         runtime "Debug"
         symbols "on" -- with debug info
@@ -253,7 +256,7 @@ project "Ignite.Editor"
             "IGN_RELEASE_BUILD",
             "NDEBUG"
         }
-    
+
     filter "configurations:Release-Profiling"
         runtime "release"
         optimize "on"

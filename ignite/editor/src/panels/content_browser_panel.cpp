@@ -17,6 +17,7 @@
 #include "ignite/core/signals/asset_signal.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/graphics/window.hpp"
+#include "ignite/asset/asset_worker.hpp"
 #include "ext/editor_ui.hpp"
 
 #include <format>
@@ -281,6 +282,8 @@ namespace ignite
 
         const auto &filepath = m_EditorLayer->GetActiveProject()->GetFilepath();
         m_EditorLayer->GetActiveProject()->Serialize(filepath);
+
+        AssetWorker::ReportStatus("Ready");
     }
 
     void ContentBrowserPanel::UIRenderFileTree(FileTreeNode *node)
@@ -1122,93 +1125,130 @@ namespace ignite
 
             if (ImGui::Button("Delete"))
             {
-                bool genCSProjectRequested = false;
 
-                for (const auto &itemPath : m_SelectedItems)
+                AssetWorker::SubmitJob([this]()
                 {
-                    std::error_code ec;
-                    if (std::filesystem::is_directory(itemPath))
+                    bool genCSProjectRequested = false;
+
+                    struct FileToRemove
                     {
-                        auto project = m_EditorLayer->GetActiveProject();
+                        AssetHandle handle = AssetHandle(0);
+                        std::filesystem::path path;
+                    };
 
-                        if (project && m_AssetManager)
+                    std::vector<FileToRemove> filesToRemove;
+                    filesToRemove.reserve(256);
+
+                    for (const auto &itemPath : m_SelectedItems)
+                    {
+                        std::error_code ec;
+                        if (std::filesystem::is_directory(itemPath))
                         {
-                            for (const auto &entry : std::filesystem::recursive_directory_iterator(itemPath.string()))
+                            auto project = m_EditorLayer->GetActiveProject();
+
+                            if (project && m_AssetManager)
                             {
-                                if (!entry.is_regular_file())
-                                    continue;
-
-                                const std::filesystem::path &filePath = entry.path().string();
-
-                                const std::filesystem::path relativePath = project->GetProjectFilepath(filePath);
-                                const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
-
-                                if (handle != AssetHandle(0))
+                                for (const auto &entry : std::filesystem::recursive_directory_iterator(itemPath.string()))
                                 {
-                                    m_AssetManager->UnloadAsset(handle);
-                                    m_AssetManager->RemoveAsset(handle);
-                                }
+                                    if (!entry.is_regular_file())
+                                        continue;
 
-                                // Also remove .meta from asset system if needed
-                                if (filePath.extension() != ".meta")
-                                {
-                                    std::filesystem::path metaPath = filePath.string() + ".meta";
-                                    if (std::filesystem::exists(metaPath))
+                                    const std::filesystem::path &filepath = entry.path().string();
+                                    const std::filesystem::path relativePath = project->GetProjectFilepath(filepath);
+                                    const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
+                                    if (handle != AssetHandle(0))
                                     {
-                                        const std::filesystem::path metaRelative = project->GetProjectFilepath(metaPath);
-                                        const AssetHandle metaHandle = m_AssetManager->GetAssetHandle(metaRelative);
+                                        filesToRemove.emplace_back(FileToRemove{ handle, filepath });
+                                    }
 
-                                        if (metaHandle != AssetHandle(0))
+                                    // Also remove .meta from asset system if needed
+                                    if (filepath.extension() != ".meta")
+                                    {
+                                        std::filesystem::path metaPath = filepath.string() + ".meta";
+                                        if (std::filesystem::exists(metaPath))
                                         {
-                                            m_AssetManager->UnloadAsset(metaHandle);
-                                            m_AssetManager->RemoveAsset(metaHandle);
+                                            const std::filesystem::path metaRelative = project->GetProjectFilepath(metaPath);
+                                            const AssetHandle metaHandle = m_AssetManager->GetAssetHandle(metaRelative);
+                                            if (metaHandle != AssetHandle(0))
+                                            {
+                                                filesToRemove.emplace_back(FileToRemove{ metaHandle, metaPath });
+                                            }
                                         }
                                     }
                                 }
                             }
+
+                            std::filesystem::remove_all(itemPath.string(), ec);
                         }
-
-                        std::filesystem::remove_all(itemPath.string(), ec);
-                    }
-                    else
-                    {
-                        std::filesystem::remove(itemPath.string(), ec);
-
-                        const std::filesystem::path metaPath = itemPath.string() + ".meta";
-                        if (std::filesystem::exists(metaPath))
+                        else
                         {
-                            std::error_code metaEc;
-                            std::filesystem::remove(metaPath.string(), metaEc);
-                        }
+                            Project *project = m_EditorLayer->GetActiveProject().get();
 
-                        Project *project = m_EditorLayer->GetActiveProject().get();
-                        if (project && m_AssetManager)
-                        {
+                            // Remove the item from the OS File System
+                            std::filesystem::remove(itemPath.string(), ec);
+
+
+                            // Remove the side-car file (.meta file)
+                            const std::filesystem::path metaPath = itemPath.string() + ".meta";
+                            if (std::filesystem::exists(metaPath))
+                            {
+                                std::error_code metaEc;
+                                std::filesystem::remove(metaPath.string(), metaEc);
+
+                                // Push to the queue
+                                const std::filesystem::path metaRelative = project->GetProjectFilepath(metaPath);
+                                const AssetHandle metaHandle = m_AssetManager->GetAssetHandle(metaRelative);
+                                if (metaHandle != AssetHandle(0))
+                                {
+                                    filesToRemove.emplace_back(FileToRemove{ metaHandle, metaPath });
+                                }
+                            }
+
+
+                            // Push to the queue
                             const std::filesystem::path relativePath = project->GetProjectFilepath(itemPath);
                             const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
                             if (handle != AssetHandle(0))
                             {
-                                m_AssetManager->UnloadAsset(handle);
-                                m_AssetManager->RemoveAsset(handle);
+                                filesToRemove.emplace_back(FileToRemove{ handle, itemPath });
+                            }
+                        }
+
+                        if (!ec)
+                        {
+                            if (itemPath.extension().string() == ".cs")
+                            {
+                                genCSProjectRequested = true;
                             }
                         }
                     }
 
-                    if (!ec)
+                    int counter = 0;
+                    for (auto &[handle, path] : filesToRemove)
                     {
-                        if (itemPath.extension().string() == ".cs")
+                        if (handle != AssetHandle(0))
                         {
-                            genCSProjectRequested = true;
+                            m_AssetManager->UnloadAsset(handle);
+                            m_AssetManager->RemoveAsset(handle);
                         }
+
+                        AssetWorker::ReportStatus(std::format("Unload asset: {}", path.generic_string()),
+                            counter / (float)filesToRemove.size());
+
+                        counter++;
                     }
-                }
 
-                if (genCSProjectRequested)
-                {
-                    m_EditorLayer->GetActiveProject()->RegenerateCSharpProject();
-                }
+                    Application::SubmitToMainThread([this, &genCSProjectRequested]()
+                    {
+                        if (genCSProjectRequested)
+                        {
+                            m_EditorLayer->GetActiveProject()->RegenerateCSharpProject();
+                        }
 
-                Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                        RefreshFiles();
+                    });
+                });
+                
 
                 ImGui::CloseCurrentPopup();
             }
@@ -1456,7 +1496,7 @@ namespace ignite
         ImGui::BeginGroup();
 
         // Keep a fixed clickable area and draw the image separately with preserved aspect ratio
-        const float maxSize = static_cast<float>(m_ThumbnailSize);
+        const auto maxSize = static_cast<float>(m_ThumbnailSize);
         const ImVec2 buttonSize(maxSize, maxSize);
         const ImVec2 buttonMin = ImGui::GetCursorScreenPos();
         const ImVec2 buttonMax(buttonMin.x + buttonSize.x, buttonMin.y + buttonSize.y);
@@ -1873,7 +1913,7 @@ namespace ignite
 
     void ContentBrowserPanel::CreateNewPrefab()
     {
-        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+        Project *project = m_EditorLayer->GetActiveProject().get();
         if (!project)
             return;
 

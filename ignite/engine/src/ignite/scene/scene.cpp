@@ -341,6 +341,27 @@ namespace ignite
                 {
                     auto &hfComp = entity.GetComponent<HeightFieldColliderComponent>();
                     physics::HeightFieldColliderDesc desc;
+
+                    if (entity.HasComponent<TerrainComponent>())
+                    {
+                        auto &tc = entity.GetComponent<TerrainComponent>();
+                        tc.data->worldSize = tc.worldSize;
+                        tc.data->maxHeight = tc.maxHeight;
+
+                        physics::HeightFieldColliderDesc desc;
+                        uint32_t res = tc.data->resolution;
+                        float step = tc.worldSize / static_cast<float>(res - 1);
+                        float halfSize = tc.worldSize * 0.5f;
+
+                        desc.center = glm::vec3(-halfSize, 0.0f, -halfSize) * tr.world.scale;
+                        desc.scale = glm::vec3(step, tc.maxHeight, step) * tr.world.scale;
+                        desc.sampleCount = res;
+                        desc.heights = tc.data->heightmap;
+
+                        auto col = m_Physics3D->CreateHeightFieldCollider(desc);
+                        return col;
+                    }
+
                     desc.center = hfComp.center;
                     desc.scale = hfComp.scale * tr.world.scale;
                     desc.sampleCount = hfComp.sampleCount;
@@ -349,7 +370,8 @@ namespace ignite
                     hfComp.collider = col;
                     return col;
                 }
-                else if (entity.HasComponent<TerrainComponent>())
+
+                if (entity.HasComponent<TerrainComponent>())
                 {
                     auto &tc = entity.GetComponent<TerrainComponent>();
                     if (tc.data && !tc.data->heightmap.empty() && tc.data->resolution >= 2)

@@ -8,6 +8,7 @@
 #include "ignite/project/project.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/base.hpp"
+#include "ignite/core/worker_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
@@ -16,12 +17,20 @@
 #include "ignite/terrain/terrain.hpp"
 
 #include "ignite_rs/core.h"
+
+#include <cppcoro/sync_wait.hpp>
 #include <fbxsdk.h>
+#include <stdexcept>
 
 namespace ignite
 {
     static AssetMetaData s_NullMetaData;
     static AssetManager *s_AssetManagerInstance = nullptr;
+
+    static cppcoro::shared_task<Ref<Asset>> MakeCompletedAssetTask(Ref<Asset> asset)
+    {
+        co_return asset;
+    }
 
     void AssetManager::VerifyNotRenderThread()
     {
@@ -53,38 +62,21 @@ namespace ignite
 
     bool AssetManager::IsAssetLoaded(AssetHandle handle) const
     {
-        std::unique_lock lock(m_AssetMutex);
-
-        const auto it = m_LoadedAssets.find(handle);
-        if (it == m_LoadedAssets.end() || !it->second)
-        {
-            return false;
-        }
-
-        return it->second->IsReady();
+        return GetAssetState(handle) == AssetState::Ready;
     }
 
     bool AssetManager::IsAssetLoading(AssetHandle handle) const
     {
-        std::unique_lock lock(m_AssetMutex);
-
-        if (m_LoadingAssets.contains(handle))
-        {
-            return true;
-        }
-
-        const auto it = m_LoadedAssets.find(handle);
-        if (it == m_LoadedAssets.end() || !it->second)
-        {
-            return false;
-        }
-
-        return !it->second->IsReady();
+        const AssetState state = GetAssetState(handle);
+        return state == AssetState::Queued ||
+            state == AssetState::Loading ||
+            state == AssetState::Finalizing;
     }
 
     void AssetManager::Init()
     {
         LOG_WARN("[Asset Manager] Initialized");
+        m_ShuttingDown.store(false, std::memory_order_release);
         s_AssetManagerInstance = this;
 
         m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
@@ -98,6 +90,14 @@ namespace ignite
     {
         SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
         m_AssetChangeToken = kInvalidSignalToken;
+
+        {
+            std::lock_guard<std::mutex> scopeLock(m_LoadScopeMutex);
+            m_ShuttingDown.store(true, std::memory_order_release);
+            m_Generation.fetch_add(1, std::memory_order_acq_rel);
+            cppcoro::sync_wait(m_LoadScope.join());
+        }
+
         if (m_FbxSdkManager)
         {
             m_FbxSdkManager->Destroy();
@@ -119,30 +119,35 @@ namespace ignite
             GPUUploadSync::DeviceWaitIdle(device);
         }
 
-        decltype(m_LoadedAssets) OLD_LoadedAssets;
-        decltype(m_LoadingAssets) OLD_LoadingAssets;
-        decltype(m_AssetRegistry) OLD_AssetRegistry;
+        decltype(m_LoadedAssets) oldLoadedAssets;
+        decltype(m_AssetRecords) oldAssetRecords;
+        decltype(m_AssetRegistry) oldAssetRegistry;
         {
             std::unique_lock lock(m_AssetMutex);
-            OLD_LoadedAssets.swap(m_LoadedAssets);
-            OLD_LoadingAssets.swap(m_LoadingAssets);
-            OLD_AssetRegistry.swap(m_AssetRegistry);
+            m_Generation.fetch_add(1, std::memory_order_acq_rel);
+            oldLoadedAssets.swap(m_LoadedAssets);
+            oldAssetRecords.swap(m_AssetRecords);
+            oldAssetRegistry.swap(m_AssetRegistry);
+            m_AssetHandleByPath.clear();
         }
 
-        OLD_LoadedAssets.clear();
-        OLD_AssetRegistry.clear();
+        oldLoadedAssets.clear();
+        oldAssetRegistry.clear();
 
-        m_Project.reset();
-        m_AssetHandleByPath.clear();
+        {
+            std::lock_guard<std::mutex> projectLock(m_ProjectMutex);
+            m_Project.reset();
+        }
         m_LastSyncedRustVersion = 0;
     }
 
     void AssetManager::SetActiveProject(const Ref<Project> &project)
     {
-        if (m_Project.lock() == project)
+        if (LockActiveProject() == project)
             return;
 
         Reset();
+        std::lock_guard<std::mutex> projectLock(m_ProjectMutex);
         m_Project = project;
     }
 
@@ -187,7 +192,7 @@ namespace ignite
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
-            Ref<Project> activeProj = m_Project.lock();
+            Ref<Project> activeProj = LockActiveProject();
             metadata.filepath = activeProj ? activeProj->GetProjectRelativeFilepath(filepath) : filepath;
             metadata.type = GetAssetTypeFromExtension(filepath.extension().generic_string());
             AssignMetaData(handle, metadata);
@@ -226,7 +231,7 @@ namespace ignite
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
-            Ref<Project> activeProj = m_Project.lock();
+            Ref<Project> activeProj = LockActiveProject();
             metadata.filepath = activeProj ? activeProj->GetProjectRelativeFilepath(filepath) : filepath;
             metadata.type = GetAssetTypeFromExtension(filepath.extension().generic_string());
             AssignMetaData(handle, metadata);
@@ -288,12 +293,289 @@ namespace ignite
 
     void AssetManager::LoadAssetAsync(AssetHandle handle)
     {
-        GetAsset<Asset>(handle);
+        (void)RequestAssetAsync(handle);
     }
 
     void AssetManager::LoadAssetImmediate(AssetHandle handle)
     {
-        GetAssetImmediate<Asset>(handle);
+        (void)GetAssetImmediateInternal(handle);
+    }
+
+    cppcoro::shared_task<Ref<Asset>> AssetManager::RequestAssetAsync(AssetHandle handle)
+    {
+        std::lock_guard<std::mutex> scopeLock(m_LoadScopeMutex);
+        if (m_ShuttingDown.load(std::memory_order_acquire) || handle == AssetHandle(0))
+        {
+            return MakeCompletedAssetTask(nullptr);
+        }
+
+        cppcoro::shared_task<Ref<Asset>> task;
+        {
+            std::unique_lock lock(m_AssetMutex);
+
+            if (const auto loadedIt = m_LoadedAssets.find(handle);
+                loadedIt != m_LoadedAssets.end() && loadedIt->second)
+            {
+                return MakeCompletedAssetTask(loadedIt->second);
+            }
+
+            const auto metadataIt = m_AssetRegistry.find(handle);
+            if (metadataIt == m_AssetRegistry.end())
+            {
+                return MakeCompletedAssetTask(nullptr);
+            }
+
+            auto &record = m_AssetRecords[handle];
+            if (!record)
+            {
+                record = std::make_shared<AssetRecord>();
+            }
+            record->metadata = metadataIt->second;
+
+            const AssetState state = record->state.load(std::memory_order_acquire);
+            if (state == AssetState::Queued || state == AssetState::Loading ||
+                state == AssetState::Finalizing)
+            {
+                return record->loadTask;
+            }
+            if (state == AssetState::Failed)
+            {
+                return MakeCompletedAssetTask(nullptr);
+            }
+
+            record->asset.reset();
+            record->error.clear();
+            record->progress = 0.0f;
+            record->state.store(AssetState::Queued, std::memory_order_release);
+
+            const std::uint64_t managerGeneration = m_Generation.load(std::memory_order_acquire);
+            const std::uint64_t requestGeneration = ++record->generation;
+            task = LoadAssetPipeline(handle, record->metadata, record, managerGeneration, requestGeneration);
+            record->loadTask = task;
+        }
+
+        m_LoadScope.spawn(task);
+        return task;
+    }
+
+    Ref<Asset> AssetManager::TryGetAsset(AssetHandle handle) const
+    {
+        std::unique_lock lock(m_AssetMutex);
+        const auto it = m_LoadedAssets.find(handle);
+        return it != m_LoadedAssets.end() ? it->second : nullptr;
+    }
+
+    AssetState AssetManager::GetAssetState(AssetHandle handle) const
+    {
+        std::unique_lock lock(m_AssetMutex);
+        if (const auto it = m_AssetRecords.find(handle); it != m_AssetRecords.end() && it->second)
+        {
+            return it->second->state.load(std::memory_order_acquire);
+        }
+        return m_LoadedAssets.contains(handle) ? AssetState::Ready : AssetState::Unloaded;
+    }
+
+    AssetStatus AssetManager::GetAssetStatus(AssetHandle handle) const
+    {
+        std::unique_lock lock(m_AssetMutex);
+        if (const auto it = m_AssetRecords.find(handle); it != m_AssetRecords.end() && it->second)
+        {
+            return AssetStatus{
+                it->second->state.load(std::memory_order_acquire),
+                it->second->progress,
+                it->second->error
+            };
+        }
+
+        return AssetStatus{
+            m_LoadedAssets.contains(handle) ? AssetState::Ready : AssetState::Unloaded,
+            m_LoadedAssets.contains(handle) ? 1.0f : 0.0f,
+            {}
+        };
+    }
+
+    bool AssetManager::RetryAsset(AssetHandle handle)
+    {
+        {
+            std::unique_lock lock(m_AssetMutex);
+            const auto it = m_AssetRecords.find(handle);
+            if (it == m_AssetRecords.end() || !it->second ||
+                it->second->state.load(std::memory_order_acquire) != AssetState::Failed)
+            {
+                return false;
+            }
+
+            ++it->second->generation;
+            it->second->loadTask = {};
+            it->second->state.store(AssetState::Unloaded, std::memory_order_release);
+        }
+
+        (void)RequestAssetAsync(handle);
+        return true;
+    }
+
+    void AssetManager::CancelAssetLoad(AssetHandle handle)
+    {
+        std::unique_lock lock(m_AssetMutex);
+        const auto it = m_AssetRecords.find(handle);
+        if (it == m_AssetRecords.end() || !it->second)
+        {
+            return;
+        }
+
+        const AssetState state = it->second->state.load(std::memory_order_acquire);
+        if (state == AssetState::Queued || state == AssetState::Loading || state == AssetState::Finalizing)
+        {
+            ++it->second->generation;
+            it->second->loadTask = {};
+            it->second->asset.reset();
+            it->second->error.clear();
+            it->second->progress = 0.0f;
+            it->second->state.store(AssetState::Unloaded, std::memory_order_release);
+        }
+    }
+
+    Ref<Asset> AssetManager::GetAssetImmediateInternal(AssetHandle handle)
+    {
+        VerifyNotRenderThread();
+
+        if (Ref<Asset> loaded = TryGetAsset(handle))
+        {
+            return loaded;
+        }
+
+        AssetMetaData metadata;
+        Ref<AssetRecord> record;
+        {
+            std::unique_lock lock(m_AssetMutex);
+            const auto metadataIt = m_AssetRegistry.find(handle);
+            if (metadataIt == m_AssetRegistry.end())
+            {
+                return nullptr;
+            }
+
+            metadata = metadataIt->second;
+            auto &entry = m_AssetRecords[handle];
+            if (!entry)
+            {
+                entry = std::make_shared<AssetRecord>();
+            }
+            record = entry;
+            record->metadata = metadata;
+            ++record->generation;
+            record->error.clear();
+            record->progress = 0.1f;
+            record->state.store(AssetState::Loading, std::memory_order_release);
+        }
+
+        LOG_TRACE("[Asset Manager] Synchronous asset load requested: {}", metadata.filepath.generic_string());
+        try
+        {
+            Ref<Asset> asset = Import(handle, metadata);
+            if (!asset)
+            {
+                throw std::runtime_error("Importer returned no asset");
+            }
+            return asset;
+        }
+        catch (const std::exception &e)
+        {
+            SetRecordState(record, AssetState::Failed, 0.0f, e.what());
+            LOG_ERROR("[Asset Manager] Failed to load asset {} \"{}\": {}",
+                static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
+        }
+        catch (...)
+        {
+            SetRecordState(record, AssetState::Failed, 0.0f, "Unknown import error");
+            LOG_ERROR("[Asset Manager] Failed to load asset {} \"{}\"",
+                static_cast<uint64_t>(handle), metadata.filepath.generic_string());
+        }
+
+        return nullptr;
+    }
+
+    cppcoro::shared_task<Ref<Asset>> AssetManager::LoadAssetPipeline(AssetHandle handle, AssetMetaData metadata,
+        Ref<AssetRecord> record, std::uint64_t managerGeneration, std::uint64_t requestGeneration)
+    {
+        try
+        {
+            co_await WorkerManager::Get().GetIOPool().Schedule();
+            if (!IsRequestCurrent(record, managerGeneration, requestGeneration))
+            {
+                co_return nullptr;
+            }
+
+            SetRecordState(record, AssetState::Loading, 0.1f);
+
+            // Importers currently combine file I/O, CPU decoding and resource
+            // creation. Run that legacy stage on the asset pool until each
+            // importer is split into explicit decode and finalization phases.
+            co_await WorkerManager::Get().GetAssetPool().Schedule();
+            if (!IsRequestCurrent(record, managerGeneration, requestGeneration))
+            {
+                co_return nullptr;
+            }
+
+            Ref<Asset> asset = Import(handle, metadata, false);
+            if (!asset)
+            {
+                throw std::runtime_error("Importer returned no asset");
+            }
+
+            if (!IsRequestCurrent(record, managerGeneration, requestGeneration))
+            {
+                co_return nullptr;
+            }
+
+            SetRecordState(record, AssetState::Finalizing, 0.9f);
+            AssignAsset(handle, asset);
+
+            LOG_TRACE("[Asset Manager] Asset ready: {} ({})", static_cast<uint64_t>(handle), metadata.filepath.generic_string());
+            co_return asset;
+        }
+        catch (const std::exception &e)
+        {
+            if (IsRequestCurrent(record, managerGeneration, requestGeneration))
+            {
+                SetRecordState(record, AssetState::Failed, 0.0f, e.what());
+
+                LOG_ERROR("[Asset Manager] Failed to load asset {} \"{}\": {}",
+                    static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
+            }
+        }
+        catch (...)
+        {
+            if (IsRequestCurrent(record, managerGeneration, requestGeneration))
+            {
+                SetRecordState(record, AssetState::Failed, 0.0f, "Unknown import error");
+
+                LOG_ERROR("[Asset Manager] Failed to load asset {} \"{}\"",
+                    static_cast<uint64_t>(handle), metadata.filepath.generic_string());
+            }
+        }
+
+        co_return nullptr;
+    }
+
+    bool AssetManager::IsRequestCurrent(const Ref<AssetRecord> &record,
+        std::uint64_t managerGeneration, std::uint64_t requestGeneration) const
+    {
+        return record && !m_ShuttingDown.load(std::memory_order_acquire) &&
+            m_Generation.load(std::memory_order_acquire) == managerGeneration &&
+            record->generation.load(std::memory_order_acquire) == requestGeneration;
+    }
+
+    void AssetManager::SetRecordState(const Ref<AssetRecord> &record, AssetState state, float progress, std::string error)
+    {
+        if (!record)
+        {
+            return;
+        }
+
+        std::unique_lock lock(m_AssetMutex);
+        record->progress = progress;
+        record->error = std::move(error);
+        record->state.store(state, std::memory_order_release);
     }
 
     void AssetManager::SyncFromRust()
@@ -326,6 +608,13 @@ namespace ignite
 
             // Asset Registry
             m_AssetRegistry[handle] = metadata;
+
+            auto &record = m_AssetRecords[handle];
+            if (!record)
+            {
+                record = std::make_shared<AssetRecord>();
+            }
+            record->metadata = metadata;
 
             if (!metadata.filepath.empty())
             {
@@ -453,7 +742,13 @@ namespace ignite
         auto it = m_LoadedAssets.find(handle);
         if (it != m_LoadedAssets.end())
         {
-            // LOG_DEBUG("[Asset Manager] Unloading asset: {}", static_cast<uint64_t>(handle));
+            Ref<AssetRecord> record;
+            if (const auto recordIt = m_AssetRecords.find(handle); recordIt != m_AssetRecords.end())
+            {
+                record = recordIt->second;
+                ++record->generation;
+                record->state.store(AssetState::Unloading, std::memory_order_release);
+            }
 
             // Release lock before GPU sync to avoid blocking other threads
             Ref<Asset> asset = it->second;
@@ -464,6 +759,14 @@ namespace ignite
             if (auto *device = DeviceManager::GetInstance()->GetDevice())
             {
                 GPUUploadSync::DeviceWaitIdle(device);
+            }
+
+            if (record)
+            {
+                std::unique_lock recordLock(m_AssetMutex);
+                record->asset.reset();
+                record->progress = 0.0f;
+                record->state.store(AssetState::Unloaded, std::memory_order_release);
             }
         }
     }
@@ -499,6 +802,14 @@ namespace ignite
                 for (AssetHandle handle : assetsToUnload)
                 {
                     m_LoadedAssets.erase(handle);
+                    if (const auto recordIt = m_AssetRecords.find(handle);
+                        recordIt != m_AssetRecords.end() && recordIt->second)
+                    {
+                        ++recordIt->second->generation;
+                        recordIt->second->asset.reset();
+                        recordIt->second->progress = 0.0f;
+                        recordIt->second->state.store(AssetState::Unloaded, std::memory_order_release);
+                    }
                     LOG_DEBUG("[Asset Manager]    \"{}\" unloaded", GetAssetDisplayName(handle));
                 }
             }
@@ -570,7 +881,7 @@ namespace ignite
         return m_AssetRegistry.contains(handle) || m_LoadedAssets.contains(handle);
     }
 
-    Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)
+    Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata, bool cacheResult)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -662,7 +973,10 @@ namespace ignite
                     return m_LoadedAssets[handle];
                 }
             }
-            AssignAsset(handle, asset);
+            if (cacheResult)
+            {
+                AssignAsset(handle, asset);
+            }
             break;
         }
         case AssetType::Skeleton:
@@ -699,7 +1013,10 @@ namespace ignite
                     return m_LoadedAssets[handle];
                 }
             }
-            AssignAsset(handle, asset);
+            if (cacheResult)
+            {
+                AssignAsset(handle, asset);
+            }
             break;
         }
         }

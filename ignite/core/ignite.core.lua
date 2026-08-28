@@ -53,12 +53,14 @@ project "Ignite.Core"
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.FASTSIMD}",
+        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.FASTSIMD_CONFIG}",
     }
 
     libdirs { "%{cfg.targetdir}" }
 
     links {
+        "cppcoro",
         "ignite_core.dll.lib", -- rust based
     }
 
@@ -70,7 +72,8 @@ project "Ignite.Core"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2"
+        "GLM_FORCE_SSE2",
+        "_WIN32_WINNT=0x0A00",
     }
 
     -- build rust and SDL
@@ -93,7 +96,7 @@ project "Ignite.Core"
             -- Configure and Build SDL
             'cmake -S "' .. SDL3_SOURCE_DIR .. '" -B "' .. SDL3_SOURCE_DIR .. '/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
             'cmake --build "' .. SDL3_SOURCE_DIR .. '/build" --config "Release"',
-            
+
             -- Build Rust
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
             copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
@@ -186,7 +189,7 @@ project "Ignite.Core"
             "NOMINMAX",
             "IGN_CORE_DLL_EXPORTS",
             "_CRT_SECURE_NO_WARNINGS",
-            
+
             "WIN32",
             "_WINDOWS"
         }
@@ -322,7 +325,7 @@ project "Ignite.Core"
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}")
             }
-            
+
 
         filter { "system:linux", "configurations:Release or Release-Profiling" }
             libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }

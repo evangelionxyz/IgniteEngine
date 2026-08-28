@@ -60,7 +60,6 @@ namespace ignite
         std::filesystem::path GetProjectFilepath(const std::filesystem::path &filepath) const;
         std::filesystem::path GetProjectRelativeFilepath(const std::filesystem::path &filepath) const;
 
-        void CopyCoreDependencies();
 
         void SetActiveScene(const Ref<Scene> &scene);
         void SetDefaultScene(AssetHandle handle);
@@ -119,10 +118,11 @@ namespace ignite
 
         bool IsCoreDependenciesUpToDate();
 
-        void StartCoreDependencyWatchers();
-        void OnCoreDependencyChanged(const std::string &path, const filewatch::Event eventType);
-
     private:
+        void CopyCoreDependencies();
+        void OnCoreDependencyChanged(const std::string &path, const filewatch::Event eventType);
+        void StartCoreDependencyWatchers();
+
         void CreateDirectories() const;
         void GenerateProject();
 

@@ -37,6 +37,7 @@ project "Ignite.Test"
         "freetype",
         "tracy",
         "MochiSharp.Native",
+        "cppcoro",
 
         "ignite_core.dll.lib", -- rust based
     }
@@ -82,6 +83,7 @@ project "Ignite.Test"
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}",
         "%{IncludeDir.FASTNOISE2}",
+        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.FASTSIMD}",
         "%{IncludeDir.FASTSIMD_CONFIG}"
     }
@@ -93,7 +95,8 @@ project "Ignite.Test"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2"
+        "GLM_FORCE_SSE2",
+        "_WIN32_WINNT=0x0A00",
     }
 
     -- build rust

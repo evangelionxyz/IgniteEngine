@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "project.hpp"
+#include "ignite/asset/asset_worker.hpp"
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/signals/signals.hpp"
 #include "ignite/core/logger.hpp"
@@ -463,6 +464,7 @@ R"(<Project>
         {
             const std::filesystem::path targetDepFilename = projectBinDir / dep;
             const std::filesystem::path depFilename = exeDir / dep;
+
             m_CoreDependenciesPending[dep] = true;
             if (!std::filesystem::exists(depFilename))
             {
@@ -475,131 +477,22 @@ R"(<Project>
             const auto dstTime = std::filesystem::exists(targetDepFilename.string())
                 ? std::filesystem::last_write_time(targetDepFilename.string()) : std::filesystem::file_time_type::min();
 
-            m_CoreDependencies[dep] = srcTime <= dstTime;
-            if (!(srcTime <= dstTime))
+            const bool newer = srcTime <= dstTime;
+            m_CoreDependencies[dep] = newer;
+
+            // only set to false when not newer
+            if (newer == false)
                 isUpToDate = false;
         }
 
+        // copy if not up to date
+        if (isUpToDate == false)
+        {
+            CopyCoreDependencies();
+        }
+
+        StartCoreDependencyWatchers();
         return isUpToDate;
-    }
-
-    void Project::StartCoreDependencyWatchers()
-    {
-        m_CoreDependencyWatchers.clear();
-
-        const std::filesystem::path exeDir = vfs::GetExecutableDirectory();
-        for (const auto& dep : m_CoreDependencies | std::views::keys)
-        {
-            const std::filesystem::path depFilename = exeDir / dep;
-            if (!std::filesystem::exists(depFilename))
-                continue;
-
-            m_CoreDependencyWatchers.push_back(vfs::WatchFile(depFilename, [this](const std::string &path, const filewatch::Event eventType)
-            {
-                OnCoreDependencyChanged(path, eventType);
-            }));
-        }
-    }
-
-    void Project::OnCoreDependencyChanged(const std::string &path, const filewatch::Event eventType)
-    {
-        if (eventType != filewatch::Event::added && eventType != filewatch::Event::modified)
-            return;
-
-        {
-            std::lock_guard lock(m_CoreDependencyMutex);
-            const auto it = m_CoreDependenciesPending.find(path);
-            if (it == m_CoreDependenciesPending.end() || !it->second)
-                return;
-            it->second = false;
-        }
-
-        AssetWorker::SubmitJob([this, path]()
-        {
-            using namespace std::chrono_literals;
-
-            const std::filesystem::path exeDir = vfs::GetExecutableDirectory();
-            const std::filesystem::path sourcePath = exeDir / path;
-            if (!std::filesystem::exists(sourcePath))
-            {
-                LOG_ERROR("[Project] Dependency {} is not found!", sourcePath.generic_string());
-                std::lock_guard lock(m_CoreDependencyMutex);
-                m_CoreDependenciesPending[path] = true;
-                return;
-            }
-
-            const std::filesystem::path targetPath = GetScriptBinDirectory() / sourcePath.filename();
-
-            for (int i = 0; i < 80; ++i)
-            {
-                std::error_code ec;
-                if (!std::filesystem::exists(sourcePath.string(), ec) || ec)
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                const auto fileSize = std::filesystem::file_size(sourcePath.string(), ec);
-                if (ec)
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                std::ifstream stream(sourcePath.string(), std::ios::binary);
-                if (!stream.good())
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                std::this_thread::sleep_for(25ms);
-                std::error_code ecAfter;
-                const auto fileSizeAfter = std::filesystem::file_size(sourcePath.string(), ecAfter);
-                if (!ecAfter && fileSize == fileSizeAfter)
-                {
-                    break;
-                }
-            }
-
-            bool success = false;
-            try
-            {
-                std::filesystem::copy_file(sourcePath.string(), targetPath.string(), std::filesystem::copy_options::overwrite_existing);
-                LOG_TRACE("[Project] Dependency {} available", sourcePath.generic_string());
-                success = true;
-            }
-            catch (...)
-            {
-                // Failed to copy
-            }
-
-            {
-                std::lock_guard lock(m_CoreDependencyMutex);
-                m_CoreDependenciesPending[path] = true;
-            }
-
-            if (!success)
-                return;
-
-            auto checkPendingDeps = [this]() -> bool
-            {
-                std::lock_guard lock(m_CoreDependencyMutex);
-                for (const auto& ready : m_CoreDependenciesPending | std::views::values)
-                {
-                    if (!ready)
-                        return false;
-                }
-                return true;
-            };
-
-            // Check every deps update
-            if (checkPendingDeps())
-            {
-                LOG_TRACE("[Project] Dependencies are up to date.");
-                BuildSolution(true);
-            }
-        });
     }
 
     void Project::BuildSolution(bool forceRebuild) const
@@ -643,7 +536,7 @@ R"(<Project>
             Application::SubmitToMainThread([this, buildSuccess]()
             {
                 SignalBus::Emit(SuccessResultSignal{ buildSuccess, SignalType::ScriptEngine });
-                AssetWorker::ReportStatus("Project loaded...", 1.0f);
+                AssetWorker::ReportStatus("Ready", 1.0f);
             });
         });
     }
@@ -807,6 +700,126 @@ R"(<Project>
         LOG_ASSERT(depAvailable, "[Project] Failed to copy script dependencies");
     }
 
+    void Project::OnCoreDependencyChanged(const std::string &path, const filewatch::Event eventType)
+    {
+        if (eventType != filewatch::Event::added && eventType != filewatch::Event::modified)
+            return;
+
+        {
+            std::lock_guard lock(m_CoreDependencyMutex);
+            const auto it = m_CoreDependenciesPending.find(path);
+            if (it == m_CoreDependenciesPending.end() || !it->second)
+                return;
+            it->second = false;
+        }
+
+        AssetWorker::SubmitJob([this, path]()
+        {
+            using namespace std::chrono_literals;
+
+            const std::filesystem::path exeDir = vfs::GetExecutableDirectory();
+            const std::filesystem::path sourcePath = exeDir / path;
+            if (!std::filesystem::exists(sourcePath))
+            {
+                LOG_ERROR("[Project] Dependency {} is not found!", sourcePath.generic_string());
+                std::lock_guard lock(m_CoreDependencyMutex);
+                m_CoreDependenciesPending[path] = true;
+                return;
+            }
+
+            const std::filesystem::path targetPath = GetScriptBinDirectory() / sourcePath.filename();
+
+            for (int i = 0; i < 80; ++i)
+            {
+                std::error_code ec;
+                if (!std::filesystem::exists(sourcePath.string(), ec) || ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                const auto fileSize = std::filesystem::file_size(sourcePath.string(), ec);
+                if (ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                std::ifstream stream(sourcePath.string(), std::ios::binary);
+                if (!stream.good())
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                std::this_thread::sleep_for(25ms);
+                std::error_code ecAfter;
+                const auto fileSizeAfter = std::filesystem::file_size(sourcePath.string(), ecAfter);
+                if (!ecAfter && fileSize == fileSizeAfter)
+                {
+                    break;
+                }
+            }
+
+            bool success = false;
+            try
+            {
+                std::filesystem::copy_file(sourcePath.string(), targetPath.string(), std::filesystem::copy_options::overwrite_existing);
+                LOG_TRACE("[Project] Dependency {} available", sourcePath.generic_string());
+                success = true;
+            }
+            catch (...)
+            {
+                // Failed to copy
+            }
+
+            {
+                std::lock_guard lock(m_CoreDependencyMutex);
+                m_CoreDependenciesPending[path] = true;
+            }
+
+            if (!success)
+                return;
+
+            auto checkPendingDeps = [this]() -> bool
+            {
+                std::lock_guard lock(m_CoreDependencyMutex);
+                for (const auto &ready : m_CoreDependenciesPending | std::views::values)
+                {
+                    if (!ready)
+                        return false;
+                }
+
+                return true;
+            };
+
+            // Check every dependencies update
+            if (checkPendingDeps())
+            {
+                LOG_TRACE("[Project] Dependencies are up to date.");
+                BuildSolution(true);
+            }
+        });
+    }
+
+    void Project::StartCoreDependencyWatchers()
+    {
+        m_CoreDependencyWatchers.clear();
+
+        const std::filesystem::path exeDir = vfs::GetExecutableDirectory();
+        for (const auto &depFilepath : m_CoreDependencies | std::views::keys)
+        {
+            const std::filesystem::path depFilename = exeDir / depFilepath;
+            if (!std::filesystem::exists(depFilename))
+                continue;
+
+            m_CoreDependencyWatchers.push_back(vfs::WatchFile(depFilename,
+                [this](const std::string &path, const filewatch::Event eventType) {
+                OnCoreDependencyChanged(path, eventType);
+            }));
+        }
+    }
+
     void Project::GenerateProject()
     {
         CreateDirectories();
@@ -922,8 +935,8 @@ R"(<Project>
             }
         }
 
-        IsCoreDependenciesUpToDate();
-        CopyCoreDependencies();
-        StartCoreDependencyWatchers();
+        // Check the Dependencies, and auto build if not up-to-date
+        const bool shouldBuild = IsCoreDependenciesUpToDate();
+        BuildSolution(shouldBuild);
     }
 }

@@ -27,7 +27,7 @@ project "Ignite.Engine"
         "src/ignite",
         "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/physics/src",
-        
+
         "%{wks.location}/crates/src/include",
 
         "%{IncludeDir.SDL3}",
@@ -65,6 +65,7 @@ project "Ignite.Engine"
         "%{IncludeDir.FBX_SDK}",
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.FASTSIMD}",
+        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.FASTSIMD_CONFIG}"
     }
 
@@ -88,7 +89,7 @@ project "Ignite.Engine"
         "tracy",
         "MochiSharp.Native",
         "UmbraShaderCompiler",
-        
+        "cppcoro",
         "ignite_core.dll.lib", -- rust based
     }
 
@@ -100,7 +101,8 @@ project "Ignite.Engine"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2"
+        "GLM_FORCE_SSE2",
+        "_WIN32_WINNT=0x0A00",
     }
 
     -- build rust, SDL, and FastNoise2
@@ -123,7 +125,7 @@ project "Ignite.Engine"
             -- Configure and Build FastNoise2
             'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
             'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Release"',
-            
+
             -- Build Rust
             'cargo build --release --manifest-path "' .. wks_absolute .. '/crates/Cargo.toml"',
             copy_file(wks_absolute .. "/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
@@ -360,7 +362,7 @@ project "Ignite.Engine"
                 copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/bin/FastNoise.dll", "%{cfg.targetdir}")
             }
-            
+
 
         filter { "system:linux", "configurations:Release or Release-Profiling" }
             libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }

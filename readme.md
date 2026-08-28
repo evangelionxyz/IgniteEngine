@@ -16,10 +16,34 @@ git clone --recursively https://github.com/evangelionxyz/IgniteEngine.git -b mas
 
 ## Windows Build
 
-Run Visual Studio Project Generator
-```bash
+Run bootstrap to download dependencies and generate Visual Studio project files
+```
 gen.bat
 ```
+
+Run premake to generate Visual Studio project files
+```
+premake5 vs2026 --file=scripts/premake5.lua
+```
+
+Restore and Build with MSBuild
+```
+msbuild IGN.slnx /t:Restore /p:Configuration=Debug /p:Platform=x64
+msbuild IGN.slnx /t:Build /p:Configuration=Debug /p:Platform=x64
+```
+
+## Linux Build
+
+Run bootstrap to download dependencies and generate makefiles
+```
+gen.linux.sh
+```
+
+Restore and Build with Make
+```
+make
+```
+
 
 ## Docker build
 

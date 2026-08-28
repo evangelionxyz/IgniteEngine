@@ -4,6 +4,7 @@
 
 #include "application.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/core/worker_manager.hpp"
 #include "input/app_event.hpp"
 
 #include "ignite/imgui/imgui_layer.hpp"
@@ -61,15 +62,17 @@ namespace ignite
             delete *it;
         }
 
-        ignite_rs_engine_shutdown();
+			// Destroy subsystems in reverse order while their worker dependencies
+            // and the Rust backend are still available.
+			for (auto it = m_Subsystems.rbegin(); it != m_Subsystems.rend(); ++it)
+			{
+				(*it)->Shutdown();
+				delete *it;
+			}
+			m_Subsystems.clear();
 
-		// Destroy subsystems in reverse order
-		for (auto it = m_Subsystems.rbegin(); it != m_Subsystems.rend(); ++it)
-		{
-			(*it)->Shutdown();
-			delete *it;
-		}
-		m_Subsystems.clear();
+        WorkerManager::Get().Shutdown();
+        ignite_rs_engine_shutdown();
 
         // destroy device
         DeviceManager::GetInstance()->Destroy();
@@ -143,6 +146,8 @@ namespace ignite
             const bool initialized = ignite_rs_engine_init();
             LOG_ASSERT(initialized, "[Application] Rust backend Failed to initialized");
         }
+
+        WorkerManager::Get().Initialize();
 
 		// Create subsystems
 		m_AssetManager = (AssetManager *)AddSubsystem(new AssetManager());

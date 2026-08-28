@@ -748,7 +748,9 @@ namespace ignite
 
         // Run the build and load the App Assembly if success
         LOG_DEBUG("Building Visual Studio Solution...");
-        scriptEngineData->project->BuildSolution(true);
+
+        // const bool forceRebuild = scriptEngineData->project->IsCoreDependenciesUpToDate() == false;
+        // scriptEngineData->project->BuildSolution(forceRebuild);
         return FileStatus::Pending;
     }
 

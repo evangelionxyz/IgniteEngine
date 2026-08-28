@@ -6,7 +6,9 @@
 #include "prefab.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/asset/asset_manager.hpp"
+#include "ignite/asset/asset_worker.hpp"
 #include "ignite/project/project.hpp"
+
 #include "entity.hpp"
 #include "component.hpp"
 #include "entity_command_manager.hpp"

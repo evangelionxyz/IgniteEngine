@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "asset_importer.hpp"
+#include "ignite/asset/asset_worker.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/application.hpp"

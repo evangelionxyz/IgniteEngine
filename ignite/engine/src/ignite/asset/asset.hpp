@@ -6,6 +6,7 @@
 
 #include "ignite/core/uuid.hpp"
 #include "ignite/core/types.hpp"
+#include "ignite/asset/asset_state.hpp"
 
 #include <string>
 #include <map>
@@ -58,16 +59,6 @@ namespace ignite
         AnimatorController2D, // .ac2d    - 2D animator state machine
         Prefab,               // .ixprefab - engine prefab asset
         Terrain,              // .ter - terrain data asset
-    };
-
-    enum class AssetState
-    {
-        Unloaded = 0,
-        Queued = 1,
-        Loading = 2,
-        Ready = 3,
-        Dirty = 4,
-        Unloading = 5
     };
 
     static inline std::string AssetTypeToString(AssetType type)

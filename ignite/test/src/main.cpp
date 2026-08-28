@@ -29,7 +29,6 @@
 #include <thread>
 #include <format>
 
-#include "rust_test.hpp"
 #include <gtest/gtest.h>
 
 using namespace ignite;
