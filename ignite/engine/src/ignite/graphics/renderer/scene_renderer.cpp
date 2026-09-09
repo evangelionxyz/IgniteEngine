@@ -1440,17 +1440,6 @@ namespace ignite
                         if (material && uploadedMaterialsThisPass.insert(material.get()).second)
                             material->UploadToGpu(cmd);
 
-                        // Skip transparent sub-meshes — they use the legacy per-draw-call path
-                        MaterialType matType = material ? material->GetType() : m_RuntimeMaterial->GetType();
-                        if (matType == MaterialType::Transparent)
-                        {
-                            // Fallback: add to transparent list via legacy DrawMesh path
-                            DrawMesh(cmd, frameContext, framebuffer, staticMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                                smc.overrideMaterials, std::vector<glm::mat4>(), smc.cachedInstanceTransforms,
-                                camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
-                            break; // DrawMesh handles all sub-meshes; avoid double-processing
-                        }
-
                         const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
                             ? material->GetBindingSet()
                             : m_RuntimeMaterial->GetBindingSet();
@@ -1458,17 +1447,47 @@ namespace ignite
                         if (!materialBindingSet)
                             continue;
 
+                        MaterialType matType = material ? material->GetType() : m_RuntimeMaterial->GetType();
+                        nvrhi::RasterCullMode matCullMode = material ? material->GetCullMode() : nvrhi::RasterCullMode::Front;
+
+                        if (matType == MaterialType::Transparent)
+                        {
+                            TransparentDrawCall dc;
+                            dc.meshBindingSet = frameContext->staticMeshBindingSet;
+                            dc.materialBindingSet = materialBindingSet;
+                            dc.vertexBuffer = primitive->vertexBuffer->GetHandle();
+                            dc.indexBuffer = primitive->indexBuffer->GetHandle();
+                            dc.indexCount = primitive->indexBuffer->GetCount();
+                            dc.pushConstants_ObjectIndex = objectIndex;
+
+                            AABB localAABB = meshInstance->localAABB;
+                            AABB worldAABB = localAABB.Transform(tr.world.GetMatrix());
+                            glm::vec3 worldCenter = worldAABB.GetCenter();
+                            dc.distanceToCamera = glm::dot(worldCenter - camera->position, camera->GetForwardDirection());
+
+                            dc.isSkeletal = false;
+                            dc.gpuData.transformation = tr.world.GetMatrix();
+                            dc.gpuData.normal = smc.normalMatrix;
+                            dc.gpuData.objectID = objectID;
+                            dc.meshInstance = meshInstance;
+                            dc.cullMode = matCullMode;
+                            transparentDrawCalls.push_back(dc);
+                            continue;
+                        }
+
+                        auto meshPSO = GetStaticPSO(framebuffer, sceneRenderSettings.fillMode, matCullMode);
+
                         BatchKey key;
                         key.vertexBuffer = *primitive->vertexBuffer;
                         key.indexBuffer = *primitive->indexBuffer;
                         key.meshBindingSet = frameContext->staticMeshBindingSet.Get();
                         key.materialBindingSet = materialBindingSet.Get();
-                        key.pipeline = *staticPSO;
+                        key.pipeline = *meshPSO;
 
                         m_OpaqueBatchBuilder.Submit(
                             key, *primitive->vertexBuffer, *primitive->indexBuffer,
                             frameContext->staticMeshBindingSet,
-                            materialBindingSet, *staticPSO,
+                            materialBindingSet, *meshPSO,
                             primitive->indexBuffer->GetCount(), objectIndex);
                     }
                     Renderer::Stats.staticMeshCount++;
@@ -1650,7 +1669,9 @@ namespace ignite
                     // skelInstance->SetSkeletonData(cmd, (void*)dc.bones, sizeof(dc.bones));
                 }
 
-                auto &pipeline = dc.isSkeletal ? animatedTransparentPSO : staticTransparentPSO;
+                auto pipeline = dc.isSkeletal
+                    ? GetAnimatedTransparentPSO(framebuffer, sceneRenderSettings.fillMode, dc.cullMode)
+                    : GetStaticTransparentPSO(framebuffer, sceneRenderSettings.fillMode, dc.cullMode);
                 transparentGState.pipeline = *pipeline;
 
                 transparentGState.bindings = { dc.meshBindingSet, dc.materialBindingSet, BindlessSystem::GetDescriptorTable() };
@@ -1659,8 +1680,15 @@ namespace ignite
 
                 cmd->setGraphicsState(transparentGState);
 
-                // Push constants for object ID
-                cmd->setPushConstants(&dc.pushConstants_ObjectIndex, sizeof(dc.pushConstants_ObjectIndex));
+                if (!dc.isSkeletal)
+                {
+                    uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &dc.pushConstants_ObjectIndex, 1);
+                    cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+                }
+                else
+                {
+                    cmd->setPushConstants(&dc.pushConstants_ObjectIndex, sizeof(dc.pushConstants_ObjectIndex));
+                }
 
                 nvrhi::DrawArguments args;
                 args.setVertexCount(dc.indexCount);
@@ -2634,6 +2662,7 @@ namespace ignite
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
         nvrhi::IFramebuffer *framebuffer,
         nvrhi::RasterFillMode fillMode,
+        nvrhi::RasterCullMode cullMode,
         const char *vertexShaderPath,
         const char *pixelShaderPath,
         EBindingLayout meshLayout,
@@ -2642,7 +2671,7 @@ namespace ignite
         if (!framebuffer)
             return nullptr;
 
-        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto key = MakeFramebufferKey(framebuffer, fillMode, cullMode);
         auto it = cache.find(key);
         if (it != cache.end())
         {
@@ -2657,6 +2686,7 @@ namespace ignite
         params.enableDepthTest = hasDepthAttachment;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
+        params.cullMode = cullMode;
         params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
         if (transparent)
@@ -2666,12 +2696,10 @@ namespace ignite
             params.srcBlendAlpha = nvrhi::BlendFactor::One;
             params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
             params.enableDepthWrite = false;
-            params.cullMode = nvrhi::RasterCullMode::None;
         }
         else
         {
             params.enableDepthWrite = hasDepthAttachment;
-            params.cullMode = nvrhi::RasterCullMode::Front;
         }
 
         Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, true);
@@ -2684,7 +2712,6 @@ namespace ignite
             .AddBindingLayout(BindlessSystem::GetBindingLayout())
             .Build(framebuffer, params);
 
-        cache.clear();
         cache.emplace(key, gp);
         return gp;
     }
@@ -2729,30 +2756,30 @@ namespace ignite
 	}
 
 	// Helper to build a geometry pipeline for a framebuffer (once) and cache it.
-    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
     {
-        return GetOrCreateMeshPSO(m_AnimatedPSOCache, framebuffer, fillMode,
+        return GetOrCreateMeshPSO(m_AnimatedPSOCache, framebuffer, fillMode, cullMode,
             "resources/shaders/mesh_anim.vertex.hlsl", "resources/shaders/mesh_anim.pixel.hlsl",
             EBindingLayout::MESH_ANIM, false);
     }
 
-	Ref<GraphicsPipeline> SceneRenderer::GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	Ref<GraphicsPipeline> SceneRenderer::GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
 	{
-        return GetOrCreateMeshPSO(m_TransparentAnimatedPSOCache, framebuffer, fillMode,
+        return GetOrCreateMeshPSO(m_TransparentAnimatedPSOCache, framebuffer, fillMode, cullMode,
             "resources/shaders/mesh_anim.vertex.hlsl", "resources/shaders/mesh_anim.pixel.hlsl",
             EBindingLayout::MESH_ANIM, true);
 	}
 
-	Ref<GraphicsPipeline> SceneRenderer::GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	Ref<GraphicsPipeline> SceneRenderer::GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
 	{
-        return GetOrCreateMeshPSO(m_StaticPSOCache, framebuffer, fillMode,
+        return GetOrCreateMeshPSO(m_StaticPSOCache, framebuffer, fillMode, cullMode,
             "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
             EBindingLayout::MESH_STATIC, false);
 	}
 
-	Ref<GraphicsPipeline> SceneRenderer::GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	Ref<GraphicsPipeline> SceneRenderer::GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
 	{
-        return GetOrCreateMeshPSO(m_TransparentStaticPSOCache, framebuffer, fillMode,
+        return GetOrCreateMeshPSO(m_TransparentStaticPSOCache, framebuffer, fillMode, cullMode,
             "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
             EBindingLayout::MESH_STATIC, true);
 	}
@@ -3802,6 +3829,7 @@ namespace ignite
                     dc.isSkeletal = isSkeletal;
                     dc.gpuData = gpuData;
                     dc.meshInstance = meshInstance;
+                    dc.cullMode = material ? material->GetCullMode() : (isSkeletal ? nvrhi::RasterCullMode::Front : nvrhi::RasterCullMode::None);
                     if constexpr (isSkeletal)
                     {
                         // Bones are indexed via pushConstants_ObjectIndex and GPU buffer allocator
@@ -3810,6 +3838,11 @@ namespace ignite
                 }
                 else
                 {
+                    auto meshPSO = isSkeletal
+                        ? GetAnimatedPSO(framebuffer, sceneRenderSettings.fillMode, material ? material->GetCullMode() : nvrhi::RasterCullMode::Front)
+                        : GetStaticPSO(framebuffer, sceneRenderSettings.fillMode, material ? material->GetCullMode() : nvrhi::RasterCullMode::Front);
+                    graphicsState.pipeline = *meshPSO;
+
                     graphicsState.bindings = { meshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
                     graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ *primitive->vertexBuffer, 0, 0 } };
                     graphicsState.setIndexBuffer({ *primitive->indexBuffer, nvrhi::Format::R32_UINT });

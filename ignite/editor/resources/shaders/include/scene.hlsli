@@ -14,6 +14,10 @@
 #define RENDER_MODE_NORMALS 2
 #define RENDER_MODE_METALLIC 3
 #define RENDER_MODE_ROUGHNESS 4
+#define RENDER_MODE_SUBSURFACE 5
+#define RENDER_MODE_TRANSMISSION 6
+#define RENDER_MODE_COAT 7
+#define RENDER_MODE_FUZZ 8
 
 struct PushConstants
 {
@@ -75,6 +79,42 @@ struct Material
     int normalTextureIndex;
     int occlusionTextureIndex;
     float2 _pad;
+
+    // OpenPBR Surface core
+    float baseWeight;
+    float specularWeight;
+    float specularIOR;
+    float coatWeight;
+    float4 specularColor;
+    float4 coatColor;
+    float coatRoughness;
+    float coatIOR;
+    float coatDarkening;
+    float specularAnisotropy;
+
+    // OpenPBR subsurface
+    float subsurfaceWeight;
+    float subsurfaceScale;
+    float2 _padSS;
+    float4 subsurfaceColor;
+    float4 subsurfaceRadius;
+
+    // OpenPBR transmission
+    float transmissionWeight;
+    float transmissionDepth;
+    float2 _padTR;
+    float4 transmissionColor;
+
+    // OpenPBR fuzz
+    float fuzzWeight;
+    float fuzzRoughness;
+    float2 _padFZ;
+    float4 fuzzColor;
+
+    // Advanced
+    float useMultiScatter;
+    float emissionLuminance;
+    float2 _padAdv;
 };
 
 struct Skeleton

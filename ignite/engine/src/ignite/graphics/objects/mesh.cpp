@@ -370,7 +370,7 @@ namespace ignite
     MeshInstance::~MeshInstance()
     {
     }
-    
+
     void MeshInstance::SetMaterial(const AssetHandle &assetHandle)
     {
         m_MaterialHandle = assetHandle;
@@ -466,7 +466,7 @@ namespace ignite
         return CreateRef<SkeletalMeshInstance>(node, primitive);
     }
 
-    
+
     // ===================================
     // Static Mesh
     // ===================================
@@ -619,6 +619,10 @@ namespace ignite
             {
                 material->SetType(MaterialType::Transparent);
             }
+            else if (gltfMaterial.alphaMode == "MASK")
+            {
+                material->SetType(MaterialType::Masked);
+            }
             else if (gltfMaterial.pbrMetallicRoughness.baseColorFactor.size() > 3 && gltfMaterial.pbrMetallicRoughness.baseColorFactor[3] < 1.0f)
             {
                 material->SetType(MaterialType::Transparent);
@@ -626,6 +630,11 @@ namespace ignite
             else
             {
                 material->SetType(MaterialType::Opaque);
+            }
+
+            if (gltfMaterial.doubleSided)
+            {
+                material->SetCullMode(nvrhi::RasterCullMode::None);
             }
 
             material->gpuData.emissiveFactor =
@@ -789,7 +798,7 @@ namespace ignite
                 weightCount = accessor.count;
             }
         }
-        
+
         // Build vertices
         vertices.reserve(positionCount);
         for (size_t i = 0; i < positionCount; ++i)
@@ -1386,8 +1395,41 @@ namespace ignite
                     if (!image.image.empty())
                     {
                         std::vector<uint8_t> data;
-                        data.resize(image.image.size() * sizeof(uint8_t));
-                        std::memcpy(data.data(), image.image.data(), data.size());
+                        const size_t pixelCount = static_cast<size_t>(image.width) * image.height;
+                        data.resize(pixelCount * 4);
+
+                        if (image.component == 4)
+                        {
+                            std::memcpy(data.data(), image.image.data(), pixelCount * 4);
+                        }
+                        else if (image.component == 3)
+                        {
+                            const uint8_t *src = image.image.data();
+                            uint8_t *dst = data.data();
+                            for (size_t p = 0; p < pixelCount; ++p)
+                            {
+                                dst[p * 4 + 0] = src[p * 3 + 0];
+                                dst[p * 4 + 1] = src[p * 3 + 1];
+                                dst[p * 4 + 2] = src[p * 3 + 2];
+                                dst[p * 4 + 3] = 255;
+                            }
+                        }
+                        else if (image.component == 1)
+                        {
+                            const uint8_t *src = image.image.data();
+                            uint8_t *dst = data.data();
+                            for (size_t p = 0; p < pixelCount; ++p)
+                            {
+                                dst[p * 4 + 0] = src[p];
+                                dst[p * 4 + 1] = src[p];
+                                dst[p * 4 + 2] = src[p];
+                                dst[p * 4 + 3] = 255;
+                            }
+                        }
+                        else
+                        {
+                            std::memcpy(data.data(), image.image.data(), std::min(data.size(), image.image.size()));
+                        }
 
                         texture = Texture::Create(data, createInfo, nullptr);
                         LOG_TRACE(" Loaded embedded texture");
@@ -2287,10 +2329,10 @@ namespace ignite
 
                     const float timestamp = static_cast<float>((sampleTime.GetSecondDouble() - startSeconds) * ticksPerSecond);
                     const glm::mat4 localMatrix = ToGlmMatrix(node->EvaluateLocalTransform(sampleTime));
-                    
+
                     Transform decomposed;
                     Transform::Decompose(localMatrix, decomposed);
-                    
+
                     channel.translationKeys.AddFrame({ decomposed.translation * scaleFactor, timestamp });
                     channel.rotationKeys.AddFrame({ decomposed.rotation, timestamp });
                     channel.scaleKeys.AddFrame({ decomposed.scale, timestamp });

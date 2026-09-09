@@ -2480,7 +2480,7 @@ namespace ignite
 
                 if (ImGui::TreeNodeEx("Shading"))
                 {
-                    static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness" };
+                    static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness", "Subsurface", "Transmission", "Coat", "Fuzz" };
                     static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
                     static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
                     static const char *fillModeLabels[]{ "Solid", "Wireframe" };

@@ -14,13 +14,15 @@ namespace ignite
         nvrhi::Format depthFormat = nvrhi::Format::UNKNOWN;
         uint32_t sampleCount = 1;
         nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
+        nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front;
 
         bool operator==(const FramebufferKey &other) const noexcept
         {
             return colorFormats == other.colorFormats
                 && depthFormat == other.depthFormat
                 && sampleCount == other.sampleCount
-                && fillMode == other.fillMode;
+                && fillMode == other.fillMode
+                && cullMode == other.cullMode;
         }
     };
 
@@ -28,16 +30,17 @@ namespace ignite
     {
         size_t operator()(const FramebufferKey &k) const noexcept
         {
-			size_t seed = Hashing::HashCombineAll(k.fillMode, k.sampleCount, k.depthFormat);
+			size_t seed = Hashing::HashCombineAll(k.fillMode, k.cullMode, k.sampleCount, k.depthFormat);
 			Hashing::HashVector(seed, k.colorFormats);
             return seed;
         }
     };
 
-    inline FramebufferKey MakeFramebufferKey(nvrhi::IFramebuffer *fb, nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid)
+    inline FramebufferKey MakeFramebufferKey(nvrhi::IFramebuffer *fb, nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front)
     {
         FramebufferKey key;
         key.fillMode = fillMode;
+        key.cullMode = cullMode;
         if (!fb)
             return key;
 
@@ -117,8 +120,8 @@ namespace ignite
 	{
 		size_t operator()(const CompositeBindingKey &k) const noexcept
 		{
-			return Hashing::HashCombineAll(k.layout, k.sceneTex, k.uiTex, 
-				k.edgeTex, k.bloomTex, k.ssaoTex, k.depthTex, k.debugTex, 
+			return Hashing::HashCombineAll(k.layout, k.sceneTex, k.uiTex,
+				k.edgeTex, k.bloomTex, k.ssaoTex, k.depthTex, k.debugTex,
 				k.objectIDTex, k.taaHistoryTex, k.postProcessBuffer, k.sampler);
 		}
 	};

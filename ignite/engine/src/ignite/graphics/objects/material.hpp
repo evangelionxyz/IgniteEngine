@@ -45,6 +45,8 @@ namespace ignite
         bool UpdateBindingSet(Ref<Texture> envMap = nullptr, Ref<Texture> shadowMap = nullptr);
         void UploadToGpu(nvrhi::ICommandList *cmd);
         void SetType(MaterialType type) { m_Type = type; }
+        void SetCullMode(nvrhi::RasterCullMode mode) { m_CullMode = mode; }
+        nvrhi::RasterCullMode GetCullMode() const { return m_CullMode; }
 
         bool IsNeedToInvalidate() const;
         void InvalidateBindingSet() { m_BindingSetDirty = true; m_BindingSet = nullptr; m_BindingSets.clear(); }
@@ -68,6 +70,7 @@ namespace ignite
         void EnsureGpuResources();
 
         MaterialType m_Type = MaterialType::Opaque;
+        nvrhi::RasterCullMode m_CullMode = nvrhi::RasterCullMode::Front;
         Ref<ConstantBuffer> m_GPUDataBuffer;
         nvrhi::BindingSetHandle m_BindingSet;
         std::map<std::pair<Texture*, Texture*>, nvrhi::BindingSetHandle> m_BindingSets;

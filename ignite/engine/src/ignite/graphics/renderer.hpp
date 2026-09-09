@@ -19,6 +19,10 @@ namespace ignite
 #define RENDER_MODE_NORMALS 2
 #define RENDER_MODE_METALLIC 3
 #define RENDER_MODE_ROUGHNESS 4
+#define RENDER_MODE_SUBSURFACE 5
+#define RENDER_MODE_TRANSMISSION 6
+#define RENDER_MODE_COAT 7
+#define RENDER_MODE_FUZZ 8
 
     class DeviceManager;
     class Texture;

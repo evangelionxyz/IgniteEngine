@@ -3069,21 +3069,106 @@ namespace ignite
 									material->SetDirtyFlag(true);
 								}
 
-								if (UI::DrawFloatControl("Occlusion Strength", &material->gpuData.occlusionStrength, 0.025f, 0.0f, 1.0f))
-								{
-									material->SetDirtyFlag(true);
-								}
+                                if (ImGui::TreeNode("OpenPBR Surface"))
+                                {
+                                    bool changed = false;
+
+                                    if (ImGui::TreeNode("Base"))
+                                    {
+                                        changed |= UI::DrawFloatControl("Base Weight", &material->gpuData.baseWeight, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawFloatControl("Specular Weight", &material->gpuData.specularWeight, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawColorVec4("Specular Color", material->gpuData.specularColor);
+                                        changed |= UI::DrawFloatControl("Specular IOR", &material->gpuData.specularIOR, 0.01f, 1.0f, 3.0f);
+                                        changed |= UI::DrawFloatControl("Specular Anisotropy", &material->gpuData.specularAnisotropy, 0.025f, 0.0f, 1.0f);
+                                        ImGui::TreePop();
+                                    }
+
+                                    if (ImGui::TreeNode("Coat"))
+                                    {
+                                        changed |= UI::DrawFloatControl("Coat Weight", &material->gpuData.coatWeight, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawColorVec4("Coat Color", material->gpuData.coatColor);
+                                        changed |= UI::DrawFloatControl("Coat Roughness", &material->gpuData.coatRoughness, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawFloatControl("Coat IOR", &material->gpuData.coatIOR, 0.01f, 1.0f, 3.0f);
+                                        changed |= UI::DrawFloatControl("Coat Darkening", &material->gpuData.coatDarkening, 0.025f, 0.0f, 1.0f);
+                                        ImGui::TreePop();
+                                    }
+
+                                    if (ImGui::TreeNode("Subsurface"))
+                                    {
+                                        changed |= UI::DrawFloatControl("Subsurface Weight", &material->gpuData.subsurfaceWeight, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawColorVec4("Subsurface Color", material->gpuData.subsurfaceColor);
+                                        changed |= UI::DrawColorVec4("Subsurface Radius", material->gpuData.subsurfaceRadius);
+                                        changed |= UI::DrawFloatControl("Subsurface Scale", &material->gpuData.subsurfaceScale, 0.1f, 0.001f, 100.0f);
+                                        ImGui::TreePop();
+                                    }
+
+                                    if (ImGui::TreeNode("Transmission"))
+                                    {
+                                        changed |= UI::DrawFloatControl("Transmission Weight", &material->gpuData.transmissionWeight, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawColorVec4("Transmission Color", material->gpuData.transmissionColor);
+                                        changed |= UI::DrawFloatControl("Transmission Depth", &material->gpuData.transmissionDepth, 0.1f, 0.0f, 100.0f);
+                                        ImGui::TreePop();
+                                    }
+
+                                    if (ImGui::TreeNode("Fuzz"))
+                                    {
+                                        changed |= UI::DrawFloatControl("Fuzz Weight", &material->gpuData.fuzzWeight, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawColorVec4("Fuzz Color", material->gpuData.fuzzColor);
+                                        changed |= UI::DrawFloatControl("Fuzz Roughness", &material->gpuData.fuzzRoughness, 0.025f, 0.0f, 1.0f);
+                                        ImGui::TreePop();
+                                    }
+
+                                    if (ImGui::TreeNode("Advanced"))
+                                    {
+                                        changed |= UI::DrawFloatControl("Multi-Scatter", &material->gpuData.useMultiScatter, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawFloatControl("Emission Luminance", &material->gpuData.emissionLuminance, 1.0f, 0.0f, 10000.0f);
+                                        ImGui::TreePop();
+                                    }
+
+                                    if (changed)
+                                        material->SetDirtyFlag(true);
+                                    ImGui::TreePop();
+                                }
+
+                                if (UI::DrawFloatControl("Occlusion Strength", &material->gpuData.occlusionStrength, 0.025f, 0.0f, 1.0f))
+                                {
+                                    material->SetDirtyFlag(true);
+                                }
 
 								// Blend Mode
 								{
-									const char *blendModeNames[] = { "Opaque", "Transparent" };
+									const char *blendModeNames[] = { "Opaque", "Transparent", "Masked" };
 									int currentBlendMode = static_cast<int>(material->GetType());
-									if (currentBlendMode > 1) currentBlendMode = 0; // clamp Masked to Opaque for display
+									if (currentBlendMode > 2) currentBlendMode = 0;
 									if (ImGui::Combo("Blend Mode", &currentBlendMode, blendModeNames, IM_ARRAYSIZE(blendModeNames)))
 									{
 										material->SetType(static_cast<MaterialType>(currentBlendMode));
 										material->SetDirtyFlag(true);
 										material->InvalidateBindingSet();
+									}
+								}
+
+								// Cull Mode
+								{
+									const char *cullModeNames[] = { "Front (Standard)", "None (Double-Sided)", "Back (Inverted)" };
+									int currentCull = 0;
+									if (material->GetCullMode() == nvrhi::RasterCullMode::None)
+										currentCull = 1;
+									else if (material->GetCullMode() == nvrhi::RasterCullMode::Back)
+										currentCull = 2;
+									else
+										currentCull = 0;
+
+									if (ImGui::Combo("Cull Mode", &currentCull, cullModeNames, IM_ARRAYSIZE(cullModeNames)))
+									{
+										if (currentCull == 1)
+											material->SetCullMode(nvrhi::RasterCullMode::None);
+										else if (currentCull == 2)
+											material->SetCullMode(nvrhi::RasterCullMode::Back);
+										else
+											material->SetCullMode(nvrhi::RasterCullMode::Front);
+
+										material->SetDirtyFlag(true);
 									}
 								}
 

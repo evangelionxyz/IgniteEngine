@@ -141,6 +141,7 @@ namespace ignite
             Mesh_GPUData gpuData;
             Ref<MeshInstance> meshInstance;
             glm::mat4 bones[MAX_BONES];
+            nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None;
         };
 
         template<typename MeshT>
@@ -155,18 +156,18 @@ namespace ignite
             nvrhi::GraphicsState &csmState, uint32_t cascadeIndex, entt::entity entity = entt::null, const std::string &socketName = "");
 
         Ref<GraphicsPipeline> GetOrCreateMeshPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
-            nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, const char *vertexShaderPath, const char *pixelShaderPath,
+            nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode, const char *vertexShaderPath, const char *pixelShaderPath,
             EBindingLayout meshLayout, bool transparent);
 
 		Ref<GraphicsPipeline> GetOrCreateCMSPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
             nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath,  const char *pixelShaderPath, EBindingLayout meshLayout);
 
         Ref<GraphicsPipeline> GetDebugGridPSO(nvrhi::IFramebuffer *framebuffer);
-        Ref<GraphicsPipeline> GetAnimatedPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetAnimatedPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front);
+        Ref<GraphicsPipeline> GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None);
 
-        Ref<GraphicsPipeline> GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-		Ref<GraphicsPipeline> GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front);
+		Ref<GraphicsPipeline> GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None);
 
         Ref<GraphicsPipeline> GetOrCreateSelectMeshPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
             nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, const char *vertexShaderPath, const char *pixelShaderPath,

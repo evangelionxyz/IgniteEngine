@@ -76,11 +76,14 @@ PSOutput main(PixelVertexInput input)
     Texture2D emissiveTex = ResourceDescriptorHeap[material.emissiveTextureIndex];
     Texture2D metallicTex = ResourceDescriptorHeap[material.metallicTextureIndex];
     Texture2D roughnessTex = ResourceDescriptorHeap[material.roughnessTextureIndex];
+    Texture2D occlusionTex = ResourceDescriptorHeap[material.occlusionTextureIndex];
 
     float3 emissiveColor = emissiveTex.Sample(sampler0, tiledUV).rgb * material.emissiveFactor.rgb;
     float4 metallicColor = metallicTex.Sample(sampler0, tiledUV);
     float4 roughnessColor = roughnessTex.Sample(sampler0, tiledUV);
     float3 normalMap = normalMapTex.Sample(sampler0, tiledUV).rgb;
+    float occlusionSample = occlusionTex.Sample(sampler0, tiledUV).r;
+    float ao = lerp(1.0f, occlusionSample, saturate(material.occlusionStrength));
 
     float metallic = clamp(SelectChannel(metallicColor, material.metallicChannel) * material.metallicFactor, 0.0f, 1.0f);
     float roughness = clamp(SelectChannel(roughnessColor, material.roughnessChannel) * material.roughnessFactor, 0.0f, 1.0f);
@@ -89,43 +92,50 @@ PSOutput main(PixelVertexInput input)
     float4 baseColorSample = baseColorTex.Sample(sampler0, tiledUV) * input.color;
     float finalAlpha = baseColorSample.a * material.baseColorFactor.a;
 
-    // Discard nearly transparent fragments in transparent mode
-    if (material.blendMode == 1 && finalAlpha < 0.001f)
+    // Discard nearly transparent fragments in transparent mode, or below cutoff in masked mode
+    if ((material.blendMode == 1 && finalAlpha < 0.001f) || (material.blendMode == 2 && finalAlpha < 0.5f))
     {
         discard;
     }
 
     if (scene.renderMode == RENDER_MODE_COLOR)
     {
-        float3 baseColor = baseColorSample.rgb * material.baseColorFactor.rgb;
-        float3 diffuseColor = baseColor * (1.0f - metallic);
-        float3 specularColor = lerp(float3(0.04f, 0.04f, 0.04f), baseColor, metallic);
-
         float3 finalNormal = normalize(N * normalMap);
+        float3 T = normalize(input.tangent);
+        float3 B = normalize(input.bitangent);
+
+        OpenPBRSurface surface;
+        surface.baseColor = baseColorSample.rgb * material.baseColorFactor.rgb;
+        surface.baseWeight = saturate(material.baseWeight);
+        surface.metalness = metallic;
+        surface.specularWeight = material.specularWeight;
+        surface.specularColor = material.specularColor.rgb;
+        surface.specularRoughness = max(roughness, 0.05f);
+        surface.specularIOR = max(material.specularIOR, 1.0f);
+        surface.coatWeight = saturate(material.coatWeight);
+        surface.coatColor = material.coatColor.rgb;
+        surface.coatRoughness = max(saturate(material.coatRoughness), 0.05f);
+        surface.coatIOR = max(material.coatIOR, 1.0f);
+        surface.coatDarkening = saturate(material.coatDarkening);
+        surface.specularAnisotropy = saturate(material.specularAnisotropy);
+        surface.subsurfaceWeight = saturate(material.subsurfaceWeight);
+        surface.subsurfaceColor = material.subsurfaceColor.rgb;
+        surface.subsurfaceRadius = material.subsurfaceRadius.rgb;
+        surface.subsurfaceScale = material.subsurfaceScale;
+        surface.transmissionWeight = saturate(material.transmissionWeight);
+        surface.transmissionColor = material.transmissionColor.rgb;
+        surface.transmissionDepth = material.transmissionDepth;
+        surface.fuzzWeight = saturate(material.fuzzWeight);
+        surface.fuzzColor = material.fuzzColor.rgb;
+        surface.fuzzRoughness = max(saturate(material.fuzzRoughness), 0.05f);
+        surface.useMultiScatter = saturate(material.useMultiScatter);
 
         float3 reflectDirection = reflect(-viewDirection, finalNormal);
         float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, camera.position.y * 0.001f);
-        float3 reflectedSpecular = float3(0.0f, 0.0f, 0.0f);
-        
-        if (length(reflectRadiance) > 0.01f)
-        {
-            float reflectionStrength = lerp(0.01f, 1.0f, metallic) * (1.0f - roughness);
-            float3 F = SchlickFresnel(viewDirection, finalNormal, specularColor);
-            float NdotR = saturate(dot(finalNormal, reflectDirection));
-            reflectedSpecular = GGXReflect(finalNormal, reflectDirection, viewDirection,
-                reflectRadiance, specularColor, roughness) * reflectionStrength * NdotR * F;
-        }
+        float3 reflectedSpecular = OpenPBREnvironment(surface, finalNormal, viewDirection, reflectRadiance);
 
         float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
-        float3 directLighting = GGX(
-            finalNormal,
-            lightDirection,
-            viewDirection,
-            irradiance,
-            diffuseColor,
-            specularColor,
-            roughness
-        );
+        float3 directLighting = OpenPBRDirect(surface, finalNormal, lightDirection, viewDirection, T, B, irradiance);
 
         float shadowTerm = SampleShadow(csm, shadowMap, shadowSampler, camera.view, 
             input.worldPos, finalNormal, lightDirection, input.position.xy);
@@ -153,15 +163,7 @@ PSOutput main(PixelVertexInput input)
             atten *= saturate(1.0f - (d / range));
 
             float3 ptIrradiance = color * intensity * atten;
-            directLighting += GGX(
-                finalNormal,
-                toLight,
-                viewDirection,
-                ptIrradiance,
-                diffuseColor,
-                specularColor,
-                roughness
-            );
+            directLighting += OpenPBRDirect(surface, finalNormal, toLight, viewDirection, T, B, ptIrradiance);
         }
 
         // Spot Lights PBR
@@ -195,29 +197,22 @@ PSOutput main(PixelVertexInput input)
             atten *= coneFactor;
 
             float3 spIrradiance = color * intensity * atten;
-            directLighting += GGX(
-                finalNormal,
-                toLight,
-                viewDirection,
-                spIrradiance,
-                diffuseColor,
-                specularColor,
-                roughness
-            );
+            directLighting += OpenPBRDirect(surface, finalNormal, toLight, viewDirection, T, B, spIrradiance);
         }
 
         float baseAmbient = 0.03f;
         float occScale = 0.35f;
         float shadowAmbientFactor = lerp(0.0f, 1.0f, shadowTerm);
 
-        float3 ambient = diffuseColor * (baseAmbient + occScale) * shadowAmbientFactor;
-        reflectedSpecular *= shadowTerm;
+        float3 ambient = surface.baseColor * surface.baseWeight * (1.0f - surface.metalness) *
+            (baseAmbient + occScale) * shadowAmbientFactor * ao;
+        reflectedSpecular *= (shadowTerm * ao);
 
         float3 finalColor = directLighting + ambient + reflectedSpecular;
 
         if (length(emissiveColor) > 0.01f)
         {
-            finalColor += emissiveColor * material.emissiveFactor.rgb * material.emissiveFactor.a;
+            finalColor += emissiveColor * material.emissiveFactor.rgb * material.emissiveFactor.a * material.emissionLuminance;
         }
 
         if (scene.debugShadow == 2)
@@ -259,6 +254,26 @@ PSOutput main(PixelVertexInput input)
     else if (scene.renderMode == RENDER_MODE_ROUGHNESS)
     {
         result.color = float4(roughness, roughness, roughness, 1.0f);
+    }
+    else if (scene.renderMode == RENDER_MODE_SUBSURFACE)
+    {
+        float ss = material.subsurfaceWeight;
+        result.color = float4(material.subsurfaceColor.rgb * ss, 1.0f);
+    }
+    else if (scene.renderMode == RENDER_MODE_TRANSMISSION)
+    {
+        float tr = material.transmissionWeight;
+        result.color = float4(material.transmissionColor.rgb * tr, 1.0f);
+    }
+    else if (scene.renderMode == RENDER_MODE_COAT)
+    {
+        float ct = material.coatWeight;
+        result.color = float4(material.coatColor.rgb * ct, 1.0f);
+    }
+    else if (scene.renderMode == RENDER_MODE_FUZZ)
+    {
+        float fz = material.fuzzWeight;
+        result.color = float4(material.fuzzColor.rgb * fz, 1.0f);
     }
 
     return result;

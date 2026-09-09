@@ -246,8 +246,6 @@ namespace ignite
         {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_NoReorder | ImGuiTableColumnFlags_WidthStretch);
 
-            constexpr int maxStickyScrollRows = 2;
-            ImGui::TableSetupScrollFreeze(0, maxStickyScrollRows);
             ImGui::TableHeadersRow();
 
             // ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, { 0.000f, 0.245f, 0.409f, 1.000f });
@@ -319,7 +317,9 @@ namespace ignite
                     ImGui::EndDragDropTarget();
                 }
 
+                // const auto entityCount = m_Scene->registry->view<IDComponent>().size();
                 std::vector<Entity> rootEntities;
+
                 m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
                     {
                         if (id.parent == UUID(0))

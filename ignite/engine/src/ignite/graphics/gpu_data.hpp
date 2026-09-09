@@ -84,6 +84,43 @@ namespace ignite
 		int normalTextureIndex = 0;
 		int occlusionTextureIndex = 0;
 		glm::vec2 _pad = glm::vec2(0.0f); // 16-byte alignment pad
+
+		// OpenPBR Surface core. The existing metallic/roughness values map to
+		// base_metalness and specular_roughness respectively.
+		float baseWeight = 1.0f;
+		float specularWeight = 1.0f;
+		float specularIOR = 1.5f;
+		float coatWeight = 0.0f;
+		glm::vec4 specularColor = glm::vec4(1.0f);
+		glm::vec4 coatColor = glm::vec4(1.0f); // squared normal-incidence transmittance
+		float coatRoughness = 0.0f;
+		float coatIOR = 1.6f;
+		float coatDarkening = 1.0f;
+		float specularAnisotropy = 0.0f;   // [0,1] stretch of specular highlight along tangent
+
+		// OpenPBR §subsurface — diffuse subsurface scattering approximation
+		float subsurfaceWeight = 0.0f;     // [0,1] blend from opaque-diffuse to subsurface
+		float subsurfaceScale  = 1.0f;     // world-space mean-free-path scale
+		glm::vec2 _padSS;                  // 16-byte alignment
+		glm::vec4 subsurfaceColor  = glm::vec4(1.0f);           // tint of subsurface scattering
+		glm::vec4 subsurfaceRadius = glm::vec4(1.0f, 0.2f, 0.1f, 0.0f); // per-channel MFP ratios (RGB + pad)
+
+		// OpenPBR §translucent-base — thin-slab Beer's law transmission
+		float transmissionWeight = 0.0f;   // [0,1] blend from opaque to translucent
+		float transmissionDepth  = 0.0f;   // absorption depth
+		glm::vec2 _padTR;                  // 16-byte alignment
+		glm::vec4 transmissionColor = glm::vec4(1.0f); // volumetric absorption tint
+
+		// OpenPBR §fuzz — microflake-based fuzz/sheen layer
+		float fuzzWeight    = 0.0f;        // [0,1] fuzz coverage
+		float fuzzRoughness = 0.5f;        // fuzz lobe roughness
+		glm::vec2 _padFZ;                  // 16-byte alignment
+		glm::vec4 fuzzColor = glm::vec4(1.0f); // fuzz albedo
+
+		// Advanced
+		float useMultiScatter   = 1.0f;    // [0,1] enable Kulla-Conty energy compensation
+		float emissionLuminance = 1.0f;     // nits scale for emission
+		glm::vec2 _padAdv;                 // 16-byte alignment
 	};
 
 	// GPU-side point light data (16-byte aligned for HLSL constant buffers)
