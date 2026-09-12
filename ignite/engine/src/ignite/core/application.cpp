@@ -444,9 +444,9 @@ namespace ignite
         m_LayerStack.PopLayer(layer);
     }
 
-    void Application::Step(float deltaTime)
+    void Application::Tick(float deltaTime)
     {
-        IGN_PROFILE_SCOPE("MainThread::Frame");
+        IGN_PROFILE_SCOPE("MainThread::Tick");
 
         m_DeltaTime = deltaTime;
         IGN_PROFILE_PLOT("Delta Time (s)", m_DeltaTime);
@@ -623,7 +623,7 @@ namespace ignite
             const float dt = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
             m_PreviousTime = currTime;
 
-            Step(dt);
+            Tick(dt);
         }
     }
 

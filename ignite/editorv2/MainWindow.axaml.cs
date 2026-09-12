@@ -1,7 +1,10 @@
 using System;
+using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using IgniteEditor.ViewModels;
 using Ignite.Managed.Services;
@@ -17,6 +20,20 @@ public partial class MainWindow : Window
         DataContext = new MainWindowViewModel();
 
         Loaded += (_, _) => HideBuiltInTitleBarElements();
+
+        AddHandler(PointerPressedEvent, (sender, e) =>
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                if (e.Source is Visual visual && !IsDescendantOfNativeViewport(visual))
+                {
+                    if (TryGetPlatformHandle()?.Handle is { } handle && handle != IntPtr.Zero)
+                    {
+                        SetFocus(handle);
+                    }
+                }
+            }
+        }, RoutingStrategies.Tunnel);
     }
 
     protected override void OnOpened(EventArgs e)
@@ -71,10 +88,24 @@ public partial class MainWindow : Window
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
-        // Clear the log callback so the native engine does not call back into
-        // managed code during shutdown (fixes the CLR assert on exit).
-        // The engine itself is shut down by NativeViewportControl.OnDetachedFromVisualTree,
-        // which fires earlier and while the CLR thread state is still valid.
+
+
+
+
         try { NativeEngineBridge.Ignite_SetLogCallback(null); } catch { }
     }
+
+    private static bool IsDescendantOfNativeViewport(Visual? visual)
+    {
+        while (visual != null)
+        {
+            if (visual is Controls.NativeViewportControl)
+                return true;
+            visual = visual.GetVisualParent();
+        }
+        return false;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetFocus(IntPtr hWnd);
 }

@@ -1,10 +1,11 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:IgniteEditor.ViewModels"
-             xmlns:ctrl="using:IgniteEditor.Controls"
-             x:Class="IgniteEditor.Views.Panels.PropertiesPanel"
-             x:DataType="vm:PropertiesViewModel"
-             HorizontalAlignment="Stretch">
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:vm="using:IgniteEditor.ViewModels"
+              xmlns:ctrl="using:IgniteEditor.Controls"
+              xmlns:models="using:Ignite.Managed.Models"
+              x:Class="IgniteEditor.Views.Panels.PropertiesPanel"
+              x:DataType="vm:PropertiesViewModel"
+              HorizontalAlignment="Stretch">
 
     <UserControl.Styles>
         <Style Selector="Expander">
@@ -46,8 +47,8 @@
                     <CheckBox Grid.Column="0" IsChecked="{Binding IsEntityActive}" 
                               Margin="0,0,6,0" MinWidth="11" MinHeight="11" Padding="0" />
                     <TextBox Grid.Column="1" Text="{Binding EntityName}" 
-                             FontSize="11" Height="16"
-                             HorizontalAlignment="Stretch" />
+                             FontSize="11" Height="22" MinHeight="22" Padding="4,2"
+                             HorizontalAlignment="Stretch" VerticalContentAlignment="Center" />
                 </Grid>
 
                 <Separator Margin="0,1" />
@@ -61,7 +62,7 @@
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.DataTemplates>
-                        <!-- Transform -->
+                        <!-- 1. Transform -->
                         <DataTemplate DataType="vm:TransformComponentVM">
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
@@ -88,41 +89,110 @@
                             </Expander>
                         </DataTemplate>
 
-                        <!-- Camera -->
+                        <!-- 2. Camera -->
                         <DataTemplate DataType="vm:CameraComponentVM">
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <TextBlock Text="Camera" FontSize="12" FontWeight="SemiBold" />
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="Camera" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
-                                    <Grid ColumnDefinitions="60,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
                                         <TextBlock Text="Perspective" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
                                         <CheckBox Grid.Column="1" IsChecked="{Binding IsPerspective}" MinHeight="16" Padding="0" />
                                     </Grid>
                                     <ctrl:FloatControl Label="FOV" Value="{Binding FieldOfView}" DefaultValue="60" Minimum="1" Maximum="179" />
                                     <ctrl:FloatControl Label="Near Clip" Value="{Binding NearClip}" DefaultValue="0.1" Minimum="0.001" Step="0.01" />
                                     <ctrl:FloatControl Label="Far Clip" Value="{Binding FarClip}" DefaultValue="1000" Minimum="0.1" Step="1" />
+                                    <ctrl:FloatControl Label="Ortho Size" Value="{Binding OrthographicSize}" DefaultValue="10" Minimum="0.01" Step="0.5" />
                                 </StackPanel>
                             </Expander>
                         </DataTemplate>
 
-                        <!-- Light -->
-                        <DataTemplate DataType="vm:LightComponentVM">
+                        <!-- 3. Sprite 2D -->
+                        <DataTemplate DataType="vm:Sprite2DComponentVM">
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <TextBlock Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" />
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="4" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
+                                    <ctrl:Vector2Control Label="Tiling" X="{Binding TilingX}" Y="{Binding TilingY}" DefaultX="1" DefaultY="1" Step="0.1" />
+                                    <Grid ColumnDefinitions="70,*,Auto,*" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="Flip X" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding FlipX}" MinHeight="16" Padding="0" />
+                                        <TextBlock Grid.Column="2" Text="Flip Y" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" Margin="6,0,4,0" />
+                                        <CheckBox Grid.Column="3" IsChecked="{Binding FlipY}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 4. Circle 2D -->
+                        <DataTemplate DataType="vm:Circle2DComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="4" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
+                                    <ctrl:FloatControl Label="Thickness" Value="{Binding Thickness}" DefaultValue="1" Minimum="0" Maximum="1" Step="0.05" />
+                                    <ctrl:FloatControl Label="Fade" Value="{Binding Fade}" DefaultValue="0.005" Minimum="0" Maximum="1" Step="0.005" />
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 5. Directional Light -->
+                        <DataTemplate DataType="vm:DirectionalLightComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
-                                    <ctrl:Vector3Control Label="Color" 
-                                                         X="{Binding ColorR}" 
-                                                         Y="{Binding ColorG}" 
-                                                         Z="{Binding ColorB}"
-                                                         DefaultX="1" DefaultY="1" DefaultZ="1"
-                                                         Step="0.05" />
+                                    <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
+
+
+
+
+
                                     <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
-                                    <Grid ColumnDefinitions="60,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                    <ctrl:FloatControl Label="Shadow Dist" Value="{Binding ShadowDistance}" DefaultValue="200" Minimum="1" Step="10" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
                                         <TextBlock Text="Shadows" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
                                         <CheckBox Grid.Column="1" IsChecked="{Binding CastShadows}" MinHeight="16" Padding="0" />
                                     </Grid>
@@ -130,12 +200,443 @@
                             </Expander>
                         </DataTemplate>
 
-                        <!-- Generic -->
+                        <!-- 6. Point Light -->
+                        <DataTemplate DataType="vm:PointLightComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
+                                    <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
+                                    <ctrl:FloatControl Label="Range" Value="{Binding Range}" DefaultValue="10" Minimum="0.1" Step="1" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Enabled" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding LightEnabled}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 7. Spot Light -->
+                        <DataTemplate DataType="vm:SpotLightComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
+                                    <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
+                                    <ctrl:FloatControl Label="Range" Value="{Binding Range}" DefaultValue="10" Minimum="0.1" Step="1" />
+                                    <ctrl:FloatControl Label="Inner Cone" Value="{Binding InnerCone}" DefaultValue="12.5" Minimum="0" Maximum="89" Step="1" />
+                                    <ctrl:FloatControl Label="Outer Cone" Value="{Binding OuterCone}" DefaultValue="45" Minimum="0" Maximum="90" Step="1" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Enabled" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding LightEnabled}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 8. Point Light 2D -->
+                        <DataTemplate DataType="vm:PointLight2DComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
+                                    <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="5" Minimum="0.1" Step="0.5" />
+                                    <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Enabled" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding LightEnabled}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 9. Rigidbody (3D) -->
+                        <DataTemplate DataType="vm:RigidbodyComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Body Type" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RigidbodyComponentVM.BodyTypeOptions}" 
+                                                  SelectedIndex="{Binding BodyType}" Height="22" MinHeight="22" FontSize="11" HorizontalAlignment="Stretch" />
+                                    </Grid>
+                                    <ctrl:FloatControl Label="Mass" Value="{Binding Mass}" DefaultValue="1" Minimum="0.001" Step="0.5" />
+                                    <ctrl:FloatControl Label="Lin Damping" Value="{Binding LinearDamping}" DefaultValue="0" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Ang Damping" Value="{Binding AngularDamping}" DefaultValue="0.05" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Friction" Value="{Binding Friction}" DefaultValue="0.2" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Restitution" Value="{Binding Restitution}" DefaultValue="0" Minimum="0" Maximum="1" Step="0.05" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Gravity" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding UseGravity}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 10. Rigidbody 2D -->
+                        <DataTemplate DataType="vm:Rigidbody2DComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Body Type" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:Rigidbody2DComponentVM.BodyTypeOptions}" 
+                                                  SelectedIndex="{Binding BodyType}" Height="22" MinHeight="22" FontSize="11" HorizontalAlignment="Stretch" />
+                                    </Grid>
+                                    <ctrl:FloatControl Label="Gravity Scale" Value="{Binding GravityScale}" DefaultValue="1" Step="0.1" />
+                                    <ctrl:FloatControl Label="Lin Damping" Value="{Binding LinearDamping}" DefaultValue="0.6" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Ang Damping" Value="{Binding AngularDamping}" DefaultValue="0.2" Minimum="0" Step="0.05" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Fixed Rot" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding FixedRotation}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Awake" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding IsAwake}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Enabled" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding IsEnabled2D}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 11. Box Collider (3D) -->
+                        <DataTemplate DataType="vm:BoxColliderComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:Vector3Control Label="Center" X="{Binding CenterX}" Y="{Binding CenterY}" Z="{Binding CenterZ}" DefaultX="0" DefaultY="0" DefaultZ="0" />
+                                    <ctrl:Vector3Control Label="Size" X="{Binding SizeX}" Y="{Binding SizeY}" Z="{Binding SizeZ}" DefaultX="1" DefaultY="1" DefaultZ="1" />
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 12. Sphere Collider (3D) -->
+                        <DataTemplate DataType="vm:SphereColliderComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:Vector3Control Label="Center" X="{Binding CenterX}" Y="{Binding CenterY}" Z="{Binding CenterZ}" DefaultX="0" DefaultY="0" DefaultZ="0" />
+                                    <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="1" Minimum="0.001" Step="0.1" />
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 13. Capsule Collider (3D) -->
+                        <DataTemplate DataType="vm:CapsuleColliderComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:Vector3Control Label="Center" X="{Binding CenterX}" Y="{Binding CenterY}" Z="{Binding CenterZ}" DefaultX="0" DefaultY="0" DefaultZ="0" />
+                                    <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="0.5" Minimum="0.001" Step="0.1" />
+                                    <ctrl:FloatControl Label="Height" Value="{Binding Height}" DefaultValue="2" Minimum="0.001" Step="0.2" />
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 14. Box Collider 2D -->
+                        <DataTemplate DataType="vm:BoxCollider2DComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:Vector2Control Label="Offset" X="{Binding OffsetX}" Y="{Binding OffsetY}" DefaultX="0" DefaultY="0" Step="0.1" />
+                                    <ctrl:Vector2Control Label="Size" X="{Binding SizeX}" Y="{Binding SizeY}" DefaultX="0.5" DefaultY="0.5" Step="0.1" />
+                                    <ctrl:FloatControl Label="Density" Value="{Binding Density}" DefaultValue="1" Minimum="0.001" Step="0.1" />
+                                    <ctrl:FloatControl Label="Friction" Value="{Binding Friction}" DefaultValue="0.5" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Restitution" Value="{Binding Restitution}" DefaultValue="0.1" Minimum="0" Maximum="1" Step="0.05" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Is Sensor" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding IsSensor}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 15. Circle Collider 2D -->
+                        <DataTemplate DataType="vm:CircleCollider2DComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:Vector2Control Label="Center" X="{Binding CenterX}" Y="{Binding CenterY}" DefaultX="0" DefaultY="0" Step="0.1" />
+                                    <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="0.5" Minimum="0.001" Step="0.05" />
+                                    <ctrl:FloatControl Label="Density" Value="{Binding Density}" DefaultValue="1" Minimum="0.001" Step="0.1" />
+                                    <ctrl:FloatControl Label="Friction" Value="{Binding Friction}" DefaultValue="0.5" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Restitution" Value="{Binding Restitution}" DefaultValue="0.1" Minimum="0" Maximum="1" Step="0.05" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Is Sensor" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding IsSensor}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 16. Character Controller -->
+                        <DataTemplate DataType="vm:CharacterControllerComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="0.5" Minimum="0.01" Step="0.05" />
+                                    <ctrl:FloatControl Label="Height" Value="{Binding Height}" DefaultValue="2" Minimum="0.1" Step="0.1" />
+                                    <ctrl:FloatControl Label="Step Height" Value="{Binding StepHeight}" DefaultValue="0.4" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Slope Angle" Value="{Binding SlopeAngle}" DefaultValue="45" Minimum="0" Maximum="89" Step="1" />
+                                    <ctrl:FloatControl Label="Mass" Value="{Binding Mass}" DefaultValue="80" Minimum="1" Step="5" />
+                                    <ctrl:FloatControl Label="Friction" Value="{Binding Friction}" DefaultValue="0.2" Minimum="0" Step="0.05" />
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 17. Audio Source -->
+                        <DataTemplate DataType="vm:AudioSourceComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:FloatControl Label="Volume" Value="{Binding Volume}" DefaultValue="1" Minimum="0" Maximum="1" Step="0.05" />
+                                    <ctrl:FloatControl Label="Pitch" Value="{Binding Pitch}" DefaultValue="1" Minimum="0.1" Maximum="3" Step="0.05" />
+                                    <ctrl:FloatControl Label="Pan" Value="{Binding Pan}" DefaultValue="0" Minimum="-1" Maximum="1" Step="0.1" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Play on Start" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding PlayOnStart}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Loop" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding Loop}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 18. Text -->
+                        <DataTemplate DataType="vm:TextComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="70,*" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Text" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding Text}" FontSize="11" Height="22" MinHeight="22" Padding="4,2"
+                                                 HorizontalAlignment="Stretch" VerticalContentAlignment="Center" />
+                                    </Grid>
+                                    <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
+                                    <ctrl:FloatControl Label="Kerning" Value="{Binding Kerning}" DefaultValue="0" Step="0.01" />
+                                    <ctrl:FloatControl Label="Line Spacing" Value="{Binding LineSpacing}" DefaultValue="-0.025" Step="0.01" />
+                                    <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Screen Space" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding ScreenSpace}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 19. World Environment -->
+                        <DataTemplate DataType="vm:WorldEnvironmentComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:FloatControl Label="Exposure" Value="{Binding Exposure}" DefaultValue="1.1" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Gamma" Value="{Binding Gamma}" DefaultValue="2.2" Minimum="0.1" Step="0.1" />
+                                    <ctrl:FloatControl Label="Ambient" Value="{Binding Ambient}" DefaultValue="0.5" Minimum="0" Step="0.05" />
+                                    <ctrl:FloatControl Label="Fog Density" Value="{Binding FogDensity}" DefaultValue="0" Minimum="0" Step="0.01" />
+                                    <ctrl:ColorPickerPropertyControl Label="Fog Color" Value="{Binding FogColor}" />
+                                    <ctrl:FloatControl Label="Fog Start" Value="{Binding FogStart}" DefaultValue="10" Minimum="0" Step="5" />
+                                    <ctrl:FloatControl Label="Fog End" Value="{Binding FogEnd}" DefaultValue="100" Minimum="0" Step="5" />
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 20. Script -->
+                        <DataTemplate DataType="vm:ScriptComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="70,*" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Class Name" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding ClassName}" FontSize="11" Height="22" MinHeight="22" Padding="4,2"
+                                                 HorizontalAlignment="Stretch" VerticalContentAlignment="Center" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- 21. Generic Fallback -->
                         <DataTemplate DataType="vm:GenericComponentVM">
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <TextBlock Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" />
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="✕" 
+                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Width="18" Height="18" Padding="0" FontSize="10"
+                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
+                                                ToolTip.Tip="Remove Component" />
+                                    </Grid>
                                 </Expander.Header>
                                 <TextBlock Text="(No editable properties)" FontSize="11" Foreground="#808080" Margin="6,4" />
                             </Expander>
@@ -143,11 +644,48 @@
                     </ItemsControl.DataTemplates>
                 </ItemsControl>
 
-                <!-- Add Component button -->
+                <!-- Add Component button with Flyout Menu -->
                 <Button Content="+ Add Component" 
                         HorizontalAlignment="Stretch" 
                         HorizontalContentAlignment="Center"
-                        FontSize="11" Padding="4,4" Margin="0,4" />
+                        FontSize="11" Padding="4,4" Margin="0,4">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="Bottom">
+                            <MenuItem Header="2D">
+                                <MenuItem Header="Sprite 2D" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.Sprite2D}" />
+                                <MenuItem Header="Circle 2D" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.Circle2D}" />
+                                <MenuItem Header="Point Light 2D" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.PointLight2D}" />
+                                <MenuItem Header="Rigid Body 2D" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.Rigidbody2D}" />
+                                <MenuItem Header="Box Collider 2D" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.BoxCollider2D}" />
+                                <MenuItem Header="Circle Collider 2D" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.CircleCollider2D}" />
+                            </MenuItem>
+                            <MenuItem Header="Rendering">
+                                <MenuItem Header="Camera" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.Camera}" />
+                                <MenuItem Header="Static Mesh" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.StaticMesh}" />
+                                <MenuItem Header="Directional Light" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.DirectionalLight}" />
+                                <MenuItem Header="Point Light" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.PointLight}" />
+                                <MenuItem Header="Spot Light" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.SpotLight}" />
+                                <MenuItem Header="World Environment" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.WorldEnvironment}" />
+                            </MenuItem>
+                            <MenuItem Header="Physics 3D">
+                                <MenuItem Header="Rigid Body" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.Rigidbody}" />
+                                <MenuItem Header="Box Collider" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.BoxCollider}" />
+                                <MenuItem Header="Sphere Collider" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.SphereCollider}" />
+                                <MenuItem Header="Capsule Collider" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.CapsuleCollider}" />
+                                <MenuItem Header="Character Controller" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.CharacterController}" />
+                            </MenuItem>
+                            <MenuItem Header="Audio">
+                                <MenuItem Header="Audio Source" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.AudioSource}" />
+                            </MenuItem>
+                            <MenuItem Header="UI">
+                                <MenuItem Header="Text" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.Text}" />
+                            </MenuItem>
+                            <MenuItem Header="Scripts">
+                                <MenuItem Header="Script" Command="{Binding AddComponentCommand}" CommandParameter="{x:Static models:ComponentType.Script}" />
+                            </MenuItem>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

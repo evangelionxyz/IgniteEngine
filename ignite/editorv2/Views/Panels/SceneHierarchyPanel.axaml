@@ -64,6 +64,9 @@
             <TreeView.ContextMenu>
                 <ContextMenu FontSize="11">
                     <MenuItem Header="Create Empty Entity" Command="{Binding CreateEntityCommand}" />
+                    <MenuItem Header="Create Child Entity" Command="{Binding CreateChildEntityCommand}" />
+                    <MenuItem Header="Move to Root (Unparent)" Command="{Binding UnparentEntityCommand}" />
+                    <Separator />
                     <MenuItem Header="Duplicate" Command="{Binding DuplicateEntityCommand}" />
                     <MenuItem Header="Delete" Command="{Binding DeleteEntityCommand}" />
                 </ContextMenu>
@@ -71,7 +74,10 @@
 
             <TreeView.ItemTemplate>
                 <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:EntityNodeViewModel">
-                    <Grid ColumnDefinitions="Auto,Auto,*" Height="18" VerticalAlignment="Center" Margin="0">
+                    <Grid ColumnDefinitions="Auto,Auto,*" Height="18" VerticalAlignment="Center" Margin="0"
+                          Background="Transparent"
+                          PointerPressed="OnItemPointerPressed"
+                          PointerReleased="OnItemPointerReleased">
                         <!-- Active Visibility Toggle -->
                         <CheckBox Grid.Column="0"
                                   IsChecked="{Binding IsActive}"

@@ -1,0 +1,208 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="IgniteEditor.Controls.ColorPickerControl"
+             x:Name="Root"
+             Background="#202020"
+             Width="380">
+
+    <UserControl.Styles>
+        <Style Selector="TextBox.picker-num">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="Padding" Value="4,1" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FontFamily" Value="Consolas,Menlo,monospace" />
+            <Setter Property="Background" Value="#181818" />
+            <Setter Property="BorderBrush" Value="#333333" />
+        </Style>
+        <Style Selector="TextBlock.picker-lbl">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="#AAAAAA" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,3,0" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="8" Background="#222222">
+        <Grid RowDefinitions="Auto,Auto">
+            <!-- Main Content Area: SV Box + Sliders + Numeric Inputs -->
+            <Grid Grid.Row="0" ColumnDefinitions="190,26,20,130" Margin="0,0,0,6">
+                <!-- 1. Saturation / Value 2D Box -->
+                <Border Grid.Column="0" Width="184" Height="170" 
+                        BorderBrush="#444444" BorderThickness="1" CornerRadius="2"
+                        ClipToBounds="True">
+                    <Grid x:Name="SvGrid" Background="{Binding CurrentHueBrush, ElementName=Root}"
+                          PointerPressed="OnSvPointerPressed"
+                          PointerMoved="OnSvPointerMoved"
+                          PointerReleased="OnSvPointerReleased"
+                          PointerCaptureLost="OnSvPointerCaptureLost">
+                        <!-- Horizontal White-to-Transparent Gradient -->
+                        <Border>
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                    <GradientStop Color="#FFFFFFFF" Offset="0.0" />
+                                    <GradientStop Color="#00FFFFFF" Offset="1.0" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <!-- Vertical Transparent-to-Black Gradient -->
+                        <Border>
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                    <GradientStop Color="#00000000" Offset="0.0" />
+                                    <GradientStop Color="#FF000000" Offset="1.0" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+
+                        <!-- Draggable Cursor Ring -->
+                        <Canvas IsHitTestVisible="False">
+                            <Ellipse x:Name="SvCursor" Width="12" Height="12" 
+                                     Stroke="#FFFFFF" StrokeThickness="2"
+                                     Canvas.Left="0" Canvas.Top="0" Margin="-6,-6,0,0">
+                                <Ellipse.Effect>
+                                    <DropShadowEffect BlurRadius="2" Opacity="0.8" Color="#000000" />
+                                </Ellipse.Effect>
+                            </Ellipse>
+                        </Canvas>
+                    </Grid>
+                </Border>
+
+                <!-- 2. Rainbow Hue Vertical Slider -->
+                <Border Grid.Column="1" Width="18" Height="170"
+                        BorderBrush="#444444" BorderThickness="1" CornerRadius="2"
+                        ClipToBounds="True" Margin="4,0,4,0">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF0000" Offset="0.00" />
+                            <GradientStop Color="#FFFF00" Offset="0.17" />
+                            <GradientStop Color="#00FF00" Offset="0.33" />
+                            <GradientStop Color="#00FFFF" Offset="0.50" />
+                            <GradientStop Color="#0000FF" Offset="0.67" />
+                            <GradientStop Color="#FF00FF" Offset="0.83" />
+                            <GradientStop Color="#FF0000" Offset="1.00" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Grid x:Name="HueGrid"
+                          PointerPressed="OnHuePointerPressed"
+                          PointerMoved="OnHuePointerMoved"
+                          PointerReleased="OnHuePointerReleased"
+                          PointerCaptureLost="OnHuePointerCaptureLost">
+                        <!-- Hue Pointer Thumb Line -->
+                        <Canvas IsHitTestVisible="False">
+                            <Border x:Name="HueIndicator" Width="18" Height="4"
+                                    BorderBrush="#FFFFFF" BorderThickness="1.5" Background="#88000000"
+                                    Canvas.Top="0" Margin="0,-2,0,0" />
+                        </Canvas>
+                    </Grid>
+                </Border>
+
+                <!-- 3. Alpha Opacity Vertical Slider -->
+                <Border Grid.Column="2" Width="14" Height="170"
+                        BorderBrush="#444444" BorderThickness="1" CornerRadius="2"
+                        ClipToBounds="True" Margin="2,0,4,0">
+                    <Grid x:Name="AlphaGrid"
+                          PointerPressed="OnAlphaPointerPressed"
+                          PointerMoved="OnAlphaPointerMoved"
+                          PointerReleased="OnAlphaPointerReleased"
+                          PointerCaptureLost="OnAlphaPointerCaptureLost">
+                        <!-- Checkerboard or Background -->
+                        <Border Background="#333333" />
+                        <!-- Gradient from Full Color to Transparent -->
+                        <Border Background="{Binding AlphaSliderBrush, ElementName=Root}" />
+
+                        <!-- Alpha Pointer Thumb Line -->
+                        <Canvas IsHitTestVisible="False">
+                            <Border x:Name="AlphaIndicator" Width="14" Height="4"
+                                    BorderBrush="#FFFFFF" BorderThickness="1.5" Background="#88000000"
+                                    Canvas.Top="0" Margin="0,-2,0,0" />
+                        </Canvas>
+                    </Grid>
+                </Border>
+
+                <!-- 4. Right Side: Swatch comparison & Numeric inputs -->
+                <StackPanel Grid.Column="3" Spacing="4" Margin="6,0,0,0">
+                    <!-- Swatch: New vs Current -->
+                    <Border BorderBrush="#444444" BorderThickness="1" CornerRadius="3" Height="38" ClipToBounds="True">
+                        <Grid RowDefinitions="*,*">
+                            <!-- New Color -->
+                            <Border Grid.Row="0" Background="{Binding NewColorBrush, ElementName=Root}"
+                                    ToolTip.Tip="New Color" />
+                            <!-- Original / Current Color -->
+                            <Border Grid.Row="1" Background="{Binding OriginalColorBrush, ElementName=Root}"
+                                    ToolTip.Tip="Click to revert to original"
+                                    PointerPressed="OnRevertToOriginalPressed"
+                                    Cursor="Hand" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Tabular Numeric Inputs for HSB/HSV, HSL, RGB -->
+                    <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="0,2,0,0">
+                        <!-- H & R -->
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="H:" Classes="picker-lbl" />
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InputH, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,4,1" />
+
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="R:" Classes="picker-lbl" />
+                        <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding InputR, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,0,1" />
+
+                        <!-- S & G -->
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="S:" Classes="picker-lbl" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding InputS, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,4,1" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="G:" Classes="picker-lbl" />
+                        <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding InputG, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,0,1" />
+
+                        <!-- V/B & B -->
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="V:" Classes="picker-lbl" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding InputV, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,4,1" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="B:" Classes="picker-lbl" />
+                        <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding InputB, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,0,1" />
+
+                        <!-- HSL: L & Alpha -->
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="L:" Classes="picker-lbl" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding InputL, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,4,1" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="2" Text="A:" Classes="picker-lbl" />
+                        <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding InputA, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,0,1" />
+
+                        <!-- Hex Input spanning full width -->
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="#" Classes="picker-lbl" />
+                        <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding InputHex, ElementName=Root}" Classes="picker-num"
+                                 LostFocus="OnHexInputChanged" KeyDown="OnHexKeyDown" Margin="0,2,0,0" />
+                    </Grid>
+                </StackPanel>
+            </Grid>
+
+            <!-- Bottom Row: Quick Palette Swatches -->
+            <Border Grid.Row="1" BorderBrush="#333333" BorderThickness="0,1,0,0" Padding="0,4,0,0">
+                <Grid ColumnDefinitions="Auto,*">
+                    <TextBlock Grid.Column="0" Text="Swatches" FontSize="10" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <WrapPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFFFFFF" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFFFFFF" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFB0B0B0" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFB0B0B0" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF606060" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF606060" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF000000" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF000000" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFF2222" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFF2222" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFF7700" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFF7700" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFFDD00" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFFDD00" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF22CC22" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF22CC22" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF00CCCC" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF00CCCC" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF2266FF" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF2266FF" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF9922FF" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF9922FF" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFF22AA" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFF22AA" />
+                    </WrapPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

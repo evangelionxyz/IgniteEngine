@@ -231,6 +231,7 @@ namespace ignite
 		LOG_ASSERT(playOrSimulateState == ESceneState::Play || playOrSimulateState == ESceneState::Simulate, "Invalid scene state for OnStart");
 
         m_State = playOrSimulateState;
+        m_PreviousState = playOrSimulateState;
 
         PreloadReferencedAssets();
 
@@ -544,6 +545,7 @@ namespace ignite
             return;
 
         m_State = ESceneState::Stop;
+        m_PreviousState = ESceneState::Stop;
 
         m_StepFrame = 0;
         timeInSeconds = 0.0f;
@@ -607,10 +609,26 @@ namespace ignite
 
     void Scene::Pause()
     {
-        m_State = ESceneState::Paused;
+        if (m_State == ESceneState::Paused)
+        {
+            m_State = (m_PreviousState != ESceneState::Stop && m_PreviousState != ESceneState::None) ? m_PreviousState : ESceneState::Play;
+        }
+        else if (m_State == ESceneState::Play || m_State == ESceneState::Simulate)
+        {
+            m_PreviousState = m_State;
+            m_State = ESceneState::Paused;
+        }
     }
 
-    void Scene::Step(int frame)
+    void Scene::Resume()
+    {
+        if (m_State == ESceneState::Paused)
+        {
+            m_State = (m_PreviousState != ESceneState::Stop && m_PreviousState != ESceneState::None) ? m_PreviousState : ESceneState::Play;
+        }
+    }
+
+    void Scene::StepFrame(int frame)
     {
         m_StepFrame = frame;
     }

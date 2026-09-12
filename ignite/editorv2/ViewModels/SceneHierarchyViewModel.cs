@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -37,7 +38,10 @@ public partial class SceneHierarchyViewModel : ViewModelBase
 
     private EntityNodeViewModel CreateNodeFromModel(EntityModel model)
     {
-        var node = new EntityNodeViewModel
+        var node = new EntityNodeViewModel(onActiveChanged: (id, active) =>
+        {
+            _sceneService.SetEntityActive(id, active);
+        })
         {
             EntityId = model.Id,
             Name = model.Name,
@@ -56,7 +60,72 @@ public partial class SceneHierarchyViewModel : ViewModelBase
     private void CreateEntity()
     {
         var entity = _sceneService.CreateEntity("New Entity");
-        RootEntities.Add(CreateNodeFromModel(entity));
+        var node = CreateNodeFromModel(entity);
+        RootEntities.Add(node);
+        SelectedEntity = node;
+    }
+
+    [RelayCommand]
+    private void CreateChildEntity()
+    {
+        if (SelectedEntity == null)
+        {
+            CreateEntity();
+            return;
+        }
+
+        var child = _sceneService.CreateEntity("Child Entity", SelectedEntity.EntityId);
+        RefreshHierarchy();
+
+        // Select the newly created child
+        var found = FindNodeRecursive(RootEntities, child.Id);
+        if (found != null)
+        {
+            SelectedEntity = found;
+            ExpandParents(RootEntities, child.Id);
+        }
+    }
+
+    [RelayCommand]
+    private void UnparentEntity()
+    {
+        if (SelectedEntity == null) return;
+        Guid entityId = SelectedEntity.EntityId;
+        _sceneService.ReparentEntity(entityId, null);
+        RefreshHierarchy();
+        SelectedEntity = FindNodeRecursive(RootEntities, entityId);
+    }
+
+    public void Reparent(Guid entityId, Guid? newParentId)
+    {
+        _sceneService.ReparentEntity(entityId, newParentId);
+        RefreshHierarchy();
+        SelectedEntity = FindNodeRecursive(RootEntities, entityId);
+    }
+
+    private static EntityNodeViewModel? FindNodeRecursive(IEnumerable<EntityNodeViewModel> nodes, Guid id)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.EntityId == id) return node;
+            var found = FindNodeRecursive(node.Children, id);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private static bool ExpandParents(IEnumerable<EntityNodeViewModel> nodes, Guid targetId)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.EntityId == targetId) return true;
+            if (ExpandParents(node.Children, targetId))
+            {
+                node.IsExpanded = true;
+                return true;
+            }
+        }
+        return false;
     }
 
     [RelayCommand]
@@ -73,7 +142,8 @@ public partial class SceneHierarchyViewModel : ViewModelBase
     {
         if (SelectedEntity == null) return;
         var dup = _sceneService.DuplicateEntity(SelectedEntity.EntityId);
-        RootEntities.Add(CreateNodeFromModel(dup));
+        RefreshHierarchy();
+        SelectedEntity = FindNodeRecursive(RootEntities, dup.Id);
     }
 
     partial void OnSelectedEntityChanged(EntityNodeViewModel? value)
@@ -86,6 +156,8 @@ public partial class SceneHierarchyViewModel : ViewModelBase
 
 public partial class EntityNodeViewModel : ViewModelBase
 {
+    private readonly Action<Guid, bool>? _onActiveChanged;
+
     [ObservableProperty]
     private Guid _entityId;
 
@@ -102,5 +174,17 @@ public partial class EntityNodeViewModel : ViewModelBase
     private bool _isSelected;
 
     public ObservableCollection<EntityNodeViewModel> Children { get; } = new();
+
+    public EntityNodeViewModel(Action<Guid, bool>? onActiveChanged = null)
+    {
+        _onActiveChanged = onActiveChanged;
+    }
+
+    public EntityNodeViewModel() { }
+
+    partial void OnIsActiveChanged(bool value)
+    {
+        _onActiveChanged?.Invoke(EntityId, value);
+    }
 }
 

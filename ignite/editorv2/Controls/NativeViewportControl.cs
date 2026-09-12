@@ -45,7 +45,6 @@ public class NativeViewportControl : NativeControlHost
         Focusable = true;
     }
 
-    // ── Navigation mode ───────────────────────────────────────────────────────
     public void SetNavigationMode(CameraNavigationMode mode)
     {
         _currentNavigationMode = mode;
@@ -54,8 +53,6 @@ public class NativeViewportControl : NativeControlHost
             NativeEngineBridge.Ignite_Camera_SetNavigationMode((int)mode);
         }
     }
-
-    // ── Focus & pointer interaction ──────────────────────────────────────────
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
@@ -64,9 +61,6 @@ public class NativeViewportControl : NativeControlHost
             SetFocus(_childHwnd);
         }
     }
-
-    // ── Native control creation ───────────────────────────────────────────────
-
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
         int width  = (int)Bounds.Width  > 0 ? (int)Bounds.Width  : 1280;
@@ -141,11 +135,10 @@ public class NativeViewportControl : NativeControlHost
         return base.CreateNativeControlCore(parent);
     }
 
-    // ── Render tick ───────────────────────────────────────────────────────────
-
     private void OnRenderTick(object? sender, EventArgs e)
     {
-        if (!_isInitialized) return;
+        if (!_isInitialized)
+            return;
 
         var now = _stopwatch.Elapsed;
         var dt  = (float)(now - _lastTime).TotalSeconds;
@@ -165,8 +158,6 @@ public class NativeViewportControl : NativeControlHost
             _fpsAccumulator = 0;
         }
     }
-
-    // ── Resize ────────────────────────────────────────────────────────────────
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
@@ -192,8 +183,6 @@ public class NativeViewportControl : NativeControlHost
         }
     }
 
-    // ── Cleanup ───────────────────────────────────────────────────────────────
-
     protected override void DestroyNativeControlCore(IPlatformHandle control)
     {
         _renderTimer?.Stop();
@@ -214,8 +203,6 @@ public class NativeViewportControl : NativeControlHost
 
         base.DestroyNativeControlCore(control);
     }
-
-    // ── Win32 P/Invokes ───────────────────────────────────────────────────────
 
     private const uint SWP_NOZORDER   = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;

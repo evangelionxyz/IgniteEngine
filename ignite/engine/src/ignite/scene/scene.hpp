@@ -54,7 +54,8 @@ namespace ignite
         void OnStop();
 
         void Pause();
-        void Step(int frame);
+        void Resume();
+        void StepFrame(int frame);
 
         void UpdateTransforms(float deltaTime);
         void UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform);
@@ -85,7 +86,7 @@ namespace ignite
 		inline bool IsStopped() const { return m_State == ESceneState::Stop; }
         inline bool IsSimulating() const { return m_State == ESceneState::Simulate; }
 		inline bool IsPlaying() const { return m_State == ESceneState::Play; }
-        inline bool IsRunning() const { return m_State == ESceneState::Play || m_State == ESceneState::Simulate; }
+        inline bool IsRunning() const { return m_State == ESceneState::Play || m_State == ESceneState::Simulate || m_State == ESceneState::Play; }
 
         static Ref<Scene> Create(Project *project);
 
@@ -123,6 +124,7 @@ namespace ignite
         uint64_t m_StepFrame = 0;
         SignalToken m_AssetChangeToken = kInvalidSignalToken;
         ESceneState m_State = ESceneState::Stop;
+        ESceneState m_PreviousState = ESceneState::Stop;
 
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;

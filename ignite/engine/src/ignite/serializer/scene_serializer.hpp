@@ -18,6 +18,9 @@ namespace ignite
 
         static Ref<Scene> Deserialize(const std::filesystem::path &filepath, Project *project);
 
+        static std::string DeserializeHierarchyJson(const std::filesystem::path &filepath);
+        static std::string GetSceneHierarchyJson(Scene *scene);
+
     private:
         Ref<Scene> m_Scene;
         Project *m_Project;

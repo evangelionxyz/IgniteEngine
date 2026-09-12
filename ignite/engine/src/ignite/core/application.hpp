@@ -75,7 +75,7 @@ namespace ignite
         void PopLayer(Layer *layer);
 
         void Run();
-        void Step(float deltaTime);
+        void Tick(float deltaTime);
         void Resize(uint32_t width, uint32_t height);
         void StartRenderThread();
         void StopRenderThread();

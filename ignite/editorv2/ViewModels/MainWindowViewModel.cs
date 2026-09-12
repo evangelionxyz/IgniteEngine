@@ -5,7 +5,6 @@ using IgniteEditor.Services;
 using System.Threading.Tasks;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
-using System;
 using System.Runtime.InteropServices;
 
 namespace IgniteEditor.ViewModels;
@@ -23,6 +22,30 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private PlayModeState _playState = PlayModeState.Stopped;
+
+    public bool IsPlaying => PlayState == PlayModeState.Playing;
+    public bool IsSimulating => PlayState == PlayModeState.Simulating;
+    public bool IsPaused => PlayState == PlayModeState.Paused;
+    public bool CanPause => PlayState != PlayModeState.Stopped;
+    public bool CanStep => PlayState == PlayModeState.Paused;
+
+    public string PlayButtonText => IsPlaying ? "⏹ Stop" : "▶ Play";
+    public string SimulateButtonText => IsSimulating ? "⏹ Stop" : "⚡ Simulate";
+    public string PauseButtonText => IsPaused ? "▶ Resume" : "⏸ Pause";
+
+    partial void OnPlayStateChanged(PlayModeState value)
+    {
+        OnPropertyChanged(nameof(IsPlaying));
+        OnPropertyChanged(nameof(IsSimulating));
+        OnPropertyChanged(nameof(IsPaused));
+        OnPropertyChanged(nameof(CanPause));
+        OnPropertyChanged(nameof(CanStep));
+        OnPropertyChanged(nameof(PlayButtonText));
+        OnPropertyChanged(nameof(SimulateButtonText));
+        OnPropertyChanged(nameof(PauseButtonText));
+        PauseCommand.NotifyCanExecuteChanged();
+        StepCommand.NotifyCanExecuteChanged();
+    }
 
     [ObservableProperty]
     private GizmoOperation _activeGizmo = GizmoOperation.Translate;
@@ -70,12 +93,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel()
     {
-        _sceneService = new MockSceneService();
+        _sceneService = new EngineSceneService();
         _loggingService = LoggingService.Instance;
         _loggingService.PopulateWithSampleLogs();
 
         SceneHierarchy = new SceneHierarchyViewModel(_sceneService);
-        Properties = new PropertiesViewModel();
+        Properties = new PropertiesViewModel(_sceneService);
         ContentBrowser = new ContentBrowserViewModel();
         Console = new ConsoleViewModel(_loggingService);
         Viewport = new ViewportViewModel();
@@ -116,39 +139,93 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void Play()
     {
-        PlayState = PlayModeState.Playing;
-        StatusText = "Playing...";
-        _loggingService.Info("Scene play started");
-    }
+        if (PlayState == PlayModeState.Playing)
+        {
+            _sceneService.StopScene();
+            PlayState = PlayModeState.Stopped;
+            StatusText = "Scene Stopped";
+            _loggingService.Info("Scene stopped");
+        }
+        else
+        {
+            if (PlayState == PlayModeState.Simulating || PlayState == PlayModeState.Paused)
+            {
+                _sceneService.StopScene();
+            }
 
-    [RelayCommand]
-    private void Pause()
-    {
-        PlayState = PlayState == PlayModeState.Paused ? PlayModeState.Playing : PlayModeState.Paused;
-        StatusText = PlayState == PlayModeState.Paused ? "Paused" : "Playing...";
-    }
-
-    [RelayCommand]
-    private void Stop()
-    {
-        PlayState = PlayModeState.Stopped;
-        StatusText = "Ready";
-        _loggingService.Info("Scene play stopped");
-    }
-
-    [RelayCommand]
-    private void Step()
-    {
-        _loggingService.Trace("Step simulation by 1 frame");
-        StatusText = "Stepped 1 frame";
+            _sceneService.PlayScene();
+            PlayState = PlayModeState.Playing;
+            StatusText = "Playing...";
+            _loggingService.Info("Scene play started");
+        }
     }
 
     [RelayCommand]
     private void Simulate()
     {
-        PlayState = PlayModeState.Simulating;
-        StatusText = "Simulating physics...";
-        _loggingService.Info("Physics simulation started");
+        if (PlayState == PlayModeState.Simulating)
+        {
+            _sceneService.StopScene();
+            PlayState = PlayModeState.Stopped;
+            StatusText = "Simulation Stopped";
+            _loggingService.Info("Simulation stopped");
+        }
+        else
+        {
+            if (PlayState == PlayModeState.Playing || PlayState == PlayModeState.Paused)
+            {
+                _sceneService.StopScene();
+            }
+
+            _sceneService.SimulateScene();
+            PlayState = PlayModeState.Simulating;
+            StatusText = "Simulating physics...";
+            _loggingService.Info("Physics simulation started");
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPause))]
+    private void Pause()
+    {
+        if (PlayState == PlayModeState.Stopped) return;
+
+        _sceneService.PauseScene();
+        if (PlayState == PlayModeState.Paused)
+        {
+            int nativeState = _sceneService.GetSceneState();
+            PlayState = nativeState == 2 ? PlayModeState.Simulating : PlayModeState.Playing;
+            StatusText = PlayState == PlayModeState.Playing ? "Playing..." : "Simulating...";
+            _loggingService.Info("Scene resumed");
+        }
+        else
+        {
+            PlayState = PlayModeState.Paused;
+            StatusText = "Paused";
+            _loggingService.Info("Scene paused");
+        }
+    }
+
+    [RelayCommand]
+    private void Stop()
+    {
+        if (PlayState != PlayModeState.Stopped)
+        {
+            _sceneService.StopScene();
+            PlayState = PlayModeState.Stopped;
+            StatusText = "Ready";
+            _loggingService.Info("Scene stopped");
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanStep))]
+    private void Step()
+    {
+        if (PlayState == PlayModeState.Paused)
+        {
+            _sceneService.StepScene(1);
+            _loggingService.Trace("Step simulation by 1 frame");
+            StatusText = "Stepped 1 frame";
+        }
     }
 
     [RelayCommand]
@@ -199,21 +276,73 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void NewScene()
     {
-        _loggingService.Info("New scene created");
-        StatusText = "New scene created";
+        if (_sceneService.NewScene())
+        {
+            _loggingService.Info("New scene created");
+            StatusText = "New scene created";
+
+            _sceneService.LoadActiveScene();
+            SceneHierarchy.RefreshHierarchy();
+        }
     }
 
     [RelayCommand]
-    private void OpenScene()
+    private async Task OpenScene()
     {
-        _loggingService.Info("Open scene dialog (not yet connected)");
+        if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
+        {
+            var options = new FilePickerOpenOptions
+            {
+                Title = "Open Ignite Scene",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("Ignite Scene (*.ixscene)")
+                    {
+                        Patterns = new[] { "*.ixscene" }
+                    },
+                    new FilePickerFileType("All Files (*.*)")
+                    {
+                        Patterns = new[] { "*.*" }
+                    }
+                }
+            };
+
+            var files = await desktop.MainWindow.StorageProvider.OpenFilePickerAsync(options);
+            if (files != null && files.Count > 0)
+            {
+                string path = files[0].Path.LocalPath;
+                _loggingService.Info($"Opening scene: {path}");
+                bool success = _sceneService.LoadScene(path);
+                if (success)
+                {
+                    SceneHierarchy.RefreshHierarchy();
+                    StatusText = $"Loaded scene: {System.IO.Path.GetFileName(path)}";
+                    _loggingService.Info($"Scene loaded: {path}");
+                }
+                else
+                {
+                    StatusText = "Failed to load scene";
+                    _loggingService.Error($"Failed to load scene: {path}");
+                }
+            }
+        }
     }
 
     [RelayCommand]
     private void SaveScene()
     {
-        _loggingService.Info("Scene saved (not yet connected)");
-        StatusText = "Scene saved";
+        bool ok = _sceneService.SaveActiveScene();
+        if (ok)
+        {
+            _loggingService.Info("Scene saved successfully.");
+            StatusText = "Scene saved";
+        }
+        else
+        {
+            _loggingService.Error("Failed to save scene.");
+            StatusText = "Failed to save scene";
+        }
     }
 
     [RelayCommand]
@@ -239,6 +368,8 @@ public partial class MainWindowViewModel : ViewModelBase
                     Title = $"Ignite Editor - {name}";
                     StatusText = $"Created project: {name}";
                     _loggingService.Info($"Project '{name}' created successfully.");
+                    _sceneService.LoadActiveScene();
+                    SceneHierarchy.RefreshHierarchy();
                 }
                 else
                 {
@@ -283,6 +414,8 @@ public partial class MainWindowViewModel : ViewModelBase
                     Title = $"Ignite Editor - {name}";
                     StatusText = $"Opened project: {name}";
                     _loggingService.Info($"Project '{name}' opened successfully.");
+                    _sceneService.LoadActiveScene();
+                    SceneHierarchy.RefreshHierarchy();
                 }
                 else
                 {
@@ -317,4 +450,3 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 }
-

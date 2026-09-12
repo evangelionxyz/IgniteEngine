@@ -241,28 +241,22 @@
 
                     <Border Width="1" Background="#2A2A2A" Margin="4,2" />
 
-                    <!-- Scene Playback Controls -->
-                    <StackPanel Orientation="Horizontal" Spacing="2">
-                        <Button Content="Play" Command="{Binding PlayCommand}" Background="Green"
-                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                ToolTip.Tip="Play Scene" />
-                        <Button Content="Pause" Command="{Binding PauseCommand}" 
-                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                ToolTip.Tip="Pause Scene" />
-                        <Button Content="Stop" Command="{Binding StopCommand}" 
-                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                ToolTip.Tip="Stop Scene" />
-                        <Button Content="Step" Command="{Binding StepCommand}" 
-                                Classes="tool-btn" FontSize="10" MinWidth="24" Height="22" Padding="4,1"
-                                ToolTip.Tip="Step 1 Frame" />
-                        <Button Content="Simulate" Command="{Binding SimulateCommand}" 
-                                Classes="tool-btn" FontSize="11" MinWidth="24" Height="22" Padding="4,1"
-                                ToolTip.Tip="Simulate Physics" />
+                    <!-- Scene Playback Controls: [Play/Stop, Simulate/Stop, Pause, Step] -->
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Button Content="{Binding PlayButtonText}" Command="{Binding PlayCommand}" 
+                                Classes="tool-btn" FontSize="11" FontWeight="SemiBold" Height="22" Padding="6,1"
+                                ToolTip.Tip="Play / Stop Scene" />
+                        <Button Content="{Binding SimulateButtonText}" Command="{Binding SimulateCommand}" 
+                                Classes="tool-btn" FontSize="11" FontWeight="SemiBold" Height="22" Padding="6,1"
+                                ToolTip.Tip="Simulate Physics / Stop" />
+                        <Button Content="{Binding PauseButtonText}" Command="{Binding PauseCommand}" 
+                                Classes="tool-btn" FontSize="11" Height="22" Padding="6,1"
+                                ToolTip.Tip="Pause / Resume Scene" />
+                        <Button Content="⏭ Step" Command="{Binding StepCommand}" 
+                                Classes="tool-btn" FontSize="11" Height="22" Padding="6,1"
+                                ToolTip.Tip="Step Simulation 1 Frame" />
                     </StackPanel>
-
                 </StackPanel>
-
-                
 
                 <!-- Right Section: State & Diagnostics Info -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Center">
