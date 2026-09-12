@@ -47,11 +47,7 @@ namespace ignite
     Application::~Application()
     {
         // Shutdown render thread
-        m_RenderThreadRunning = false;
-        m_FrameCV.notify_all();
-        m_RenderTaskCV.notify_all();
-        if (m_RenderThread && m_RenderThread->joinable())
-            m_RenderThread->join();
+        StopRenderThread();
 
         GPUUploadSync::DeviceWaitIdle(DeviceManager::GetInstance()->GetDevice());
 
@@ -110,9 +106,11 @@ namespace ignite
         }
 
         // Create native filesystem
-        const std::filesystem::path exePath = m_CreateInfo.cmdLineArgs[0];
+        const std::filesystem::path exeDir = (m_CreateInfo.cmdLineArgs.count > 0 && m_CreateInfo.cmdLineArgs.args)
+            ? std::filesystem::path(m_CreateInfo.cmdLineArgs[0]).parent_path()
+            : std::filesystem::current_path();
         m_AppNativeFileSystem = CreateRef<vfs::NativeFileSystem>();
-        m_AppRelativeFilesystem = CreateRef<vfs::RelativeFileSystem>(m_AppNativeFileSystem, exePath.parent_path());
+        m_AppRelativeFilesystem = CreateRef<vfs::RelativeFileSystem>(m_AppNativeFileSystem, exeDir);
 
         m_CommandManager = CreateScope<CommandManager>();
         DeviceParameters deviceParams;
@@ -130,6 +128,8 @@ namespace ignite
         deviceParams.supportExplicitDisplayScaling = true;
         deviceParams.enableHeapDirectlyIndexed = true;
         deviceParams.headlessDevice = m_CreateInfo.headless;
+        deviceParams.offscreen = m_CreateInfo.offscreen;
+        deviceParams.nativeWindowHandle = m_CreateInfo.nativeWindowHandle;
 
         m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceParams, m_CreateInfo.graphicsApi );
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));
@@ -167,6 +167,11 @@ namespace ignite
         if (m_CreateInfo.useAudio)
         {
             AddSubsystem(new FmodAudio());
+        }
+
+        if (!m_CreateInfo.headless)
+        {
+            StartRenderThread();
         }
     }
 
@@ -309,7 +314,7 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
                 renderCommandList->open();
-                nvrhi::utils::ClearColorAttachment(renderCommandList, backBufferFrameBuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
+                nvrhi::utils::ClearColorAttachment(renderCommandList, backBufferFrameBuffer, 0, nvrhi::Color(1.0f, 0.0f, 1.0f, 1.0f));
                 renderCommandList->close();
                 {
                     auto &queueMutex = GPUUploadSync::GetQueueMutex();
@@ -439,132 +444,186 @@ namespace ignite
         m_LayerStack.PopLayer(layer);
     }
 
+    void Application::Step(float deltaTime)
+    {
+        IGN_PROFILE_SCOPE("MainThread::Frame");
+
+        m_DeltaTime = deltaTime;
+        IGN_PROFILE_PLOT("Delta Time (s)", m_DeltaTime);
+
+        // Reset per-frame relative mouse delta before processing new events
+        if (auto* activeInput = InputSystem::GetActiveSystem())
+        {
+            activeInput->ResetMouseDelta();
+        }
+
+        SDL_Event sdlEvent;
+        while (SDL_PollEvent(&sdlEvent))
+        {
+            if (auto* activeInput = InputSystem::GetActiveSystem())
+            {
+                activeInput->ProcessEvent(&sdlEvent);
+            }
+
+            if (m_Window)
+            {
+                m_Window->PollEvents(sdlEvent);
+            }
+
+            if (m_CreateInfo.useGui && m_ImGuiLayer)
+            {
+                m_ImGuiLayer->PollEvent(sdlEvent);
+            }
+        }
+
+        // Notify Rust engine of frame start (updates Rust-side timing and frame counter)
+        ignite_rs_engine_begin_frame(m_DeltaTime);
+
+        ProcessMainThreadSubmissions();
+
+        if (m_CreateInfo.useAudio)
+        {
+            FmodAudio::Update();
+        }
+
+        DeviceManager *deviceManager = m_Window ? m_Window->GetDeviceManager() : DeviceManager::GetInstance();
+        nvrhi::IDevice *device = deviceManager ? deviceManager->GetDevice() : nullptr;
+
+        const bool canRender = m_CreateInfo.offscreen || (m_Window && (m_Window->IsExternalWindow() || (m_Window->IsVisible() && m_Window->IsInFocus())));
+        if (canRender)
+        {
+            IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");
+
+            for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
+                (*layer)->OnUpdate(m_DeltaTime);
+
+            SceneManager::ExecutePendingTransition();
+
+            if (!m_CreateInfo.headless && m_FrameIndex > 0 && deviceManager)
+            {
+                bool frameBegan = false;
+                {
+                    IGN_PROFILE_SCOPE("MainThread::BeginFrame");
+                    frameBegan = deviceManager->BeginFrame();
+                }
+
+                if (frameBegan)
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(m_FrameMutex);
+                        m_FrameCounter++;
+                        m_CurrentFrameReady = true;
+                    }
+                    m_FrameCV.notify_one();
+
+                    {
+                        IGN_PROFILE_SCOPE("MainThread::WaitForRenderComplete");
+                        std::unique_lock<std::mutex> lock(m_FrameMutex);
+                        m_FrameCV.wait(lock, [this]
+                        {
+                            return m_RenderComplete.load() || !m_RenderThreadRunning.load();
+                        });
+
+                        m_RenderComplete = false;
+                    }
+
+                    bool presented = false;
+                    {
+                        IGN_PROFILE_SCOPE("MainThread::Present");
+                        presented = deviceManager->Present();
+                    }
+
+                    if (m_CreateInfo.useGui && m_ImGuiLayer)
+                    {
+                        IGN_PROFILE_SCOPE("MainThread::ImGuiRenderPlatformWindows");
+                        m_ImGuiLayer->RenderPlatformWindows();
+                    }
+                }
+            }
+        }
+
+        // Flush Rust-side deferred operations before frame ends
+        ignite_rs_engine_end_frame();
+
+        // call this at least once per frame!
+        if (device)
+        {
+            device->runGarbageCollection();
+        }
+
+        UpdateAverageTimeTime(m_DeltaTime);
+        ++m_FrameIndex;
+        IGN_PROFILE_FRAME_NAMED("Main Frame");
+    }
+
+    void Application::Resize(uint32_t width, uint32_t height)
+    {
+        if (width == 0 || height == 0)
+            return;
+
+        if (m_CreateInfo.width == width && m_CreateInfo.height == height)
+            return;
+
+        m_CreateInfo.width = width;
+        m_CreateInfo.height = height;
+
+        DeviceManager *deviceManager = m_Window ? m_Window->GetDeviceManager() : DeviceManager::GetInstance();
+        if (deviceManager)
+        {
+            DeviceParameters &params = deviceManager->GetDeviceParameters();
+            if (params.backBufferWidth != width || params.backBufferHeight != height)
+            {
+                deviceManager->ResizeBackbuffer(width, height);
+                deviceManager->ResizeSwapChain();
+                deviceManager->CreateBackBuffers();
+            }
+        }
+    }
+
+    void Application::StartRenderThread()
+    {
+        if (m_RenderThreadRunning || m_CreateInfo.headless)
+            return;
+
+        m_RenderThreadRunning = true;
+        m_RenderThread = CreateScope<std::thread>(&Application::RenderThreadFunc, this);
+
+        std::stringstream ss;
+        ss << m_RenderThread->get_id();
+        unsigned long long id = std::stoull(ss.str());
+        LOG_WARN("[Application] Render thread started: {}", id);
+    }
+
+    void Application::StopRenderThread()
+    {
+        if (!m_RenderThreadRunning)
+            return;
+
+        m_RenderThreadRunning = false;
+        m_FrameCV.notify_all();
+        m_RenderTaskCV.notify_all();
+        if (m_RenderThread && m_RenderThread->joinable())
+        {
+            m_RenderThread->join();
+            m_RenderThread.reset();
+        }
+    }
+
     void Application::Run()
     {
         IGN_PROFILE_THREAD_NAME("Main Thread");
         IGN_PROFILE_SCOPE("Application::Run");
-        DeviceManager *deviceManager = m_Window->GetDeviceManager();
-        nvrhi::IDevice *device = deviceManager->GetDevice();
 
-        // Start render thread
-        if (!m_CreateInfo.headless)
+        // Start render thread if not already running
+        StartRenderThread();
+
+        while (m_Window && m_Window->IsLooping())
         {
-            m_RenderThreadRunning = true;
-            m_RenderThread = CreateScope<std::thread>(&Application::RenderThreadFunc, this);
-
-            std::stringstream ss;
-            ss << m_RenderThread->get_id();
-            unsigned long long id = std::stoull(ss.str());
-            LOG_WARN("[Application] Render thread: {}", id);
-        }
-
-        SDL_Event sdlEvent;
-
-        while (m_Window->IsLooping())
-        {
-            IGN_PROFILE_SCOPE("MainThread::Frame");
-
-            // Reset per-frame relative mouse delta before processing new events
-            if (auto* activeInput = InputSystem::GetActiveSystem())
-            {
-                activeInput->ResetMouseDelta();
-            }
-
-            while (SDL_PollEvent(&sdlEvent))
-
-            {
-                if (auto* activeInput = InputSystem::GetActiveSystem())
-                {
-                    activeInput->ProcessEvent(&sdlEvent);
-                }
-
-                m_Window->PollEvents(sdlEvent);
-                if (m_CreateInfo.useGui)
-                {
-                    m_ImGuiLayer->PollEvent(sdlEvent);
-                }
-            }
-
             const float currTime = static_cast<float>(SDL_GetTicks());
-            m_DeltaTime = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
-            IGN_PROFILE_PLOT("Delta Time (s)", m_DeltaTime);
-
-            // Notify Rust engine of frame start (updates Rust-side timing and frame counter)
-            ignite_rs_engine_begin_frame(m_DeltaTime);
-
-            ProcessMainThreadSubmissions();
-
-            if (m_CreateInfo.useAudio)
-            {
-                FmodAudio::Update();
-            }
-
-            if (m_Window->IsVisible() && m_Window->IsInFocus())
-            {
-                IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");
-
-                for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
-                    (*layer)->OnUpdate(m_DeltaTime);
-
-                SceneManager::ExecutePendingTransition();
-
-                if (!m_CreateInfo.headless && m_FrameIndex > 0)
-                {
-                    bool frameBegan = false;
-                    {
-                        IGN_PROFILE_SCOPE("MainThread::BeginFrame");
-                        frameBegan = deviceManager->BeginFrame();
-                    }
-
-                    if (frameBegan)
-                    {
-                        {
-                            std::lock_guard<std::mutex> lock(m_FrameMutex);
-                            m_FrameCounter++;
-                            m_CurrentFrameReady = true;
-                        }
-                        m_FrameCV.notify_one();
-
-                        {
-                            IGN_PROFILE_SCOPE("MainThread::WaitForRenderComplete");
-                            std::unique_lock<std::mutex> lock(m_FrameMutex);
-                            m_FrameCV.wait(lock, [this]
-                            {
-                                return m_RenderComplete.load() || !m_RenderThreadRunning.load();
-                            });
-
-                            m_RenderComplete = false;
-                        }
-
-                        bool presented = false;
-                        {
-                            IGN_PROFILE_SCOPE("MainThread::Present");
-                            presented = deviceManager->Present();
-                        }
-
-                        if (m_CreateInfo.useGui && m_ImGuiLayer)
-                        {
-                            IGN_PROFILE_SCOPE("MainThread::ImGuiRenderPlatformWindows");
-                            m_ImGuiLayer->RenderPlatformWindows();
-                        }
-
-                        if (!presented)
-                            continue;
-                    }
-                }
-            }
-
-            // Flush Rust-side deferred operations before frame ends
-            ignite_rs_engine_end_frame();
-
-            // call this at lease once per frame!
-            device->runGarbageCollection();
-
-            UpdateAverageTimeTime(m_DeltaTime);
-            // set previous time
+            const float dt = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
             m_PreviousTime = currTime;
-            ++m_FrameIndex;
-            IGN_PROFILE_FRAME_NAMED("Main Frame");
+
+            Step(dt);
         }
     }
 

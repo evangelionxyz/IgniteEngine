@@ -1,6 +1,6 @@
 project "Ignite.EditorV2"
     location "%{wks.location}/ignite/editorv2"
-    kind "WindowedApp"
+    kind "ConsoleApp"
     language "C#"
     dotnetframework "net10.0"
 
@@ -47,7 +47,9 @@ project "Ignite.EditorV2"
             CopyLocalLockFileAssemblies = "true",
             EnableDynamicLoading = "true",
             ImplicitUsing = "enable",
-            ApplicationManifest = "app.manifest"
+            ApplicationManifest = "app.manifest",
+            EnableNativeCodeDebugging = "true",
+            PlatformTarget = "x64"
         }
 
     filter "configurations:Debug or Debug-Profiling"

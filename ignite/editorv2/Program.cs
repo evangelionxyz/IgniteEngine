@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using System;
 
 namespace IgniteEditor;
@@ -16,6 +16,14 @@ class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            .With(new Win32PlatformOptions
+            {
+                CompositionMode = new[]
+                {
+                    Win32CompositionMode.RedirectionSurface,
+                    Win32CompositionMode.DirectComposition
+                }
+            })
 #if DEBUG
             .WithDeveloperTools()
 #endif

@@ -27,8 +27,30 @@ public partial class ConsoleViewModel : ViewModelBase
     public ConsoleViewModel(LoggingService loggingService)
     {
         _loggingService = loggingService;
-        _loggingService.Logs.CollectionChanged += (_, _) => RefreshFilter();
+        _loggingService.Logs.CollectionChanged += OnLogsCollectionChanged;
         RefreshFilter();
+    }
+
+    private void OnLogsCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add && e.NewItems != null)
+        {
+            foreach (LogEntry log in e.NewItems)
+            {
+                if (ShouldShow(log.Level))
+                {
+                    FilteredLogs.Add(new LogEntryViewModel(log));
+                }
+            }
+        }
+        else if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+        {
+            FilteredLogs.Clear();
+        }
+        else
+        {
+            RefreshFilter();
+        }
     }
 
     [RelayCommand]

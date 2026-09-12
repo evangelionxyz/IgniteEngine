@@ -15,12 +15,42 @@ public class LoggingService
     public void Log(LogLevel level, string message)
     {
         var entry = new LogEntry(DateTime.Now, level, message);
-        Logs.Add(entry);
-        while (Logs.Count > MaxLogEntries)
-            Logs.RemoveAt(0);
+
+        try
+        {
+            if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                Logs.Add(entry);
+                while (Logs.Count > MaxLogEntries)
+                    Logs.RemoveAt(0);
+            }
+            else
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    Logs.Add(entry);
+                    while (Logs.Count > MaxLogEntries)
+                        Logs.RemoveAt(0);
+                });
+            }
+        }
+        catch
+        {
+            Logs.Add(entry);
+        }
     }
 
-    public void Clear() => Logs.Clear();
+    public void Clear()
+    {
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Logs.Clear();
+        }
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Logs.Clear());
+        }
+    }
 
     public void Trace(string message) => Log(LogLevel.Trace, message);
     public void Debug(string message) => Log(LogLevel.Debug, message);

@@ -9,6 +9,8 @@
 
 namespace ignite
 {
+    static LogCallbackFn s_LogCallback = nullptr;
+
     class ImGuiConsoleSink : public spdlog::sinks::base_sink<std::mutex>
     {
     public:
@@ -17,6 +19,12 @@ namespace ignite
             spdlog::memory_buf_t formatted;
             spdlog::sinks::base_sink<std::mutex>::formatter_->format(msg, formatted);
             m_Messages.push_back({ msg.level, fmt::to_string(formatted) });
+
+            if (s_LogCallback)
+            {
+                std::string rawMsg(msg.payload.data(), msg.payload.size());
+                s_LogCallback(static_cast<int>(msg.level), rawMsg.c_str());
+            }
         }
 
         void flush_() override {}
@@ -81,5 +89,10 @@ namespace ignite
     void Logger::ClearLogs()
     {
         impl->imguiSink->m_Messages.clear();
+    }
+
+    void Logger::SetLogCallback(LogCallbackFn callback)
+    {
+        s_LogCallback = callback;
     }
 }

@@ -27,6 +27,8 @@ namespace ignite
         std::string message;
     };
 
+    typedef void (*LogCallbackFn)(int level, const char *message);
+
     class IGN_CORE_API Logger
     {
     public:
@@ -36,6 +38,8 @@ namespace ignite
 
         static const std::vector<LogMessage>& GetLogs();
         static void ClearLogs();
+
+        static void SetLogCallback(LogCallbackFn callback);
     };
 }
 

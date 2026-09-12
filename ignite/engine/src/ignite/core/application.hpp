@@ -59,6 +59,8 @@ namespace ignite
         bool usePhysics = true;
         bool useAudio = true;
         bool headless = false;
+        bool offscreen = false;
+        void *nativeWindowHandle = nullptr;
 
         nvrhi::GraphicsAPI graphicsApi = nvrhi::GraphicsAPI::VULKAN;
     };
@@ -73,12 +75,18 @@ namespace ignite
         void PopLayer(Layer *layer);
 
         void Run();
+        void Step(float deltaTime);
+        void Resize(uint32_t width, uint32_t height);
+        void StartRenderThread();
+        void StopRenderThread();
         void OnEvent(Event &e);
 
         std::string GetAppName() { return m_CreateInfo.name; }
         const ApplicationCreateInfo &GetCreateInfo() { return m_CreateInfo; }
+        bool IsOffscreen() const { return m_CreateInfo.offscreen; }
 
         Window *GetWindow() { return m_Window.get(); }
+        Renderer *GetRenderer() { return m_Renderer; }
         EditorInputSystem *GetEditorInputSystem() { return m_EditorInputSystem; }
         GameInputSystem *GetGameInputSystem() { return m_GameInputSystem; }
 

@@ -29,6 +29,7 @@ namespace ignite
         bool IsLooping() const { return m_Looping; };
         bool IsVisible() const { return m_IsVisible; }
         bool IsInFocus() const { return m_IsInFocus; }
+        bool IsExternalWindow() const { return m_IsExternalWindow; }
 
         void SetEventCallback(const std::function<void(Event&)>& callback);
         void SetTitle(const std::string &title) const;
@@ -60,6 +61,7 @@ namespace ignite
         bool m_Looping = true;
         bool m_IsVisible = true;
 		bool m_IsInFocus = true;
+        bool m_IsExternalWindow = false;
 
         friend class JoystickManager;
     };

@@ -45,6 +45,9 @@ namespace ignite
         bool BeginFrame() override;
         bool Present() override;
 
+        void *GetSharedBackBufferHandle() override;
+        bool ReadbackBackBuffer(void *outPixels, size_t bufferSize) override;
+
         const char *GetRendererString() const override;
         bool IsVulkanInstanceExtensionEnabled(const char *extensionName) const override;
         bool IsVulkanDeviceExtensionEnabled(const char *extensionName) const override;
@@ -62,6 +65,8 @@ namespace ignite
         bool CreateVkDevice();
         bool CreateVkSwapChain();
         void DestroySwapChain();
+        bool CreateOffscreenBuffers();
+        void DestroyOffscreenBuffers();
         void CreateDescriptorPool();
 
         void WaitForIdle() override;
@@ -152,6 +157,12 @@ namespace ignite
         std::vector<vk::Image> m_SwapchainImages;
         std::vector<Ref<RenderTarget>> m_SwapChainRenderTargets;
         uint32_t m_SwapChainIndex = static_cast<uint32_t>(-1);
+
+        // Offscreen data
+        std::vector<nvrhi::TextureHandle> m_OffscreenColorTextures;
+        std::vector<nvrhi::TextureHandle> m_OffscreenDepthTextures;
+        nvrhi::StagingTextureHandle m_ReadbackStagingTexture;
+        nvrhi::CommandListHandle m_ReadbackCommandList;
 
         nvrhi::vulkan::DeviceHandle m_NvrhiDevice;
         nvrhi::DeviceHandle m_ValidationLayer;

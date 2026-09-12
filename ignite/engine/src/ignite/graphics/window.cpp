@@ -101,46 +101,72 @@ namespace ignite
         }
         LOG_ASSERT(result, "SDL3 format not found\n");
 
-        SDL_WindowFlags windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
-        if (graphicsApi == nvrhi::GraphicsAPI::VULKAN)
+        if (params.nativeWindowHandle)
         {
-		    windowFlags |= SDL_WINDOW_VULKAN;
-        }
+            SDL_PropertiesID props = SDL_CreateProperties();
+            SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, windowTitle);
+            SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, params.windowWidth);
+            SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, params.windowHeight);
+            if (graphicsApi == nvrhi::GraphicsAPI::VULKAN)
+            {
+                SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
+            }
+#ifdef PLATFORM_WINDOWS
+            SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, params.nativeWindowHandle);
+#endif
+            m_Window = SDL_CreateWindowWithProperties(props);
+            SDL_DestroyProperties(props);
+            LOG_ASSERT(m_Window, "Failed to create SDL3 window from native handle\n");
+            m_IsExternalWindow = true;
 
-        m_Window = SDL_CreateWindow(windowTitle, params.windowWidth, params.windowHeight, windowFlags);
-        LOG_ASSERT(m_Window, "Failed to create SDL3 window\n");
-
-        if (params.startMaximized)
-        {
-            SDL_MaximizeWindow(m_Window);
-        }
-
-        if (params.startFullscreen)
-        {
-            SDL_SetWindowFullscreen(m_Window, SDL_WINDOW_FULLSCREEN);
+            int width, height;
+            SDL_GetWindowSize(m_Window, &width, &height);
+            deviceParams.backBufferWidth = width > 0 ? width : params.windowWidth;
+            deviceParams.backBufferHeight = height > 0 ? height : params.windowHeight;
         }
         else
         {
-            int width, height;
-            SDL_GetWindowSize(m_Window, &width, &height);
-            deviceParams.backBufferWidth = width;
-            deviceParams.backBufferHeight = height;
-        }
+            SDL_WindowFlags windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
+            if (graphicsApi == nvrhi::GraphicsAPI::VULKAN)
+            {
+                windowFlags |= SDL_WINDOW_VULKAN;
+            }
 
-	    SDL_SetWindowPosition(m_Window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+            m_Window = SDL_CreateWindow(windowTitle, params.windowWidth, params.windowHeight, windowFlags);
+            LOG_ASSERT(m_Window, "Failed to create SDL3 window\n");
+
+            if (params.startMaximized)
+            {
+                SDL_MaximizeWindow(m_Window);
+            }
+
+            if (params.startFullscreen)
+            {
+                SDL_SetWindowFullscreen(m_Window, SDL_WINDOW_FULLSCREEN);
+            }
+            else
+            {
+                int width, height;
+                SDL_GetWindowSize(m_Window, &width, &height);
+                deviceParams.backBufferWidth = width;
+                deviceParams.backBufferHeight = height;
+            }
+
+            SDL_SetWindowPosition(m_Window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
 #if PLATFORM_WINDOWS
-		HWND hwnd = GetNativeWindow();
-        BOOL useDarkMode = TRUE;
-        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
+            HWND hwnd = GetNativeWindow();
+            BOOL useDarkMode = TRUE;
+            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
 
-        // 7160E8 visual studio purple
-        COLORREF rgbRed = 0x00E86071;
-        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+            // 7160E8 visual studio purple
+            COLORREF rgbRed = 0x00E86071;
+            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 
-        // DWM_WINDOW_CORNER_PREFERENCE cornerPreference = DWMWCP_ROUNDSMALL;
-        // DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
+            // DWM_WINDOW_CORNER_PREFERENCE cornerPreference = DWMWCP_ROUNDSMALL;
+            // DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
 #endif
+        }
 
         result = m_DeviceManager->CreateDevice();
         LOG_ASSERT(result, "Failed to create Device Instance\n");
@@ -213,11 +239,15 @@ namespace ignite
             // window is not minimized, and the size has changed
             if (event.window.data1 > 0 && event.window.data2 > 0)
             {
-                deviceParams.backBufferWidth = event.window.data1;
-                deviceParams.backBufferHeight = event.window.data2;
+                if (deviceParams.backBufferWidth != (uint32_t)event.window.data1 ||
+                    deviceParams.backBufferHeight != (uint32_t)event.window.data2)
+                {
+                    deviceParams.backBufferWidth = event.window.data1;
+                    deviceParams.backBufferHeight = event.window.data2;
 
-                m_DeviceManager->ResizeSwapChain();
-                m_DeviceManager->CreateBackBuffers();
+                    m_DeviceManager->ResizeSwapChain();
+                    m_DeviceManager->CreateBackBuffers();
+                }
             }
             break;
         }
@@ -393,7 +423,10 @@ namespace ignite
             m_Window = nullptr;
         }
 
-		SDL_Quit();
+        if (!m_IsExternalWindow)
+        {
+            SDL_Quit();
+        }
     }
 
     void Window::SetTitle(const std::string &title) const
@@ -445,7 +478,7 @@ namespace ignite
     {
         if (!m_Window)
             return;
-        if (!m_DeviceManager->GetDeviceParameters().startMaximized)
+        if (!m_IsExternalWindow && !m_DeviceManager->GetDeviceParameters().startMaximized)
         {
 			int width, height;
 			SDL_GetWindowSize(m_Window, &width, &height);
@@ -456,7 +489,10 @@ namespace ignite
         }
 
 		m_IsVisible = true;
-		SDL_ShowWindow(m_Window);
+        if (!m_IsExternalWindow)
+        {
+		    SDL_ShowWindow(m_Window);
+        }
     }
 
     void Window::Hide()
@@ -495,6 +531,10 @@ namespace ignite
 #ifdef PLATFORM_WINDOWS
     HWND Window::GetNativeWindow() const
     {
+        if (m_DeviceManager && m_DeviceManager->GetDeviceParameters().nativeWindowHandle)
+        {
+            return (HWND)m_DeviceManager->GetDeviceParameters().nativeWindowHandle;
+        }
         if (!m_Window)
             return nullptr;
         // Retrieve HWND

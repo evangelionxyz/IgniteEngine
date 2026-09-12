@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Views.Panels.ConsolePanel.RegisterNativeLoggerBridge();
         DataContext = new MainWindowViewModel();
 
         Loaded += (_, _) => HideBuiltInTitleBarElements();
@@ -64,6 +65,19 @@ public partial class MainWindow : Window
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             BeginMoveDrag(e);
+        }
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        try
+        {
+            Services.NativeEngineBridge.Ignite_Shutdown();
+        }
+        catch
+        {
+            // Ignore if already shutdown
         }
     }
 }

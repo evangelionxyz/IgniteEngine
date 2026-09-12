@@ -1,19 +1,37 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:IgniteEditor.ViewModels"
+             xmlns:controls="using:IgniteEditor.Controls"
              x:Class="IgniteEditor.Views.Panels.ViewportPanel"
              x:DataType="vm:ViewportViewModel">
     
     <Grid Background="#121212">
-        <Border BorderBrush="#242424" BorderThickness="1" Margin="1">
-            <Grid>
-                <!-- Center message -->
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
-                    <TextBlock Text="⬡" FontSize="44" Foreground="#383838" HorizontalAlignment="Center" />
-                    <TextBlock Text="Viewport" FontSize="15" FontWeight="SemiBold" Foreground="#666666" HorizontalAlignment="Center" />
-                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#4A4A4A" HorizontalAlignment="Center" />
-                </StackPanel>
-            </Grid>
+        <!-- Native Vulkan Viewport Host -->
+        <controls:NativeViewportControl x:Name="ViewportHost"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch" />
+
+        <!-- Overlay for status message when engine is not connected -->
+        <Border Background="#CC121212"
+                IsVisible="{Binding !IsEngineConnected}"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
+                <TextBlock Text="⬡" FontSize="44" Foreground="#383838" HorizontalAlignment="Center" />
+                <TextBlock Text="Viewport" FontSize="15" FontWeight="SemiBold" Foreground="#666666" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#4A4A4A" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <!-- Viewport Info / FPS Overlay (top right) -->
+        <Border Background="#80181818" CornerRadius="4" Padding="6,3" Margin="8"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                IsVisible="{Binding IsEngineConnected}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Vulkan" FontSize="11" Foreground="#4EC9B0" FontWeight="SemiBold" />
+                <TextBlock Text="|" FontSize="11" Foreground="#404040" />
+                <TextBlock Text="{Binding Fps, StringFormat='{}{0:F1} FPS'}" FontSize="11" Foreground="#A0A0A0" />
+            </StackPanel>
         </Border>
     </Grid>
 </UserControl>

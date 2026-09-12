@@ -64,6 +64,8 @@ namespace ignite
         bool startFullscreen = false;
         bool startBorderless = false;
         bool allowModeSwitch = false;
+        bool offscreen = false;
+        void *nativeWindowHandle = nullptr;
 
         int windowPosX = -1; // -1 means use default placement
         int windowPosY = -1;
@@ -179,6 +181,10 @@ namespace ignite
         virtual uint32_t GetBackBufferCount() = 0;
         nvrhi::IFramebuffer *GetCurrentFramebuffer();
         nvrhi::IFramebuffer *GetFramebuffer(uint32_t index);
+
+        bool IsOffscreen() const { return m_DeviceParameters.offscreen; }
+        virtual void *GetSharedBackBufferHandle() { return nullptr; }
+        virtual bool ReadbackBackBuffer(void *outPixels, size_t bufferSize) { return false; }
 
         virtual void Destroy();
         virtual ~DeviceManager() = default;

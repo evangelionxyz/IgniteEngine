@@ -189,7 +189,7 @@ namespace ignite
             optionalExtensions.device.insert(name);
         }
 
-        if (!m_DeviceParameters.headlessDevice)
+        if (!m_DeviceParameters.headlessDevice && !m_DeviceParameters.offscreen)
         {
             // Need to adjust the swap chain format before creating the device because it affects physical device selection
             if (m_DeviceParameters.swapChainFormat == nvrhi::Format::SRGBA8_UNORM)
@@ -254,23 +254,37 @@ namespace ignite
         if (m_DeviceParameters.headlessDevice)
             return true;
 
-       CHECK(CreateVkSwapChain())
+        if (m_DeviceParameters.offscreen)
+        {
+            return CreateOffscreenBuffers();
+        }
 
-       m_PresentSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
-       m_AcquireSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
-       for (uint32_t i = 0; i < m_DeviceParameters.maxFramesInFlight + 1; ++i)
-       {
-           m_PresentSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
-           m_AcquireSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
-       }
+        CHECK(CreateVkSwapChain())
 
-       return true;
+        if (m_PresentSemaphores.empty())
+        {
+            m_PresentSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
+            m_AcquireSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
+            for (uint32_t i = 0; i < m_DeviceParameters.maxFramesInFlight + 1; ++i)
+            {
+                m_PresentSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
+                m_AcquireSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
+            }
+        }
+
+        return true;
     }
 
     void DeviceManager_VK::DestroyDeviceAndSwapChain()
     {
-        DestroySwapChain();
-
+        if (m_DeviceParameters.offscreen)
+        {
+            DestroyOffscreenBuffers();
+        }
+        else
+        {
+            DestroySwapChain();
+        }
 
         for (auto &semaphore : m_PresentSemaphores)
         {
@@ -329,8 +343,14 @@ namespace ignite
     {
         if (m_VulkanDevice)
         {
-            //DestroySwapChain();
-            CreateSwapChain();
+            if (m_DeviceParameters.offscreen)
+            {
+                CreateOffscreenBuffers();
+            }
+            else
+            {
+                CreateSwapChain();
+            }
         }
     }
 
@@ -367,6 +387,28 @@ namespace ignite
     {
         if (m_DeviceParameters.headlessDevice)
             return true;
+
+        if (m_DeviceParameters.offscreen)
+        {
+            if (m_SwapChainRenderTargets.empty())
+                return false;
+
+            while (m_FramesInFlight.size() >= m_DeviceParameters.maxFramesInFlight)
+            {
+                auto query = m_FramesInFlight.front();
+                m_FramesInFlight.pop();
+
+                {
+                    IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::WaitEventQuery");
+                    m_NvrhiDevice->waitEventQuery(query);
+                }
+
+                m_QueryPool.push_back(query);
+            }
+
+            m_SwapChainIndex = (m_SwapChainIndex + 1) % m_SwapChainRenderTargets.size();
+            return true;
+        }
 
         if (BindlessSystem::HasPendingWrites())
         {
@@ -434,6 +476,31 @@ namespace ignite
     {
         if (m_DeviceParameters.headlessDevice)
             return true;
+
+        if (m_DeviceParameters.offscreen)
+        {
+            nvrhi::EventQueryHandle query;
+            if (!m_QueryPool.empty())
+            {
+                query = m_QueryPool.back();
+                m_QueryPool.pop_back();
+            }
+            else
+            {
+                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                query = m_NvrhiDevice->createEventQuery();
+            }
+
+            {
+                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                m_NvrhiDevice->resetEventQuery(query);
+                m_NvrhiDevice->setEventQuery(query, nvrhi::CommandQueue::Graphics);
+                m_FramesInFlight.push(query);
+            }
+
+            m_FrameIndex++;
+            return true;
+        }
 
         IGN_PROFILE_FUNCTION();
         const auto &semaphore = m_PresentSemaphores[m_PresentSemaphoreIndex];
@@ -926,7 +993,7 @@ namespace ignite
                 }
             }
 
-            if (m_PresentQueueFamily == -1 && !m_DeviceParameters.headlessDevice)
+            if (m_PresentQueueFamily == -1 && !m_DeviceParameters.headlessDevice && !m_DeviceParameters.offscreen)
             {
                 if (queueFamily.queueCount > 0 && SDL_Vulkan_GetPresentationSupport(m_VulkanInstance, physicalDevice, i))
                 {
@@ -936,7 +1003,7 @@ namespace ignite
         }
 
         if (m_GraphicsQueueFamily == -1 ||
-            (m_PresentQueueFamily == -1 && !m_DeviceParameters.headlessDevice) ||
+            (m_PresentQueueFamily == -1 && !m_DeviceParameters.headlessDevice && !m_DeviceParameters.offscreen) ||
             (m_ComputeQueueFamily == -1 && m_DeviceParameters.enableComputeQueue) ||
             (m_TransferQueueFamily == -1 && m_DeviceParameters.enableCopyQueue))
         {
@@ -1047,7 +1114,7 @@ namespace ignite
             m_GraphicsQueueFamily
         };
 
-        if (!m_DeviceParameters.headlessDevice)
+        if (!m_DeviceParameters.headlessDevice && !m_DeviceParameters.offscreen)
             uniqueQueueFamilies.insert(m_PresentQueueFamily);
         
         if (m_DeviceParameters.enableComputeQueue)
@@ -1171,7 +1238,7 @@ namespace ignite
             m_VulkanDevice.getQueue(m_ComputeQueueFamily, kComputeQueueIndex, &m_ComputeQueue);
         if (m_DeviceParameters.enableCopyQueue)
             m_VulkanDevice.getQueue(m_TransferQueueFamily, kTransferQueueIndex, &m_TransferQueue);
-        if (!m_DeviceParameters.headlessDevice)
+        if (!m_DeviceParameters.headlessDevice && !m_DeviceParameters.offscreen)
             m_VulkanDevice.getQueue(m_PresentQueueFamily, kPresentQueueIndex, &m_PresentQueue);
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_VulkanDevice);
@@ -1330,5 +1397,122 @@ namespace ignite
             std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
             m_VulkanDevice.waitIdle();
         }
+    }
+
+    bool DeviceManager_VK::CreateOffscreenBuffers()
+    {
+        DestroyOffscreenBuffers();
+
+        uint32_t width = std::max(1u, m_DeviceParameters.backBufferWidth);
+        uint32_t height = std::max(1u, m_DeviceParameters.backBufferHeight);
+        uint32_t bufferCount = std::max(1u, m_DeviceParameters.swapChainBufferCount);
+
+        m_OffscreenColorTextures.clear();
+        m_OffscreenDepthTextures.clear();
+        m_SwapChainRenderTargets.clear();
+
+        for (uint32_t i = 0; i < bufferCount; ++i)
+        {
+            RenderTargetCreateInfo rtInfo;
+            rtInfo.width = width;
+            rtInfo.height = height;
+            rtInfo.attachments = {
+                FramebufferAttachments {
+                    .name = "Offscreen Depth RT",
+                    .format = nvrhi::Format::D32S8,
+                    .state = nvrhi::ResourceStates::DepthWrite
+                },
+                FramebufferAttachments {
+                    .name = "Offscreen Color RT",
+                    .format = m_DeviceParameters.swapChainFormat,
+                    .state = nvrhi::ResourceStates::RenderTarget
+                }
+            };
+
+            auto rt = RenderTarget::Create(rtInfo, std::format("Offscreen RT {}", i));
+            m_SwapChainRenderTargets.emplace_back(rt);
+            m_OffscreenColorTextures.push_back(rt->GetColorAttachment(0)->GetHandle());
+            m_OffscreenDepthTextures.push_back(rt->GetDepthAttachment()->GetHandle());
+        }
+
+        m_SwapChainIndex = 0;
+        return true;
+    }
+
+    void DeviceManager_VK::DestroyOffscreenBuffers()
+    {
+        if (m_VulkanDevice)
+        {
+            std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
+            m_VulkanDevice.waitIdle();
+        }
+
+        m_SwapChainRenderTargets.clear();
+        m_OffscreenColorTextures.clear();
+        m_OffscreenDepthTextures.clear();
+        m_ReadbackStagingTexture = nullptr;
+        m_ReadbackCommandList = nullptr;
+    }
+
+    void *DeviceManager_VK::GetSharedBackBufferHandle()
+    {
+        nvrhi::ITexture *backBuffer = GetCurrentBackBuffer();
+        if (!backBuffer)
+            return nullptr;
+        return backBuffer->getNativeObject(nvrhi::ObjectTypes::VK_Image);
+    }
+
+    bool DeviceManager_VK::ReadbackBackBuffer(void *outPixels, size_t bufferSize)
+    {
+        if (!outPixels || bufferSize == 0)
+            return false;
+
+        nvrhi::ITexture *backBuffer = GetCurrentBackBuffer();
+        if (!backBuffer)
+            return false;
+
+        const nvrhi::TextureDesc &desc = backBuffer->getDesc();
+        size_t rowPitch = desc.width * 4;
+        size_t requiredSize = rowPitch * desc.height;
+        if (bufferSize < requiredSize)
+            return false;
+
+        if (!m_ReadbackCommandList)
+        {
+            m_ReadbackCommandList = m_NvrhiDevice->createCommandList();
+        }
+
+        if (!m_ReadbackStagingTexture ||
+            m_ReadbackStagingTexture->getDesc().width != desc.width ||
+            m_ReadbackStagingTexture->getDesc().height != desc.height)
+        {
+            m_ReadbackStagingTexture = m_NvrhiDevice->createStagingTexture(desc, nvrhi::CpuAccessMode::Read);
+        }
+
+        m_ReadbackCommandList->open();
+        m_ReadbackCommandList->copyTexture(m_ReadbackStagingTexture, nvrhi::TextureSlice(), backBuffer, nvrhi::TextureSlice());
+        m_ReadbackCommandList->close();
+
+        {
+            std::scoped_lock lock(GPUUploadSync::GetQueueMutex());
+            m_NvrhiDevice->executeCommandList(m_ReadbackCommandList);
+        }
+
+        WaitForIdle();
+
+        size_t actualPitch = 0;
+        void *mapped = m_NvrhiDevice->mapStagingTexture(m_ReadbackStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &actualPitch);
+        if (!mapped)
+            return false;
+
+        for (uint32_t y = 0; y < desc.height; ++y)
+        {
+            memcpy(static_cast<uint8_t *>(outPixels) + y * rowPitch,
+                   static_cast<const uint8_t *>(mapped) + y * actualPitch,
+                   rowPitch);
+        }
+
+        m_NvrhiDevice->unmapStagingTexture(m_ReadbackStagingTexture);
+        return true;
     }
 }
