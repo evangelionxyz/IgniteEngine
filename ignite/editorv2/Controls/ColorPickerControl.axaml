@@ -138,7 +138,7 @@
                     </Border>
 
                     <!-- Tabular Numeric Inputs for HSB/HSV, HSL, RGB -->
-                    <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="0,2,0,0">
+                    <Grid ColumnDefinitions="30,*,30,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                         <!-- H & R -->
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="H:" Classes="picker-lbl" />
                         <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InputH, ElementName=Root}" Classes="picker-num"

@@ -133,7 +133,7 @@
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="4" Margin="6,4" HorizontalAlignment="Stretch">
-                                    <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
+                                    <ctrl:ColorPickerControl SelectedColor="{Binding ColorValue, Mode=TwoWay}" />
                                     <ctrl:Vector2Control Label="Tiling" X="{Binding TilingX}" Y="{Binding TilingY}" DefaultX="1" DefaultY="1" Step="0.1" />
                                     <Grid ColumnDefinitions="70,*,Auto,*" Margin="0,1" HorizontalAlignment="Stretch">
                                         <TextBlock Grid.Column="0" Text="Flip X" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
