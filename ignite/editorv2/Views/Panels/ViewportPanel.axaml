@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:IgniteEditor.ViewModels"
+             x:Class="IgniteEditor.Views.Panels.ViewportPanel"
+             x:DataType="vm:ViewportViewModel">
+    
+    <Grid Background="#121212">
+        <Border BorderBrush="#242424" BorderThickness="1" Margin="1">
+            <Grid>
+                <!-- Center message -->
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
+                    <TextBlock Text="⬡" FontSize="44" Foreground="#383838" HorizontalAlignment="Center" />
+                    <TextBlock Text="Viewport" FontSize="15" FontWeight="SemiBold" Foreground="#666666" HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#4A4A4A" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

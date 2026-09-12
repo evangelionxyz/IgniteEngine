@@ -1,0 +1,154 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:IgniteEditor.ViewModels"
+             xmlns:ctrl="using:IgniteEditor.Controls"
+             x:Class="IgniteEditor.Views.Panels.PropertiesPanel"
+             x:DataType="vm:PropertiesViewModel"
+             HorizontalAlignment="Stretch">
+
+    <UserControl.Styles>
+        <Style Selector="Expander">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Padding" Value="6,3" />
+            <Setter Property="MinHeight" Value="24" />
+        </Style>
+        <Style Selector="Expander /template/ Border#ExpanderContent">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Expander /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="ItemsControl > ContentPresenter">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="6,4"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+        <StackPanel Spacing="3" HorizontalAlignment="Stretch">
+            <!-- No selection message -->
+            <TextBlock Text="Select an entity to inspect"
+                       IsVisible="{Binding !HasSelection}"
+                       Foreground="#808080" FontSize="12"
+                       HorizontalAlignment="Center" Margin="0,20" />
+
+            <!-- Entity header -->
+            <StackPanel IsVisible="{Binding HasSelection}" Spacing="4" HorizontalAlignment="Stretch">
+                <Grid ColumnDefinitions="Auto,*,Auto" HorizontalAlignment="Stretch">
+                    <CheckBox Grid.Column="0" IsChecked="{Binding IsEntityActive}" 
+                              Margin="0,0,6,0" MinWidth="11" MinHeight="11" Padding="0" />
+                    <TextBox Grid.Column="1" Text="{Binding EntityName}" 
+                             FontSize="11" Height="16"
+                             HorizontalAlignment="Stretch" />
+                </Grid>
+
+                <Separator Margin="0,1" />
+
+                <!-- Components -->
+                <ItemsControl ItemsSource="{Binding Components}" 
+                              HorizontalAlignment="Stretch">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="3" HorizontalAlignment="Stretch" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.DataTemplates>
+                        <!-- Transform -->
+                        <DataTemplate DataType="vm:TransformComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <TextBlock Text="Transform" FontSize="12" FontWeight="SemiBold" />
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:Vector3Control Label="Position" 
+                                                         X="{Binding PositionX}" 
+                                                         Y="{Binding PositionY}" 
+                                                         Z="{Binding PositionZ}"
+                                                         DefaultX="0" DefaultY="0" DefaultZ="0" />
+                                    <ctrl:Vector3Control Label="Rotation" 
+                                                         X="{Binding RotationX}" 
+                                                         Y="{Binding RotationY}" 
+                                                         Z="{Binding RotationZ}"
+                                                         DefaultX="0" DefaultY="0" DefaultZ="0" />
+                                    <ctrl:Vector3Control Label="Scale" 
+                                                         X="{Binding ScaleX}" 
+                                                         Y="{Binding ScaleY}" 
+                                                         Z="{Binding ScaleZ}"
+                                                         DefaultX="1" DefaultY="1" DefaultZ="1" />
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- Camera -->
+                        <DataTemplate DataType="vm:CameraComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <TextBlock Text="Camera" FontSize="12" FontWeight="SemiBold" />
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="60,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Perspective" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding IsPerspective}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                    <ctrl:FloatControl Label="FOV" Value="{Binding FieldOfView}" DefaultValue="60" Minimum="1" Maximum="179" />
+                                    <ctrl:FloatControl Label="Near Clip" Value="{Binding NearClip}" DefaultValue="0.1" Minimum="0.001" Step="0.01" />
+                                    <ctrl:FloatControl Label="Far Clip" Value="{Binding FarClip}" DefaultValue="1000" Minimum="0.1" Step="1" />
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- Light -->
+                        <DataTemplate DataType="vm:LightComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <TextBlock Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" />
+                                </Expander.Header>
+                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                    <ctrl:Vector3Control Label="Color" 
+                                                         X="{Binding ColorR}" 
+                                                         Y="{Binding ColorG}" 
+                                                         Z="{Binding ColorB}"
+                                                         DefaultX="1" DefaultY="1" DefaultZ="1"
+                                                         Step="0.05" />
+                                    <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
+                                    <Grid ColumnDefinitions="60,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Shadows" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding CastShadows}" MinHeight="16" Padding="0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+
+                        <!-- Generic -->
+                        <DataTemplate DataType="vm:GenericComponentVM">
+                            <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <TextBlock Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" />
+                                </Expander.Header>
+                                <TextBlock Text="(No editable properties)" FontSize="11" Foreground="#808080" Margin="6,4" />
+                            </Expander>
+                        </DataTemplate>
+                    </ItemsControl.DataTemplates>
+                </ItemsControl>
+
+                <!-- Add Component button -->
+                <Button Content="+ Add Component" 
+                        HorizontalAlignment="Stretch" 
+                        HorizontalContentAlignment="Center"
+                        FontSize="11" Padding="4,4" Margin="0,4" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

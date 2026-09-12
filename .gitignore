@@ -33,3 +33,4 @@ __pycache__
 ignite/test/test-resources/temp
 test-resources
 .cache
+IgniteEditor/obj

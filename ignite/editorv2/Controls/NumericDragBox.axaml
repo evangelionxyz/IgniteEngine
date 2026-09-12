@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="IgniteEditor.Controls.NumericDragBox"
+             HorizontalAlignment="Stretch">
+
+    <Border Background="#202020" BorderBrush="#303030" BorderThickness="1" 
+            CornerRadius="3" ClipToBounds="True" Height="22" Margin="1,0">
+        <Grid ColumnDefinitions="Auto,*">
+            <!-- Colored Drag Handle / Badge -->
+            <Border x:Name="BadgeBorder" Grid.Column="0" 
+                    Width="16" Cursor="SizeWestEast"
+                    PointerPressed="OnDragHandlePointerPressed"
+                    PointerMoved="OnDragHandlePointerMoved"
+                    PointerReleased="OnDragHandlePointerReleased"
+                    PointerCaptureLost="OnDragHandlePointerCaptureLost"
+                    ToolTip.Tip="Click or drag horizontally to adjust value (Shift: 0.1x, Ctrl: 10x)">
+                <TextBlock x:Name="BadgeTextBlock" 
+                           FontSize="10" FontWeight="Bold"
+                           Foreground="#FFFFFF"
+                           HorizontalAlignment="Center" 
+                           VerticalAlignment="Center" />
+            </Border>
+
+            <!-- Value Text Input -->
+            <TextBox x:Name="ValueTextBox" Grid.Column="1"
+                     BorderThickness="0" CornerRadius="0"
+                     Background="Transparent"
+                     Padding="4,1" MinHeight="20" Height="20"
+                     FontSize="11" Foreground="#E0E0E0"
+                     VerticalContentAlignment="Center"
+                     HorizontalContentAlignment="Center"
+                     LostFocus="OnTextBoxLostFocus"
+                     KeyDown="OnTextBoxKeyDown" />
+        </Grid>
+    </Border>
+</UserControl>

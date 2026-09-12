@@ -50,6 +50,7 @@ function copy_dir(src, dst)
 end
 
     include "../ignite/editor/ignite.editor.lua"
+    include "../ignite/editorv2/ignite.editorv2.lua"
     include "../ignite/engine/ignite.engine.lua"
     include "../ignite/core/ignite.core.lua"
     include "../ignite/physics/ignite.physics.lua"

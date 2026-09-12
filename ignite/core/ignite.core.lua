@@ -210,8 +210,7 @@ project "Ignite.Core"
             copy_file("%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll", "%{cfg.targetdir}"),
 
             -- Copying dotnet libraries
-            copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/hostfxr.dll", "%{cfg.targetdir}")
+            copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll", "%{cfg.targetdir}")
         }
 
         filter "configurations:Debug"

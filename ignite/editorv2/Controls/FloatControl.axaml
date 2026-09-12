@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:IgniteEditor.Controls"
+             x:Class="IgniteEditor.Controls.FloatControl"
+             x:Name="Root"
+             HorizontalAlignment="Stretch">
+
+    <Grid ColumnDefinitions="60,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+        <!-- Row Label (Draggable scrub handle) -->
+        <TextBlock Grid.Column="0" 
+                   Text="{Binding Label, ElementName=Root}"
+                   FontSize="11" Foreground="#9E9E9E" 
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   Cursor="SizeWestEast"
+                   PointerPressed="OnLabelPointerPressed"
+                   PointerMoved="OnLabelPointerMoved"
+                   PointerReleased="OnLabelPointerReleased"
+                   PointerCaptureLost="OnLabelPointerCaptureLost"
+                   ToolTip.Tip="Drag horizontally to adjust (Shift: 0.1x, Ctrl: 10x)" />
+
+        <!-- Float NumericDragBox -->
+        <local:NumericDragBox Grid.Column="1"
+                              Value="{Binding Value, ElementName=Root}"
+                              DefaultValue="{Binding DefaultValue, ElementName=Root}"
+                              Minimum="{Binding Minimum, ElementName=Root}"
+                              Maximum="{Binding Maximum, ElementName=Root}"
+                              Step="{Binding Step, ElementName=Root}"
+                              Format="{Binding Format, ElementName=Root}" />
+
+        <!-- Reset button at the very right: visible after changed -->
+        <Button Grid.Column="2" Classes="reset-btn"
+                Width="16" Height="16" Padding="0" Margin="2,0,0,0"
+                ToolTip.Tip="Reset to default"
+                IsVisible="{Binding HasChanged, ElementName=Root}"
+                Click="OnResetClicked">
+            <TextBlock Text="↺" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Button>
+    </Grid>
+</UserControl>

@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:IgniteEditor.ViewModels"
+             x:Class="IgniteEditor.Views.Panels.SceneHierarchyPanel"
+             x:DataType="vm:SceneHierarchyViewModel">
+
+    <UserControl.Styles>
+        <!-- Ultra-compact TreeView item styling specifically for game engine hierarchy -->
+        <Style Selector="TreeView">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="TreeViewItem">
+            <Setter Property="MinHeight" Value="18" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
+            <Setter Property="MinHeight" Value="18" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="TreeViewItem /template/ Panel#PART_Header">
+            <Setter Property="MinHeight" Value="18" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TreeViewItem /template/ ToggleButton#PART_ExpandCollapseChevron">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="MinHeight" Value="12" />
+            <Setter Property="MinWidth" Value="12" />
+            <Setter Property="Margin" Value="1,0,0,0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="TreeView CheckBox">
+            <Setter Property="MinWidth" Value="12" />
+            <Setter Property="MinHeight" Value="12" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="TreeView CheckBox /template/ Border#RootBorder">
+            <Setter Property="Width" Value="11" />
+            <Setter Property="Height" Value="11" />
+            <Setter Property="CornerRadius" Value="2" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel>
+        <!-- Search bar & Quick Add -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="3,2,3,2">
+            <TextBox Grid.Column="0" PlaceholderText="Search hierarchy..." 
+                     Text="{Binding SearchFilter}"
+                     Padding="4,1" FontSize="11" Height="20" MinHeight="20" />
+            <Button Grid.Column="1" Content="+" Command="{Binding CreateEntityCommand}"
+                    FontSize="11" Padding="4,1" Height="20" MinHeight="20" MinWidth="20"
+                    Margin="2,0,0,0" ToolTip.Tip="Create Empty Entity" />
+        </Grid>
+
+        <!-- Entity tree -->
+        <TreeView ItemsSource="{Binding RootEntities}"
+                  SelectedItem="{Binding SelectedEntity}"
+                  Padding="0" Margin="0">
+            <TreeView.ContextMenu>
+                <ContextMenu FontSize="11">
+                    <MenuItem Header="Create Empty Entity" Command="{Binding CreateEntityCommand}" />
+                    <MenuItem Header="Duplicate" Command="{Binding DuplicateEntityCommand}" />
+                    <MenuItem Header="Delete" Command="{Binding DeleteEntityCommand}" />
+                </ContextMenu>
+            </TreeView.ContextMenu>
+
+            <TreeView.ItemTemplate>
+                <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:EntityNodeViewModel">
+                    <Grid ColumnDefinitions="Auto,Auto,*" Height="18" VerticalAlignment="Center" Margin="0">
+                        <!-- Active Visibility Toggle -->
+                        <CheckBox Grid.Column="0"
+                                  IsChecked="{Binding IsActive}"
+                                  Width="12" Height="12" MinWidth="12" MinHeight="12"
+                                  Padding="0" Margin="0,0,4,0"
+                                  VerticalAlignment="Center"
+                                  ToolTip.Tip="Toggle Active" />
+
+                        <!-- Entity Icon -->
+                        <TextBlock Grid.Column="1" Text="⬡" FontSize="9" Foreground="#888888" 
+                                   VerticalAlignment="Center" Margin="0,0,4,0" />
+
+                        <!-- Entity Name -->
+                        <TextBlock Grid.Column="2" Text="{Binding Name}" 
+                                   FontSize="11" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+    </DockPanel>
+</UserControl>

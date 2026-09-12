@@ -22,5 +22,6 @@ workspace "IGN-Managed"
 
     group "Managed"
         include "../scriptengine/ignite.scriptengine.lua"
+        include "../ignite/editorv2/ignite.editorv2.lua"
         include "mochisharp-managed.lua"
     group ""

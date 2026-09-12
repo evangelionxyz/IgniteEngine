@@ -1,0 +1,417 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ========================================================================= -->
+    <!-- IgniteEditor Neutral Monochrome Dark Theme Overrides for FluentTheme      -->
+    <!-- Pure Grayscale Palette (R == G == B, completely free of blue/purple tint):-->
+    <!--   Deep Background:    #161616                                             -->
+    <!--   Panel Background:   #1E1E1E                                             -->
+    <!--   Card / Container:   #242424                                             -->
+    <!--   Control Fill:       #282828                                             -->
+    <!--   Hover State:        #323232                                             -->
+    <!--   Active / Selected:  #3E3E3E                                             -->
+    <!--   Borders / Dividers: #333333                                             -->
+    <!--   Text Primary:       #E0E0E0                                             -->
+    <!--   Text Secondary:     #8A8A8A                                             -->
+    <!--   Text Disabled:      #555555                                             -->
+    <!-- ========================================================================= -->
+
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+            <!-- Accent Colors (Neutral Monochrome) -->
+            <Color x:Key="SystemAccentColor">#707070</Color>
+            <Color x:Key="SystemAccentColorDark1">#555555</Color>
+            <Color x:Key="SystemAccentColorDark2">#404040</Color>
+            <Color x:Key="SystemAccentColorDark3">#2C2C2C</Color>
+            <Color x:Key="SystemAccentColorLight1">#8A8A8A</Color>
+            <Color x:Key="SystemAccentColorLight2">#A5A5A5</Color>
+            <Color x:Key="SystemAccentColorLight3">#C0C0C0</Color>
+
+            <!-- Accent Brushes -->
+            <SolidColorBrush x:Key="SystemAccentColorBrush" Color="#707070" />
+            <SolidColorBrush x:Key="SystemAccentColorDark1Brush" Color="#555555" />
+            <SolidColorBrush x:Key="SystemAccentColorDark2Brush" Color="#404040" />
+            <SolidColorBrush x:Key="SystemAccentColorDark3Brush" Color="#2C2C2C" />
+            <SolidColorBrush x:Key="SystemAccentColorLight1Brush" Color="#8A8A8A" />
+            <SolidColorBrush x:Key="SystemAccentColorLight2Brush" Color="#A5A5A5" />
+            <SolidColorBrush x:Key="SystemAccentColorLight3Brush" Color="#C0C0C0" />
+            <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#707070" />
+
+            <!-- System Region / Window Background -->
+            <Color x:Key="SystemRegionColor">#161616</Color>
+            <SolidColorBrush x:Key="SystemRegionBrush" Color="#161616" />
+
+            <!-- Solid Background Tokens -->
+            <Color x:Key="SolidBackgroundFillColorBase">#161616</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#161616" />
+            <Color x:Key="SolidBackgroundFillColorSecondary">#1E1E1E</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorSecondaryBrush" Color="#1E1E1E" />
+            <Color x:Key="SolidBackgroundFillColorTertiary">#252525</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorTertiaryBrush" Color="#252525" />
+            <Color x:Key="SolidBackgroundFillColorQuarternary">#333333</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorQuarternaryBrush" Color="#333333" />
+            <Color x:Key="SolidBackgroundFillColorTransparent">#00000000</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorTransparentBrush" Color="Transparent" />
+
+            <!-- Card / Panel Background Tokens -->
+            <Color x:Key="CardBackgroundFillColorDefault">#1E1E1E</Color>
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#1E1E1E" />
+            <Color x:Key="CardBackgroundFillColorSecondary">#161616</Color>
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#161616" />
+            <Color x:Key="CardBackgroundFillColorTertiary">#282828</Color>
+            <SolidColorBrush x:Key="CardBackgroundFillColorTertiaryBrush" Color="#282828" />
+
+            <!-- Control Fill Tokens (Buttons, TextBoxes, Inputs) -->
+            <Color x:Key="ControlFillColorDefault">#242424</Color>
+            <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#242424" />
+            <Color x:Key="ControlFillColorSecondary">#2C2C2C</Color>
+            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#2C2C2C" />
+            <Color x:Key="ControlFillColorTertiary">#1E1E1E</Color>
+            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#1E1E1E" />
+            <Color x:Key="ControlFillColorDisabled">#80161616</Color>
+            <SolidColorBrush x:Key="ControlFillColorDisabledBrush" Color="#80161616" />
+            <Color x:Key="ControlFillColorTransparent">#00000000</Color>
+            <SolidColorBrush x:Key="ControlFillColorTransparentBrush" Color="Transparent" />
+            <Color x:Key="ControlFillColorInputActive">#181818</Color>
+            <SolidColorBrush x:Key="ControlFillColorInputActiveBrush" Color="#181818" />
+
+            <!-- Control & Card Stroke / Border Tokens -->
+            <Color x:Key="ControlStrokeColorDefault">#333333</Color>
+            <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#333333" />
+            <Color x:Key="ControlStrokeColorSecondary">#383838</Color>
+            <SolidColorBrush x:Key="ControlStrokeColorSecondaryBrush" Color="#383838" />
+            <Color x:Key="ControlStrokeColorOnAccentDefault">#FFFFFF</Color>
+            <SolidColorBrush x:Key="ControlStrokeColorOnAccentDefaultBrush" Color="#FFFFFF" />
+            <Color x:Key="CardStrokeColorDefault">#333333</Color>
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#333333" />
+            <Color x:Key="CardStrokeColorDefaultSolid">#333333</Color>
+            <SolidColorBrush x:Key="CardStrokeColorDefaultSolidBrush" Color="#333333" />
+            <Color x:Key="DividerStrokeColorDefault">#333333</Color>
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#333333" />
+            <Color x:Key="SurfaceStrokeColorDefault">#333333</Color>
+            <SolidColorBrush x:Key="SurfaceStrokeColorDefaultBrush" Color="#333333" />
+            <SolidColorBrush x:Key="ControlElevationBorderBrush" Color="#333333" />
+
+            <!-- Text & Foreground Tokens -->
+            <Color x:Key="TextFillColorPrimary">#E0E0E0</Color>
+            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#E0E0E0" />
+            <Color x:Key="TextFillColorSecondary">#8A8A8A</Color>
+            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#8A8A8A" />
+            <Color x:Key="TextFillColorTertiary">#606060</Color>
+            <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#606060" />
+            <Color x:Key="TextFillColorDisabled">#555555</Color>
+            <SolidColorBrush x:Key="TextFillColorDisabledBrush" Color="#555555" />
+            <Color x:Key="TextFillColorInverse">#161616</Color>
+            <SolidColorBrush x:Key="TextFillColorInverseBrush" Color="#161616" />
+
+            <!-- Accent Fill Tokens -->
+            <Color x:Key="AccentFillColorDefault">#606060</Color>
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#606060" />
+            <Color x:Key="AccentFillColorSecondary">#707070</Color>
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#707070" />
+            <Color x:Key="AccentFillColorTertiary">#505050</Color>
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#505050" />
+            <Color x:Key="AccentFillColorDisabled">#80505050</Color>
+            <SolidColorBrush x:Key="AccentFillColorDisabledBrush" Color="#80505050" />
+            <Color x:Key="AccentFillColorSelectedTextBackground">#3C3C3C</Color>
+            <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="#3C3C3C" />
+
+            <!-- Subtle Fill Tokens -->
+            <Color x:Key="SubtleFillColorTransparent">#00000000</Color>
+            <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent" />
+            <Color x:Key="SubtleFillColorSecondary">#282828</Color>
+            <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#282828" />
+            <Color x:Key="SubtleFillColorTertiary">#202020</Color>
+            <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#202020" />
+            <Color x:Key="SubtleFillColorDisabled">#00000000</Color>
+            <SolidColorBrush x:Key="SubtleFillColorDisabledBrush" Color="Transparent" />
+
+            <!-- TreeViewItem State Brushes -->
+            <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#444444" />
+            <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedDisabled" Color="#2C2C2C" />
+            <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="#2A2A2A" />
+            <SolidColorBrush x:Key="TreeViewItemBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TreeViewItemForegroundSelectedPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TreeViewItemForegroundPointerOver" Color="#E0E0E0" />
+
+            <!-- ListBoxItem State Brushes -->
+            <SolidColorBrush x:Key="ListBoxItemBackgroundSelected" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="ListBoxItemBackgroundSelectedPointerOver" Color="#444444" />
+            <SolidColorBrush x:Key="ListBoxItemBackgroundSelectedDisabled" Color="#2C2C2C" />
+            <SolidColorBrush x:Key="ListBoxItemBackgroundPointerOver" Color="#2A2A2A" />
+            <SolidColorBrush x:Key="ListBoxItemBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ListBoxItemForegroundSelected" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ListBoxItemForegroundSelectedPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ListBoxItemForegroundPointerOver" Color="#E0E0E0" />
+
+            <!-- ComboBoxItem State Brushes -->
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#444444" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#2A2A2A" />
+
+            <!-- MenuItem State Brushes -->
+            <SolidColorBrush x:Key="MenuItemItemBackgroundPointerOver" Color="#2C2C2C" />
+            <SolidColorBrush x:Key="MenuItemItemBackgroundSelected" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="MenuItemForegroundPointerOver" Color="#FFFFFF" />
+
+            <!-- Selection & Highlight Brushes -->
+            <Color x:Key="HighlightColor">#3A3A3A</Color>
+            <SolidColorBrush x:Key="HighlightBrush" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#444444" />
+            <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#555555" />
+            <SolidColorBrush x:Key="SystemControlHighlightAltBaseHighBrush" Color="#E0E0E0" />
+
+            <!-- Status Tokens (Preserve distinct log visibility) -->
+            <Color x:Key="SystemFillColorCritical">#CC3333</Color>
+            <SolidColorBrush x:Key="SystemFillColorCriticalBrush" Color="#CC3333" />
+            <Color x:Key="SystemFillColorCaution">#CCCC33</Color>
+            <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="#CCCC33" />
+            <Color x:Key="SystemFillColorSuccess">#33CC33</Color>
+            <SolidColorBrush x:Key="SystemFillColorSuccessBrush" Color="#33CC33" />
+            <Color x:Key="SystemFillColorAttention">#33CCCC</Color>
+            <SolidColorBrush x:Key="SystemFillColorAttentionBrush" Color="#33CCCC" />
+            <Color x:Key="SystemErrorColor">#CC3333</Color>
+
+            <!-- Legacy Fluent v1 Brushes -->
+            <SolidColorBrush x:Key="SystemControlBackgroundAltHighBrush" Color="#161616" />
+            <SolidColorBrush x:Key="SystemControlBackgroundBaseLowBrush" Color="#1E1E1E" />
+            <SolidColorBrush x:Key="SystemControlBackgroundBaseMediumLowBrush" Color="#282828" />
+            <SolidColorBrush x:Key="SystemControlForegroundBaseHighBrush" Color="#E0E0E0" />
+            <SolidColorBrush x:Key="SystemControlForegroundBaseMediumBrush" Color="#8A8A8A" />
+            <SolidColorBrush x:Key="SystemControlDisabledBaseLowBrush" Color="#80161616" />
+            <SolidColorBrush x:Key="SystemControlDisabledBaseMediumLowBrush" Color="#555555" />
+
+            <!-- Dock.Avalonia Compatibility Brushes -->
+            <SolidColorBrush x:Key="DockApplicationAccentBrushHigh" Color="#555555" />
+            <SolidColorBrush x:Key="DockThemeBackgroundBrush" Color="#161616" />
+            <SolidColorBrush x:Key="DockThemeBorderLowBrush" Color="#333333" />
+            <SolidColorBrush x:Key="DockThemeBorderHighBrush" Color="#333333" />
+            <SolidColorBrush x:Key="DockThemeControlBackgroundBrush" Color="#1E1E1E" />
+            <SolidColorBrush x:Key="DockThemeForegroundBrush" Color="#E0E0E0" />
+
+            <!-- Ignite Custom Semantic Colors & Brushes -->
+            <Color x:Key="IgniteMainBackground">#161616</Color>
+            <SolidColorBrush x:Key="IgniteMainBackgroundBrush" Color="#161616" />
+            <Color x:Key="IgnitePanelBackground">#1E1E1E</Color>
+            <SolidColorBrush x:Key="IgnitePanelBackgroundBrush" Color="#1E1E1E" />
+            <Color x:Key="IgniteAccent">#707070</Color>
+            <SolidColorBrush x:Key="IgniteAccentBrush" Color="#707070" />
+            <Color x:Key="IgniteTextPrimary">#E0E0E0</Color>
+            <SolidColorBrush x:Key="IgniteTextPrimaryBrush" Color="#E0E0E0" />
+            <Color x:Key="IgniteTextSecondary">#8A8A8A</Color>
+            <SolidColorBrush x:Key="IgniteTextSecondaryBrush" Color="#8A8A8A" />
+            <Color x:Key="IgniteBorder">#333333</Color>
+            <SolidColorBrush x:Key="IgniteBorderBrush" Color="#333333" />
+            <Color x:Key="IgniteHover">#2A2A2A</Color>
+            <SolidColorBrush x:Key="IgniteHoverBrush" Color="#2A2A2A" />
+            <Color x:Key="IgniteSelection">#3A3A3A</Color>
+            <SolidColorBrush x:Key="IgniteSelectionBrush" Color="#3A3A3A" />
+            <Color x:Key="IgniteError">#CC3333</Color>
+            <SolidColorBrush x:Key="IgniteErrorBrush" Color="#CC3333" />
+            <Color x:Key="IgniteWarning">#CCCC33</Color>
+            <SolidColorBrush x:Key="IgniteWarningBrush" Color="#CCCC33" />
+            <Color x:Key="IgniteSuccess">#33CC33</Color>
+            <SolidColorBrush x:Key="IgniteSuccessBrush" Color="#33CC33" />
+            <Color x:Key="IgniteInfo">#33CCCC</Color>
+            <SolidColorBrush x:Key="IgniteInfoBrush" Color="#33CCCC" />
+        </ResourceDictionary>
+
+        <!-- Default Variant matches Dark -->
+        <ResourceDictionary x:Key="Default">
+            <!-- Accent Colors -->
+            <Color x:Key="SystemAccentColor">#707070</Color>
+            <Color x:Key="SystemAccentColorDark1">#555555</Color>
+            <Color x:Key="SystemAccentColorDark2">#404040</Color>
+            <Color x:Key="SystemAccentColorDark3">#2C2C2C</Color>
+            <Color x:Key="SystemAccentColorLight1">#8A8A8A</Color>
+            <Color x:Key="SystemAccentColorLight2">#A5A5A5</Color>
+            <Color x:Key="SystemAccentColorLight3">#C0C0C0</Color>
+
+            <SolidColorBrush x:Key="SystemAccentColorBrush" Color="#707070" />
+            <SolidColorBrush x:Key="SystemAccentColorDark1Brush" Color="#555555" />
+            <SolidColorBrush x:Key="SystemAccentColorDark2Brush" Color="#404040" />
+            <SolidColorBrush x:Key="SystemAccentColorDark3Brush" Color="#2C2C2C" />
+            <SolidColorBrush x:Key="SystemAccentColorLight1Brush" Color="#8A8A8A" />
+            <SolidColorBrush x:Key="SystemAccentColorLight2Brush" Color="#A5A5A5" />
+            <SolidColorBrush x:Key="SystemAccentColorLight3Brush" Color="#C0C0C0" />
+            <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#707070" />
+
+            <Color x:Key="SystemRegionColor">#161616</Color>
+            <SolidColorBrush x:Key="SystemRegionBrush" Color="#161616" />
+
+            <Color x:Key="SolidBackgroundFillColorBase">#161616</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#161616" />
+            <Color x:Key="SolidBackgroundFillColorSecondary">#1E1E1E</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorSecondaryBrush" Color="#1E1E1E" />
+            <Color x:Key="SolidBackgroundFillColorTertiary">#252525</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorTertiaryBrush" Color="#252525" />
+            <Color x:Key="SolidBackgroundFillColorQuarternary">#333333</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorQuarternaryBrush" Color="#333333" />
+            <Color x:Key="SolidBackgroundFillColorTransparent">#00000000</Color>
+            <SolidColorBrush x:Key="SolidBackgroundFillColorTransparentBrush" Color="Transparent" />
+
+            <Color x:Key="CardBackgroundFillColorDefault">#1E1E1E</Color>
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#1E1E1E" />
+            <Color x:Key="CardBackgroundFillColorSecondary">#161616</Color>
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#161616" />
+            <Color x:Key="CardBackgroundFillColorTertiary">#282828</Color>
+            <SolidColorBrush x:Key="CardBackgroundFillColorTertiaryBrush" Color="#282828" />
+
+            <Color x:Key="ControlFillColorDefault">#242424</Color>
+            <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#242424" />
+            <Color x:Key="ControlFillColorSecondary">#2C2C2C</Color>
+            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#2C2C2C" />
+            <Color x:Key="ControlFillColorTertiary">#1E1E1E</Color>
+            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#1E1E1E" />
+            <Color x:Key="ControlFillColorDisabled">#80161616</Color>
+            <SolidColorBrush x:Key="ControlFillColorDisabledBrush" Color="#80161616" />
+            <Color x:Key="ControlFillColorTransparent">#00000000</Color>
+            <SolidColorBrush x:Key="ControlFillColorTransparentBrush" Color="Transparent" />
+            <Color x:Key="ControlFillColorInputActive">#181818</Color>
+            <SolidColorBrush x:Key="ControlFillColorInputActiveBrush" Color="#181818" />
+
+            <Color x:Key="ControlStrokeColorDefault">#333333</Color>
+            <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#333333" />
+            <Color x:Key="ControlStrokeColorSecondary">#383838</Color>
+            <SolidColorBrush x:Key="ControlStrokeColorSecondaryBrush" Color="#383838" />
+            <Color x:Key="ControlStrokeColorOnAccentDefault">#FFFFFF</Color>
+            <SolidColorBrush x:Key="ControlStrokeColorOnAccentDefaultBrush" Color="#FFFFFF" />
+            <Color x:Key="CardStrokeColorDefault">#333333</Color>
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#333333" />
+            <Color x:Key="CardStrokeColorDefaultSolid">#333333</Color>
+            <SolidColorBrush x:Key="CardStrokeColorDefaultSolidBrush" Color="#333333" />
+            <Color x:Key="DividerStrokeColorDefault">#333333</Color>
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#333333" />
+            <Color x:Key="SurfaceStrokeColorDefault">#333333</Color>
+            <SolidColorBrush x:Key="SurfaceStrokeColorDefaultBrush" Color="#333333" />
+            <SolidColorBrush x:Key="ControlElevationBorderBrush" Color="#333333" />
+
+            <Color x:Key="TextFillColorPrimary">#E0E0E0</Color>
+            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#E0E0E0" />
+            <Color x:Key="TextFillColorSecondary">#8A8A8A</Color>
+            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#8A8A8A" />
+            <Color x:Key="TextFillColorTertiary">#606060</Color>
+            <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#606060" />
+            <Color x:Key="TextFillColorDisabled">#555555</Color>
+            <SolidColorBrush x:Key="TextFillColorDisabledBrush" Color="#555555" />
+            <Color x:Key="TextFillColorInverse">#161616</Color>
+            <SolidColorBrush x:Key="TextFillColorInverseBrush" Color="#161616" />
+
+            <Color x:Key="AccentFillColorDefault">#606060</Color>
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#606060" />
+            <Color x:Key="AccentFillColorSecondary">#707070</Color>
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#707070" />
+            <Color x:Key="AccentFillColorTertiary">#505050</Color>
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#505050" />
+            <Color x:Key="AccentFillColorDisabled">#80505050</Color>
+            <SolidColorBrush x:Key="AccentFillColorDisabledBrush" Color="#80505050" />
+            <Color x:Key="AccentFillColorSelectedTextBackground">#3C3C3C</Color>
+            <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="#3C3C3C" />
+
+            <Color x:Key="SubtleFillColorTransparent">#00000000</Color>
+            <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent" />
+            <Color x:Key="SubtleFillColorSecondary">#282828</Color>
+            <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#282828" />
+            <Color x:Key="SubtleFillColorTertiary">#202020</Color>
+            <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#202020" />
+            <Color x:Key="SubtleFillColorDisabled">#00000000</Color>
+            <SolidColorBrush x:Key="SubtleFillColorDisabledBrush" Color="Transparent" />
+
+            <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#444444" />
+            <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedDisabled" Color="#2C2C2C" />
+            <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="#2A2A2A" />
+            <SolidColorBrush x:Key="TreeViewItemBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TreeViewItemForegroundSelectedPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TreeViewItemForegroundPointerOver" Color="#E0E0E0" />
+
+            <SolidColorBrush x:Key="ListBoxItemBackgroundSelected" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="ListBoxItemBackgroundSelectedPointerOver" Color="#444444" />
+            <SolidColorBrush x:Key="ListBoxItemBackgroundSelectedDisabled" Color="#2C2C2C" />
+            <SolidColorBrush x:Key="ListBoxItemBackgroundPointerOver" Color="#2A2A2A" />
+            <SolidColorBrush x:Key="ListBoxItemBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ListBoxItemForegroundSelected" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ListBoxItemForegroundSelectedPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ListBoxItemForegroundPointerOver" Color="#E0E0E0" />
+
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#444444" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#2A2A2A" />
+
+            <SolidColorBrush x:Key="MenuItemItemBackgroundPointerOver" Color="#2C2C2C" />
+            <SolidColorBrush x:Key="MenuItemItemBackgroundSelected" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="MenuItemForegroundPointerOver" Color="#FFFFFF" />
+
+            <Color x:Key="HighlightColor">#3A3A3A</Color>
+            <SolidColorBrush x:Key="HighlightBrush" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#444444" />
+            <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#555555" />
+            <SolidColorBrush x:Key="SystemControlHighlightAltBaseHighBrush" Color="#E0E0E0" />
+
+            <Color x:Key="SystemFillColorCritical">#CC3333</Color>
+            <SolidColorBrush x:Key="SystemFillColorCriticalBrush" Color="#CC3333" />
+            <Color x:Key="SystemFillColorCaution">#CCCC33</Color>
+            <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="#CCCC33" />
+            <Color x:Key="SystemFillColorSuccess">#33CC33</Color>
+            <SolidColorBrush x:Key="SystemFillColorSuccessBrush" Color="#33CC33" />
+            <Color x:Key="SystemFillColorAttention">#33CCCC</Color>
+            <SolidColorBrush x:Key="SystemFillColorAttentionBrush" Color="#33CCCC" />
+            <Color x:Key="SystemErrorColor">#CC3333</Color>
+
+            <SolidColorBrush x:Key="SystemControlBackgroundAltHighBrush" Color="#161616" />
+            <SolidColorBrush x:Key="SystemControlBackgroundBaseLowBrush" Color="#1E1E1E" />
+            <SolidColorBrush x:Key="SystemControlBackgroundBaseMediumLowBrush" Color="#282828" />
+            <SolidColorBrush x:Key="SystemControlForegroundBaseHighBrush" Color="#E0E0E0" />
+            <SolidColorBrush x:Key="SystemControlForegroundBaseMediumBrush" Color="#8A8A8A" />
+            <SolidColorBrush x:Key="SystemControlDisabledBaseLowBrush" Color="#80161616" />
+            <SolidColorBrush x:Key="SystemControlDisabledBaseMediumLowBrush" Color="#555555" />
+
+            <SolidColorBrush x:Key="DockApplicationAccentBrushHigh" Color="#555555" />
+            <SolidColorBrush x:Key="DockThemeBackgroundBrush" Color="#161616" />
+            <SolidColorBrush x:Key="DockThemeBorderLowBrush" Color="#333333" />
+            <SolidColorBrush x:Key="DockThemeBorderHighBrush" Color="#333333" />
+            <SolidColorBrush x:Key="DockThemeControlBackgroundBrush" Color="#1E1E1E" />
+            <SolidColorBrush x:Key="DockThemeForegroundBrush" Color="#E0E0E0" />
+
+            <Color x:Key="IgniteMainBackground">#161616</Color>
+            <SolidColorBrush x:Key="IgniteMainBackgroundBrush" Color="#161616" />
+            <Color x:Key="IgnitePanelBackground">#1E1E1E</Color>
+            <SolidColorBrush x:Key="IgnitePanelBackgroundBrush" Color="#1E1E1E" />
+            <Color x:Key="IgniteAccent">#707070</Color>
+            <SolidColorBrush x:Key="IgniteAccentBrush" Color="#707070" />
+            <Color x:Key="IgniteTextPrimary">#E0E0E0</Color>
+            <SolidColorBrush x:Key="IgniteTextPrimaryBrush" Color="#E0E0E0" />
+            <Color x:Key="IgniteTextSecondary">#8A8A8A</Color>
+            <SolidColorBrush x:Key="IgniteTextSecondaryBrush" Color="#8A8A8A" />
+            <Color x:Key="IgniteBorder">#333333</Color>
+            <SolidColorBrush x:Key="IgniteBorderBrush" Color="#333333" />
+            <Color x:Key="IgniteHover">#2A2A2A</Color>
+            <SolidColorBrush x:Key="IgniteHoverBrush" Color="#2A2A2A" />
+            <Color x:Key="IgniteSelection">#3A3A3A</Color>
+            <SolidColorBrush x:Key="IgniteSelectionBrush" Color="#3A3A3A" />
+            <Color x:Key="IgniteError">#CC3333</Color>
+            <SolidColorBrush x:Key="IgniteErrorBrush" Color="#CC3333" />
+            <Color x:Key="IgniteWarning">#CCCC33</Color>
+            <SolidColorBrush x:Key="IgniteWarningBrush" Color="#CCCC33" />
+            <Color x:Key="IgniteSuccess">#33CC33</Color>
+            <SolidColorBrush x:Key="IgniteSuccessBrush" Color="#33CC33" />
+            <Color x:Key="IgniteInfo">#33CCCC</Color>
+            <SolidColorBrush x:Key="IgniteInfoBrush" Color="#33CCCC" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- Fallback Direct Resources -->
+    <SolidColorBrush x:Key="IgniteMainBackgroundBrush" Color="#161616" />
+    <SolidColorBrush x:Key="IgnitePanelBackgroundBrush" Color="#1E1E1E" />
+    <SolidColorBrush x:Key="IgniteBorderBrush" Color="#333333" />
+    <SolidColorBrush x:Key="IgniteHoverBrush" Color="#2A2A2A" />
+    <SolidColorBrush x:Key="IgniteSelectionBrush" Color="#3A3A3A" />
+    <SolidColorBrush x:Key="IgniteTextPrimaryBrush" Color="#E0E0E0" />
+    <SolidColorBrush x:Key="IgniteTextSecondaryBrush" Color="#8A8A8A" />
+
+</ResourceDictionary>

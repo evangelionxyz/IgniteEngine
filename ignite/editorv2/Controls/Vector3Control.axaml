@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:IgniteEditor.Controls"
+             x:Class="IgniteEditor.Controls.Vector3Control"
+             x:Name="Root"
+             HorizontalAlignment="Stretch">
+
+    <Grid ColumnDefinitions="60,*,*,*,18" Margin="0,1" HorizontalAlignment="Stretch">
+        <!-- Row Label -->
+        <TextBlock Grid.Column="0" 
+                   Text="{Binding Label, ElementName=Root}"
+                   FontSize="11" Foreground="#9E9E9E" 
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+        <!-- X -->
+        <local:NumericDragBox Grid.Column="1" Badge="X" BadgeBrush="#CC3333"
+                              Value="{Binding X, ElementName=Root}"
+                              DefaultValue="{Binding DefaultX, ElementName=Root}"
+                              Step="{Binding Step, ElementName=Root}" />
+
+        <!-- Y -->
+        <local:NumericDragBox Grid.Column="2" Badge="Y" BadgeBrush="#33CC33"
+                              Value="{Binding Y, ElementName=Root}"
+                              DefaultValue="{Binding DefaultY, ElementName=Root}"
+                              Step="{Binding Step, ElementName=Root}" />
+
+        <!-- Z -->
+        <local:NumericDragBox Grid.Column="3" Badge="Z" BadgeBrush="#3366CC"
+                              Value="{Binding Z, ElementName=Root}"
+                              DefaultValue="{Binding DefaultZ, ElementName=Root}"
+                              Step="{Binding Step, ElementName=Root}" />
+
+        <!-- Reset button at the very right: visible after changed -->
+        <Button Grid.Column="4" Classes="reset-btn"
+                Width="16" Height="16" Padding="0" Margin="2,0,0,0"
+                ToolTip.Tip="Reset to default"
+                IsVisible="{Binding HasChanged, ElementName=Root}"
+                Click="OnResetClicked">
+            <TextBlock Text="↺" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Button>
+    </Grid>
+</UserControl>
