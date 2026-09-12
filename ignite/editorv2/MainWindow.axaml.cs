@@ -1,10 +1,10 @@
 using System;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using IgniteEditor.ViewModels;
+using Ignite.Managed.Services;
 
 namespace IgniteEditor;
 
@@ -71,13 +71,10 @@ public partial class MainWindow : Window
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
-        try
-        {
-            Services.NativeEngineBridge.Ignite_Shutdown();
-        }
-        catch
-        {
-            // Ignore if already shutdown
-        }
+        // Clear the log callback so the native engine does not call back into
+        // managed code during shutdown (fixes the CLR assert on exit).
+        // The engine itself is shut down by NativeViewportControl.OnDetachedFromVisualTree,
+        // which fires earlier and while the CLR thread state is still valid.
+        try { NativeEngineBridge.Ignite_SetLogCallback(null); } catch { }
     }
 }

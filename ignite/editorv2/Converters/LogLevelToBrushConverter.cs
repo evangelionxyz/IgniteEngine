@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
-using IgniteEditor.Models;
+using Ignite.Managed.Models;
 
 namespace IgniteEditor.Converters;
 

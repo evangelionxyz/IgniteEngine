@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IgniteEditor.Models;
+
+using Ignite.Managed.Services;
+using Ignite.Managed.Models;
 
 namespace IgniteEditor.Services;
 

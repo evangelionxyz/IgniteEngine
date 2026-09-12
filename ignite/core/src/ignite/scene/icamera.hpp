@@ -119,6 +119,10 @@ namespace ignite
         // Directly set the view matrix (used for mirror/proxy cameras that copy another camera's view)
         virtual void SetView(const glm::mat4 &view) { m_View = view; }
 
+        // Directly set the projection matrix (used when an external controller pushes pre-built matrices)
+        virtual void SetProjection(const glm::mat4 &proj) { m_Projection = proj; }
+
+
         virtual glm::vec3 GetUpDirection() const;
         virtual glm::vec3 GetRightDirection() const;
         virtual glm::vec3 GetForwardDirection() const;

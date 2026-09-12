@@ -141,7 +141,7 @@ namespace ignite
         static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
 
-        void OnProjectReadySignal(const SuccessResultSignal &signal);
+        void OnOpenProject();
 
         void OnFileImport(const FileImportPayload &payload);
         void AddContentBrowserPanel();
@@ -191,7 +191,6 @@ namespace ignite
         uint32_t m_ActiveEditorDockspaceId = 0;
 
         SignalToken m_FileImportSignalToken = kInvalidSignalToken;
-        SignalToken m_ProjectReadySignalToken = kInvalidSignalToken;
 
         std::string m_StatusText;
         float m_LoadingProgress = 0.0f;

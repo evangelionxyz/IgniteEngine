@@ -2,7 +2,10 @@ using System;
 using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using IgniteEditor.Models;
+
+using Ignite.Managed.Models;
+using Ignite.Managed.Services;
+
 using IgniteEditor.Services;
 using IgniteEditor.ViewModels;
 
@@ -43,7 +46,10 @@ public partial class ConsolePanel : UserControl
                     _ => LogLevel.Info
                 };
 
-                LoggingService.Instance.Log(logLevel, message);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    LoggingService.Instance.Log(logLevel, message);
+                });
             };
 
             NativeEngineBridge.Ignite_SetLogCallback(s_NativeLogCallback);

@@ -1,20 +1,32 @@
-project "Ignite.ScriptEngine"
-    location "%{wks.location}/scriptengine"
-    kind "SharedLib"
+project "Ignite.Managed.Test"
+    location "%{wks.location}/ignite/managed.test"
+    kind "ConsoleApp"
     language "C#"
     dotnetframework "net10.0"
-    
+
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
     files {
-        "%{prj.location}/Ignite/**.cs",
-        "%{prj.location}/Properties/**.cs"
+        "%{prj.location}/**.cs"
+    }
+
+    removefiles {
+        "%{prj.location}/bin/**",
+        "%{prj.location}/obj/**"
     }
 
     links {
         "Ignite.Managed",
-        "MochiSharp.Managed"
+        "Ignite.ScriptEngine"
+    }
+
+    dependson {
+        "Ignite.Engine"
+    }
+
+    nuget {
+        "NUnit:4.6.1"
     }
 
     filter { "action:vs* or system:windows" }
@@ -25,9 +37,12 @@ project "Ignite.ScriptEngine"
             AllowUnsafeBlocks = "true",
             CopyLocalLockFileAssemblies = "true",
             EnableDynamicLoading = "true",
-            ImplicitUsing = "enable"
+            ImplicitUsing = "enable",
+            ApplicationManifest = "app.manifest",
+            EnableNativeCodeDebugging = "true",
+            PlatformTarget = "x64"
         }
-        
+
     filter "configurations:Debug or Debug-Profiling"
         symbols "on"
         optimize "off"
@@ -35,7 +50,7 @@ project "Ignite.ScriptEngine"
     filter "configurations:Release or Release-Profiling"
         optimize "on"
         symbols "off"
-    
+
     filter "configurations:Shipping or Shipping-Profiling"
         optimize "on"
         symbols "off"

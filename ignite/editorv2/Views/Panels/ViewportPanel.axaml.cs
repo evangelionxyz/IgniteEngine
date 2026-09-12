@@ -28,5 +28,31 @@ public partial class ViewportPanel : UserControl
                 }
             };
         }
+
+        void AttachViewModel(ViewportViewModel vm)
+        {
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ViewportViewModel.NavigationMode) && ViewportHost != null)
+                    ViewportHost.SetNavigationMode(vm.NavigationMode);
+            };
+            if (ViewportHost != null)
+            {
+                ViewportHost.SetNavigationMode(vm.NavigationMode);
+            }
+        }
+
+        if (DataContext is ViewportViewModel initialVm)
+        {
+            AttachViewModel(initialVm);
+        }
+
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is ViewportViewModel vm)
+            {
+                AttachViewModel(vm);
+            }
+        };
     }
 }

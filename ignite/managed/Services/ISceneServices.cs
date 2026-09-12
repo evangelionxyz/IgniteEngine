@@ -1,8 +1,8 @@
 using System;
+using Ignite.Managed.Models;
 using System.Collections.Generic;
-using IgniteEditor.Models;
 
-namespace IgniteEditor.Services;
+namespace Ignite.Managed.Services;
 
 public interface ISceneService
 {

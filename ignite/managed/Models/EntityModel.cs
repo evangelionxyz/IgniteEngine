@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
-namespace IgniteEditor.Models;
+namespace Ignite.Managed.Models;
 
 public class EntityModel
 {

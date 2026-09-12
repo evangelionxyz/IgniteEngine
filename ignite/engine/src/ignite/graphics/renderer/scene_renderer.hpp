@@ -75,7 +75,7 @@ namespace ignite
         void BeginFrame();
         void SetActiveScene(const Ref<Scene> &scene);
 
-        void Render(ICamera *camera, FrameContext *frameContext, bool drawDebug);
+        void Render(ICamera *camera, FrameContext *frameContext, bool drawDebug, nvrhi::IFramebuffer *targetFramebuffer = nullptr);
 
         void SetCameraWidgetMousePosition(ICamera *camera, uint32_t mouseX, uint32_t mouseY, bool hovered);
         void SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
@@ -115,7 +115,7 @@ namespace ignite
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug);
         void UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
 		void DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
-        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false);
+        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false, nvrhi::IFramebuffer *targetFramebuffer = nullptr);
 
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D);
         void DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebufferm, FrameContext *frameContext);

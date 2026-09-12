@@ -162,9 +162,7 @@ namespace ignite
         CloseCurrentProject();
 
         // Unsubscribe signals
-        SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
         SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
-        m_ProjectReadySignalToken = kInvalidSignalToken;
         m_FileImportSignalToken = kInvalidSignalToken;
 
         ContentBrowserPanel::ReleaseSharedResources();
@@ -824,7 +822,11 @@ namespace ignite
             {
                 if (ImGui::MenuItem("Build Solution"))
                 {
-                    m_ActiveProject->BuildSolution(true);
+                    AssetWorker::SubmitJob([this]()
+                    {
+                        constexpr bool rebuild = true;
+                        m_ActiveProject->BuildSolution(rebuild);
+                    });
                 }
 
                 ProjectConfiguration currentConfig = m_ActiveProject->GetConfiguration();
@@ -842,7 +844,6 @@ namespace ignite
                             {
                                 SaveProject();
                                 m_ActiveProject->BuildSolution(true);
-                                m_ActiveProject->GetScriptEngine()->ReloadAssembly();
                             });
                         }
                     }
@@ -1398,18 +1399,18 @@ namespace ignite
 
         AssetWorker::SubmitJob([this, filepath]()
         {
-            if (const Ref<Project> openedProject = Project::Deserialize(filepath))
+            if (const Ref<Project> openedProject = Project::Open(filepath))
             {
-                // Subscribe Build Solution callback
-                m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
-                {
-                    OnProjectReadySignal(signal);
-                });
-
                 m_ActiveProject = openedProject;
                 m_CurrentProjectFilepath = filepath;
-                openedProject->InitScriptEngine();
+
+                Application::SubmitToMainThread([this]()
+                {                       
+                    OnOpenProject();
+                });
             }
+
+            LOG_ASSERT(m_ActiveProject, "Failed to open project!");
         });
     }
 
@@ -1646,44 +1647,37 @@ namespace ignite
         }
     }
 
-    void EditorLayer::OnProjectReadySignal(const SuccessResultSignal &signal)
+    void EditorLayer::OnOpenProject()
     {
-        if (signal.isSuccess && signal.type == SignalType::Project)
+        // Reload project files
+        ReloadContentBrowserPanels();
+
+        // Get Project default scene (use immediate load for synchronous path)
+        AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
+        if (defSceneAssetHandle != AssetHandle(0))
         {
-            // One shot signal
-            SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
-            m_ProjectReadySignalToken = kInvalidSignalToken;
-
-            // Reload project files
-            ReloadContentBrowserPanels();
-
-            // Get Project default scene (use immediate load for synchronous path)
-            AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
-            if (defSceneAssetHandle != AssetHandle(0))
+            // Use GetAssetImmediate since we're on main thread and need synchronous load
+            if (Ref<Scene> activeScene = AssetManager::GetInstance()->GetAssetImmediate<Scene>(defSceneAssetHandle))
             {
-                // Use GetAssetImmediate since we're on main thread and need synchronous load
-                if (Ref<Scene> activeScene = AssetManager::GetInstance()->GetAssetImmediate<Scene>(defSceneAssetHandle))
-                {
-                    m_EditorScene = SceneManager::Copy(activeScene);
-                    m_EditorScene->SetDirtyFlag(false);
-                    SetActiveScene(m_EditorScene);
+                m_EditorScene = SceneManager::Copy(activeScene);
+                m_EditorScene->SetDirtyFlag(false);
+                SetActiveScene(m_EditorScene);
 
-                    const auto &[assetFilepath, assetType] = AssetManager::GetInstance()->GetMetaData(activeScene->handle);
+                const auto &[assetFilepath, assetType] = AssetManager::GetInstance()->GetMetaData(activeScene->handle);
 
-                    m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
-                    m_CurrentSceneHandle = activeScene->handle;
-                }
-                else
-                {
-                    // Create a default scene if load failed
-                    NewScene();
-                }
+                m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
+                m_CurrentSceneHandle = activeScene->handle;
             }
             else
             {
-                // Create a default scene
+                // Create a default scene if load failed
                 NewScene();
             }
+        }
+        else
+        {
+            // Create a default scene
+            NewScene();
         }
     }
 
@@ -1809,37 +1803,25 @@ namespace ignite
                 CloseCurrentProject();
             }
 
-            AssetWorker::SubmitJob([this]()
+            const std::string projName = m_State.projectCreateInfo.name;
+            const std::filesystem::path parentDir = m_State.projectCreateInfo.filepath.parent_path();
+
+            AssetWorker::SubmitJob([this, projName, parentDir]()
             {
-                // sanitize name
-                while (m_State.projectCreateInfo.name.find(' ') != std::string::npos)
+                if (Ref<Project> newProject = Project::New(projName, parentDir))
                 {
-                    const size_t spacePos = m_State.projectCreateInfo.name.find(' ');
-                    m_State.projectCreateInfo.name.replace(spacePos, 1, "");
-                }
-
-                m_State.projectCreateInfo.filepath /= (m_State.projectCreateInfo.name + ".ixproj");
-                m_State.projectCreateInfo.rootDirectory = m_State.projectCreateInfo.filepath.parent_path();
-
-                if (Ref<Project> newProject = Project::Create(m_State.projectCreateInfo))
-                {
-                    // Subscribe Build Solution callback
-                    m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
-                        { OnProjectReadySignal(signal); });
-
                     // Submit to main thread to sync
                     Application::SubmitToMainThread([this, newProject]()
                     {
                         m_ActiveProject = newProject;
-                        m_ActiveProject->InitScriptEngine();
-
-                        // Serialize
-                        m_ActiveProject->Serialize(m_State.projectCreateInfo.filepath);
+                        m_CurrentProjectFilepath = newProject->GetFilepath();
 
                         // clear modal inputs
                         m_State.projectCreateInfo.filepath.clear();
                         m_State.projectCreateInfo.name.clear();
                         memset(nameBuffer, 0, sizeof(nameBuffer));
+
+                        OnOpenProject();
                     });
                 }
             });

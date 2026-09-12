@@ -17,8 +17,10 @@
 #ifdef PLATFORM_WINDOWS
     #include <dwmapi.h>
     #include <ShellScalingApi.h>
+    #include <commctrl.h>
     #pragma comment(lib, "Dwmapi.lib") // Link to DWM API
     #pragma comment(lib, "shcore.lib")
+    #pragma comment(lib, "comctl32.lib")
 #endif
 
 #include <ignite/core/input/joystick_codes.hpp>
@@ -64,6 +66,41 @@ namespace ignite
         { nvrhi::Format::RGBA32_UINT,       32, 32, 32, 32,  0,  0, },
         { nvrhi::Format::RGBA32_FLOAT,      32, 32, 32, 32,  0,  0, }
     };
+
+#ifdef PLATFORM_WINDOWS
+    static LRESULT CALLBACK ExternalViewportSubclassProc(
+        HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
+        UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+    {
+        switch (msg)
+        {
+        case WM_LBUTTONDOWN:
+            ::SetFocus(hwnd);
+            break;
+        case WM_RBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+            ::SetFocus(hwnd);
+            ::SetCapture(hwnd);
+            break;
+        case WM_RBUTTONUP:
+        case WM_MBUTTONUP:
+            if ((GetKeyState(VK_RBUTTON) >= 0) && (GetKeyState(VK_MBUTTON) >= 0) && (GetKeyState(VK_LBUTTON) >= 0))
+            {
+                ::ReleaseCapture();
+            }
+            break;
+        case WM_KILLFOCUS:
+            ::ReleaseCapture();
+            break;
+        case WM_MOUSEACTIVATE:
+            return MA_ACTIVATE;
+        case WM_GETDLGCODE:
+            return DLGC_WANTALLKEYS;
+        }
+        return DefSubclassProc(hwnd, msg, wParam, lParam);
+    }
+#endif
+
     Window::Window(const char *windowTitle, const DeviceParameters &params, nvrhi::GraphicsAPI graphicsApi)
         : m_WindowTitle(windowTitle)
     {
@@ -118,6 +155,10 @@ namespace ignite
             SDL_DestroyProperties(props);
             LOG_ASSERT(m_Window, "Failed to create SDL3 window from native handle\n");
             m_IsExternalWindow = true;
+
+#ifdef PLATFORM_WINDOWS
+            SetWindowSubclass((HWND)params.nativeWindowHandle, ExternalViewportSubclassProc, 1, 0);
+#endif
 
             int width, height;
             SDL_GetWindowSize(m_Window, &width, &height);
@@ -417,6 +458,16 @@ namespace ignite
 
     void Window::Destroy()
     {
+#ifdef PLATFORM_WINDOWS
+        if (m_IsExternalWindow)
+        {
+            HWND hwnd = GetNativeWindow();
+            if (hwnd)
+            {
+                RemoveWindowSubclass(hwnd, ExternalViewportSubclassProc, 1);
+            }
+        }
+#endif
         if (m_Window)
         {
 			SDL_DestroyWindow(m_Window);

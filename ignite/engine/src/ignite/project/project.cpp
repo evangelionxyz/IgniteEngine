@@ -16,6 +16,10 @@
 #include "ignite/physics/3d/physics_3d.hpp"
 
 #include "ignite/serializer/serializer.hpp"
+#include "ignite/scene/scene.hpp"
+#include "ignite/scene/scene_manager.hpp"
+#include "ignite/scene/component.hpp"
+#include "ignite/serializer/scene_serializer.hpp"
 
 namespace ignite
 {
@@ -442,6 +446,216 @@ R"(<Project>
         return CreateRef<Project>(info);
     }
 
+    Ref<Project> Project::GetActive()
+    {
+        if (!s_ActiveProject)
+        {
+            if (AssetManager *am = AssetManager::GetInstance())
+            {
+                s_ActiveProject = am->LockActiveProject();
+            }
+        }
+        return s_ActiveProject;
+    }
+
+    void Project::SetActive(const Ref<Project> &project)
+    {
+        s_ActiveProject = project;
+        if (AssetManager *am = AssetManager::GetInstance())
+        {
+            am->SetActiveProject(project);
+        }
+    }
+
+    Ref<Project> Project::New(const std::string &name, const std::filesystem::path &parentDirectory)
+    {
+        std::string cleanName = name;
+        while (cleanName.find(' ') != std::string::npos)
+        {
+            const size_t spacePos = cleanName.find(' ');
+            cleanName.replace(spacePos, 1, "");
+        }
+
+        if (cleanName.empty())
+        {
+            LOG_ERROR("[Project] Cannot create project with an empty name");
+            return nullptr;
+        }
+
+        CloseActive();
+
+        std::filesystem::path projectRoot = parentDirectory / cleanName;
+        std::filesystem::path projectFile = projectRoot / (cleanName + ".ixproj");
+
+        ProjectInfo info;
+        info.name = cleanName;
+        info.filepath = projectFile;
+        info.rootDirectory = projectRoot;
+        info.assetDirectory = "Assets";
+        info.scriptsDirectory = "Scripts";
+        info.assetRegistryFilepath = "AssetRegistry.ixreg";
+        info.configuration = ProjectConfiguration::Debug;
+
+        Ref<Project> project = Project::Create(info);
+        if (!project)
+        {
+            LOG_ERROR("[Project] Failed to create project '{}'", cleanName);
+            return nullptr;
+        }
+
+        project->InitScriptEngine();
+        SetActive(project);
+
+        // Create default scene with camera and 2D quad
+        Ref<Scene> defaultScene = Scene::Create(project.get());
+        if (defaultScene)
+        {
+            // Primary camera
+            Entity camEntity = SceneManager::CreateCamera(defaultScene.get(), "Main Camera");
+            auto &cam = camEntity.GetComponent<CameraComponent>();
+            cam.primary = true;
+            cam.camera.projectionType = ProjectionType::Orthographic;
+            cam.camera.orthoSize = 10.0f;
+            cam.camera.nearPlane = 0.1f;
+            cam.camera.farPlane = 500.0f;
+            camEntity.GetComponent<TransformComponent>().local.translation = glm::vec3(0.0f, 0.0f, 5.0f);
+
+            // 2D Quad Sprite
+            Entity quadEntity = SceneManager::CreateSprite(defaultScene.get(), "Quad 2D");
+            auto &sc = quadEntity.GetComponent<Sprite2DComponent>();
+            sc.color = glm::vec4(0.2f, 0.6f, 1.0f, 1.0f);
+            auto &tc = quadEntity.GetComponent<TransformComponent>();
+            tc.local.scale = glm::vec3(2.0f, 2.0f, 1.0f);
+
+            defaultScene->OnUpdateEdit(0.0f);
+
+            std::filesystem::path scenesDir = project->GetAssetDirectory() / "Scenes";
+            std::filesystem::create_directories(scenesDir);
+            std::filesystem::path scenePath = scenesDir / "Default.ixscene";
+
+            SceneSerializer serializer(defaultScene, project.get());
+            serializer.Serialize(scenePath);
+
+            if (AssetManager *am = AssetManager::GetInstance())
+            {
+                AssetHandle sceneHandle = am->ImportAsset(scenePath);
+                project->SetDefaultScene(sceneHandle);
+            }
+
+            project->SetActiveScene(defaultScene);
+        }
+
+        project->Serialize(projectFile);
+        LOG_INFO("[Project] Created project '{}' at '{}'", cleanName, projectFile.generic_string());
+        return project;
+    }
+
+    Ref<Project> Project::Open(const std::filesystem::path &filepath)
+    {
+        if (!std::filesystem::exists(filepath))
+        {
+            LOG_ERROR("[Project] File does not exist: {}", filepath.generic_string());
+            return nullptr;
+        }
+
+        CloseActive();
+
+        Ref<Project> project = Project::Deserialize(filepath);
+        if (!project)
+        {
+            LOG_ERROR("[Project] Failed to deserialize project: {}", filepath.generic_string());
+            return nullptr;
+        }
+
+        project->InitScriptEngine();
+        SetActive(project);
+
+        AssetHandle defSceneHandle = project->GetInfo().defaultSceneHandle;
+        Ref<Scene> activeScene = nullptr;
+        if (AssetManager *am = AssetManager::GetInstance())
+        {
+            if (defSceneHandle != AssetHandle(0))
+            {
+                activeScene = am->GetAssetImmediate<Scene>(defSceneHandle);
+            }
+        }
+
+        if (!activeScene)
+        {
+            activeScene = Scene::Create(project.get());
+            Entity camEntity = SceneManager::CreateCamera(activeScene.get(), "Main Camera");
+            auto &cam = camEntity.GetComponent<CameraComponent>();
+            cam.primary = true;
+            cam.camera.projectionType = ProjectionType::Orthographic;
+            cam.camera.orthoSize = 10.0f;
+            camEntity.GetComponent<TransformComponent>().local.translation = glm::vec3(0.0f, 0.0f, 5.0f);
+
+            Entity quadEntity = SceneManager::CreateSprite(activeScene.get(), "Quad 2D");
+            auto &sc = quadEntity.GetComponent<Sprite2DComponent>();
+            sc.color = glm::vec4(0.2f, 0.6f, 1.0f, 1.0f);
+            auto &tc = quadEntity.GetComponent<TransformComponent>();
+            tc.local.scale = glm::vec3(2.0f, 2.0f, 1.0f);
+
+            activeScene->OnUpdateEdit(0.0f);
+        }
+
+        project->SetActiveScene(activeScene);
+        LOG_INFO("[Project] Opened project '{}' from '{}'", project->GetInfo().name, filepath.generic_string());
+        return project;
+    }
+
+    bool Project::SaveActive()
+    {
+        Ref<Project> active = GetActive();
+        if (!active)
+            return false;
+
+        if (Ref<Scene> scene = active->LockActiveScene())
+        {
+            if (AssetManager *am = AssetManager::GetInstance())
+            {
+                const auto &meta = am->GetMetaData(scene->handle);
+                if (!meta.filepath.empty())
+                {
+                    std::filesystem::path scenePath = active->GetProjectFilepath(meta.filepath);
+                    SceneSerializer serializer(scene, active.get());
+                    serializer.Serialize(scenePath);
+                }
+            }
+        }
+
+        return active->Serialize(active->GetFilepath());
+    }
+
+    void Project::CloseActive()
+    {
+        Ref<Project> active = s_ActiveProject;
+        if (!active)
+        {
+            if (AssetManager *am = AssetManager::GetInstance())
+            {
+                active = am->LockActiveProject();
+            }
+        }
+
+        if (!active)
+            return;
+
+        if (Ref<Scene> scene = active->LockActiveScene())
+        {
+            scene->OnStop();
+            active->SetActiveScene(nullptr);
+        }
+
+        if (AssetManager *am = AssetManager::GetInstance())
+        {
+            am->Reset();
+            am->SetActiveProject(nullptr);
+        }
+
+        s_ActiveProject.reset();
+    }
+
     bool Project::IsCoreDependenciesUpToDate()
     {
         static std::array<std::string, 5> coreDeps =
@@ -497,48 +711,41 @@ R"(<Project>
 
     void Project::BuildSolution(bool forceRebuild) const
     {
-        AssetWorker::SubmitJob([this, forceRebuild]()
+        bool buildSuccess = std::filesystem::exists(GetScriptModulePath());
+
+        std::string_view verbosity = "/v:m"; // verbose minimal
+        std::string_view configStr = "Debug";
+        if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
+        else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
+
+        if (!buildSuccess || forceRebuild)
         {
-            bool buildSuccess = std::filesystem::exists(GetScriptModulePath());
-
-			std::string_view verbosity = "/v:m"; // verbose minimal
-            std::string_view configStr = "Debug";
-            if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
-            else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
-
-            if (!buildSuccess || forceRebuild)
+            // restore NuGet
             {
-                // restore NuGet
-                {
-                    AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
-					std::string buildCommand = std::format("msbuild \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                        GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
-                    std::system(buildCommand.c_str());
-                }
-
-                // Build
-                {
-                    AssetWorker::ReportStatus("Building Solution...", 0.8f);
-					std::string buildCommand = std::format("msbuild \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-						GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
-                    std::system(buildCommand.c_str());
-                }
+                AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
+                std::string buildCommand = std::format("msbuild \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                    GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
+                std::system(buildCommand.c_str());
             }
 
-            buildSuccess = std::filesystem::exists(GetScriptModulePath());
-
-            // Validate .dll file
-            LOG_ASSERT(buildSuccess, "[Project] Failed to build Solution");
-
-            // MAIN THREAD
-            // Notify script engine that the build finished; the script engine will
-            // load the assembly and then emit SignalType::Project for the editor layer.
-            Application::SubmitToMainThread([this, buildSuccess]()
+            // Build
             {
-                SignalBus::Emit(SuccessResultSignal{ buildSuccess, SignalType::ScriptEngine });
-                AssetWorker::ReportStatus("Ready", 1.0f);
-            });
-        });
+                AssetWorker::ReportStatus("Building Solution...", 0.8f);
+                std::string buildCommand = std::format("msbuild \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                    GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
+                std::system(buildCommand.c_str());
+            }
+        }
+
+        buildSuccess = std::filesystem::exists(GetScriptModulePath());
+
+        // Notify script engine that the build finished; the script engine will
+        // load the assembly and then emit SignalType::Project for the editor layer.
+        SignalBus::Emit(SuccessResultSignal{ buildSuccess, SignalType::ScriptEngine });
+        AssetWorker::ReportStatus("Ready", 1.0f);
+
+        // Validate .dll file
+        LOG_ASSERT(buildSuccess, "[Project] Failed to build Solution");
     }
 
     void Project::CreateCSharpScript(const std::filesystem::path &filepath)
@@ -713,93 +920,90 @@ R"(<Project>
             it->second = false;
         }
 
-        AssetWorker::SubmitJob([this, path]()
+        using namespace std::chrono_literals;
+
+        const std::filesystem::path exeDir = vfs::GetExecutableDirectory();
+        const std::filesystem::path sourcePath = exeDir / path;
+        if (!std::filesystem::exists(sourcePath))
         {
-            using namespace std::chrono_literals;
+            LOG_ERROR("[Project] Dependency {} is not found!", sourcePath.generic_string());
+            std::lock_guard lock(m_CoreDependencyMutex);
+            m_CoreDependenciesPending[path] = true;
+            return;
+        }
 
-            const std::filesystem::path exeDir = vfs::GetExecutableDirectory();
-            const std::filesystem::path sourcePath = exeDir / path;
-            if (!std::filesystem::exists(sourcePath))
+        const std::filesystem::path targetPath = GetScriptBinDirectory() / sourcePath.filename();
+
+        for (int i = 0; i < 80; ++i)
+        {
+            std::error_code ec;
+            if (!std::filesystem::exists(sourcePath.string(), ec) || ec)
             {
-                LOG_ERROR("[Project] Dependency {} is not found!", sourcePath.generic_string());
-                std::lock_guard lock(m_CoreDependencyMutex);
-                m_CoreDependenciesPending[path] = true;
-                return;
-            }
-
-            const std::filesystem::path targetPath = GetScriptBinDirectory() / sourcePath.filename();
-
-            for (int i = 0; i < 80; ++i)
-            {
-                std::error_code ec;
-                if (!std::filesystem::exists(sourcePath.string(), ec) || ec)
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                const auto fileSize = std::filesystem::file_size(sourcePath.string(), ec);
-                if (ec)
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                std::ifstream stream(sourcePath.string(), std::ios::binary);
-                if (!stream.good())
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
                 std::this_thread::sleep_for(25ms);
-                std::error_code ecAfter;
-                const auto fileSizeAfter = std::filesystem::file_size(sourcePath.string(), ecAfter);
-                if (!ecAfter && fileSize == fileSizeAfter)
-                {
-                    break;
-                }
+                continue;
             }
 
-            bool success = false;
-            try
+            const auto fileSize = std::filesystem::file_size(sourcePath.string(), ec);
+            if (ec)
             {
-                std::filesystem::copy_file(sourcePath.string(), targetPath.string(), std::filesystem::copy_options::overwrite_existing);
-                LOG_TRACE("[Project] Dependency {} available", sourcePath.generic_string());
-                success = true;
-            }
-            catch (...)
-            {
-                // Failed to copy
+                std::this_thread::sleep_for(25ms);
+                continue;
             }
 
+            std::ifstream stream(sourcePath.string(), std::ios::binary);
+            if (!stream.good())
             {
-                std::lock_guard lock(m_CoreDependencyMutex);
-                m_CoreDependenciesPending[path] = true;
+                std::this_thread::sleep_for(25ms);
+                continue;
             }
 
-            if (!success)
-                return;
-
-            auto checkPendingDeps = [this]() -> bool
+            std::this_thread::sleep_for(25ms);
+            std::error_code ecAfter;
+            const auto fileSizeAfter = std::filesystem::file_size(sourcePath.string(), ecAfter);
+            if (!ecAfter && fileSize == fileSizeAfter)
             {
-                std::lock_guard lock(m_CoreDependencyMutex);
-                for (const auto &ready : m_CoreDependenciesPending | std::views::values)
-                {
-                    if (!ready)
-                        return false;
-                }
-
-                return true;
-            };
-
-            // Check every dependencies update
-            if (checkPendingDeps())
-            {
-                LOG_TRACE("[Project] Dependencies are up to date.");
-                BuildSolution(true);
+                break;
             }
-        });
+        }
+
+        bool success = false;
+        try
+        {
+            std::filesystem::copy_file(sourcePath.string(), targetPath.string(), std::filesystem::copy_options::overwrite_existing);
+            LOG_TRACE("[Project] Dependency {} available", sourcePath.generic_string());
+            success = true;
+        }
+        catch (...)
+        {
+            // Failed to copy
+        }
+
+        {
+            std::lock_guard lock(m_CoreDependencyMutex);
+            m_CoreDependenciesPending[path] = true;
+        }
+
+        if (!success)
+            return;
+
+        auto checkPendingDeps = [this]() -> bool
+        {
+            std::lock_guard lock(m_CoreDependencyMutex);
+            for (const auto &ready : m_CoreDependenciesPending | std::views::values)
+            {
+                if (!ready)
+                    return false;
+            }
+
+            return true;
+        };
+
+        // Check every dependencies update
+        if (checkPendingDeps())
+        {
+            LOG_TRACE("[Project] Dependencies are up to date.");
+            BuildSolution(true);
+        }
     }
 
     void Project::StartCoreDependencyWatchers()

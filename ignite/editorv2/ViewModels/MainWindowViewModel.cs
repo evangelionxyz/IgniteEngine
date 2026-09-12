@@ -1,6 +1,12 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Ignite.Managed.Services;
 using IgniteEditor.Services;
+using System.Threading.Tasks;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform.Storage;
+using System;
+using System.Runtime.InteropServices;
 
 namespace IgniteEditor.ViewModels;
 
@@ -211,22 +217,104 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void NewProject()
+    private async Task NewProject()
     {
-        _loggingService.Info("New project dialog (not yet connected)");
+        if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
+        {
+            var options = new FolderPickerOpenOptions
+            {
+                Title = "Select Location for New Project"
+            };
+
+            var folders = await desktop.MainWindow.StorageProvider.OpenFolderPickerAsync(options);
+            if (folders != null && folders.Count > 0)
+            {
+                string parentDir = folders[0].Path.LocalPath;
+                string defaultName = "NewProject";
+                _loggingService.Info($"Creating new project '{defaultName}' in: {parentDir}");
+                bool success = NativeEngineBridge.Ignite_Project_New(defaultName, parentDir);
+                if (success)
+                {
+                    var name = Marshal.PtrToStringUTF8(NativeEngineBridge.Ignite_Project_GetName()) ?? "";
+                    Title = $"Ignite Editor - {name}";
+                    StatusText = $"Created project: {name}";
+                    _loggingService.Info($"Project '{name}' created successfully.");
+                }
+                else
+                {
+                    StatusText = "Failed to create project";
+                    _loggingService.Error($"Failed to create project in: {parentDir}");
+                }
+            }
+        }
     }
 
     [RelayCommand]
-    private void OpenProject()
+    private async Task OpenProject()
     {
-        _loggingService.Info("Open project dialog (not yet connected)");
+        if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
+        {
+            var options = new FilePickerOpenOptions
+            {
+                Title = "Open Ignite Project",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("Ignite Project (*.ixproj)")
+                    {
+                        Patterns = new[] { "*.ixproj" }
+                    },
+                    new FilePickerFileType("All Files (*.*)")
+                    {
+                        Patterns = new[] { "*.*" }
+                    }
+                }
+            };
+
+            var files = await desktop.MainWindow.StorageProvider.OpenFilePickerAsync(options);
+            if (files != null && files.Count > 0)
+            {
+                string path = files[0].Path.LocalPath;
+                _loggingService.Info($"Opening project: {path}");
+                bool success = NativeEngineBridge.Ignite_Project_Open(path);
+                if (success)
+                {
+                    var name = Marshal.PtrToStringUTF8(NativeEngineBridge.Ignite_Project_GetName()) ?? "";
+                    Title = $"Ignite Editor - {name}";
+                    StatusText = $"Opened project: {name}";
+                    _loggingService.Info($"Project '{name}' opened successfully.");
+                }
+                else
+                {
+                    StatusText = "Failed to open project";
+                    _loggingService.Error($"Failed to open project: {path}");
+                }
+            }
+        }
     }
 
     [RelayCommand]
     private void SaveProject()
     {
-        _loggingService.Info("Project saved (not yet connected)");
-        StatusText = "Project saved";
+        if (NativeEngineBridge.Ignite_Project_IsOpen())
+        {
+            bool ok = NativeEngineBridge.Ignite_Project_Save();
+            if (ok)
+            {
+                _loggingService.Info("Project saved.");
+                StatusText = "Project saved";
+            }
+            else
+            {
+                _loggingService.Error("Failed to save project.");
+                StatusText = "Failed to save project";
+            }
+        }
+        else
+        {
+            _loggingService.Warn("No active project to save.");
+            StatusText = "No active project";
+        }
     }
 }
 

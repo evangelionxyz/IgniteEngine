@@ -710,11 +710,6 @@ namespace ignite
 
                 // Load App Assembly immediately (we may be on a worker thread)
                 scriptEngineData->appAssemblyLoaded = LoadAppAssembly(modulePath);
-                const bool ready = scriptEngineData->appAssemblyLoaded;
-                Application::SubmitToMainThread([ready]()
-                {
-                    SignalBus::Emit(SuccessResultSignal{ ready, SignalType::Project });
-                });
                 return FileStatus::Success;
             }
         }
@@ -740,10 +735,6 @@ namespace ignite
             {
                 scriptEngineData->appAssemblyLoaded = LoadAppAssembly(scriptEngineData->project->GetScriptModulePath());
             }
-
-            // We are already on the main thread (called from project.cpp's SubmitToMainThread),
-            // so emit Project signal directly — no need for another SubmitToMainThread.
-            SignalBus::Emit(SuccessResultSignal{ signal.isSuccess && scriptEngineData->appAssemblyLoaded, SignalType::Project });
         });
 
         // Run the build and load the App Assembly if success

@@ -337,7 +337,7 @@ namespace ignite
         return plan;
     }
 
-    void SceneRenderer::Render(ICamera *camera, FrameContext *frameContext, bool drawDebug)
+    void SceneRenderer::Render(ICamera *camera, FrameContext *frameContext, bool drawDebug, nvrhi::IFramebuffer *targetFramebuffer)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -404,7 +404,14 @@ namespace ignite
                 frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
 
                 const glm::vec4 bgColor = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
-                target->compositeRT->ClearColorAttachmentFloat(cmd, 0, bgColor);
+                if (targetFramebuffer)
+                {
+                    nvrhi::utils::ClearColorAttachment(cmd, targetFramebuffer, 0, nvrhi::Color(bgColor.r, bgColor.g, bgColor.b, bgColor.a));
+                }
+                else
+                {
+                    target->compositeRT->ClearColorAttachmentFloat(cmd, 0, bgColor);
+                }
 
                 if (target->previousPlan.requiresDebugOverlay && target->debugRT)
                 {
@@ -420,19 +427,22 @@ namespace ignite
 
                 if (plan.requiresGrid)
                 {
-                    nvrhi::IFramebuffer *compositeFb = target->compositeRT->GetFramebuffer();
+                    nvrhi::IFramebuffer *destFb = targetFramebuffer ? targetFramebuffer : target->compositeRT->GetFramebuffer().Get();
                     if (camera->projectionType == ProjectionType::Orthographic)
                     {
-                        DrawDebugGrid(cmd, compositeFb, frameContext, sceneRenderSettings.worldGrid2D, true);
+                        DrawDebugGrid(cmd, destFb, frameContext, sceneRenderSettings.worldGrid2D, true);
                     }
                     else
                     {
-                        DrawDebugGrid(cmd, compositeFb, frameContext, sceneRenderSettings.worldGrid3D, false);
+                        DrawDebugGrid(cmd, destFb, frameContext, sceneRenderSettings.worldGrid3D, false);
                     }
                 }
 
-                cmd->setTextureState(*target->compositeRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-                cmd->commitBarriers();
+                if (!targetFramebuffer)
+                {
+                    cmd->setTextureState(*target->compositeRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                    cmd->commitBarriers();
+                }
                 cmd->close();
 
                 {
@@ -470,7 +480,10 @@ namespace ignite
 
             // Clear Render Targets (feature-gated)
             {
-                target->sceneRT->ClearColorAttachmentFloat(cmd, 0);
+                const glm::vec4 clearColor = (m_WorldEnvironment && m_WorldEnvironment->environment)
+                    ? glm::vec4(0.0f)
+                    : glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
+                target->sceneRT->ClearColorAttachmentFloat(cmd, 0, clearColor);
                 if (plan.requiresObjectId || target->previousPlan.requiresObjectId)
                 {
                     target->sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
@@ -641,10 +654,10 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive);
+                CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, targetFramebuffer);
             }
 
-            if (postProcessing.taaProperties.enable)
+            if (postProcessing.taaProperties.enable && !targetFramebuffer)
             {
                 EnsureTAAHistoryRT(target, width, height);
                 if (target->taaHistoryRT[frameContext->frameIndexInFlight])
@@ -2414,11 +2427,12 @@ namespace ignite
 
     void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext,
         Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing,
-        Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, bool msaaResolved)
+        Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, bool msaaResolved,
+        nvrhi::IFramebuffer *targetFramebuffer)
     {
         IGN_PROFILE_FUNCTION();
 
-        auto compositeFramebuffer = target->compositeRT->GetFramebuffer();
+        nvrhi::IFramebuffer *compositeFramebuffer = targetFramebuffer ? targetFramebuffer : target->compositeRT->GetFramebuffer().Get();
 
         // Setup Post Processing settings
         if (camera)

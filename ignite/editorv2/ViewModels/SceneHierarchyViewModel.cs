@@ -2,8 +2,8 @@ using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using IgniteEditor.Models;
-using IgniteEditor.Services;
+using Ignite.Managed.Models;
+using Ignite.Managed.Services;
 
 namespace IgniteEditor.ViewModels;
 

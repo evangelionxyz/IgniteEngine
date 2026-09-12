@@ -1,6 +1,16 @@
 namespace IgniteEditor.ViewModels;
 
 /// <summary>
+/// Mirrors C++ EditorCamera::NavigationMode.
+/// </summary>
+public enum CameraNavigationMode
+{
+    Orbit = 0,
+    Fly   = 1,
+    Mode2D = 2
+}
+
+/// <summary>
 /// Enum mirroring the C++ GizmoOperation in states.hpp
 /// </summary>
 public enum GizmoOperation

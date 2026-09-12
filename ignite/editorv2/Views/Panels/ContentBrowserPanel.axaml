@@ -6,7 +6,7 @@
 
     <DockPanel>
         <!-- Navigation bar -->
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="2" Height="26">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="2" Height="26">
             <Button Grid.Column="0" Content="◀" Command="{Binding NavigateBackCommand}" 
                     IsEnabled="{Binding CanGoBack}" Padding="4,2" FontSize="11" MinWidth="24" MinHeight="22" />
             <Button Grid.Column="1" Content="▶" Command="{Binding NavigateForwardCommand}" 
@@ -34,11 +34,8 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBox Grid.Column="4" PlaceholderText="🔍 Search" Text="{Binding SearchFilter}" 
+            <TextBox Grid.Column="4" PlaceholderText="Search" Text="{Binding SearchFilter}" 
                      Width="140" FontSize="11" Padding="4,2" MinHeight="22" Margin="4,0" />
-
-            <Slider Grid.Column="5" Value="{Binding ThumbnailSize}" Minimum="48" Maximum="128" 
-                    Width="80" VerticalAlignment="Center" />
         </Grid>
 
         <!-- Item count status -->

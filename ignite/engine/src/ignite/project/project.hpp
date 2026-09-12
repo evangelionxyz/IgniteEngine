@@ -113,10 +113,20 @@ namespace ignite
 
         static Ref<Project> Create(const ProjectInfo &info);
 
+        static Ref<Project> GetActive();
+        static void SetActive(const Ref<Project> &project);
+        static Ref<Project> New(const std::string &name, const std::filesystem::path &parentDirectory);
+        static Ref<Project> Open(const std::filesystem::path &filepath);
+        static bool SaveActive();
+        static void CloseActive();
+
         static AssetType GetStaticType() { return AssetType::Project; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
         bool IsCoreDependenciesUpToDate();
+
+    private:
+        static inline Ref<Project> s_ActiveProject = nullptr;
 
     private:
         void CopyCoreDependencies();

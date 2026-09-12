@@ -49,19 +49,32 @@ function copy_dir(src, dst)
     end
 end
 
-    include "../ignite/editor/ignite.editor.lua"
+group "Managed"
+    include "../ignite/managed/ignite.managed.lua"
+    include "../scriptengine/ignite.scriptengine.lua"
+    include "mochisharp-managed.lua"
+group ""
+
+group "App"
     include "../ignite/editorv2/ignite.editorv2.lua"
+    include "../ignite/editor/ignite.editor.lua"
+group ""
+
+group "App/Tests"
+    include "../ignite/managed.test/ignite.managed.test.lua"
+    include "../ignite/test/ignite.test.lua"
+group ""
+
+group "Engine"
     include "../ignite/engine/ignite.engine.lua"
     include "../ignite/core/ignite.core.lua"
     include "../ignite/physics/ignite.physics.lua"
-    include "../ignite/test/ignite.test.lua"
-    include "../scriptengine/ignite.scriptengine.lua"
-    
+
     -- Rust
     include "../crates/ignite_rs.lua"
 
     include "mochisharp-native.lua"
-    include "mochisharp-managed.lua"
+group ""
 
     if not os.getenv("GITHUB_ACTIONS") then
         include "utility_project.lua"

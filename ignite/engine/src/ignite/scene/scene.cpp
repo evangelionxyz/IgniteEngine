@@ -168,13 +168,25 @@ namespace ignite
     Scene::Scene(Project *project)
         : m_Project(project)
         , m_SceneRenderer(nullptr)
+        , m_AssetManager(nullptr)
+        , m_Physics2D(nullptr)
+        , m_Physics3D(nullptr)
         , m_ViewportWidth(1280)
         , m_ViewportHeight(720)
     {
         registry = new entt::registry();
 
-        m_Physics2D = project->GetPhysics2D();
-        m_Physics3D = project->GetPhysics3D();
+        if (m_Project)
+        {
+            m_Physics2D = m_Project->GetPhysics2D();
+            m_Physics3D = m_Project->GetPhysics3D();
+        }
+        else if (auto activeProj = Project::GetActive())
+        {
+            m_Project = activeProj.get();
+            m_Physics2D = m_Project->GetPhysics2D();
+            m_Physics3D = m_Project->GetPhysics3D();
+        }
 
 		m_AssetManager = AssetManager::GetInstance();
 		m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(

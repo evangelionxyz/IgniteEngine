@@ -199,81 +199,70 @@
         <!-- ================================================================= -->
         <!-- ROW 2: EXPANDED TOOLBAR WITH COMPREHENSIVE ENGINE TOOLS           -->
         <!-- ================================================================= -->
-        <Border DockPanel.Dock="Top" Background="#1E1E1E" Padding="6,3" Height="34"
-                BorderBrush="#262626" BorderThickness="0,0,0,1">
+        <Border DockPanel.Dock="Top" Background="#1E1E1E"
+                Padding="6,3" Height="34" BorderBrush="#262626"
+                BorderThickness="0,0,0,1">
             <DockPanel LastChildFill="True">
                 <!-- Left Section: Play Controls & Transform Gizmos -->
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                    <!-- Playback Controls -->
-                    <Border Background="#161616" CornerRadius="3" Padding="2" BorderBrush="#2A2A2A" BorderThickness="1">
-                        <StackPanel Orientation="Horizontal" Spacing="2">
-                            <Button Content="Play" Command="{Binding PlayCommand}" 
-                                    Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                    ToolTip.Tip="Play Scene" />
-                            <Button Content="Pause" Command="{Binding PauseCommand}" 
-                                    Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                    ToolTip.Tip="Pause Scene" />
-                            <Button Content="Stop" Command="{Binding StopCommand}" 
-                                    Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                    ToolTip.Tip="Stop Scene" />
-                            <Button Content="Step" Command="{Binding StepCommand}" 
-                                    Classes="tool-btn" FontSize="10" MinWidth="24" Height="22" Padding="4,1"
-                                    ToolTip.Tip="Step 1 Frame" />
-                            <Button Content="Simulate" Command="{Binding SimulateCommand}" 
-                                    Classes="tool-btn" FontSize="11" MinWidth="24" Height="22" Padding="4,1"
-                                    ToolTip.Tip="Simulate Physics" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Width="1" Background="#2A2A2A" Margin="4,2" />
-
-                    <!-- Transform Gizmo Tools -->
-                    <Border Background="#161616" CornerRadius="3" Padding="2" BorderBrush="#2A2A2A" BorderThickness="1">
-                        <StackPanel Orientation="Horizontal" Spacing="2">
-                            <Button Content="Translate" Command="{Binding SetGizmoCommand}" CommandParameter="Translate"
-                                    Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                    ToolTip.Tip="Translate Tool (W)" />
-                            <Button Content="Rotate" Command="{Binding SetGizmoCommand}" CommandParameter="Rotate"
-                                    Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                    ToolTip.Tip="Rotate Tool (E)" />
-                            <Button Content="Scale" Command="{Binding SetGizmoCommand}" CommandParameter="Scale"
-                                    Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                    ToolTip.Tip="Scale Tool (R)" />
-                            <Button Content="Bound 2D" Command="{Binding SetGizmoCommand}" CommandParameter="BoundSizing2D"
-                                    Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
-                                    ToolTip.Tip="2D Bounds Tool (T)" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Width="1" Background="#2A2A2A" Margin="4,2" />
-
+                    
                     <!-- Coordinate System Toggle -->
                     <Button Content="{Binding CoordinateSpaceText}" 
                             Command="{Binding ToggleCoordinateSpaceCommand}"
-                            Classes="tool-btn" Height="24" Padding="6,2" FontSize="11"
+                            Classes="tool-btn" Height="22" Padding="6,2" FontSize="11"
                             ToolTip.Tip="Toggle Coordinate Space (World / Local)" />
 
                     <!-- Snapping & Grid -->
                     <ToggleButton Content="Snap" IsChecked="{Binding SnapEnabled}"
-                                  Classes="tool-toggle" Height="24" Padding="6,2" FontSize="11"
+                                  Classes="tool-toggle" Height="22" Padding="6,2" FontSize="11"
                                   ToolTip.Tip="Toggle Grid/Rotation Snapping" />
 
                     <ToggleButton Content="Grid" IsChecked="{Binding ShowGrid}"
-                                  Classes="tool-toggle" Height="24" Padding="6,2" FontSize="11"
+                                  Classes="tool-toggle" Height="22" Padding="6,2" FontSize="11"
                                   ToolTip.Tip="Toggle Viewport Grid" />
 
                     <Border Width="1" Background="#2A2A2A" Margin="4,2" />
+                    
+                    <!-- Transform Gizmo Tools -->
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Button Content="Translate" Command="{Binding SetGizmoCommand}" CommandParameter="Translate"
+                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
+                                ToolTip.Tip="Translate Tool (W)" />
+                        <Button Content="Rotate" Command="{Binding SetGizmoCommand}" CommandParameter="Rotate"
+                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
+                                ToolTip.Tip="Rotate Tool (E)" />
+                        <Button Content="Scale" Command="{Binding SetGizmoCommand}" CommandParameter="Scale"
+                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
+                                ToolTip.Tip="Scale Tool (R)" />
+                        <Button Content="Bound 2D" Command="{Binding SetGizmoCommand}" CommandParameter="BoundSizing2D"
+                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
+                                ToolTip.Tip="2D Bounds Tool (T)" />
+                    </StackPanel>
 
-                    <!-- Viewport Mode (3D/2D) -->
-                    <ToggleButton Content="2D" IsChecked="{Binding Is2DMode}"
-                                  Classes="tool-toggle" Height="24" Padding="8,2" FontSize="11"
-                                  ToolTip.Tip="Toggle 2D / 3D Mode" />
+                    <Border Width="1" Background="#2A2A2A" Margin="4,2" />
 
-                    <!-- Quick Save -->
-                    <Button Content="Save" Command="{Binding SaveSceneCommand}"
-                            Classes="tool-btn" Height="24" MinWidth="28" Padding="4,2" FontSize="12"
-                            ToolTip.Tip="Save Scene (Ctrl+S)" />
+                    <!-- Scene Playback Controls -->
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Button Content="Play" Command="{Binding PlayCommand}" Background="Green"
+                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
+                                ToolTip.Tip="Play Scene" />
+                        <Button Content="Pause" Command="{Binding PauseCommand}" 
+                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
+                                ToolTip.Tip="Pause Scene" />
+                        <Button Content="Stop" Command="{Binding StopCommand}" 
+                                Classes="tool-btn" FontSize="12" MinWidth="26" Height="22" Padding="4,1"
+                                ToolTip.Tip="Stop Scene" />
+                        <Button Content="Step" Command="{Binding StepCommand}" 
+                                Classes="tool-btn" FontSize="10" MinWidth="24" Height="22" Padding="4,1"
+                                ToolTip.Tip="Step 1 Frame" />
+                        <Button Content="Simulate" Command="{Binding SimulateCommand}" 
+                                Classes="tool-btn" FontSize="11" MinWidth="24" Height="22" Padding="4,1"
+                                ToolTip.Tip="Simulate Physics" />
+                    </StackPanel>
+
                 </StackPanel>
+
+                
 
                 <!-- Right Section: State & Diagnostics Info -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -308,10 +297,6 @@
 
                 <Border Grid.Column="2" />
 
-                <!-- Platform Tag -->
-                <TextBlock Grid.Column="3" Text="DirectX12 / Vulkan" 
-                           FontSize="11" Foreground="#999999" Margin="0,0,12,0" VerticalAlignment="Center" />
-
                 <!-- Version -->
                 <TextBlock Grid.Column="4" Text="Ignite Engine v0.1.0" 
                            FontSize="11" Foreground="#999999" VerticalAlignment="Center" />
@@ -321,7 +306,7 @@
         <!-- ================================================================= -->
         <!-- ROW 3: MAIN EDITOR DOCK/PANEL CONTENT                             -->
         <!-- ================================================================= -->
-        <Grid ColumnDefinitions="220,3,*,3,300" Background="#161616">
+        <Grid ColumnDefinitions="220,3,*,3,330" Background="#161616">
             <!-- Left: Scene Hierarchy -->
             <Border Grid.Column="0" Background="#1E1E1E">
                 <DockPanel>
@@ -336,7 +321,7 @@
             <GridSplitter Grid.Column="1" Width="3" Background="#242424" />
 
             <!-- Center: Viewport + Bottom panels -->
-            <Grid Grid.Column="2" RowDefinitions="*,3,210">
+            <Grid Grid.Column="2" RowDefinitions="*,3,280">
                 <!-- Viewport -->
                 <Border Grid.Row="0" Background="#181818">
                     <DockPanel>

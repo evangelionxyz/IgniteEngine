@@ -1,7 +1,7 @@
 using System;
 using System.Numerics;
 
-namespace IgniteEditor.Models;
+namespace Ignite.Managed.Models;
 
 public enum ComponentType
 {

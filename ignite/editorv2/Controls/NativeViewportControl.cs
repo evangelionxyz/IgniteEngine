@@ -1,26 +1,33 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using IgniteEditor.Services;
+
+using Ignite.Managed.Services;
+using IgniteEditor.ViewModels;
 
 namespace IgniteEditor.Controls;
 
+/// <summary>
+/// Native viewport control that hosts the Ignite engine directly via Vulkan swapchain.
+/// All 3D rendering and camera navigation (Orbit/Fly/2D via SDL3 InputSystem) runs natively
+/// in C++ at 120+ FPS with zero GPU readback overhead.
+/// </summary>
 public class NativeViewportControl : NativeControlHost
 {
     private IntPtr _childHwnd = IntPtr.Zero;
     private DispatcherTimer? _renderTimer;
-    private readonly DispatcherTimer _resizeDebounceTimer;
-    private readonly Stopwatch _resizeThrottleStopwatch = new();
     private readonly Stopwatch _stopwatch = new();
     private TimeSpan _lastTime;
     private bool _isInitialized;
-    private bool _firstResizeApplied;
+    private CameraNavigationMode _currentNavigationMode = CameraNavigationMode.Orbit;
 
-    private int _pendingWidth;
-    private int _pendingHeight;
     private int _currentWidth;
     private int _currentHeight;
 
@@ -29,38 +36,59 @@ public class NativeViewportControl : NativeControlHost
 
     public bool IsEngineConnected => _isInitialized;
 
+    // FPS tracking
+    private int    _frameCount;
+    private double _fpsAccumulator;
+
     public NativeViewportControl()
     {
-        _resizeDebounceTimer = new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(50)
-        };
-        _resizeDebounceTimer.Tick += OnResizeDebounceTick;
+        Focusable = true;
     }
+
+    // ── Navigation mode ───────────────────────────────────────────────────────
+    public void SetNavigationMode(CameraNavigationMode mode)
+    {
+        _currentNavigationMode = mode;
+        if (_isInitialized)
+        {
+            NativeEngineBridge.Ignite_Camera_SetNavigationMode((int)mode);
+        }
+    }
+
+    // ── Focus & pointer interaction ──────────────────────────────────────────
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (_childHwnd != IntPtr.Zero)
+        {
+            SetFocus(_childHwnd);
+        }
+    }
+
+    // ── Native control creation ───────────────────────────────────────────────
 
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
+        int width  = (int)Bounds.Width  > 0 ? (int)Bounds.Width  : 1280;
+        int height = (int)Bounds.Height > 0 ? (int)Bounds.Height : 720;
+        _currentWidth  = width;
+        _currentHeight = height;
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             var parentHwnd = parent.Handle;
-            int width = (int)Bounds.Width > 0 ? (int)Bounds.Width : 1280;
-            int height = (int)Bounds.Height > 0 ? (int)Bounds.Height : 720;
-            _currentWidth = width;
-            _currentHeight = height;
-            _pendingWidth = width;
-            _pendingHeight = height;
 
-            // Win32 Window Styles
-            const int WS_CHILD = 0x40000000;
-            const int WS_VISIBLE = 0x10000000;
+            const int WS_CHILD        = 0x40000000;
+            const int WS_VISIBLE      = 0x10000000;
             const int WS_CLIPCHILDREN = 0x02000000;
             const int WS_CLIPSIBLINGS = 0x04000000;
+            const int SS_NOTIFY       = 0x00000100;
 
             _childHwnd = CreateWindowExW(
                 0,
                 "STATIC",
                 "IgniteViewportHost",
-                WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | SS_NOTIFY,
                 0, 0, width, height,
                 parentHwnd,
                 IntPtr.Zero,
@@ -72,10 +100,10 @@ public class NativeViewportControl : NativeControlHost
                 var config = new IgniteAppConfig
                 {
                     NativeWindowHandle = _childHwnd,
-                    Width = (uint)width,
-                    Height = (uint)height,
-                    Offscreen = false, // Direct native viewport swapchain
-                    GraphicsApi = 0,   // Vulkan first
+                    Width       = (uint)width,
+                    Height      = (uint)height,
+                    Offscreen   = false, // Direct native Vulkan swapchain (120+ FPS!)
+                    GraphicsApi = 0,     // Vulkan
                     EnableDebug = false
                 };
 
@@ -86,12 +114,14 @@ public class NativeViewportControl : NativeControlHost
 
                     if (_isInitialized)
                     {
+                        NativeEngineBridge.Ignite_Camera_SetNavigationMode((int)_currentNavigationMode);
+
                         _stopwatch.Start();
                         _lastTime = _stopwatch.Elapsed;
 
                         _renderTimer = new DispatcherTimer(DispatcherPriority.Render)
                         {
-                            Interval = TimeSpan.FromMilliseconds(16) // ~60 FPS
+                            Interval = TimeSpan.FromMicroseconds(0) // Run as fast as display allows
                         };
                         _renderTimer.Tick += OnRenderTick;
                         _renderTimer.Start();
@@ -99,7 +129,7 @@ public class NativeViewportControl : NativeControlHost
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[NativeViewportControl] Failed to initialize engine: {ex.Message}");
+                    Debug.WriteLine($"[NativeViewportControl] Engine init failed: {ex.Message}");
                     _isInitialized = false;
                     EngineConnectionChanged?.Invoke(false);
                 }
@@ -111,31 +141,32 @@ public class NativeViewportControl : NativeControlHost
         return base.CreateNativeControlCore(parent);
     }
 
-    private int _frameCount;
-    private double _fpsAccumulator;
+    // ── Render tick ───────────────────────────────────────────────────────────
 
     private void OnRenderTick(object? sender, EventArgs e)
     {
         if (!_isInitialized) return;
 
-        var currentTime = _stopwatch.Elapsed;
-        var dt = (float)(currentTime - _lastTime).TotalSeconds;
-        _lastTime = currentTime;
-
+        var now = _stopwatch.Elapsed;
+        var dt  = (float)(now - _lastTime).TotalSeconds;
+        _lastTime = now;
         if (dt > 0.1f) dt = 0.1f;
 
+        // Native engine step: polls SDL3 events, updates EditorCamera, renders directly to swapchain
         NativeEngineBridge.Ignite_Tick(dt);
 
+        // FPS counter
         _frameCount++;
         _fpsAccumulator += dt;
         if (_fpsAccumulator >= 0.5)
         {
-            float fps = (float)(_frameCount / _fpsAccumulator);
-            FpsUpdated?.Invoke(fps);
+            FpsUpdated?.Invoke((float)(_frameCount / _fpsAccumulator));
             _frameCount = 0;
             _fpsAccumulator = 0;
         }
     }
+
+    // ── Resize ────────────────────────────────────────────────────────────────
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
@@ -147,62 +178,24 @@ public class NativeViewportControl : NativeControlHost
         if (w == _currentWidth && h == _currentHeight)
             return;
 
-        _pendingWidth = w;
-        _pendingHeight = h;
+        _currentWidth  = w;
+        _currentHeight = h;
 
-        // Apply immediately on first layout or before engine is initialized
-        if (!_firstResizeApplied || !_isInitialized)
+        if (_childHwnd != IntPtr.Zero)
         {
-            _firstResizeApplied = true;
-            ApplyPendingResize();
-            return;
+            SetWindowPos(_childHwnd, IntPtr.Zero, 0, 0, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
         }
-
-        // Throttle during continuous dragging: at most once every 100ms
-        if (!_resizeThrottleStopwatch.IsRunning || _resizeThrottleStopwatch.ElapsedMilliseconds >= 100)
-        {
-            _resizeThrottleStopwatch.Restart();
-            ApplyPendingResize();
-            return;
-        }
-
-        // Debounce: wait 50ms after the user stops dragging
-        _resizeDebounceTimer.Stop();
-        _resizeDebounceTimer.Start();
-    }
-
-    private void OnResizeDebounceTick(object? sender, EventArgs e)
-    {
-        _resizeDebounceTimer.Stop();
-        _resizeThrottleStopwatch.Reset();
-        ApplyPendingResize();
-    }
-
-    private void ApplyPendingResize()
-    {
-        if (_childHwnd == IntPtr.Zero || _pendingWidth <= 0 || _pendingHeight <= 0)
-            return;
-
-        if (_pendingWidth == _currentWidth && _pendingHeight == _currentHeight)
-            return;
-
-        _currentWidth = _pendingWidth;
-        _currentHeight = _pendingHeight;
-
-        SetWindowPos(_childHwnd, IntPtr.Zero, 0, 0, _currentWidth, _currentHeight,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
 
         if (_isInitialized)
         {
-            NativeEngineBridge.Ignite_Resize((uint)_currentWidth, (uint)_currentHeight);
+            NativeEngineBridge.Ignite_Resize((uint)w, (uint)h);
         }
     }
 
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+
     protected override void DestroyNativeControlCore(IPlatformHandle control)
     {
-        _resizeDebounceTimer.Stop();
-        _resizeThrottleStopwatch.Reset();
-
         _renderTimer?.Stop();
         _renderTimer = null;
 
@@ -222,13 +215,15 @@ public class NativeViewportControl : NativeControlHost
         base.DestroyNativeControlCore(control);
     }
 
-    private const uint SWP_NOZORDER = 0x0004;
+    // ── Win32 P/Invokes ───────────────────────────────────────────────────────
+
+    private const uint SWP_NOZORDER   = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
-    private const uint SWP_NOCOPYBITS = 0x0100;
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr CreateWindowExW(int dwExStyle, string lpClassName, string lpWindowName,
-        int dwStyle, int x, int y, int nWidth, int nHeight, IntPtr hWndParent, IntPtr hMenu, IntPtr hInstance, IntPtr lpParam);
+        int dwStyle, int x, int y, int nWidth, int nHeight, IntPtr hWndParent, IntPtr hMenu,
+        IntPtr hInstance, IntPtr lpParam);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -236,8 +231,12 @@ public class NativeViewportControl : NativeControlHost
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+        int X, int Y, int cx, int cy, uint uFlags);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandleW(string? lpModuleName);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetFocus(IntPtr hWnd);
 }

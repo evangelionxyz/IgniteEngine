@@ -1,9 +1,6 @@
-using System;
 using System.Collections.ObjectModel;
-using System.Numerics;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using IgniteEditor.Models;
+using Ignite.Managed.Models;
 
 namespace IgniteEditor.ViewModels;
 
@@ -21,7 +18,7 @@ public partial class PropertiesViewModel : ViewModelBase
     [ObservableProperty]
     private ObservableCollection<ComponentEditorViewModel> _components = new();
 
-    public void SetEntity(EntityNodeViewModel? entityNode, Models.EntityModel? model)
+    public void SetEntity(EntityNodeViewModel? entityNode, Ignite.Managed.Models.EntityModel? model)
     {
         if (entityNode == null || model == null)
         {

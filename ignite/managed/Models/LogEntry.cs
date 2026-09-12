@@ -1,6 +1,6 @@
 using System;
 
-namespace IgniteEditor.Models;
+namespace Ignite.Managed.Models;
 
 public enum LogLevel
 {

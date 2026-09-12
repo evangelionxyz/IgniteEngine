@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using System.Collections.Generic;
 
 namespace IgniteEditor.ViewModels;
 
@@ -21,5 +22,14 @@ public partial class ViewportViewModel : ViewModelBase
 
     [ObservableProperty]
     private float _fps;
-}
 
+    [ObservableProperty]
+    private CameraNavigationMode _navigationMode = CameraNavigationMode.Orbit;
+
+    public List<CameraNavigationMode> NavigationModes { get; } = new()
+    {
+        CameraNavigationMode.Orbit,
+        CameraNavigationMode.Fly,
+        CameraNavigationMode.Mode2D
+    };
+}

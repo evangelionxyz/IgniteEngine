@@ -19,6 +19,7 @@ project "Ignite.EditorV2"
     }
 
     links {
+        "Ignite.Managed",
         "Ignite.ScriptEngine"
     }
 
