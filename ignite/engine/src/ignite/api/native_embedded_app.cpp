@@ -42,4 +42,65 @@ namespace ignite
     void NativeEmbeddedApp::Pause() { if (m_AvaloniaLayer) m_AvaloniaLayer->Pause(); }
     void NativeEmbeddedApp::StepFrame(int frames) { if (m_AvaloniaLayer) m_AvaloniaLayer->StepFrame(frames); }
     int NativeEmbeddedApp::GetSceneState() const { return m_AvaloniaLayer ? m_AvaloniaLayer->GetState() : static_cast<int>(ESceneState::Stop); }
+
+    uint64_t NativeEmbeddedApp::PickEntity(float mouseX, float mouseY, uint32_t viewportWidth, uint32_t viewportHeight, bool isDoubleClick, bool isShiftDown)
+    {
+        return m_AvaloniaLayer ? static_cast<uint64_t>(m_AvaloniaLayer->PickEntity(mouseX, mouseY, viewportWidth, viewportHeight, isDoubleClick, isShiftDown)) : 0u;
+    }
+
+    void NativeEmbeddedApp::SetSelectedEntity(uint64_t uuid)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SelectEntity(UUID(uuid), false);
+    }
+
+    void NativeEmbeddedApp::SelectEntity(uint64_t uuid, bool multiSelect)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SelectEntity(UUID(uuid), multiSelect);
+    }
+
+    void NativeEmbeddedApp::DeselectEntity(uint64_t uuid)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->DeselectEntity(UUID(uuid));
+    }
+
+    bool NativeEmbeddedApp::IsEntitySelected(uint64_t uuid) const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->IsEntitySelected(UUID(uuid)) : false;
+    }
+
+    void NativeEmbeddedApp::ClearSelectedEntities()
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->ClearSelectedEntities();
+    }
+
+    void NativeEmbeddedApp::SetSelectedEntities(const uint64_t *uuids, uint32_t count)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SetSelectedEntities(uuids, count);
+    }
+
+    uint32_t NativeEmbeddedApp::GetSelectedEntities(uint64_t *outUuids, uint32_t maxCount) const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->GetSelectedEntities(outUuids, maxCount) : 0;
+    }
+
+    uint32_t NativeEmbeddedApp::GetSelectedEntityCount() const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->GetSelectedEntityCount() : 0;
+    }
+
+    uint64_t NativeEmbeddedApp::GetSelectedEntity() const
+    {
+        return m_AvaloniaLayer ? static_cast<uint64_t>(m_AvaloniaLayer->GetSelectedEntityUUID()) : 0;
+    }
+
+    void NativeEmbeddedApp::SetEntitySelectedCallback(void (*callback)(uint64_t uuid, bool isMultiSelect))
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SetEntitySelectedCallback(callback);
+    }
 }

@@ -89,10 +89,8 @@ public partial class MainWindow : Window
     {
         base.OnClosing(e);
 
-
-
-
-        try { NativeEngineBridge.Ignite_SetLogCallback(null); } catch { }
+        Controls.NativeViewportControl.Instance?.Shutdown();
+        NativeEngineBridge.Ignite_SetLogCallback(null);
     }
 
     private static bool IsDescendantOfNativeViewport(Visual? visual)

@@ -27,6 +27,14 @@ public partial class ViewportPanel : UserControl
                     vm.Fps = fps;
                 }
             };
+
+            ViewportHost.EntityPicked += (uuid, isMultiSelect) =>
+            {
+                if (DataContext is ViewportViewModel vm)
+                {
+                    vm.NotifyEntityPicked(uuid, isMultiSelect);
+                }
+            };
         }
 
         void AttachViewModel(ViewportViewModel vm)

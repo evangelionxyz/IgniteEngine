@@ -410,6 +410,7 @@ namespace ignite
 			SetKey(event->key.key, false);
 			break;
 		case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			SetMousePosition((int)event->button.x, (int)event->button.y);
 			SetMouseButton(event->button.button, true);
 			break;
 		case SDL_EVENT_MOUSE_BUTTON_UP:
@@ -455,6 +456,7 @@ namespace ignite
 			SetKey(event->key.key, false);
 			break;
 		case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			SetMousePosition((int)event->button.x, (int)event->button.y);
 			SetMouseButton(event->button.button, true);
 			break;
 		case SDL_EVENT_MOUSE_BUTTON_UP:

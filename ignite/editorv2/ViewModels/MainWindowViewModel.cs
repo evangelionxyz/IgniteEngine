@@ -2,10 +2,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Ignite.Managed.Services;
 using IgniteEditor.Services;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 namespace IgniteEditor.ViewModels;
 
@@ -103,18 +105,21 @@ public partial class MainWindowViewModel : ViewModelBase
         Console = new ConsoleViewModel(_loggingService);
         Viewport = new ViewportViewModel();
 
-        // Wire selection → properties
-        SceneHierarchy.SelectionChanged += (_, node) =>
+        // Wire selection → properties & native viewport outline
+        SceneHierarchy.MultiSelectionChanged += (_, _) =>
         {
-            if (node != null)
-            {
-                var model = _sceneService.GetEntity(node.EntityId);
-                Properties.SetEntity(node, model);
-            }
-            else
-            {
-                Properties.SetEntity(null, null);
-            }
+            SyncSelectionToNative();
+        };
+
+        SceneHierarchy.SelectionChanged += (_, _) =>
+        {
+            SyncSelectionToNative();
+        };
+
+        // Wire viewport picking → scene hierarchy selection
+        Viewport.EntityPicked += (uuid, isMultiSelect) =>
+        {
+            SceneHierarchy.SelectEntityByUuid(uuid, isMultiSelect);
         };
 
         // Initialize content browser with editor resources folder if it exists
@@ -122,15 +127,48 @@ public partial class MainWindowViewModel : ViewModelBase
             System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".",
             "resources");
 
-        if (!System.IO.Directory.Exists(resourcesPath))
-        {
-            // Fallback: use the ignite editor resources directory
-            resourcesPath = @"d:\Dev\Ignite\ignite\editor\resources";
-        }
+        Debug.Assert(System.IO.Directory.Exists(resourcesPath));
 
         if (System.IO.Directory.Exists(resourcesPath))
         {
             ContentBrowser.Initialize(resourcesPath);
+        }
+    }
+
+    private void SyncSelectionToNative()
+    {
+        var selectedNodes = SceneHierarchy.GetAllSelectedNodes();
+        if (selectedNodes.Count == 0)
+        {
+            Properties.SetEntity(null, null);
+            NativeEngineBridge.Ignite_Viewport_ClearSelectedEntities();
+        }
+        else if (selectedNodes.Count == 1)
+        {
+            var node = selectedNodes[0];
+            var model = _sceneService.GetEntity(node.EntityId);
+            Properties.SetEntity(node, model);
+            if (model != null && model.Uuid != 0)
+            {
+                NativeEngineBridge.Ignite_Viewport_SetSelectedEntity(model.Uuid);
+            }
+        }
+        else
+        {
+            var primary = SceneHierarchy.SelectedEntity ?? selectedNodes[0];
+            var model = _sceneService.GetEntity(primary.EntityId);
+            Properties.SetEntity(primary, model);
+
+            var uuids = new List<ulong>();
+            foreach (var node in selectedNodes)
+            {
+                var m = _sceneService.GetEntity(node.EntityId);
+                if (m != null && m.Uuid != 0)
+                {
+                    uuids.Add(m.Uuid);
+                }
+            }
+            NativeEngineBridge.Ignite_Viewport_SetSelectedEntities(uuids.ToArray(), (uint)uuids.Count);
         }
     }
 
@@ -299,11 +337,11 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     new FilePickerFileType("Ignite Scene (*.ixscene)")
                     {
-                        Patterns = new[] { "*.ixscene" }
+                        Patterns = ["*.ixscene"]
                     },
                     new FilePickerFileType("All Files (*.*)")
                     {
-                        Patterns = new[] { "*.*" }
+                        Patterns = ["*.*"]
                     }
                 }
             };
@@ -393,11 +431,11 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     new FilePickerFileType("Ignite Project (*.ixproj)")
                     {
-                        Patterns = new[] { "*.ixproj" }
+                        Patterns = ["*.ixproj"]
                     },
                     new FilePickerFileType("All Files (*.*)")
                     {
-                        Patterns = new[] { "*.*" }
+                        Patterns = ["*.*"]
                     }
                 }
             };

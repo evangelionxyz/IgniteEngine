@@ -25,6 +25,18 @@ namespace ignite
         void StepFrame(int frames);
         int GetSceneState() const;
 
+        uint64_t PickEntity(float mouseX, float mouseY, uint32_t viewportWidth, uint32_t viewportHeight, bool isDoubleClick, bool isShiftDown);
+        void SetSelectedEntity(uint64_t uuid);
+        void SelectEntity(uint64_t uuid, bool multiSelect);
+        void DeselectEntity(uint64_t uuid);
+        bool IsEntitySelected(uint64_t uuid) const;
+        void ClearSelectedEntities();
+        void SetSelectedEntities(const uint64_t *uuids, uint32_t count);
+        uint32_t GetSelectedEntities(uint64_t *outUuids, uint32_t maxCount) const;
+        uint32_t GetSelectedEntityCount() const;
+        uint64_t GetSelectedEntity() const;
+        void SetEntitySelectedCallback(void (*callback)(uint64_t uuid, bool isMultiSelect));
+
         AvaloniaLayer *GetAvaloniaLayer() { return m_AvaloniaLayer; }
 
     private:

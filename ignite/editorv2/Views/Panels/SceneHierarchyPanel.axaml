@@ -10,10 +10,11 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
         </Style>
-        <Style Selector="TreeViewItem">
+        <Style Selector="TreeViewItem" x:DataType="vm:EntityNodeViewModel">
             <Setter Property="MinHeight" Value="18" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
+            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
         </Style>
         <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
             <Setter Property="MinHeight" Value="18" />
@@ -60,6 +61,7 @@
         <!-- Entity tree -->
         <TreeView ItemsSource="{Binding RootEntities}"
                   SelectedItem="{Binding SelectedEntity}"
+                  SelectionMode="Multiple"
                   Padding="0" Margin="0">
             <TreeView.ContextMenu>
                 <ContextMenu FontSize="11">

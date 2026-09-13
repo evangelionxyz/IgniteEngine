@@ -264,6 +264,85 @@ IGN_API int Ignite_Camera_GetNavigationMode()
 }
 
 // ======================================
+// Viewport & Picking API
+// ======================================
+
+IGN_API uint64_t Ignite_Viewport_PickEntity(float mouseX, float mouseY, uint32_t viewportWidth, uint32_t viewportHeight, bool isDoubleClick, bool isShiftDown)
+{
+    if (s_EmbeddedApp)
+    {
+        const auto uuid = static_cast<uint64_t>(s_EmbeddedApp->PickEntity(mouseX, mouseY,
+            viewportWidth, viewportHeight, isDoubleClick, isShiftDown));
+        return uuid;
+    }
+    return 0;
+}
+
+IGN_API void Ignite_Viewport_SetSelectedEntity(uint64_t uuid)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SetSelectedEntity(uuid);
+}
+
+IGN_API void Ignite_Viewport_SelectEntity(uint64_t uuid, bool multiSelect)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SelectEntity(uuid, multiSelect);
+}
+
+IGN_API void Ignite_Viewport_DeselectEntity(uint64_t uuid)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->DeselectEntity(uuid);
+}
+
+IGN_API bool Ignite_Viewport_IsEntitySelected(uint64_t uuid)
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->IsEntitySelected(uuid);
+    return false;
+}
+
+IGN_API void Ignite_Viewport_SetSelectedEntities(const uint64_t *uuids, uint32_t count)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SetSelectedEntities(uuids, count);
+}
+
+IGN_API uint32_t Ignite_Viewport_GetSelectedEntities(uint64_t *outUuids, uint32_t maxCount)
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetSelectedEntities(outUuids, maxCount);
+    return 0;
+}
+
+IGN_API uint32_t Ignite_Viewport_GetSelectedEntityCount()
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetSelectedEntityCount();
+    return 0;
+}
+
+IGN_API void Ignite_Viewport_ClearSelectedEntities()
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->ClearSelectedEntities();
+}
+
+IGN_API uint64_t Ignite_Viewport_GetSelectedEntity()
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetSelectedEntity();
+    return 0;
+}
+
+IGN_API void Ignite_Viewport_SetEntitySelectedCallback(IgniteEntitySelectedCallback callback)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SetEntitySelectedCallback(callback);
+}
+
+// ======================================
 // Scene API
 // ======================================
 

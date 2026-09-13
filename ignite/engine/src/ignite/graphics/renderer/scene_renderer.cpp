@@ -80,7 +80,7 @@ namespace ignite
 
         m_Renderer2D = Renderer2D::Create();
         m_OutlineJFA = OutlineJFA::Create();
-		m_OutlineJFA->CreatePipeline();
+        m_OutlineJFA->CreatePipeline();
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
         m_RuntimeMaterial   = CreateRef<Material>();
@@ -121,10 +121,10 @@ namespace ignite
 
         if (m_WorldEnvironment)
         {
-			if (scene == nullptr && m_WorldEnvironment->environment)
-			{
-				m_WorldEnvironment->environment.reset();
-			}
+            if (scene == nullptr && m_WorldEnvironment->environment)
+            {
+                m_WorldEnvironment->environment.reset();
+            }
             m_WorldEnvironment = nullptr;
         }
 
@@ -364,8 +364,8 @@ namespace ignite
             if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
             {
                 const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-				postProcessing = cc.camera.postProcessing;
-				cameraLens = cc.camera.lens;
+                postProcessing = cc.camera.postProcessing;
+                cameraLens = cc.camera.lens;
 
                 isGameCamera = camera == &cc.camera;
             }
@@ -379,9 +379,8 @@ namespace ignite
             glm::mat4 projection = camera->GetProjection();
             if (postProcessing.taaProperties.enable && target->sceneRT)
             {
-                const glm::vec2 jitter = GetTAAJitter(m_TAAFrameIndex,
-                    target->sceneRT->GetWidth(),
-                    target->sceneRT->GetHeight());
+                const glm::vec2 jitter = GetTAAJitter(m_TAAFrameIndex, target->sceneRT->GetWidth(), target->sceneRT->GetHeight());
+
                 projection[2][0] += jitter.x;
                 projection[2][1] += jitter.y;
             }
@@ -403,7 +402,7 @@ namespace ignite
                 sceneCascadeData.shadowStrength = 0.0f;
                 frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
 
-                const glm::vec4 bgColor = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
+                const glm::vec4 bgColor = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
                 if (targetFramebuffer)
                 {
                     nvrhi::utils::ClearColorAttachment(cmd, targetFramebuffer, 0, nvrhi::Color(bgColor.r, bgColor.g, bgColor.b, bgColor.a));
@@ -457,9 +456,9 @@ namespace ignite
             // Full render path
             CameraBufferData cameraData = { projection, camera->GetView(), glm::vec4(camera->position, 1.0f) };
             {
-				IGN_PROFILE_SCOPE("SceneRenderer::WriteFrameData");
-			    frameContext->cameraBuffer.SetData(cmd, &cameraData, sizeof(cameraData));
-			    frameContext->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(m_SceneGPUData));
+                IGN_PROFILE_SCOPE("SceneRenderer::WriteFrameData");
+                frameContext->cameraBuffer.SetData(cmd, &cameraData, sizeof(cameraData));
+                frameContext->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(m_SceneGPUData));
             }
 
             if (plan.hasMeshes || plan.hasTerrain)
@@ -467,11 +466,11 @@ namespace ignite
                 PreallocateGPUData(cmd, frameContext);
             }
 
-			if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
-			{
-				m_WorldEnvironment->environment->WriteBuffer(cmd);
-				m_WorldEnvironment->gpuInitialized = true;
-			}
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
+            {
+                m_WorldEnvironment->environment->WriteBuffer(cmd);
+                m_WorldEnvironment->gpuInitialized = true;
+            }
 
             const auto width = target->compositeRT ? target->compositeRT->GetWidth() : m_ViewportWidth;
             const auto height = target->compositeRT ? target->compositeRT->GetHeight() : m_ViewportHeight;
@@ -481,14 +480,21 @@ namespace ignite
             // Clear Render Targets (feature-gated)
             {
                 const glm::vec4 clearColor = (m_WorldEnvironment && m_WorldEnvironment->environment)
-                    ? glm::vec4(0.0f)
-                    : glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
+                    ? glm::vec4(0.0f) : glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+
                 target->sceneRT->ClearColorAttachmentFloat(cmd, 0, clearColor);
                 if (plan.requiresObjectId || target->previousPlan.requiresObjectId)
                 {
                     target->sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
                 target->sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
+
+                // Keep the outline mask separate from the scene object-ID buffer used by picking.
+                if (target->selectionRT)
+                {
+                    target->selectionRT->ClearColorAttachmentFloat(cmd, 0);
+                    target->selectionRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                }
 
                 if (plan.hasWidgets)
                 {
@@ -536,11 +542,13 @@ namespace ignite
                 }
 
                 const Ref<GraphicsPipeline> envPSO = GetEnvironmentPSO(sceneFramebuffer, sceneRenderSettings.fillMode);
-                m_WorldEnvironment->environment->Draw(cmd, sceneFramebuffer, envPSO,
-                    frameContext->cameraBuffer.GetHandle(), frameContext->sceneBuffer.GetHandle());
+                m_WorldEnvironment->environment->Draw(cmd, sceneFramebuffer, envPSO, frameContext->cameraBuffer.GetHandle(), frameContext->sceneBuffer.GetHandle());
             }
 
-            ColorPass(cmd, camera, frameContext, sceneFramebuffer, drawDebug);
+            nvrhi::IFramebuffer *selectionFramebuffer = target->selectionRT
+                ? target->selectionRT->GetFramebuffer().Get()
+                : nullptr;
+            ColorPass(cmd, camera, frameContext, sceneFramebuffer, selectionFramebuffer, drawDebug);
 
             if (plan.hasWidgets && target->widgetRT)
             {
@@ -558,6 +566,8 @@ namespace ignite
             if (target->sceneRT->GetColorAttachment(1))
                 cmd->setTextureState(*target->sceneRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
             cmd->setTextureState(*target->sceneRT->GetDepthAttachment(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+            if (target->selectionRT && target->selectionRT->GetColorAttachment(1))
+                cmd->setTextureState(*target->selectionRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
 
             if (target->widgetRT && target->widgetRT->GetColorAttachment(0))
                 cmd->setTextureState(*target->widgetRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
@@ -603,8 +613,8 @@ namespace ignite
                     m_OutlineJFA->CreateOutputTexture(renderWidth, renderHeight);
                 }
 
-                // Use the resolved (single-sample) object-ID texture for JFA outline
-                Ref<Texture> edgeObjIDSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(1) : target->sceneRT->GetColorAttachment(1);
+                // Read the selected-object mask, not the scene object-ID buffer used by picking.
+                Ref<Texture> edgeObjIDSrc = target->selectionRT ? target->selectionRT->GetColorAttachment(1) : nullptr;
                 m_OutlineJFA->UpdateBindingSet(edgeObjIDSrc);
 
                 constexpr uint32_t kMaxSelectedIDs = 100;
@@ -635,6 +645,7 @@ namespace ignite
                 bloomInstance->settings.threshold = postProcessing.bloomThreshold;
                 bloomInstance->settings.iterations = postProcessing.bloomIterations;
                 bloomInstance->Resize(renderWidth, renderHeight);
+
                 // Bloom reads from the resolved (single-sample) texture
                 Ref<Texture> bloomSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
                 bloomInstance->Build(cmd, bloomSrc, m_CompositeVertexBuffer);
@@ -665,13 +676,16 @@ namespace ignite
                     IGN_PROFILE_SCOPE("SceneRenderer::TAAHistoryCopy");
                     Ref<Texture> compositeColor = target->compositeRT->GetColorAttachment(0);
                     Ref<Texture> historyColor = target->taaHistoryRT[frameContext->frameIndexInFlight]->GetColorAttachment(0);
+
                     cmd->setTextureState(*compositeColor, nvrhi::AllSubresources, nvrhi::ResourceStates::CopySource);
                     cmd->setTextureState(*historyColor, nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
                     cmd->commitBarriers();
+
                     cmd->copyTexture(*historyColor, nvrhi::TextureSlice(), *compositeColor, nvrhi::TextureSlice());
                     cmd->setTextureState(*historyColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
                     cmd->setTextureState(*compositeColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
                     cmd->commitBarriers();
+
                     target->taaHistoryValid = true;
                     ++m_TAAFrameIndex;
                 }
@@ -984,6 +998,8 @@ namespace ignite
 
                 if (target->sceneRT)
                     target->sceneRT->Resize(renderWidth, renderHeight);
+                if (target->selectionRT)
+                    target->selectionRT->Resize(renderWidth, renderHeight);
                 if (target->sceneResolvedRT)
                     target->sceneResolvedRT->Resize(renderWidth, renderHeight);
                 if (target->widgetRT)
@@ -1370,7 +1386,7 @@ namespace ignite
         }
     }
 
-    void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug)
+    void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, nvrhi::IFramebuffer *selectionFramebuffer, bool drawDebug)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -1838,9 +1854,9 @@ namespace ignite
             m_Renderer2D->End();
         }
 
-        if (!m_SelectedEntities.empty())
+        if (!m_SelectedEntities.empty() && selectionFramebuffer)
         {
-            RenderSelectedEntitiesIDOverlay(cmd, camera, frameContext, framebuffer, uploadedMaterialsThisPass);
+            RenderSelectedEntitiesIDOverlay(cmd, camera, frameContext, selectionFramebuffer, uploadedMaterialsThisPass);
         }
     }
 
@@ -2546,12 +2562,12 @@ namespace ignite
 
         // ANIMATED
         m_AnimatedPSOCache.clear();
-		m_TransparentAnimatedPSOCache.clear();
+        m_TransparentAnimatedPSOCache.clear();
         m_AnimatedCSMPSOCache.clear();
 
         // STATIC
         m_StaticPSOCache.clear();
-		m_TransparentStaticPSOCache.clear();
+        m_TransparentStaticPSOCache.clear();
         m_StaticCSMPSOCache.clear();
 
         // ENV & Debug
@@ -2730,46 +2746,46 @@ namespace ignite
         return gp;
     }
 
-	Ref<GraphicsPipeline> SceneRenderer::GetOrCreateCMSPSO(
+    Ref<GraphicsPipeline> SceneRenderer::GetOrCreateCMSPSO(
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
         nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath, const char *pixelShaderPath,
         EBindingLayout meshLayout)
-	{
+    {
         if (!framebuffer)
             return nullptr;
 
-		auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
-		auto it = cache.find(key);
-		if (it != cache.end())
-		{
-			return it->second;
-		}
+        auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
+        auto it = cache.find(key);
+        if (it != cache.end())
+        {
+            return it->second;
+        }
 
-		GraphicsPipelineParams params;
-		params.enableDepthWrite = true;
-		params.enableDepthTest = true;
-		params.depthFunc = nvrhi::ComparisonFunc::Less;
-		params.cullMode = nvrhi::RasterCullMode::Front;
-		params.fillMode = nvrhi::RasterFillMode::Solid;
+        GraphicsPipelineParams params;
+        params.enableDepthWrite = true;
+        params.enableDepthTest = true;
+        params.depthFunc = nvrhi::ComparisonFunc::Less;
+        params.cullMode = nvrhi::RasterCullMode::Front;
+        params.fillMode = nvrhi::RasterFillMode::Solid;
 
-		Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
-		Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
+        Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
+        Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
 
-		Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create("CSM Shadow Pipeline");
-		pipeline->SetShaders({ vertexShader, pixelShader })
-			.AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
-			.Build(framebuffer, params);
+        Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create("CSM Shadow Pipeline");
+        pipeline->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(Renderer::GetBindingLayout(meshLayout))
+            .Build(framebuffer, params);
 
         if (pipeline)
         {
-		    cache.clear();
-		    cache.emplace(key, pipeline);
+            cache.clear();
+            cache.emplace(key, pipeline);
         }
 
-		return pipeline;
-	}
+        return pipeline;
+    }
 
-	// Helper to build a geometry pipeline for a framebuffer (once) and cache it.
+    // Helper to build a geometry pipeline for a framebuffer (once) and cache it.
     Ref<GraphicsPipeline> SceneRenderer::GetAnimatedPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
     {
         return GetOrCreateMeshPSO(m_AnimatedPSOCache, framebuffer, fillMode, cullMode,
@@ -2777,26 +2793,26 @@ namespace ignite
             EBindingLayout::MESH_ANIM, false);
     }
 
-	Ref<GraphicsPipeline> SceneRenderer::GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
-	{
+    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
+    {
         return GetOrCreateMeshPSO(m_TransparentAnimatedPSOCache, framebuffer, fillMode, cullMode,
             "resources/shaders/mesh_anim.vertex.hlsl", "resources/shaders/mesh_anim.pixel.hlsl",
             EBindingLayout::MESH_ANIM, true);
-	}
+    }
 
-	Ref<GraphicsPipeline> SceneRenderer::GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
-	{
+    Ref<GraphicsPipeline> SceneRenderer::GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
+    {
         return GetOrCreateMeshPSO(m_StaticPSOCache, framebuffer, fillMode, cullMode,
             "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
             EBindingLayout::MESH_STATIC, false);
-	}
+    }
 
-	Ref<GraphicsPipeline> SceneRenderer::GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
-	{
+    Ref<GraphicsPipeline> SceneRenderer::GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode)
+    {
         return GetOrCreateMeshPSO(m_TransparentStaticPSOCache, framebuffer, fillMode, cullMode,
             "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
             EBindingLayout::MESH_STATIC, true);
-	}
+    }
 
     Ref<GraphicsPipeline> SceneRenderer::GetOrCreateSelectMeshPSO(
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
@@ -3223,23 +3239,23 @@ namespace ignite
         }
     }
 
-	Ref<GraphicsPipeline> SceneRenderer::GetAnimatedCSMPSO()
-	{
+    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedCSMPSO()
+    {
         nvrhi::IFramebuffer *framebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(0);
         return GetOrCreateCMSPSO(m_AnimatedCSMPSOCache, framebuffer,
             "resources/shaders/csm_anim.vertex.hlsl", "resources/shaders/csm.pixel.hlsl",
             EBindingLayout::MESH_ANIM);
-	}
+    }
 
-	Ref<GraphicsPipeline> SceneRenderer::GetStaticCSMPSO()
-	{
-		nvrhi::IFramebuffer *framebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(0);
-		return GetOrCreateCMSPSO(m_StaticCSMPSOCache, framebuffer,
-			"resources/shaders/csm_static.vertex.hlsl", "resources/shaders/csm.pixel.hlsl",
-			EBindingLayout::MESH_STATIC);
-	}
+    Ref<GraphicsPipeline> SceneRenderer::GetStaticCSMPSO()
+    {
+        nvrhi::IFramebuffer *framebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(0);
+        return GetOrCreateCMSPSO(m_StaticCSMPSOCache, framebuffer,
+            "resources/shaders/csm_static.vertex.hlsl", "resources/shaders/csm.pixel.hlsl",
+            EBindingLayout::MESH_STATIC);
+    }
 
-	// Helper to build an environment pipeline per framebuffer (once)
+    // Helper to build an environment pipeline per framebuffer (once)
     Ref<GraphicsPipeline> SceneRenderer::GetEnvironmentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
     {
         auto key = MakeFramebufferKey(framebuffer, fillMode);
@@ -3330,8 +3346,8 @@ namespace ignite
         return gp;
     }
 
-	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-			Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler, bool useResolvedScene)
+    nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
+            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler, bool useResolvedScene)
     {
         Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
         Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
@@ -3492,6 +3508,18 @@ namespace ignite
 
         target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
 
+        // Selection IDs are rendered into a separate single-sample mask. This pass intentionally
+        // ignores scene depth so selected objects remain outlineable through occluders, without
+        // modifying the scene ID buffer consumed by PickEntity.
+        RenderTargetCreateInfo selectionRTCreateInfo = {};
+        selectionRTCreateInfo.sampleCount = 1;
+        selectionRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Selection Mask ColorAttachment]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget },
+            FramebufferAttachments{ "[Selection Mask ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget }
+        };
+        target->selectionRT = RenderTarget::Create(selectionRTCreateInfo, "[Scene Renderer] Selection Mask RT");
+
         // If MSAA is active, create a single-sample resolve target that downstream passes (bloom, composite) read from
         if (sampleCount > 1)
         {
@@ -3529,174 +3557,174 @@ namespace ignite
         return target;
     }
 
-	std::vector<Ref<Bloom>> SceneRenderer::GetOrCreateBlooms(ICamera *camera)
-	{
-		constexpr uint32_t resolution = 1080;
+    std::vector<Ref<Bloom>> SceneRenderer::GetOrCreateBlooms(ICamera *camera)
+    {
+        constexpr uint32_t resolution = 1080;
 
         auto it = m_Blooms.find(camera);
         if (it != m_Blooms.end())
-			return it->second;
+            return it->second;
 
-		const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
-		std::vector<Ref<Bloom>> blooms(maxFrame);
+        const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
+        std::vector<Ref<Bloom>> blooms(maxFrame);
         for (uint32_t i = 0; i < maxFrame; ++i)
         {
             Ref<Bloom> bloom = CreateRef<Bloom>(resolution, resolution);
             blooms[i] = bloom;
         }
 
-		m_Blooms.emplace(camera, blooms);
+        m_Blooms.emplace(camera, blooms);
         return blooms;
-	}
+    }
 
-	std::vector<Ref<SSAO>> SceneRenderer::GetOrCreateSSAOs(nvrhi::ICommandList *cmd, ICamera *camera)
-	{
-		constexpr uint32_t resolution = 1080;
+    std::vector<Ref<SSAO>> SceneRenderer::GetOrCreateSSAOs(nvrhi::ICommandList *cmd, ICamera *camera)
+    {
+        constexpr uint32_t resolution = 1080;
 
-		auto it = m_SSAOs.find(camera);
+        auto it = m_SSAOs.find(camera);
         if (it != m_SSAOs.end())
-			return it->second;
+            return it->second;
 
-		const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
-		std::vector<Ref<SSAO>> SSAOs(maxFrame);
-		for (uint32_t i = 0; i < maxFrame; ++i)
-		{
-			Ref<SSAO> ssao = CreateRef<SSAO>(cmd, resolution, resolution);
-			SSAOs[i] = ssao;
-		}
+        const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
+        std::vector<Ref<SSAO>> SSAOs(maxFrame);
+        for (uint32_t i = 0; i < maxFrame; ++i)
+        {
+            Ref<SSAO> ssao = CreateRef<SSAO>(cmd, resolution, resolution);
+            SSAOs[i] = ssao;
+        }
 
-		m_SSAOs.emplace(camera, SSAOs);
-		return SSAOs;
-	}
+        m_SSAOs.emplace(camera, SSAOs);
+        return SSAOs;
+    }
 
-	// ---------------------------------------------------------------------------
-	// FlushOpaqueBatches — dispatch all opaque static mesh batches as instanced draws.
-	// Each DrawBatch contains N instances sharing the same vertex buffer, index buffer,
-	// material binding set, and PSO. The object indices are uploaded to the
-	// InstanceIndexBuffer and referenced via push constant base offset.
-	// ---------------------------------------------------------------------------
-	void SceneRenderer::FlushOpaqueBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer)
-	{
-		if (m_OpaqueBatchBuilder.IsEmpty())
-			return;
+    // ---------------------------------------------------------------------------
+    // FlushOpaqueBatches — dispatch all opaque static mesh batches as instanced draws.
+    // Each DrawBatch contains N instances sharing the same vertex buffer, index buffer,
+    // material binding set, and PSO. The object indices are uploaded to the
+    // InstanceIndexBuffer and referenced via push constant base offset.
+    // ---------------------------------------------------------------------------
+    void SceneRenderer::FlushOpaqueBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer)
+    {
+        if (m_OpaqueBatchBuilder.IsEmpty())
+            return;
 
-		IGN_PROFILE_SCOPE("SceneRenderer::FlushOpaqueBatches");
+        IGN_PROFILE_SCOPE("SceneRenderer::FlushOpaqueBatches");
 
-		m_OpaqueBatchBuilder.Finalize();
-		const auto &batches = m_OpaqueBatchBuilder.GetBatches();
+        m_OpaqueBatchBuilder.Finalize();
+        const auto &batches = m_OpaqueBatchBuilder.GetBatches();
 
-		// Batch upload all instance indices upfront in a single contiguous writeBuffer call
-		std::vector<uint32_t> allObjectIndices;
-		std::vector<uint32_t> batchBaseOffsets;
-		batchBaseOffsets.reserve(batches.size());
+        // Batch upload all instance indices upfront in a single contiguous writeBuffer call
+        std::vector<uint32_t> allObjectIndices;
+        std::vector<uint32_t> batchBaseOffsets;
+        batchBaseOffsets.reserve(batches.size());
 
-		for (const DrawBatch &batch : batches)
-		{
-			uint32_t offset = static_cast<uint32_t>(allObjectIndices.size());
-			batchBaseOffsets.push_back(offset);
-			allObjectIndices.insert(allObjectIndices.end(), batch.objectIndices.begin(), batch.objectIndices.end());
-		}
+        for (const DrawBatch &batch : batches)
+        {
+            const auto offset = static_cast<uint32_t>(allObjectIndices.size());
+            batchBaseOffsets.push_back(offset);
+            allObjectIndices.insert(allObjectIndices.end(), batch.objectIndices.begin(), batch.objectIndices.end());
+        }
 
-		const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator.Allocate(
-			cmd,
-			allObjectIndices.data(),
-			static_cast<uint32_t>(allObjectIndices.size()));
+        const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator.Allocate(
+            cmd,
+            allObjectIndices.data(),
+            static_cast<uint32_t>(allObjectIndices.size()));
 
-		nvrhi::GraphicsState graphicsState = nvrhi::GraphicsState();
-		graphicsState.framebuffer = framebuffer;
-		graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+        nvrhi::GraphicsState graphicsState = nvrhi::GraphicsState();
+        graphicsState.framebuffer = framebuffer;
+        graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
-		for (size_t i = 0; i < batches.size(); ++i)
-		{
-			const DrawBatch &batch = batches[i];
-			if (!batch.meshBindingSet || !batch.materialBindingSet || !batch.vertexBuffer || !batch.indexBuffer || !batch.pipeline)
-				continue;
+        for (size_t i = 0; i < batches.size(); ++i)
+        {
+            const DrawBatch &batch = batches[i];
+            if (!batch.meshBindingSet || !batch.materialBindingSet || !batch.vertexBuffer || !batch.indexBuffer || !batch.pipeline)
+                continue;
 
-			const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[i];
+            const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[i];
 
-			graphicsState.pipeline = batch.pipeline;
-			graphicsState.bindings = { batch.meshBindingSet, batch.materialBindingSet, BindlessSystem::GetDescriptorTable() };
-			graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ batch.vertexBuffer, 0, 0 } };
-			graphicsState.setIndexBuffer({ batch.indexBuffer, nvrhi::Format::R32_UINT });
+            graphicsState.pipeline = batch.pipeline;
+            graphicsState.bindings = { batch.meshBindingSet, batch.materialBindingSet, BindlessSystem::GetDescriptorTable() };
+            graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ batch.vertexBuffer, 0, 0 } };
+            graphicsState.setIndexBuffer({ batch.indexBuffer, nvrhi::Format::R32_UINT });
 
-			cmd->setGraphicsState(graphicsState);
-			cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+            cmd->setGraphicsState(graphicsState);
+            cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
 
-			nvrhi::DrawArguments args;
-			args.setVertexCount(batch.indexCount);
-			args.instanceCount = batch.GetInstanceCount();
-			cmd->drawIndexed(args);
+            nvrhi::DrawArguments args;
+            args.setVertexCount(batch.indexCount);
+            args.instanceCount = batch.GetInstanceCount();
+            cmd->drawIndexed(args);
 
-			Renderer::Stats.drawCallCount++;
-			Renderer::Stats.indexCount3D += batch.indexCount * batch.GetInstanceCount();
-		}
-	}
+            Renderer::Stats.drawCallCount++;
+            Renderer::Stats.indexCount3D += batch.indexCount * batch.GetInstanceCount();
+        }
+    }
 
-	// ---------------------------------------------------------------------------
-	// FlushShadowBatches — dispatch all CSM shadow batches as instanced draws.
-	// Similar to FlushOpaqueBatches but uses the CSM framebuffer and no material
-	// binding set (shadow pass only writes depth).
-	// ---------------------------------------------------------------------------
-	void SceneRenderer::FlushShadowBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, uint32_t cascadeIndex)
-	{
-		if (m_ShadowBatchBuilder.IsEmpty())
-			return;
+    // ---------------------------------------------------------------------------
+    // FlushShadowBatches — dispatch all CSM shadow batches as instanced draws.
+    // Similar to FlushOpaqueBatches but uses the CSM framebuffer and no material
+    // binding set (shadow pass only writes depth).
+    // ---------------------------------------------------------------------------
+    void SceneRenderer::FlushShadowBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, uint32_t cascadeIndex)
+    {
+        if (m_ShadowBatchBuilder.IsEmpty())
+            return;
 
-		IGN_PROFILE_SCOPE("SceneRenderer::FlushShadowBatches");
+        IGN_PROFILE_SCOPE("SceneRenderer::FlushShadowBatches");
 
-		m_ShadowBatchBuilder.Finalize();
-		const auto &batches = m_ShadowBatchBuilder.GetBatches();
+        m_ShadowBatchBuilder.Finalize();
+        const auto &batches = m_ShadowBatchBuilder.GetBatches();
 
-		// Batch upload all instance indices upfront in a single contiguous writeBuffer call
-		std::vector<uint32_t> allObjectIndices;
-		std::vector<uint32_t> batchBaseOffsets;
-		batchBaseOffsets.reserve(batches.size());
+        // Batch upload all instance indices upfront in a single contiguous writeBuffer call
+        std::vector<uint32_t> allObjectIndices;
+        std::vector<uint32_t> batchBaseOffsets;
+        batchBaseOffsets.reserve(batches.size());
 
-		for (const DrawBatch &batch : batches)
-		{
-			uint32_t offset = static_cast<uint32_t>(allObjectIndices.size());
-			batchBaseOffsets.push_back(offset);
-			allObjectIndices.insert(allObjectIndices.end(), batch.objectIndices.begin(), batch.objectIndices.end());
-		}
+        for (const DrawBatch &batch : batches)
+        {
+            const auto offset = static_cast<uint32_t>(allObjectIndices.size());
+            batchBaseOffsets.push_back(offset);
+            allObjectIndices.insert(allObjectIndices.end(), batch.objectIndices.begin(), batch.objectIndices.end());
+        }
 
-		const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator.Allocate(
-			cmd,
-			allObjectIndices.data(),
-			static_cast<uint32_t>(allObjectIndices.size()));
+        const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator.Allocate(
+            cmd,
+            allObjectIndices.data(),
+            static_cast<uint32_t>(allObjectIndices.size()));
 
-		nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(cascadeIndex, frameContext->frameIndexInFlight);
-		nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
+        nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(cascadeIndex, frameContext->frameIndexInFlight);
+        nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
 
-		nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
-		csmState.framebuffer = csmFramebuffer;
-		csmState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+        nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
+        csmState.framebuffer = csmFramebuffer;
+        csmState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
 
-		for (size_t i = 0; i < batches.size(); ++i)
-		{
-			const DrawBatch &batch = batches[i];
-			if (!batch.meshBindingSet || !batch.vertexBuffer || !batch.indexBuffer || !batch.pipeline)
-				continue;
+        for (size_t i = 0; i < batches.size(); ++i)
+        {
+            const DrawBatch &batch = batches[i];
+            if (!batch.meshBindingSet || !batch.vertexBuffer || !batch.indexBuffer || !batch.pipeline)
+                continue;
 
-			const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[i];
+            const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[i];
 
-			csmState.pipeline = batch.pipeline;
-			csmState.bindings = { batch.meshBindingSet };
-			csmState.vertexBuffers = { nvrhi::VertexBufferBinding{ batch.vertexBuffer, 0, 0 } };
-			csmState.setIndexBuffer({ batch.indexBuffer, nvrhi::Format::R32_UINT });
+            csmState.pipeline = batch.pipeline;
+            csmState.bindings = { batch.meshBindingSet };
+            csmState.vertexBuffers = { nvrhi::VertexBufferBinding{ batch.vertexBuffer, 0, 0 } };
+            csmState.setIndexBuffer({ batch.indexBuffer, nvrhi::Format::R32_UINT });
 
-			cmd->setGraphicsState(csmState);
-			cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+            cmd->setGraphicsState(csmState);
+            cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
 
-			nvrhi::DrawArguments args;
-			args.setVertexCount(batch.indexCount);
-			args.instanceCount = batch.GetInstanceCount();
-			cmd->drawIndexed(args);
+            nvrhi::DrawArguments args;
+            args.setVertexCount(batch.indexCount);
+            args.instanceCount = batch.GetInstanceCount();
+            cmd->drawIndexed(args);
 
-			Renderer::Stats.shadowDrawCallCount++;
-		}
-	}
+            Renderer::Stats.shadowDrawCallCount++;
+        }
+    }
 
-	template<typename MeshT>
+    template<typename MeshT>
     void SceneRenderer::DrawMesh(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer,
         const Ref<MeshT> &mesh, const glm::mat4 &parentTransform, const glm::mat4 &normalMatrix, uint32_t objectID,
         const std::unordered_map<int, AssetHandle> &overrideMaterials, const std::vector<glm::mat4> &boneTransforms,
@@ -3709,8 +3737,8 @@ namespace ignite
 
         constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
 
-		static_assert(std::is_same_v<MeshT, StaticMesh> || std::is_same_v<MeshT, SkeletalMesh>,
-			"DrawPreviewMeshImpl: MeshT must be StaticMesh or SkeletalMesh");
+        static_assert(std::is_same_v<MeshT, StaticMesh> || std::is_same_v<MeshT, SkeletalMesh>,
+            "DrawPreviewMeshImpl: MeshT must be StaticMesh or SkeletalMesh");
 
         auto graphicsState = nvrhi::GraphicsState();
         graphicsState.pipeline = *opaquePSO;
@@ -3742,11 +3770,11 @@ namespace ignite
                     }
                 }
 
-				gpuData.transformation = parentTransform * meshTransform;
-				gpuData.normal = normalMatrix;
+                gpuData.transformation = parentTransform * meshTransform;
+                gpuData.normal = normalMatrix;
             }
 
-			gpuData.objectID = objectID;
+            gpuData.objectID = objectID;
 
             uint32_t PushConstant_ObjectIndex = 0;
             bool foundInCache = false;
@@ -3785,13 +3813,14 @@ namespace ignite
                 {
                     gpuData.boneOffset = 0;
                 }
+
                 PushConstant_ObjectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
             }
 
-			nvrhi::BindingSetHandle meshBindingSet = frameContext->staticMeshBindingSet;
+            nvrhi::BindingSetHandle meshBindingSet = frameContext->staticMeshBindingSet;
             if constexpr (isSkeletal)
             {
-				meshBindingSet = frameContext->animatedBindingSet;
+                meshBindingSet = frameContext->animatedBindingSet;
             }
 
             auto &primitive = meshInstance->GetPrimitive();
@@ -3863,15 +3892,15 @@ namespace ignite
 
                     cmd->setGraphicsState(graphicsState);
 
-					if constexpr (!isSkeletal)
-					{
-						uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &PushConstant_ObjectIndex, 1);
-						cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
-					}
-					else
-					{
-						cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
-					}
+                    if constexpr (!isSkeletal)
+                    {
+                        uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &PushConstant_ObjectIndex, 1);
+                        cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+                    }
+                    else
+                    {
+                        cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
+                    }
 
                     const uint32_t idxCount = primitive->indexBuffer->GetCount();
                     nvrhi::DrawArguments args;
@@ -3919,7 +3948,7 @@ namespace ignite
                 {
                     if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
                     {
-                        const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                        const auto ji = static_cast<size_t>(meshInstance->linkedJointIndex);
                         if (ji < boneTransforms.size())
                         {
                             meshTransform = boneTransforms[ji] * meshTransform;
@@ -3971,10 +4000,10 @@ namespace ignite
                 PushConstant_ObjectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
             }
 
-			nvrhi::BindingSetHandle meshBindingSet = frameContext->staticMeshCSMBindingSet[cascadeIndex];
+            nvrhi::BindingSetHandle meshBindingSet = frameContext->staticMeshCSMBindingSet[cascadeIndex];
             if constexpr (isSkeletal)
             {
-				meshBindingSet = frameContext->animatedMeshCSMBindingSet[cascadeIndex];
+                meshBindingSet = frameContext->animatedMeshCSMBindingSet[cascadeIndex];
             }
 
             if (meshBindingSet)
@@ -3985,15 +4014,15 @@ namespace ignite
 
                 cmd->setGraphicsState(csmState);
 
-				if constexpr (!isSkeletal)
-				{
-					uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &PushConstant_ObjectIndex, 1);
-					cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
-				}
-				else
-				{
-					cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
-				}
+                if constexpr (!isSkeletal)
+                {
+                    uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &PushConstant_ObjectIndex, 1);
+                    cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
+                }
+                else
+                {
+                    cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
+                }
 
                 const uint32_t idxCount = primitive->indexBuffer->GetCount();
                 nvrhi::DrawArguments args;

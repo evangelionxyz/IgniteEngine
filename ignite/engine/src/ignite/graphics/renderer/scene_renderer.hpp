@@ -56,8 +56,9 @@ namespace ignite
 	struct CameraRenderTarget
 	{
 		Ref<RenderTarget> sceneRT;         // MSAA render target (sampleCount > 1) or regular
-		Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
-		Ref<RenderTarget> widgetRT;
+		        Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
+		        Ref<RenderTarget> selectionRT;     // Single-sample selected-object ID mask for outlines
+		        Ref<RenderTarget> widgetRT;
 		Ref<RenderTarget> compositeRT;
 		Ref<RenderTarget> debugRT;
         Ref<RenderTarget> taaHistoryRT[3];
@@ -112,7 +113,7 @@ namespace ignite
         void EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
 
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext);
-        void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, bool drawDebug);
+        void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, nvrhi::IFramebuffer *selectionFramebuffer, bool drawDebug);
         void UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
 		void DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
         void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false, nvrhi::IFramebuffer *targetFramebuffer = nullptr);

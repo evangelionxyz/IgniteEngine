@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using System;
 using System.Collections.Generic;
 
 namespace IgniteEditor.ViewModels;
@@ -26,10 +27,17 @@ public partial class ViewportViewModel : ViewModelBase
     [ObservableProperty]
     private CameraNavigationMode _navigationMode = CameraNavigationMode.Orbit;
 
-    public List<CameraNavigationMode> NavigationModes { get; } = new()
-    {
+    public List<CameraNavigationMode> NavigationModes { get; } =
+    [
         CameraNavigationMode.Orbit,
         CameraNavigationMode.Fly,
         CameraNavigationMode.Mode2D
-    };
+    ];
+
+    public event Action<ulong, bool>? EntityPicked;
+
+    public void NotifyEntityPicked(ulong uuid, bool isMultiSelect)
+    {
+        EntityPicked?.Invoke(uuid, isMultiSelect);
+    }
 }

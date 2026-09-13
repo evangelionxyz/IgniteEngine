@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Ignite.Managed.Models;
@@ -30,9 +31,9 @@ public partial class ConsoleViewModel : ViewModelBase
         RefreshFilter();
     }
 
-    private void OnLogsCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    private void OnLogsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add && e.NewItems != null)
+        if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems != null)
         {
             foreach (LogEntry log in e.NewItems)
             {
@@ -42,7 +43,7 @@ public partial class ConsoleViewModel : ViewModelBase
                 }
             }
         }
-        else if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+        else if (e.Action == NotifyCollectionChangedAction.Reset)
         {
             FilteredLogs.Clear();
         }

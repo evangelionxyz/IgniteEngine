@@ -98,6 +98,44 @@ public static class NativeEngineBridge
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern int Ignite_Camera_GetNavigationMode();
 
+    // Viewport & Picking API
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern ulong Ignite_Viewport_PickEntity(float mouseX, float mouseY, uint viewportWidth, uint viewportHeight, [MarshalAs(UnmanagedType.I1)] bool isDoubleClick, [MarshalAs(UnmanagedType.I1)] bool isShiftDown);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SetSelectedEntity(ulong uuid);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SelectEntity(ulong uuid, [MarshalAs(UnmanagedType.I1)] bool multiSelect);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_DeselectEntity(ulong uuid);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool Ignite_Viewport_IsEntitySelected(ulong uuid);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SetSelectedEntities([In] ulong[] uuids, uint count);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern uint Ignite_Viewport_GetSelectedEntities([Out] ulong[] outUuids, uint maxCount);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern uint Ignite_Viewport_GetSelectedEntityCount();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_ClearSelectedEntities();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern ulong Ignite_Viewport_GetSelectedEntity();
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void EntitySelectedCallback(ulong uuid, [MarshalAs(UnmanagedType.I1)] bool isMultiSelect);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SetEntitySelectedCallback(EntitySelectedCallback? callback);
+
     // Scene API
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     public static extern IntPtr Ignite_Scene_DeserializeHierarchyJson(string filepath);

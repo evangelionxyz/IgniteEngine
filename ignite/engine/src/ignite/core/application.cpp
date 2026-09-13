@@ -619,8 +619,8 @@ namespace ignite
 
         while (m_Window && m_Window->IsLooping())
         {
-            const float currTime = static_cast<float>(SDL_GetTicks());
-            const float dt = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
+            const auto currTime = static_cast<float>(SDL_GetTicks());
+            const auto dt = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
             m_PreviousTime = currTime;
 
             Tick(dt);

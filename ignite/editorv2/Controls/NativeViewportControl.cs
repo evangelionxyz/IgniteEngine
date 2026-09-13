@@ -27,13 +27,16 @@ public class NativeViewportControl : NativeControlHost
     private TimeSpan _lastTime;
     private bool _isInitialized;
     private CameraNavigationMode _currentNavigationMode = CameraNavigationMode.Orbit;
-
     private int _currentWidth;
     private int _currentHeight;
 
     public event Action<bool>? EngineConnectionChanged;
     public event Action<float>? FpsUpdated;
+    public event Action<ulong, bool>? EntityPicked;
 
+    private static NativeEngineBridge.EntitySelectedCallback? s_EntitySelectedCallback;
+    public static NativeViewportControl? Instance { get; private set; }
+    private static long s_LastPickTimestamp;
     public bool IsEngineConnected => _isInitialized;
 
     // FPS tracking
@@ -53,6 +56,16 @@ public class NativeViewportControl : NativeControlHost
             NativeEngineBridge.Ignite_Camera_SetNavigationMode((int)mode);
         }
     }
+
+    private static void OnNativeEntitySelected(ulong uuid, bool isMultiSelect)
+    {
+        s_LastPickTimestamp = Stopwatch.GetTimestamp();
+        Dispatcher.UIThread.Post(() =>
+        {
+            Instance?.EntityPicked?.Invoke(uuid, isMultiSelect);
+        });
+    }
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
@@ -60,11 +73,69 @@ public class NativeViewportControl : NativeControlHost
         {
             SetFocus(_childHwnd);
         }
+
+        var pt = e.GetCurrentPoint(this);
+        if (pt.Properties.IsLeftButtonPressed && _isInitialized)
+        {
+            var now = Stopwatch.GetTimestamp();
+            if (now - s_LastPickTimestamp < Stopwatch.Frequency / 10)
+                return;
+
+            s_LastPickTimestamp = now;
+
+            var isDoubleClick = e.ClickCount >= 2;
+            var isShiftDown = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+            var isCtrlDown = (e.KeyModifiers & KeyModifiers.Control) != 0;
+            var isMultiSelect = isShiftDown || isCtrlDown;
+            var w = (float)(Bounds.Width > 0 ? Bounds.Width : _currentWidth);
+            var h = (float)(Bounds.Height > 0 ? Bounds.Height : _currentHeight);
+            var picked = NativeEngineBridge.Ignite_Viewport_PickEntity((float)pt.Position.X, (float)pt.Position.Y,
+                (uint)w, (uint)h, isDoubleClick, isMultiSelect);
+
+            if (!isMultiSelect)
+            {
+                var isAlreadySelected = NativeEngineBridge.Ignite_Viewport_IsEntitySelected(picked);
+                var currentCount = NativeEngineBridge.Ignite_Viewport_GetSelectedEntityCount();
+
+                ulong finalSelection = picked;
+                if (picked != 0 && isAlreadySelected && currentCount == 1 && !isDoubleClick)
+                {
+                    finalSelection = 0;
+                    NativeEngineBridge.Ignite_Viewport_ClearSelectedEntities();
+                }
+                else if (picked == 0)
+                {
+                    finalSelection = 0;
+                    NativeEngineBridge.Ignite_Viewport_ClearSelectedEntities();
+                }
+                else
+                {
+                    NativeEngineBridge.Ignite_Viewport_SetSelectedEntity(finalSelection);
+                }
+
+                EntityPicked?.Invoke(finalSelection, false);
+            }
+            else
+            {
+                if (picked != 0)
+                {
+                    if (NativeEngineBridge.Ignite_Viewport_IsEntitySelected(picked))
+                    {
+                        NativeEngineBridge.Ignite_Viewport_DeselectEntity(picked);
+                    }
+                    else
+                    {
+                        NativeEngineBridge.Ignite_Viewport_SelectEntity(picked, true);
+                    }
+                    EntityPicked?.Invoke(picked, true);
+                }
+            }
+        }
     }
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
-        int width  = (int)Bounds.Width  > 0 ? (int)Bounds.Width  : 1280;
-        int height = (int)Bounds.Height > 0 ? (int)Bounds.Height : 720;
+        var width  = (int)Bounds.Width  > 0 ? (int)Bounds.Width  : 1280;
+        var height = (int)Bounds.Height > 0 ? (int)Bounds.Height : 720;
         _currentWidth  = width;
         _currentHeight = height;
 
@@ -108,6 +179,10 @@ public class NativeViewportControl : NativeControlHost
 
                     if (_isInitialized)
                     {
+                        Instance = this;
+                        s_EntitySelectedCallback = OnNativeEntitySelected;
+                        NativeEngineBridge.Ignite_Viewport_SetEntitySelectedCallback(s_EntitySelectedCallback);
+
                         NativeEngineBridge.Ignite_Camera_SetNavigationMode((int)_currentNavigationMode);
 
                         _stopwatch.Start();
@@ -124,8 +199,7 @@ public class NativeViewportControl : NativeControlHost
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"[NativeViewportControl] Engine init failed: {ex.Message}");
-                    _isInitialized = false;
-                    EngineConnectionChanged?.Invoke(false);
+                    Shutdown();
                 }
 
                 return new PlatformHandle(_childHwnd, "HWND");
@@ -143,7 +217,9 @@ public class NativeViewportControl : NativeControlHost
         var now = _stopwatch.Elapsed;
         var dt  = (float)(now - _lastTime).TotalSeconds;
         _lastTime = now;
-        if (dt > 0.1f) dt = 0.1f;
+
+        if (dt > 0.1f)
+            dt = 0.1f;
 
         // Native engine step: polls SDL3 events, updates EditorCamera, renders directly to swapchain
         NativeEngineBridge.Ignite_Tick(dt);
@@ -151,6 +227,7 @@ public class NativeViewportControl : NativeControlHost
         // FPS counter
         _frameCount++;
         _fpsAccumulator += dt;
+
         if (_fpsAccumulator >= 0.5)
         {
             FpsUpdated?.Invoke((float)(_frameCount / _fpsAccumulator));
@@ -163,8 +240,8 @@ public class NativeViewportControl : NativeControlHost
     {
         base.OnSizeChanged(e);
 
-        int w = Math.Max(1, (int)e.NewSize.Width);
-        int h = Math.Max(1, (int)e.NewSize.Height);
+        var w = Math.Max(1, (int)e.NewSize.Width);
+        var h = Math.Max(1, (int)e.NewSize.Height);
 
         if (w == _currentWidth && h == _currentHeight)
             return;
@@ -190,9 +267,15 @@ public class NativeViewportControl : NativeControlHost
 
         if (_isInitialized)
         {
+            if (Instance == this)
+            {
+                NativeEngineBridge.Ignite_Viewport_SetEntitySelectedCallback(null);
+                Instance = null;
+                s_EntitySelectedCallback = null;
+            }
+
             NativeEngineBridge.Ignite_Shutdown();
-            _isInitialized = false;
-            EngineConnectionChanged?.Invoke(false);
+            Shutdown();
         }
 
         if (_childHwnd != IntPtr.Zero)
@@ -204,13 +287,20 @@ public class NativeViewportControl : NativeControlHost
         base.DestroyNativeControlCore(control);
     }
 
+    public void Shutdown()
+    {
+        _isInitialized = false;
+        EngineConnectionChanged?.Invoke(false);
+    }
+
     private const uint SWP_NOZORDER   = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern IntPtr CreateWindowExW(int dwExStyle, string lpClassName, string lpWindowName,
-        int dwStyle, int x, int y, int nWidth, int nHeight, IntPtr hWndParent, IntPtr hMenu,
-        IntPtr hInstance, IntPtr lpParam);
+    private static extern IntPtr CreateWindowExW(
+        int dwExStyle, string lpClassName, string lpWindowName,
+        int dwStyle, int x, int y, int nWidth, int nHeight,
+        IntPtr hWndParent, IntPtr hMenu, IntPtr hInstance, IntPtr lpParam);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
