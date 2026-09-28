@@ -1800,6 +1800,8 @@ namespace ignite
                 m_State.projectCreateInfo.name = std::string(nameBuffer);
             }
 
+            ImGui::Spacing();
+
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::AlignTextToFramePadding();
