@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -143,8 +143,8 @@ namespace ignite
 
         LOG_ASSERT(project, "[Scene SR] Invalid project");
 
-        YAML::Node sceneFileNode = Serializer::Deserialize(filepath);
-        YAML::Node sceneNode = sceneFileNode["Scene"];
+        JsonNode sceneFileNode = Serializer::Deserialize(filepath);
+        JsonNode sceneNode = sceneFileNode["Scene"];
 
         LOG_ASSERT(sceneNode, "[Scene SR] Invalid scene file");
         if (!sceneNode)
@@ -156,7 +156,7 @@ namespace ignite
         auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
 
-        for (YAML::Node entityNode : sceneNode["Entities"])
+        for (JsonNode entityNode : sceneNode["Entities"])
         {
             EntitySerializer::DeserializeEntity(entityNode, desScene.get(), project);
         }
@@ -187,18 +187,18 @@ namespace ignite
             return "[]";
         }
 
-        YAML::Node sceneFileNode;
+        JsonNode sceneFileNode;
         try
         {
             sceneFileNode = Serializer::Deserialize(filepath);
         }
         catch (const std::exception &e)
         {
-            LOG_ERROR("[SceneSerializer] Failed to parse scene YAML: {}", e.what());
+            LOG_ERROR("[SceneSerializer] Failed to parse scene JSON: {}", e.what());
             return "[]";
         }
 
-        YAML::Node sceneNode = sceneFileNode["Scene"];
+        JsonNode sceneNode = sceneFileNode["Scene"];
         if (!sceneNode || !sceneNode["Entities"])
         {
             return "[]";
@@ -218,7 +218,7 @@ namespace ignite
         std::vector<uint64_t> rootIds;
         std::vector<uint64_t> allIdsInOrder;
 
-        for (YAML::Node entityNode : sceneNode["Entities"])
+        for (JsonNode entityNode : sceneNode["Entities"])
         {
             EntityEntry entry;
             if (entityNode["ID"])
@@ -237,7 +237,7 @@ namespace ignite
             // 1. Transform
             if (entityNode["Transform"])
             {
-                YAML::Node tNode = entityNode["Transform"];
+                JsonNode tNode = entityNode["Transform"];
                 glm::vec3 pos = tNode["LocalTranslation"] ? tNode["LocalTranslation"].as<glm::vec3>(glm::vec3(0.0f)) :
                     (tNode["WorldTranslation"] ? tNode["WorldTranslation"].as<glm::vec3>(glm::vec3(0.0f)) : glm::vec3(0.0f));
                 glm::vec3 rot(0.0f);
@@ -282,7 +282,7 @@ namespace ignite
             // 2. Camera
             if (entityNode["Camera"])
             {
-                YAML::Node cNode = entityNode["Camera"];
+                JsonNode cNode = entityNode["Camera"];
                 int proj = cNode["Projection"] ? cNode["Projection"].as<int>(1) : 1;
                 float fov = cNode["Fov"] ? cNode["Fov"].as<float>(60.0f) : 60.0f;
                 float nearP = cNode["Near"] ? cNode["Near"].as<float>(0.1f) : 0.1f;
@@ -303,7 +303,7 @@ namespace ignite
             // 3. DirectionalLight
             if (entityNode["DirectionalLight"])
             {
-                YAML::Node lNode = entityNode["DirectionalLight"];
+                JsonNode lNode = entityNode["DirectionalLight"];
                 glm::vec4 color = lNode["Color"] ? lNode["Color"].as<glm::vec4>(glm::vec4(1.0f)) : glm::vec4(1.0f);
                 float intensity = lNode["Intensity"] ? lNode["Intensity"].as<float>(1.0f) : 1.0f;
 
@@ -318,7 +318,7 @@ namespace ignite
             // 4. PointLight
             if (entityNode["PointLight"])
             {
-                YAML::Node lNode = entityNode["PointLight"];
+                JsonNode lNode = entityNode["PointLight"];
                 glm::vec4 color = lNode["Color"] ? lNode["Color"].as<glm::vec4>(glm::vec4(1.0f)) : glm::vec4(1.0f);
                 float intensity = lNode["Intensity"] ? lNode["Intensity"].as<float>(1.0f) : 1.0f;
                 float range = lNode["Range"] ? lNode["Range"].as<float>(10.0f) : 10.0f;
@@ -335,7 +335,7 @@ namespace ignite
             // 5. SpotLight
             if (entityNode["SpotLight"])
             {
-                YAML::Node lNode = entityNode["SpotLight"];
+                JsonNode lNode = entityNode["SpotLight"];
                 glm::vec4 color = lNode["Color"] ? lNode["Color"].as<glm::vec4>(glm::vec4(1.0f)) : glm::vec4(1.0f);
                 float intensity = lNode["Intensity"] ? lNode["Intensity"].as<float>(1.0f) : 1.0f;
                 float range = lNode["Range"] ? lNode["Range"].as<float>(10.0f) : 10.0f;
@@ -352,7 +352,7 @@ namespace ignite
             // 6. Sprite2D
             if (entityNode["Sprite2D"])
             {
-                YAML::Node sNode = entityNode["Sprite2D"];
+                JsonNode sNode = entityNode["Sprite2D"];
                 glm::vec4 color = sNode["Color"] ? sNode["Color"].as<glm::vec4>(glm::vec4(1.0f)) : glm::vec4(1.0f);
 
                 json c;
@@ -365,7 +365,7 @@ namespace ignite
             // 7. Circle2D
             if (entityNode["Circle2D"])
             {
-                YAML::Node sNode = entityNode["Circle2D"];
+                JsonNode sNode = entityNode["Circle2D"];
                 glm::vec4 color = sNode["Color"] ? sNode["Color"].as<glm::vec4>(glm::vec4(1.0f)) : glm::vec4(1.0f);
 
                 json c;
@@ -396,7 +396,7 @@ namespace ignite
             // 10. Rigidbody
             if (entityNode["Rigidbody"])
             {
-                YAML::Node rbNode = entityNode["Rigidbody"];
+                JsonNode rbNode = entityNode["Rigidbody"];
                 float mass = rbNode["Mass"] ? rbNode["Mass"].as<float>(1.0f) : 1.0f;
 
                 json c;

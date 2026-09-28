@@ -498,9 +498,6 @@ TEST(EngineTests, ActionInputSystem)
     Ref<Project> project = Project::Create(info);
     ASSERT_NE(project, nullptr);
 
-    // Initialize the C# script engine
-    project->InitScriptEngine();
-
     // Create a new C# script ActionTest.cs
     std::filesystem::path scriptFilepath = project->GetScriptsDirectory() / "ActionTest.cs";
     {
@@ -525,6 +522,9 @@ public class ActionTest : Entity
         out.close();
         project->RegenerateCSharpProject();
     }
+
+    // Initialize the C# script engine
+    project->InitScriptEngine();
 
     // Wait for compilation & script engine loading assembly
     auto scriptEngine = project->GetScriptEngine();
@@ -594,8 +594,6 @@ TEST(EngineTests, AnimatorScriptingIntegration)
     Ref<Project> project = Project::Create(info);
     ASSERT_NE(project, nullptr);
 
-    project->InitScriptEngine();
-
     // Create C# script AnimationTest.cs
     std::filesystem::path scriptFilepath = project->GetScriptsDirectory() / "AnimationTest.cs";
     {
@@ -631,6 +629,8 @@ public class AnimationTest : Entity
         out.close();
         project->RegenerateCSharpProject();
     }
+
+    project->InitScriptEngine();
 
     auto scriptEngine = project->GetScriptEngine();
     ASSERT_NE(scriptEngine, nullptr);
@@ -1134,8 +1134,6 @@ TEST(EngineTests, ScriptEngineLivePlayModeHotReload)
 
     Ref<Project> project = Project::Create(info);
     ASSERT_NE(project, nullptr);
-
-    project->InitScriptEngine();
 
     // Create C# script LiveTestScript.cs
     std::filesystem::path scriptFilepath = project->GetScriptsDirectory() / "LiveTestScript.cs";

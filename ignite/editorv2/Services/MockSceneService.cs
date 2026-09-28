@@ -39,12 +39,12 @@ public class MockSceneService : ISceneService
             ComponentType.Script);
 
         // 3a. PlayerModel child (SkeletalMesh + Transform)
-        CreateEntityInternal("PlayerModel", player.Id,
+        CreateEntityInternal("PlayerModel", player.Guid,
             ComponentType.Transform,
             ComponentType.SkeletalMesh);
 
         // 3b. Weapon child (StaticMesh + Transform)
-        CreateEntityInternal("Weapon", player.Id,
+        CreateEntityInternal("Weapon", player.Guid,
             ComponentType.Transform,
             ComponentType.StaticMesh);
 
@@ -59,17 +59,17 @@ public class MockSceneService : ISceneService
             ComponentType.Transform);
 
         // 5a. Tree1 (StaticMesh + Transform)
-        CreateEntityInternal("Tree1", environment.Id,
+        CreateEntityInternal("Tree1", environment.Guid,
             ComponentType.Transform,
             ComponentType.StaticMesh);
 
         // 5b. Tree2 (StaticMesh + Transform)
-        CreateEntityInternal("Tree2", environment.Id,
+        CreateEntityInternal("Tree2", environment.Guid,
             ComponentType.Transform,
             ComponentType.StaticMesh);
 
         // 5c. Rock1 (StaticMesh + Transform)
-        CreateEntityInternal("Rock1", environment.Id,
+        CreateEntityInternal("Rock1", environment.Guid,
             ComponentType.Transform,
             ComponentType.StaticMesh);
 
@@ -80,7 +80,7 @@ public class MockSceneService : ISceneService
     {
         var entity = new EntityModel
         {
-            Id = Guid.NewGuid(),
+            Guid = Guid.NewGuid(),
             Name = name,
             ParentId = parentId,
             IsActive = true
@@ -113,7 +113,7 @@ public class MockSceneService : ISceneService
 
     private void RebuildHierarchy()
     {
-        var dict = _entities.ToDictionary(e => e.Id);
+        var dict = _entities.ToDictionary(e => e.Guid);
 
         foreach (var entity in _entities)
         {
@@ -141,7 +141,7 @@ public class MockSceneService : ISceneService
     {
         lock (_lock)
         {
-            return _entities.FirstOrDefault(e => e.Id == id);
+            return _entities.FirstOrDefault(e => e.Guid == id);
         }
     }
 
@@ -159,14 +159,14 @@ public class MockSceneService : ISceneService
     {
         lock (_lock)
         {
-            var entity = _entities.FirstOrDefault(e => e.Id == id);
+            var entity = _entities.FirstOrDefault(e => e.Guid == id);
             if (entity == null) return;
 
             var toRemove = new HashSet<Guid>();
             CollectDescendantIds(entity, toRemove);
             toRemove.Add(id);
 
-            _entities.RemoveAll(e => toRemove.Contains(e.Id));
+            _entities.RemoveAll(e => toRemove.Contains(e.Guid));
             RebuildHierarchy();
         }
     }
@@ -175,7 +175,7 @@ public class MockSceneService : ISceneService
     {
         foreach (var child in parent.Children)
         {
-            ids.Add(child.Id);
+            ids.Add(child.Guid);
             CollectDescendantIds(child, ids);
         }
     }
@@ -184,7 +184,7 @@ public class MockSceneService : ISceneService
     {
         lock (_lock)
         {
-            var entity = _entities.FirstOrDefault(e => e.Id == entityId);
+            var entity = _entities.FirstOrDefault(e => e.Guid == entityId);
             if (entity == null) return;
 
             if (newParentId.HasValue)
@@ -196,7 +196,7 @@ public class MockSceneService : ISceneService
                 CollectDescendantIds(entity, descendants);
                 if (descendants.Contains(newParentId.Value)) return;
 
-                var newParent = _entities.FirstOrDefault(e => e.Id == newParentId.Value);
+                var newParent = _entities.FirstOrDefault(e => e.Guid == newParentId.Value);
                 if (newParent == null) return;
             }
 
@@ -209,7 +209,7 @@ public class MockSceneService : ISceneService
     {
         lock (_lock)
         {
-            var entity = _entities.FirstOrDefault(e => e.Id == id);
+            var entity = _entities.FirstOrDefault(e => e.Guid == id);
             if (entity != null)
             {
                 entity.Name = newName;
@@ -221,7 +221,7 @@ public class MockSceneService : ISceneService
     {
         lock (_lock)
         {
-            var original = _entities.FirstOrDefault(e => e.Id == id);
+            var original = _entities.FirstOrDefault(e => e.Guid == id);
             if (original == null)
             {
                 throw new ArgumentException($"Entity with ID {id} not found.", nameof(id));
@@ -237,7 +237,7 @@ public class MockSceneService : ISceneService
     {
         var copy = new EntityModel
         {
-            Id = Guid.NewGuid(),
+            Guid = Guid.NewGuid(),
             Name = isRoot ? $"{source.Name} (Copy)" : source.Name,
             ParentId = newParentId,
             IsActive = source.IsActive
@@ -257,7 +257,7 @@ public class MockSceneService : ISceneService
 
         foreach (var child in source.Children)
         {
-            DuplicateEntityRecursive(child, copy.Id, isRoot: false);
+            DuplicateEntityRecursive(child, copy.Guid, isRoot: false);
         }
 
         return copy;

@@ -284,6 +284,7 @@ namespace ignite
     bool ScriptEngine::ReloadAssembly()
     {
         scriptEngineData->appAssemblyLoaded = false;
+        scriptEngineData->coreAssemblyLoaded = false;
 
         // CRITICAL: Destroy all script instances BEFORE reloading the assembly
         // This prevents TargetException due to managed objects holding old type references
@@ -699,14 +700,40 @@ namespace ignite
 
         // For initial project load/create, force asynchronous build first so app assembly
         // is loaded only after dependencies and build outputs are updated.
+        auto subscribeBuildSignal = []()
+        {
+            if (scriptEngineData->solutionBuildToken != kInvalidSignalToken)
+                return;
+
+            scriptEngineData->solutionBuildToken = SignalBus::Subscribe<SuccessResultSignal>([](const SuccessResultSignal &signal)
+            {
+                if (signal.type != SignalType::ScriptEngine)
+                    return;
+
+                LOG_ASSERT(signal.isSuccess, "[Script Engine] Failed to build solution!");
+                if (!signal.isSuccess)
+                    return;
+
+                if (scriptEngineData->scene && scriptEngineData->scene->IsRunning())
+                {
+                    scriptEngineData->hotReloadPending = true;
+                    LOG_INFO("[Script Engine] Solution build finished during play. Hot reload scheduled for frame end.");
+                    return;
+                }
+
+                if (!scriptEngineData->appAssemblyLoaded)
+                {
+                    scriptEngineData->appAssemblyLoaded = LoadAppAssembly(scriptEngineData->project->GetScriptModulePath());
+                }
+            });
+        };
+
         if (!waitForBuild)
         {
             auto modulePath = scriptEngineData->project->GetScriptModulePath();
             if (std::filesystem::exists(modulePath))
             {
-                // Clean up any leftover slow-path subscription from a previous call
-                SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
-                scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+                subscribeBuildSignal();
 
                 // Load App Assembly immediately (we may be on a worker thread)
                 scriptEngineData->appAssemblyLoaded = LoadAppAssembly(modulePath);
@@ -715,33 +742,13 @@ namespace ignite
         }
 
         // Build path (forced at project open/create, or when DLL does not exist):
-        // Deregister any leftover subscription.
-        SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
-        scriptEngineData->solutionBuildToken = kInvalidSignalToken;
-
-        // Register Build Solution callback — one-shot, only fires on ScriptEngine signal
-        scriptEngineData->solutionBuildToken = SignalBus::Subscribe<SuccessResultSignal>([](const SuccessResultSignal &signal)
-        {
-            // Guard: only handle the "build finished" notification, not any re-emitted Project signals
-            if (signal.type != SignalType::ScriptEngine)
-                return;
-
-            // One-shot: unsubscribe immediately so cascading Project emits don't re-trigger this
-            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
-            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
-
-            LOG_ASSERT(signal.isSuccess, "[Script Engine] Failed to build solution!");
-            if (signal.isSuccess)
-            {
-                scriptEngineData->appAssemblyLoaded = LoadAppAssembly(scriptEngineData->project->GetScriptModulePath());
-            }
-        });
+        subscribeBuildSignal();
 
         // Run the build and load the App Assembly if success
         LOG_DEBUG("Building Visual Studio Solution...");
 
-        // const bool forceRebuild = scriptEngineData->project->IsCoreDependenciesUpToDate() == false;
-        // scriptEngineData->project->BuildSolution(forceRebuild);
+        const bool forceRebuild = scriptEngineData->project->IsCoreDependenciesUpToDate() == false;
+        scriptEngineData->project->BuildSolution(forceRebuild);
         return FileStatus::Pending;
     }
 
@@ -784,8 +791,19 @@ namespace ignite
 
     void ScriptEngine::OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType)
     {
-        if (!scriptEngineData->assemblyReloadingPending && eventType == filewatch::Event::modified)
+        if (!scriptEngineData->assemblyReloadingPending && 
+            (eventType == filewatch::Event::modified || eventType == filewatch::Event::added || eventType == filewatch::Event::renamed_new))
         {
+            auto modulePath = scriptEngineData->project ? scriptEngineData->project->GetScriptModulePath() : std::filesystem::path(path);
+            std::chrono::time_point<std::chrono::file_clock> newWriteTime{};
+            if (scriptEngineData->hasAppAssemblyLastWriteTime && vfs::TryGetFileWriteTime(modulePath, newWriteTime))
+            {
+                if (newWriteTime <= scriptEngineData->appAssemblyLastWriteTime)
+                {
+                    return;
+                }
+            }
+
             scriptEngineData->assemblyReloadingPending = true;
 
             Application::SubmitToMainThread([]()

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -91,7 +91,7 @@ namespace ignite
         sr.AddKeyValue("Type", ScriptFieldTypeToString(field.field.Type));
     }
 
-    static void DeserializeScriptFieldValue(YAML::Node fieldNode, const std::string &name, const ScriptField &fieldDef, ScriptInstanceField &outField)
+    static void DeserializeScriptFieldValue(JsonNode fieldNode, const std::string &name, const ScriptField &fieldDef, ScriptInstanceField &outField)
     {
         auto valueNode = fieldNode["Value"];
 
@@ -820,7 +820,7 @@ namespace ignite
         sr.EndMap(); // END Entity
     }
 
-    Entity EntitySerializer::DeserializeEntity(const YAML::Node &entityNode, Scene *scene, Project *project)
+    Entity EntitySerializer::DeserializeEntity(const JsonNode &entityNode, Scene *scene, Project *project)
     {
         UUID uuid = UUID(entityNode["ID"].as<uint64_t>());
         std::string name = entityNode["Name"].as<std::string>();
@@ -831,7 +831,7 @@ namespace ignite
         desEntity.GetComponent<IDComponent>().parent = parent;
 
         // Transform component
-        if (YAML::Node node = entityNode["Transform"])
+        if (JsonNode node = entityNode["Transform"])
         {
             auto &comp = desEntity.AddComponent<TransformComponent>();
             comp.world.translation = node["WorldTranslation"].as<glm::vec3>();
@@ -844,14 +844,14 @@ namespace ignite
         }
 
         // Rendering component
-        if (YAML::Node node = entityNode["Rendering"])
+        if (JsonNode node = entityNode["Rendering"])
         {
             auto &comp = desEntity.AddComponent<RenderingComponent>();
             comp.visible = node["Visible"].as<bool>();
         }
 
         // Camera component
-        if (YAML::Node node = entityNode["Camera"])
+        if (JsonNode node = entityNode["Camera"])
         {
             auto &comp = desEntity.AddComponent<CameraComponent>();
             comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
@@ -866,7 +866,7 @@ namespace ignite
             if (auto n = node["Fov"]) comp.camera.fov = n.as<float>();
             if (auto n = node["Primary"]) comp.primary = n.as<bool>();
 
-            if (YAML::Node lensNode = node["Lens"])
+            if (JsonNode lensNode = node["Lens"])
             {
                 if (auto n = lensNode["EnabledDOF"]) comp.camera.lens.enabledDOF = n.as<bool>();
                 if (auto n = lensNode["FocalLength"]) comp.camera.lens.focalLength = n.as<float>();
@@ -876,7 +876,7 @@ namespace ignite
                 if (auto n = lensNode["BlurAmount"]) comp.camera.lens.blurAmount = n.as<float>();
             }
 
-            if (YAML::Node ppNode = node["PostProcessing"])
+            if (JsonNode ppNode = node["PostProcessing"])
             {
                 auto &pp = comp.camera.postProcessing;
                 if (auto n = ppNode["EnableVignette"]) pp.enableVignette = n.as<bool>();
@@ -913,7 +913,7 @@ namespace ignite
         }
 
         // Directional Light
-        if (YAML::Node node = entityNode["DirectionalLight"])
+        if (JsonNode node = entityNode["DirectionalLight"])
         {
             auto &comp = desEntity.AddComponent<DirectionalLightComponent>();
             if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
@@ -929,7 +929,7 @@ namespace ignite
         }
 
         // Point Light
-        if (YAML::Node node = entityNode["PointLight"])
+        if (JsonNode node = entityNode["PointLight"])
         {
             auto &comp = desEntity.AddComponent<PointLightComponent>();
             if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
@@ -942,7 +942,7 @@ namespace ignite
         }
 
         // Spot Light
-        if (YAML::Node node = entityNode["SpotLight"])
+        if (JsonNode node = entityNode["SpotLight"])
         {
             auto &comp = desEntity.AddComponent<SpotLightComponent>();
             if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
@@ -957,7 +957,7 @@ namespace ignite
         }
 
         // Terrain
-        if (YAML::Node node = entityNode["Terrain"])
+        if (JsonNode node = entityNode["Terrain"])
         {
             auto &comp = desEntity.AddComponent<TerrainComponent>();
             if (auto n = node["Resolution"]) comp.resolution = n.as<uint32_t>();
@@ -1009,7 +1009,7 @@ namespace ignite
         }
 
         // Sprite 2D component
-        if (YAML::Node node = entityNode["Sprite2D"])
+        if (JsonNode node = entityNode["Sprite2D"])
         {
             auto &comp = desEntity.AddComponent<Sprite2DComponent>();
             if (auto n = node["MaterialHandle"]) comp.materialHandle = AssetHandle(n.as<uint64_t>());
@@ -1022,7 +1022,7 @@ namespace ignite
             if (auto n = node["FlipY"]) comp.flipY = n.as<bool>();
         }
 
-        if (YAML::Node node = entityNode["Animator2D"])
+        if (JsonNode node = entityNode["Animator2D"])
         {
             auto &comp = desEntity.AddComponent<Animator2DComponent>();
             if (auto n = node["ControllerHandle"]) comp.controllerHandle = AssetHandle(n.as<uint64_t>());
@@ -1030,7 +1030,7 @@ namespace ignite
         }
 
         // Circle 2D component
-        if (YAML::Node node = entityNode["Circle2D"])
+        if (JsonNode node = entityNode["Circle2D"])
         {
             auto &comp = desEntity.AddComponent<Circle2DComponent>();
             if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
@@ -1038,7 +1038,7 @@ namespace ignite
             if (auto n = node["Fade"]) comp.fade = n.as<float>();
         }
 
-        if (YAML::Node node = entityNode["PointLight2D"])
+        if (JsonNode node = entityNode["PointLight2D"])
         {
             auto &comp = desEntity.AddComponent<PointLight2DComponent>();
             if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
@@ -1048,7 +1048,7 @@ namespace ignite
         }
 
         // Rigidbody 2D
-        if (YAML::Node node = entityNode["Rigidbody2D"])
+        if (JsonNode node = entityNode["Rigidbody2D"])
         {
             auto &comp = desEntity.AddComponent<Rigidbody2DComponent>();
             if (auto n = node["BodyType"]) comp.bodyType = static_cast<physics::BodyType>(n.as<int>());
@@ -1065,7 +1065,7 @@ namespace ignite
         }
 
         // Box collider 2D
-        if (YAML::Node node = entityNode["BoxCollider2D"])
+        if (JsonNode node = entityNode["BoxCollider2D"])
         {
             auto &comp = desEntity.AddComponent<BoxCollider2DComponent>();
             if (auto n = node["Size"]) comp.size = n.as<glm::vec2>();
@@ -1077,7 +1077,7 @@ namespace ignite
         }
 
         // Circle collider 2D
-        if (YAML::Node node = entityNode["CircleCollider2D"])
+        if (JsonNode node = entityNode["CircleCollider2D"])
         {
             auto &comp = desEntity.AddComponent<CircleCollider2DComponent>();
             if (auto n = node["Radius"]) comp.radius = n.as<float>();
@@ -1089,14 +1089,14 @@ namespace ignite
         }
 
         // Static Mesh Component
-        if (YAML::Node node = entityNode["StaticMesh"])
+        if (JsonNode node = entityNode["StaticMesh"])
         {
             auto &comp = desEntity.AddComponent<StaticMeshComponent>();
             if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
 
-            if (YAML::Node matsNode = node["OverrideMaterials"])
+            if (JsonNode matsNode = node["OverrideMaterials"])
             {
-                for (YAML::Node matNode : matsNode)
+                for (JsonNode matNode : matsNode)
                 {
                     uint32_t meshIndex = matNode["Mesh"].as<uint32_t>();
                     AssetHandle materialHandle = AssetHandle(matNode["MaterialHandle"].as<uint64_t>());
@@ -1106,16 +1106,16 @@ namespace ignite
         }
 
         // Skeletal Mesh Component
-        if (YAML::Node node = entityNode["SkeletalMesh"])
+        if (JsonNode node = entityNode["SkeletalMesh"])
         {
             auto &comp = desEntity.AddComponent<SkeletalMeshComponent>();
             if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["AnimatorHandle"]) comp.runtimeAnimatorHandle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["UniqueAnimator"]) comp.uniqueAnimator = n.as<bool>();
 
-            if (YAML::Node matsNode = node["OverrideMaterials"])
+            if (JsonNode matsNode = node["OverrideMaterials"])
             {
-                for (YAML::Node matNode : matsNode)
+                for (JsonNode matNode : matsNode)
                 {
                     uint32_t meshIndex = matNode["Mesh"].as<uint32_t>();
                     AssetHandle materialHandle = AssetHandle(matNode["MaterialHandle"].as<uint64_t>());
@@ -1123,9 +1123,9 @@ namespace ignite
                 }
             }
 
-            if (YAML::Node socketsNode = node["SocketAttachments"])
+            if (JsonNode socketsNode = node["SocketAttachments"])
             {
-                for (YAML::Node socketNode : socketsNode)
+                for (JsonNode socketNode : socketsNode)
                 {
                     std::string socketName = socketNode["SocketName"].as<std::string>();
                     AssetHandle meshHandle = AssetHandle(socketNode["MeshHandle"].as<uint64_t>());
@@ -1135,7 +1135,7 @@ namespace ignite
         }
 
         // Rigidbody Component
-        if (YAML::Node node = entityNode["Rigidbody"])
+        if (JsonNode node = entityNode["Rigidbody"])
         {
             auto &comp = desEntity.AddComponent<RigidbodyComponent>();
             if (auto n = node["MotionQuality"]) comp.motionQuality = static_cast<physics::MotionQuality>(n.as<int>());
@@ -1166,7 +1166,7 @@ namespace ignite
         }
 
         // BoxCollider Component
-        if (YAML::Node node = entityNode["BoxCollider"])
+        if (JsonNode node = entityNode["BoxCollider"])
         {
             auto &comp = desEntity.AddComponent<BoxColliderComponent>();
             if (auto n = node["Scale"]) comp.scale = n.as<glm::vec3>();
@@ -1174,7 +1174,7 @@ namespace ignite
         }
 
         // SphereCollider Component
-        if (YAML::Node node = entityNode["SphereCollider"])
+        if (JsonNode node = entityNode["SphereCollider"])
         {
             auto &comp = desEntity.AddComponent<SphereColliderComponent>();
             if (auto n = node["Radius"]) comp.radius = n.as<float>();
@@ -1182,7 +1182,7 @@ namespace ignite
         }
 
         // CapsuleCollider Component
-        if (YAML::Node node = entityNode["CapsuleCollider"])
+        if (JsonNode node = entityNode["CapsuleCollider"])
         {
             auto &comp = desEntity.AddComponent<CapsuleColliderComponent>();
             if (auto n = node["Radius"]) comp.radius = n.as<float>();
@@ -1191,7 +1191,7 @@ namespace ignite
         }
 
         // CharacterController Component
-        if (YAML::Node node = entityNode["CharacterController"])
+        if (JsonNode node = entityNode["CharacterController"])
         {
             auto &comp = desEntity.AddComponent<CharacterControllerComponent>();
             if (auto n = node["Radius"]) comp.radius = n.as<float>();
@@ -1207,19 +1207,19 @@ namespace ignite
         }
 
         // MeshCollider Component
-        if (YAML::Node node = entityNode["MeshCollider"])
+        if (JsonNode node = entityNode["MeshCollider"])
         {
             auto &comp = desEntity.AddComponent<MeshColliderComponent>();
-            if (YAML::Node verticesNode = node["Vertices"])
+            if (JsonNode verticesNode = node["Vertices"])
             {
-                for (YAML::Node vNode : verticesNode)
+                for (JsonNode vNode : verticesNode)
                 {
                     comp.vertices.push_back(vNode.as<glm::vec3>());
                 }
             }
-            if (YAML::Node indicesNode = node["Indices"])
+            if (JsonNode indicesNode = node["Indices"])
             {
-                for (YAML::Node iNode : indicesNode)
+                for (JsonNode iNode : indicesNode)
                 {
                     comp.indices.push_back(iNode.as<uint32_t>());
                 }
@@ -1227,15 +1227,15 @@ namespace ignite
         }
 
         // HeightFieldCollider Component
-        if (YAML::Node node = entityNode["HeightFieldCollider"])
+        if (JsonNode node = entityNode["HeightFieldCollider"])
         {
             auto &comp = desEntity.AddComponent<HeightFieldColliderComponent>();
             if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
             if (auto n = node["Scale"]) comp.scale = n.as<glm::vec3>();
             if (auto n = node["SampleCount"]) comp.sampleCount = n.as<uint32_t>();
-            if (YAML::Node heightsNode = node["Heights"])
+            if (JsonNode heightsNode = node["Heights"])
             {
-                for (YAML::Node hNode : heightsNode)
+                for (JsonNode hNode : heightsNode)
                 {
                     comp.heights.push_back(hNode.as<float>());
                 }
@@ -1243,7 +1243,7 @@ namespace ignite
         }
 
         // AudioSource Component
-        if (YAML::Node node = entityNode["AudioSource"])
+        if (JsonNode node = entityNode["AudioSource"])
         {
             auto &comp = desEntity.AddComponent<AudioSourceComponent>();
             if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
@@ -1253,9 +1253,9 @@ namespace ignite
             if (auto n = node["PlayOnStart"]) comp.playOnStart = n.as<bool>();
             if (auto n = node["Loop"]) comp.loop = n.as<bool>();
 
-            if (YAML::Node dspsNode = node["DSPs"])
+            if (JsonNode dspsNode = node["DSPs"])
             {
-                for (YAML::Node dspNode : dspsNode)
+                for (JsonNode dspNode : dspsNode)
                 {
                     AudioSourceComponent::DspSettings settings;
                     if (auto n = dspNode["Type"]) settings.type = static_cast<AudioSourceComponent::DspType>(n.as<int>());
@@ -1301,7 +1301,7 @@ namespace ignite
         }
 
         // WorldEnvironment
-        if (YAML::Node node = entityNode["WorldEnvironment"])
+        if (JsonNode node = entityNode["WorldEnvironment"])
         {
             auto &comp = desEntity.AddComponent<WorldEnvironment>();
             if (auto n = node["SkyType"]) comp.skyType = static_cast<SkyType>(n.as<uint32_t>());
@@ -1326,7 +1326,7 @@ namespace ignite
         }
 
         // Text Component
-        if (YAML::Node node = entityNode["TextComponent"])
+        if (JsonNode node = entityNode["TextComponent"])
         {
             auto &comp = desEntity.AddComponent<TextComponent>();
             if (auto n = node["FontHandle"]) comp.fontHandle = AssetHandle(n.as<uint64_t>());
@@ -1339,14 +1339,14 @@ namespace ignite
         }
 
         // Widget Component
-        if (YAML::Node node = entityNode["WidgetComponent"])
+        if (JsonNode node = entityNode["WidgetComponent"])
         {
             auto &comp = desEntity.AddComponent<WidgetComponent>();
             if (auto n = node["WidgetHandle"]) comp.widgetHandle = AssetHandle(n.as<uint64_t>());
         }
 
         // Script component
-        if (YAML::Node node = entityNode["Script"])
+        if (JsonNode node = entityNode["Script"])
         {
             auto &comp = desEntity.AddComponent<ScriptComponent>();
             if (auto n = node["ClassName"]) comp.className = n.as<std::string>();
@@ -1357,12 +1357,12 @@ namespace ignite
             {
                 if (Ref<ScriptClass> scriptClass = scriptEngine->GetEntityClassByName(comp.className))
                 {
-                    if (YAML::Node fieldsNode = node["Fields"])
+                    if (JsonNode fieldsNode = node["Fields"])
                     {
                         std::unordered_map<std::string, ScriptInstanceField> instanceFields;
                         const auto &classFields = scriptClass->GetFields();
 
-                        for (YAML::Node fieldNode : fieldsNode)
+                        for (JsonNode fieldNode : fieldsNode)
                         {
                             if (auto name = fieldNode["Name"])
                             {
@@ -1382,7 +1382,7 @@ namespace ignite
             }
         }
 
-        if (YAML::Node node = entityNode["PrefabComponent"])
+        if (JsonNode node = entityNode["PrefabComponent"])
         {
             auto &comp = desEntity.AddComponent<PrefabComponent>();
             if (auto n = node["PrefabHandle"]) comp.prefabHandle = AssetHandle(n.as<uint64_t>());

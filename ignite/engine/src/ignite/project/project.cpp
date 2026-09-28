@@ -154,6 +154,11 @@ R"(<Project>
 
     void Project::InitScriptEngine()
     {
+        if (m_ScriptEngine)
+        {
+            delete m_ScriptEngine;
+            m_ScriptEngine = nullptr;
+        }
         m_ScriptEngine = new ScriptEngine(this);
     }
 
@@ -351,8 +356,8 @@ R"(<Project>
             return nullptr;
         }
 
-        YAML::Node projectFileNode = Serializer::Deserialize(filepath);
-        YAML::Node projectNode = projectFileNode["Project"];
+        JsonNode projectFileNode = Serializer::Deserialize(filepath);
+        JsonNode projectNode = projectFileNode["Project"];
 
         ProjectInfo info;
         info.name = projectNode["Name"].as<std::string>();
@@ -374,14 +379,14 @@ R"(<Project>
             info.configuration = ProjectConfiguration::Debug;
         }
 
-        if (YAML::Node physNode = projectNode["Physics"])
+        if (JsonNode physNode = projectNode["Physics"])
         {
             if (auto n = physNode["Gravity"]) info.physicsSettings.gravity = n.as<glm::vec3>();
             if (auto n = physNode["LayerCount"]) info.physicsSettings.layerCount = n.as<uint32_t>();
-            if (YAML::Node namesNode = physNode["LayerNames"])
+            if (JsonNode namesNode = physNode["LayerNames"])
             {
                 uint32_t idx = 0;
-                for (YAML::Node nameNode : namesNode)
+                for (JsonNode nameNode : namesNode)
                 {
                     if (idx < physics::MAX_PHYSICS_LAYERS)
                     {
@@ -389,10 +394,10 @@ R"(<Project>
                     }
                 }
             }
-            if (YAML::Node masksNode = physNode["CollisionMasks"])
+            if (JsonNode masksNode = physNode["CollisionMasks"])
             {
                 uint32_t idx = 0;
-                for (YAML::Node maskNode : masksNode)
+                for (JsonNode maskNode : masksNode)
                 {
                     if (idx < physics::MAX_PHYSICS_LAYERS)
                     {
@@ -411,12 +416,12 @@ R"(<Project>
         {
             // project filepath / asset filename (.ixreg)
             std::filesystem::path assetRegFilepath = info.rootDirectory / info.assetRegistryFilepath;
-            YAML::Node assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
-            YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
+            JsonNode assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
+            JsonNode assetRegNode = assetRegFileNode["AssetRegistry"];
 
 			assetManager->SetActiveProject(project);
 
-            const YAML::Node assetNodes = assetRegNode["Assets"];
+            const JsonNode assetNodes = assetRegNode["Assets"];
 
             Timer timer;
             LOG_WARN("[Project] Deserializing Asset Registries {} items...", assetNodes.size());
@@ -721,20 +726,18 @@ R"(<Project>
         if (!buildSuccess || forceRebuild)
         {
             // restore NuGet
-            {
-                AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
-                std::string buildCommand = std::format("msbuild \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                    GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
-                std::system(buildCommand.c_str());
-            }
+            AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
+            std::string restoreCommand = std::format("msbuild \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
+            std::system(restoreCommand.c_str());
+        }
 
-            // Build
-            {
-                AssetWorker::ReportStatus("Building Solution...", 0.8f);
-                std::string buildCommand = std::format("msbuild \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                    GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
-                std::system(buildCommand.c_str());
-            }
+        // Build
+        {
+            AssetWorker::ReportStatus("Building Solution...", 0.8f);
+            std::string buildCommand = std::format("msbuild \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
+            std::system(buildCommand.c_str());
         }
 
         buildSuccess = std::filesystem::exists(GetScriptModulePath());
@@ -1140,7 +1143,7 @@ R"(<Project>
         }
 
         // Check the Dependencies, and auto build if not up-to-date
-        const bool shouldBuild = IsCoreDependenciesUpToDate();
+        const bool shouldBuild = !IsCoreDependenciesUpToDate();
         BuildSolution(shouldBuild);
     }
 }

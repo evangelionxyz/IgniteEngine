@@ -6,7 +6,7 @@ namespace Ignite.Managed.Models;
 
 public class EntityModel
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Guid { get; set; } = Guid.NewGuid();
     public ulong Uuid { get; set; }
     public string Name { get; set; } = "Entity";
     public Guid? ParentId { get; set; }

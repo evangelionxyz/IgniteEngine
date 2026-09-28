@@ -58,7 +58,7 @@ public partial class PropertiesViewModel : ViewModelBase
 
         foreach (var comp in model.Components)
         {
-            var vm = ComponentEditorViewModel.Create(comp, entityId, _sceneService);
+            var vm = ComponentEditorViewModel.Create(comp, entityId, _sceneService, RemoveComponent);
             Components.Add(vm);
         }
 
@@ -118,17 +118,27 @@ public abstract partial class ComponentEditorViewModel : ViewModelBase
 
     public bool CanRemove => ComponentType != ComponentType.Transform;
 
+    internal Action<ComponentEditorViewModel>? _onRemove;
+
+    [RelayCommand]
+    public void Remove()
+    {
+        if (!CanRemove) return;
+        _onRemove?.Invoke(this);
+    }
+
     protected readonly Guid _entityId;
     protected readonly ISceneService? _sceneService;
 
     public static ComponentEditorViewModel Create(
         ComponentModel model,
         Guid entityId,
-        ISceneService? sceneService)
+        ISceneService? sceneService,
+        Action<ComponentEditorViewModel>? onRemove = null)
     {
-        return model.Type switch
+        var vm = model.Type switch
         {
-            ComponentType.Transform => new TransformComponentVM(model, entityId, sceneService),
+            ComponentType.Transform => (ComponentEditorViewModel)new TransformComponentVM(model, entityId, sceneService),
             ComponentType.Camera => new CameraComponentVM(model, entityId, sceneService),
             ComponentType.Sprite2D => new Sprite2DComponentVM(model, entityId, sceneService),
             ComponentType.Circle2D => new Circle2DComponentVM(model, entityId, sceneService),
@@ -150,6 +160,8 @@ public abstract partial class ComponentEditorViewModel : ViewModelBase
             ComponentType.Script => new ScriptComponentVM(model, entityId, sceneService),
             _ => new GenericComponentVM(model, entityId, sceneService)
         };
+        vm._onRemove = onRemove;
+        return vm;
     }
 
     protected ComponentEditorViewModel(ComponentModel model, Guid entityId, ISceneService? sceneService)

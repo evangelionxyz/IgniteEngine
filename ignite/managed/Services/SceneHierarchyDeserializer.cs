@@ -55,7 +55,7 @@ public static class SceneHierarchyDeserializer
         }
 
         entity.Uuid = uuid;
-        entity.Id = uuid != 0 ? EntityModel.GuidFromUInt64(uuid) : Guid.NewGuid();
+        entity.Guid = uuid != 0 ? EntityModel.GuidFromUInt64(uuid) : Guid.NewGuid();
 
         if (element.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String)
         {

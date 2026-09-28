@@ -48,7 +48,7 @@ public partial class SceneHierarchyViewModel : ViewModelBase
                 OnNodeSelectionChanged(n, selected);
             })
         {
-            EntityId = model.Id,
+            EntityId = model.Guid,
             Name = model.Name,
             IsActive = model.IsActive
         };
@@ -83,29 +83,71 @@ public partial class SceneHierarchyViewModel : ViewModelBase
         RefreshHierarchy();
 
         // Select the newly created child
-        var found = FindNodeRecursive(RootEntities, child.Id);
+        var found = FindNodeRecursive(RootEntities, child.Guid);
         if (found != null)
         {
             SelectedEntity = found;
-            ExpandParents(RootEntities, child.Id);
+            ExpandParents(RootEntities, child.Guid);
         }
     }
 
     [RelayCommand]
     private void UnparentEntity()
     {
-        if (SelectedEntity == null) return;
-        Guid entityId = SelectedEntity.EntityId;
-        _sceneService.ReparentEntity(entityId, null);
+        var selected = GetAllSelectedNodes();
+        if (selected.Count == 0 && SelectedEntity != null)
+            selected.Add(SelectedEntity);
+
+        if (selected.Count == 0)
+            return;
+
+        foreach (var node in selected)
+            _sceneService.ReparentEntity(node.EntityId, null);
+
         RefreshHierarchy();
-        SelectedEntity = FindNodeRecursive(RootEntities, entityId);
+        RestoreSelection(selected);
+    }
+
+    public bool CanReparent(Guid entityId, Guid? newParentId)
+    {
+        if (!newParentId.HasValue)
+            return true;
+
+        if (entityId == newParentId.Value)
+            return false;
+
+        var source = FindNodeRecursive(RootEntities, entityId);
+        return source != null && !ContainsNode(source.Children, newParentId.Value);
     }
 
     public void Reparent(Guid entityId, Guid? newParentId)
     {
-        _sceneService.ReparentEntity(entityId, newParentId);
+        var selected = GetAllSelectedNodes();
+        if (selected.Count == 0 || !IsDirectlySelected(selected, entityId))
+        {
+            selected.Clear();
+            var source = FindNodeRecursive(RootEntities, entityId);
+            if (source != null)
+                selected.Add(source);
+        }
+
+        var moved = new List<EntityNodeViewModel>();
+        foreach (var node in selected)
+        {
+            // Moving an ancestor also moves its descendants. Do not reparent
+            // those descendants a second time as separate siblings.
+            if (HasSelectedAncestor(node, selected) || !CanReparent(node.EntityId, newParentId))
+                continue;
+
+            _sceneService.ReparentEntity(node.EntityId, newParentId);
+            moved.Add(node);
+        }
+
+        if (moved.Count == 0)
+            return;
+
         RefreshHierarchy();
-        SelectedEntity = FindNodeRecursive(RootEntities, entityId);
+        RestoreSelection(selected);
     }
 
     private bool _suppressSelectionEvents;
@@ -158,15 +200,13 @@ public partial class SceneHierarchyViewModel : ViewModelBase
                 }
                 else
                 {
-                    found.IsSelected = !found.IsSelected;
-                    if (found.IsSelected)
-                    {
-                        SelectedEntity = found;
-                    }
-                    else if (SelectedEntity == found)
-                    {
-                        SelectedEntity = FindFirstSelectedNode(RootEntities);
-                    }
+                    // Multi-selection is append-only for viewport and hierarchy
+                    // notifications. Explicit deselection is handled by clearing
+                    // the selection or changing the selection mode.
+                    if (!found.IsSelected)
+                        found.IsSelected = true;
+
+                    SelectedEntity = found;
                 }
             }
             finally
@@ -246,6 +286,39 @@ public partial class SceneHierarchyViewModel : ViewModelBase
         return null;
     }
 
+    private static bool ContainsNode(IEnumerable<EntityNodeViewModel> nodes, Guid id)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.EntityId == id || ContainsNode(node.Children, id))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsDirectlySelected(IEnumerable<EntityNodeViewModel> selected, Guid id)
+    {
+        foreach (var node in selected)
+        {
+            if (node.EntityId == id)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasSelectedAncestor(EntityNodeViewModel node, IEnumerable<EntityNodeViewModel> selected)
+    {
+        foreach (var candidate in selected)
+        {
+            if (candidate.EntityId != node.EntityId && ContainsNode(candidate.Children, node.EntityId))
+                return true;
+        }
+
+        return false;
+    }
+
     private static EntityNodeViewModel? FindNodeRecursive(IEnumerable<EntityNodeViewModel> nodes, Guid id)
     {
         foreach (var node in nodes)
@@ -291,10 +364,35 @@ public partial class SceneHierarchyViewModel : ViewModelBase
     [RelayCommand]
     private void DuplicateEntity()
     {
-        if (SelectedEntity == null) return;
-        var dup = _sceneService.DuplicateEntity(SelectedEntity.EntityId);
+        var selected = GetAllSelectedNodes();
+        if (selected.Count == 0 && SelectedEntity != null)
+            selected.Add(SelectedEntity);
+
+        if (selected.Count == 0)
+            return;
+
+        var duplicatedIds = new List<Guid>();
+        foreach (var node in selected)
+        {
+            var duplicate = _sceneService.DuplicateEntity(node.EntityId);
+            if (duplicate.Guid != Guid.Empty)
+                duplicatedIds.Add(duplicate.Guid);
+        }
+
         RefreshHierarchy();
-        SelectEntityById(dup.Id);
+        ClearSelection();
+        foreach (var id in duplicatedIds)
+            SelectEntityById(id, multiSelect: true);
+    }
+
+    private void RestoreSelection(IEnumerable<EntityNodeViewModel> selected)
+    {
+        ClearSelection();
+        foreach (var node in selected)
+        {
+            if (FindNodeRecursive(RootEntities, node.EntityId) != null)
+                SelectEntityById(node.EntityId, multiSelect: true);
+        }
     }
 
     partial void OnSelectedEntityChanged(EntityNodeViewModel? value)
@@ -328,6 +426,9 @@ public partial class EntityNodeViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _isSelected;
+
+    [ObservableProperty]
+    private bool _isDropTarget;
 
     public ObservableCollection<EntityNodeViewModel> Children { get; } = new();
 

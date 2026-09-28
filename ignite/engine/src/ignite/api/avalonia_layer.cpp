@@ -6,6 +6,8 @@
 #include "ignite/core/input/key_event.hpp"
 #include "ignite/core/input/input_system.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/application.hpp"
+#include "ignite/imgui/imgui_layer.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/scene.hpp"
@@ -13,8 +15,17 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/project/project.hpp"
 
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
+    #define IMGUI_DEFINE_MATH_OPERATORS
+#endif
+
+#include <imgui.h>
+#include <imgui_internal.h>
+#include <glm/glm.hpp>
+
 #include <chrono>
 #include <algorithm>
+#include <SDL3/SDL_keyboard.h>
 
 namespace ignite
 {
@@ -33,6 +44,11 @@ namespace ignite
         m_EditorCamera.UpdateView();
         m_EditorCamera.UpdateProjection(width, height);
         m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+
+        if (auto *imguiLayer = Application::GetInstance()->GetImGuiLayer())
+        {
+            imguiLayer->SetBlock(false);
+        }
     }
 
     void AvaloniaLayer::OnAttach()
@@ -128,7 +144,7 @@ namespace ignite
 
     void AvaloniaLayer::OnGuiRender()
     {
-        ImGui::ShowDemoWindow(nullptr);
+        // DrawGizmo();
     }
 
     void AvaloniaLayer::Play()
@@ -209,10 +225,6 @@ namespace ignite
         // =============================
         dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent &event)
         {
-
-            if (ImGui::GetIO().WantTextInput)
-                return false;
-
             const bool control = InputSystem::IsModifierPressed(KeyMod::Control);
             const bool shift = InputSystem::IsModifierPressed(KeyMod::LeftShift);
 
@@ -295,8 +307,11 @@ namespace ignite
         // =============================
         // Mouse Scrolled Event
         // =============================
-        dispatcher.Dispatch<MouseScrolledEvent>([this](MouseScrolledEvent &event)
+        dispatcher.Dispatch<MouseScrolledEvent>([this, &e](MouseScrolledEvent &event)
         {
+            if (e.GetSource() != EventSource::Viewport)
+                return false;
+
             if (ImGui::GetIO().WantCaptureMouse)
                 return false;
 
@@ -307,8 +322,11 @@ namespace ignite
         // =============================
         // Mouse Button Event
         // =============================
-        dispatcher.Dispatch<MouseButtonPressedEvent>([this](MouseButtonPressedEvent &event)
+        dispatcher.Dispatch<MouseButtonPressedEvent>([this, &e](MouseButtonPressedEvent &event)
         {
+            if (e.GetSource() != EventSource::Viewport)
+                return false;
+
             if (event.GetButton() == Mouse::ButtonLeft)
             {
                 auto scene = GetCurrentScene();
@@ -332,8 +350,18 @@ namespace ignite
                 m_LastClickTime = now;
                 m_LastClickPos = mousePos;
 
-                const bool isShift = InputSystem::IsModifierPressed(KeyMod::Shift) || InputSystem::IsModifierPressed(KeyMod::LeftShift) || InputSystem::IsModifierPressed(KeyMod::RightShift);
-                const bool isCtrl = InputSystem::IsModifierPressed(KeyMod::Control) || InputSystem::IsModifierPressed(KeyMod::LeftControl) || InputSystem::IsModifierPressed(KeyMod::RightControl);
+                // Read SDL's live modifier state as well as the cached input state. The
+                // viewport is hosted in a native child window, so a key event can be
+                // delivered through a different focus path than the mouse event.
+                const SDL_Keymod liveModifiers = SDL_GetModState();
+                const bool isShift = (liveModifiers & SDL_KMOD_SHIFT) != 0
+                    || InputSystem::IsModifierPressed(KeyMod::Shift)
+                    || InputSystem::IsModifierPressed(KeyMod::LeftShift)
+                    || InputSystem::IsModifierPressed(KeyMod::RightShift);
+                const bool isCtrl = (liveModifiers & SDL_KMOD_CTRL) != 0
+                    || InputSystem::IsModifierPressed(KeyMod::Control)
+                    || InputSystem::IsModifierPressed(KeyMod::LeftControl)
+                    || InputSystem::IsModifierPressed(KeyMod::RightControl);
                 m_MultiSelect = isShift || isCtrl;
 
                 const uint64_t pickedUuid = static_cast<uint64_t>(PickEntity(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y),
@@ -363,7 +391,13 @@ namespace ignite
                 {
                     if (pickedEntity.IsValid())
                     {
-                        SetSelectedEntity(pickedEntity);
+                        // SHIFT appends to the current selection. Do not toggle an entity
+                        // off when it is already selected; CTRL retains toggle behavior.
+                        if (isShift)
+                            SelectEntity(pickedEntity.GetUUID(), true);
+                        else
+                            SetSelectedEntity(pickedEntity);
+
                         if (m_EntitySelectedCallback)
                             m_EntitySelectedCallback(static_cast<uint64_t>(pickedEntity.GetUUID()), true);
                     }
@@ -625,6 +659,28 @@ namespace ignite
     uint32_t AvaloniaLayer::GetSelectedEntityCount() const
     {
         return static_cast<uint32_t>(m_SelectedEntities.size());
+    }
+
+    void AvaloniaLayer::DrawGizmo()
+    {
+        constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse
+            | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
+            | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+
+        const ImGuiViewport *viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->Pos);
+        ImGui::SetNextWindowSize(viewport->Size);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+
+        ImGui::Begin("##main_dockspace", nullptr, windowFlags);
+        ImGuiWindow *window = ImGui::GetCurrentWindow();
+        window->DC.LayoutType = ImGuiLayoutType_Horizontal;
+        window->DC.NavLayerCurrent = ImGuiNavLayer_Menu;
+
+        ImGui::Text("Hello world");
+
+        ImGui::End();
     }
 
     void AvaloniaLayer::SetNavigationMode(int mode)

@@ -49,7 +49,9 @@ public static class NativeEngineBridge
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern void Ignite_SetLogCallback(LogCallback? callback);
 
+    // ======================================
     // Project API
+    // ======================================
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool Ignite_Project_New(string name, string parentDirectory);
@@ -81,7 +83,9 @@ public static class NativeEngineBridge
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr Ignite_Project_GetAssetDirectory();
 
+    // ======================================
     // Asset Manager API
+    // ======================================
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern uint Ignite_AssetManager_GetAssetCount();
 
@@ -98,7 +102,9 @@ public static class NativeEngineBridge
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern int Ignite_Camera_GetNavigationMode();
 
+    // ======================================
     // Viewport & Picking API
+    // ======================================
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern ulong Ignite_Viewport_PickEntity(float mouseX, float mouseY, uint viewportWidth, uint viewportHeight, [MarshalAs(UnmanagedType.I1)] bool isDoubleClick, [MarshalAs(UnmanagedType.I1)] bool isShiftDown);
 
@@ -136,7 +142,9 @@ public static class NativeEngineBridge
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern void Ignite_Viewport_SetEntitySelectedCallback(EntitySelectedCallback? callback);
 
+    // ======================================
     // Scene API
+    // ======================================
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     public static extern IntPtr Ignite_Scene_DeserializeHierarchyJson(string filepath);
 
@@ -167,7 +175,9 @@ public static class NativeEngineBridge
         return ptr == IntPtr.Zero ? "[]" : Marshal.PtrToStringAnsi(ptr) ?? "[]";
     }
 
+    // ======================================
     // Entity & Component API
+    // ======================================
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     public static extern ulong Ignite_Entity_Create(string name, ulong parentUuid);
 
@@ -301,4 +311,25 @@ public static class NativeEngineBridge
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool Ignite_Entity_SetWorldEnvironment(ulong uuid, float exposure, float gamma, float ambient, float fogDensity, float fr, float fg, float fb, float fa, float fogStart, float fogEnd);
+
+    // ======================================
+    // Window & Event System API
+    // ======================================
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Window_RegisterExternalWindowID(uint sdlWindowId);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Window_UnregisterExternalWindowID(uint sdlWindowId);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Input_InjectKeyEvent(int sdlKeycode, [MarshalAs(UnmanagedType.I1)] bool isDown, ushort mod, [MarshalAs(UnmanagedType.I1)] bool repeat);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Input_InjectMouseButton(int button, [MarshalAs(UnmanagedType.I1)] bool isDown, float x, float y);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Input_InjectMouseMove(float x, float y);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Input_InjectMouseScroll(float xOffset, float yOffset);
 }

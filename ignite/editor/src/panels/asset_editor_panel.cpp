@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "pch.hpp"
 
@@ -212,14 +212,14 @@ namespace ignite
                 return false;
             }
 
-            const YAML::Node root = Serializer::Deserialize(metadataPath);
-            const YAML::Node editorNode = root["DATA"]["AnimatorEditor"];
+            const JsonNode root = Serializer::Deserialize(metadataPath);
+            const JsonNode editorNode = root["DATA"]["AnimatorEditor"];
             if (!editorNode)
             {
                 return false;
             }
 
-            const YAML::Node graphNode = editorNode["Graph"];
+            const JsonNode graphNode = editorNode["Graph"];
             if (graphNode)
             {
                 if (graphNode["PanX"]) ui.graphState.pan.x = graphNode["PanX"].as<float>();

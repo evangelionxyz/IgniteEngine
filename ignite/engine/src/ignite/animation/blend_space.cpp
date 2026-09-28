@@ -10,10 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
-#pragma warning(push)
-#pragma warning(disable : 4275 4251)
-#include <yaml-cpp/yaml.h>
-#pragma warning(pop)
+
 
 namespace ignite
 {
@@ -303,8 +300,8 @@ namespace ignite
         if (!std::filesystem::exists(filepath))
             return nullptr;
 
-        YAML::Node root = YAML::LoadFile(filepath.string());
-        YAML::Node node = root["BlendSpace"];
+        JsonNode root = Serializer::Deserialize(filepath);
+        JsonNode node = root["BlendSpace"];
         if (!node)
             return nullptr;
 
@@ -326,7 +323,7 @@ namespace ignite
         if (auto n = node["SmoothingType"])  blendSpace->smoothingType    = static_cast<BlendSpaceSmoothingType>(n.as<int>());
         if (auto n = node["DampingRatio"])   blendSpace->dampingRatio     = n.as<float>();
 
-        if (YAML::Node samplesNode = node["Samples"])
+        if (JsonNode samplesNode = node["Samples"])
         {
             // Reserve space for samples to avoid multiple allocations prevent destroying the sample's animation handle pinning
             blendSpace->samples.reserve(samplesNode.size());

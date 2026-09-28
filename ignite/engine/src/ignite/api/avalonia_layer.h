@@ -60,6 +60,11 @@ namespace ignite
         void SetEntitySelectedCallback(EntitySelectedCallback callback) { m_EntitySelectedCallback = callback; }
 
     private:
+
+        void DrawGizmo();
+
+    private:
+
         Ref<SceneRenderer> m_SceneRenderer;
 
         Ref<Scene> m_FallbackScene;

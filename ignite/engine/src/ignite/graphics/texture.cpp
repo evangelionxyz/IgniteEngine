@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -64,8 +64,8 @@ namespace ignite
             return false;
         }
 
-        YAML::Node root = Serializer::Deserialize(filepath);
-        YAML::Node node = root["DATA"];
+        JsonNode root = Serializer::Deserialize(filepath);
+        JsonNode node = root["DATA"];
         if (!node)
         {
             node = root["TextureImportSettings"];

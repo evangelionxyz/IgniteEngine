@@ -7,7 +7,6 @@
 #include "ignite/math/math.hpp"
 
 #include <vector>
-#include <yaml-cpp/yaml.h>
 #include <fstream>
 
 namespace ignite

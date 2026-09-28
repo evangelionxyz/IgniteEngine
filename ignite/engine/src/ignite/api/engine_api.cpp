@@ -15,7 +15,9 @@
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/scene/editor_camera.hpp"
+#include "ignite/core/input/key_event.hpp"
 #include "ignite/core/input/mouse_event.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/serializer/scene_serializer.hpp"
 
 #include "native_embedded_app.h"
@@ -1197,6 +1199,107 @@ IGN_API bool Ignite_Entity_SetWorldEnvironment(uint64_t uuid, float exposure, fl
     comp.dirtyEnvironment = true;
     scene->SetDirtyFlag(true);
     return true;
+}
+
+// ======================================
+// Window & Event System API
+// ======================================
+IGN_API void Ignite_Window_RegisterExternalWindowID(uint32_t sdlWindowId)
+{
+    if (s_EmbeddedApp && s_EmbeddedApp->GetWindow())
+    {
+        s_EmbeddedApp->GetWindow()->RegisterExternalWindowID(static_cast<SDL_WindowID>(sdlWindowId));
+    }
+}
+
+IGN_API void Ignite_Window_UnregisterExternalWindowID(uint32_t sdlWindowId)
+{
+    if (s_EmbeddedApp && s_EmbeddedApp->GetWindow())
+    {
+        s_EmbeddedApp->GetWindow()->UnregisterExternalWindowID(static_cast<SDL_WindowID>(sdlWindowId));
+    }
+}
+
+IGN_API void Ignite_Input_InjectKeyEvent(int sdlKeycode, bool isDown, uint16_t mod, bool repeat)
+{
+    if (auto *activeInput = ignite::InputSystem::GetActiveSystem())
+    {
+        activeInput->SetModifier(ignite::KeyMod::Shift, (mod & SDL_KMOD_SHIFT) != 0);
+        activeInput->SetModifier(ignite::KeyMod::Control, (mod & SDL_KMOD_CTRL) != 0);
+        activeInput->SetModifier(ignite::KeyMod::LeftAlt, (mod & SDL_KMOD_LALT) != 0);
+        activeInput->SetModifier(ignite::KeyMod::RightAlt, (mod & SDL_KMOD_RALT) != 0);
+        activeInput->SetModifier(ignite::KeyMod::LeftShift, (mod & SDL_KMOD_LSHIFT) != 0);
+        activeInput->SetModifier(ignite::KeyMod::RightShift, (mod & SDL_KMOD_RSHIFT) != 0);
+        activeInput->SetModifier(ignite::KeyMod::LeftControl, (mod & SDL_KMOD_LCTRL) != 0);
+        activeInput->SetModifier(ignite::KeyMod::RightControl, (mod & SDL_KMOD_RCTRL) != 0);
+        activeInput->SetKey(static_cast<SDL_Keycode>(sdlKeycode), isDown);
+    }
+
+    if (auto *app = ignite::Application::GetInstance())
+    {
+        if (isDown)
+        {
+            ignite::KeyPressedEvent e(static_cast<KeyCode>(sdlKeycode), repeat ? 1 : 0);
+            e.SetSource(ignite::EventSource::Editor);
+            app->OnEvent(e);
+        }
+        else
+        {
+            ignite::KeyReleasedEvent e(static_cast<KeyCode>(sdlKeycode));
+            e.SetSource(ignite::EventSource::Editor);
+            app->OnEvent(e);
+        }
+    }
+}
+
+IGN_API void Ignite_Input_InjectMouseButton(int button, bool isDown, float x, float y)
+{
+    if (auto *activeInput = ignite::InputSystem::GetActiveSystem())
+    {
+        activeInput->SetMousePosition(static_cast<int>(x), static_cast<int>(y));
+        activeInput->SetMouseButton(static_cast<MouseCode>(button), isDown);
+    }
+
+    if (auto *app = ignite::Application::GetInstance())
+    {
+        if (isDown)
+        {
+            ignite::MouseButtonPressedEvent e(static_cast<MouseCode>(button));
+            e.SetSource(ignite::EventSource::Editor);
+            app->OnEvent(e);
+        }
+        else
+        {
+            ignite::MouseButtonReleasedEvent e(static_cast<MouseCode>(button));
+            e.SetSource(ignite::EventSource::Editor);
+            app->OnEvent(e);
+        }
+    }
+}
+
+IGN_API void Ignite_Input_InjectMouseMove(float x, float y)
+{
+    if (auto *activeInput = ignite::InputSystem::GetActiveSystem())
+    {
+        activeInput->SetMousePosition(static_cast<int>(x), static_cast<int>(y));
+    }
+
+    if (auto *app = ignite::Application::GetInstance())
+    {
+        ignite::MouseMovedEvent e(static_cast<int>(x), static_cast<int>(y));
+        e.SetSource(ignite::EventSource::Editor);
+        app->OnEvent(e);
+    }
+}
+
+IGN_API void Ignite_Input_InjectMouseScroll(float xOffset, float yOffset)
+{
+    if (auto *app = ignite::Application::GetInstance())
+    {
+        ignite::MouseScrolledEvent e(xOffset, yOffset);
+        e.SetSource(ignite::EventSource::Editor);
+        app->OnEvent(e);
+    }
 }
 
 }

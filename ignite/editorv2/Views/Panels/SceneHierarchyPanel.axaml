@@ -1,8 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:IgniteEditor.ViewModels"
+             xmlns:local="using:IgniteEditor.Views.Panels"
              x:Class="IgniteEditor.Views.Panels.SceneHierarchyPanel"
              x:DataType="vm:SceneHierarchyViewModel">
+
+    <UserControl.Resources>
+        <local:DropTargetBrushConverter x:Key="DropTargetBrushConverter" />
+    </UserControl.Resources>
 
     <UserControl.Styles>
         <!-- Ultra-compact TreeView item styling specifically for game engine hierarchy -->
@@ -62,6 +67,10 @@
         <TreeView ItemsSource="{Binding RootEntities}"
                   SelectedItem="{Binding SelectedEntity}"
                   SelectionMode="Multiple"
+                  DragDrop.AllowDrop="True"
+                  DragDrop.DragOver="OnTreeDragOver"
+                  DragDrop.DragLeave="OnTreeDragLeave"
+                  DragDrop.Drop="OnTreeDrop"
                   Padding="0" Margin="0">
             <TreeView.ContextMenu>
                 <ContextMenu FontSize="11">
@@ -77,8 +86,9 @@
             <TreeView.ItemTemplate>
                 <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:EntityNodeViewModel">
                     <Grid ColumnDefinitions="Auto,Auto,*" Height="18" VerticalAlignment="Center" Margin="0"
-                          Background="Transparent"
+                          Background="{Binding IsDropTarget, Converter={StaticResource DropTargetBrushConverter}}"
                           PointerPressed="OnItemPointerPressed"
+                          PointerMoved="OnItemPointerMoved"
                           PointerReleased="OnItemPointerReleased">
                         <!-- Active Visibility Toggle -->
                         <CheckBox Grid.Column="0"

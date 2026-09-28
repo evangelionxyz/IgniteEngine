@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -12,7 +12,7 @@
 namespace ignite
 {
     // -------------------------------------------------------------------------
-    // Helpers to serialize a ScriptInstanceField value to/from YAML
+    // Helpers to serialize a ScriptInstanceField value to/from JSON
     // -------------------------------------------------------------------------
     static void SerializeFieldValue(Serializer &sr, const std::string &name, const ScriptField &fieldDef, const ScriptInstanceField &field)
     {
@@ -82,7 +82,7 @@ namespace ignite
         }
     }
 
-    static void DeserializeFieldValue(const YAML::Node &node, const std::string &name, ScriptField &fieldDef, ScriptInstanceField &outField)
+    static void DeserializeFieldValue(const JsonNode &node, const std::string &name, ScriptField &fieldDef, ScriptInstanceField &outField)
     {
         if (!node[name]) return;
         const auto &valueNode = node[name];
@@ -258,8 +258,8 @@ namespace ignite
             return nullptr;
         }
 
-        YAML::Node root = Serializer::Deserialize(filepath);
-        YAML::Node soNode = root["ScriptableObject"];
+        JsonNode root = Serializer::Deserialize(filepath);
+        JsonNode soNode = root["ScriptableObject"];
         if (!soNode)
         {
             LOG_ERROR("[ScriptableObject] Invalid .ixso file: {}", filepath.generic_string());
@@ -273,7 +273,7 @@ namespace ignite
         ScriptEngine *engine = ScriptEngine::GetInstance();
         Ref<ScriptClass> scriptClass = engine ? engine->GetScriptableObjectClassByName(className) : nullptr;
 
-        const YAML::Node fieldsNode = soNode["Fields"];
+        const JsonNode fieldsNode = soNode["Fields"];
         if (fieldsNode && fieldsNode.IsMap() && scriptClass)
         {
             for (auto &[fieldName, fieldDef] : scriptClass->GetFields())

@@ -62,7 +62,7 @@ public class EngineSceneService : ISceneService
 
     private void RegisterEntityRecursive(EntityModel entity)
     {
-        _entitiesById[entity.Id] = entity;
+        _entitiesById[entity.Guid] = entity;
         foreach (var child in entity.Children)
         {
             RegisterEntityRecursive(child);
@@ -100,7 +100,7 @@ public class EngineSceneService : ISceneService
 
             var entity = new EntityModel
             {
-                Id = entityId,
+                Guid = entityId,
                 Uuid = newUuid,
                 Name = name,
                 ParentId = parentId,
@@ -115,7 +115,7 @@ public class EngineSceneService : ISceneService
                 Data = new TransformData()
             });
 
-            _entitiesById[entity.Id] = entity;
+            _entitiesById[entity.Guid] = entity;
 
             if (parentId.HasValue && _entitiesById.TryGetValue(parentId.Value, out var parent))
             {
@@ -157,7 +157,7 @@ public class EngineSceneService : ISceneService
 
     private void UnregisterEntityRecursive(EntityModel entity)
     {
-        _entitiesById.Remove(entity.Id);
+        _entitiesById.Remove(entity.Guid);
         foreach (var child in entity.Children)
         {
             UnregisterEntityRecursive(child);
@@ -876,7 +876,7 @@ public class EngineSceneService : ISceneService
     {
         var copy = new EntityModel
         {
-            Id = Guid.NewGuid(),
+            Guid = Guid.NewGuid(),
             Name = isRoot ? $"{source.Name} (Copy)" : source.Name,
             ParentId = newParentId,
             IsActive = source.IsActive
@@ -893,11 +893,11 @@ public class EngineSceneService : ISceneService
             });
         }
 
-        _entitiesById[copy.Id] = copy;
+        _entitiesById[copy.Guid] = copy;
 
         foreach (var child in source.Children)
         {
-            var childCopy = DuplicateRecursive(child, copy.Id, isRoot: false);
+            var childCopy = DuplicateRecursive(child, copy.Guid, isRoot: false);
             copy.Children.Add(childCopy);
         }
 
@@ -908,7 +908,7 @@ public class EngineSceneService : ISceneService
     {
         foreach (var child in parent.Children)
         {
-            ids.Add(child.Id);
+            ids.Add(child.Guid);
             CollectDescendants(child, ids);
         }
     }

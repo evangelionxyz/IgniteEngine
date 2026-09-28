@@ -132,6 +132,74 @@ public class NativeViewportControl : NativeControlHost
             }
         }
     }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (_isInitialized)
+        {
+            var sdlKey = AvaloniaKeyToSdlKey(e.Key);
+            if (sdlKey != 0)
+            {
+                ushort mod = 0;
+                if ((e.KeyModifiers & KeyModifiers.Shift) != 0) mod |= 0x0001;
+                if ((e.KeyModifiers & KeyModifiers.Control) != 0) mod |= 0x0040;
+                if ((e.KeyModifiers & KeyModifiers.Alt) != 0) mod |= 0x0100;
+                NativeEngineBridge.Ignite_Input_InjectKeyEvent(sdlKey, true, mod, false);
+            }
+        }
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+        if (_isInitialized)
+        {
+            var sdlKey = AvaloniaKeyToSdlKey(e.Key);
+            if (sdlKey != 0)
+            {
+                ushort mod = 0;
+                if ((e.KeyModifiers & KeyModifiers.Shift) != 0) mod |= 0x0001;
+                if ((e.KeyModifiers & KeyModifiers.Control) != 0) mod |= 0x0040;
+                if ((e.KeyModifiers & KeyModifiers.Alt) != 0) mod |= 0x0100;
+                NativeEngineBridge.Ignite_Input_InjectKeyEvent(sdlKey, false, mod, false);
+            }
+        }
+    }
+
+    private static int AvaloniaKeyToSdlKey(Key key)
+    {
+        if (key >= Key.A && key <= Key.Z)
+            return 'a' + (key - Key.A);
+        if (key >= Key.D0 && key <= Key.D9)
+            return '0' + (key - Key.D0);
+        if (key >= Key.NumPad0 && key <= Key.NumPad9)
+            return '0' + (key - Key.NumPad0);
+
+        return key switch
+        {
+            Key.Space => ' ',
+            Key.Return => '\r',
+            Key.Escape => 0x1B,
+            Key.Back => '\b',
+            Key.Tab => '\t',
+            Key.Delete => 0x7F,
+            Key.F1 => 0x4000003A,
+            Key.F2 => 0x4000003B,
+            Key.F3 => 0x4000003C,
+            Key.F4 => 0x4000003D,
+            Key.F5 => 0x4000003E,
+            Key.F6 => 0x4000003F,
+            Key.F7 => 0x40000040,
+            Key.F8 => 0x40000041,
+            Key.F9 => 0x40000042,
+            Key.F10 => 0x40000043,
+            Key.F11 => 0x40000044,
+            Key.F12 => 0x40000045,
+            _ => 0
+        };
+    }
+
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
         var width  = (int)Bounds.Width  > 0 ? (int)Bounds.Width  : 1280;
@@ -297,10 +365,8 @@ public class NativeViewportControl : NativeControlHost
     private const uint SWP_NOACTIVATE = 0x0010;
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern IntPtr CreateWindowExW(
-        int dwExStyle, string lpClassName, string lpWindowName,
-        int dwStyle, int x, int y, int nWidth, int nHeight,
-        IntPtr hWndParent, IntPtr hMenu, IntPtr hInstance, IntPtr lpParam);
+    private static extern IntPtr CreateWindowExW(int dwExStyle, string lpClassName, string lpWindowName, int dwStyle,
+        int x, int y, int nWidth, int nHeight, IntPtr hWndParent, IntPtr hMenu, IntPtr hInstance, IntPtr lpParam);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -308,8 +374,7 @@ public class NativeViewportControl : NativeControlHost
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
-        int X, int Y, int cx, int cy, uint uFlags);
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandleW(string? lpModuleName);

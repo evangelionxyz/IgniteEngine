@@ -11,6 +11,8 @@ project "BOX2D"
 
     files {
         "%{THIRDPARTY_DIR}/BOX2D/src/**.c",
+        "%{THIRDPARTY_DIR}/BOX2D/src/**.h",
+        "%{THIRDPARTY_DIR}/BOX2D/include/**.h"
     }
 
     includedirs {

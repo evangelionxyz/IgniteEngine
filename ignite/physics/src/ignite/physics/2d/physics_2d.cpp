@@ -98,9 +98,19 @@ namespace ignite::physics
         }
     }
 
+    bool Physics2D::IsValidWorld() const
+    {
+        return b2World_IsValid(m_WorldId);
+    }
+
     bool Physics2D::IsValidBody(b2BodyId bodyId)
     {
         return b2Body_IsValid(bodyId);
+    }
+
+    bool Physics2D::IsValidShape(b2ShapeId shapeId) const
+    {
+        return b2Shape_IsValid(shapeId);
     }
 
     void Physics2D::SetBodyType(b2BodyId bodyId, b2BodyType type)

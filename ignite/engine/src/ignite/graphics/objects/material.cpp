@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -228,8 +228,8 @@ namespace ignite
 
     Ref<Material> Material::Deserialize(const std::filesystem::path &filepath)
     {
-        YAML::Node fileNode = Serializer::Deserialize(filepath);
-        YAML::Node materialNode = fileNode["Material"];
+        JsonNode fileNode = Serializer::Deserialize(filepath);
+        JsonNode materialNode = fileNode["Material"];
         if (!materialNode)
         {
             return nullptr;
@@ -252,7 +252,7 @@ namespace ignite
         if (materialNode["NormalTextureHandle"]) material->normalTextureHandle = AssetHandle(materialNode["NormalTextureHandle"].as<uint64_t>());
         if (materialNode["OcclusionTextureHandle"]) material->occlusionTextureHandle = AssetHandle(materialNode["OcclusionTextureHandle"].as<uint64_t>());
 
-        if (YAML::Node gpuDataNode = materialNode["GPUData"])
+        if (JsonNode gpuDataNode = materialNode["GPUData"])
         {
             if (gpuDataNode["BaseColorFactor"]) material->gpuData.baseColorFactor = gpuDataNode["BaseColorFactor"].as<glm::vec4>();
             if (gpuDataNode["EmissiveFactor"]) material->gpuData.emissiveFactor = gpuDataNode["EmissiveFactor"].as<glm::vec4>();

@@ -45,19 +45,23 @@ TEST(Physics2D, CreateAndDestroyWorld)
     physics::Physics2D physics;
 
     // World should be created in constructor
-    EXPECT_TRUE(b2World_IsValid(physics.GetWorldId()));
+    physics.SimulationStart();
+    EXPECT_TRUE(physics.IsValidWorld());
 
     physics.SimulationStop();
-    EXPECT_FALSE(b2World_IsValid(physics.GetWorldId()));
+    EXPECT_FALSE(physics.IsValidWorld());
 
     physics.SimulationStart();
-    EXPECT_TRUE(b2World_IsValid(physics.GetWorldId()));
+    EXPECT_TRUE(physics.IsValidWorld());
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, CreateStaticBody)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_staticBody;
@@ -68,12 +72,15 @@ TEST(Physics2D, CreateStaticBody)
 
     physics.DestroyBody(bodyId);
     EXPECT_FALSE(physics.IsValidBody(bodyId));
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, CreateDynamicBody)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_dynamicBody;
@@ -99,12 +106,15 @@ TEST(Physics2D, CreateDynamicBody)
     EXPECT_FLOAT_EQ(physics.GetAngularVelocity(bodyId), 0.5f);
 
     physics.DestroyBody(bodyId);
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, CreateKinematicBody)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_kinematicBody;
@@ -115,12 +125,16 @@ TEST(Physics2D, CreateKinematicBody)
 
     physics.SetBodyType(bodyId, b2_dynamicBody);
     physics.DestroyBody(bodyId);
+
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, CreateBodyWithBoxCollider)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     // Create body
     b2BodyDef bodyDef = b2DefaultBodyDef();
@@ -139,7 +153,7 @@ TEST(Physics2D, CreateBodyWithBoxCollider)
     b2Polygon box = b2MakeBox(1.0f, 1.0f);
 
     b2ShapeId shapeId = physics.CreateBoxCollider(bodyId, shapeDef, box);
-    EXPECT_TRUE(b2Shape_IsValid(shapeId));
+    EXPECT_TRUE(physics.IsValidShape(shapeId));
 
     // Verify mass was computed
     float mass = physics.GetMass(bodyId);
@@ -147,12 +161,16 @@ TEST(Physics2D, CreateBodyWithBoxCollider)
 
     physics.DestroyShape(shapeId, true);
     physics.DestroyBody(bodyId);
+
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, CreateBodyWithCircleCollider)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     // Create body
     b2BodyDef bodyDef = b2DefaultBodyDef();
@@ -174,16 +192,20 @@ TEST(Physics2D, CreateBodyWithCircleCollider)
     circle.radius = 0.5f;
 
     b2ShapeId shapeId = physics.CreateCircleCollider(bodyId, shapeDef, circle);
-    EXPECT_TRUE(b2Shape_IsValid(shapeId));
+    EXPECT_TRUE(physics.IsValidShape(shapeId));
 
     physics.DestroyShape(shapeId, true);
     physics.DestroyBody(bodyId);
+
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, CreateBodyWithMultipleColliders)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_dynamicBody;
@@ -197,24 +219,28 @@ TEST(Physics2D, CreateBodyWithMultipleColliders)
     boxShapeDef.density = 1.0f;
     b2Polygon box = b2MakeOffsetBox(0.5f, 0.5f, {-0.5f, 0.0f}, b2MakeRot(0.0f));
     b2ShapeId boxShapeId = physics.CreateBoxCollider(bodyId, boxShapeDef, box);
-    EXPECT_TRUE(b2Shape_IsValid(boxShapeId));
+    EXPECT_TRUE(physics.IsValidShape(boxShapeId));
 
     // Add circle collider
     b2ShapeDef circleShapeDef = b2DefaultShapeDef();
     circleShapeDef.density = 1.0f;
     b2Circle circle = {{0.5f, 0.0f}, 0.3f};
     b2ShapeId circleShapeId = physics.CreateCircleCollider(bodyId, circleShapeDef, circle);
-    EXPECT_TRUE(b2Shape_IsValid(circleShapeId));
+    EXPECT_TRUE(physics.IsValidShape(circleShapeId));
 
     physics.DestroyShape(boxShapeId, true);
     physics.DestroyShape(circleShapeId, true);
     physics.DestroyBody(bodyId);
+
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, SimulationStep)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     // Create a dynamic body
     b2BodyDef bodyDef = b2DefaultBodyDef();
@@ -241,12 +267,15 @@ TEST(Physics2D, SimulationStep)
     EXPECT_LT(pos.y, 10.0f); // Y should have decreased due to gravity
 
     physics.DestroyBody(bodyId);
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, ApplyForcesAndImpulses)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_dynamicBody;
@@ -281,12 +310,15 @@ TEST(Physics2D, ApplyForcesAndImpulses)
     EXPECT_NE(physics.GetAngularVelocity(bodyId), 0.0f);
 
     physics.DestroyBody(bodyId);
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, BodyActivationState)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_dynamicBody;
@@ -305,12 +337,15 @@ TEST(Physics2D, BodyActivationState)
     physics.SetAwake(bodyId, true);
 
     physics.DestroyBody(bodyId);
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, BodyMotionLocks)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_dynamicBody;
@@ -337,12 +372,15 @@ TEST(Physics2D, BodyMotionLocks)
     EXPECT_NEAR(physics.GetAngularVelocity(bodyId), 0.0f, 0.001f);
 
     physics.DestroyBody(bodyId);
+    physics.SimulationStop();
 }
 
 TEST(Physics2D, BulletBody)
 {
     physics::Physics2D physics;
-    ASSERT_TRUE(b2World_IsValid(physics.GetWorldId()));
+
+    physics.SimulationStart();
+    ASSERT_TRUE(physics.IsValidWorld());
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_dynamicBody;
@@ -360,6 +398,7 @@ TEST(Physics2D, BulletBody)
     EXPECT_FALSE(physics.IsBullet(bodyId));
 
     physics.DestroyBody(bodyId);
+    physics.SimulationStop();
 }
 
 // ===============================================
@@ -459,17 +498,20 @@ TEST(Physics2DComponent, CreatePhysicsBodyOnSceneStart)
     // Start the scene - this should create the physics body
     scene->OnStart(ESceneState::Simulate);
 
+    physics::Physics2D *physics = project->GetPhysics2D();
+    ASSERT_NE(physics, nullptr);
+
     // Body should now be valid
-    EXPECT_TRUE(b2Body_IsValid(rb.bodyId));
-    EXPECT_TRUE(b2Shape_IsValid(bc.shapeId));
-    EXPECT_TRUE(b2Shape_IsValid(cc.shapeId));
+    EXPECT_TRUE(physics->IsValidBody(rb.bodyId));
+    EXPECT_TRUE(physics->IsValidShape(bc.shapeId));
+    EXPECT_TRUE(physics->IsValidShape(cc.shapeId));
 
     // Stop the scene - this should destroy the physics body
     scene->OnStop();
 
-    EXPECT_FALSE(b2Body_IsValid(rb.bodyId));
-    EXPECT_FALSE(b2Shape_IsValid(bc.shapeId));
-    EXPECT_FALSE(b2Shape_IsValid(cc.shapeId));
+    EXPECT_FALSE(physics->IsValidBody(rb.bodyId));
+    EXPECT_FALSE(physics->IsValidShape(bc.shapeId));
+    EXPECT_FALSE(physics->IsValidShape(cc.shapeId));
 }
 
 TEST(Physics2DComponent, PhysicsBodyWithZeroScale)
@@ -494,7 +536,7 @@ TEST(Physics2DComponent, PhysicsBodyWithZeroScale)
     scene->OnStart(ESceneState::Simulate);
 
     // Body should be created (collider may have minimum size due to epsilon clamping)
-    EXPECT_TRUE(b2Body_IsValid(rb.bodyId));
+    EXPECT_TRUE(project->GetPhysics2D()->IsValidBody(rb.bodyId));
 
     scene->OnStop();
 }
@@ -520,8 +562,8 @@ TEST(Physics2DComponent, PhysicsBodyWithNegativeScale)
     // This should handle negative scale gracefully (use abs)
     scene->OnStart(ESceneState::Simulate);
 
-    EXPECT_TRUE(b2Body_IsValid(rb.bodyId));
-    EXPECT_TRUE(b2Shape_IsValid(bc.shapeId));
+    EXPECT_TRUE(project->GetPhysics2D()->IsValidBody(rb.bodyId));
+    EXPECT_TRUE(project->GetPhysics2D()->IsValidShape(bc.shapeId));
 
     scene->OnStop();
 }
@@ -597,8 +639,8 @@ TEST(Physics2DComponent, SensorCollider)
 
     scene->OnStart(ESceneState::Simulate);
 
-    EXPECT_TRUE(b2Body_IsValid(rb.bodyId));
-    EXPECT_TRUE(b2Shape_IsValid(bc.shapeId));
+    EXPECT_TRUE(project->GetPhysics2D()->IsValidBody(rb.bodyId));
+    EXPECT_TRUE(project->GetPhysics2D()->IsValidShape(bc.shapeId));
 
     scene->OnStop();
 }

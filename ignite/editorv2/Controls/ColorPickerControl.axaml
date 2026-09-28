@@ -2,43 +2,54 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="IgniteEditor.Controls.ColorPickerControl"
              x:Name="Root"
-             Background="#202020"
-             Width="380">
+             Background="Transparent"
+             HorizontalAlignment="Stretch"
+             MinWidth="260">
 
     <UserControl.Styles>
         <Style Selector="TextBox.picker-num">
             <Setter Property="FontSize" Value="10" />
-            <Setter Property="Height" Value="20" />
-            <Setter Property="MinHeight" Value="20" />
-            <Setter Property="Padding" Value="4,1" />
+            <Setter Property="Height" Value="19" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="2,0" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="FontFamily" Value="Consolas,Menlo,monospace" />
-            <Setter Property="Background" Value="#181818" />
-            <Setter Property="BorderBrush" Value="#333333" />
+            <Setter Property="Background" Value="#141517" />
+            <Setter Property="BorderBrush" Value="#383A40" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="2" />
+        </Style>
+        <Style Selector="TextBox.picker-num:focus">
+            <Setter Property="BorderBrush" Value="{DynamicResource IgniteAccentBrush}" />
         </Style>
         <Style Selector="TextBlock.picker-lbl">
             <Setter Property="FontSize" Value="10" />
-            <Setter Property="Foreground" Value="#AAAAAA" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#DFE1E5" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="0,0,3,0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="TextAlignment" Value="Center" />
         </Style>
     </UserControl.Styles>
 
-    <Border BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="8" Background="#222222">
-        <Grid RowDefinitions="Auto,Auto">
-            <!-- Main Content Area: SV Box + Sliders + Numeric Inputs -->
-            <Grid Grid.Row="0" ColumnDefinitions="190,26,20,130" Margin="0,0,0,6">
-                <!-- 1. Saturation / Value 2D Box -->
-                <Border Grid.Column="0" Width="184" Height="170" 
-                        BorderBrush="#444444" BorderThickness="1" CornerRadius="2"
+    <Border BorderBrush="#383A40" BorderThickness="1" CornerRadius="4" Padding="6" Background="#1E2023" HorizontalAlignment="Stretch">
+        <Grid RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch">
+            <!-- Main Content Area: SV Box (Stretches) + Sliders + Numeric Inputs -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,22,18,118" Margin="0,0,0,4" HorizontalAlignment="Stretch">
+                <!-- 1. Saturation / Value 2D Box (Flexibly stretched) -->
+                <Border Grid.Column="0" Height="140" MinWidth="80" HorizontalAlignment="Stretch"
+                        BorderBrush="#383A40" BorderThickness="1" CornerRadius="2"
                         ClipToBounds="True">
                     <Grid x:Name="SvGrid" Background="{Binding CurrentHueBrush, ElementName=Root}"
                           PointerPressed="OnSvPointerPressed"
                           PointerMoved="OnSvPointerMoved"
                           PointerReleased="OnSvPointerReleased"
-                          PointerCaptureLost="OnSvPointerCaptureLost">
+                          PointerCaptureLost="OnSvPointerCaptureLost"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                         <!-- Horizontal White-to-Transparent Gradient -->
-                        <Border>
+                        <Border HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
                                     <GradientStop Color="#FFFFFFFF" Offset="0.0" />
@@ -47,7 +58,7 @@
                             </Border.Background>
                         </Border>
                         <!-- Vertical Transparent-to-Black Gradient -->
-                        <Border>
+                        <Border HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
                                     <GradientStop Color="#00000000" Offset="0.0" />
@@ -57,12 +68,12 @@
                         </Border>
 
                         <!-- Draggable Cursor Ring -->
-                        <Canvas IsHitTestVisible="False">
-                            <Ellipse x:Name="SvCursor" Width="12" Height="12" 
+                        <Canvas IsHitTestVisible="False" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Ellipse x:Name="SvCursor" Width="12" Height="12"
                                      Stroke="#FFFFFF" StrokeThickness="2"
                                      Canvas.Left="0" Canvas.Top="0" Margin="-6,-6,0,0">
                                 <Ellipse.Effect>
-                                    <DropShadowEffect BlurRadius="2" Opacity="0.8" Color="#000000" />
+                                    <DropShadowEffect OffsetX="2" OffsetY="3" BlurRadius="4" Opacity="0.4" Color="#000000" />
                                 </Ellipse.Effect>
                             </Ellipse>
                         </Canvas>
@@ -70,9 +81,9 @@
                 </Border>
 
                 <!-- 2. Rainbow Hue Vertical Slider -->
-                <Border Grid.Column="1" Width="18" Height="170"
-                        BorderBrush="#444444" BorderThickness="1" CornerRadius="2"
-                        ClipToBounds="True" Margin="4,0,4,0">
+                <Border Grid.Column="1" Width="20" Height="140" HorizontalAlignment="Center"
+                        BorderBrush="#383A40" BorderThickness="1" CornerRadius="2"
+                        ClipToBounds="True" Margin="2,0,2,0">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
                             <GradientStop Color="#FF0000" Offset="0.00" />
@@ -84,122 +95,127 @@
                             <GradientStop Color="#FF0000" Offset="1.00" />
                         </LinearGradientBrush>
                     </Border.Background>
-                    <Grid x:Name="HueGrid"
+                    <Grid x:Name="HueGrid" Background="Transparent"
                           PointerPressed="OnHuePointerPressed"
                           PointerMoved="OnHuePointerMoved"
                           PointerReleased="OnHuePointerReleased"
-                          PointerCaptureLost="OnHuePointerCaptureLost">
+                          PointerCaptureLost="OnHuePointerCaptureLost"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                         <!-- Hue Pointer Thumb Line -->
-                        <Canvas IsHitTestVisible="False">
-                            <Border x:Name="HueIndicator" Width="18" Height="4"
-                                    BorderBrush="#FFFFFF" BorderThickness="1.5" Background="#88000000"
-                                    Canvas.Top="0" Margin="0,-2,0,0" />
+                        <Canvas IsHitTestVisible="False" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Border x:Name="HueIndicator" Width="18" Height="8"
+                                    BorderBrush="#FFFFFF" BorderThickness="1.5" Background="#44000000"
+                                    CornerRadius="1" Canvas.Top="0" Margin="0,-2,0,0">
+                            </Border>
                         </Canvas>
                     </Grid>
                 </Border>
 
                 <!-- 3. Alpha Opacity Vertical Slider -->
-                <Border Grid.Column="2" Width="14" Height="170"
-                        BorderBrush="#444444" BorderThickness="1" CornerRadius="2"
-                        ClipToBounds="True" Margin="2,0,4,0">
-                    <Grid x:Name="AlphaGrid"
+                <Border Grid.Column="2" Width="20" Height="140" HorizontalAlignment="Center"
+                        BorderBrush="#383A40" BorderThickness="1" CornerRadius="2"
+                        ClipToBounds="True" Margin="1,0,2,0">
+                    <Grid x:Name="AlphaGrid" Background="Transparent"
                           PointerPressed="OnAlphaPointerPressed"
                           PointerMoved="OnAlphaPointerMoved"
                           PointerReleased="OnAlphaPointerReleased"
-                          PointerCaptureLost="OnAlphaPointerCaptureLost">
-                        <!-- Checkerboard or Background -->
-                        <Border Background="#333333" />
+                          PointerCaptureLost="OnAlphaPointerCaptureLost"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                        <!-- Background dark fill -->
+                        <Border Background="#282828" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
                         <!-- Gradient from Full Color to Transparent -->
-                        <Border Background="{Binding AlphaSliderBrush, ElementName=Root}" />
+                        <Border Background="{Binding AlphaSliderBrush, ElementName=Root}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
                         <!-- Alpha Pointer Thumb Line -->
-                        <Canvas IsHitTestVisible="False">
-                            <Border x:Name="AlphaIndicator" Width="14" Height="4"
-                                    BorderBrush="#FFFFFF" BorderThickness="1.5" Background="#88000000"
-                                    Canvas.Top="0" Margin="0,-2,0,0" />
+                        <Canvas IsHitTestVisible="False" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Border x:Name="AlphaIndicator" Width="18" Height="8"
+                                    BorderBrush="#FFFFFF" BorderThickness="1.5" Background="#44000000"
+                                    CornerRadius="1" Canvas.Top="0" Margin="0,-2,0,0">
+                            </Border>
                         </Canvas>
                     </Grid>
                 </Border>
 
-                <!-- 4. Right Side: Swatch comparison & Numeric inputs -->
-                <StackPanel Grid.Column="3" Spacing="4" Margin="6,0,0,0">
+                <!-- 4. Right Side: Swatch comparison & Numeric inputs (Fixed compact width, no overlaps) -->
+                <StackPanel Grid.Column="3" Spacing="3" Margin="4,0,0,0" HorizontalAlignment="Stretch">
                     <!-- Swatch: New vs Current -->
-                    <Border BorderBrush="#444444" BorderThickness="1" CornerRadius="3" Height="38" ClipToBounds="True">
+                    <Border BorderBrush="#383A40" BorderThickness="1" CornerRadius="3" Height="26" ClipToBounds="True">
                         <Grid RowDefinitions="*,*">
                             <!-- New Color -->
                             <Border Grid.Row="0" Background="{Binding NewColorBrush, ElementName=Root}"
                                     ToolTip.Tip="New Color" />
                             <!-- Original / Current Color -->
                             <Border Grid.Row="1" Background="{Binding OriginalColorBrush, ElementName=Root}"
-                                    ToolTip.Tip="Click to revert to original"
+                                    ToolTip.Tip="Original (Click to revert)"
                                     PointerPressed="OnRevertToOriginalPressed"
                                     Cursor="Hand" />
                         </Grid>
                     </Border>
 
                     <!-- Tabular Numeric Inputs for HSB/HSV, HSL, RGB -->
-                    <Grid ColumnDefinitions="30,*,30,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                    <Grid ColumnDefinitions="12,*,12,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                         <!-- H & R -->
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="H:" Classes="picker-lbl" />
-                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InputH, ElementName=Root}" Classes="picker-num"
-                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,4,1" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="H" Classes="picker-lbl"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InputH, ElementName=Root}"
+                                 Classes="picker-num" LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,3,1" />
 
-                        <TextBlock Grid.Row="0" Grid.Column="2" Text="R:" Classes="picker-lbl" />
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="R" Classes="picker-lbl" />
                         <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding InputR, ElementName=Root}" Classes="picker-num"
                                  LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,0,1" />
 
                         <!-- S & G -->
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="S:" Classes="picker-lbl" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="S" Classes="picker-lbl" />
                         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding InputS, ElementName=Root}" Classes="picker-num"
-                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,4,1" />
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,3,1" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="2" Text="G:" Classes="picker-lbl" />
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="G" Classes="picker-lbl" />
                         <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding InputG, ElementName=Root}" Classes="picker-num"
                                  LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,0,1" />
 
                         <!-- V/B & B -->
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="V:" Classes="picker-lbl" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="V" Classes="picker-lbl" />
                         <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding InputV, ElementName=Root}" Classes="picker-num"
-                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,4,1" />
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,3,1" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="2" Text="B:" Classes="picker-lbl" />
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="B" Classes="picker-lbl" />
                         <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding InputB, ElementName=Root}" Classes="picker-num"
                                  LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,0,1" />
 
                         <!-- HSL: L & Alpha -->
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="L:" Classes="picker-lbl" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="L" Classes="picker-lbl" />
                         <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding InputL, ElementName=Root}" Classes="picker-num"
-                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,4,1" />
+                                 LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,3,1" />
 
-                        <TextBlock Grid.Row="3" Grid.Column="2" Text="A:" Classes="picker-lbl" />
+                        <TextBlock Grid.Row="3" Grid.Column="2" Text="A" Classes="picker-lbl" />
                         <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding InputA, ElementName=Root}" Classes="picker-num"
                                  LostFocus="OnInputChanged" KeyDown="OnInputKeyDown" Margin="0,1,0,1" />
 
                         <!-- Hex Input spanning full width -->
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="#" Classes="picker-lbl" />
                         <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding InputHex, ElementName=Root}" Classes="picker-num"
-                                 LostFocus="OnHexInputChanged" KeyDown="OnHexKeyDown" Margin="0,2,0,0" />
+                                 LostFocus="OnHexInputChanged" KeyDown="OnHexKeyDown" Margin="0,1,0,0" />
                     </Grid>
                 </StackPanel>
             </Grid>
 
             <!-- Bottom Row: Quick Palette Swatches -->
-            <Border Grid.Row="1" BorderBrush="#333333" BorderThickness="0,1,0,0" Padding="0,4,0,0">
+            <Border Grid.Row="1" BorderBrush="#383A40" BorderThickness="0,1,0,0" Padding="0,4,0,0" Margin="0,2,0,0">
                 <Grid ColumnDefinitions="Auto,*">
-                    <TextBlock Grid.Column="0" Text="Swatches" FontSize="10" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <WrapPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFFFFFF" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFFFFFF" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFB0B0B0" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFB0B0B0" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF606060" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF606060" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF000000" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF000000" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFF2222" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFF2222" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFF7700" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFF7700" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFFDD00" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFFDD00" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF22CC22" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF22CC22" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF00CCCC" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF00CCCC" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF2266FF" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF2266FF" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FF9922FF" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FF9922FF" />
-                        <Button Width="15" Height="15" Padding="0" Margin="1" Background="#FFFF22AA" BorderThickness="1" BorderBrush="#444444" Click="OnPaletteClick" Tag="#FFFF22AA" />
+                    <TextBlock Grid.Column="0" Text="Palette" FontSize="11" FontWeight="SemiBold" Foreground="#8F939D" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <WrapPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Stretch">
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FFFFFFFF" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FFFFFFFF" ToolTip.Tip="White" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FFB0B0B0" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FFB0B0B0" ToolTip.Tip="Light Gray" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FF505050" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FF505050" ToolTip.Tip="Gray" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FF000000" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FF000000" ToolTip.Tip="Black" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FFFF2222" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FFFF2222" ToolTip.Tip="Red" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FFFF7700" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FFFF7700" ToolTip.Tip="Orange" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FFFFDD00" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FFFFDD00" ToolTip.Tip="Yellow" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FFD1FE17" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FFD1FE17" ToolTip.Tip="Ignite Lime" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FF22CC22" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FF22CC22" ToolTip.Tip="Green" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FF00CCCC" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FF00CCCC" ToolTip.Tip="Cyan" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FF2266FF" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FF2266FF" ToolTip.Tip="Blue" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FF9922FF" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FF9922FF" ToolTip.Tip="Purple" />
+                        <Button Width="15" Height="15" Padding="0" Margin="1" CornerRadius="2" Background="#FFFF22AA" BorderThickness="1" BorderBrush="#383A40" Click="OnPaletteClick" Tag="#FFFF22AA" ToolTip.Tip="Magenta" />
                     </WrapPanel>
                 </Grid>
             </Border>

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include <gtest/gtest.h>
 #include <filesystem>
@@ -81,12 +81,12 @@ TEST(CharacterController, SerializationRoundtrip)
     cc.up = glm::vec3(0.0f, 1.0f, 0.0f);
     cc.linearVelocity = glm::vec3(1.0f, 2.0f, 3.0f);
 
-    std::filesystem::path tempPath = vfs::GetExecutableDirectory() / "test_character.yaml";
+    std::filesystem::path tempPath = vfs::GetExecutableDirectory() / "test_character.json";
     Serializer sr(tempPath);
     EntitySerializer::SerializeEntity(sr, originalEntity);
     sr.Serialize();
 
-    YAML::Node rootNode = Serializer::Deserialize(tempPath);
+    JsonNode rootNode = Serializer::Deserialize(tempPath);
 
     Entity deserializedEntity = EntitySerializer::DeserializeEntity(rootNode, scene.get(), project.get());
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -39,8 +39,8 @@ namespace ignite
 			return nullptr;
 		}
 
-		YAML::Node fileNode = Serializer::Deserialize(filepath);
-		YAML::Node materialNode = fileNode["Material2D"];
+		JsonNode fileNode = Serializer::Deserialize(filepath);
+		JsonNode materialNode = fileNode["Material2D"];
 		if (!materialNode)
 		{
 			return nullptr;

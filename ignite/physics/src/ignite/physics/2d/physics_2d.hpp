@@ -33,7 +33,9 @@ namespace ignite::physics
         b2ShapeId CreateCircleCollider(b2BodyId bodyId, const b2ShapeDef &shapeDef, const b2Circle &circle);
         void DestroyShape(b2ShapeId shapeId, bool updateBodyMass = false);
 
+        bool IsValidWorld() const;
         bool IsValidBody(b2BodyId bodyId);
+        bool IsValidShape(b2ShapeId shapeId) const;
         void SetBodyType(b2BodyId bodyId, b2BodyType type);
         void SetPosition(b2BodyId bodyId, const glm::vec2 &position);
         void SetRotation(b2BodyId bodyId, float rotation);

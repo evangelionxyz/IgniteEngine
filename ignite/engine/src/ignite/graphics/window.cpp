@@ -238,216 +238,248 @@ namespace ignite
             return;
 
 		DeviceParameters &deviceParams = m_DeviceManager->GetDeviceParameters();
-        const SDL_WindowID mainWindowId = SDL_GetWindowID(m_Window);
+        const SDL_WindowID mainWindowId = m_Window ? SDL_GetWindowID(m_Window) : 0;
+
+        auto getWindowSource = [mainWindowId, this](SDL_WindowID wid) -> std::pair<bool, EventSource> {
+            if (mainWindowId != 0 && wid == mainWindowId)
+                return { true, EventSource::Viewport };
+            if (wid == 0 || m_WatchedWindowIDs.count(wid) > 0)
+                return { true, EventSource::Editor };
+            return { false, EventSource::Viewport };
+        };
+
+        auto dispatch = [this](Event &e, EventSource source) {
+            e.SetSource(source);
+            if (m_Callback)
+            {
+                m_Callback(e);
+            }
+        };
+
         switch (event.type)
         {
-        case SDL_EVENT_QUIT:
-        {
-			m_Looping = false;
-            break;
-        }
-
-        case SDL_EVENT_WINDOW_RESIZED:
-        {
-            if (event.window.windowID != mainWindowId)
-                break;
-
-            WindowResizeEvent e(event.window.data1, event.window.data2);
-            m_Callback(e);
-
-            if (event.window.data1 == 0 || event.window.data2 == 0)
+            case SDL_EVENT_QUIT:
             {
-                m_IsVisible = false;
+			    m_Looping = false;
                 break;
             }
-
-			SDL_WindowFlags flags = SDL_GetWindowFlags(m_Window);
-            // m_DeviceManager->m_WindowIsInFocus = (flags & SDL_WINDOW_INPUT_FOCUS) == 0;
-            m_IsVisible = true;
-
-            deviceParams.windowWidth = event.window.data1;
-            deviceParams.windowHeight = event.window.data2;
-            break;
-        }
-        case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-        {
-            if (event.window.windowID != mainWindowId)
-                break;
-
-            FramebufferResizeEvent e(event.window.data1, event.window.data2);
-            m_Callback(e);
-
-            // window is not minimized, and the size has changed
-            if (event.window.data1 > 0 && event.window.data2 > 0)
+            case SDL_EVENT_WINDOW_RESIZED:
             {
-                if (deviceParams.backBufferWidth != (uint32_t)event.window.data1 ||
-                    deviceParams.backBufferHeight != (uint32_t)event.window.data2)
+                auto [allowed, source] = getWindowSource(event.window.windowID);
+                if (!allowed)
+                    break;
+
+                WindowResizeEvent e(event.window.data1, event.window.data2);
+                dispatch(e, source);
+
+                if (event.window.windowID == mainWindowId)
                 {
-                    deviceParams.backBufferWidth = event.window.data1;
-                    deviceParams.backBufferHeight = event.window.data2;
+                    if (event.window.data1 == 0 || event.window.data2 == 0)
+                    {
+                        m_IsVisible = false;
+                        break;
+                    }
 
-                    m_DeviceManager->ResizeSwapChain();
-                    m_DeviceManager->CreateBackBuffers();
+                    SDL_WindowFlags flags = SDL_GetWindowFlags(m_Window);
+                    // m_DeviceManager->m_WindowIsInFocus = (flags & SDL_WINDOW_INPUT_FOCUS) == 0;
+                    m_IsVisible = true;
+
+                    deviceParams.windowWidth = event.window.data1;
+                    deviceParams.windowHeight = event.window.data2;
                 }
+                break;
             }
-            break;
-        }
-        case SDL_EVENT_WINDOW_MAXIMIZED:
-        {
-            if (event.window.windowID != mainWindowId)
-                break;
-
-            WindowMaximizedEvent e(true);
-            m_Callback(e);
-			break;
-        }
-        case SDL_EVENT_WINDOW_MINIMIZED:
-        {
-            if (event.window.windowID != mainWindowId)
-                break;
-
-            WindowMinimizedEvent e(true);
-            m_Callback(e);
-            break;
-        }
-        case SDL_EVENT_WINDOW_RESTORED:
-        {
-            if (event.window.windowID != mainWindowId)
-                break;
-
-            WindowMinimizedEvent event(false);
-            m_Callback(event);
-            break;
-		}
-        case SDL_EVENT_WINDOW_DESTROYED:
-        {
-            if (event.window.windowID != mainWindowId)
-                break;
-
-            WindowCloseEvent e;
-            m_Callback(e);
-            break;
-        }
-        case SDL_EVENT_JOYSTICK_ADDED:
-        {
-            SDL_JoystickID jID = event.jdevice.which;
-			JoystickManager::ConnectJoystick(jID);
-
-            break;
-        }
-        case SDL_EVENT_JOYSTICK_REMOVED:
-        {
-			SDL_JoystickID jID = event.jdevice.which;
-            JoystickManager::DisconnectJoystick(jID);
-			break;
-        }
-        case SDL_EVENT_TEXT_INPUT:
-        {
-            if (event.text.windowID != mainWindowId)
-                break;
-
-			/*KeyTypedEvent e(std::string(event.text.text));
-			m_Callback(e);*/
-            break;
-        }
-        case SDL_EVENT_KEY_DOWN:
-        {
-            if (event.key.windowID != mainWindowId)
-                break;
-
-            if (event.key.repeat)
+            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             {
-                KeyPressedEvent e(event.key.key, 1);
-                m_Callback(e);
+                if (event.window.windowID != mainWindowId)
+                    break;
+
+                FramebufferResizeEvent e(event.window.data1, event.window.data2);
+                dispatch(e, EventSource::Viewport);
+
+                // window is not minimized, and the size has changed
+                if (event.window.data1 > 0 && event.window.data2 > 0)
+                {
+                    if (deviceParams.backBufferWidth != (uint32_t)event.window.data1 ||
+                        deviceParams.backBufferHeight != (uint32_t)event.window.data2)
+                    {
+                        deviceParams.backBufferWidth = event.window.data1;
+                        deviceParams.backBufferHeight = event.window.data2;
+
+                        m_DeviceManager->ResizeSwapChain();
+                        m_DeviceManager->CreateBackBuffers();
+                    }
+                }
+                break;
             }
-            else
+            case SDL_EVENT_WINDOW_MAXIMIZED:
             {
-                KeyPressedEvent e(event.key.key, 0);
-                m_Callback(e);
+                auto [allowed, source] = getWindowSource(event.window.windowID);
+                if (!allowed)
+                    break;
+
+                WindowMaximizedEvent e(true);
+                dispatch(e, source);
+			    break;
             }
-            break;
-        }
-        case SDL_EVENT_KEY_UP:
-        {
-            if (event.key.windowID != mainWindowId)
-                break;
+            case SDL_EVENT_WINDOW_MINIMIZED:
+            {
+                auto [allowed, source] = getWindowSource(event.window.windowID);
+                if (!allowed)
+                    break;
 
-            KeyReleasedEvent e(event.key.key);
-            m_Callback(e);
-            break;
-        }
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        {
-           if (event.button.windowID != mainWindowId)
+                WindowMinimizedEvent e(true);
+                dispatch(e, source);
                 break;
+            }
+            case SDL_EVENT_WINDOW_RESTORED:
+            {
+                auto [allowed, source] = getWindowSource(event.window.windowID);
+                if (!allowed)
+                    break;
 
-            MouseButtonPressedEvent e(event.button.button);
-            m_Callback(e);
-			break;
-        }
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-        {
-            if (event.button.windowID != mainWindowId)
+                WindowMinimizedEvent event(false);
+                dispatch(event, source);
                 break;
+		    }
+            case SDL_EVENT_WINDOW_DESTROYED:
+            {
+                auto [allowed, source] = getWindowSource(event.window.windowID);
+                if (!allowed)
+                    break;
 
-            MouseButtonReleasedEvent e(event.button.button);
-            m_Callback(e);
-            break;
-        }
-        case SDL_EVENT_MOUSE_WHEEL:
-        {
-            if (event.wheel.windowID != mainWindowId)
+                WindowCloseEvent e;
+                dispatch(e, source);
                 break;
-
-            MouseScrolledEvent e(event.wheel.x, event.wheel.y);
-            m_Callback(e);
-            break;
-		}
-        case SDL_EVENT_MOUSE_MOTION:
-        {
-          if (event.motion.windowID != mainWindowId)
+            }
+            case SDL_EVENT_JOYSTICK_ADDED:
+            {
+                SDL_JoystickID jID = event.jdevice.which;
+			    JoystickManager::ConnectJoystick(jID);
                 break;
+            }
+            case SDL_EVENT_JOYSTICK_REMOVED:
+            {
+			    SDL_JoystickID jID = event.jdevice.which;
+                JoystickManager::DisconnectJoystick(jID);
+			    break;
+            }
+            case SDL_EVENT_TEXT_INPUT:
+            {
+                auto [allowed, source] = getWindowSource(event.text.windowID);
+                if (!allowed)
+                    break;
 
-            MouseMovedEvent e((int)event.motion.x, (int)event.motion.y);
-            m_Callback(e);
-            break;
-		}
-        case SDL_EVENT_DROP_FILE:
-        {
-			// TODO: implement multiple file drop
+			    /*KeyTypedEvent e(std::string(event.text.text));
+			    dispatch(e, source);*/
+                break;
+            }
+            case SDL_EVENT_KEY_DOWN:
+            {
+                auto [allowed, source] = getWindowSource(event.key.windowID);
+                if (!allowed)
+                    break;
+
+                if (event.key.repeat)
+                {
+                    KeyPressedEvent e(event.key.key, 1);
+                    dispatch(e, source);
+                }
+                else
+                {
+                    KeyPressedEvent e(event.key.key, 0);
+                    dispatch(e, source);
+                }
+                break;
+            }
+            case SDL_EVENT_KEY_UP:
+            {
+                auto [allowed, source] = getWindowSource(event.key.windowID);
+                if (!allowed)
+                    break;
+
+                KeyReleasedEvent e(event.key.key);
+                dispatch(e, source);
+                break;
+            }
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            {
+                auto [allowed, source] = getWindowSource(event.button.windowID);
+                if (!allowed)
+                    break;
+
+                MouseButtonPressedEvent e(event.button.button);
+                dispatch(e, source);
+			    break;
+            }
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+            {
+                auto [allowed, source] = getWindowSource(event.button.windowID);
+                if (!allowed)
+                    break;
+
+                MouseButtonReleasedEvent e(event.button.button);
+                dispatch(e, source);
+                break;
+            }
+            case SDL_EVENT_MOUSE_WHEEL:
+            {
+                auto [allowed, source] = getWindowSource(event.wheel.windowID);
+                if (!allowed)
+                    break;
+
+                MouseScrolledEvent e(event.wheel.x, event.wheel.y);
+                dispatch(e, source);
+                break;
+		    }
+            case SDL_EVENT_MOUSE_MOTION:
+            {
+                auto [allowed, source] = getWindowSource(event.motion.windowID);
+                if (!allowed)
+                    break;
+
+                MouseMovedEvent e((int)event.motion.x, (int)event.motion.y);
+                dispatch(e, source);
+                break;
+		    }
+            case SDL_EVENT_DROP_FILE:
+            {
+			    // TODO: implement multiple file drop
+                auto [allowed, source] = getWindowSource(event.drop.windowID);
+                if (!allowed)
+                    break;
 #if 0
-            std::vector<ignite::Path> filepaths(event.drop.reserved);
+                std::vector<ignite::Path> filepaths(event.drop.reserved);
 
-            LOG_INFO("Paths: ");
-            for (uint32_t i = 0; i < static_cast<uint32_t>(filepaths.size()); i++)
-            {
-                filepaths[i] = ignite::Path(std::string(event.drop.data));
-                LOG_INFO(" {}", filepaths[i].generic_string().c_str());
-            }
+                LOG_INFO("Paths: ");
+                for (uint32_t i = 0; i < static_cast<uint32_t>(filepaths.size()); i++)
+                {
+                    filepaths[i] = ignite::Path(std::string(event.drop.data));
+                    LOG_INFO(" {}", filepaths[i].generic_string().c_str());
+                }
 
-            WindowDropEvent e(std::move(filepaths));
-            m_Callback(e);
+                WindowDropEvent e(std::move(filepaths));
+                dispatch(e, source);
 #endif
-            break;
-        }
-        case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
-        {
-            if (deviceParams.enablePerMonitorDPI)
+                break;
+            }
+            case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
             {
-                WindowDPIScaleChangedEvent e(static_cast<float>(event.display.data1), static_cast<float>(event.display.data2));
-                m_Callback(e);
+                if (deviceParams.enablePerMonitorDPI)
+                {
+                    WindowDPIScaleChangedEvent e(static_cast<float>(event.display.data1), static_cast<float>(event.display.data2));
+                    dispatch(e, EventSource::Viewport);
 #ifdef _WIN32
-				HWND hwnd = GetNativeWindow();
-                HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-                uint32_t dpiX, dpiY;
-                GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-				m_DeviceManager->SetDPISacaleFactors(dpiX / 96.f, dpiY / 96.f);
+				    HWND hwnd = GetNativeWindow();
+                    HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                    uint32_t dpiX, dpiY;
+                    GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+				    m_DeviceManager->SetDPISacaleFactors(dpiX / 96.f, dpiY / 96.f);
 #else
 #endif
+                }
+                break;
             }
-            break;
-        }
-
         }
 
         for (const Ref<Joystick>& j : JoystickManager::GetConnectedJoystick())
@@ -586,8 +618,10 @@ namespace ignite
         {
             return (HWND)m_DeviceManager->GetDeviceParameters().nativeWindowHandle;
         }
+
         if (!m_Window)
             return nullptr;
+
         // Retrieve HWND
         SDL_PropertiesID props = SDL_GetWindowProperties(m_Window);
         HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);

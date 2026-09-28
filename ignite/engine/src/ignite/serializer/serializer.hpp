@@ -5,294 +5,411 @@
 
 #include "ignite/core/uuid.hpp"
 #include "ignite/math/math.hpp"
-
+#include "ignite/core/base.hpp"
+#include "ignite/core/logger.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 
-#pragma warning(push)
-#pragma warning(disable : 4275 4251)
-#include <yaml-cpp/yaml.h>
-#include <yaml-cpp/node/convert.h>
-#pragma warning(pop)
-
+#include <nlohmann/json.hpp>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <string>
 #include <filesystem>
+#include <vector>
+#include <memory>
 
-namespace YAML
+namespace nlohmann
 {
-    template<>
-    struct convert<char16_t>
-    {
-        static Node encode(const char16_t &rhs)
-        {
-            return Node(static_cast<uint16_t>(rhs));
-        }
-
-        static bool decode(const Node &node, char16_t &rhs)
-        {
-            if (!node.IsScalar())
-                return false;
-
-            rhs = static_cast<char16_t>(node.as<uint16_t>());
-            return true;
-        }
-    };
-
-    template<>
-    struct convert<ignite::UUID>
-    {
-        static Node encode(const ignite::UUID uuid)
-        {
-            return Node(static_cast<uint64_t>(uuid));
-        }
-
-        static bool decode(const Node &node, ignite::UUID &uuid)
-        {
-            if (!node.IsScalar())
-                return false;
-
-            uuid = ignite::UUID(node.as<uint64_t>());
-            return true;
-        }
-    };
-
-    template<>
-    struct convert<ignite::Rect>
-    {
-        static Node encode(const ignite::Rect &rect)
-        {
-            Node node;
-            node.push_back(rect.min.x);
-            node.push_back(rect.min.y);
-            node.push_back(rect.max.x);
-            node.push_back(rect.max.y);
-            return node;
-        }
-
-        static bool decode(const Node &node, ignite::Rect &rect)
-        {
-            if (!node.IsSequence() || node.size() != 4)
-                return false;
-
-            rect.SetMin({ node[0].as<float>(), node[1].as<float>() });
-            rect.SetMax({ node[2].as<float>(), node[3].as<float>() });
-            return true;
-        }
-    };
-
+    // char16_t
     template <>
-    struct convert<glm::vec2>
+    struct adl_serializer<char16_t>
     {
-        static Node encode(const glm::vec2 &rhs)
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const char16_t &c)
         {
-            Node node;
-            node.push_back(rhs.x);
-            node.push_back(rhs.y);
-            return node;
+            j = static_cast<uint16_t>(c);
         }
-
-        static bool decode(const Node &node, glm::vec2 &rhs)
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, char16_t &c)
         {
-            if (!node.IsSequence() || node.size() != 2)
-                return false;
-
-            rhs.x = node[0].as<float>();
-            rhs.y = node[1].as<float>();
-            return true;
+            if (j.is_number())
+                c = static_cast<char16_t>(j.template get<uint16_t>());
         }
     };
 
+    // glm::vec2
     template <>
-    struct convert<glm::vec3>
+    struct adl_serializer<glm::vec2>
     {
-        static Node encode(const glm::vec3 &rhs)
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const glm::vec2 &v)
         {
-            Node node;
-            node.push_back(rhs.x);
-            node.push_back(rhs.y);
-            node.push_back(rhs.z);
-            return node;
+            j = BasicJsonType::array({ v.x, v.y });
         }
-
-        static bool decode(const Node &node, glm::vec3 &rhs)
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, glm::vec2 &v)
         {
-            if (!node.IsSequence() || node.size() != 3)
-                return false;
-
-            rhs.x = node[0].as<float>();
-            rhs.y = node[1].as<float>();
-            rhs.z = node[2].as<float>();
-            return true;
+            if (j.is_array() && j.size() >= 2)
+            {
+                v.x = j[0].template get<float>();
+                v.y = j[1].template get<float>();
+            }
         }
     };
 
+    // glm::vec3
     template <>
-    struct convert<glm::vec4>
+    struct adl_serializer<glm::vec3>
     {
-        static Node encode(const glm::vec4 &rhs)
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const glm::vec3 &v)
         {
-            Node node;
-            node.push_back(rhs.x);
-            node.push_back(rhs.y);
-            node.push_back(rhs.z);
-            node.push_back(rhs.w);
-            return node;
+            j = BasicJsonType::array({ v.x, v.y, v.z });
         }
-
-        static bool decode(const Node &node, glm::vec4 &rhs)
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, glm::vec3 &v)
         {
-            if (!node.IsSequence() || node.size() != 4)
-                return false;
-
-            rhs.x = node[0].as<float>();
-            rhs.y = node[1].as<float>();
-            rhs.z = node[2].as<float>();
-            rhs.w = node[3].as<float>();
-            return true;
+            if (j.is_array() && j.size() >= 3)
+            {
+                v.x = j[0].template get<float>();
+                v.y = j[1].template get<float>();
+                v.z = j[2].template get<float>();
+            }
         }
     };
 
+    // glm::vec4
     template <>
-    struct convert<glm::ivec2>
+    struct adl_serializer<glm::vec4>
     {
-        static Node encode(const glm::ivec2 &rhs)
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const glm::vec4 &v)
         {
-            Node node;
-            node.push_back(rhs.x);
-            node.push_back(rhs.y);
-            return node;
+            j = BasicJsonType::array({ v.x, v.y, v.z, v.w });
         }
-
-        static bool decode(const Node &node, glm::ivec2 &rhs)
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, glm::vec4 &v)
         {
-            if (!node.IsSequence() || node.size() != 2)
-                return false;
-
-            rhs.x = node[0].as<int>();
-            rhs.y = node[1].as<int>();
-            return true;
+            if (j.is_array() && j.size() >= 4)
+            {
+                v.x = j[0].template get<float>();
+                v.y = j[1].template get<float>();
+                v.z = j[2].template get<float>();
+                v.w = j[3].template get<float>();
+            }
         }
     };
 
+    // glm::ivec2
     template <>
-    struct convert<glm::ivec3>
+    struct adl_serializer<glm::ivec2>
     {
-        static Node encode(const glm::ivec3 &rhs)
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const glm::ivec2 &v)
         {
-            Node node;
-            node.push_back(rhs.x);
-            node.push_back(rhs.y);
-            node.push_back(rhs.z);
-            return node;
+            j = BasicJsonType::array({ v.x, v.y });
         }
-
-        static bool decode(const Node &node, glm::ivec3 &rhs)
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, glm::ivec2 &v)
         {
-            if (!node.IsSequence() || node.size() != 3)
-                return false;
-
-            rhs.x = node[0].as<int>();
-            rhs.y = node[1].as<int>();
-            rhs.z = node[2].as<int>();
-            return true;
+            if (j.is_array() && j.size() >= 2)
+            {
+                v.x = j[0].template get<int>();
+                v.y = j[1].template get<int>();
+            }
         }
     };
 
+    // glm::ivec3
     template <>
-    struct convert<glm::ivec4>
+    struct adl_serializer<glm::ivec3>
     {
-        static Node encode(const glm::ivec4 &rhs)
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const glm::ivec3 &v)
         {
-            Node node;
-            node.push_back(rhs.x);
-            node.push_back(rhs.y);
-            node.push_back(rhs.z);
-            node.push_back(rhs.w);
-            return node;
+            j = BasicJsonType::array({ v.x, v.y, v.z });
         }
-
-        static bool decode(const Node &node, glm::ivec4 &rhs)
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, glm::ivec3 &v)
         {
-            if (!node.IsSequence() || node.size() != 4)
-                return false;
-
-            rhs.x = node[0].as<int>();
-            rhs.y = node[1].as<int>();
-            rhs.z = node[2].as<int>();
-            rhs.w = node[3].as<int>();
-            return true;
+            if (j.is_array() && j.size() >= 3)
+            {
+                v.x = j[0].template get<int>();
+                v.y = j[1].template get<int>();
+                v.z = j[2].template get<int>();
+            }
         }
     };
 
+    // glm::ivec4
     template <>
-    struct convert<glm::quat>
+    struct adl_serializer<glm::ivec4>
     {
-        static Node encode(const glm::quat &rhs)
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const glm::ivec4 &v)
         {
-            Node node;
-            node.push_back(rhs.x);
-            node.push_back(rhs.y);
-            node.push_back(rhs.z);
-            node.push_back(rhs.w);
-            return node;
+            j = BasicJsonType::array({ v.x, v.y, v.z, v.w });
         }
-
-        static bool decode(const Node &node, glm::quat &rhs)
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, glm::ivec4 &v)
         {
-            if (!node.IsSequence() || node.size() != 4)
-                return false;
+            if (j.is_array() && j.size() >= 4)
+            {
+                v.x = j[0].template get<int>();
+                v.y = j[1].template get<int>();
+                v.z = j[2].template get<int>();
+                v.w = j[3].template get<int>();
+            }
+        }
+    };
 
-            rhs.x = node[0].as<float>();
-            rhs.y = node[1].as<float>();
-            rhs.z = node[2].as<float>();
-            rhs.w = node[3].as<float>();
-            return true;
+    // glm::quat
+    template <>
+    struct adl_serializer<glm::quat>
+    {
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const glm::quat &q)
+        {
+            j = BasicJsonType::array({ q.x, q.y, q.z, q.w });
+        }
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, glm::quat &q)
+        {
+            if (j.is_array() && j.size() >= 4)
+            {
+                q.x = j[0].template get<float>();
+                q.y = j[1].template get<float>();
+                q.z = j[2].template get<float>();
+                q.w = j[3].template get<float>();
+            }
+        }
+    };
+
+    // ignite::UUID
+    template <>
+    struct adl_serializer<ignite::UUID>
+    {
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const ignite::UUID &uuid)
+        {
+            j = static_cast<uint64_t>(uuid);
+        }
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, ignite::UUID &uuid)
+        {
+            if (j.is_number())
+                uuid = ignite::UUID(j.template get<uint64_t>());
+        }
+    };
+
+    // ignite::Rect
+    template <>
+    struct adl_serializer<ignite::Rect>
+    {
+        template <typename BasicJsonType>
+        static void to_json(BasicJsonType &j, const ignite::Rect &rect)
+        {
+            j = BasicJsonType::array({ rect.min.x, rect.min.y, rect.max.x, rect.max.y });
+        }
+        template <typename BasicJsonType>
+        static void from_json(const BasicJsonType &j, ignite::Rect &rect)
+        {
+            if (j.is_array() && j.size() >= 4)
+            {
+                rect.SetMin({ j[0].template get<float>(), j[1].template get<float>() });
+                rect.SetMax({ j[2].template get<float>(), j[3].template get<float>() });
+            }
         }
     };
 }
 
-namespace ignite
+namespace glm
 {
-    static YAML::Emitter &operator<<(YAML::Emitter &out, const Rect &rect)
-    {
-        out << YAML::Flow;
-        out << YAML::BeginSeq << rect.min.x << rect.min.y << rect.max.x << rect.max.y << YAML::EndSeq;
-        return out;
-    }
+    inline void to_json(nlohmann::ordered_json &j, const vec2 &v) { j = nlohmann::ordered_json::array({ v.x, v.y }); }
+    inline void from_json(const nlohmann::ordered_json &j, vec2 &v) { if (j.is_array() && j.size() >= 2) { v.x = j[0].get<float>(); v.y = j[1].get<float>(); } }
 
-    static YAML::Emitter &operator<<(YAML::Emitter &out, const glm::vec2 &v)
-    {
-        out << YAML::Flow;
-        out << YAML::BeginSeq << v.x << v.y << YAML::EndSeq;
-        return out;
-    }
+    inline void to_json(nlohmann::ordered_json &j, const vec3 &v) { j = nlohmann::ordered_json::array({ v.x, v.y, v.z }); }
+    inline void from_json(const nlohmann::ordered_json &j, vec3 &v) { if (j.is_array() && j.size() >= 3) { v.x = j[0].get<float>(); v.y = j[1].get<float>(); v.z = j[2].get<float>(); } }
 
-    static YAML::Emitter &operator<<(YAML::Emitter &out, const glm::vec3 &v)
-    {
-        out << YAML::Flow;
-        out << YAML::BeginSeq << v.x << v.y << v.z << YAML::EndSeq;
-        return out;
-    }
+    inline void to_json(nlohmann::ordered_json &j, const vec4 &v) { j = nlohmann::ordered_json::array({ v.x, v.y, v.z, v.w }); }
+    inline void from_json(const nlohmann::ordered_json &j, vec4 &v) { if (j.is_array() && j.size() >= 4) { v.x = j[0].get<float>(); v.y = j[1].get<float>(); v.z = j[2].get<float>(); v.w = j[3].get<float>(); } }
 
-    static YAML::Emitter &operator<<(YAML::Emitter &out, const glm::vec4 &v)
-    {
-        out << YAML::Flow;
-        out << YAML::BeginSeq << v.x << v.y << v.z << v.w << YAML::EndSeq;
-        return out;
-    }
+    inline void to_json(nlohmann::ordered_json &j, const ivec2 &v) { j = nlohmann::ordered_json::array({ v.x, v.y }); }
+    inline void from_json(const nlohmann::ordered_json &j, ivec2 &v) { if (j.is_array() && j.size() >= 2) { v.x = j[0].get<int>(); v.y = j[1].get<int>(); } }
 
-    static YAML::Emitter &operator<<(YAML::Emitter &out, const glm::quat &q)
-    {
-        out << YAML::Flow;
-        out << YAML::BeginSeq << q.x << q.y << q.z << q.w << YAML::EndSeq;
-        return out;
-    }
+    inline void to_json(nlohmann::ordered_json &j, const ivec3 &v) { j = nlohmann::ordered_json::array({ v.x, v.y, v.z }); }
+    inline void from_json(const nlohmann::ordered_json &j, ivec3 &v) { if (j.is_array() && j.size() >= 3) { v.x = j[0].get<int>(); v.y = j[1].get<int>(); v.z = j[2].get<int>(); } }
+
+    inline void to_json(nlohmann::ordered_json &j, const ivec4 &v) { j = nlohmann::ordered_json::array({ v.x, v.y, v.z, v.w }); }
+    inline void from_json(const nlohmann::ordered_json &j, ivec4 &v) { if (j.is_array() && j.size() >= 4) { v.x = j[0].get<int>(); v.y = j[1].get<int>(); v.z = j[2].get<int>(); v.w = j[3].get<int>(); } }
+
+    inline void to_json(nlohmann::ordered_json &j, const quat &q) { j = nlohmann::ordered_json::array({ q.x, q.y, q.z, q.w }); }
+    inline void from_json(const nlohmann::ordered_json &j, quat &q) { if (j.is_array() && j.size() >= 4) { q.x = j[0].get<float>(); q.y = j[1].get<float>(); q.z = j[2].get<float>(); q.w = j[3].get<float>(); } }
 }
 
-#include "ignite/core/base.hpp"
-
 namespace ignite
 {
+    inline void to_json(nlohmann::ordered_json &j, const UUID &uuid) { j = static_cast<uint64_t>(uuid); }
+    inline void from_json(const nlohmann::ordered_json &j, UUID &uuid) { if (j.is_number()) uuid = UUID(j.get<uint64_t>()); }
+
+    inline void to_json(nlohmann::ordered_json &j, const Rect &rect) { j = nlohmann::ordered_json::array({ rect.min.x, rect.min.y, rect.max.x, rect.max.y }); }
+    inline void from_json(const nlohmann::ordered_json &j, Rect &rect) { if (j.is_array() && j.size() >= 4) { rect.SetMin({ j[0].get<float>(), j[1].get<float>() }); rect.SetMax({ j[2].get<float>(), j[3].get<float>() }); } }
+
+    class IGN_API JsonNode
+    {
+    public:
+        JsonNode() : m_Storage(nullptr), m_Json(nullptr) {}
+
+        JsonNode(std::shared_ptr<nlohmann::ordered_json> storage)
+            : m_Storage(std::move(storage)), m_Json(m_Storage ? m_Storage.get() : nullptr) {}
+
+        JsonNode(nlohmann::ordered_json &&j)
+            : m_Storage(std::make_shared<nlohmann::ordered_json>(std::move(j)))
+        {
+            m_Json = m_Storage.get();
+        }
+
+        JsonNode(const nlohmann::ordered_json &j)
+            : m_Storage(nullptr), m_Json(&j) {}
+
+        JsonNode(const nlohmann::ordered_json *j, std::shared_ptr<nlohmann::ordered_json> storage)
+            : m_Storage(std::move(storage)), m_Json(j) {}
+
+        static JsonNode Parse(const std::string &jsonString)
+        {
+            try
+            {
+                auto storage = std::make_shared<nlohmann::ordered_json>(nlohmann::ordered_json::parse(jsonString));
+                return JsonNode(std::move(storage));
+            }
+            catch (const std::exception &e)
+            {
+                LOG_ERROR("[JsonNode] Failed to parse JSON string: {}", e.what());
+                return JsonNode();
+            }
+        }
+
+        bool IsValid() const { return m_Json != nullptr && !m_Json->is_null(); }
+        explicit operator bool() const { return IsValid(); }
+
+        bool operator!() const { return !IsValid(); }
+
+        JsonNode operator[](const std::string &key) const
+        {
+            if (m_Json && m_Json->is_object())
+            {
+                auto it = m_Json->find(key);
+                if (it != m_Json->end() && !it->is_null())
+                {
+                    return JsonNode(&(*it), m_Storage);
+                }
+            }
+            return JsonNode();
+        }
+
+        JsonNode operator[](const char *key) const
+        {
+            if (!key) return JsonNode();
+            return operator[](std::string(key));
+        }
+
+        JsonNode operator[](size_t index) const
+        {
+            if (m_Json && m_Json->is_array() && index < m_Json->size())
+            {
+                return JsonNode(&(*m_Json)[index], m_Storage);
+            }
+            return JsonNode();
+        }
+
+        JsonNode operator[](int index) const
+        {
+            if (index >= 0)
+                return operator[](static_cast<size_t>(index));
+            return JsonNode();
+        }
+
+        template <typename T>
+        T as() const
+        {
+            if (m_Json && !m_Json->is_null())
+            {
+                try
+                {
+                    return m_Json->get<T>();
+                }
+                catch (const std::exception &e)
+                {
+                    LOG_WARN("[JsonNode] Failed to get value: {}", e.what());
+                }
+            }
+            return T();
+        }
+
+        template <typename T>
+        T as(const T &defaultValue) const
+        {
+            if (m_Json && !m_Json->is_null())
+            {
+                try
+                {
+                    return m_Json->get<T>();
+                }
+                catch (...)
+                {
+                    return defaultValue;
+                }
+            }
+            return defaultValue;
+        }
+
+        bool IsSequence() const { return m_Json && m_Json->is_array(); }
+        bool IsMap() const { return m_Json && m_Json->is_object(); }
+        bool IsScalar() const { return m_Json && !m_Json->is_structured() && !m_Json->is_null(); }
+        bool IsNull() const { return m_Json == nullptr || m_Json->is_null(); }
+        size_t size() const { return m_Json ? m_Json->size() : 0; }
+
+        struct Iterator
+        {
+            using BaseIter = nlohmann::ordered_json::const_iterator;
+            BaseIter iter;
+            std::shared_ptr<nlohmann::ordered_json> storage;
+
+            Iterator(BaseIter it, std::shared_ptr<nlohmann::ordered_json> s)
+                : iter(it), storage(std::move(s)) {}
+
+            JsonNode operator*() const { return JsonNode(&(*iter), storage); }
+            Iterator &operator++() { ++iter; return *this; }
+            bool operator!=(const Iterator &other) const { return iter != other.iter; }
+            bool operator==(const Iterator &other) const { return iter == other.iter; }
+        };
+
+        Iterator begin() const
+        {
+            if (m_Json && (m_Json->is_array() || m_Json->is_object()))
+                return Iterator(m_Json->begin(), m_Storage);
+            return Iterator(nlohmann::ordered_json::const_iterator(), nullptr);
+        }
+
+        Iterator end() const
+        {
+            if (m_Json && (m_Json->is_array() || m_Json->is_object()))
+                return Iterator(m_Json->end(), m_Storage);
+            return Iterator(nlohmann::ordered_json::const_iterator(), nullptr);
+        }
+
+        const nlohmann::ordered_json &GetJson() const
+        {
+            static const nlohmann::ordered_json kNullJson = nullptr;
+            return m_Json ? *m_Json : kNullJson;
+        }
+
+        operator const nlohmann::ordered_json &() const { return GetJson(); }
+
+    private:
+        std::shared_ptr<nlohmann::ordered_json> m_Storage;
+        const nlohmann::ordered_json *m_Json = nullptr;
+    };
+
     class IGN_API Serializer
     {
     public:
@@ -310,20 +427,29 @@ namespace ignite
         void EndSequence();
 
         template<typename T>
-        void AddKeyValue(const char *keyName, T value)
+        void AddKeyValue(const char *keyName, const T &value)
         {
-            m_Emitter << YAML::Key << keyName << YAML::Value << value;
+            if (!m_Stack.empty() && m_Stack.back()->is_object())
+            {
+                (*m_Stack.back())[keyName] = value;
+            }
         }
 
         template<typename T>
-        void AddValue(T value)
+        void AddValue(const T &value)
         {
-            m_Emitter << value;
+            if (!m_Stack.empty() && m_Stack.back()->is_array())
+            {
+                m_Stack.back()->push_back(value);
+            }
         }
 
-        static YAML::Node Deserialize(const std::filesystem::path &filepath);
+        static JsonNode Deserialize(const std::filesystem::path &filepath);
+        static JsonNode DeserializeFromString(const std::string &jsonString) { return JsonNode::Parse(jsonString); }
 
         const std::filesystem::path &GetFilepath() const { return m_Filepath; }
+        const nlohmann::ordered_json &GetRoot() const { return m_Root; }
+        nlohmann::ordered_json &GetRoot() { return m_Root; }
 
         static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
         {
@@ -335,9 +461,9 @@ namespace ignite
             sr.EndSequence();
         }
 
-        static bool DeserializeMat4(const YAML::Node &node, const char *key, glm::mat4 &outMat)
+        static bool DeserializeMat4(const JsonNode &node, const char *key, glm::mat4 &outMat)
         {
-            const YAML::Node matNode = node[key];
+            const JsonNode matNode = node[key];
             if (!matNode || !matNode.IsSequence() || matNode.size() != 4)
             {
                 return false;
@@ -353,7 +479,8 @@ namespace ignite
         }
 
     private:
-        YAML::Emitter m_Emitter;
+        nlohmann::ordered_json m_Root;
+        std::vector<nlohmann::ordered_json *> m_Stack;
         std::filesystem::path m_Filepath;
     };
 }

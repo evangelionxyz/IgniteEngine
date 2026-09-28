@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -167,8 +167,8 @@ namespace ignite
             return nullptr;
         }
 
-        YAML::Node fileNode = Serializer::Deserialize(filepath);
-        YAML::Node widgetNode = fileNode["Widget"];
+        JsonNode fileNode = Serializer::Deserialize(filepath);
+        JsonNode widgetNode = fileNode["Widget"];
         if (!widgetNode)
         {
             return nullptr;
@@ -181,9 +181,9 @@ namespace ignite
 
         widget->m_WidgetItems.clear();
         std::unordered_map<int, int> parentMap;
-        if (YAML::Node itemsNode = widgetNode["Items"]; itemsNode && itemsNode.IsSequence())
+        if (JsonNode itemsNode = widgetNode["Items"]; itemsNode && itemsNode.IsSequence())
         {
-            for (const YAML::Node &itemNode : itemsNode)
+            for (const JsonNode &itemNode : itemsNode)
             {
                 if (!itemNode["ID"] || !itemNode["Type"])
                     continue;
@@ -399,9 +399,9 @@ namespace ignite
         }
 
         widget->m_ChildWidgets.clear();
-        if (YAML::Node childrenNode = widgetNode["ChildWidgets"]; childrenNode && childrenNode.IsSequence())
+        if (JsonNode childrenNode = widgetNode["ChildWidgets"]; childrenNode && childrenNode.IsSequence())
         {
-            for (const YAML::Node &childNode : childrenNode)
+            for (const JsonNode &childNode : childrenNode)
             {
                 WidgetChildEntry child;
                 if (childNode["Handle"]) child.handle = AssetHandle(childNode["Handle"].as<uint64_t>());

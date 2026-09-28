@@ -15,7 +15,7 @@ namespace ignite
     {
     public:
         static void SerializeEntity(Serializer &sr, Entity entity);
-        static Entity DeserializeEntity(const YAML::Node &entityNode, Scene *scene, Project *project);
+        static Entity DeserializeEntity(const JsonNode &entityNode, Scene *scene, Project *project);
     };
 }
 

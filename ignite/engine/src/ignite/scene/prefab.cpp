@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -56,8 +56,8 @@ namespace ignite
             return nullptr;
         }
 
-        YAML::Node fileNode = Serializer::Deserialize(filepath);
-        YAML::Node prefabNode = fileNode["Prefab"];
+        JsonNode fileNode = Serializer::Deserialize(filepath);
+        JsonNode prefabNode = fileNode["Prefab"];
         if (!prefabNode)
         {
             LOG_ERROR("[Prefab] Invalid prefab file format: {}", filepath.generic_string());
@@ -70,9 +70,9 @@ namespace ignite
             prefab->m_RootEntityUUID = UUID(prefabNode["RootEntity"].as<uint64_t>());
         }
 
-        if (YAML::Node entitiesNode = prefabNode["Entities"])
+        if (JsonNode entitiesNode = prefabNode["Entities"])
         {
-            for (YAML::Node entityNode : entitiesNode)
+            for (JsonNode entityNode : entitiesNode)
             {
                 EntitySerializer::DeserializeEntity(entityNode, prefab->m_PrefabScene.get(), project);
             }

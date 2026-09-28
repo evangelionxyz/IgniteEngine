@@ -130,24 +130,20 @@ TEST(TerrainSystem, SerializationRoundtrip)
 
     TerrainBuilder::GenerateProcedural(comp, 0.02f, 999);
 
-    YAML::Emitter out;
-    out << YAML::BeginMap;
-    out << YAML::Key << "Terrain" << YAML::Value << YAML::BeginMap;
-    out << YAML::Key << "Resolution" << YAML::Value << comp.resolution;
-    out << YAML::Key << "WorldSize" << YAML::Value << comp.worldSize;
-    out << YAML::Key << "MaxHeight" << YAML::Value << comp.maxHeight;
-    out << YAML::Key << "ChunkCount" << YAML::Value << comp.chunkCount;
-    out << YAML::Key << "LodLevels" << YAML::Value << comp.lodLevels;
-    out << YAML::Key << "HeightmapHandle" << YAML::Value << static_cast<uint64_t>(comp.heightmapHandle);
-    out << YAML::EndMap;
-    out << YAML::EndMap;
+    nlohmann::ordered_json out;
+    out["Terrain"]["Resolution"] = comp.resolution;
+    out["Terrain"]["WorldSize"] = comp.worldSize;
+    out["Terrain"]["MaxHeight"] = comp.maxHeight;
+    out["Terrain"]["ChunkCount"] = comp.chunkCount;
+    out["Terrain"]["LodLevels"] = comp.lodLevels;
+    out["Terrain"]["HeightmapHandle"] = static_cast<uint64_t>(comp.heightmapHandle);
 
-    std::string yamlStr = out.c_str();
-    YAML::Node rootNode = YAML::Load(yamlStr);
-    ASSERT_TRUE(rootNode.IsDefined());
+    std::string jsonStr = out.dump();
+    JsonNode rootNode = JsonNode::Parse(jsonStr);
+    ASSERT_TRUE(rootNode.IsValid());
 
-    YAML::Node terrainNode = rootNode["Terrain"];
-    ASSERT_TRUE(terrainNode.IsDefined());
+    JsonNode terrainNode = rootNode["Terrain"];
+    ASSERT_TRUE(terrainNode.IsValid());
 
     EXPECT_EQ(terrainNode["Resolution"].as<uint32_t>(), 64u);
     EXPECT_FLOAT_EQ(terrainNode["WorldSize"].as<float>(), 200.0f);

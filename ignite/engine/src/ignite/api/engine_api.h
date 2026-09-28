@@ -125,6 +125,16 @@ IGN_API bool     Ignite_Entity_SetAudioSource(uint64_t uuid, float volume, float
 IGN_API bool     Ignite_Entity_SetText(uint64_t uuid, const char *text, float r, float g, float b, float a, float kerning, float lineSpacing, bool screenSpace);
 IGN_API bool     Ignite_Entity_SetWorldEnvironment(uint64_t uuid, float exposure, float gamma, float ambient, float fogDensity, float fr, float fg, float fb, float fa, float fogStart, float fogEnd);
 
+// ======================================
+// Window & Event System API
+// ======================================
+IGN_API void     Ignite_Window_RegisterExternalWindowID(uint32_t sdlWindowId);
+IGN_API void     Ignite_Window_UnregisterExternalWindowID(uint32_t sdlWindowId);
+
+IGN_API void     Ignite_Input_InjectKeyEvent(int sdlKeycode, bool isDown, uint16_t mod, bool repeat);
+IGN_API void     Ignite_Input_InjectMouseButton(int button, bool isDown, float x, float y);
+IGN_API void     Ignite_Input_InjectMouseMove(float x, float y);
+IGN_API void     Ignite_Input_InjectMouseScroll(float xOffset, float yOffset);
 
 #ifdef __cplusplus
 }

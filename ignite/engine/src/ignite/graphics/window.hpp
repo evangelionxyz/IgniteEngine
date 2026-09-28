@@ -31,6 +31,10 @@ namespace ignite
         bool IsInFocus() const { return m_IsInFocus; }
         bool IsExternalWindow() const { return m_IsExternalWindow; }
 
+        void RegisterExternalWindowID(SDL_WindowID id) { m_WatchedWindowIDs.insert(id); }
+        void UnregisterExternalWindowID(SDL_WindowID id) { m_WatchedWindowIDs.erase(id); }
+        bool IsWatchedWindow(SDL_WindowID id) const { return m_WatchedWindowIDs.count(id) > 0; }
+
         void SetEventCallback(const std::function<void(Event&)>& callback);
         void SetTitle(const std::string &title) const;
         void SetIcon(const std::string &filepath);
@@ -58,6 +62,7 @@ namespace ignite
         DeviceManager *m_DeviceManager;
         std::string m_WindowTitle;
         std::function<void(Event&)> m_Callback;
+        std::unordered_set<SDL_WindowID> m_WatchedWindowIDs;
         bool m_Looping = true;
         bool m_IsVisible = true;
 		bool m_IsInFocus = true;

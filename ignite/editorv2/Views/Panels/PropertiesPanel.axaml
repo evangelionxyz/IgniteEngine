@@ -11,12 +11,14 @@
         <Style Selector="Expander">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="MinHeight" Value="20" />
         </Style>
         <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
-            <Setter Property="Padding" Value="6,3" />
-            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="MinHeight" Value="20" />
         </Style>
         <Style Selector="Expander /template/ Border#ExpanderContent">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -25,6 +27,8 @@
         <Style Selector="Expander /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="ItemsControl > ContentPresenter">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -67,7 +71,7 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <TextBlock Text="Transform" FontSize="12" FontWeight="SemiBold" />
+                                    <TextBlock Text="Transform" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
                                     <ctrl:Vector3Control Label="Position" 
@@ -94,14 +98,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="Camera" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -122,14 +128,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="4" Margin="6,4" HorizontalAlignment="Stretch">
@@ -150,14 +158,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="4" Margin="6,4" HorizontalAlignment="Stretch">
@@ -173,14 +183,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -205,14 +217,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -232,14 +246,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -261,14 +277,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -288,14 +306,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -322,14 +342,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -362,14 +384,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -384,14 +408,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -406,14 +432,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -429,14 +457,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -458,14 +488,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -487,14 +519,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -513,14 +547,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -544,14 +580,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -576,14 +614,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -603,14 +643,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
@@ -628,14 +670,16 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="✕" 
-                                                Command="{Binding $parent[UserControl].((vm:PropertiesViewModel)DataContext).RemoveComponentCommand}"
-                                                CommandParameter="{Binding}"
-                                                Width="18" Height="18" Padding="0" FontSize="10"
-                                                Background="Transparent" BorderThickness="0" Foreground="#888888"
-                                                ToolTip.Tip="Remove Component" />
+                                        <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
+                                            <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="Remove Component" Command="{Binding RemoveCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </Grid>
                                 </Expander.Header>
                                 <TextBlock Text="(No editable properties)" FontSize="11" Foreground="#808080" Margin="6,4" />

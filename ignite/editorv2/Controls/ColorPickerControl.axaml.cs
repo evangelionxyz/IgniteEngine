@@ -93,11 +93,15 @@ public partial class ColorPickerControl : UserControl
     {
         SelectedColorProperty.Changed.AddClassHandler<ColorPickerControl>((x, _) => x.OnSelectedColorChanged(x.SelectedColor));
         VectorColorProperty.Changed.AddClassHandler<ColorPickerControl>((x, _) => x.OnVectorColorChanged(x.VectorColor));
+        OriginalColorProperty.Changed.AddClassHandler<ColorPickerControl>((x, _) => x.OriginalColorBrush = new SolidColorBrush(x.OriginalColor));
     }
 
     public ColorPickerControl()
     {
         InitializeComponent();
+        SvGrid.SizeChanged += (s, e) => UpdateIndicatorPositions();
+        HueGrid.SizeChanged += (s, e) => UpdateIndicatorPositions();
+        AlphaGrid.SizeChanged += (s, e) => UpdateIndicatorPositions();
         UpdateAllFromHsv();
     }
 
@@ -224,15 +228,7 @@ public partial class ColorPickerControl : UserControl
         InputA = aB.ToString();
         InputHex = $"{rB:X2}{gB:X2}{bB:X2}{aB:X2}";
 
-        // Position SV Cursor (Width=184, Height=170)
-        Canvas.SetLeft(SvCursor, _s * 184f);
-        Canvas.SetTop(SvCursor, (1f - _v) * 170f);
-
-        // Position Hue Indicator (Height=170, Hue 0..360)
-        Canvas.SetTop(HueIndicator, (_h / 360f) * 170f);
-
-        // Position Alpha Indicator (Height=170, Alpha 1..0 from top to bottom)
-        Canvas.SetTop(AlphaIndicator, (1f - _a) * 170f);
+        UpdateIndicatorPositions();
 
         if (triggerEvents)
         {
@@ -246,12 +242,36 @@ public partial class ColorPickerControl : UserControl
         }
     }
 
+    private void UpdateIndicatorPositions()
+    {
+        double svW = SvGrid?.Bounds.Width > 0 ? SvGrid.Bounds.Width : 180.0;
+        double svH = SvGrid?.Bounds.Height > 0 ? SvGrid.Bounds.Height : 140.0;
+        if (SvCursor != null)
+        {
+            Canvas.SetLeft(SvCursor, Math.Clamp(_s * (float)svW, 0f, (float)svW));
+            Canvas.SetTop(SvCursor, Math.Clamp((1f - _v) * (float)svH, 0f, (float)svH));
+        }
+
+        double hueH = HueGrid?.Bounds.Height > 0 ? HueGrid.Bounds.Height : 140.0;
+        if (HueIndicator != null)
+        {
+            Canvas.SetTop(HueIndicator, Math.Clamp((_h / 360f) * (float)hueH, 0f, (float)hueH));
+        }
+
+        double alphaH = AlphaGrid?.Bounds.Height > 0 ? AlphaGrid.Bounds.Height : 140.0;
+        if (AlphaIndicator != null)
+        {
+            Canvas.SetTop(AlphaIndicator, Math.Clamp((1f - _a) * (float)alphaH, 0f, (float)alphaH));
+        }
+    }
+
     // ---- Pointer Event Handlers for 2D SV Box ----
     private void OnSvPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         _isDraggingSv = true;
         e.Pointer.Capture(SvGrid);
         UpdateSvFromPointer(e.GetPosition(SvGrid));
+        e.Handled = true;
     }
 
     private void OnSvPointerMoved(object? sender, PointerEventArgs e)
@@ -259,13 +279,18 @@ public partial class ColorPickerControl : UserControl
         if (_isDraggingSv)
         {
             UpdateSvFromPointer(e.GetPosition(SvGrid));
+            e.Handled = true;
         }
     }
 
     private void OnSvPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        _isDraggingSv = false;
-        e.Pointer.Capture(null);
+        if (_isDraggingSv)
+        {
+            _isDraggingSv = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
     }
 
     private void OnSvPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
@@ -275,8 +300,8 @@ public partial class ColorPickerControl : UserControl
 
     private void UpdateSvFromPointer(Point pt)
     {
-        double w = SvGrid.Bounds.Width > 0 ? SvGrid.Bounds.Width : 184.0;
-        double h = SvGrid.Bounds.Height > 0 ? SvGrid.Bounds.Height : 170.0;
+        double w = SvGrid.Bounds.Width > 0 ? SvGrid.Bounds.Width : 180.0;
+        double h = SvGrid.Bounds.Height > 0 ? SvGrid.Bounds.Height : 140.0;
         _s = Math.Clamp((float)(pt.X / w), 0f, 1f);
         _v = Math.Clamp(1f - (float)(pt.Y / h), 0f, 1f);
         UpdateAllFromHsv();
@@ -288,6 +313,7 @@ public partial class ColorPickerControl : UserControl
         _isDraggingHue = true;
         e.Pointer.Capture(HueGrid);
         UpdateHueFromPointer(e.GetPosition(HueGrid));
+        e.Handled = true;
     }
 
     private void OnHuePointerMoved(object? sender, PointerEventArgs e)
@@ -295,13 +321,18 @@ public partial class ColorPickerControl : UserControl
         if (_isDraggingHue)
         {
             UpdateHueFromPointer(e.GetPosition(HueGrid));
+            e.Handled = true;
         }
     }
 
     private void OnHuePointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        _isDraggingHue = false;
-        e.Pointer.Capture(null);
+        if (_isDraggingHue)
+        {
+            _isDraggingHue = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
     }
 
     private void OnHuePointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
@@ -311,7 +342,7 @@ public partial class ColorPickerControl : UserControl
 
     private void UpdateHueFromPointer(Point pt)
     {
-        double h = HueGrid.Bounds.Height > 0 ? HueGrid.Bounds.Height : 170.0;
+        double h = HueGrid.Bounds.Height > 0 ? HueGrid.Bounds.Height : 140.0;
         _h = Math.Clamp((float)(pt.Y / h) * 360f, 0f, 360f);
         UpdateAllFromHsv();
     }
@@ -322,6 +353,7 @@ public partial class ColorPickerControl : UserControl
         _isDraggingAlpha = true;
         e.Pointer.Capture(AlphaGrid);
         UpdateAlphaFromPointer(e.GetPosition(AlphaGrid));
+        e.Handled = true;
     }
 
     private void OnAlphaPointerMoved(object? sender, PointerEventArgs e)
@@ -329,13 +361,18 @@ public partial class ColorPickerControl : UserControl
         if (_isDraggingAlpha)
         {
             UpdateAlphaFromPointer(e.GetPosition(AlphaGrid));
+            e.Handled = true;
         }
     }
 
     private void OnAlphaPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        _isDraggingAlpha = false;
-        e.Pointer.Capture(null);
+        if (_isDraggingAlpha)
+        {
+            _isDraggingAlpha = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
     }
 
     private void OnAlphaPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
@@ -345,7 +382,7 @@ public partial class ColorPickerControl : UserControl
 
     private void UpdateAlphaFromPointer(Point pt)
     {
-        double h = AlphaGrid.Bounds.Height > 0 ? AlphaGrid.Bounds.Height : 170.0;
+        double h = AlphaGrid.Bounds.Height > 0 ? AlphaGrid.Bounds.Height : 140.0;
         _a = Math.Clamp(1f - (float)(pt.Y / h), 0f, 1f);
         UpdateAllFromHsv();
     }

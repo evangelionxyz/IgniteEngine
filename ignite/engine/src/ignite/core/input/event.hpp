@@ -8,6 +8,14 @@
 
 namespace ignite
 {
+    enum class EventSource
+    {
+        None = 0,
+        Editor,
+        Runtime,
+        Viewport,
+    };
+
     enum class EventType
     {
         None = 0,
@@ -33,7 +41,6 @@ namespace ignite
         MouseButtonReleased,
         MouseMoved,
         MouseScrolled,
-
     };
 
     enum EventCategory
@@ -61,6 +68,8 @@ virtual const char* GetName() const override { return #type; }
         bool Handled = false;
 
         virtual EventType GetEventType() const = 0;
+        virtual EventSource GetSource() const { return m_Source; }
+        virtual void SetSource(EventSource source) { m_Source = source; }
         virtual const char *GetName() const = 0;
         virtual int GetCategoryFlags() const = 0;
         virtual std::string ToString() const { return GetName(); }
@@ -69,6 +78,10 @@ virtual const char* GetName() const override { return #type; }
         {
             return (GetCategoryFlags() & category) != 0;
         }
+    protected:
+        EventSource m_Source = EventSource::Viewport;
+
+        friend class EventDispatcher;
     };
 
     class EventDispatcher
@@ -79,13 +92,29 @@ virtual const char* GetName() const override { return #type; }
         {
         }
 
-        // F will be deduced by the compiler
+        // Dispatches to func for matching event type regardless of source
         template<typename T, typename F>
         bool Dispatch(const F &func)
         {
             if (m_Event.GetEventType() == T::GetStaticType())
             {
-                m_Event.Handled = func(static_cast<T &>(m_Event));
+                m_Event.Handled |= func(static_cast<T &>(m_Event));
+                return true;
+            }
+            return false;
+        }
+
+        // Dispatches to func only if event type matches AND matches the filtered source
+        template<typename T, typename F>
+        bool Dispatch(const F &func, EventSource filterSource)
+        {
+            if (m_Event.GetEventType() == T::GetStaticType())
+            {
+                if (filterSource != EventSource::None && m_Event.GetSource() != filterSource)
+                {
+                    return false;
+                }
+                m_Event.Handled |= func(static_cast<T &>(m_Event));
                 return true;
             }
             return false;

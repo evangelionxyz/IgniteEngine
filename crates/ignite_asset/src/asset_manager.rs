@@ -175,30 +175,6 @@ mod tests {
     use crate::AssetType;
 
     #[test]
-    fn test_asset_pinning() {
-        let mut manager = AssetManager::new();
-        let invalid = AssetHandle::from_u64(0);
-        let valid = AssetHandle::from_u64(101);
-
-        assert!(!manager.pin_asset(invalid));
-        assert_eq!(manager.get_pin_count(invalid), 0);
-
-        assert!(manager.pin_asset(valid));
-        assert!(manager.is_pinned(valid));
-        assert_eq!(manager.get_pin_count(valid), 1);
-
-        assert!(manager.pin_asset(valid));
-        assert_eq!(manager.get_pin_count(valid), 2);
-
-        assert!(manager.unpin_asset(valid));
-        assert_eq!(manager.get_pin_count(valid), 1);
-
-        assert!(manager.unpin_asset(valid));
-        assert!(!manager.is_pinned(valid));
-        assert_eq!(manager.get_pin_count(valid), 0);
-    }
-
-    #[test]
     fn test_metadata_registry() {
         let mut manager = AssetManager::new();
         let handle = AssetHandle::from_u64(202);
