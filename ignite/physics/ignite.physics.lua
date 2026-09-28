@@ -26,6 +26,7 @@ project "Ignite.Physics"
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.BOX2D}",
+        "%{IncludeDir.LUA}",
         "%{IncludeDir.SPDLOG}",
     }
 
@@ -33,6 +34,7 @@ project "Ignite.Physics"
 
     links {
         "Ignite.Core",
+        "Lua",
         "JOLT",
         "BOX2D",
         "SPDLOG",

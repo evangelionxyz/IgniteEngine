@@ -62,6 +62,7 @@ namespace ignite
         m_MethodBindings.clear();
         m_InstanceMap.clear();
         m_TypeMap.clear();
+
         m_LoadContext.reset();
 
         if (m_Initialized)

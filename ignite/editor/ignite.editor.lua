@@ -27,6 +27,7 @@ project "Ignite.Editor"
         "JOLT",
         "ZLIB",
         "yaml-cpp",
+        "Lua",
         "UmbraShaderCompiler",
         "IMGUI",
         "BOX2D",
@@ -87,6 +88,7 @@ project "Ignite.Editor"
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.FASTSIMD}",
         "%{IncludeDir.CPPCORO}",
+        "%{IncludeDir.LUA}",
         "%{IncludeDir.FASTSIMD_CONFIG}"
     }
 

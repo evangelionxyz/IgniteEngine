@@ -25,6 +25,7 @@ project "Ignite.Test"
         "JOLT",
         "ZLIB",
         "yaml-cpp",
+        "Lua",
         "UmbraShaderCompiler",
         "IMGUI",
         "BOX2D",
@@ -85,6 +86,7 @@ project "Ignite.Test"
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.FASTSIMD}",
+        "%{IncludeDir.LUA}",
         "%{IncludeDir.FASTSIMD_CONFIG}"
     }
 

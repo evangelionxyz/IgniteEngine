@@ -66,6 +66,7 @@ project "Ignite.Engine"
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.FASTSIMD}",
         "%{IncludeDir.CPPCORO}",
+        "%{IncludeDir.LUA}",
         "%{IncludeDir.FASTSIMD_CONFIG}"
     }
 
@@ -82,6 +83,7 @@ project "Ignite.Engine"
         "TINYGLTF",
         "NVRHI",
         "ZLIB",
+        "Lua",
         "yaml-cpp",
         "msdf-atlas-gen",
         "msdfgen",

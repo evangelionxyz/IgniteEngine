@@ -3094,18 +3094,19 @@ namespace ignite
             {
                 static char buffer[256] = { 0 };
                 static std::string compNameFilterResultStr;
-                static std::set<std::pair<std::string, CompType>> filteredCompName;
+
+                // Non static to re-create empty set
+                std::set<std::pair<std::string, CompType>> filteredCompName;
 
                 if (focusComponentInput)
                 {
                     ImGui::SetKeyboardFocusHere();
                     focusComponentInput = false;
                 }
-                ImGui::InputTextWithHint("##component_name", "Component", buffer, sizeof(buffer) + 1, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
 
+                ImGui::InputTextWithHint("##component_name", "Component", buffer, sizeof(buffer) + 1,
+                    ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
                 compNameFilterResultStr = std::string(buffer);
-
-                filteredCompName.clear();
 
                 if (!compNameFilterResultStr.empty())
                 {
@@ -3209,7 +3210,8 @@ namespace ignite
                     }
                 };
 
-                ImGui::BeginChildEx("##component_list", ImGui::GetCurrentWindow()->GetID("##component_list"), ImVec2(-1, 128.0f), ImGuiChildFlags_None, ImGuiWindowFlags_None);
+                ImGui::BeginChildEx("##component_list", ImGui::GetCurrentWindow()->GetID("##component_list"),
+                    ImVec2(-1, 128.0f), ImGuiChildFlags_None, ImGuiWindowFlags_None);
 
                 if (compNameFilterResultStr.empty())
                 {
@@ -3222,15 +3224,19 @@ namespace ignite
                         }
                     }
                 }
-
-                for (const auto &[strName, type] : filteredCompName)
+                else
                 {
-                    if (ImGui::Selectable(strName.c_str()))
+                    for (const auto &[strName, type] : filteredCompName)
                     {
-                        addCompFunc(Entity{ selectedEntity, m_Scene }, type);
-                        ImGui::CloseCurrentPopup();
+                        if (ImGui::Selectable(strName.c_str()))
+                        {
+                            addCompFunc(Entity{ selectedEntity, m_Scene }, type);
+                            ImGui::CloseCurrentPopup();
+                        }
                     }
                 }
+
+                
 
                 ImGui::EndChild();
 

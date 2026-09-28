@@ -703,9 +703,9 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         BindSharedImGuiContext();
-        constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_MenuBar
-            | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
-            | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+        constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse
+            | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus
+            | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
         const ImGuiViewport *viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->Pos);
@@ -1004,26 +1004,64 @@ namespace ignite
         {
             if (ImGui::Begin("Console", &m_State.consoleWindow))
             {
-                if (ImGui::Button("Clear"))
+                const auto &logs = Logger::GetLogs();
+
+                // Allocate enough memory for log searching
+                static char buffer[256] = { 0 };
+                static std::string consoleLogSearchResultStr;
+
+                // Non static to re-create empty set
+                std::set<std::pair<std::string, size_t>> filteredConsoleLog;
+
+                // Clear Logs and Search Query
+                if (UI::DrawButton("Clear", { 48.0f, 24.0f }))
                 {
+                    consoleLogSearchResultStr.clear();
+                    std::memset(buffer, NULL, sizeof(buffer));
+
                     Logger::ClearLogs();
                 }
 
-                ImGui::Separator();
+                // Query search string
+                ImGui::SameLine();
+                ImGui::InputTextEx("##console_search", "Search", buffer, sizeof(buffer) + 1, {256.0f, 24.0f},
+                    ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll, nullptr, nullptr);
 
+                consoleLogSearchResultStr = std::string(buffer);
+                if (!consoleLogSearchResultStr.empty())
+                {
+                    std::string search = stringutils::ToLower(consoleLogSearchResultStr);
+                    for (size_t i = 0; i < logs.size(); ++i)
+                    {
+                        std::string messageLower = stringutils::ToLower(logs[i].message);
+                        if (messageLower.find(search) != std::string::npos)
+                        {
+                            filteredConsoleLog.insert({ messageLower, i});
+                        }
+                    }
+
+                    // Clear Search Query
+                    ImGui::SameLine();
+                    if (UI::DrawButton("X", {24.0f, 24.0f}))
+                    {
+                        consoleLogSearchResultStr.clear();
+                        std::memset(buffer, NULL, sizeof(buffer));
+                    }
+                }
+
+                ImGui::Separator();
                 if (ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar))
                 {
-                    const auto& logs = Logger::GetLogs();
-                    for (const auto& log : logs)
+                    static std::function<void(const LogMessage &)> printLogFn = [&](const LogMessage &log)
                     {
                         ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
                         switch (log.level)
                         {
-                            case spdlog::level::trace: color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f); break;
-                            case spdlog::level::debug: color = ImVec4(0.2f, 0.8f, 0.8f, 1.0f); break;
-                            case spdlog::level::info:  color = ImVec4(0.2f, 0.8f, 0.2f, 1.0f); break;
-                            case spdlog::level::warn:  color = ImVec4(0.8f, 0.8f, 0.2f, 1.0f); break;
-                            case spdlog::level::err:   color = ImVec4(0.8f, 0.2f, 0.2f, 1.0f); break;
+                            case spdlog::level::trace:    color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f); break;
+                            case spdlog::level::debug:    color = ImVec4(0.2f, 0.8f, 0.8f, 1.0f); break;
+                            case spdlog::level::info:     color = ImVec4(0.2f, 0.8f, 0.2f, 1.0f); break;
+                            case spdlog::level::warn:     color = ImVec4(0.8f, 0.8f, 0.2f, 1.0f); break;
+                            case spdlog::level::err:      color = ImVec4(0.8f, 0.2f, 0.2f, 1.0f); break;
                             case spdlog::level::critical: color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); break;
                             default: break;
                         }
@@ -1034,9 +1072,26 @@ namespace ignite
                             ImGui::TextWrapped("%s", log.message.c_str());
                             ImGui::PopStyleColor();
                         }
+                    };
+
+                    // Print with search or default
+                    if (consoleLogSearchResultStr.empty())
+                    {
+                        for (const auto &log : logs)
+                        {
+                            printLogFn(log);
+                        }
+                    }
+                    else
+                    {
+                        for (const auto &[_, logIndex] : filteredConsoleLog)
+                        {
+                            printLogFn(logs[logIndex]);
+                        }
                     }
                 }
 
+                // Scroll to the bottom
                 if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
                 {
                     ImGui::SetScrollHereY(1.0f);
@@ -1049,7 +1104,6 @@ namespace ignite
 
         // Draw UI
         UISceneRenderer();
-
         UISettings();
     }
 
