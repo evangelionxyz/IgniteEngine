@@ -90,7 +90,7 @@ public class Circle2DData
 
 public class RigidbodyData
 {
-    public int BodyType { get; set; } = 0; // 0=Static, 1=Dynamic, 2=Kinematic
+    public int BodyType { get; set; } = 0; // 0=Static, 1=Kinematic, 2=Dynamic
     public float Mass { get; set; } = 1.0f;
     public float LinearDamping { get; set; } = 0.0f;
     public float AngularDamping { get; set; } = 0.05f;
@@ -102,7 +102,7 @@ public class RigidbodyData
 
 public class Rigidbody2DData
 {
-    public int BodyType { get; set; } = 0; // 0=Static, 1=Dynamic, 2=Kinematic
+    public int BodyType { get; set; } = 0; // 0=Static, 1=Kinematic, 2=Dynamic
     public float GravityScale { get; set; } = 1.0f;
     public float LinearDamping { get; set; } = 0.6f;
     public float AngularDamping { get; set; } = 0.2f;

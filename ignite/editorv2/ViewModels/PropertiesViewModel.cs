@@ -564,7 +564,7 @@ public partial class PointLight2DComponentVM : ComponentEditorViewModel
 // -------------------------------------------------------------
 public partial class RigidbodyComponentVM : ComponentEditorViewModel
 {
-    public static string[] BodyTypeOptions { get; } = ["Static", "Dynamic", "Kinematic"];
+    public static string[] BodyTypeOptions { get; } = ["Static", "Kinematic", "Dynamic"];
     private bool _isUpdating;
 
     [ObservableProperty] private int _bodyType = 0;
@@ -614,7 +614,7 @@ public partial class RigidbodyComponentVM : ComponentEditorViewModel
 // -------------------------------------------------------------
 public partial class Rigidbody2DComponentVM : ComponentEditorViewModel
 {
-    public static string[] BodyTypeOptions { get; } = ["Static", "Dynamic", "Kinematic"];
+    public static string[] BodyTypeOptions { get; } = ["Static", "Kinematic", "Dynamic"];
     private bool _isUpdating;
 
     [ObservableProperty] private int _bodyType = 0;
