@@ -1,0 +1,7 @@
+# Auto-detect text files and perform LF normalization on checkin
+* text=auto
+
+# Docker and shell scripts must preserve LF line endings on Windows
+dockerfile text eol=lf
+[Dd]ockerfile* text eol=lf
+*.sh text eol=lf

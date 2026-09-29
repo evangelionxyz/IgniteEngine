@@ -1427,6 +1427,8 @@ namespace ignite
 
         // Reset everything
         m_ActiveProject.reset();
+        Project::CloseActive();
+
         m_CurrentProjectFilepath.clear();
         m_MainSceneBeforeIsolation.reset();
         m_EditingPrefab.reset();

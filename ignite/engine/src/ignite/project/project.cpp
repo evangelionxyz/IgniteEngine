@@ -164,9 +164,6 @@ R"(<Project>
 
     Project::~Project()
     {
-        m_CoreDependencyWatchers.clear();
-        if (m_ScriptEngine)
-            delete m_ScriptEngine;
     }
 
     std::filesystem::path Project::GetProjectFilepath(const std::filesystem::path &filepath) const

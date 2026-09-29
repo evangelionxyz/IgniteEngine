@@ -402,14 +402,13 @@ namespace ignite
                 sceneCascadeData.shadowStrength = 0.0f;
                 frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
 
-                const glm::vec4 bgColor = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
                 if (targetFramebuffer)
                 {
-                    nvrhi::utils::ClearColorAttachment(cmd, targetFramebuffer, 0, nvrhi::Color(bgColor.r, bgColor.g, bgColor.b, bgColor.a));
+                    nvrhi::utils::ClearColorAttachment(cmd, targetFramebuffer, 0, nvrhi::Color(0.0f));
                 }
                 else
                 {
-                    target->compositeRT->ClearColorAttachmentFloat(cmd, 0, bgColor);
+                    target->compositeRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                 }
 
                 if (target->previousPlan.requiresDebugOverlay && target->debugRT)
@@ -479,10 +478,7 @@ namespace ignite
 
             // Clear Render Targets (feature-gated)
             {
-                const glm::vec4 clearColor = (m_WorldEnvironment && m_WorldEnvironment->environment)
-                    ? glm::vec4(0.0f) : glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
-
-                target->sceneRT->ClearColorAttachmentFloat(cmd, 0, clearColor);
+                target->sceneRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                 if (plan.requiresObjectId || target->previousPlan.requiresObjectId)
                 {
                     target->sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
