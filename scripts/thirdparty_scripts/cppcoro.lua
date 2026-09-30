@@ -19,9 +19,6 @@ project "cppcoro"
         "%{THIRDPARTY_DIR}/cppcoro/include",
 }
 
-defines {
-    "_WIN32_WINNT=0x0A00",
-}
 
 filter "system:windows"
     systemversion "latest"
@@ -36,7 +33,16 @@ filter "system:windows"
         "/wd4244",
         "/permissive-",
     }
-filter {}
+    defines {
+        "CPPCORO_OS_WINNT",
+        "_WIN32_WINNT=0x0A00",
+    }
+
+filter "system:linux"
+    pic "on"
+    defines {
+        "CPPCORO_OS_LINUX"
+    }
 
 filter { "configurations:Debug or Debug-Profiling" }
     runtime "debug"

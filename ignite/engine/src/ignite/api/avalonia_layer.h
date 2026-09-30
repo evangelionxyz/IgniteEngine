@@ -24,15 +24,25 @@ namespace ignite
         void OnUpdate(float deltaTime) override;
         void OnRender(nvrhi::IFramebuffer *mainFramebuffer) override;
         void OnGuiRender() override;
-        void Play();
-        void Simulate();
-        void Stop();
-        void Pause();
-        void StepFrame(int frames);
-        int GetState();
 
-        Ref<Scene> GetCurrentScene();
-        Ref<Scene> GetEditorScene();
+        // Scene Management
+        void SetActiveScene(const Ref<Scene> &scene);
+        bool SceneNew();
+        bool SceneOpen(const std::filesystem::path &filepath);
+        bool SceneSave();
+        bool SceneSave(const std::filesystem::path &filepath);
+        AssetHandle GetCurrentSceneHandle() const { return m_CurrentSceneHandle; }
+        AssetHandle GetActiveSceneHandle() const;
+        const std::filesystem::path &GetCurrentSceneFilePath() const { return m_CurrentSceneFilepath; }
+        bool IsCurrentSceneSaved() const;
+
+        void ScenePlay();
+        void SceneSimulate();
+        void SceneStop();
+        void ScenePause();
+        void SceneStepFrame(int frames);
+        int SceneGetState();
+        Ref<Scene> GetActiveScene();
 
         void OnEvent(Event &e) override;
         void SetNavigationMode(int mode);
@@ -59,16 +69,35 @@ namespace ignite
         using EntitySelectedCallback = void (*)(uint64_t uuid, bool isMultiSelect);
         void SetEntitySelectedCallback(EntitySelectedCallback callback) { m_EntitySelectedCallback = callback; }
 
+        // Project
+        bool ProjectSave();
+        bool ProjectClose();
+
+        void OnOpenProject();
+
     private:
 
         void DrawGizmo();
 
     private:
+        // Project
+        Ref<Project> m_ActiveProject;
+        std::filesystem::path m_CurrentProjectFilepath;
+        AssetHandle m_CurrentProjectAssetHandle = AssetHandle(0);
+
+        // Scenes
+        Ref<Scene> m_EditorScene;
+        Ref<Scene> m_ActiveScene;
+        Ref<Scene> m_MainSceneBeforeIsolation;
 
         Ref<SceneRenderer> m_SceneRenderer;
+        std::filesystem::path m_CurrentSceneFilepath;
+        AssetHandle m_CurrentSceneHandle = AssetHandle(0);
 
-        Ref<Scene> m_FallbackScene;
-        Ref<Scene> m_RuntimeScene;
+        // Prefab
+        Ref<Prefab> m_EditingPrefab;
+        AssetHandle m_EditingPrefabHandle = AssetHandle(0);
+        bool m_IsInPrefabIsolationMode = false;
 
         std::unordered_map<UUID, Entity> m_SelectedEntities;
 

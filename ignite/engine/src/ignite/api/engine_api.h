@@ -83,8 +83,13 @@ IGN_API void     Ignite_Viewport_SetEntitySelectedCallback(IgniteEntitySelectedC
 IGN_API const char *Ignite_Scene_DeserializeHierarchyJson(const char *filepath);
 IGN_API const char *Ignite_Scene_GetActiveHierarchyJson();
 IGN_API bool        Ignite_Scene_Open(const char *filepath);
-IGN_API bool        Ignite_Scene_New();
 IGN_API bool        Ignite_Scene_Save();
+IGN_API bool        Ignite_Scene_SaveAs(const char *filepath);
+IGN_API bool        Ignite_Scene_New();
+IGN_API uint64_t    Ignite_Scene_GetCurrentHandle();
+IGN_API uint64_t    Ignite_Scene_GetActiveHandle();
+IGN_API const char *Ignite_Scene_GetFilePath();
+IGN_API bool        Ignite_Scene_IsSaved();
 IGN_API void        Ignite_Scene_Play();
 IGN_API void        Ignite_Scene_Stop();
 IGN_API void        Ignite_Scene_Simulate();

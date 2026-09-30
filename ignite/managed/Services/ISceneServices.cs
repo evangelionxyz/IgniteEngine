@@ -18,6 +18,11 @@ public interface ISceneService
     void LoadActiveScene();
     bool LoadScene(string filepath);
     bool SaveActiveScene();
+    bool SaveSceneAs(string filepath);
+    ulong GetCurrentSceneHandle();
+    ulong GetActiveSceneHandle();
+    string GetCurrentSceneFilePath();
+    bool IsCurrentSceneSaved();
     void SetEntityTransform(Guid entityId, Vector3 position, Vector3 rotation, Vector3 scale);
     void SetEntitySpriteColor(Guid entityId, Vector4 color);
     void AddComponent(Guid entityId, ComponentType type);

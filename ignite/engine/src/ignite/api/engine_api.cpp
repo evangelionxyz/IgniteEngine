@@ -34,9 +34,30 @@ static std::string s_ProjectDirBuffer;
 static std::string s_ProjectFilePathBuffer;
 static std::string s_ProjectAssetDirBuffer;
 static std::string s_SceneHierarchyBuffer;
+static std::string s_SceneFilePathBuffer;
 
-extern "C" {
+namespace helper
+{
+    static Ref<ignite::Scene> GetActiveScene()
+    {
+        Ref<ignite::Scene> sc;
 
+        if (s_EmbeddedApp && s_EmbeddedApp->GetAvaloniaLayer())
+        {
+            sc = s_EmbeddedApp->GetAvaloniaLayer()->GetActiveScene();
+        }
+
+        if (Ref<ignite::Project> activeProject = ignite::Project::GetActive(); !sc)
+        {
+            return activeProject->LockActiveScene();
+        }
+
+        return sc;
+    }
+}
+
+extern "C"
+{
 IGN_API bool Ignite_Init(const IgniteAppConfig *config)
 {
     if (s_EmbeddedApp)
@@ -142,6 +163,10 @@ IGN_API bool Ignite_Project_New(const char *name, const char *parentDirectory)
     std::thread t([&]() {
         Ref<ignite::Project> proj = ignite::Project::New(nameStr, dirStr);
         success = (proj != nullptr);
+        if (success && s_EmbeddedApp && s_EmbeddedApp->GetAvaloniaLayer())
+        {
+            s_EmbeddedApp->GetAvaloniaLayer()->OnOpenProject();
+        }
     });
 
     if (t.joinable())
@@ -157,24 +182,32 @@ IGN_API bool Ignite_Project_Open(const char *filepath)
     bool success = false;
     std::string pathStr = filepath;
 
-    std::thread t([&]() {
-        Ref<ignite::Project> proj = ignite::Project::Open(pathStr);
-        success = (proj != nullptr);
+    std::thread t([&]()
+    {
+        Ref<ignite::Project> project = ignite::Project::Open(pathStr);
+        success = (project != nullptr);
+        if (success)
+        {
+            s_EmbeddedApp->GetAvaloniaLayer()->OnOpenProject();
+        }
     });
 
     if (t.joinable())
+    {
         t.join();
+    }
+
     return success;
 }
 
 IGN_API bool Ignite_Project_Save()
 {
-    return ignite::Project::SaveActive();
+    return s_EmbeddedApp->ProjectSave();
 }
 
 IGN_API void Ignite_Project_Close()
 {
-    ignite::Project::CloseActive();
+    s_EmbeddedApp->ProjectClose();
 }
 
 IGN_API bool Ignite_Project_IsOpen()
@@ -373,55 +406,52 @@ IGN_API const char *Ignite_Scene_GetActiveHierarchyJson()
 
 IGN_API bool Ignite_Scene_New()
 {
-    Ref<ignite::Project> active = ignite::Project::GetActive();
-    if (!active)
-        return false;
-
-    Ref<ignite::Scene> newScene = ignite::Scene::Create(active.get());
-    if (!newScene)
-        return false;
-
-    active->SetActiveScene(newScene);
-    return true;
+    return s_EmbeddedApp->SceneNew();
 }
 
 IGN_API bool Ignite_Scene_Open(const char *filepath)
 {
-    if (!filepath)
-        return false;
-    
-    Ref<ignite::Project> active = ignite::Project::GetActive();
-    if (!active)
-        return false;
-    
-    Ref<ignite::Scene> loadedScene = ignite::SceneSerializer::Deserialize(filepath, active.get());
-    if (!loadedScene)
-        return false;
-    
-    active->SetActiveScene(loadedScene);
-    return true;
+    return s_EmbeddedApp->SceneOpen(filepath);
 }
 
 IGN_API bool Ignite_Scene_Save()
 {
-    Ref<ignite::Project> active = ignite::Project::GetActive();
-    if (!active)
-        return false;
+    return s_EmbeddedApp->SceneSave();
+}
 
-    Ref<ignite::Scene> scene = active->LockActiveScene();
-    if (!scene)
-        return false;
+IGN_API bool Ignite_Scene_SaveAs(const char *filepath)
+{
+    return s_EmbeddedApp->SceneSave(filepath);
+}
 
-    if (ignite::AssetManager *am = ignite::AssetManager::GetInstance())
+IGN_API uint64_t Ignite_Scene_GetCurrentHandle()
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetCurrentSceneHandle();
+    return 0;
+}
+
+IGN_API uint64_t Ignite_Scene_GetActiveHandle()
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetActiveSceneHandle();
+    return 0;
+}
+
+IGN_API const char *Ignite_Scene_GetFilePath()
+{
+    if (s_EmbeddedApp)
     {
-        const auto &meta = am->GetMetaData(scene->handle);
-        if (!meta.filepath.empty())
-        {
-            std::filesystem::path scenePath = active->GetProjectFilepath(meta.filepath);
-            ignite::SceneSerializer serializer(scene, active.get());
-            return serializer.Serialize(scenePath);
-        }
+        s_SceneFilePathBuffer = s_EmbeddedApp->GetCurrentSceneFilePath().generic_string();
+        return s_SceneFilePathBuffer.c_str();
     }
+    return "";
+}
+
+IGN_API bool Ignite_Scene_IsSaved()
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->IsCurrentSceneSaved();
     return false;
 }
 
@@ -865,60 +895,46 @@ IGN_API bool Ignite_Entity_RemoveComponent(uint64_t uuid, int componentType)
     return true;
 }
 
-static Ref<ignite::Scene> GetActiveSceneHelper()
-{
-    if (s_EmbeddedApp && s_EmbeddedApp->GetAvaloniaLayer())
-    {
-        Ref<ignite::Scene> sc = s_EmbeddedApp->GetAvaloniaLayer()->GetCurrentScene();
-        if (sc) return sc;
-    }
-    if (Ref<ignite::Project> activeProject = ignite::Project::GetActive())
-    {
-        return activeProject->LockActiveScene();
-    }
-    return nullptr;
-}
-
 IGN_API void Ignite_Scene_Play()
 {
     if (s_EmbeddedApp)
-         s_EmbeddedApp->Play();
+         s_EmbeddedApp->ScenePlay();
 }
 
 IGN_API void Ignite_Scene_Stop()
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->Stop();
+        s_EmbeddedApp->SceneStop();
 }
 
 IGN_API void Ignite_Scene_Simulate()
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->Simulate();
+        s_EmbeddedApp->SceneSimulate();
 }
 
 IGN_API void Ignite_Scene_Pause()
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->Pause();
+        s_EmbeddedApp->ScenePause();
 }
 
 IGN_API void Ignite_Scene_StepFrame(int frames)
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->StepFrame(frames);
+        s_EmbeddedApp->SceneStepFrame(frames);
 }
 
 IGN_API int Ignite_Scene_GetState()
 {
     if (s_EmbeddedApp)
-        return s_EmbeddedApp->GetSceneState();
+        return s_EmbeddedApp->SceneGetState();
     return 1;
 }
 
 IGN_API bool Ignite_Entity_SetCamera(uint64_t uuid, bool isPerspective, float fov, float nearPlane, float farPlane, float orthoSize)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::CameraComponent>()) return false;
@@ -934,7 +950,7 @@ IGN_API bool Ignite_Entity_SetCamera(uint64_t uuid, bool isPerspective, float fo
 
 IGN_API bool Ignite_Entity_SetDirectionalLight(uint64_t uuid, float r, float g, float b, float a, float intensity, float shadowDistance, bool castShadows)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::DirectionalLightComponent>()) return false;
@@ -949,7 +965,7 @@ IGN_API bool Ignite_Entity_SetDirectionalLight(uint64_t uuid, float r, float g, 
 
 IGN_API bool Ignite_Entity_SetPointLight(uint64_t uuid, float r, float g, float b, float a, float intensity, float range, bool enabled)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::PointLightComponent>()) return false;
@@ -964,7 +980,7 @@ IGN_API bool Ignite_Entity_SetPointLight(uint64_t uuid, float r, float g, float 
 
 IGN_API bool Ignite_Entity_SetSpotLight(uint64_t uuid, float r, float g, float b, float a, float intensity, float range, float innerCone, float outerCone, bool enabled)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::SpotLightComponent>()) return false;
@@ -981,7 +997,7 @@ IGN_API bool Ignite_Entity_SetSpotLight(uint64_t uuid, float r, float g, float b
 
 IGN_API bool Ignite_Entity_SetPointLight2D(uint64_t uuid, float r, float g, float b, float a, float radius, float intensity, bool enabled)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::PointLight2DComponent>()) return false;
@@ -996,7 +1012,7 @@ IGN_API bool Ignite_Entity_SetPointLight2D(uint64_t uuid, float r, float g, floa
 
 IGN_API bool Ignite_Entity_SetSprite2D(uint64_t uuid, float r, float g, float b, float a, float tilingX, float tilingY, bool flipX, bool flipY)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::Sprite2DComponent>()) return false;
@@ -1011,7 +1027,7 @@ IGN_API bool Ignite_Entity_SetSprite2D(uint64_t uuid, float r, float g, float b,
 
 IGN_API bool Ignite_Entity_SetCircle2D(uint64_t uuid, float r, float g, float b, float a, float thickness, float fade)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::Circle2DComponent>()) return false;
@@ -1025,7 +1041,7 @@ IGN_API bool Ignite_Entity_SetCircle2D(uint64_t uuid, float r, float g, float b,
 
 IGN_API bool Ignite_Entity_SetRigidbody(uint64_t uuid, int bodyType, float mass, float linearDamping, float angularDamping, float friction, float restitution, bool useGravity)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::RigidbodyComponent>()) return false;
@@ -1043,7 +1059,7 @@ IGN_API bool Ignite_Entity_SetRigidbody(uint64_t uuid, int bodyType, float mass,
 
 IGN_API bool Ignite_Entity_SetRigidbody2D(uint64_t uuid, int bodyType, float gravityScale, float linearDamping, float angularDamping, bool fixedRotation, bool isAwake, bool isEnabled)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::Rigidbody2DComponent>()) return false;
@@ -1061,7 +1077,7 @@ IGN_API bool Ignite_Entity_SetRigidbody2D(uint64_t uuid, int bodyType, float gra
 
 IGN_API bool Ignite_Entity_SetBoxCollider(uint64_t uuid, float cx, float cy, float cz, float sx, float sy, float sz)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::BoxColliderComponent>()) return false;
@@ -1074,7 +1090,7 @@ IGN_API bool Ignite_Entity_SetBoxCollider(uint64_t uuid, float cx, float cy, flo
 
 IGN_API bool Ignite_Entity_SetSphereCollider(uint64_t uuid, float cx, float cy, float cz, float radius)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::SphereColliderComponent>()) return false;
@@ -1087,7 +1103,7 @@ IGN_API bool Ignite_Entity_SetSphereCollider(uint64_t uuid, float cx, float cy, 
 
 IGN_API bool Ignite_Entity_SetCapsuleCollider(uint64_t uuid, float cx, float cy, float cz, float radius, float height)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::CapsuleColliderComponent>()) return false;
@@ -1101,7 +1117,7 @@ IGN_API bool Ignite_Entity_SetCapsuleCollider(uint64_t uuid, float cx, float cy,
 
 IGN_API bool Ignite_Entity_SetBoxCollider2D(uint64_t uuid, float ox, float oy, float sx, float sy, float density, float friction, float restitution, bool isSensor)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::BoxCollider2DComponent>()) return false;
@@ -1118,7 +1134,7 @@ IGN_API bool Ignite_Entity_SetBoxCollider2D(uint64_t uuid, float ox, float oy, f
 
 IGN_API bool Ignite_Entity_SetCircleCollider2D(uint64_t uuid, float cx, float cy, float radius, float density, float friction, float restitution, bool isSensor)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::CircleCollider2DComponent>()) return false;
@@ -1135,7 +1151,7 @@ IGN_API bool Ignite_Entity_SetCircleCollider2D(uint64_t uuid, float cx, float cy
 
 IGN_API bool Ignite_Entity_SetCharacterController(uint64_t uuid, float radius, float height, float stepHeight, float slopeAngle, float mass, float friction)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::CharacterControllerComponent>()) return false;
@@ -1152,7 +1168,7 @@ IGN_API bool Ignite_Entity_SetCharacterController(uint64_t uuid, float radius, f
 
 IGN_API bool Ignite_Entity_SetAudioSource(uint64_t uuid, float volume, float pitch, float pan, bool playOnStart, bool loop)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::AudioSourceComponent>()) return false;
@@ -1168,7 +1184,7 @@ IGN_API bool Ignite_Entity_SetAudioSource(uint64_t uuid, float volume, float pit
 
 IGN_API bool Ignite_Entity_SetText(uint64_t uuid, const char *text, float r, float g, float b, float a, float kerning, float lineSpacing, bool screenSpace)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::TextComponent>()) return false;
@@ -1184,7 +1200,7 @@ IGN_API bool Ignite_Entity_SetText(uint64_t uuid, const char *text, float r, flo
 
 IGN_API bool Ignite_Entity_SetWorldEnvironment(uint64_t uuid, float exposure, float gamma, float ambient, float fogDensity, float fr, float fg, float fb, float fa, float fogStart, float fogEnd)
 {
-    auto scene = GetActiveSceneHelper();
+    auto scene = helper::GetActiveScene();
     if (!scene) return false;
     auto entity = ignite::SceneManager::GetEntity(scene.get(), ignite::UUID(uuid));
     if (!entity || !entity.HasComponent<ignite::WorldEnvironment>()) return false;

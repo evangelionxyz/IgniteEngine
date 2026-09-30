@@ -426,14 +426,8 @@ namespace ignite
                 if (plan.requiresGrid)
                 {
                     nvrhi::IFramebuffer *destFb = targetFramebuffer ? targetFramebuffer : target->compositeRT->GetFramebuffer().Get();
-                    if (camera->projectionType == ProjectionType::Orthographic)
-                    {
-                        DrawDebugGrid(cmd, destFb, frameContext, sceneRenderSettings.worldGrid2D, true);
-                    }
-                    else
-                    {
-                        DrawDebugGrid(cmd, destFb, frameContext, sceneRenderSettings.worldGrid3D, false);
-                    }
+                    const auto is2D = camera->projectionType == ProjectionType::Orthographic;
+                    DrawDebugGrid(cmd, destFb, frameContext, is2D ? sceneRenderSettings.worldGrid2D : sceneRenderSettings.worldGrid3D, is2D);
                 }
 
                 if (!targetFramebuffer)
@@ -441,6 +435,7 @@ namespace ignite
                     cmd->setTextureState(*target->compositeRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
                     cmd->commitBarriers();
                 }
+
                 cmd->close();
 
                 {

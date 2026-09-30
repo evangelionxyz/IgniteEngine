@@ -60,6 +60,24 @@ public class EngineSceneService : ISceneService
         return NativeEngineBridge.Ignite_Scene_Save();
     }
 
+    public bool SaveSceneAs(string filepath)
+    {
+        if (string.IsNullOrWhiteSpace(filepath))
+            return false;
+
+        bool saved = NativeEngineBridge.Ignite_Scene_SaveAs(filepath);
+        if (saved)
+        {
+            LoadActiveScene();
+        }
+        return saved;
+    }
+
+    public ulong GetCurrentSceneHandle() => NativeEngineBridge.Ignite_Scene_GetCurrentHandle();
+    public ulong GetActiveSceneHandle() => NativeEngineBridge.Ignite_Scene_GetActiveHandle();
+    public string GetCurrentSceneFilePath() => NativeEngineBridge.GetCurrentSceneFilePath();
+    public bool IsCurrentSceneSaved() => NativeEngineBridge.Ignite_Scene_IsSaved();
+
     private void RegisterEntityRecursive(EntityModel entity)
     {
         _entitiesById[entity.Guid] = entity;

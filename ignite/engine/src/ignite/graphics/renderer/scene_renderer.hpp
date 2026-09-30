@@ -18,13 +18,13 @@ namespace ignite
     class WidgetRenderer;
     class SkeletalMeshComponent;
 
-	struct CameraWidgetInputState
-	{
-		uint32_t mouseX = 0;
-		uint32_t mouseY = 0;
-		bool hovered = false;
-		bool useOverride = false;
-	};
+    struct CameraWidgetInputState
+    {
+        uint32_t mouseX = 0;
+        uint32_t mouseY = 0;
+        bool hovered = false;
+        bool useOverride = false;
+    };
 
     struct RenderPlan
     {
@@ -53,19 +53,20 @@ namespace ignite
         }
     };
 
-	struct CameraRenderTarget
-	{
-		Ref<RenderTarget> sceneRT;         // MSAA render target (sampleCount > 1) or regular
-		        Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
-		        Ref<RenderTarget> selectionRT;     // Single-sample selected-object ID mask for outlines
-		        Ref<RenderTarget> widgetRT;
-		Ref<RenderTarget> compositeRT;
-		Ref<RenderTarget> debugRT;
+    struct CameraRenderTarget
+    {
+        Ref<RenderTarget> sceneRT;         // MSAA render target (sampleCount > 1) or regular
+        Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
+        Ref<RenderTarget> selectionRT;     // Single-sample selected-object ID mask for outlines
+        Ref<RenderTarget> widgetRT;
+        Ref<RenderTarget> compositeRT;
+        Ref<RenderTarget> debugRT;
         Ref<RenderTarget> taaHistoryRT[3];
+
         bool taaHistoryValid = false;
         int msaaSampleCount = 1;           // Tracks the current MSAA sample count (1 = no MSAA)
         RenderPlan previousPlan;
-	};
+    };
 
     class IGN_API SceneRenderer : public ISceneRenderer
     {
@@ -95,7 +96,7 @@ namespace ignite
         int GetDebugShadowMode() const { return m_SceneGPUData.debugShadow; }
         void SetDebugShadowMode(int debugShadow) { m_SceneGPUData.debugShadow = debugShadow; }
 
-		virtual Ref<Texture> GetEnvironmentMapColorTexture() const override;
+        virtual Ref<Texture> GetEnvironmentMapColorTexture() const override;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const override;
 
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap() override;
@@ -115,7 +116,7 @@ namespace ignite
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, nvrhi::IFramebuffer *selectionFramebuffer, bool drawDebug);
         void UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
-		void DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
+        void DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
         void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false, nvrhi::IFramebuffer *targetFramebuffer = nullptr);
 
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D);
@@ -160,7 +161,7 @@ namespace ignite
             nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode, const char *vertexShaderPath, const char *pixelShaderPath,
             EBindingLayout meshLayout, bool transparent);
 
-		Ref<GraphicsPipeline> GetOrCreateCMSPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
+        Ref<GraphicsPipeline> GetOrCreateCMSPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
             nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath,  const char *pixelShaderPath, EBindingLayout meshLayout);
 
         Ref<GraphicsPipeline> GetDebugGridPSO(nvrhi::IFramebuffer *framebuffer);
@@ -168,7 +169,7 @@ namespace ignite
         Ref<GraphicsPipeline> GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None);
 
         Ref<GraphicsPipeline> GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front);
-		Ref<GraphicsPipeline> GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None);
+        Ref<GraphicsPipeline> GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None);
 
         Ref<GraphicsPipeline> GetOrCreateSelectMeshPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
             nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, const char *vertexShaderPath, const char *pixelShaderPath,
@@ -177,8 +178,8 @@ namespace ignite
         Ref<GraphicsPipeline> GetAnimatedSelectPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
         void RenderSelectedEntitiesIDOverlay(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, std::unordered_set<Material *> &uploadedMaterialsThisPass);
 
-		Ref<GraphicsPipeline> GetAnimatedCSMPSO();
-		Ref<GraphicsPipeline> GetStaticCSMPSO();
+        Ref<GraphicsPipeline> GetAnimatedCSMPSO();
+        Ref<GraphicsPipeline> GetStaticCSMPSO();
 
         Ref<GraphicsPipeline> GetEnvironmentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
         Ref<GraphicsPipeline> GetCompositePSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
@@ -188,23 +189,23 @@ namespace ignite
             Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler, bool useResolvedScene = false);
 
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
-		std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);
-		std::vector<Ref<SSAO>> GetOrCreateSSAOs(nvrhi::ICommandList *cmd, ICamera *camera);
+        std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);
+        std::vector<Ref<SSAO>> GetOrCreateSSAOs(nvrhi::ICommandList *cmd, ICamera *camera);
 
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
 
         std::unordered_map<ICamera *, Ref<CameraRenderTarget>> m_RenderTargets;
         std::unordered_map<ICamera *, std::vector<Ref<Bloom>>> m_Blooms;
-		std::unordered_map<ICamera *, std::vector<Ref<SSAO>>> m_SSAOs;
+        std::unordered_map<ICamera *, std::vector<Ref<SSAO>>> m_SSAOs;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentAnimatedPSOCache;
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedCSMPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedCSMPSOCache;
 
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticPSOCache;
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentStaticPSOCache;
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticCSMPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentStaticPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticCSMPSOCache;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_SelectStaticPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_SelectAnimatedPSOCache;

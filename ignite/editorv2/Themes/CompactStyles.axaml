@@ -40,8 +40,8 @@
         <x:Double x:Key="TabItemThemeFontSize">11</x:Double>
 
         <!-- Expander Density Tokens -->
-        <x:Double x:Key="ExpanderMinHeight">24</x:Double>
-        <Thickness x:Key="ExpanderHeaderPadding">4,2,4,2</Thickness>
+        <x:Double x:Key="ExpanderMinHeight">16</x:Double>
+        <Thickness x:Key="ExpanderHeaderPadding">2,2,2,2</Thickness>
 
         <!-- ScrollBar Density Tokens -->
         <x:Double x:Key="ScrollBarSize">8</x:Double>
@@ -275,24 +275,6 @@
         <Setter Property="Height" Value="0" />
     </Style>
 
-    <!-- ========================================================================= -->
-    <!-- Expander                                                                  -->
-    <!-- ========================================================================= -->
-    <Style Selector="Expander">
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        <Setter Property="MinHeight" Value="16" />
-        <Setter Property="FontSize" Value="12" />
-    </Style>
-
-    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-    </Style>
-
-    <Style Selector="Expander /template/ ToggleButton">
-        <Setter Property="MinHeight" Value="12" />
-        <Setter Property="Padding" Value="4,2,4,2" />
-    </Style>
 
     <!-- ========================================================================= -->
     <!-- ScrollBar                                                                 -->
@@ -416,37 +398,165 @@
     <!-- ========================================================================= -->
     <!-- Expander Density & Full-Width Stretch Overrides                           -->
     <!-- ========================================================================= -->
+    <!-- Expander Density & Styling (Compact, Clean, No Accent Color When Opened) -->
+    <!-- ========================================================================= -->
     <Style Selector="Expander">
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="20" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Background" Value="#18191B" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="3" />
     </Style>
 
+    <!-- Header Base (Normal Closed State) -->
     <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="MinHeight" Value="20" />
-        <Setter Property="Padding" Value="4,2" />
-		<Setter Property="Background" Value="#121212" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Padding" Value="4,1" />
+        <Setter Property="Background" Value="#202124" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Foreground" Value="#F0F2F5" />
+        <Setter Property="FontSize" Value="11" />
     </Style>
 
-    <Style Selector="Expander /template/ Border#ExpanderContent">
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="Padding" Value="0" />
-		<Setter Property="Background" Value="#121212" />
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader /template/ Border#ToggleButtonBackground">
+        <Setter Property="Background" Value="#202124" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="3" />
     </Style>
 
-    <Style Selector="Expander /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="#F0F2F5" />
+        <Setter Property="Padding" Value="0" />
     </Style>
 
-    <!-- Expander Chevron Hover Only Visibility -->
+    <!-- Header PointerOver -->
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:pointerover">
+        <Setter Property="Background" Value="#282A2E" />
+        <Setter Property="BorderBrush" Value="#383A40" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:pointerover /template/ Border#ToggleButtonBackground">
+        <Setter Property="Background" Value="#282A2E" />
+        <Setter Property="BorderBrush" Value="#383A40" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <!-- REMOVE ACCENT COLOR WHEN OPENED: Checked State -->
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked">
+        <Setter Property="Background" Value="#202124" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="#F0F2F5" />
+        <Setter Property="CornerRadius" Value="3,3,0,0" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked /template/ Border#ToggleButtonBackground">
+        <Setter Property="Background" Value="#202124" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="3,3,0,0" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="#F0F2F5" />
+    </Style>
+
+    <!-- Checked + PointerOver (Opened + Hover) - NO ACCENT COLOR -->
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked:pointerover">
+        <Setter Property="Background" Value="#282A2E" />
+        <Setter Property="BorderBrush" Value="#383A40" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked:pointerover /template/ Border#ToggleButtonBackground">
+        <Setter Property="Background" Value="#282A2E" />
+        <Setter Property="BorderBrush" Value="#383A40" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <!-- Checked + Pressed (Opened + Pressed) - NO ACCENT COLOR -->
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked:pressed">
+        <Setter Property="Background" Value="#1A1B1D" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="Foreground" Value="#F0F2F5" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked:pressed /template/ Border#ToggleButtonBackground">
+        <Setter Property="Background" Value="#1A1B1D" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="#F0F2F5" />
+    </Style>
+
+    <!-- Expander:expanded pseudo-class (Also ensure NO ACCENT COLOR) -->
+    <Style Selector="Expander:expanded /template/ ToggleButton#ExpanderHeader">
+        <Setter Property="Background" Value="#202124" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="#F0F2F5" />
+        <Setter Property="CornerRadius" Value="3,3,0,0" />
+    </Style>
+    <Style Selector="Expander:expanded /template/ ToggleButton#ExpanderHeader /template/ Border#ToggleButtonBackground">
+        <Setter Property="Background" Value="#202124" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="3,3,0,0" />
+    </Style>
+    <Style Selector="Expander:expanded /template/ ToggleButton#ExpanderHeader /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="#F0F2F5" />
+    </Style>
+
+    <!-- Expander Content Border -->
+    <Style Selector="Expander /template/ Border#ExpanderContent">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="#18191B" />
+        <Setter Property="BorderBrush" Value="#2C2E33" />
+        <Setter Property="BorderThickness" Value="1,0,1,1" />
+        <Setter Property="CornerRadius" Value="0,0,3,3" />
+    </Style>
+
+    <!-- Compact Chevron Dimensions & Visibility -->
     <Style Selector="Expander /template/ ToggleButton#ExpanderHeader /template/ Border#ExpandCollapseChevronBorder">
-        <Setter Property="Opacity" Value="0" />
+        <Setter Property="Width" Value="14" />
+        <Setter Property="Height" Value="14" />
+        <Setter Property="MinHeight" Value="14" />
+        <Setter Property="MinWidth" Value="14" />
+        <Setter Property="Margin" Value="2,0,4,0" />
+        <Setter Property="Opacity" Value="0.6" />
         <Setter Property="Transitions">
             <Transitions>
                 <DoubleTransition Property="Opacity" Duration="0:0:0.1" />
@@ -454,10 +564,19 @@
         </Setter>
     </Style>
     <Style Selector="Expander:pointerover /template/ ToggleButton#ExpanderHeader /template/ Border#ExpandCollapseChevronBorder">
-        <Setter Property="Opacity" Value="1" />
+        <Setter Property="Opacity" Value="1.0" />
     </Style>
+    <Style Selector="Expander:expanded /template/ ToggleButton#ExpanderHeader /template/ Border#ExpandCollapseChevronBorder">
+        <Setter Property="Opacity" Value="0.8" />
+    </Style>
+
     <Style Selector="Expander /template/ ToggleButton#ExpanderHeader /template/ Path#ExpandCollapseChevron">
-        <Setter Property="Opacity" Value="0" />
+        <Setter Property="Width" Value="7" />
+        <Setter Property="Height" Value="7" />
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Opacity" Value="0.6" />
         <Setter Property="Transitions">
             <Transitions>
                 <DoubleTransition Property="Opacity" Duration="0:0:0.1" />
@@ -465,7 +584,10 @@
         </Setter>
     </Style>
     <Style Selector="Expander:pointerover /template/ ToggleButton#ExpanderHeader /template/ Path#ExpandCollapseChevron">
-        <Setter Property="Opacity" Value="1" />
+        <Setter Property="Opacity" Value="1.0" />
+    </Style>
+    <Style Selector="Expander:expanded /template/ ToggleButton#ExpanderHeader /template/ Path#ExpandCollapseChevron">
+        <Setter Property="Opacity" Value="0.85" />
     </Style>
 
     <!-- ========================================================================= -->

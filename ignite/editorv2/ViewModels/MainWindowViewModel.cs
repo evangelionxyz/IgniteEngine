@@ -8,6 +8,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System;
 
 namespace IgniteEditor.ViewModels;
 
@@ -316,6 +317,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (_sceneService.NewScene())
         {
+            CurrentSceneName = "Untitled.ixscene";
             _loggingService.Info("New scene created");
             StatusText = "New scene created";
 
@@ -354,8 +356,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 bool success = _sceneService.LoadScene(path);
                 if (success)
                 {
+                    CurrentSceneName = System.IO.Path.GetFileName(path);
                     SceneHierarchy.RefreshHierarchy();
-                    StatusText = $"Loaded scene: {System.IO.Path.GetFileName(path)}";
+                    StatusText = $"Loaded scene: {CurrentSceneName}";
                     _loggingService.Info($"Scene loaded: {path}");
                 }
                 else
@@ -368,18 +371,82 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SaveScene()
+    private async Task SaveScene()
     {
-        bool ok = _sceneService.SaveActiveScene();
-        if (ok)
+        ulong currentSceneHandle = _sceneService.GetCurrentSceneHandle();
+        ulong activeSceneHandle = _sceneService.GetActiveSceneHandle();
+
+        // 1. Save current scene if the Current Scene Handle is the same with the current scene
+        if (currentSceneHandle != 0 && currentSceneHandle == activeSceneHandle)
         {
-            _loggingService.Info("Scene saved successfully.");
-            StatusText = "Scene saved";
+            bool ok = _sceneService.SaveActiveScene();
+            if (ok)
+            {
+                string scenePath = _sceneService.GetCurrentSceneFilePath();
+                if (!string.IsNullOrEmpty(scenePath))
+                {
+                    CurrentSceneName = System.IO.Path.GetFileName(scenePath);
+                }
+
+                _loggingService.Info("Scene saved successfully.");
+                StatusText = "Scene saved";
+            }
+            else
+            {
+                _loggingService.Error("Failed to save scene.");
+                StatusText = "Failed to save scene";
+            }
         }
         else
         {
-            _loggingService.Error("Failed to save scene.");
-            StatusText = "Failed to save scene";
+            // 2. Open a File Save Dialog to save current scene if the Current Scene Handle is different (not saved yet to disk)
+            await SaveSceneAs();
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveSceneAs()
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
+        {
+            var options = new FilePickerSaveOptions
+            {
+                Title = "Save Ignite Scene As",
+                DefaultExtension = "ixscene",
+                ShowOverwritePrompt = true,
+                FileTypeChoices = new[]
+                {
+                    new FilePickerFileType("Ignite Scene (*.ixscene)")
+                    {
+                        Patterns = ["*.ixscene"]
+                    },
+                    new FilePickerFileType("All Files (*.*)")
+                    {
+                        Patterns = ["*.*"]
+                    }
+                }
+            };
+
+            var file = await desktop.MainWindow.StorageProvider.SaveFilePickerAsync(options);
+            if (file != null)
+            {
+                string filepath = file.Path.LocalPath;
+
+                _loggingService.Info($"Save scene as '{filepath}'");
+                bool success = _sceneService.SaveSceneAs(filepath);
+                if (success)
+                {
+                    CurrentSceneName = System.IO.Path.GetFileName(filepath);
+                    _loggingService.Info($"Scene '{filepath}' saved successfully.");
+                    StatusText = $"Scene saved: {CurrentSceneName}";
+                    SceneHierarchy.RefreshHierarchy();
+                }
+                else
+                {
+                    StatusText = "Failed to save scene";
+                    _loggingService.Error($"Failed to save scene: {filepath}");
+                }
+            }
         }
     }
 
@@ -408,6 +475,12 @@ public partial class MainWindowViewModel : ViewModelBase
                     _loggingService.Info($"Project '{name}' created successfully.");
                     _sceneService.LoadActiveScene();
                     SceneHierarchy.RefreshHierarchy();
+
+                    string scenePath = _sceneService.GetCurrentSceneFilePath();
+                    if (!string.IsNullOrEmpty(scenePath))
+                    {
+                        CurrentSceneName = System.IO.Path.GetFileName(scenePath);
+                    }
                 }
                 else
                 {
@@ -445,6 +518,7 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 string path = files[0].Path.LocalPath;
                 _loggingService.Info($"Opening project: {path}");
+
                 bool success = NativeEngineBridge.Ignite_Project_Open(path);
                 if (success)
                 {
@@ -454,6 +528,12 @@ public partial class MainWindowViewModel : ViewModelBase
                     _loggingService.Info($"Project '{name}' opened successfully.");
                     _sceneService.LoadActiveScene();
                     SceneHierarchy.RefreshHierarchy();
+
+                    string scenePath = _sceneService.GetCurrentSceneFilePath();
+                    if (!string.IsNullOrEmpty(scenePath))
+                    {
+                        CurrentSceneName = System.IO.Path.GetFileName(scenePath);
+                    }
                 }
                 else
                 {
@@ -485,6 +565,24 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             _loggingService.Warn("No active project to save.");
             StatusText = "No active project";
+        }
+    }
+
+    [RelayCommand]
+    private void CloseProject()
+    {
+        if (NativeEngineBridge.Ignite_Project_IsOpen())
+        {
+            // Get Project name and Close
+            var name = Marshal.PtrToStringUTF8(NativeEngineBridge.Ignite_Project_GetName()) ?? "";
+            NativeEngineBridge.Ignite_Project_Close();
+
+            // Refresh the Scene Hierarchy
+            _sceneService.LoadActiveScene();
+            SceneHierarchy.RefreshHierarchy();
+
+            _loggingService.Info($"Project '{name}' closed");
+            StatusText = $"Project '{name}' closed";
         }
     }
 }

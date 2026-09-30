@@ -283,10 +283,26 @@ public class MockSceneService : ISceneService
         return true;
     }
 
+    private ulong _currentSceneHandle = 1;
+    private ulong _activeSceneHandle = 1;
+    private string _currentSceneFilePath = "MockScene.ixscene";
+
     public bool SaveActiveScene()
     {
         return true;
     }
+
+    public bool SaveSceneAs(string filepath)
+    {
+        _currentSceneFilePath = filepath;
+        _currentSceneHandle = _activeSceneHandle;
+        return true;
+    }
+
+    public ulong GetCurrentSceneHandle() => _currentSceneHandle;
+    public ulong GetActiveSceneHandle() => _activeSceneHandle;
+    public string GetCurrentSceneFilePath() => _currentSceneFilePath;
+    public bool IsCurrentSceneSaved() => _currentSceneHandle != 0 && _currentSceneHandle == _activeSceneHandle;
 
     public void SetEntityTransform(Guid entityId, Vector3 position, Vector3 rotation, Vector3 scale)
     {

@@ -149,6 +149,27 @@
             <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="#121417" />
             <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="#121417" />
 
+            <!-- Expander Theme Brushes (Neutral dark surface, no accent color on open) -->
+            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#202124" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#282A2E" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#1E2023" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="#18191B" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#2C2E33" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#383A40" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#2C2E33" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ExpanderHeaderForeground" Color="#F0F2F5" />
+            <SolidColorBrush x:Key="ExpanderHeaderForegroundPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderForegroundPressed" Color="#F0F2F5" />
+            <SolidColorBrush x:Key="ExpanderHeaderForegroundDisabled" Color="#707582" />
+            <SolidColorBrush x:Key="ExpanderChevronForeground" Color="#A0A4B0" />
+            <SolidColorBrush x:Key="ExpanderChevronForegroundPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderChevronForegroundPressed" Color="#F0F2F5" />
+            <SolidColorBrush x:Key="ExpanderChevronForegroundDisabled" Color="#555861" />
+            <SolidColorBrush x:Key="ExpanderContentBackground" Color="#18191B" />
+            <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#2C2E33" />
+            <SolidColorBrush x:Key="ExpanderContentForeground" Color="#F0F2F5" />
+
             <!-- TabItem State Brushes & Dimensions -->
             <SolidColorBrush x:Key="TabItemHeaderSelectedPipeFill" Color="Transparent" />
             <SolidColorBrush x:Key="TabItemPipeFill" Color="Transparent" />
@@ -376,6 +397,38 @@
             <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#202124" />
             <Color x:Key="SubtleFillColorDisabled">#00000000</Color>
             <SolidColorBrush x:Key="SubtleFillColorDisabledBrush" Color="Transparent" />
+
+            <!-- ToggleButton State Brushes -->
+            <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="#D1FE17" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="#DBFE40" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="#B8E312" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushChecked" Color="#D1FE17" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPointerOver" Color="#DBFE40" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPressed" Color="#B8E312" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="#121417" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="#121417" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="#121417" />
+
+            <!-- Expander Theme Brushes (Neutral dark surface, no accent color on open) -->
+            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#202124" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#282A2E" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#1E2023" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="#18191B" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#2C2E33" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#383A40" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#2C2E33" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ExpanderHeaderForeground" Color="#F0F2F5" />
+            <SolidColorBrush x:Key="ExpanderHeaderForegroundPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderForegroundPressed" Color="#F0F2F5" />
+            <SolidColorBrush x:Key="ExpanderHeaderForegroundDisabled" Color="#707582" />
+            <SolidColorBrush x:Key="ExpanderChevronForeground" Color="#A0A4B0" />
+            <SolidColorBrush x:Key="ExpanderChevronForegroundPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderChevronForegroundPressed" Color="#F0F2F5" />
+            <SolidColorBrush x:Key="ExpanderChevronForegroundDisabled" Color="#555861" />
+            <SolidColorBrush x:Key="ExpanderContentBackground" Color="#18191B" />
+            <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#2C2E33" />
+            <SolidColorBrush x:Key="ExpanderContentForeground" Color="#F0F2F5" />
 
             <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#253310" />
             <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#2F4216" />

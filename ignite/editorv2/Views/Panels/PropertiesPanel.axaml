@@ -12,23 +12,56 @@
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="MinHeight" Value="20" />
+            <Setter Property="FontSize" Value="11" />
         </Style>
         <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Padding" Value="4,1" />
             <Setter Property="MinHeight" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Background" Value="#202124" />
+            <Setter Property="BorderBrush" Value="#2C2E33" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Foreground" Value="#F0F2F5" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+        <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked">
+            <Setter Property="Background" Value="#202124" />
+            <Setter Property="BorderBrush" Value="#2C2E33" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#F0F2F5" />
+            <Setter Property="CornerRadius" Value="3,3,0,0" />
+        </Style>
+        <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#F0F2F5" />
+        </Style>
+        <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
         </Style>
         <Style Selector="Expander /template/ Border#ExpanderContent">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#18191B" />
+            <Setter Property="BorderBrush" Value="#2C2E33" />
+            <Setter Property="BorderThickness" Value="1,0,1,1" />
+            <Setter Property="CornerRadius" Value="0,0,3,3" />
         </Style>
         <Style Selector="Expander /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0" />
         </Style>
         <Style Selector="ItemsControl > ContentPresenter">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -36,22 +69,22 @@
         </Style>
     </UserControl.Styles>
 
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="6,4"
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="4,3"
                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-        <StackPanel Spacing="3" HorizontalAlignment="Stretch">
+        <StackPanel Spacing="2" HorizontalAlignment="Stretch">
             <!-- No selection message -->
             <TextBlock Text="Select an entity to inspect"
                        IsVisible="{Binding !HasSelection}"
-                       Foreground="#808080" FontSize="12"
+                       Foreground="#808080" FontSize="11"
                        HorizontalAlignment="Center" Margin="0,20" />
 
             <!-- Entity header -->
-            <StackPanel IsVisible="{Binding HasSelection}" Spacing="4" HorizontalAlignment="Stretch">
+            <StackPanel IsVisible="{Binding HasSelection}" Spacing="3" HorizontalAlignment="Stretch">
                 <Grid ColumnDefinitions="Auto,*,Auto" HorizontalAlignment="Stretch">
                     <CheckBox Grid.Column="0" IsChecked="{Binding IsEntityActive}" 
                               Margin="0,0,6,0" MinWidth="11" MinHeight="11" Padding="0" />
                     <TextBox Grid.Column="1" Text="{Binding EntityName}" 
-                             FontSize="11" Height="22" MinHeight="22" Padding="4,2"
+                             FontSize="11" Height="20" MinHeight="20" Padding="4,1"
                              HorizontalAlignment="Stretch" VerticalContentAlignment="Center" />
                 </Grid>
 
@@ -59,10 +92,10 @@
 
                 <!-- Components -->
                 <ItemsControl ItemsSource="{Binding Components}" 
-                              HorizontalAlignment="Stretch">
+                               HorizontalAlignment="Stretch">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel Spacing="3" HorizontalAlignment="Stretch" />
+                            <StackPanel Spacing="2" HorizontalAlignment="Stretch" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.DataTemplates>
@@ -71,9 +104,9 @@
                             <Expander IsExpanded="{Binding IsExpanded}" Padding="0" Margin="0,1"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
-                                    <TextBlock Text="Transform" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <TextBlock Text="Transform" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:Vector3Control Label="Position" 
                                                          X="{Binding PositionX}" 
                                                          Y="{Binding PositionY}" 
@@ -99,7 +132,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="Camera" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="Camera" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -110,7 +143,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
                                         <TextBlock Text="Perspective" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
                                         <CheckBox Grid.Column="1" IsChecked="{Binding IsPerspective}" MinHeight="16" Padding="0" />
@@ -129,7 +162,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -140,7 +173,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="4" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:ColorPickerControl SelectedColor="{Binding ColorValue, Mode=TwoWay}" />
                                     <ctrl:Vector2Control Label="Tiling" X="{Binding TilingX}" Y="{Binding TilingY}" DefaultX="1" DefaultY="1" Step="0.1" />
                                     <Grid ColumnDefinitions="70,*,Auto,*" Margin="0,1" HorizontalAlignment="Stretch">
@@ -159,7 +192,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -170,7 +203,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="4" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
                                     <ctrl:FloatControl Label="Thickness" Value="{Binding Thickness}" DefaultValue="1" Minimum="0" Maximum="1" Step="0.05" />
                                     <ctrl:FloatControl Label="Fade" Value="{Binding Fade}" DefaultValue="0.005" Minimum="0" Maximum="1" Step="0.005" />
@@ -184,7 +217,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -195,13 +228,8 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
-
-
-
-
-
                                     <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
                                     <ctrl:FloatControl Label="Shadow Dist" Value="{Binding ShadowDistance}" DefaultValue="200" Minimum="1" Step="10" />
                                     <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
@@ -218,7 +246,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -229,7 +257,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
                                     <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
                                     <ctrl:FloatControl Label="Range" Value="{Binding Range}" DefaultValue="10" Minimum="0.1" Step="1" />
@@ -247,7 +275,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -258,7 +286,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
                                     <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
                                     <ctrl:FloatControl Label="Range" Value="{Binding Range}" DefaultValue="10" Minimum="0.1" Step="1" />
@@ -278,7 +306,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -289,7 +317,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:ColorPickerPropertyControl Label="Color" Value="{Binding ColorValue}" />
                                     <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="5" Minimum="0.1" Step="0.5" />
                                     <ctrl:FloatControl Label="Intensity" Value="{Binding Intensity}" DefaultValue="1" Minimum="0" Step="0.1" />
@@ -307,7 +335,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -318,7 +346,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
                                         <TextBlock Text="Body Type" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
                                         <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RigidbodyComponentVM.BodyTypeOptions}" 
@@ -343,7 +371,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -354,7 +382,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <Grid ColumnDefinitions="70,*,18" Margin="0,1" HorizontalAlignment="Stretch">
                                         <TextBlock Text="Body Type" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
                                         <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:Rigidbody2DComponentVM.BodyTypeOptions}" 
@@ -385,7 +413,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -396,7 +424,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:Vector3Control Label="Center" X="{Binding CenterX}" Y="{Binding CenterY}" Z="{Binding CenterZ}" DefaultX="0" DefaultY="0" DefaultZ="0" />
                                     <ctrl:Vector3Control Label="Size" X="{Binding SizeX}" Y="{Binding SizeY}" Z="{Binding SizeZ}" DefaultX="1" DefaultY="1" DefaultZ="1" />
                                 </StackPanel>
@@ -409,7 +437,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -420,7 +448,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:Vector3Control Label="Center" X="{Binding CenterX}" Y="{Binding CenterY}" Z="{Binding CenterZ}" DefaultX="0" DefaultY="0" DefaultZ="0" />
                                     <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="1" Minimum="0.001" Step="0.1" />
                                 </StackPanel>
@@ -433,7 +461,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -444,7 +472,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:Vector3Control Label="Center" X="{Binding CenterX}" Y="{Binding CenterY}" Z="{Binding CenterZ}" DefaultX="0" DefaultY="0" DefaultZ="0" />
                                     <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="0.5" Minimum="0.001" Step="0.1" />
                                     <ctrl:FloatControl Label="Height" Value="{Binding Height}" DefaultValue="2" Minimum="0.001" Step="0.2" />
@@ -458,7 +486,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -469,7 +497,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:Vector2Control Label="Offset" X="{Binding OffsetX}" Y="{Binding OffsetY}" DefaultX="0" DefaultY="0" Step="0.1" />
                                     <ctrl:Vector2Control Label="Size" X="{Binding SizeX}" Y="{Binding SizeY}" DefaultX="0.5" DefaultY="0.5" Step="0.1" />
                                     <ctrl:FloatControl Label="Density" Value="{Binding Density}" DefaultValue="1" Minimum="0.001" Step="0.1" />
@@ -489,7 +517,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -500,7 +528,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:Vector2Control Label="Center" X="{Binding CenterX}" Y="{Binding CenterY}" DefaultX="0" DefaultY="0" Step="0.1" />
                                     <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="0.5" Minimum="0.001" Step="0.05" />
                                     <ctrl:FloatControl Label="Density" Value="{Binding Density}" DefaultValue="1" Minimum="0.001" Step="0.1" />
@@ -520,7 +548,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -531,7 +559,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:FloatControl Label="Radius" Value="{Binding Radius}" DefaultValue="0.5" Minimum="0.01" Step="0.05" />
                                     <ctrl:FloatControl Label="Height" Value="{Binding Height}" DefaultValue="2" Minimum="0.1" Step="0.1" />
                                     <ctrl:FloatControl Label="Step Height" Value="{Binding StepHeight}" DefaultValue="0.4" Minimum="0" Step="0.05" />
@@ -548,7 +576,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -559,7 +587,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:FloatControl Label="Volume" Value="{Binding Volume}" DefaultValue="1" Minimum="0" Maximum="1" Step="0.05" />
                                     <ctrl:FloatControl Label="Pitch" Value="{Binding Pitch}" DefaultValue="1" Minimum="0.1" Maximum="3" Step="0.05" />
                                     <ctrl:FloatControl Label="Pan" Value="{Binding Pan}" DefaultValue="0" Minimum="-1" Maximum="1" Step="0.1" />
@@ -581,7 +609,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -592,7 +620,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <Grid ColumnDefinitions="70,*" Margin="0,1" HorizontalAlignment="Stretch">
                                         <TextBlock Text="Text" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
                                         <TextBox Grid.Column="1" Text="{Binding Text}" FontSize="11" Height="22" MinHeight="22" Padding="4,2"
@@ -615,7 +643,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -626,7 +654,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <ctrl:FloatControl Label="Exposure" Value="{Binding Exposure}" DefaultValue="1.1" Minimum="0" Step="0.05" />
                                     <ctrl:FloatControl Label="Gamma" Value="{Binding Gamma}" DefaultValue="2.2" Minimum="0.1" Step="0.1" />
                                     <ctrl:FloatControl Label="Ambient" Value="{Binding Ambient}" DefaultValue="0.5" Minimum="0" Step="0.05" />
@@ -644,7 +672,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -655,7 +683,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <StackPanel Spacing="3" Margin="6,4" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="3" Margin="5,3" HorizontalAlignment="Stretch">
                                     <Grid ColumnDefinitions="70,*" Margin="0,1" HorizontalAlignment="Stretch">
                                         <TextBlock Text="Class Name" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
                                         <TextBox Grid.Column="1" Text="{Binding ClassName}" FontSize="11" Height="22" MinHeight="22" Padding="4,2"
@@ -671,7 +699,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="0" Text="{Binding ComponentName}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Classes="comp-more-btn" Margin="0,0,2,0" ToolTip.Tip="Component Options">
                                             <PathIcon Data="{StaticResource IconMoreVertical}" Width="12" Height="12" />
                                             <Button.Flyout>
@@ -682,7 +710,7 @@
                                         </Button>
                                     </Grid>
                                 </Expander.Header>
-                                <TextBlock Text="(No editable properties)" FontSize="11" Foreground="#808080" Margin="6,4" />
+                                <TextBlock Text="(No editable properties)" FontSize="11" Foreground="#808080" Margin="5,3" />
                             </Expander>
                         </DataTemplate>
                     </ItemsControl.DataTemplates>

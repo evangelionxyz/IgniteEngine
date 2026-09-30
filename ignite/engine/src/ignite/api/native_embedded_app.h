@@ -9,6 +9,7 @@
 namespace ignite
 {
     class AvaloniaLayer;
+    class Scene;
 
     class NativeEmbeddedApp final : public Application
     {
@@ -18,12 +19,27 @@ namespace ignite
         void SetCameraNavigationMode(int mode);
         int GetCameraNavigationMode() const;
 
-        void Play();
-        void Simulate();
-        void Stop();
-        void Pause();
-        void StepFrame(int frames);
-        int GetSceneState() const;
+        // Scene Management
+        void SetActiveScene(const Ref<Scene> &scene);
+        bool SceneNew();
+        bool SceneOpen(const std::filesystem::path &filepath);
+        bool SceneSave();
+        bool SceneSave(const std::filesystem::path &filepath);
+        uint64_t GetCurrentSceneHandle() const;
+        uint64_t GetActiveSceneHandle() const;
+        const std::filesystem::path &GetCurrentSceneFilePath() const;
+        bool IsCurrentSceneSaved() const;
+
+        void ScenePlay();
+        void SceneSimulate();
+        void SceneStop();
+        void ScenePause();
+        void SceneStepFrame(int frames);
+        int SceneGetState() const;
+
+        // Project
+        bool ProjectSave();
+        bool ProjectClose();
 
         uint64_t PickEntity(float mouseX, float mouseY, uint32_t viewportWidth, uint32_t viewportHeight, bool isDoubleClick, bool isShiftDown);
         void SetSelectedEntity(uint64_t uuid);

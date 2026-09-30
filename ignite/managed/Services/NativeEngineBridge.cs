@@ -155,13 +155,36 @@ public static class NativeEngineBridge
     [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool Ignite_Scene_Open(string filepath);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool Ignite_Scene_Save();
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool Ignite_Scene_SaveAs(string filepath);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool Ignite_Scene_New();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern ulong Ignite_Scene_GetCurrentHandle();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern ulong Ignite_Scene_GetActiveHandle();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr Ignite_Scene_GetFilePath();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool Ignite_Scene_IsSaved();
+
+    public static string GetCurrentSceneFilePath()
+    {
+        var ptr = Ignite_Scene_GetFilePath();
+        return ptr == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(ptr) ?? "";
+    }
 
     public static string GetActiveSceneHierarchyJson()
     {

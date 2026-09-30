@@ -26,22 +26,124 @@ namespace ignite
     void NativeEmbeddedApp::SetCameraNavigationMode(int mode)
     {
         if (m_AvaloniaLayer)
+        {
             m_AvaloniaLayer->SetNavigationMode(mode);
+        }
     }
 
     int NativeEmbeddedApp::GetCameraNavigationMode() const
     {
         if (m_AvaloniaLayer)
+        {
             return m_AvaloniaLayer->GetNavigationMode();
+        }
         return 0;
     }
 
-    void NativeEmbeddedApp::Play() { if (m_AvaloniaLayer) m_AvaloniaLayer->Play(); }
-    void NativeEmbeddedApp::Simulate() { if (m_AvaloniaLayer) m_AvaloniaLayer->Simulate(); }
-    void NativeEmbeddedApp::Stop() { if (m_AvaloniaLayer) m_AvaloniaLayer->Stop(); }
-    void NativeEmbeddedApp::Pause() { if (m_AvaloniaLayer) m_AvaloniaLayer->Pause(); }
-    void NativeEmbeddedApp::StepFrame(int frames) { if (m_AvaloniaLayer) m_AvaloniaLayer->StepFrame(frames); }
-    int NativeEmbeddedApp::GetSceneState() const { return m_AvaloniaLayer ? m_AvaloniaLayer->GetState() : static_cast<int>(ESceneState::Stop); }
+    void NativeEmbeddedApp::SetActiveScene(const Ref<Scene> &scene)
+    {
+        if (m_AvaloniaLayer)
+        {
+            m_AvaloniaLayer->SetActiveScene(scene);
+        }
+    }
+
+    bool NativeEmbeddedApp::SceneNew()
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->SceneNew() : false;
+    }
+
+    bool NativeEmbeddedApp::SceneOpen(const std::filesystem::path &filepath)
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->SceneOpen(filepath) : false;
+    }
+
+    bool NativeEmbeddedApp::SceneSave()
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->SceneSave() : false;
+    }
+
+    bool NativeEmbeddedApp::SceneSave(const std::filesystem::path &filepath)
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->SceneSave(filepath) : false;
+    }
+
+    uint64_t NativeEmbeddedApp::GetCurrentSceneHandle() const
+    {
+        return m_AvaloniaLayer ? static_cast<uint64_t>(m_AvaloniaLayer->GetCurrentSceneHandle()) : 0;
+    }
+
+    uint64_t NativeEmbeddedApp::GetActiveSceneHandle() const
+    {
+        return m_AvaloniaLayer ? static_cast<uint64_t>(m_AvaloniaLayer->GetActiveSceneHandle()) : 0;
+    }
+
+    const std::filesystem::path &NativeEmbeddedApp::GetCurrentSceneFilePath() const
+    {
+        static const std::filesystem::path s_EmptyPath;
+        return m_AvaloniaLayer ? m_AvaloniaLayer->GetCurrentSceneFilePath() : s_EmptyPath;
+    }
+
+    bool NativeEmbeddedApp::IsCurrentSceneSaved() const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->IsCurrentSceneSaved() : false;
+    }
+
+
+    void NativeEmbeddedApp::ScenePlay()
+    {
+        if (m_AvaloniaLayer)
+        {
+            m_AvaloniaLayer->ScenePlay();
+        }
+    }
+
+    void NativeEmbeddedApp::SceneSimulate()
+    {
+        if (m_AvaloniaLayer)
+        {
+            m_AvaloniaLayer->SceneSimulate();
+        }
+    }
+
+    void NativeEmbeddedApp::SceneStop()
+    {
+        if (m_AvaloniaLayer)
+        {
+            m_AvaloniaLayer->SceneStop();
+        }
+    }
+
+    void NativeEmbeddedApp::ScenePause()
+    {
+        if (m_AvaloniaLayer)
+        {
+            m_AvaloniaLayer->ScenePause();
+        }
+    }
+
+    void NativeEmbeddedApp::SceneStepFrame(int frames)
+    {
+        if (m_AvaloniaLayer)
+        {
+            m_AvaloniaLayer->SceneStepFrame(frames);
+        }
+    }
+
+    int NativeEmbeddedApp::SceneGetState() const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->SceneGetState() : static_cast<int>(ESceneState::Stop);
+    }
+
+    bool NativeEmbeddedApp::ProjectSave()
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->ProjectSave() : false;
+    }
+
+    bool NativeEmbeddedApp::ProjectClose()
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->ProjectClose() : false;
+    }
 
     uint64_t NativeEmbeddedApp::PickEntity(float mouseX, float mouseY, uint32_t viewportWidth, uint32_t viewportHeight, bool isDoubleClick, bool isShiftDown)
     {

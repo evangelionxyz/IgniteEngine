@@ -13,7 +13,11 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/scene/scene_manager.hpp"
+#include "ignite/asset/asset_worker.hpp"
+#include "ignite/serializer/scene_serializer.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/scene/prefab.hpp"
+#include "ignite/graphics/ui/game_ui_system.hpp"
 
 #ifndef IMGUI_DEFINE_MATH_OPERATORS
     #define IMGUI_DEFINE_MATH_OPERATORS
@@ -54,13 +58,11 @@ namespace ignite
     void AvaloniaLayer::OnAttach()
     {
         m_SceneRenderer = CreateRef<SceneRenderer>();
-        m_FallbackScene = Scene::Create(nullptr);
     }
 
     void AvaloniaLayer::OnDetach()
     {
         m_SceneRenderer = nullptr;
-        m_FallbackScene = nullptr;
     }
 
     void AvaloniaLayer::Resize(uint32_t width, uint32_t height)
@@ -73,7 +75,7 @@ namespace ignite
     void AvaloniaLayer::OnUpdate(float deltaTime)
     {
         // Update Scene
-        if (Ref<Scene> activeScene = GetCurrentScene())
+        if (Ref<Scene> activeScene = GetActiveScene())
         {
             switch (activeScene->GetState())
             {
@@ -91,55 +93,52 @@ namespace ignite
                     break;
                 }
             }
-        }
 
-        // Camera update using SDL3 InputSystem
-        if (!ImGui::GetIO().WantCaptureMouse && !ImGui::GetIO().WantCaptureKeyboard)
-        {
-            m_EditorCamera.UpdateMouseState();
-            switch (m_EditorCamera.GetNavigationMode())
+            // Camera update using SDL3 InputSystem
+            if (!ImGui::GetIO().WantCaptureMouse && !ImGui::GetIO().WantCaptureKeyboard)
             {
-            case EditorCamera::NavigationMode::Fly:
-                m_EditorCamera.HandleFly(deltaTime);
-                m_EditorCamera.HandlePan(deltaTime);
-                m_EditorCamera.HandleZoom(deltaTime);
-                break;
-            case EditorCamera::NavigationMode::Mode2D:
-                m_EditorCamera.HandlePan(deltaTime);
-                m_EditorCamera.HandleZoom(deltaTime);
-                break;
-            case EditorCamera::NavigationMode::Orbit:
-            default:
-                m_EditorCamera.HandleOrbit(deltaTime);
-                m_EditorCamera.HandlePan(deltaTime);
-                m_EditorCamera.HandleZoom(deltaTime);
-                break;
-            }
-            
-        }
+                m_EditorCamera.UpdateMouseState();
+                switch (m_EditorCamera.GetNavigationMode())
+                {
+                case EditorCamera::NavigationMode::Fly:
+                    m_EditorCamera.HandleFly(deltaTime);
+                    m_EditorCamera.HandlePan(deltaTime);
+                    m_EditorCamera.HandleZoom(deltaTime);
+                    break;
+                case EditorCamera::NavigationMode::Mode2D:
+                    m_EditorCamera.HandlePan(deltaTime);
+                    m_EditorCamera.HandleZoom(deltaTime);
+                    break;
+                case EditorCamera::NavigationMode::Orbit:
+                default:
+                    m_EditorCamera.HandleOrbit(deltaTime);
+                    m_EditorCamera.HandlePan(deltaTime);
+                    m_EditorCamera.HandleZoom(deltaTime);
+                    break;
+                }
 
-        m_EditorCamera.ApplyInertia(deltaTime);
-        m_EditorCamera.UpdateCameraPosition(deltaTime);
-        m_EditorCamera.UpdateView();
+            }
+
+            m_EditorCamera.ApplyInertia(deltaTime);
+            m_EditorCamera.UpdateCameraPosition(deltaTime);
+            m_EditorCamera.UpdateView();
+        }
     }
 
     void AvaloniaLayer::OnRender(nvrhi::IFramebuffer *mainFramebuffer)
     {
-        if (!m_SceneRenderer)
-            return;
-
-        Ref<Scene> activeScene = GetCurrentScene();
-        if (!activeScene)
+        Ref<Scene> activeScene = GetActiveScene();
+        if (!m_SceneRenderer || !activeScene)
             return;
 
         ICamera *cameraToUse = &m_EditorCamera;
-
         m_SceneRenderer->ResizeFramebuffer(cameraToUse, m_Width, m_Height);
         m_SceneRenderer->SetActiveScene(activeScene);
         m_SceneRenderer->BeginFrame();
 
+        constexpr bool drawDebug = true;
         FrameContext *frameContext = Renderer::GetCurrentFrameContext();
-        m_SceneRenderer->Render(cameraToUse, frameContext, false, mainFramebuffer);
+        m_SceneRenderer->Render(cameraToUse, frameContext, drawDebug, mainFramebuffer);
     }
 
     void AvaloniaLayer::OnGuiRender()
@@ -147,73 +146,316 @@ namespace ignite
         // DrawGizmo();
     }
 
-    void AvaloniaLayer::Play()
+    void AvaloniaLayer::SetActiveScene(const Ref<Scene> &scene)
     {
-        Stop();
-        if (Ref<Scene> editorScene = GetEditorScene())
+        if (!scene || m_ActiveScene == scene)
+            return;
+
+        // Update active scene
+        if (auto project = Project::GetActive())
         {
-            m_RuntimeScene = SceneManager::Copy(editorScene);
-            m_RuntimeScene->OnStart(ESceneState::Play);
+            scene->PreloadReferencedAssets();
+        }
+
+        // Clear references in all systems before changing active scene
+        m_SceneRenderer->SetActiveScene(nullptr); // null will clear
+        if (auto project = Project::GetActive())
+        {
+            project->SetActiveScene(scene);
+        }
+
+        // Set new scene
+        m_ActiveScene = scene;
+
+        // Update all systems with new scene
+        m_SceneRenderer->SetActiveScene(scene);
+        GameUISystem::SetSceneContext(scene.get());
+    }
+
+    bool AvaloniaLayer::SceneNew()
+    {
+        SceneStop();
+
+        m_CurrentSceneFilepath.clear();
+        m_CurrentSceneHandle = AssetHandle(0);
+
+        // Clear active scene first to release references in renderer
+        SetActiveScene(nullptr);
+
+        // Reset scenes - this should trigger destructor
+        m_EditorScene.reset();
+        m_ActiveScene.reset();
+
+        // Unload unused assets (assets not referenced by anything else)
+        if (m_ActiveProject)
+        {
+            AssetManager::GetInstance()->UnloadUnusedAssets();
+
+            // Create new editor scene
+            m_EditorScene = Scene::Create(m_ActiveProject.get());
+            m_EditorScene->handle = AssetHandle();
+
+            // Set as active scene
+            SetActiveScene(m_EditorScene);
+            return true;
+        }
+
+        LOG_ASSERT(m_ActiveProject, "Invalid project!");
+        LOG_ASSERT(m_ActiveScene, "Failed to create new scene!");
+
+        return false;
+    }
+
+    bool AvaloniaLayer::SceneOpen(const std::filesystem::path &filepath)
+    {
+        const AssetHandle sceneHandle = AssetManager::GetInstance()->GetAssetHandle(filepath);
+        if (m_CurrentSceneHandle == sceneHandle && m_CurrentSceneHandle != AssetHandle(0))
+        {
+            LOG_WARN("Dismiss opening current scene {0}", filepath.generic_string());
+            return false;
+        }
+
+        m_CurrentSceneHandle = sceneHandle;
+
+        // Submit heavy I/O work to asset worker
+        AssetWorker::SubmitJob([this, filepath, sceneHandle]()
+        {
+            AssetWorker::ReportStatus(std::format("Loading scene {}...", filepath.filename().string()), 0.5f);
+
+            // Load scene on worker thread (I/O happens here)
+            Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
+            if (loadedScene)
+            {
+                loadedScene->handle = sceneHandle;
+
+                // Submit UI update back to main thread
+                Application::SubmitToMainThread([this, loadedScene, filepath, sceneHandle]() mutable
+                {
+                    // Stop scene
+                    if (m_EditorScene)
+                        m_EditorScene->OnStop();
+
+                    if (m_ActiveScene)
+                        m_ActiveScene->OnStop();
+
+                    // Clear active scene references
+                    SetActiveScene(nullptr);
+
+                    // Reset old scene
+                    m_EditorScene.reset();
+                    m_ActiveScene.reset();
+
+                    // Unload unused assets
+                    if (m_ActiveProject)
+                    {
+                        AssetManager::GetInstance()->UnloadUnusedAssets();
+                    }
+
+                    // Copy and activate new scene
+                    m_EditorScene = SceneManager::Copy(loadedScene);
+                    m_EditorScene->handle = sceneHandle;
+                    m_EditorScene->SetDirtyFlag(false);
+
+                    SetActiveScene(m_EditorScene);
+
+                    m_CurrentSceneFilepath = filepath;
+                    m_CurrentSceneHandle = sceneHandle;
+
+                    AssetWorker::ReportStatus("Ready", 0.0f);
+                });
+            }
+            else
+            {
+                LOG_ASSERT(false, "Failed to load scene: {}", filepath.generic_string());
+            }
+        });
+
+        return true;
+    }
+
+    bool AvaloniaLayer::SceneSave()
+    {
+        // Save Prefab Scene
+        if (m_IsInPrefabIsolationMode)
+        {
+            if (m_EditingPrefabHandle != AssetHandle(0))
+            {
+                // Get filepath to serialize
+                const auto &filepath = AssetManager::GetInstance()->GetFilepath(m_EditingPrefabHandle);
+                const auto &absPath = m_ActiveProject->GetProjectFilepath(filepath);
+
+                if (std::filesystem::exists(absPath))
+                {
+                    return m_EditingPrefab->Serialize(absPath);
+                }
+            }
+
+            return false;
+        }
+
+        // Main Scene:
+        // 1. Save current scene if the Current Scene Handle is the same with the current scene
+        Ref<Scene> currentScene = m_EditorScene ? m_EditorScene : m_ActiveScene;
+        const AssetHandle activeSceneHandle = currentScene ? currentScene->handle : AssetHandle(0);
+
+        if (m_CurrentSceneHandle != AssetHandle(0)
+            && m_CurrentSceneHandle == activeSceneHandle
+            && !m_CurrentSceneFilepath.empty())
+        {
+            return SceneSave(m_CurrentSceneFilepath);
+        }
+
+        // 2. Open a File Save Dialog to save current scene if the Current Scene Handle is different (not saved yet to disk)
+        return false;
+    }
+
+    bool AvaloniaLayer::SceneSave(const std::filesystem::path &filepath)
+    {
+        if (filepath.empty())
+        {
+            LOG_ERROR("[AvaloniaLayer] Cannot save scene: filepath is empty");
+            return false;
+        }
+
+        std::filesystem::path path = filepath;
+        if (path.extension() != ".ixscene")
+        {
+            path += ".ixscene";
+        }
+
+        Ref<Scene> sceneToSave = m_EditorScene ? m_EditorScene : m_ActiveScene;
+        if (!sceneToSave)
+        {
+            LOG_ERROR("[AvaloniaLayer] Cannot save scene: no active scene");
+            return false;
+        }
+
+        if (!m_ActiveProject)
+        {
+            m_ActiveProject = Project::GetActive();
+        }
+
+        if (!m_ActiveProject)
+        {
+            LOG_ERROR("[AvaloniaLayer] Cannot save scene: no active project");
+            return false;
+        }
+
+        SceneSerializer serializer(sceneToSave, m_ActiveProject.get());
+        if (!serializer.Serialize(path))
+        {
+            LOG_ERROR("[AvaloniaLayer] Failed to serialize scene to: {}", path.generic_string());
+            return false;
+        }
+
+        if (sceneToSave->handle == AssetHandle(0))
+        {
+            sceneToSave->handle = AssetHandle();
+        }
+
+        if (AssetManager *am = AssetManager::GetInstance())
+        {
+            AssetHandle existingHandle = am->GetAssetHandle(path);
+            if (existingHandle != AssetHandle(0))
+            {
+                sceneToSave->handle = existingHandle;
+            }
+            else
+            {
+                const auto relPath = m_ActiveProject->GetProjectRelativeFilepath(path);
+                AssetMetaData meta(relPath, AssetType::Scene);
+                am->AssignMetaData(sceneToSave->handle, meta);
+                am->AssignAsset(sceneToSave->handle, sceneToSave);
+            }
+        }
+
+        if (m_EditorScene)
+        {
+            m_EditorScene->handle = sceneToSave->handle;
+            m_EditorScene->SetDirtyFlag(false);
+        }
+        if (m_ActiveScene)
+        {
+            m_ActiveScene->handle = sceneToSave->handle;
+            m_ActiveScene->SetDirtyFlag(false);
+        }
+
+        m_CurrentSceneFilepath = path;
+        m_CurrentSceneHandle = sceneToSave->handle;
+
+        LOG_INFO("[AvaloniaLayer] Scene saved successfully: {}", path.generic_string());
+        return true;
+    }
+
+    AssetHandle AvaloniaLayer::GetActiveSceneHandle() const
+    {
+        Ref<Scene> currentScene = m_EditorScene ? m_EditorScene : m_ActiveScene;
+        return currentScene ? currentScene->handle : AssetHandle(0);
+    }
+
+    bool AvaloniaLayer::IsCurrentSceneSaved() const
+    {
+        Ref<Scene> currentScene = m_EditorScene ? m_EditorScene : m_ActiveScene;
+        const AssetHandle activeSceneHandle = currentScene ? currentScene->handle : AssetHandle(0);
+        return m_CurrentSceneHandle != AssetHandle(0)
+            && m_CurrentSceneHandle == activeSceneHandle
+            && !m_CurrentSceneFilepath.empty();
+    }
+
+    void AvaloniaLayer::ScenePlay()
+    {
+        SceneStop();
+        SetActiveScene(SceneManager::Copy(m_EditorScene));
+        m_ActiveScene->OnStart(ESceneState::Play);
+    }
+
+    void AvaloniaLayer::SceneSimulate()
+    {
+        SceneStop();
+        SetActiveScene(SceneManager::Copy(m_EditorScene));
+        m_ActiveScene->OnStart(ESceneState::Simulate);
+    }
+
+    void AvaloniaLayer::SceneStop()
+    {
+        if (m_EditorScene)
+            m_EditorScene->OnStop();
+
+        if (m_ActiveScene)
+            m_ActiveScene->OnStop();
+
+        SetActiveScene(m_EditorScene);
+    }
+
+    void AvaloniaLayer::ScenePause()
+    {
+        if (m_ActiveScene)
+        {
+            m_ActiveScene->Pause();
         }
     }
 
-    void AvaloniaLayer::Simulate()
+    void AvaloniaLayer::SceneStepFrame(int frames)
     {
-        Stop();
-        if (Ref<Scene> editorScene = GetEditorScene())
+        if (m_ActiveScene)
         {
-            m_RuntimeScene = SceneManager::Copy(editorScene);
-            m_RuntimeScene->OnStart(ESceneState::Simulate);
+            m_ActiveScene->StepFrame(frames);
         }
     }
 
-    void AvaloniaLayer::Stop()
+    int AvaloniaLayer::SceneGetState()
     {
-        if (m_RuntimeScene)
+        if (m_ActiveScene)
         {
-            m_RuntimeScene->OnStop();
-            m_RuntimeScene = nullptr;
+            return static_cast<int>(m_ActiveScene->GetState());
         }
-    }
 
-    void AvaloniaLayer::Pause()
-    {
-        if (m_RuntimeScene)
-        {
-            m_RuntimeScene->Pause();
-        }
-    }
-
-    void AvaloniaLayer::StepFrame(int frames)
-    {
-        if (m_RuntimeScene)
-        {
-            m_RuntimeScene->StepFrame(frames);
-        }
-    }
-
-    int AvaloniaLayer::GetState()
-    {
-        if (m_RuntimeScene)
-            return static_cast<int>(m_RuntimeScene->GetState());
         return static_cast<int>(ESceneState::Stop);
     }
 
-    Ref<Scene> AvaloniaLayer::GetCurrentScene()
+    Ref<Scene> AvaloniaLayer::GetActiveScene()
     {
-        if (Ref<Project> activeProj = Project::GetActive())
-        {
-            if (Ref<Scene> projScene = activeProj->LockActiveScene())
-            {
-                return projScene;
-            }
-        }
-        return m_FallbackScene;
-    }
-
-    Ref<Scene> AvaloniaLayer::GetEditorScene()
-    {
-        return m_RuntimeScene ? m_RuntimeScene : GetCurrentScene();
+        return m_ActiveScene;
     }
 
     void AvaloniaLayer::OnEvent(Event &e)
@@ -329,10 +571,10 @@ namespace ignite
 
             if (event.GetButton() == Mouse::ButtonLeft)
             {
-                auto scene = GetCurrentScene();
+                auto scene = GetActiveScene();
 
                 // Picking is disabled while playing scene
-                if (!scene || GetState() == static_cast<int>(ESceneState::Play) || ImGui::GetIO().WantCaptureMouse)
+                if (!scene || SceneGetState() == static_cast<int>(ESceneState::Play) || ImGui::GetIO().WantCaptureMouse)
                     return false;
 
                 // Don't pick if right or middle mouse button is pressed (orbit/pan)
@@ -409,7 +651,7 @@ namespace ignite
 
     UUID AvaloniaLayer::PickEntity(float mouseX, float mouseY, uint32_t viewportWidth, uint32_t viewportHeight, bool isDoubleClick, bool isShiftDown)
     {
-        Ref<Scene> scene = GetEditorScene();
+        Ref<Scene> scene = GetActiveScene();
         if (!scene || !scene->registry || !m_SceneRenderer)
             return UUID(0);
 
@@ -561,7 +803,7 @@ namespace ignite
 
     Entity AvaloniaLayer::SetSelectedEntity(UUID uuid)
     {
-        Ref<Scene> scene = GetCurrentScene();
+        Ref<Scene> scene = GetActiveScene();
         if (!scene)
             return Entity{};
 
@@ -571,7 +813,7 @@ namespace ignite
 
     void AvaloniaLayer::SelectEntity(UUID uuid, bool multiSelect)
     {
-        Ref<Scene> scene = GetCurrentScene();
+        Ref<Scene> scene = GetActiveScene();
         if (!scene)
             return;
 
@@ -624,7 +866,7 @@ namespace ignite
         if (!uuids || count == 0)
             return;
 
-        Ref<Scene> scene = GetCurrentScene();
+        Ref<Scene> scene = GetActiveScene();
         if (!scene)
             return;
 
@@ -659,6 +901,95 @@ namespace ignite
     uint32_t AvaloniaLayer::GetSelectedEntityCount() const
     {
         return static_cast<uint32_t>(m_SelectedEntities.size());
+    }
+
+    bool AvaloniaLayer::ProjectSave()
+    {
+        // Automatically save current scene
+        return Project::SaveActive();
+    }
+
+    bool AvaloniaLayer::ProjectClose()
+    {
+        if (!m_ActiveProject)
+            return false;
+
+        if (m_IsInPrefabIsolationMode)
+        {
+            // ExitPrefabIsolation(true);
+        }
+
+        // Stop scene before saving
+        if (m_EditorScene)
+            m_EditorScene->OnStop();
+
+        if (m_ActiveScene)
+            m_ActiveScene->OnStop();
+
+        // Save Project
+        ProjectSave();
+
+        SetActiveScene(nullptr);
+
+        m_EditorScene.reset();
+        m_ActiveScene.reset();
+
+        AssetManager::GetInstance()->Reset();
+
+        // Reset everything
+        m_ActiveProject.reset();
+        Project::CloseActive();
+
+        m_CurrentProjectFilepath.clear();
+        m_MainSceneBeforeIsolation.reset();
+        m_EditingPrefab.reset();
+        m_IsInPrefabIsolationMode = false;
+        m_CurrentSceneFilepath.clear();
+
+        m_EditingPrefabHandle = AssetHandle(0);
+        m_CurrentSceneHandle = AssetHandle(0);
+
+        return true;
+    }
+
+    void AvaloniaLayer::OnOpenProject()
+    {
+        // TODO: Reload project files
+
+        // Get Project default scene (use immediate load for synchronous path)
+        m_ActiveProject = Project::GetActive();
+        LOG_ASSERT(m_ActiveProject, "Invalid active project!");
+        if (!m_ActiveProject)
+        {
+            return;
+        }
+
+        AssetHandle defaultSceneHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
+        if (defaultSceneHandle != AssetHandle(0))
+        {
+            if (Ref<Scene> activeScene = AssetManager::GetInstance()->GetAssetImmediate<Scene>(defaultSceneHandle))
+            {
+                m_EditorScene = SceneManager::Copy(activeScene);
+                m_EditorScene->handle = activeScene->handle;
+                m_EditorScene->SetDirtyFlag(false);
+                SetActiveScene(m_EditorScene);
+
+                const auto &[assetFilepath, assetType] = AssetManager::GetInstance()->GetMetaData(defaultSceneHandle);
+
+                m_CurrentSceneFilepath = m_ActiveProject->GetProjectFilepath(assetFilepath);
+                m_CurrentSceneHandle = activeScene->handle;
+            }
+            else
+            {
+                // Create a default scene if load failed
+                SceneNew();
+            }
+        }
+        else
+        {
+            // Create a default scene
+            SceneNew();
+        }
     }
 
     void AvaloniaLayer::DrawGizmo()

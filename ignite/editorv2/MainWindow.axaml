@@ -149,7 +149,7 @@
         <!-- ROW 0: INTEGRATED TITLE BAR & MENU BAR                            -->
         <!-- Margin="0,0,140,0" leaves room for CaptionButtons (Min, Max, Close) -->
         <!-- ================================================================= -->
-        <Grid DockPanel.Dock="Top" Height="30" Background="{DynamicResource IgniteTitleBarGradient}">
+        <Grid DockPanel.Dock="Top" Height="38" Background="{DynamicResource IgniteTitleBarGradient}">
             <Border BorderBrush="{DynamicResource IgniteBorderSubtleBrush}" BorderThickness="0,0,0,1">
                 <Grid Margin="0,0,140,0">
                     <Grid.ColumnDefinitions>
@@ -182,10 +182,12 @@
                                 <MenuItem Header="New Scene" Command="{Binding NewSceneCommand}" InputGesture="Ctrl+N" />
                                 <MenuItem Header="Open Scene" Command="{Binding OpenSceneCommand}" InputGesture="Ctrl+O" />
                                 <MenuItem Header="Save Scene" Command="{Binding SaveSceneCommand}" InputGesture="Ctrl+S" />
+                                <MenuItem Header="Save Scene As" Command="{Binding SaveSceneAsCommand}" InputGesture="Ctrl+Shift+S" />
                                 <Separator />
                                 <MenuItem Header="New Project" Command="{Binding NewProjectCommand}" />
                                 <MenuItem Header="Open Project" Command="{Binding OpenProjectCommand}" />
                                 <MenuItem Header="Save Project" Command="{Binding SaveProjectCommand}" />
+                                <MenuItem Header="Close Project" Command="{Binding CloseProjectCommand}" />
                             </MenuItem>
                             <!-- Edit -->
                             <MenuItem Header="_Edit">

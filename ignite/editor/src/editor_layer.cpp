@@ -1231,11 +1231,6 @@ namespace ignite
 
     void EditorLayer::NewScene()
     {
-        if (m_EditorScene)
-        {
-            m_EditorScene->OnStop();
-        }
-
         OnSceneStop();
 
         m_CurrentSceneFilePath.clear();
@@ -1253,13 +1248,16 @@ namespace ignite
         if (m_ActiveProject)
         {
             AssetManager::GetInstance()->UnloadUnusedAssets();
+
+            // Create new editor scene
+            m_EditorScene = Scene::Create(m_ActiveProject.get());
+
+            // Set as active scene
+            SetActiveScene(m_EditorScene);
         }
 
-        // Create new editor scene
-        m_EditorScene = Scene::Create(m_ActiveProject.get());
-
-        // Set as active scene
-        SetActiveScene(m_EditorScene);
+        LOG_ASSERT(m_ActiveProject, "Invalid project!");
+        LOG_ASSERT(m_ActiveScene, "Failed to create new scene!");
     }
 
     void EditorLayer::SaveScene()
@@ -1280,21 +1278,65 @@ namespace ignite
         // Main Scene
         else
         {
-            if (m_CurrentSceneFilePath.empty())
+            // 1. Save current scene if the Current Scene Handle is the same with the current scene
+            const AssetHandle activeSceneHandle = m_ActiveScene ? m_ActiveScene->handle : AssetHandle(0);
+            if (m_CurrentSceneHandle != AssetHandle(0)
+                && m_CurrentSceneHandle == activeSceneHandle
+                && !m_CurrentSceneFilePath.empty())
             {
-                SaveSceneAs();
+                SaveScene(m_CurrentSceneFilePath);
             }
             else
             {
-                SaveScene(m_CurrentSceneFilePath);
+                // 2. Open a File Save Dialog to save current scene if the Current Scene Handle is different (not saved yet to disk)
+                SaveSceneAs();
             }
         }
     }
 
-    void EditorLayer::SaveScene(const std::filesystem::path &filepath) const
+    void EditorLayer::SaveScene(const std::filesystem::path &filepath)
     {
-        SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
+        Ref<Scene> sceneToSave = m_EditorScene ? m_EditorScene : m_ActiveScene;
+        if (!sceneToSave || !m_ActiveProject)
+            return;
+
+        SceneSerializer serializer(sceneToSave, m_ActiveProject.get());
         serializer.Serialize(filepath);
+
+        if (sceneToSave->handle == AssetHandle(0))
+        {
+            sceneToSave->handle = AssetHandle();
+        }
+
+        if (AssetManager *am = AssetManager::GetInstance())
+        {
+            AssetHandle existingHandle = am->GetAssetHandle(filepath);
+            if (existingHandle != AssetHandle(0))
+            {
+                sceneToSave->handle = existingHandle;
+            }
+            else
+            {
+                const auto relPath = m_ActiveProject->GetProjectRelativeFilepath(filepath);
+                AssetMetaData meta(relPath, AssetType::Scene);
+                am->AssignMetaData(sceneToSave->handle, meta);
+                am->AssignAsset(sceneToSave->handle, sceneToSave);
+            }
+        }
+
+        if (m_EditorScene)
+        {
+            m_EditorScene->handle = sceneToSave->handle;
+            m_EditorScene->SetDirtyFlag(false);
+        }
+        if (m_ActiveScene)
+        {
+            m_ActiveScene->handle = sceneToSave->handle;
+            m_ActiveScene->SetDirtyFlag(false);
+        }
+
+        m_CurrentSceneFilePath = filepath;
+        m_CurrentSceneHandle = sceneToSave->handle;
     }
 
     void EditorLayer::SaveSceneAs()
@@ -1334,7 +1376,7 @@ namespace ignite
             if (loadedScene)
             {
                 // Submit UI update back to main thread
-                Application::SubmitToMainThread([this, loadedScene, filepath]() mutable
+                Application::SubmitToMainThread([this, loadedScene, filepath, sceneHandle]() mutable
                 {
                     // Stop scene
                     if (m_EditorScene)
@@ -1361,6 +1403,7 @@ namespace ignite
                     SetActiveScene(m_EditorScene);
 
                     m_CurrentSceneFilePath = filepath;
+                    m_CurrentSceneHandle = sceneHandle;
 
                     AssetWorker::ReportStatus("Ready", 0.0f);
                 });
@@ -1477,9 +1520,6 @@ namespace ignite
 
     void EditorLayer::OnScenePlay()
     {
-        if (m_EditorScene)
-            m_EditorScene->OnStop();
-
         OnSceneStop();
 
         // copy initial components to new scene
