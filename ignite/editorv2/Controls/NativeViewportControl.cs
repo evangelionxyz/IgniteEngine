@@ -33,10 +33,11 @@ public class NativeViewportControl : NativeControlHost
     public event Action<bool>? EngineConnectionChanged;
     public event Action<float>? FpsUpdated;
     public event Action<ulong, bool>? EntityPicked;
+    public event Action<GizmoOperation>? GizmoOperationChanged;
 
     private static NativeEngineBridge.EntitySelectedCallback? s_EntitySelectedCallback;
+    private static NativeEngineBridge.GizmoOperationChangedCallback? s_GizmoOperationChangedCallback;
     public static NativeViewportControl? Instance { get; private set; }
-    private static long s_LastPickTimestamp;
     public bool IsEngineConnected => _isInitialized;
 
     // FPS tracking
@@ -59,78 +60,29 @@ public class NativeViewportControl : NativeControlHost
 
     private static void OnNativeEntitySelected(ulong uuid, bool isMultiSelect)
     {
-        s_LastPickTimestamp = Stopwatch.GetTimestamp();
         Dispatcher.UIThread.Post(() =>
         {
             Instance?.EntityPicked?.Invoke(uuid, isMultiSelect);
         });
     }
 
+    private static void OnNativeGizmoOperationChanged(int op)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            Instance?.GizmoOperationChanged?.Invoke((GizmoOperation)op);
+        });
+    }
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+
+        // Picking and modifier handling are owned by the native SDL viewport
+        // event path. Doing it here as well causes every click to be applied twice
+        // because the hosted HWND and Avalonia both receive the pointer event.
         if (_childHwnd != IntPtr.Zero)
-        {
             SetFocus(_childHwnd);
-        }
-
-        var pt = e.GetCurrentPoint(this);
-        if (pt.Properties.IsLeftButtonPressed && _isInitialized)
-        {
-            var now = Stopwatch.GetTimestamp();
-            if (now - s_LastPickTimestamp < Stopwatch.Frequency / 10)
-                return;
-
-            s_LastPickTimestamp = now;
-
-            var isDoubleClick = e.ClickCount >= 2;
-            var isShiftDown = (e.KeyModifiers & KeyModifiers.Shift) != 0;
-            var isCtrlDown = (e.KeyModifiers & KeyModifiers.Control) != 0;
-            var isMultiSelect = isShiftDown || isCtrlDown;
-            var w = (float)(Bounds.Width > 0 ? Bounds.Width : _currentWidth);
-            var h = (float)(Bounds.Height > 0 ? Bounds.Height : _currentHeight);
-            var picked = NativeEngineBridge.Ignite_Viewport_PickEntity((float)pt.Position.X, (float)pt.Position.Y,
-                (uint)w, (uint)h, isDoubleClick, isMultiSelect);
-
-            if (!isMultiSelect)
-            {
-                var isAlreadySelected = NativeEngineBridge.Ignite_Viewport_IsEntitySelected(picked);
-                var currentCount = NativeEngineBridge.Ignite_Viewport_GetSelectedEntityCount();
-
-                ulong finalSelection = picked;
-                if (picked != 0 && isAlreadySelected && currentCount == 1 && !isDoubleClick)
-                {
-                    finalSelection = 0;
-                    NativeEngineBridge.Ignite_Viewport_ClearSelectedEntities();
-                }
-                else if (picked == 0)
-                {
-                    finalSelection = 0;
-                    NativeEngineBridge.Ignite_Viewport_ClearSelectedEntities();
-                }
-                else
-                {
-                    NativeEngineBridge.Ignite_Viewport_SetSelectedEntity(finalSelection);
-                }
-
-                EntityPicked?.Invoke(finalSelection, false);
-            }
-            else
-            {
-                if (picked != 0)
-                {
-                    if (NativeEngineBridge.Ignite_Viewport_IsEntitySelected(picked))
-                    {
-                        NativeEngineBridge.Ignite_Viewport_DeselectEntity(picked);
-                    }
-                    else
-                    {
-                        NativeEngineBridge.Ignite_Viewport_SelectEntity(picked, true);
-                    }
-                    EntityPicked?.Invoke(picked, true);
-                }
-            }
-        }
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -251,6 +203,9 @@ public class NativeViewportControl : NativeControlHost
                         s_EntitySelectedCallback = OnNativeEntitySelected;
                         NativeEngineBridge.Ignite_Viewport_SetEntitySelectedCallback(s_EntitySelectedCallback);
 
+                        s_GizmoOperationChangedCallback = OnNativeGizmoOperationChanged;
+                        NativeEngineBridge.Ignite_Viewport_SetGizmoOperationChangedCallback(s_GizmoOperationChangedCallback);
+
                         NativeEngineBridge.Ignite_Camera_SetNavigationMode((int)_currentNavigationMode);
 
                         _stopwatch.Start();
@@ -338,6 +293,7 @@ public class NativeViewportControl : NativeControlHost
             if (Instance == this)
             {
                 NativeEngineBridge.Ignite_Viewport_SetEntitySelectedCallback(null);
+                NativeEngineBridge.Ignite_Viewport_SetGizmoOperationChangedCallback(null);
                 Instance = null;
                 s_EntitySelectedCallback = null;
             }

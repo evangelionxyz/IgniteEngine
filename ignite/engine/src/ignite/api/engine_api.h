@@ -64,14 +64,16 @@ IGN_API int  Ignite_Camera_GetNavigationMode();
 // Viewport & Picking API
 // ======================================
 IGN_API uint64_t Ignite_Viewport_PickEntity(float mouseX, float mouseY, uint32_t viewportWidth, uint32_t viewportHeight, bool isDoubleClick, bool isShiftDown);
-IGN_API void     Ignite_Viewport_SetSelectedEntity(uint64_t uuid);
-IGN_API void     Ignite_Viewport_SelectEntity(uint64_t uuid, bool multiSelect);
-IGN_API void     Ignite_Viewport_DeselectEntity(uint64_t uuid);
+IGN_API void     Ignite_Viewport_SelectSingleEntityFromViewport(uint64_t uuid);
+IGN_API void     Ignite_Viewport_SyncSingleSelection(uint64_t uuid);
+IGN_API void     Ignite_Viewport_AddEntityToSelectionFromViewport(uint64_t uuid);
+IGN_API void     Ignite_Viewport_DeselectEntityFromViewport(uint64_t uuid);
 IGN_API bool     Ignite_Viewport_IsEntitySelected(uint64_t uuid);
-IGN_API void     Ignite_Viewport_SetSelectedEntities(const uint64_t *uuids, uint32_t count);
+IGN_API void     Ignite_Viewport_SyncSelectedEntities(const uint64_t *uuids, uint32_t count);
 IGN_API uint32_t Ignite_Viewport_GetSelectedEntities(uint64_t *outUuids, uint32_t maxCount);
 IGN_API uint32_t Ignite_Viewport_GetSelectedEntityCount();
-IGN_API void     Ignite_Viewport_ClearSelectedEntities();
+IGN_API void     Ignite_Viewport_ClearSelectionFromViewport();
+IGN_API void     Ignite_Viewport_SyncClearSelection();
 IGN_API uint64_t Ignite_Viewport_GetSelectedEntity();
 
 typedef void (*IgniteEntitySelectedCallback)(uint64_t uuid, bool isMultiSelect);

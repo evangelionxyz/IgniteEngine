@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Ignite.Managed.Services;
 using IgniteEditor.Services;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
@@ -51,13 +52,88 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [ObservableProperty]
-    private GizmoOperation _activeGizmo = GizmoOperation.Translate;
+    private GizmoOperation _activeGizmo = GizmoOperation.None;
+
+    public bool IsNoneActive => ActiveGizmo == GizmoOperation.None;
+    public bool IsTranslateActive => ActiveGizmo == GizmoOperation.Translate;
+    public bool IsRotateActive => ActiveGizmo == GizmoOperation.Rotate;
+    public bool IsScaleActive => ActiveGizmo == GizmoOperation.Scale;
+    public bool IsBoundSizing2DActive => ActiveGizmo == GizmoOperation.BoundSizing2D;
+
+    partial void OnActiveGizmoChanged(GizmoOperation value)
+    {
+        OnPropertyChanged(nameof(IsNoneActive));
+        OnPropertyChanged(nameof(IsTranslateActive));
+        OnPropertyChanged(nameof(IsRotateActive));
+        OnPropertyChanged(nameof(IsScaleActive));
+        OnPropertyChanged(nameof(IsBoundSizing2DActive));
+        OnPropertyChanged(nameof(SnapValue));
+        NativeEngineBridge.Ignite_Viewport_SetGizmoOperation((int)value);
+    }
 
     [ObservableProperty]
     private bool _snapEnabled = true;
 
+    partial void OnSnapEnabledChanged(bool value)
+    {
+        NativeEngineBridge.Ignite_Viewport_SetSnapEnabled(value);
+    }
+
     [ObservableProperty]
-    private float _snapValue = 0.25f;
+    private float _translateSnapValue = 0.5f;
+
+    [ObservableProperty]
+    private float _rotateSnapValue = 15.0f;
+
+    [ObservableProperty]
+    private float _scaleSnapValue = 0.25f;
+
+    public float SnapValue
+    {
+        get => ActiveGizmo switch
+        {
+            GizmoOperation.Rotate => RotateSnapValue,
+            GizmoOperation.Scale => ScaleSnapValue,
+            _ => TranslateSnapValue
+        };
+        set
+        {
+            switch (ActiveGizmo)
+            {
+                case GizmoOperation.Rotate:
+                    RotateSnapValue = value;
+                    break;
+                case GizmoOperation.Scale:
+                    ScaleSnapValue = value;
+                    break;
+                default:
+                    TranslateSnapValue = value;
+                    break;
+            }
+            OnPropertyChanged(nameof(SnapValue));
+        }
+    }
+
+    partial void OnTranslateSnapValueChanged(float value)
+    {
+        NativeEngineBridge.Ignite_Viewport_SetSnapValue((int)GizmoOperation.Translate, value);
+        if (ActiveGizmo == GizmoOperation.Translate)
+            OnPropertyChanged(nameof(SnapValue));
+    }
+
+    partial void OnRotateSnapValueChanged(float value)
+    {
+        NativeEngineBridge.Ignite_Viewport_SetSnapValue((int)GizmoOperation.Rotate, value);
+        if (ActiveGizmo == GizmoOperation.Rotate)
+            OnPropertyChanged(nameof(SnapValue));
+    }
+
+    partial void OnScaleSnapValueChanged(float value)
+    {
+        NativeEngineBridge.Ignite_Viewport_SetSnapValue((int)GizmoOperation.Scale, value);
+        if (ActiveGizmo == GizmoOperation.Scale)
+            OnPropertyChanged(nameof(SnapValue));
+    }
 
     [ObservableProperty]
     private bool _isWorldSpace = true;
@@ -67,6 +143,7 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnIsWorldSpaceChanged(bool value)
     {
         OnPropertyChanged(nameof(CoordinateSpaceText));
+        NativeEngineBridge.Ignite_Viewport_SetGizmoMode(value ? 1 : 0);
     }
 
     [ObservableProperty]
@@ -92,6 +169,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public ViewportViewModel Viewport { get; }
 
     private readonly ISceneService _sceneService;
+    private readonly List<Guid> _lastSyncedSelection = new();
+    private Guid? _lastSyncedPrimaryEntity;
     private readonly LoggingService _loggingService;
 
     public MainWindowViewModel()
@@ -120,7 +199,34 @@ public partial class MainWindowViewModel : ViewModelBase
         // Wire viewport picking → scene hierarchy selection
         Viewport.EntityPicked += (uuid, isMultiSelect) =>
         {
+            // Native callbacks are emitted only for viewport-originated changes.
+            // Hierarchy synchronization uses silent Sync* APIs and cannot loop
+            // back into this handler.
             SceneHierarchy.SelectEntityByUuid(uuid, isMultiSelect);
+        };
+
+        // Wire viewport gizmo operation change → main window state
+        Viewport.GizmoOperationChanged += op =>
+        {
+            if (_activeGizmo != op)
+            {
+                _activeGizmo = op;
+                OnPropertyChanged(nameof(ActiveGizmo));
+                OnPropertyChanged(nameof(IsNoneActive));
+                OnPropertyChanged(nameof(IsTranslateActive));
+                OnPropertyChanged(nameof(IsRotateActive));
+                OnPropertyChanged(nameof(IsScaleActive));
+                OnPropertyChanged(nameof(IsBoundSizing2DActive));
+                OnPropertyChanged(nameof(SnapValue));
+            }
+        };
+
+        Viewport.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ViewportViewModel.IsEngineConnected) && Viewport.IsEngineConnected)
+            {
+                SyncGizmoSettingsToNative();
+            }
         };
 
         // Initialize content browser with editor resources folder if it exists
@@ -136,13 +242,33 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public void SyncGizmoSettingsToNative()
+    {
+        NativeEngineBridge.Ignite_Viewport_SetGizmoOperation((int)ActiveGizmo);
+        NativeEngineBridge.Ignite_Viewport_SetGizmoMode(IsWorldSpace ? 1 : 0);
+        NativeEngineBridge.Ignite_Viewport_SetSnapEnabled(SnapEnabled);
+        NativeEngineBridge.Ignite_Viewport_SetSnapValue((int)GizmoOperation.Translate, TranslateSnapValue);
+        NativeEngineBridge.Ignite_Viewport_SetSnapValue((int)GizmoOperation.Rotate, RotateSnapValue);
+        NativeEngineBridge.Ignite_Viewport_SetSnapValue((int)GizmoOperation.Scale, ScaleSnapValue);
+    }
+
     private void SyncSelectionToNative()
     {
         var selectedNodes = SceneHierarchy.GetAllSelectedNodes();
+        var primaryEntity = SceneHierarchy.SelectedEntity?.EntityId;
+        var selectionIds = selectedNodes.Select(node => node.EntityId).ToList();
+
+        if (_lastSyncedPrimaryEntity == primaryEntity && _lastSyncedSelection.SequenceEqual(selectionIds))
+            return;
+
+        _lastSyncedPrimaryEntity = primaryEntity;
+        _lastSyncedSelection.Clear();
+        _lastSyncedSelection.AddRange(selectionIds);
+
         if (selectedNodes.Count == 0)
         {
             Properties.SetEntity(null, null);
-            NativeEngineBridge.Ignite_Viewport_ClearSelectedEntities();
+            NativeEngineBridge.Ignite_Viewport_SyncClearSelection();
         }
         else if (selectedNodes.Count == 1)
         {
@@ -151,7 +277,7 @@ public partial class MainWindowViewModel : ViewModelBase
             Properties.SetEntity(node, model);
             if (model != null && model.Uuid != 0)
             {
-                NativeEngineBridge.Ignite_Viewport_SetSelectedEntity(model.Uuid);
+                NativeEngineBridge.Ignite_Viewport_SyncSingleSelection(model.Uuid);
             }
         }
         else
@@ -169,7 +295,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     uuids.Add(m.Uuid);
                 }
             }
-            NativeEngineBridge.Ignite_Viewport_SetSelectedEntities(uuids.ToArray(), (uint)uuids.Count);
+            NativeEngineBridge.Ignite_Viewport_SyncSelectedEntities(uuids.ToArray(), (uint)uuids.Count);
         }
     }
 
@@ -306,7 +432,20 @@ public partial class MainWindowViewModel : ViewModelBase
             "Translate" => GizmoOperation.Translate,
             "Rotate" => GizmoOperation.Rotate,
             "Scale" => GizmoOperation.Scale,
+            "BoundSizing2D" => GizmoOperation.BoundSizing2D,
             _ => GizmoOperation.None
+        };
+    }
+
+    [RelayCommand]
+    private void CycleGizmo()
+    {
+        ActiveGizmo = ActiveGizmo switch
+        {
+            GizmoOperation.Translate => GizmoOperation.Rotate,
+            GizmoOperation.Rotate => GizmoOperation.Scale,
+            GizmoOperation.Scale => GizmoOperation.Translate,
+            _ => GizmoOperation.Translate
         };
     }
 

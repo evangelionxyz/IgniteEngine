@@ -76,6 +76,9 @@ namespace ignite
         bool OnFramebufferResize(FramebufferResizeEvent &event) const;
         bool OnDPIScaleChanged(WindowDPIScaleChangedEvent &event);
 
+        [[nodiscard]] bool WantCaptureMouse() const;
+        [[nodiscard]] bool WantCaptureKeyboard() const;
+
     private:
         Scope<ImGui_NVRHI> imguiNVRHI;
         Ref<GuiFont> m_Font;

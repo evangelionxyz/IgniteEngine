@@ -35,6 +35,14 @@ public partial class ViewportPanel : UserControl
                     vm.NotifyEntityPicked(uuid, isMultiSelect);
                 }
             };
+
+            ViewportHost.GizmoOperationChanged += op =>
+            {
+                if (DataContext is ViewportViewModel vm)
+                {
+                    vm.NotifyGizmoOperationChanged(op);
+                }
+            };
         }
 
         void AttachViewModel(ViewportViewModel vm)

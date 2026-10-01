@@ -12,6 +12,15 @@
 
 namespace ignite
 {
+    enum class GizmoOperation : int
+    {
+        NONE = -1,
+        TRANSLATE = 0,
+        ROTATE = 1,
+        SCALE = 2,
+        BOUND_SIZING_2D = 3
+    };
+
     struct IGN_API GizmoInfo
     {
         glm::mat4 cameraView;

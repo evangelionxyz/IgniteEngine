@@ -313,22 +313,28 @@ IGN_API uint64_t Ignite_Viewport_PickEntity(float mouseX, float mouseY, uint32_t
     return 0;
 }
 
-IGN_API void Ignite_Viewport_SetSelectedEntity(uint64_t uuid)
+IGN_API void Ignite_Viewport_SelectSingleEntityFromViewport(uint64_t uuid)
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->SetSelectedEntity(uuid);
+        s_EmbeddedApp->SelectSingleEntityFromViewport(uuid);
 }
 
-IGN_API void Ignite_Viewport_SelectEntity(uint64_t uuid, bool multiSelect)
+IGN_API void Ignite_Viewport_SyncSingleSelection(uint64_t uuid)
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->SelectEntity(uuid, multiSelect);
+        s_EmbeddedApp->SyncSingleSelection(uuid);
 }
 
-IGN_API void Ignite_Viewport_DeselectEntity(uint64_t uuid)
+IGN_API void Ignite_Viewport_AddEntityToSelectionFromViewport(uint64_t uuid)
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->DeselectEntity(uuid);
+        s_EmbeddedApp->AddEntityToSelectionFromViewport(uuid);
+}
+
+IGN_API void Ignite_Viewport_DeselectEntityFromViewport(uint64_t uuid)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->DeselectEntityFromViewport(uuid);
 }
 
 IGN_API bool Ignite_Viewport_IsEntitySelected(uint64_t uuid)
@@ -338,10 +344,10 @@ IGN_API bool Ignite_Viewport_IsEntitySelected(uint64_t uuid)
     return false;
 }
 
-IGN_API void Ignite_Viewport_SetSelectedEntities(const uint64_t *uuids, uint32_t count)
+IGN_API void Ignite_Viewport_SyncSelectedEntities(const uint64_t *uuids, uint32_t count)
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->SetSelectedEntities(uuids, count);
+        s_EmbeddedApp->SyncSelectedEntities(uuids, count);
 }
 
 IGN_API uint32_t Ignite_Viewport_GetSelectedEntities(uint64_t *outUuids, uint32_t maxCount)
@@ -358,10 +364,16 @@ IGN_API uint32_t Ignite_Viewport_GetSelectedEntityCount()
     return 0;
 }
 
-IGN_API void Ignite_Viewport_ClearSelectedEntities()
+IGN_API void Ignite_Viewport_ClearSelectionFromViewport()
 {
     if (s_EmbeddedApp)
-        s_EmbeddedApp->ClearSelectedEntities();
+        s_EmbeddedApp->ClearSelectionFromViewport();
+}
+
+IGN_API void Ignite_Viewport_SyncClearSelection()
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SyncClearSelection();
 }
 
 IGN_API uint64_t Ignite_Viewport_GetSelectedEntity()
@@ -375,6 +387,75 @@ IGN_API void Ignite_Viewport_SetEntitySelectedCallback(IgniteEntitySelectedCallb
 {
     if (s_EmbeddedApp)
         s_EmbeddedApp->SetEntitySelectedCallback(callback);
+}
+
+// ======================================
+// Viewport Gizmo & Snapping API
+// ======================================
+
+IGN_API void Ignite_Viewport_SetGizmoOperation(int op)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SetGizmoOperation(op);
+}
+
+IGN_API int Ignite_Viewport_GetGizmoOperation()
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetGizmoOperation();
+    return -1;
+}
+
+IGN_API void Ignite_Viewport_CycleGizmoOperation()
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->CycleGizmoOperation();
+}
+
+IGN_API void Ignite_Viewport_SetGizmoMode(int mode)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SetGizmoMode(mode);
+}
+
+IGN_API int Ignite_Viewport_GetGizmoMode()
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetGizmoMode();
+    return 0;
+}
+
+IGN_API void Ignite_Viewport_SetSnapEnabled(bool enabled)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SetSnapEnabled(enabled);
+}
+
+IGN_API bool Ignite_Viewport_GetSnapEnabled()
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetSnapEnabled();
+    return false;
+}
+
+IGN_API void Ignite_Viewport_SetSnapValue(int op, float value)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SetSnapValue(op, value);
+}
+
+IGN_API float Ignite_Viewport_GetSnapValue(int op)
+{
+    if (s_EmbeddedApp)
+        return s_EmbeddedApp->GetSnapValue(op);
+    return 0.0f;
+}
+
+using IgniteGizmoOperationChangedCallback = void (*)(int op);
+IGN_API void Ignite_Viewport_SetGizmoOperationChangedCallback(IgniteGizmoOperationChangedCallback callback)
+{
+    if (s_EmbeddedApp)
+        s_EmbeddedApp->SetGizmoOperationChangedCallback(callback);
 }
 
 // ======================================

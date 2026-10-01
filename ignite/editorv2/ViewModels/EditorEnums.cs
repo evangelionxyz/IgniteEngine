@@ -23,6 +23,35 @@ public enum GizmoOperation
 }
 
 /// <summary>
+/// Represents the coordinate space mode for gizmos.
+/// </summary>
+public enum GizmoMode
+{
+    Local = 0,
+    World = 1
+}
+
+/// <summary>
+/// Extension methods for GizmoOperation.
+/// </summary>
+public static class GizmoOperationExtensions
+{
+    /// <summary>
+    /// Cycles through the primary gizmo operations: Translate -> Rotate -> Scale -> Translate.
+    /// </summary>
+    public static GizmoOperation Cycle(this GizmoOperation op)
+    {
+        return op switch
+        {
+            GizmoOperation.Translate => GizmoOperation.Rotate,
+            GizmoOperation.Rotate => GizmoOperation.Scale,
+            GizmoOperation.Scale => GizmoOperation.Translate,
+            _ => GizmoOperation.Translate
+        };
+    }
+}
+
+/// <summary>
 /// Represents the current editor play state.
 /// </summary>
 public enum PlayModeState
@@ -32,4 +61,5 @@ public enum PlayModeState
     Paused,
     Simulating
 }
+
 

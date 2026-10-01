@@ -150,22 +150,28 @@ namespace ignite
         return m_AvaloniaLayer ? static_cast<uint64_t>(m_AvaloniaLayer->PickEntity(mouseX, mouseY, viewportWidth, viewportHeight, isDoubleClick, isShiftDown)) : 0u;
     }
 
-    void NativeEmbeddedApp::SetSelectedEntity(uint64_t uuid)
+    void NativeEmbeddedApp::SelectSingleEntityFromViewport(uint64_t uuid)
     {
         if (m_AvaloniaLayer)
-            m_AvaloniaLayer->SelectEntity(UUID(uuid), false);
+            m_AvaloniaLayer->SelectSingleEntityFromViewport(UUID(uuid));
     }
 
-    void NativeEmbeddedApp::SelectEntity(uint64_t uuid, bool multiSelect)
+    void NativeEmbeddedApp::SyncSingleSelection(uint64_t uuid)
     {
         if (m_AvaloniaLayer)
-            m_AvaloniaLayer->SelectEntity(UUID(uuid), multiSelect);
+            m_AvaloniaLayer->SyncSingleSelection(UUID(uuid));
     }
 
-    void NativeEmbeddedApp::DeselectEntity(uint64_t uuid)
+    void NativeEmbeddedApp::AddEntityToSelectionFromViewport(uint64_t uuid)
     {
         if (m_AvaloniaLayer)
-            m_AvaloniaLayer->DeselectEntity(UUID(uuid));
+            m_AvaloniaLayer->AddEntityToSelectionFromViewport(UUID(uuid));
+    }
+
+    void NativeEmbeddedApp::DeselectEntityFromViewport(uint64_t uuid)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->DeselectEntityFromViewport(UUID(uuid));
     }
 
     bool NativeEmbeddedApp::IsEntitySelected(uint64_t uuid) const
@@ -173,16 +179,22 @@ namespace ignite
         return m_AvaloniaLayer ? m_AvaloniaLayer->IsEntitySelected(UUID(uuid)) : false;
     }
 
-    void NativeEmbeddedApp::ClearSelectedEntities()
+    void NativeEmbeddedApp::ClearSelectionFromViewport()
     {
         if (m_AvaloniaLayer)
-            m_AvaloniaLayer->ClearSelectedEntities();
+            m_AvaloniaLayer->ClearSelectionFromViewport();
     }
 
-    void NativeEmbeddedApp::SetSelectedEntities(const uint64_t *uuids, uint32_t count)
+    void NativeEmbeddedApp::SyncClearSelection()
     {
         if (m_AvaloniaLayer)
-            m_AvaloniaLayer->SetSelectedEntities(uuids, count);
+            m_AvaloniaLayer->SyncClearSelection();
+    }
+
+    void NativeEmbeddedApp::SyncSelectedEntities(const uint64_t *uuids, uint32_t count)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SyncSelectedEntities(uuids, count);
     }
 
     uint32_t NativeEmbeddedApp::GetSelectedEntities(uint64_t *outUuids, uint32_t maxCount) const
@@ -204,5 +216,61 @@ namespace ignite
     {
         if (m_AvaloniaLayer)
             m_AvaloniaLayer->SetEntitySelectedCallback(callback);
+    }
+
+    void NativeEmbeddedApp::SetGizmoOperation(int op)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SetGizmoOperation(op);
+    }
+
+    int NativeEmbeddedApp::GetGizmoOperation() const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->GetGizmoOperation() : -1;
+    }
+
+    void NativeEmbeddedApp::CycleGizmoOperation()
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->CycleGizmoOperation();
+    }
+
+    void NativeEmbeddedApp::SetGizmoMode(int mode)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SetGizmoMode(mode);
+    }
+
+    int NativeEmbeddedApp::GetGizmoMode() const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->GetGizmoMode() : 0;
+    }
+
+    void NativeEmbeddedApp::SetSnapEnabled(bool enabled)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SetSnapEnabled(enabled);
+    }
+
+    bool NativeEmbeddedApp::GetSnapEnabled() const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->GetSnapEnabled() : false;
+    }
+
+    void NativeEmbeddedApp::SetSnapValue(int op, float value)
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SetSnapValue(op, value);
+    }
+
+    float NativeEmbeddedApp::GetSnapValue(int op) const
+    {
+        return m_AvaloniaLayer ? m_AvaloniaLayer->GetSnapValue(op) : 0.0f;
+    }
+
+    void NativeEmbeddedApp::SetGizmoOperationChangedCallback(void (*callback)(int op))
+    {
+        if (m_AvaloniaLayer)
+            m_AvaloniaLayer->SetGizmoOperationChangedCallback(callback);
     }
 }

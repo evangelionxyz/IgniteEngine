@@ -200,13 +200,12 @@ public partial class SceneHierarchyViewModel : ViewModelBase
                 }
                 else
                 {
-                    // Multi-selection is append-only for viewport and hierarchy
-                    // notifications. Explicit deselection is handled by clearing
-                    // the selection or changing the selection mode.
-                    if (!found.IsSelected)
-                        found.IsSelected = true;
-
-                    SelectedEntity = found;
+                    // Viewport multi-selection notifications represent a toggle.
+                    found.IsSelected = !found.IsSelected;
+                    if (found.IsSelected)
+                        SelectedEntity = found;
+                    else if (SelectedEntity == found)
+                        SelectedEntity = FindFirstSelectedNode(RootEntities);
                 }
             }
             finally

@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:IgniteEditor.ViewModels"
         xmlns:panels="using:IgniteEditor.Views.Panels"
+        xmlns:ctrl="using:IgniteEditor.Controls"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
         mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="880"
         x:Class="IgniteEditor.MainWindow"
@@ -294,6 +295,14 @@
                         </StackPanel>
                     </ToggleButton>
 
+                    <!-- Individual Snap Value for Active Gizmo Operation -->
+                    <ctrl:NumericDragBox Value="{Binding SnapValue, Mode=TwoWay}"
+                                         IsEnabled="{Binding SnapEnabled}"
+                                         Step="0.1" Minimum="0.001" Maximum="360"
+                                         Format="0.##" Width="52" Height="22"
+                                         Margin="1,0"
+                                         ToolTip.Tip="Snap Value for Active Operation (Translate / Rotate / Scale)" />
+
                     <ToggleButton IsChecked="{Binding ShowGrid}"
                                   Classes="tool-toggle" Height="22" Padding="6,2" FontSize="11"
                                   ToolTip.Tip="Toggle Viewport Grid">
@@ -305,40 +314,32 @@
 
                     <Border Width="1" Background="{DynamicResource IgniteBorderSubtleBrush}" Margin="4,2" />
                     
-                    <!-- Transform Gizmo Tools with Clean Vector Icons -->
+                    <!-- Transform Gizmo Tools. None is the safe default/picking mode. -->
                     <StackPanel Orientation="Horizontal" Spacing="2">
-                        <Button Command="{Binding SetGizmoCommand}" CommandParameter="Translate"
-                                Classes="tool-btn" Height="22" Padding="6,1"
-                                ToolTip.Tip="Translate Tool (W)">
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <PathIcon Data="{StaticResource IconTranslate}" Width="10" Height="10" Foreground="{DynamicResource IgniteTextPrimaryBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="Translate" FontSize="11" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button Command="{Binding SetGizmoCommand}" CommandParameter="Rotate"
-                                Classes="tool-btn" Height="22" Padding="6,1"
-                                ToolTip.Tip="Rotate Tool (E)">
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <PathIcon Data="{StaticResource IconRotate}" Width="10" Height="10" Foreground="{DynamicResource IgniteTextPrimaryBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="Rotate" FontSize="11" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button Command="{Binding SetGizmoCommand}" CommandParameter="Scale"
-                                Classes="tool-btn" Height="22" Padding="6,1"
-                                ToolTip.Tip="Scale Tool (R)">
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <PathIcon Data="{StaticResource IconScale}" Width="10" Height="10" Foreground="{DynamicResource IgniteTextPrimaryBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="Scale" FontSize="11" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button Command="{Binding SetGizmoCommand}" CommandParameter="BoundSizing2D"
-                                Classes="tool-btn" Height="22" Padding="6,1"
-                                ToolTip.Tip="2D Bounds Tool (T)">
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <PathIcon Data="{StaticResource IconBounds2D}" Width="10" Height="10" Foreground="{DynamicResource IgniteTextPrimaryBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="Bound 2D" FontSize="11" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
+                        <ToggleButton IsChecked="{Binding IsNoneActive, Mode=OneWay}"
+                                      Command="{Binding SetGizmoCommand}" CommandParameter="None"
+                                      Classes="tool-toggle" Width="26" Height="22" Padding="6,1"
+                                      ToolTip.Tip="Selection Tool (Mouse Picking)">
+                            <PathIcon Data="{StaticResource IconSelect}" Width="12" Height="12" />
+                        </ToggleButton>
+                        <ToggleButton IsChecked="{Binding IsTranslateActive, Mode=OneWay}"
+                                      Command="{Binding SetGizmoCommand}" CommandParameter="Translate"
+                                      Classes="tool-toggle" Width="26" Height="22" Padding="6,1"
+                                      ToolTip.Tip="Translate Tool (W)">
+                            <PathIcon Data="{StaticResource IconTranslate}" Width="12" Height="12" />
+                        </ToggleButton>
+                        <ToggleButton IsChecked="{Binding IsRotateActive, Mode=OneWay}"
+                                      Command="{Binding SetGizmoCommand}" CommandParameter="Rotate"
+                                      Classes="tool-toggle" Width="26" Height="22" Padding="6,1"
+                                      ToolTip.Tip="Rotate Tool (E)">
+                            <PathIcon Data="{StaticResource IconRotate}" Width="12" Height="12" />
+                        </ToggleButton>
+                        <ToggleButton IsChecked="{Binding IsScaleActive, Mode=OneWay}"
+                                      Command="{Binding SetGizmoCommand}" CommandParameter="Scale"
+                                      Classes="tool-toggle" Width="26" Height="22" Padding="6,1"
+                                      ToolTip.Tip="Scale Tool (R)">
+                            <PathIcon Data="{StaticResource IconScale}" Width="12" Height="12" />
+                        </ToggleButton>
                     </StackPanel>
 
                     <Border Width="1" Background="{DynamicResource IgniteBorderSubtleBrush}" Margin="4,2" />

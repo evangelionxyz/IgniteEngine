@@ -7,7 +7,7 @@ namespace IgniteEditor.ViewModels;
 public partial class ViewportViewModel : ViewModelBase
 {
     [ObservableProperty]
-    private GizmoOperation _currentGizmoOperation = GizmoOperation.Translate;
+    private GizmoOperation _currentGizmoOperation = GizmoOperation.None;
 
     [ObservableProperty]
     private double _viewportWidth = 800;
@@ -39,5 +39,13 @@ public partial class ViewportViewModel : ViewModelBase
     public void NotifyEntityPicked(ulong uuid, bool isMultiSelect)
     {
         EntityPicked?.Invoke(uuid, isMultiSelect);
+    }
+
+    public event Action<GizmoOperation>? GizmoOperationChanged;
+
+    public void NotifyGizmoOperationChanged(GizmoOperation op)
+    {
+        CurrentGizmoOperation = op;
+        GizmoOperationChanged?.Invoke(op);
     }
 }

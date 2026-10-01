@@ -11,6 +11,7 @@
 #include "ignite/core/platform_utils.hpp"
 
 #include <backends/imgui_impl_sdl3.h>
+#include <imgui_internal.h>
 #include <ImGuizmo.h>
 
 #ifdef PLATFORM_WINDOWS
@@ -270,14 +271,83 @@ namespace ignite
         imguiNVRHI->Init(m_DeviceManager->GetDevice());
     }
 
+    bool ImGuiLayer::WantCaptureMouse() const
+    {
+        if (m_BlockEvents)
+            return false;
+
+        ImGuiContext *g = ImGui::GetCurrentContext();
+        if (!g)
+            return false;
+
+        // 1. If an ImGui window is currently being held and dragged (moving window)
+        if (g->MovingWindow != nullptr)
+        {
+            ImGuiWindow *movingRoot = g->MovingWindow->RootWindow ? g->MovingWindow->RootWindow : g->MovingWindow;
+            if (movingRoot && strcmp(movingRoot->Name, "##main_dockspace") != 0)
+                return true;
+        }
+
+        // 2. If an item in an ImGui window is currently active (e.g. dragging a slider, scrollbar, button, etc.)
+        if (g->ActiveId != 0 && g->ActiveIdWindow != nullptr)
+        {
+            ImGuiWindow *activeRoot = g->ActiveIdWindow->RootWindow ? g->ActiveIdWindow->RootWindow : g->ActiveIdWindow;
+            if (activeRoot && strcmp(activeRoot->Name, "##main_dockspace") != 0)
+                return true;
+        }
+
+        // 3. If any ImGui window (other than the background gizmo dockspace) is hovered
+        if (g->HoveredWindow != nullptr)
+        {
+            ImGuiWindow *hoveredRoot = g->HoveredWindow->RootWindow ? g->HoveredWindow->RootWindow : g->HoveredWindow;
+            if (hoveredRoot && strcmp(hoveredRoot->Name, "##main_dockspace") != 0)
+                return true;
+        }
+
+        // 4. On the gizmo dockspace window, pass input through to editor camera unless ImGuizmo is actively being manipulated
+        if (ImGuizmo::IsUsing())
+            return true;
+
+        return false;
+    }
+
+    bool ImGuiLayer::WantCaptureKeyboard() const
+    {
+        if (m_BlockEvents)
+            return false;
+
+        ImGuiContext *g = ImGui::GetCurrentContext();
+        if (!g)
+            return false;
+
+        ImGuiIO &io = ImGui::GetIO();
+        if (io.WantTextInput)
+            return true;
+
+        if (g->ActiveId != 0 && g->ActiveIdWindow != nullptr)
+        {
+            ImGuiWindow *activeRoot = g->ActiveIdWindow->RootWindow ? g->ActiveIdWindow->RootWindow : g->ActiveIdWindow;
+            if (activeRoot && strcmp(activeRoot->Name, "##main_dockspace") != 0)
+                return io.WantCaptureKeyboard;
+        }
+
+        return false;
+    }
+
     void ImGuiLayer::OnEvent(Event &event)
     {
-		if (m_BlockEvents)
-		{
-            // ImGuiIO &io = ImGui::GetIO();
-            // event.Handled |= event.IsInCategory(EventCategoryMouse) && io.WantCaptureMouse;
-            // event.Handled |= event.IsInCategory(EventCategoryKeyboard) && io.WantCaptureKeyboard;
-		}
+        if (!m_BlockEvents)
+        {
+            if (event.IsInCategory(EventCategoryMouse) && WantCaptureMouse())
+            {
+                event.Handled = true;
+            }
+
+            if (event.IsInCategory(EventCategoryKeyboard) && WantCaptureKeyboard())
+            {
+                event.Handled = true;
+            }
+        }
 
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<FramebufferResizeEvent>(BIND_CLASS_EVENT_FN(ImGuiLayer::OnFramebufferResize));

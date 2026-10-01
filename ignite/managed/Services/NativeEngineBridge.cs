@@ -109,20 +109,20 @@ public static class NativeEngineBridge
     public static extern ulong Ignite_Viewport_PickEntity(float mouseX, float mouseY, uint viewportWidth, uint viewportHeight, [MarshalAs(UnmanagedType.I1)] bool isDoubleClick, [MarshalAs(UnmanagedType.I1)] bool isShiftDown);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void Ignite_Viewport_SetSelectedEntity(ulong uuid);
+    public static extern void Ignite_Viewport_SyncSingleSelection(ulong uuid);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void Ignite_Viewport_SelectEntity(ulong uuid, [MarshalAs(UnmanagedType.I1)] bool multiSelect);
+    public static extern void Ignite_Viewport_AddEntityToSelectionFromViewport(ulong uuid);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void Ignite_Viewport_DeselectEntity(ulong uuid);
+    public static extern void Ignite_Viewport_DeselectEntityFromViewport(ulong uuid);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool Ignite_Viewport_IsEntitySelected(ulong uuid);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void Ignite_Viewport_SetSelectedEntities([In] ulong[] uuids, uint count);
+    public static extern void Ignite_Viewport_SyncSelectedEntities([In] ulong[] uuids, uint count);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern uint Ignite_Viewport_GetSelectedEntities([Out] ulong[] outUuids, uint maxCount);
@@ -131,7 +131,7 @@ public static class NativeEngineBridge
     public static extern uint Ignite_Viewport_GetSelectedEntityCount();
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void Ignite_Viewport_ClearSelectedEntities();
+    public static extern void Ignite_Viewport_SyncClearSelection();
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern ulong Ignite_Viewport_GetSelectedEntity();
@@ -141,6 +141,43 @@ public static class NativeEngineBridge
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern void Ignite_Viewport_SetEntitySelectedCallback(EntitySelectedCallback? callback);
+
+    // ======================================
+    // Viewport Gizmo & Snapping API
+    // ======================================
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SetGizmoOperation(int op);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int Ignite_Viewport_GetGizmoOperation();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_CycleGizmoOperation();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SetGizmoMode(int mode);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int Ignite_Viewport_GetGizmoMode();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SetSnapEnabled([MarshalAs(UnmanagedType.I1)] bool enabled);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool Ignite_Viewport_GetSnapEnabled();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SetSnapValue(int op, float value);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern float Ignite_Viewport_GetSnapValue(int op);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void GizmoOperationChangedCallback(int op);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void Ignite_Viewport_SetGizmoOperationChangedCallback(GizmoOperationChangedCallback? callback);
 
     // ======================================
     // Scene API

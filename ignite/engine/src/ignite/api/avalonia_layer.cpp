@@ -17,6 +17,8 @@
 #include "ignite/serializer/scene_serializer.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/scene/prefab.hpp"
+#include "ignite/core/command.hpp"
+#include "ignite/scene/component_property_command.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
 
 #ifndef IMGUI_DEFINE_MATH_OPERATORS
@@ -48,6 +50,7 @@ namespace ignite
         m_EditorCamera.UpdateView();
         m_EditorCamera.UpdateProjection(width, height);
         m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+        m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
 
         if (auto *imguiLayer = Application::GetInstance()->GetImGuiLayer())
         {
@@ -94,14 +97,39 @@ namespace ignite
                 }
             }
 
-            // Camera update using SDL3 InputSystem
-            if (!ImGui::GetIO().WantCaptureMouse && !ImGui::GetIO().WantCaptureKeyboard)
+            m_EditorCamera.UpdateMouseState();
+
+            auto *imguiLayer = Application::GetInstance()->GetImGuiLayer();
+            const bool blockMouse = imguiLayer ? imguiLayer->WantCaptureMouse() : false;
+            const bool blockKeyboard = imguiLayer ? imguiLayer->WantCaptureKeyboard() : false;
+            const bool gizmoEnabled = m_GizmoOperation != GizmoOperation::NONE && !m_SelectedEntities.empty();
+            const bool isGizmoManipulating = gizmoEnabled && (m_Gizmo.IsManipulating() || m_IsGizmoManipulating);
+
+            // Camera navigation: user can orbit (RMB) or pan (MMB).
+            // Navigation can only begin if mouse is not blocked by ImGui and gizmo is not manipulating.
+            const bool wantsNavigate = m_EditorCamera.mouse.rightButtonDown || m_EditorCamera.mouse.middleButtonDown;
+            if (!m_IsCameraNavigating)
             {
-                m_EditorCamera.UpdateMouseState();
+                if (wantsNavigate && !blockMouse && !isGizmoManipulating)
+                {
+                    m_IsCameraNavigating = true;
+                }
+            }
+            else
+            {
+                if (!wantsNavigate || isGizmoManipulating)
+                {
+                    m_IsCameraNavigating = false;
+                }
+            }
+
+            if ((!blockMouse || m_IsCameraNavigating) && !isGizmoManipulating)
+            {
                 switch (m_EditorCamera.GetNavigationMode())
                 {
                 case EditorCamera::NavigationMode::Fly:
-                    m_EditorCamera.HandleFly(deltaTime);
+                    if (!blockKeyboard)
+                        m_EditorCamera.HandleFly(deltaTime);
                     m_EditorCamera.HandlePan(deltaTime);
                     m_EditorCamera.HandleZoom(deltaTime);
                     break;
@@ -116,10 +144,12 @@ namespace ignite
                     m_EditorCamera.HandleZoom(deltaTime);
                     break;
                 }
-
             }
 
-            m_EditorCamera.ApplyInertia(deltaTime);
+            if (!isGizmoManipulating)
+            {
+                m_EditorCamera.ApplyInertia(deltaTime);
+            }
             m_EditorCamera.UpdateCameraPosition(deltaTime);
             m_EditorCamera.UpdateView();
         }
@@ -143,7 +173,11 @@ namespace ignite
 
     void AvaloniaLayer::OnGuiRender()
     {
-        // DrawGizmo();
+        if (m_ActiveScene)
+        {
+            DrawGizmo();
+            ImGui::ShowDemoWindow();
+        }
     }
 
     void AvaloniaLayer::SetActiveScene(const Ref<Scene> &scene)
@@ -467,10 +501,42 @@ namespace ignite
         // =============================
         dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent &event)
         {
+            auto *imguiLayer = Application::GetInstance()->GetImGuiLayer();
+            if (imguiLayer && imguiLayer->WantCaptureKeyboard())
+                return false;
+
             const bool control = InputSystem::IsModifierPressed(KeyMod::Control);
-            const bool shift = InputSystem::IsModifierPressed(KeyMod::LeftShift);
+            const bool shift = InputSystem::IsModifierPressed(KeyMod::LeftShift) || InputSystem::IsModifierPressed(KeyMod::RightShift);
+            const bool alt = InputSystem::IsModifierPressed(KeyMod::LeftAlt) || InputSystem::IsModifierPressed(KeyMod::RightAlt);
 
             m_MultiSelect = shift;
+
+            if (event.GetRepeatCount() == 0 && !control && !shift && !alt && !m_EditorCamera.mouse.rightButtonDown && !m_EditorCamera.mouse.middleButtonDown)
+            {
+                switch (event.GetKeyCode())
+                {
+                case Key::Space:
+                    CycleGizmoOperation();
+                    return true;
+                case Key::Q:
+                    SetGizmoOperation(static_cast<int>(GizmoOperation::NONE));
+                    return true;
+                case Key::W:
+                    SetGizmoOperation(static_cast<int>(GizmoOperation::TRANSLATE));
+                    return true;
+                case Key::E:
+                    SetGizmoOperation(static_cast<int>(GizmoOperation::ROTATE));
+                    return true;
+                case Key::R:
+                    SetGizmoOperation(static_cast<int>(GizmoOperation::SCALE));
+                    return true;
+                case Key::T:
+                    SetGizmoOperation(static_cast<int>(GizmoOperation::BOUND_SIZING_2D));
+                    return true;
+                default:
+                    break;
+                }
+            }
 
             switch (event.GetKeyCode())
             {
@@ -554,7 +620,11 @@ namespace ignite
             if (e.GetSource() != EventSource::Viewport)
                 return false;
 
-            if (ImGui::GetIO().WantCaptureMouse)
+            auto *imguiLayer = Application::GetInstance()->GetImGuiLayer();
+            if (imguiLayer && imguiLayer->WantCaptureMouse())
+                return false;
+
+            if (m_GizmoOperation != GizmoOperation::NONE && (m_Gizmo.IsManipulating() || m_IsGizmoManipulating))
                 return false;
 
             m_EditorCamera.mouse.scroll = { static_cast<int>(event.GetXOffset()), static_cast<int>(event.GetYOffset()) };
@@ -574,7 +644,14 @@ namespace ignite
                 auto scene = GetActiveScene();
 
                 // Picking is disabled while playing scene
-                if (!scene || SceneGetState() == static_cast<int>(ESceneState::Play) || ImGui::GetIO().WantCaptureMouse)
+                if (!scene || SceneGetState() == static_cast<int>(ESceneState::Play))
+                    return false;
+
+                auto *imguiLayer = Application::GetInstance()->GetImGuiLayer();
+                if (imguiLayer && imguiLayer->WantCaptureMouse())
+                    return false;
+
+                if (m_IsGizmoManipulating || m_IsGizmoBeingUse)
                     return false;
 
                 // Don't pick if right or middle mouse button is pressed (orbit/pan)
@@ -615,42 +692,41 @@ namespace ignite
 
                 if (!m_MultiSelect)
                 {
-                    if (pickedEntity.IsValid())
-                    {
-                        ClearSelectedEntities();
-                        SetSelectedEntity(pickedEntity);
-                        if (m_EntitySelectedCallback)
-                            m_EntitySelectedCallback(static_cast<uint64_t>(pickedEntity.GetUUID()), false);
-                    }
+                    // A plain click on the selected entity toggles it off. Clicking
+                    // empty space also clears the complete selection.
+                    if (pickedEntity.IsValid() && IsEntitySelected(pickedEntity.GetUUID()))
+                        ClearSelectionFromViewport();
                     else
-                    {
-                        ClearSelectedEntities();
-                        if (m_EntitySelectedCallback)
-                            m_EntitySelectedCallback(0, false);
-                    }
+                        SelectSingleEntityFromViewport(
+                            pickedEntity.IsValid()
+                            ? pickedEntity.GetUUID()
+                            : UUID(0)
+                        );
                 }
-                else
+                else if (pickedEntity.IsValid())
                 {
-                    if (pickedEntity.IsValid())
-                    {
-                        // SHIFT appends to the current selection. Do not toggle an entity
-                        // off when it is already selected; CTRL retains toggle behavior.
-                        if (isShift)
-                            SelectEntity(pickedEntity.GetUUID(), true);
-                        else
-                            SetSelectedEntity(pickedEntity);
-
-                        if (m_EntitySelectedCallback)
-                            m_EntitySelectedCallback(static_cast<uint64_t>(pickedEntity.GetUUID()), true);
-                    }
+                    // Shift/Ctrl both use the same toggle behavior in the viewport:
+                    // add an unselected entity and remove an already selected one.
+                    if (IsEntitySelected(pickedEntity.GetUUID()))
+                        DeselectEntityFromViewport(pickedEntity.GetUUID());
+                    else
+                        AddEntityToSelectionFromViewport(pickedEntity.GetUUID());
                 }
             }
+
             return false;
         });
     }
 
     UUID AvaloniaLayer::PickEntity(float mouseX, float mouseY, uint32_t viewportWidth, uint32_t viewportHeight, bool isDoubleClick, bool isShiftDown)
     {
+        auto *imguiLayer = Application::GetInstance()->GetImGuiLayer();
+        if (imguiLayer && imguiLayer->WantCaptureMouse())
+            return UUID(0);
+
+        if (m_GizmoOperation != GizmoOperation::NONE && (m_Gizmo.IsManipulating() || m_Gizmo.IsHovered() || m_IsGizmoBeingUse))
+            return UUID(0);
+
         Ref<Scene> scene = GetActiveScene();
         if (!scene || !scene->registry || !m_SceneRenderer)
             return UUID(0);
@@ -756,38 +832,24 @@ namespace ignite
         return m_SelectedEntities.find(uuid) != m_SelectedEntities.end();
     }
 
-    Entity AvaloniaLayer::SetSelectedEntity(Entity entity)
+    Entity AvaloniaLayer::ApplySingleSelection(Entity entity)
     {
         if (!entity.IsValid())
         {
-            ClearSelectedEntities();
+            SyncClearSelection();
             return Entity{};
         }
 
-        // multi select
-        if (m_MultiSelect)
+        // This API is also used by the hierarchy-to-native synchronization.
+        // It must be idempotent; viewport click toggling is handled explicitly
+        // in OnEvent before calling the explicit viewport toggle methods.
+        if (m_SelectedEntities.size() == 1 && IsEntitySelected(entity.GetUUID()))
         {
-            if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
-            {
-                // de-select
-                if (m_SceneRenderer)
-                    m_SceneRenderer->UnselectEntity(it->second);
-                it = m_SelectedEntities.erase(it);
-
-                if (!m_SelectedEntities.empty())
-                {
-                    return m_SelectedEntities.begin()->second;
-                }
-                return Entity{};
-            }
-            else
-            {
-                m_SelectedEntities[entity.GetUUID()] = entity;
-                if (m_SceneRenderer)
-                    m_SceneRenderer->SetSelectedEntity(entity);
-            }
+            ApplyGizmoOperation();
+            return entity;
         }
-        else // single select
+
+        if (entity.IsValid())
         {
             m_SelectedEntities.clear();
             if (m_SceneRenderer)
@@ -798,20 +860,35 @@ namespace ignite
                 m_SceneRenderer->SetSelectedEntity(entity);
         }
 
+        ApplyGizmoOperation();
+
         return entity;
     }
 
-    Entity AvaloniaLayer::SetSelectedEntity(UUID uuid)
+    void AvaloniaLayer::SelectSingleEntityFromViewport(UUID uuid)
     {
         Ref<Scene> scene = GetActiveScene();
         if (!scene)
-            return Entity{};
+            return;
 
-        Entity entity = SceneManager::GetEntity(scene.get(), uuid);
-        return SetSelectedEntity(entity);
+        Entity entity = ApplySingleSelection(SceneManager::GetEntity(scene.get(), uuid));
+        if (m_EntitySelectedCallback)
+        {
+            m_EntitySelectedCallback(
+                entity.IsValid() ? static_cast<uint64_t>(entity.GetUUID()) : 0,
+                false
+            );
+        }
     }
 
-    void AvaloniaLayer::SelectEntity(UUID uuid, bool multiSelect)
+    void AvaloniaLayer::SyncSingleSelection(UUID uuid)
+    {
+        Ref<Scene> scene = GetActiveScene();
+        if (scene)
+            ApplySingleSelection(SceneManager::GetEntity(scene.get(), uuid));
+    }
+
+    void AvaloniaLayer::AddEntityToSelectionFromViewport(UUID uuid)
     {
         Ref<Scene> scene = GetActiveScene();
         if (!scene)
@@ -819,25 +896,19 @@ namespace ignite
 
         Entity entity = SceneManager::GetEntity(scene.get(), uuid);
         if (!entity.IsValid())
-        {
-            if (!multiSelect)
-                ClearSelectedEntities();
             return;
-        }
-
-        if (!multiSelect)
-        {
-            m_SelectedEntities.clear();
-            if (m_SceneRenderer)
-                m_SceneRenderer->ClearSelectedEntities();
-        }
 
         m_SelectedEntities[uuid] = entity;
         if (m_SceneRenderer)
             m_SceneRenderer->SetSelectedEntity(entity);
+
+        ApplyGizmoOperation();
+
+        if (m_EntitySelectedCallback)
+            m_EntitySelectedCallback(static_cast<uint64_t>(uuid), true);
     }
 
-    void AvaloniaLayer::DeselectEntity(UUID uuid)
+    void AvaloniaLayer::DeselectEntityFromViewport(UUID uuid)
     {
         auto it = m_SelectedEntities.find(uuid);
         if (it != m_SelectedEntities.end())
@@ -845,30 +916,62 @@ namespace ignite
             if (m_SceneRenderer)
                 m_SceneRenderer->UnselectEntity(it->second);
             m_SelectedEntities.erase(it);
+
+            // Any explicit deselection returns to the safe picking mode.
+            SetGizmoOperation(static_cast<int>(GizmoOperation::NONE));
+
+            if (m_EntitySelectedCallback)
+                m_EntitySelectedCallback(static_cast<uint64_t>(uuid), true);
         }
     }
 
-    void AvaloniaLayer::ClearSelectedEntities()
+    void AvaloniaLayer::ClearSelectionFromViewport()
     {
         m_SelectedEntities.clear();
+        m_IsGizmoManipulating = false;
+        m_IsGizmoBeingUse = false;
+
+        // Clear GIZMO Operation and notify the Avalonia toolbar.
+        SetGizmoOperation(static_cast<int>(GizmoOperation::NONE));
+
         if (m_SceneRenderer)
-        {
             m_SceneRenderer->ClearSelectedEntities();
-        }
+
+        if (m_EntitySelectedCallback)
+            m_EntitySelectedCallback(0, false);
     }
 
-    void AvaloniaLayer::SetSelectedEntities(const uint64_t *uuids, uint32_t count)
+    void AvaloniaLayer::SyncClearSelection()
+    {
+        m_SelectedEntities.clear();
+        m_IsGizmoManipulating = false;
+        m_IsGizmoBeingUse = false;
+
+        // Managed synchronization must not change the user's active tool.
+        // The stored operation is restored by ApplyGizmoOperation when the
+        // next entity is selected.
+        if (m_SceneRenderer)
+            m_SceneRenderer->ClearSelectedEntities();
+    }
+
+    void AvaloniaLayer::SyncSelectedEntities(const uint64_t *uuids, uint32_t count)
     {
         m_SelectedEntities.clear();
         if (m_SceneRenderer)
             m_SceneRenderer->ClearSelectedEntities();
 
         if (!uuids || count == 0)
+        {
+            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
             return;
+        }
 
         Ref<Scene> scene = GetActiveScene();
         if (!scene)
+        {
+            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
             return;
+        }
 
         for (uint32_t i = 0; i < count; ++i)
         {
@@ -880,6 +983,15 @@ namespace ignite
                 if (m_SceneRenderer)
                     m_SceneRenderer->SetSelectedEntity(entity);
             }
+        }
+
+        if (m_SelectedEntities.empty())
+        {
+            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+        }
+        else
+        {
+            ApplyGizmoOperation();
         }
     }
 
@@ -996,7 +1108,7 @@ namespace ignite
     {
         constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse
             | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
-            | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+            | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
 
         const ImGuiViewport *viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->Pos);
@@ -1009,7 +1121,345 @@ namespace ignite
         window->DC.LayoutType = ImGuiLayoutType_Horizontal;
         window->DC.NavLayerCurrent = ImGuiNavLayer_Menu;
 
-        ImGui::Text("Hello world");
+        // Begin GIZMO Manipulation
+        auto view = m_EditorCamera.GetView();
+        auto &projection = m_EditorCamera.GetProjection();
+
+#if 0
+        // Draw orientation just for Perspective projection
+        if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
+        {
+            constexpr float orientationSize = 80.0f;
+            ImGuiOrientation::internal::config.mSize = orientationSize;
+
+            constexpr float orientationPadding = 25.0f;
+            ImGuiOrientation::config.axisLengthScale = 0.25f;
+            ImGuiOrientation::SetRect
+            (
+                globals::GEditor::EditorViewport.max.x + globals::GEditor::EditorViewport.min.x - orientationSize - orientationPadding,
+                globals::GEditor::EditorViewport.min.y + orientationPadding
+            );
+
+            if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
+            {
+                glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
+                m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
+                m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
+            }
+        }
+#endif
+
+        // Setup gizmo
+        GizmoInfo gizmoInfo;
+        gizmoInfo.cameraView = view;
+        gizmoInfo.cameraProjection = projection;
+        gizmoInfo.cameraType = m_EditorCamera.projectionType;
+        gizmoInfo.viewRect = Rect({ 0, 0 }, { viewport->Size.x, viewport->Size.y });
+
+        gizmoInfo.isSnapping = m_SnapEnabled;
+
+        switch (m_GizmoOperation)
+        {
+            case GizmoOperation::TRANSLATE: gizmoInfo.snapValue = m_SnapValues[0]; break;
+            case GizmoOperation::ROTATE:    gizmoInfo.snapValue = m_SnapValues[1]; break;
+            case GizmoOperation::SCALE:     gizmoInfo.snapValue = m_SnapValues[2]; break;
+            default:                        gizmoInfo.snapValue = m_SnapValues[0]; break;
+        }
+
+        m_Gizmo.SetInfo(gizmoInfo);
+
+        // Start manipulation: Fired only on the first frame of interaction
+        // const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
+        // bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
+        const bool gizmoEnabled = m_GizmoOperation != GizmoOperation::NONE && !m_SelectedEntities.empty();
+        bool isManipulatingNow = gizmoEnabled && m_Gizmo.IsManipulating();
+
+        static std::unordered_map<UUID, TransformComponent> initialTransforms;
+
+        if (isManipulatingNow && !m_IsGizmoManipulating)
+        {
+            initialTransforms.clear();
+            for (const auto &[uuid, entity] : m_SelectedEntities)
+            {
+                // Store the original transform of each selected entity
+                initialTransforms[uuid] = entity.GetTransform();
+            }
+        }
+
+        // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
+        bool isPlayOrSimulate = m_ActiveScene->GetState() == ESceneState::Play || m_ActiveScene->GetState() == ESceneState::Simulate;
+        bool wasManipulating = m_IsGizmoManipulating;
+
+        m_IsGizmoManipulating = isManipulatingNow;
+        m_IsGizmoBeingUse = gizmoEnabled && (isManipulatingNow || m_Gizmo.IsHovered());
+
+        if (gizmoEnabled && m_SelectedEntities.size() > 1)
+        {
+            // Step 1: Compute shared pivot (center of all selected entities)
+            glm::vec3 pivot(0.0f);
+            for (Entity entity : m_SelectedEntities | std::views::values)
+            {
+                pivot += entity.GetTransform().world.translation;
+            }
+            pivot /= static_cast<float>(m_SelectedEntities.size());
+
+            // Step 2: create a transform matrix for the gizmo at the pivot point
+            glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
+            glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
+
+            // Step 3: Manipulate the matrix
+            m_Gizmo.Manipulate(manipulatedTransform);
+
+            if (m_IsGizmoManipulating)
+            {
+                // THis delta is now the TOTAL change from the moment of manipulation began
+                glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
+
+                // Decompose the total delta
+                glm::vec3 deltaTranslation, deltaScale, deltaRotation;
+                Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
+
+                for (auto &[uuid, entity] : m_SelectedEntities)
+                {
+                    // Get the live transform component to apply changes to it
+                    auto &tr = entity.GetTransform();
+
+                    // Get the ORIGINAL transform we stored at the beginning of the manipulation
+                    const auto &initialTransform = initialTransforms.at(uuid);
+                    glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
+
+                    // Apply Translation and Rotation around the shared pivot
+                    glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
+                    glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), pivot);
+                    glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
+
+                    // Apply the total delta to the ORIGINAL world matrix
+                    glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
+                    glm::vec3 newTranslation, newRotationEuler, newScale;
+                    Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
+
+                    // ----- Apply Scale and Update Local Transform -----
+                    if (entity.GetParentUUID() != UUID(0))
+                    {
+                        Entity parent = SceneManager::GetEntity(m_ActiveScene.get(), entity.GetParentUUID());
+                        const auto &parentTr = parent.GetTransform();
+                        glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                        glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
+
+                        glm::vec3 localTranslation, localEuler, localScale;
+                        Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                        tr.local.translation = localTranslation;
+                        tr.local.rotation = glm::quat(localEuler);
+
+                        // Apply the total scale delta to the ORIGINAL local scale
+                        tr.local.scale = initialTransform.local.scale * deltaScale;
+                    }
+                    else
+                    {
+                        tr.local.translation = newTranslation;
+                        tr.local.rotation = glm::quat(newRotationEuler);
+
+                        // Apply the total scale delta to the ORIGINAL local scale
+                        tr.local.scale = initialTransform.local.scale * deltaScale;
+                    }
+
+                    tr.dirty = true;
+
+                    if (isPlayOrSimulate)
+                    {
+                        Application::SubmitToMainThread([scene = m_ActiveScene.get(), entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
+                            if (entity.IsValid())
+                            {
+                                if (entity.HasComponent<RigidbodyComponent>())
+                                {
+                                    auto &rb = entity.GetComponent<RigidbodyComponent>();
+                                    rb.isGizmoDragging = true;
+                                    if (auto dynActor = rb.dynamicActor.lock())
+                                    {
+                                        dynActor->SetPosition(translation, true);
+                                        dynActor->SetRotation(rotation, true);
+                                        dynActor->SetLinearVelocity(glm::vec3(0.0f));
+                                        dynActor->SetAngularVelocity(glm::vec3(0.0f));
+                                    }
+                                    else if (auto statActor = rb.staticActor.lock())
+                                    {
+                                        statActor->SetPosition(translation, true);
+                                        statActor->SetRotation(rotation, true);
+                                    }
+                                }
+                                if (entity.HasComponent<Rigidbody2DComponent>())
+                                {
+                                    auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
+                                    rb2D.isGizmoDragging = true;
+                                    if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
+                                    {
+                                        scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
+                                        scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
+                                        scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
+                                        scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
+                                        scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
+                                    }
+                                }
+                            }
+                            });
+                    }
+                }
+            }
+
+            // Commit commands when the multi-entity gizmo is released
+            if (!isManipulatingNow && wasManipulating)
+            {
+                if (isPlayOrSimulate)
+                {
+                    for (auto &[uuid, entity] : m_SelectedEntities)
+                    {
+                        Application::SubmitToMainThread([scene = m_ActiveScene.get(), entity]() mutable {
+                            if (entity.IsValid())
+                            {
+                                if (entity.HasComponent<RigidbodyComponent>())
+                                    entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
+                                if (entity.HasComponent<Rigidbody2DComponent>())
+                                    entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
+                            }
+                            });
+                    }
+                }
+
+                std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
+                for (auto &[uuid, entity] : m_SelectedEntities)
+                {
+                    if (auto it = initialTransforms.find(uuid); it != initialTransforms.end())
+                    {
+                        entries.push_back({ uuid, it->second, entity.GetTransform() });
+                    }
+                }
+
+                if (!entries.empty())
+                {
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyBatchCommand<TransformComponent>>(m_ActiveScene.get(), std::move(entries)));
+                }
+            }
+        }
+        else if (gizmoEnabled && GetSelectedEntity().IsValid())
+        {
+            Entity entity = GetSelectedEntity();
+            auto &tr = entity.GetTransform();
+            glm::mat4 transformMatrix = tr.world.GetMatrix();
+
+            m_Gizmo.Manipulate(transformMatrix);
+
+            if (m_Gizmo.IsManipulating())
+            {
+                const glm::vec3 preservedLocalScale = tr.local.scale;
+                glm::vec3 translation, rotation, scale;
+                Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
+                const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
+
+                if (entity.GetParentUUID() != UUID(0))
+                {
+                    Entity parent = SceneManager::GetEntity(m_ActiveScene.get(), entity.GetParentUUID());
+                    const auto &parentTr = parent.GetTransform();
+                    const glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
+
+                    glm::vec3 localTranslation, localEuler, localScale;
+                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                    tr.local.translation = localTranslation;
+                    tr.local.rotation = glm::quat(localEuler);
+
+                    if (op == ImGuizmo::SCALE)
+                    {
+                        tr.local.scale = localScale;
+                    }
+                    else
+                    {
+                        tr.local.scale = preservedLocalScale;
+                    }
+                }
+                else
+                {
+                    tr.local.translation = translation;
+                    tr.local.rotation = glm::quat(rotation);
+
+                    if (op == ImGuizmo::SCALE)
+                    {
+                        tr.local.scale = scale;
+                    }
+                    else
+                    {
+                        tr.local.scale = preservedLocalScale;
+                    }
+                }
+                tr.dirty = true;
+
+                // check if the entity has rigidbody and update its position and rotation in the physics engine
+                if (isPlayOrSimulate)
+                {
+                    Application::SubmitToMainThread([scene = m_ActiveScene.get(), entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
+                        if (entity.IsValid())
+                        {
+                            if (entity.HasComponent<RigidbodyComponent>())
+                            {
+                                auto &rb = entity.GetComponent<RigidbodyComponent>();
+                                rb.isGizmoDragging = true;
+                                if (auto dynActor = rb.dynamicActor.lock())
+                                {
+                                    dynActor->SetPosition(translation, true);
+                                    dynActor->SetRotation(rotation, true);
+                                    dynActor->SetLinearVelocity(glm::vec3(0.0f));
+                                    dynActor->SetAngularVelocity(glm::vec3(0.0f));
+                                }
+                                else if (auto statActor = rb.staticActor.lock())
+                                {
+                                    statActor->SetPosition(translation, true);
+                                    statActor->SetRotation(rotation, true);
+                                }
+                            }
+                            if (entity.HasComponent<Rigidbody2DComponent>())
+                            {
+                                auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
+                                rb2D.isGizmoDragging = true;
+                                if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
+                                {
+                                    scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
+                                    scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
+                                    scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
+                                    scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
+                                    scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
+                                }
+                            }
+                        }
+                        });
+                }
+            }
+
+            // Commit a single command when the gizmo is released (single entity)
+            if (!isManipulatingNow && wasManipulating)
+            {
+                if (isPlayOrSimulate)
+                {
+                    Application::SubmitToMainThread([scene = m_ActiveScene.get(), entity]() mutable {
+                        if (entity.IsValid())
+                        {
+                            if (entity.HasComponent<RigidbodyComponent>())
+                                entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
+                            if (entity.HasComponent<Rigidbody2DComponent>())
+                                entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
+                        }
+                        });
+                }
+
+                if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
+                {
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_ActiveScene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
+                }
+            }
+
+        }
+        
+
+        m_IsGizmoManipulating = gizmoEnabled && m_Gizmo.IsManipulating();
+        m_IsGizmoBeingUse = gizmoEnabled && (m_IsGizmoManipulating || m_Gizmo.IsHovered());
 
         ImGui::End();
     }
@@ -1024,5 +1474,117 @@ namespace ignite
     int AvaloniaLayer::GetNavigationMode() const
     {
         return static_cast<int>(m_EditorCamera.GetNavigationMode());
+    }
+
+    void AvaloniaLayer::ApplyGizmoOperation()
+    {
+        if (m_SelectedEntities.empty())
+        {
+            m_IsGizmoManipulating = false;
+            m_IsGizmoBeingUse = false;
+            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+            return;
+        }
+
+        if (m_GizmoOperation == GizmoOperation::NONE)
+        {
+            m_IsGizmoManipulating = false;
+            m_IsGizmoBeingUse = false;
+        }
+
+        switch (m_GizmoOperation)
+        {
+        case GizmoOperation::TRANSLATE:
+            m_Gizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
+            break;
+        case GizmoOperation::ROTATE:
+            m_Gizmo.SetOperation(ImGuizmo::OPERATION::ROTATE);
+            break;
+        case GizmoOperation::SCALE:
+            m_Gizmo.SetOperation(ImGuizmo::OPERATION::SCALE);
+            break;
+        default:
+            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+            break;
+        }
+    }
+
+    void AvaloniaLayer::SetGizmoOperation(int op)
+    {
+        m_GizmoOperation = static_cast<GizmoOperation>(op);
+        if (m_GizmoOperation == GizmoOperation::NONE)
+        {
+            m_IsGizmoManipulating = false;
+            m_IsGizmoBeingUse = false;
+        }
+        ApplyGizmoOperation();
+
+        if (m_GizmoOperationChangedCallback)
+        {
+            m_GizmoOperationChangedCallback(static_cast<int>(m_GizmoOperation));
+        }
+    }
+
+    int AvaloniaLayer::GetGizmoOperation() const
+    {
+        return static_cast<int>(m_GizmoOperation);
+    }
+
+    void AvaloniaLayer::CycleGizmoOperation()
+    {
+        GizmoOperation nextOp;
+        switch (m_GizmoOperation)
+        {
+        case GizmoOperation::TRANSLATE:
+            nextOp = GizmoOperation::ROTATE;
+            break;
+        case GizmoOperation::ROTATE:
+            nextOp = GizmoOperation::SCALE;
+            break;
+        case GizmoOperation::SCALE:
+            nextOp = GizmoOperation::TRANSLATE;
+            break;
+        default:
+            nextOp = GizmoOperation::TRANSLATE;
+            break;
+        }
+        SetGizmoOperation(static_cast<int>(nextOp));
+    }
+
+    void AvaloniaLayer::SetGizmoMode(int mode)
+    {
+        m_Gizmo.SetMode(mode == 1 ? ImGuizmo::MODE::WORLD : ImGuizmo::MODE::LOCAL);
+    }
+
+    int AvaloniaLayer::GetGizmoMode() const
+    {
+        return m_Gizmo.GetMode() == ImGuizmo::MODE::WORLD ? 1 : 0;
+    }
+
+    void AvaloniaLayer::SetSnapEnabled(bool enabled)
+    {
+        m_SnapEnabled = enabled;
+    }
+
+    bool AvaloniaLayer::GetSnapEnabled() const
+    {
+        return m_SnapEnabled;
+    }
+
+    void AvaloniaLayer::SetSnapValue(int op, float value)
+    {
+        if (op >= 0 && op < static_cast<int>(m_SnapValues.size()))
+        {
+            m_SnapValues[op] = value;
+        }
+    }
+
+    float AvaloniaLayer::GetSnapValue(int op) const
+    {
+        if (op >= 0 && op < static_cast<int>(m_SnapValues.size()))
+        {
+            return m_SnapValues[op];
+        }
+        return 0.0f;
     }
 }
