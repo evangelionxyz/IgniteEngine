@@ -20,6 +20,7 @@
 #include "ignite/graphics/font.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/widget.hpp"
+#include "ignite/imgui/imgui_layer.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/math/transform.hpp"
 #include "ignite/math/frustum.hpp"
@@ -4015,7 +4016,9 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         if (m_EditorLayer->GetState().gameplayViewportWindow)
         {
-            m_Data.sceneViewportGameplayVisible = ImGui::Begin("Game", &m_EditorLayer->GetState().gameplayViewportWindow);
+            m_Data.sceneViewportGameplayVisible = ImGui::Begin("Game", &m_EditorLayer->GetState().gameplayViewportWindow,
+                ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoScrollWithMouse);
+
             if (m_Data.sceneViewportGameplayVisible)
             {
                 // Preview camera

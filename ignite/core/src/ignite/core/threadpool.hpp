@@ -6,11 +6,9 @@
 
 #include "ignite/core/base.hpp"
 
-#include <cppcoro/coroutine.hpp>
-#include <cppcoro/task.hpp>
-
 #include <atomic>
 #include <condition_variable>
+#include <coroutine>
 #include <functional>
 #include <future>
 #include <memory>

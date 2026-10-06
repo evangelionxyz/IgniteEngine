@@ -30,6 +30,13 @@ namespace ignite
     class CascadedShadowMap;
     class WorldEnvironment;
 
+    enum class SampleMethod : uint8_t
+    {
+        TAA = 0,
+        MSAA = 1,
+        FXAA = 2
+    };
+
     struct DebugGridStyle
     {
         bool enabled = true;
@@ -59,6 +66,7 @@ namespace ignite
 
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
         MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
+        bool enableFXAA = true;
         float renderScale = 1.0f;
 
         nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
@@ -183,6 +191,7 @@ namespace ignite
         Ref<OutlineJFA> m_OutlineJFA;
 
         ConstantBuffer m_CompositePostProcessBuffer;
+        ConstantBuffer m_FXAABuffer;
         ConstantBuffer m_DebugGridBuffer;
         ConstantBuffer m_CascadedShadowMapBuffer;
         Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];

@@ -325,7 +325,6 @@ namespace ignite
                 material->SetType(MaterialType::Opaque);
             }
 
-            material->gpuData.metallicFactor = 0.0f;
             return material;
         }
 

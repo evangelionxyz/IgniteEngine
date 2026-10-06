@@ -164,6 +164,25 @@ namespace ignite
 			return Hashing::HashCombineAll(k.layout, k.cameraBuffer, k.lightingBuffer);
 		}
 	};
+
+	struct FXAABindingKey
+	{
+		nvrhi::IBindingLayout *layout = nullptr;
+		nvrhi::ITexture *inputTexture = nullptr;
+
+		bool operator==(const FXAABindingKey &other) const noexcept
+		{
+			return layout == other.layout && inputTexture == other.inputTexture;
+		}
+	};
+
+	struct FXAABindingKeyHash
+	{
+		size_t operator()(const FXAABindingKey &k) const noexcept
+		{
+			return Hashing::HashCombineAll(k.layout, k.inputTexture);
+		}
+	};
 }
 
 #endif

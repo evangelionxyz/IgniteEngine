@@ -194,12 +194,18 @@ PSOutput main(PixelVertexInput input)
             directLighting += OpenPBRDirect(surface, finalNormal, toLight, viewDirection, T, B, spIrradiance);
         }
 
-        float baseAmbient = 0.03f;
-        float occScale = 0.35f;
+        // Calculate diffuse irradiance from the environment map (using a high mip level for blurriness)
         float shadowAmbientFactor = lerp(0.0f, 1.0f, shadowTerm);
+        float3 diffuseIrradiance = SampleEnvironmentMap(environmentMapTexture, sampler0, finalNormal, scene.skyType, 100.0f); // use high LOD
+                
+        float3 F0 = lerp(0.04f, surface.baseColor, surface.metalness);
+        float3 F = F0 + (max(float3(1.0f - surface.specularRoughness, 1.0f - surface.specularRoughness, 1.0f - surface.specularRoughness), F0) - F0) * pow(clamp(1.0 - dot(finalNormal, viewDirection), 0.0, 1.0), 5.0);
+        float3 kS = F;
+        float3 kD = 1.0 - kS;
+        kD *= 1.0 - surface.metalness;
 
-        float3 ambient = surface.baseColor * surface.baseWeight * (1.0f - surface.metalness) *
-            (baseAmbient + occScale) * shadowAmbientFactor * ao;
+        float3 ambient = (kD * surface.baseColor * diffuseIrradiance) * shadowAmbientFactor * ao;
+        
         reflectedSpecular *= (shadowTerm * ao);
 
         float3 finalColor = directLighting + ambient + reflectedSpecular;

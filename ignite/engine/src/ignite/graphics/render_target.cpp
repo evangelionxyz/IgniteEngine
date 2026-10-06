@@ -57,12 +57,16 @@ namespace ignite {
                 // Set dimension and array size based on attachment configuration
                 if (attachment.arrayLayers > 1)
                 {
-                    createInfo.dimension = nvrhi::TextureDimension::Texture2DArray;
+                    createInfo.dimension = m_CreateInfo.sampleCount > 1
+                        ? nvrhi::TextureDimension::Texture2DMSArray
+                        : nvrhi::TextureDimension::Texture2DArray;
                     createInfo.arraySize = attachment.arrayLayers;
                 }
                 else
                 {
-                    createInfo.dimension = nvrhi::TextureDimension::Texture2D;
+                    createInfo.dimension = m_CreateInfo.sampleCount > 1
+                        ? nvrhi::TextureDimension::Texture2DMS
+                        : nvrhi::TextureDimension::Texture2D;
                 }
 
                 m_DepthAttachment = Texture::Create(createInfo);
@@ -100,12 +104,16 @@ namespace ignite {
                     // Set dimension and array size based on attachment configuration
                     if (attachment.arrayLayers > 1)
                     {
-                        createInfo.dimension = nvrhi::TextureDimension::Texture2DArray;
+                        createInfo.dimension = m_CreateInfo.sampleCount > 1
+                            ? nvrhi::TextureDimension::Texture2DMSArray
+                            : nvrhi::TextureDimension::Texture2DArray;
                         createInfo.arraySize = attachment.arrayLayers;
                     }
                     else
                     {
-                        createInfo.dimension = nvrhi::TextureDimension::Texture2D;
+                        createInfo.dimension = m_CreateInfo.sampleCount > 1
+                            ? nvrhi::TextureDimension::Texture2DMS
+                            : nvrhi::TextureDimension::Texture2D;
                     }
 
                     m_ColorAttachments.emplace_back(Texture::Create(createInfo));

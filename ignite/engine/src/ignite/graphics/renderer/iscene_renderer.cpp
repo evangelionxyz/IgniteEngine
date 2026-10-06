@@ -21,6 +21,7 @@ namespace ignite
     ISceneRenderer::ISceneRenderer()
         : m_CascadedShadowMapBuffer(sizeof(CSM_GPUData), false, 1, "[SceneRenderer] CSM Buffer")
 		, m_CompositePostProcessBuffer(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer")
+		, m_FXAABuffer(sizeof(glm::vec4), true, 16, "FXAA Buffer")
 		, m_DebugGridBuffer(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer")
     {
         for (int i = 0; i < NUM_CASCADES; ++i)

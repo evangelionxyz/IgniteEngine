@@ -673,15 +673,7 @@ namespace ignite
                 // viewport is hosted in a native child window, so a key event can be
                 // delivered through a different focus path than the mouse event.
                 const SDL_Keymod liveModifiers = SDL_GetModState();
-                const bool isShift = (liveModifiers & SDL_KMOD_SHIFT) != 0
-                    || InputSystem::IsModifierPressed(KeyMod::Shift)
-                    || InputSystem::IsModifierPressed(KeyMod::LeftShift)
-                    || InputSystem::IsModifierPressed(KeyMod::RightShift);
-                const bool isCtrl = (liveModifiers & SDL_KMOD_CTRL) != 0
-                    || InputSystem::IsModifierPressed(KeyMod::Control)
-                    || InputSystem::IsModifierPressed(KeyMod::LeftControl)
-                    || InputSystem::IsModifierPressed(KeyMod::RightControl);
-                m_MultiSelect = isShift || isCtrl;
+                m_MultiSelect = (liveModifiers & SDL_KMOD_SHIFT) != 0 || InputSystem::IsModifierPressed(KeyMod::Shift);
 
                 const uint64_t pickedUuid = static_cast<uint64_t>(PickEntity(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y),
                     m_Width, m_Height, isDoubleClick, m_MultiSelect));

@@ -350,31 +350,48 @@ namespace ignite
 
         EnsureSceneEnvironmentMap();
 
+        // Scene post processing
+        PostProcessing postProcessing = camera->postProcessing;
+        CameraLens cameraLens = camera->lens;
+
+        bool isGameCamera = false;
+        if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+        {
+            const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+            postProcessing = cc.camera.postProcessing;
+            cameraLens = cc.camera.lens;
+
+            isGameCamera = camera == &cc.camera;
+        }
+
+        postProcessing.taaProperties.enable = postProcessing.taaProperties.enable || sceneRenderSettings.taaProperties.enable;
+        postProcessing.taaProperties.blendFactor = sceneRenderSettings.taaProperties.enable ? sceneRenderSettings.taaProperties.blendFactor : postProcessing.taaProperties.blendFactor;
+        postProcessing.msaaProperties.enable = postProcessing.msaaProperties.enable || sceneRenderSettings.msaaProperties.enable;
+        postProcessing.msaaProperties.sampleCount = sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : postProcessing.msaaProperties.sampleCount;
+        postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
+
+        // Ensure MSAA render targets match current settings
+        {
+            const bool msaaEnabled = postProcessing.msaaProperties.enable;
+            int desiredSampleCount = msaaEnabled ? postProcessing.msaaProperties.sampleCount : 1;
+            if (desiredSampleCount <= 1) desiredSampleCount = 1;
+            else if (desiredSampleCount <= 2) desiredSampleCount = 2;
+            else if (desiredSampleCount <= 4) desiredSampleCount = 4;
+            else desiredSampleCount = 8;
+
+            const uint32_t baseWidth = target->compositeRT ? target->compositeRT->GetWidth() : m_ViewportWidth;
+            const uint32_t baseHeight = target->compositeRT ? target->compositeRT->GetHeight() : m_ViewportHeight;
+            const uint32_t renderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(baseWidth) * postProcessing.renderScale)));
+            const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(baseHeight) * postProcessing.renderScale)));
+
+            EnsureMSAARenderTargets(target, desiredSampleCount, renderWidth, renderHeight);
+        }
+
         // Create fresh command list for this frame
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
             cmd->open();
-
-            // Scene post processing
-            PostProcessing postProcessing = camera->postProcessing;
-            CameraLens cameraLens = camera->lens;
-
-            bool isGameCamera = false;
-            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
-            {
-                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                postProcessing = cc.camera.postProcessing;
-                cameraLens = cc.camera.lens;
-
-                isGameCamera = camera == &cc.camera;
-            }
-
-            postProcessing.taaProperties.enable = postProcessing.taaProperties.enable || sceneRenderSettings.taaProperties.enable;
-            postProcessing.taaProperties.blendFactor = sceneRenderSettings.taaProperties.enable ? sceneRenderSettings.taaProperties.blendFactor : postProcessing.taaProperties.blendFactor;
-            postProcessing.msaaProperties.enable = postProcessing.msaaProperties.enable || sceneRenderSettings.msaaProperties.enable;
-            postProcessing.msaaProperties.sampleCount = sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : postProcessing.msaaProperties.sampleCount;
-            postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
 
             glm::mat4 projection = camera->GetProjection();
             if (postProcessing.taaProperties.enable && target->sceneRT)
@@ -578,19 +595,16 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::MSAAResolve");
                 Ref<Texture> msaaColor = target->sceneRT->GetColorAttachment(0);
-                Ref<Texture> msaaObjID = target->sceneRT->GetColorAttachment(1);
                 Ref<Texture> resolvedColor = target->sceneResolvedRT->GetColorAttachment(0);
-                Ref<Texture> resolvedObjID = target->sceneResolvedRT->GetColorAttachment(1);
 
                 cmd->setTextureState(*resolvedColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveDest);
-                cmd->setTextureState(*resolvedObjID, nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveDest);
+                cmd->setTextureState(*msaaColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ResolveSource);
                 cmd->commitBarriers();
 
                 cmd->resolveTexture(*resolvedColor, nvrhi::TextureSubresourceSet(), *msaaColor, nvrhi::TextureSubresourceSet());
-                cmd->resolveTexture(*resolvedObjID, nvrhi::TextureSubresourceSet(), *msaaObjID, nvrhi::TextureSubresourceSet());
 
                 cmd->setTextureState(*resolvedColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-                cmd->setTextureState(*resolvedObjID, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->setTextureState(*msaaColor, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
                 cmd->commitBarriers();
             }
 
@@ -644,7 +658,7 @@ namespace ignite
             }
 
             Ref<Texture> ssaoTexture = nullptr;
-            if (postProcessing.enableSSAO)
+            if (postProcessing.enableSSAO && !msaaActive)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::HBAOPass", 0x404040FF);
                 const auto &SSAOs = GetOrCreateSSAOs(cmd, camera);
@@ -656,7 +670,22 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, targetFramebuffer);
+                nvrhi::IFramebuffer* finalCompositeFB = targetFramebuffer ? targetFramebuffer : target->compositeRT->GetFramebuffer().Get();
+                
+                if (sceneRenderSettings.enableFXAA && target->postProcessRT)
+                {
+                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, target->postProcessRT->GetFramebuffer().Get());
+
+                    cmd->setTextureState(*target->postProcessRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                    cmd->commitBarriers();
+                    
+                    IGN_PROFILE_SCOPE("SceneRenderer::FXAAPass");
+                    FXAAPass(cmd, finalCompositeFB, target->postProcessRT->GetColorAttachment(0));
+                }
+                else
+                {
+                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, finalCompositeFB);
+                }
             }
 
             if (postProcessing.taaProperties.enable && !targetFramebuffer)
@@ -680,6 +709,11 @@ namespace ignite
                     target->taaHistoryValid = true;
                     ++m_TAAFrameIndex;
                 }
+            }
+            else if (!targetFramebuffer)
+            {
+                cmd->setTextureState(*target->compositeRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+                cmd->commitBarriers();
             }
 
             target->previousPlan = plan;
@@ -997,6 +1031,8 @@ namespace ignite
                     target->widgetRT->Resize(width, height);
                 if (target->compositeRT)
                     target->compositeRT->Resize(width, height);
+                if (target->postProcessRT)
+                    target->postProcessRT->Resize(width, height);
                 for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
                 {
                     if (historyRT)
@@ -1006,7 +1042,7 @@ namespace ignite
 
                 if (target->debugRT)
                 {
-                    target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT ? target->sceneRT->GetDepthAttachment() : nullptr;
+                    target->debugRT->GetCreateInfo().depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
                     target->debugRT->Resize(renderWidth, renderHeight);
                 }
             }
@@ -1672,7 +1708,11 @@ namespace ignite
             IGN_PROFILE_SCOPE("SceneRenderer::TransparentMeshes");
 
             // Sort back-to-front (farthest first)
-            std::ranges::sort(transparentDrawCalls, [](const TransparentDrawCall &a, const TransparentDrawCall &b) { return a.distanceToCamera > b.distanceToCamera; });
+            std::ranges::sort(transparentDrawCalls, [](const TransparentDrawCall &a, const TransparentDrawCall &b) {
+                if (a.distanceToCamera != b.distanceToCamera)
+                    return a.distanceToCamera > b.distanceToCamera;
+                return a.pushConstants_ObjectIndex < b.pushConstants_ObjectIndex;
+            });
 
             nvrhi::GraphicsState transparentGState = nvrhi::GraphicsState();
             transparentGState.framebuffer = framebuffer;
@@ -3337,6 +3377,91 @@ namespace ignite
         return gp;
     }
 
+    Ref<GraphicsPipeline> SceneRenderer::GetFXAAPSO(nvrhi::IFramebuffer *framebuffer)
+    {
+        auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
+        auto it = m_FXAAPSOCache.find(key);
+        if (it != m_FXAAPSOCache.end())
+            return it->second;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        nvrhi::BindingLayoutDesc layoutDesc = {};
+        layoutDesc.visibility = nvrhi::ShaderType::All;
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // inputTexture
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));     // sampler
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // FXAABuffer
+
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = false;
+        params.enableDepthStencil = false;
+        params.fillMode = nvrhi::RasterFillMode::Solid;
+        params.cullMode = nvrhi::RasterCullMode::None;
+
+        // Create pipeline
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/fxaa.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/fxaa.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("FXAAPass");
+        gp->SetShaders({vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .Build(framebuffer, params);
+
+        m_FXAAPSOCache.emplace(key, gp);
+        return gp;
+    }
+
+    void SceneRenderer::FXAAPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> inputTexture)
+    {
+        IGN_PROFILE_FUNCTION();
+        
+        const auto& fbInfo = framebuffer->getFramebufferInfo();
+        glm::vec4 inverseScreenSize = glm::vec4(1.0f / (float)fbInfo.width, 1.0f / (float)fbInfo.height, 0.0f, 0.0f);
+        m_FXAABuffer.SetData(cmd, &inverseScreenSize, sizeof(glm::vec4));
+        cmd->setBufferState(m_FXAABuffer.GetHandle(), nvrhi::ResourceStates::ConstantBuffer);
+
+        Ref<GraphicsPipeline> pso = GetFXAAPSO(framebuffer);
+        nvrhi::IBindingLayout *layout = pso->GetBindingLayout(0).Get();
+
+        FXAABindingKey key { layout, inputTexture->GetHandle().Get() };
+        auto it = m_FXAABindingSetCache.find(key);
+        nvrhi::BindingSetHandle bindingSet;
+        if (it != m_FXAABindingSetCache.end())
+        {
+            bindingSet = it->second;
+        }
+        else
+        {
+            nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc()
+                .addItem(nvrhi::BindingSetItem::Texture_SRV(0, inputTexture->GetHandle()))
+                .addItem(nvrhi::BindingSetItem::Sampler(0, m_CompositeSampler.Get()))
+                .addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_FXAABuffer.GetHandle()));
+
+            bindingSet = DeviceManager::GetInstance()->GetDevice()->createBindingSet(desc, layout);
+            LOG_ASSERT(bindingSet, "[FXAA] Failed to create FXAA Binding Set");
+            m_FXAABindingSetCache.emplace(key, bindingSet);
+        }
+
+        cmd->setBufferState(*m_CompositeVertexBuffer, nvrhi::ResourceStates::VertexBuffer);
+
+        auto graphicsState = nvrhi::GraphicsState();
+        graphicsState.pipeline = *pso;
+        graphicsState.framebuffer = framebuffer;
+        graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding{ *m_CompositeVertexBuffer, 0, 0 } };
+        graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(fbInfo.getViewport());
+        graphicsState.bindings = { bindingSet };
+        cmd->setGraphicsState(graphicsState);
+
+        auto args = nvrhi::DrawArguments();
+        args.instanceCount = 1;
+        args.vertexCount = 6;
+        cmd->draw(args);
+    }
+
     nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
             Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler, bool useResolvedScene)
     {
@@ -3344,12 +3469,12 @@ namespace ignite
         Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
         Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
         Ref<Texture> taaHistory = taaHistoryTexture ? taaHistoryTexture : Renderer::GetBlackTexture();
-        Ref<Texture> depth = (target->sceneRT && target->sceneRT->GetDepthAttachment()) ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
         Ref<Texture> debug = (target->debugRT && target->debugRT->GetColorAttachment(0)) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
         Ref<Texture> widget = (target->widgetRT && target->widgetRT->GetColorAttachment(0)) ? target->widgetRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
 
         // When MSAA is active use the resolved single-sample textures for the composite pass
         const bool hasResolved = useResolvedScene && target->sceneResolvedRT;
+        Ref<Texture> depth = (target->sceneRT && target->sceneRT->GetDepthAttachment() && !hasResolved) ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
         Ref<Texture> sceneColor = (hasResolved ? target->sceneResolvedRT->GetColorAttachment(0) : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : Renderer::GetBlackTexture()));
         Ref<Texture> objectIDTex = hasResolved
             ? (target->sceneResolvedRT->GetColorAttachment(1) ? target->sceneResolvedRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture())
@@ -3434,12 +3559,12 @@ namespace ignite
                 FramebufferAttachments{ "[Scene DebugObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget },
                 FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }
             };
-            debugRTCreateInfo.depthAttachmentOverride = target->sceneRT ? target->sceneRT->GetDepthAttachment() : nullptr;
+            debugRTCreateInfo.depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
             target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
         }
         else if (target->debugRT->GetWidth() != renderWidth || target->debugRT->GetHeight() != renderHeight)
         {
-            target->debugRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT ? target->sceneRT->GetDepthAttachment() : nullptr;
+            target->debugRT->GetCreateInfo().depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
             target->debugRT->Resize(renderWidth, renderHeight);
         }
     }
@@ -3470,6 +3595,60 @@ namespace ignite
         }
     }
 
+    void SceneRenderer::EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight)
+    {
+        if (!target)
+            return;
+
+        const bool sampleCountChanged = (target->msaaSampleCount != desiredSampleCount);
+        const bool needsResolveRT = (desiredSampleCount > 1);
+        const bool resolveRTMissing = needsResolveRT && (!target->sceneResolvedRT);
+
+        if (!sampleCountChanged && !resolveRTMissing)
+            return;
+
+        GPUUploadSync::DeviceWaitIdle(m_Device);
+
+        target->msaaSampleCount = desiredSampleCount;
+
+        // Recreate sceneRT with the desired sample count
+        RenderTargetCreateInfo sceneRTCreateInfo = {};
+        sceneRTCreateInfo.width = renderWidth;
+        sceneRTCreateInfo.height = renderHeight;
+        sceneRTCreateInfo.sampleCount = desiredSampleCount;
+        sceneRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite },
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::RenderTarget },
+            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget }
+        };
+        target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
+
+        // Manage resolved target
+        if (desiredSampleCount > 1)
+        {
+            RenderTargetCreateInfo resolvedRTCreateInfo = {};
+            resolvedRTCreateInfo.width = renderWidth;
+            resolvedRTCreateInfo.height = renderHeight;
+            resolvedRTCreateInfo.sampleCount = 1;
+            resolvedRTCreateInfo.attachments =
+            {
+                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::ShaderResource },
+                FramebufferAttachments{ "[Scene Resolved ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::ShaderResource }
+            };
+            target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
+        }
+        else
+        {
+            target->sceneResolvedRT = nullptr;
+        }
+
+        // Invalidate debugRT so EnsureDebugRT recreates it with matching depth attachment or separate depth attachment
+        target->debugRT = nullptr;
+
+        m_CompositeBindingSetCache.clear();
+    }
+
     Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
     {
         auto it = m_RenderTargets.find(camera);
@@ -3481,9 +3660,13 @@ namespace ignite
         // Determine MSAA sample count from camera or scene settings
         const PostProcessing &pp = camera ? camera->postProcessing : PostProcessing{};
         const bool msaaEnabled = pp.msaaProperties.enable || sceneRenderSettings.msaaProperties.enable;
-        const int sampleCount = msaaEnabled
+        int sampleCount = msaaEnabled
             ? (sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : pp.msaaProperties.sampleCount)
             : 1;
+        if (sampleCount <= 1) sampleCount = 1;
+        else if (sampleCount <= 2) sampleCount = 2;
+        else if (sampleCount <= 4) sampleCount = 4;
+        else sampleCount = 8;
         target->msaaSampleCount = sampleCount;
 
         // =========================================
@@ -3531,6 +3714,7 @@ namespace ignite
             FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
         };
         target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
+        target->postProcessRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Post Process RT");
 
         if (!m_WidgetRenderer)
         {

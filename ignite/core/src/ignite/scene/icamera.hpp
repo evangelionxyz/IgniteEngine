@@ -62,6 +62,7 @@ namespace ignite
         bool enableBloom = false;
         bool enableSSAO = false; // HBAO-compatible ambient occlusion toggle
         bool debugSSAO = false; // Visualize raw AO buffer
+        bool enableFXAA = false; // Fast Approximate Anti-Aliasing
 
         // Bloom
         float bloomIntensity = 1.5f;

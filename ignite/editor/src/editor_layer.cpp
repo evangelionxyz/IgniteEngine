@@ -312,15 +312,6 @@ namespace ignite
             }
 
             m_ScenePanel->OnUpdate(deltaTime);
-
-            // Block ImGui mouse/keyboard input while the scene viewport is focused
-            // so users can't accidentally drag editor panels during gameplay.
-            if (auto *imguiLayer = Application::GetInstance()->GetImGuiLayer())
-            {
-                const bool isSceneFocused = m_ScenePanel->m_SceneFocused && m_ActiveScene->IsRunning()
-                    && (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
-                imguiLayer->SetBlock(isSceneFocused);
-            }
         }
     }
 
@@ -332,33 +323,6 @@ namespace ignite
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
     }
-
-#if 0
-    void EditorLayer::OnSDLEvent(SDL_Event *evt)
-    {
-        if (!m_SceneRenderer)
-        {
-            return;
-        }
-
-        SDL_Event modifiedEvent = *evt;
-        if (m_ScenePanel && (evt->type == SDL_EVENT_MOUSE_MOTION || evt->type == SDL_EVENT_MOUSE_BUTTON_DOWN || evt->type == SDL_EVENT_MOUSE_BUTTON_UP))
-        {
-            const glm::vec2& mousePos = m_ScenePanel->GetViewportMousePos();
-            if (evt->type == SDL_EVENT_MOUSE_MOTION)
-            {
-                modifiedEvent.motion.x = mousePos.x;
-                modifiedEvent.motion.y = mousePos.y;
-            }
-            else
-            {
-                modifiedEvent.button.x = mousePos.x;
-                modifiedEvent.button.y = mousePos.y;
-            }
-        }
-    }
-
-#endif
 
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)
     {
@@ -2541,6 +2505,12 @@ namespace ignite
                     {
                         UI::DrawCheckbox("Enable", &renderSettings.msaaProperties.enable);
                         UI::DrawIntControl("Samples", &renderSettings.msaaProperties.sampleCount, 1, 1, 16);
+                        ImGui::TreePop();
+                    }
+
+                    if (ImGui::TreeNodeEx("FXAA", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        UI::DrawCheckbox("Enable", &renderSettings.enableFXAA);
                         ImGui::TreePop();
                     }
 

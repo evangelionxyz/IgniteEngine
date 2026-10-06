@@ -336,19 +336,6 @@ namespace ignite
 
     void ImGuiLayer::OnEvent(Event &event)
     {
-        if (!m_BlockEvents)
-        {
-            if (event.IsInCategory(EventCategoryMouse) && WantCaptureMouse())
-            {
-                event.Handled = true;
-            }
-
-            if (event.IsInCategory(EventCategoryKeyboard) && WantCaptureKeyboard())
-            {
-                event.Handled = true;
-            }
-        }
-
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<FramebufferResizeEvent>(BIND_CLASS_EVENT_FN(ImGuiLayer::OnFramebufferResize));
         dispatcher.Dispatch<WindowDPIScaleChangedEvent>(BIND_CLASS_EVENT_FN(ImGuiLayer::OnDPIScaleChanged));

@@ -727,10 +727,7 @@ R"(<Project>
             std::string restoreCommand = std::format("msbuild \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
                 GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
             std::system(restoreCommand.c_str());
-        }
 
-        // Build
-        {
             AssetWorker::ReportStatus("Building Solution...", 0.8f);
             std::string buildCommand = std::format("msbuild \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
                 GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal

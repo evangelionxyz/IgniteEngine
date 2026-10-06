@@ -27,8 +27,7 @@ public sealed class DropTargetBrushConverter : IValueConverter
 
 public partial class SceneHierarchyPanel : UserControl
 {
-    private static readonly DataFormat<EntityNodeViewModel> EntityDragFormat =
-        DataFormat.CreateInProcessFormat<EntityNodeViewModel>("Ignite.EntityNode");
+    private static readonly DataFormat<EntityNodeViewModel> EntityDragFormat = DataFormat.CreateInProcessFormat<EntityNodeViewModel>("Ignite.EntityNode");
 
     private EntityNodeViewModel? _draggedNode;
     private PointerPressedEventArgs? _pointerPressedEvent;

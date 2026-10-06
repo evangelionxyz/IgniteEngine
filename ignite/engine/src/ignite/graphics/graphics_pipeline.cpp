@@ -66,7 +66,7 @@ namespace ignite
         renderState.rasterState.scissorEnable = m_Params.enableScissor;
         renderState.rasterState.depthClipEnable = m_Params.enableDepthClip;
         renderState.rasterState.frontCounterClockwise = false;
-        renderState.rasterState.multisampleEnable = false;
+        renderState.rasterState.multisampleEnable = framebuffer && (framebuffer->getFramebufferInfo().sampleCount > 1);
 
         nvrhi::GraphicsPipelineDesc pipelineDesc;
 

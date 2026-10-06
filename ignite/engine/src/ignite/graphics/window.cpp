@@ -248,7 +248,8 @@ namespace ignite
             return { false, EventSource::Viewport };
         };
 
-        auto dispatch = [this](Event &e, EventSource source) {
+        auto dispatch = [this](Event &e, EventSource source)
+        {
             e.SetSource(source);
             if (m_Callback)
             {

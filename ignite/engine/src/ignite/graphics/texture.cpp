@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -460,7 +460,19 @@ namespace ignite
     	LOG_ASSERT(m_CreateInfo.dimension != nvrhi::TextureDimension::Unknown, "[Texture] Dimension must be set");
     	LOG_ASSERT(m_CreateInfo.initialState != nvrhi::ResourceStates::Unknown, "[Texture] State must be set");
 
-        if (m_CreateInfo.width > 0 && m_CreateInfo.height > 0)
+        if (m_CreateInfo.sampleCount > 1)
+        {
+            m_CreateInfo.mipLevels = 1;
+            if (m_CreateInfo.dimension == nvrhi::TextureDimension::Texture2D)
+            {
+                m_CreateInfo.dimension = nvrhi::TextureDimension::Texture2DMS;
+            }
+            else if (m_CreateInfo.dimension == nvrhi::TextureDimension::Texture2DArray)
+            {
+                m_CreateInfo.dimension = nvrhi::TextureDimension::Texture2DMSArray;
+            }
+        }
+        else if (m_CreateInfo.width > 0 && m_CreateInfo.height > 0)
         {
             const uint32_t maxMips = CalculateMaxMipLevels(m_CreateInfo.width, m_CreateInfo.height, m_CreateInfo.depth);
             m_CreateInfo.mipLevels = (m_CreateInfo.mipLevels == 0) ? 1u : std::min(m_CreateInfo.mipLevels, maxMips);

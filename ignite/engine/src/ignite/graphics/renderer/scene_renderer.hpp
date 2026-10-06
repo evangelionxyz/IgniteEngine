@@ -59,6 +59,7 @@ namespace ignite
         Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
         Ref<RenderTarget> selectionRT;     // Single-sample selected-object ID mask for outlines
         Ref<RenderTarget> widgetRT;
+        Ref<RenderTarget> postProcessRT;  // Intermediate LDR target for tonemapping before FXAA/UI
         Ref<RenderTarget> compositeRT;
         Ref<RenderTarget> debugRT;
         Ref<RenderTarget> taaHistoryRT[3];
@@ -112,12 +113,14 @@ namespace ignite
         void EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
         void EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
         void EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
+        void EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight);
 
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, nvrhi::IFramebuffer *selectionFramebuffer, bool drawDebug);
         void UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
         void DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
         void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false, nvrhi::IFramebuffer *targetFramebuffer = nullptr);
+        void FXAAPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> inputTexture);
 
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D);
         void DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebufferm, FrameContext *frameContext);
@@ -183,6 +186,7 @@ namespace ignite
 
         Ref<GraphicsPipeline> GetEnvironmentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
         Ref<GraphicsPipeline> GetCompositePSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetFXAAPSO(nvrhi::IFramebuffer *framebuffer);
 
         nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &gridBuffer);
         nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
@@ -212,10 +216,12 @@ namespace ignite
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_EnvironmentPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CompositePSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_FXAAPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_DebugGridPSOCache;
 
         std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> m_CompositeBindingSetCache;
         std::unordered_map<DebugGridBindingKey, nvrhi::BindingSetHandle, DebugGridBindingKeyHash> m_DebugGridBindingSetCache;
+        std::unordered_map<FXAABindingKey, nvrhi::BindingSetHandle, FXAABindingKeyHash> m_FXAABindingSetCache;
 
         std::unordered_map<ICamera *, CameraWidgetInputState> m_CameraInputStates;
 
