@@ -2494,24 +2494,25 @@ namespace ignite
             {
                 if (ImGui::TreeNodeEx("Sampling"))
                 {
-                    if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
+                    static const char *sampleMethodLabels[] = { "None", "TAA", "MSAA", "FXAA" };
+                    int currentMethod = static_cast<int>(renderSettings.sampleMethod);
+                    if (UI::DrawComboBox("Method", sampleMethodLabels, IM_ARRAYSIZE(sampleMethodLabels), &currentMethod))
                     {
-                        UI::DrawCheckbox("Enable", &renderSettings.taaProperties.enable);
+                        m_SceneRenderer->SetSampleMethod(static_cast<SampleMethod>(currentMethod));
+                    }
+
+                    if (renderSettings.sampleMethod == SampleMethod::TAA)
+                    {
                         UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
-                        ImGui::TreePop();
                     }
-
-                    if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
+                    else if (renderSettings.sampleMethod == SampleMethod::MSAA)
                     {
-                        UI::DrawCheckbox("Enable", &renderSettings.msaaProperties.enable);
-                        UI::DrawIntControl("Samples", &renderSettings.msaaProperties.sampleCount, 1, 1, 16);
-                        ImGui::TreePop();
-                    }
-
-                    if (ImGui::TreeNodeEx("FXAA", ImGuiTreeNodeFlags_DefaultOpen))
-                    {
-                        UI::DrawCheckbox("Enable", &renderSettings.enableFXAA);
-                        ImGui::TreePop();
+                        if (UI::DrawIntControl("Samples", &renderSettings.msaaProperties.sampleCount, 1, 2, 8))
+                        {
+                            if (renderSettings.msaaProperties.sampleCount <= 2) renderSettings.msaaProperties.sampleCount = 2;
+                            else if (renderSettings.msaaProperties.sampleCount <= 4) renderSettings.msaaProperties.sampleCount = 4;
+                            else renderSettings.msaaProperties.sampleCount = 8;
+                        }
                     }
 
                     ImGui::TreePop();

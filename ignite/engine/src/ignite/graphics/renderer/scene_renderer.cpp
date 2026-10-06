@@ -364,10 +364,35 @@ namespace ignite
             isGameCamera = camera == &cc.camera;
         }
 
-        postProcessing.taaProperties.enable = postProcessing.taaProperties.enable || sceneRenderSettings.taaProperties.enable;
-        postProcessing.taaProperties.blendFactor = sceneRenderSettings.taaProperties.enable ? sceneRenderSettings.taaProperties.blendFactor : postProcessing.taaProperties.blendFactor;
-        postProcessing.msaaProperties.enable = postProcessing.msaaProperties.enable || sceneRenderSettings.msaaProperties.enable;
-        postProcessing.msaaProperties.sampleCount = sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : postProcessing.msaaProperties.sampleCount;
+        switch (sceneRenderSettings.sampleMethod)
+        {
+        case SampleMethod::NONE:
+            postProcessing.taaProperties.enable = false;
+            postProcessing.msaaProperties.enable = false;
+            postProcessing.enableFXAA = false;
+            sceneRenderSettings.enableFXAA = false;
+            break;
+        case SampleMethod::TAA:
+            postProcessing.taaProperties.enable = true;
+            postProcessing.taaProperties.blendFactor = sceneRenderSettings.taaProperties.blendFactor;
+            postProcessing.msaaProperties.enable = false;
+            postProcessing.enableFXAA = false;
+            sceneRenderSettings.enableFXAA = false;
+            break;
+        case SampleMethod::MSAA:
+            postProcessing.taaProperties.enable = false;
+            postProcessing.msaaProperties.enable = true;
+            postProcessing.msaaProperties.sampleCount = sceneRenderSettings.msaaProperties.sampleCount;
+            postProcessing.enableFXAA = false;
+            sceneRenderSettings.enableFXAA = false;
+            break;
+        case SampleMethod::FXAA:
+            postProcessing.taaProperties.enable = false;
+            postProcessing.msaaProperties.enable = false;
+            postProcessing.enableFXAA = true;
+            sceneRenderSettings.enableFXAA = true;
+            break;
+        }
         postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
 
         // Ensure MSAA render targets match current settings
@@ -3659,10 +3684,24 @@ namespace ignite
 
         // Determine MSAA sample count from camera or scene settings
         const PostProcessing &pp = camera ? camera->postProcessing : PostProcessing{};
-        const bool msaaEnabled = pp.msaaProperties.enable || sceneRenderSettings.msaaProperties.enable;
-        int sampleCount = msaaEnabled
-            ? (sceneRenderSettings.msaaProperties.enable ? sceneRenderSettings.msaaProperties.sampleCount : pp.msaaProperties.sampleCount)
-            : 1;
+        bool msaaEnabled = false;
+        int sampleCount = 1;
+        if (sceneRenderSettings.sampleMethod == SampleMethod::MSAA)
+        {
+            msaaEnabled = true;
+            sampleCount = sceneRenderSettings.msaaProperties.sampleCount;
+        }
+        else if (sceneRenderSettings.sampleMethod == SampleMethod::NONE || sceneRenderSettings.sampleMethod == SampleMethod::FXAA || sceneRenderSettings.sampleMethod == SampleMethod::TAA)
+        {
+            msaaEnabled = false;
+            sampleCount = 1;
+        }
+        else
+        {
+            msaaEnabled = pp.msaaProperties.enable;
+            sampleCount = pp.msaaProperties.sampleCount;
+        }
+
         if (sampleCount <= 1) sampleCount = 1;
         else if (sampleCount <= 2) sampleCount = 2;
         else if (sampleCount <= 4) sampleCount = 4;

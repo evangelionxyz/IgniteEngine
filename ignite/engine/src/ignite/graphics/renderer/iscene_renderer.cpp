@@ -208,5 +208,10 @@ namespace ignite
     {
         return m_CascadedShadowMap;
     }
+
+    void ISceneRenderer::SetSampleMethod(SampleMethod method)
+    {
+        sceneRenderSettings.SetSampleMethod(method);
+    }
 }
 

@@ -32,9 +32,11 @@ namespace ignite
 
     enum class SampleMethod : uint8_t
     {
-        TAA = 0,
-        MSAA = 1,
-        FXAA = 2
+        NONE = 0,
+        TAA,
+        MSAA,
+        FXAA,
+        None = NONE
     };
 
     struct DebugGridStyle
@@ -64,6 +66,7 @@ namespace ignite
         bool showBoundingBox = false;
         bool showPhysicsCollider = false;
 
+        SampleMethod sampleMethod = SampleMethod::FXAA;
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
         MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
         bool enableFXAA = true;
@@ -75,6 +78,15 @@ namespace ignite
         {
             worldGrid2D.enableZAxis = false;
             worldGrid2D.gridSize = 100.0f;
+            SetSampleMethod(SampleMethod::FXAA);
+        }
+
+        void SetSampleMethod(SampleMethod method)
+        {
+            sampleMethod = method;
+            enableFXAA = (method == SampleMethod::FXAA);
+            msaaProperties.enable = (method == SampleMethod::MSAA);
+            taaProperties.enable = (method == SampleMethod::TAA);
         }
     };
 
@@ -137,6 +149,9 @@ namespace ignite
         PostProcessing &GetPostProcessingSettings() { return m_PostProcessing; }
         const PostProcessing &GetPostProcessingSettings() const { return m_PostProcessing; }
         const glm::uvec2 GetViewportSize() const { return { m_ViewportWidth, m_ViewportHeight }; }
+
+        SampleMethod GetSampleMethod() const { return sceneRenderSettings.sampleMethod; }
+        void SetSampleMethod(SampleMethod method);
 
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
