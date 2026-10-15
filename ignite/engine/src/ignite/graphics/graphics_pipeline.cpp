@@ -3,8 +3,10 @@
 #include "ignite_pch.hpp"
 
 #include "graphics_pipeline.hpp"
+#include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "gpu_upload_sync.hpp"
 #include "shader.hpp"
 
 #include "renderer.hpp"
@@ -19,24 +21,18 @@ namespace ignite
 
     GraphicsPipeline& GraphicsPipeline::SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile)
     {
+        UnsubscribeShaders();
         m_Shaders = shaders;
 
-        // Unsubscribe first (on shot only)
-        for (SignalToken token : m_ShaderSignalTokens)
+        // Listen to each shader directly, so only the pipelines using a changed shader rebuild.
+        m_ShaderListeners.reserve(m_Shaders.size());
+        for (const Ref<Shader> &shader : m_Shaders)
         {
-            SignalBus::Unsubscribe<AssetChangeSignal>(token);
-        }
+            if (!shader)
+                continue;
 
-        m_ShaderSignalTokens.resize(m_Shaders.size());
-        for (size_t i = 0; i < m_Shaders.size(); ++i)
-        {
-            m_ShaderSignalTokens[i] = SignalBus::Subscribe<AssetChangeSignal>(
-                [this](const AssetChangeSignal &signal)
-                {
-                    // if (signal.type == AssetType::Shader)
-                    //     OnShaderReload(signal);
-                }
-            );
+            const ShaderReloadToken token = shader->AddReloadListener([this](Shader &) { OnShaderReload(); });
+            m_ShaderListeners.push_back({ shader, token });
         }
         return *this;
     }
@@ -50,7 +46,14 @@ namespace ignite
 
     void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params)
     {
-        m_FramebufferHandle = framebuffer;
+        LOG_ASSERT(framebuffer, "[GraphicsPipeline] Framebuffer is null");
+        Build(framebuffer->getFramebufferInfo(), params);
+    }
+
+    void GraphicsPipeline::Build(const nvrhi::FramebufferInfoEx &framebufferInfo, const GraphicsPipelineParams &params)
+    {
+        m_FramebufferInfo = framebufferInfo;
+        m_HasFramebufferInfo = true;
 
         nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
 
@@ -85,7 +88,7 @@ namespace ignite
         renderState.rasterState.scissorEnable = m_Params.enableScissor;
         renderState.rasterState.depthClipEnable = m_Params.enableDepthClip;
         renderState.rasterState.frontCounterClockwise = false;
-        renderState.rasterState.multisampleEnable = framebuffer && (framebuffer->getFramebufferInfo().sampleCount > 1);
+        renderState.rasterState.multisampleEnable = m_FramebufferInfo.sampleCount > 1;
 
         nvrhi::GraphicsPipelineDesc pipelineDesc;
 
@@ -119,7 +122,7 @@ namespace ignite
         }
 
         // create with the same framebuffer to be rendered
-        m_Handle = device->createGraphicsPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
+        m_Handle = device->createGraphicsPipeline(pipelineDesc, m_FramebufferInfo);
         LOG_ASSERT(m_Handle, "Failed to create graphics pipeline");
     }
 
@@ -131,6 +134,7 @@ namespace ignite
 
     GraphicsPipeline::~GraphicsPipeline()
     {
+        UnsubscribeShaders();
         Renderer::DecrementPipelineCount(m_Name);
     }
 
@@ -139,12 +143,37 @@ namespace ignite
         return CreateRef<GraphicsPipeline>(name);
     }
 
-    void GraphicsPipeline::OnShaderReload(const AssetChangeSignal &signal)
+    void GraphicsPipeline::UnsubscribeShaders()
     {
-        // Reset
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        GPUUploadSync::DeviceWaitIdle(device);
-        m_Handle = nullptr;
-        Build(m_FramebufferHandle, m_Params);
+        for (ShaderListener &listener : m_ShaderListeners)
+        {
+            if (listener.shader)
+                listener.shader->RemoveReloadListener(listener.token);
+        }
+        m_ShaderListeners.clear();
+    }
+
+    void GraphicsPipeline::OnShaderReload()
+    {
+        // Never built yet: the new shader will be picked up by the first Build().
+        if (!m_Handle || !m_HasFramebufferInfo)
+            return;
+
+        // The render thread owns PSO usage, so swap the PSO there to avoid racing a frame in flight.
+        std::weak_ptr<bool> alive = m_Alive;
+        Application::SubmitToRenderThread([this, alive]()
+        {
+            if (alive.expired())
+                return;
+
+            LOG_INFO("[GraphicsPipeline] Rebuilding '{}' after shader reload", m_Name);
+
+            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+            GPUUploadSync::DeviceWaitIdle(device);
+            m_Handle = nullptr;
+
+            // Rebuild with the same framebuffer and params
+            Build(m_FramebufferInfo, m_Params);
+        }, "GraphicsPipeline::OnShaderReload");
     }
 }

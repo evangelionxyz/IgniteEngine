@@ -15,8 +15,13 @@
 #include "ignite/core/logger.hpp"
 
 #include <nvrhi/nvrhi.h>
+#include "ignite/core/file_watcher.hpp"
+
+#include <functional>
 #include <initializer_list>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace ignite
 {
@@ -131,11 +136,25 @@ namespace ignite
     class Shader;
     using ShaderMap = std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher>;
 
+    using ShaderReloadToken = uint32_t;
+    using ShaderReloadCallback = std::function<void(Shader &)>;
+
     class IGN_API Shader : Asset
     {
     public:
         Shader() = default;
         Shader(const std::filesystem::path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
+        ~Shader();
+
+        Shader(const Shader &) = delete;
+        Shader &operator=(const Shader &) = delete;
+
+        // Called (main thread) after this shader was successfully recompiled, e.g. by the file watcher.
+        // Returns a token for RemoveReloadListener. Safe to call from inside a listener.
+        ShaderReloadToken AddReloadListener(ShaderReloadCallback callback);
+        void RemoveReloadListener(ShaderReloadToken token);
+
+        const std::filesystem::path &GetFilepath() const { return m_Filepath; }
 
 		const inline std::vector<nvrhi::VertexAttributeDesc> &GetVertexAttributes() { return m_VertexAttributes; }
         inline nvrhi::ShaderHandle GetHandle() { return m_Handle; }
@@ -178,6 +197,10 @@ namespace ignite
         std::string m_Name;
 
         umbra::ShaderReflectionInfo m_ReflectionInfo;
+
+        FileWatchToken m_FileWatchToken = kInvalidFileWatchToken;
+        std::vector<std::pair<ShaderReloadToken, ShaderReloadCallback>> m_ReloadListeners;
+        ShaderReloadToken m_LastReloadToken = 0;
 		std::vector<nvrhi::VertexAttributeDesc> m_VertexAttributes;
 
         static Ref<umbra::DXCInstance> s_DXCInstance;

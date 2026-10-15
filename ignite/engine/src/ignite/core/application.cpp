@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "application.hpp"
+#include "ignite/core/file_watcher.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/core/worker_manager.hpp"
 #include "input/app_event.hpp"
@@ -48,6 +49,8 @@ namespace ignite
     {
         // Shutdown render thread
         StopRenderThread();
+
+        FileWatcher::Shutdown();
 
         GPUUploadSync::DeviceWaitIdle(DeviceManager::GetInstance()->GetDevice());
 
@@ -623,6 +626,7 @@ namespace ignite
             const auto dt = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
             m_PreviousTime = currTime;
 
+            FileWatcher::Update();
             Tick(dt);
         }
     }

@@ -9,6 +9,7 @@
 #include "ignite/core/signals/asset_signal.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/file_watcher.hpp"
 
 namespace ignite
 {
@@ -91,40 +92,77 @@ namespace ignite
             LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
             Reflect(m_Type, shaderCode, m_VertexAttributes);
         }
+
+        // Hot reload: recompile when the source file changes on disk.
+        // FileWatcher invokes this on the main thread from FileWatcher::Update().
+        m_FileWatchToken = FileWatcher::WatchFile(m_Filepath, [this](const FileChangeEvent &event)
+        {
+            if (event.type == FileChangeType::Removed)
+                return;
+
+            LOG_INFO("[Shader] Source changed, recompiling '{}'", event.path.generic_string());
+            Recompile();
+        });
+    }
+
+    Shader::~Shader()
+    {
+        FileWatcher::Unwatch(m_FileWatchToken);
     }
 
     bool Shader::Recompile()
     {
         nvrhi::ShaderHandle newShaderHandle = nullptr;
 
-        // Compile shader source
+        // Compile shader source. A failed compile (e.g. a syntax error while editing) must not
+        // crash or drop the working shader, so only log and keep the previous handle.
         std::vector<uint8_t> shaderCode = CompileOrGetShader(m_Filepath, m_Type, true, m_ShaderDesc.entryName.c_str());
-        LOG_ASSERT(shaderCode.data() && !shaderCode.empty(), "[Shader] Blob data is not valid {}", m_Filepath);
-
-        // Create the handle and reflect to construct the vertex attributes
-        if (shaderCode.data() && !shaderCode.empty())
+        if (shaderCode.empty())
         {
-            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-            newShaderHandle = device->createShader(m_ShaderDesc, shaderCode.data(), shaderCode.size());
-            LOG_ASSERT(newShaderHandle, "[Shader] Failed to create {} shader: {}", UMBRA_GetShaderTypeString(m_Type), m_Filepath.generic_string());
-
-            // Only replace the Main Shader handle if the creation is successful.
-            if (newShaderHandle)
-            {
-                m_Handle = newShaderHandle;
-                LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
-                m_ReflectionInfo = Reflect(m_Type, shaderCode, m_VertexAttributes);
-            }
+            LOG_ERROR("[Shader] Recompile failed, keeping previous shader: {}", m_Filepath.generic_string());
+            return false;
         }
 
-        // Emit GraphicsPipeline reload
-        const bool success = newShaderHandle != nullptr;
-        if (success)
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        newShaderHandle = device->createShader(m_ShaderDesc, shaderCode.data(), shaderCode.size());
+        if (!newShaderHandle)
         {
-            NotifyChange();
+            LOG_ERROR("[Shader] Failed to create {} shader: {}", UMBRA_GetShaderTypeString(m_Type), m_Filepath.generic_string());
+            return false;
         }
 
-        return newShaderHandle != nullptr;
+        // Only replace the Main Shader handle if the creation is successful.
+        m_Handle = newShaderHandle;
+        LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
+        m_ReflectionInfo = Reflect(m_Type, shaderCode, m_VertexAttributes);
+
+        NotifyChange();
+
+        // Notify only the objects that depend on this specific shader (e.g. its PSOs).
+        // Copy so listeners can add/remove listeners while being notified.
+        const auto listeners = m_ReloadListeners;
+        for (const auto &[token, callback] : listeners)
+        {
+            if (callback)
+                callback(*this);
+        }
+
+        return true;
+    }
+
+    ShaderReloadToken Shader::AddReloadListener(ShaderReloadCallback callback)
+    {
+        if (!callback)
+            return 0;
+
+        const ShaderReloadToken token = ++m_LastReloadToken;
+        m_ReloadListeners.emplace_back(token, std::move(callback));
+        return token;
+    }
+
+    void Shader::RemoveReloadListener(ShaderReloadToken token)
+    {
+        std::erase_if(m_ReloadListeners, [token](const auto &entry) { return entry.first == token; });
     }
 
     std::vector<uint8_t> Shader::CompileOrGetShader(const std::filesystem::path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)

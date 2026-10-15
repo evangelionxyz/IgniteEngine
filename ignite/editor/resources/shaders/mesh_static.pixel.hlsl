@@ -7,7 +7,6 @@
 // ==============================
 // set 0
 // ==============================
-
 DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0
 cbuffer                  CameraBuffer      : register(b1, space0) { Camera camera; }
 StructuredBuffer<Object> g_ObjectBuffer    : register(t2, space0);
@@ -31,7 +30,6 @@ struct PSOutput
     float4 color : SV_TARGET0;
     uint objectID : SV_TARGET1;
 };
-
 
 float SelectChannel(float4 value, int channel)
 {

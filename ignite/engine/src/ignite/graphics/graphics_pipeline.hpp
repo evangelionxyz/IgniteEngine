@@ -61,6 +61,7 @@ namespace ignite {
         GraphicsPipeline &AddBindingLayout(const nvrhi::BindingLayoutHandle &layout);
         GraphicsPipeline &SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile = false);
         void Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params);
+        void Build(const nvrhi::FramebufferInfoEx &framebufferInfo, const GraphicsPipelineParams &params);
 
         nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
 
@@ -90,19 +91,31 @@ namespace ignite {
         GraphicsPipelineParams &GetParams() { return m_Params; }
 
     private:
-        void OnShaderReload(const AssetChangeSignal &signal);
+        void UnsubscribeShaders();
+        void OnShaderReload();
 
     private:
+        struct ShaderListener
+        {
+            Ref<Shader> shader;
+            ShaderReloadToken token = 0;
+        };
+
         std::string m_Name;
         nvrhi::GraphicsPipelineHandle m_Handle;
         std::vector<Ref<Shader>> m_Shaders;
-        std::vector<SignalToken> m_ShaderSignalTokens;
+        std::vector<ShaderListener> m_ShaderListeners;
+
+        // Lets queued render-thread rebuilds detect that this pipeline is gone.
+        std::shared_ptr<bool> m_Alive = std::make_shared<bool>(true);
 
         nvrhi::InputLayoutHandle m_InputLayout;
         std::vector<nvrhi::BindingLayoutHandle> m_BindingLayouts;
 
         GraphicsPipelineParams m_Params;
-        nvrhi::IFramebuffer *m_FramebufferHandle;
+        // Copy of the format info (not the framebuffer pointer, which may be destroyed/recreated, e.g. on resize)
+        nvrhi::FramebufferInfoEx m_FramebufferInfo;
+        bool m_HasFramebufferInfo = false;
     };
 }
 
