@@ -53,7 +53,6 @@ project "Ignite.Core"
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.FASTSIMD}",
-        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.LUA}",
         "%{IncludeDir.FASTSIMD_CONFIG}",
     }
@@ -61,7 +60,6 @@ project "Ignite.Core"
     libdirs { "%{cfg.targetdir}" }
 
     links {
-        "cppcoro",
         "Lua",
         "ignite_core.dll.lib", -- rust based
     }

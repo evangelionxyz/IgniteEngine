@@ -21,8 +21,6 @@ project "Ignite.Physics"
         "src/ignite",
         "%{wks.location}/ignite/core/src",
         "%{wks.location}/crates/src/include",
-
-        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.BOX2D}",
@@ -38,7 +36,6 @@ project "Ignite.Physics"
         "JOLT",
         "BOX2D",
         "SPDLOG",
-        "cppcoro",
     }
 
     defines {

@@ -65,7 +65,6 @@ project "Ignite.Engine"
         "%{IncludeDir.FBX_SDK}",
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.FASTSIMD}",
-        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.LUA}",
         "%{IncludeDir.FASTSIMD_CONFIG}"
     }
@@ -91,7 +90,6 @@ project "Ignite.Engine"
         "tracy",
         "MochiSharp.Native",
         "UmbraShaderCompiler",
-        "cppcoro",
         "ignite_core.dll.lib", -- rust based
     }
 

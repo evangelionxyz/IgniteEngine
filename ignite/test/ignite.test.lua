@@ -38,7 +38,6 @@ project "Ignite.Test"
         "freetype",
         "tracy",
         "MochiSharp.Native",
-        "cppcoro",
 
         "ignite_core.dll.lib", -- rust based
     }
@@ -84,7 +83,6 @@ project "Ignite.Test"
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}",
         "%{IncludeDir.FASTNOISE2}",
-        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.FASTSIMD}",
         "%{IncludeDir.LUA}",
         "%{IncludeDir.FASTSIMD_CONFIG}"

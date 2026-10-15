@@ -40,7 +40,6 @@ project "Ignite.Editor"
         "freetype",
         "tracy",
         "MochiSharp.Native",
-        "cppcoro",
 
         "ignite_core.dll.lib", -- rust based
     }
@@ -87,7 +86,6 @@ project "Ignite.Editor"
         "%{IncludeDir.Hostfxr}",
         "%{IncludeDir.FASTNOISE2}",
         "%{IncludeDir.FASTSIMD}",
-        "%{IncludeDir.CPPCORO}",
         "%{IncludeDir.LUA}",
         "%{IncludeDir.FASTSIMD_CONFIG}"
     }
