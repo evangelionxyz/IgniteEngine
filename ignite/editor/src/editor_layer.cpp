@@ -103,8 +103,12 @@ namespace ignite
 
         auto *app = Application::GetInstance();
 
-        m_FileImportSignalToken = SignalBus::Subscribe<FileImportPayload>([this](const FileImportPayload & payload)
-            { OnFileImport(payload); });
+        m_FileImportSignalToken = SignalBus::Subscribe<FileImportPayload>(
+            [this](const FileImportPayload &payload)
+            {
+                OnFileImport(payload);
+            }
+        );
 
         m_ScenePanel = new ScenePanel("Scene Panel", this);
         m_AssetImporterPanel = new AssetImporterPanel("AssetImporter Panel", this);
@@ -2387,7 +2391,15 @@ namespace ignite
         {
             for (auto &[key, shader] : Shader::GetShaderCache())
             {
-                ImGui::Button(shader->GetName().c_str(), { -1.0f, 0.0f });
+                ImGui::PushID(key.filename.c_str());
+                ImGui::Text(shader->GetName().c_str());
+                ImGui::SameLine();
+                if (ImGui::Button("Reload"))
+                {
+                    shader->Recompile();
+                }
+
+                ImGui::PopID();
 
             }
             ImGui::TreePop();

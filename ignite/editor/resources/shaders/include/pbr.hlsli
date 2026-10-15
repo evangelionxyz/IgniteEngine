@@ -249,28 +249,46 @@ static float3 OpenPBRDirect(OpenPBRSurface surface, float3 N, float3 L, float3 V
     return (fuzz + (1.0f - surface.fuzzWeight) * (coat + base * throughCoat)) * irradiance;
 }
 
-static float3 OpenPBREnvironment(OpenPBRSurface surface, float3 N, float3 V, float3 radiance)
+// Split-sum environment BRDF approximation (Karis / Lazarov). Returns (scale, bias) applied to F0.
+static float2 EnvBRDFApprox(float roughness, float NdotV)
+{
+    float4 c0 = float4(-1.0f, -0.0275f, -0.572f, 0.022f);
+    float4 c1 = float4(1.0f, 0.0425f, 1.04f, -0.04f);
+    float4 r = roughness * c0 + c1;
+    float a004 = min(r.x * r.x, exp2(-9.28f * saturate(NdotV))) * r.x + r.y;
+    return float2(-1.04f, 1.04f) * a004 + r.zw;
+}
+
+// Directional albedo of the base specular lobe (what fraction of the environment is reflected).
+static float3 OpenPBRBaseSpecularAlbedo(OpenPBRSurface surface, float NdotV)
+{
+    float3 f0 = OpenPBRBaseFresnel(1.0f, surface);
+    float2 ab = EnvBRDFApprox(saturate(surface.specularRoughness), NdotV);
+    return saturate(f0 * ab.x + ab.y * saturate(surface.specularWeight));
+}
+
+// sharpRadiance: environment sampled along the reflection vector (mirror, no blur).
+// blurredRadiance: cosine-convolved environment, used as a stand-in for rough reflections
+// because the environment map has no prefiltered mips.
+static float3 OpenPBREnvironment(OpenPBRSurface surface, float3 N, float3 V, float3 sharpRadiance, float3 blurredRadiance)
 {
     float NdotV = saturate(dot(N, V));
-    float3 baseF = OpenPBRBaseFresnel(NdotV, surface);
     float3 coatF = SchlickFresnelCos(NdotV, DielectricF0(max(surface.coatIOR, 1.0f)));
-    
-    // Attenuate sharp mirror reflections on rough surfaces (environment map is single-mip without prefiltering)
-    float baseRoughnessFactor = 1.0f - saturate(surface.specularRoughness);
-    baseRoughnessFactor = baseRoughnessFactor * baseRoughnessFactor;
-    float3 baseSpecular = baseF * baseRoughnessFactor;
-    
-    float coatRoughnessFactor = 1.0f - saturate(surface.coatRoughness);
-    coatRoughnessFactor = coatRoughnessFactor * coatRoughnessFactor;
-    float3 coatSpecular = surface.coatWeight * coatF * coatRoughnessFactor;
-    
+
+    float baseBlur = smoothstep(0.0f, 0.6f, surface.specularRoughness);
+    float3 baseRadiance = lerp(sharpRadiance, blurredRadiance, baseBlur);
+    float3 baseSpecular = OpenPBRBaseSpecularAlbedo(surface, NdotV);
+
+    float coatBlur = smoothstep(0.0f, 0.6f, surface.coatRoughness);
+    float3 coatRadiance = lerp(sharpRadiance, blurredRadiance, coatBlur);
+    float3 coatSpecular = surface.coatWeight * coatF;
+
     float3 throughCoat = lerp(float3(1.0f, 1.0f, 1.0f), saturate(surface.coatColor) * (1.0f - coatF),
         surface.coatWeight * surface.coatDarkening);
-        
-    float fuzzRoughnessFactor = 1.0f - saturate(surface.fuzzRoughness);
-    float3 fuzz = surface.fuzzWeight * surface.fuzzColor * (fuzzRoughnessFactor * fuzzRoughnessFactor);
-    
-    return radiance * (fuzz + (1.0f - surface.fuzzWeight) * (coatSpecular + baseSpecular * throughCoat));
+
+    float3 fuzz = surface.fuzzWeight * surface.fuzzColor * blurredRadiance;
+
+    return fuzz + (1.0f - surface.fuzzWeight) * (coatSpecular * coatRadiance + baseSpecular * throughCoat * baseRadiance);
 }
 
 static float3 GGX(float3 N, float3 L, float3 V, float3 irradiance, float3 diffuse, float3 specular, float roughness)

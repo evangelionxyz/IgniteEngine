@@ -126,6 +126,35 @@ static float3 SampleEnvironmentMap(Texture2D tex, SamplerState samp, float3 dir,
     return SampleSphericalMap(tex, samp, dir);
 }
 
+// Diffuse irradiance (already divided by PI, so it can be multiplied directly with albedo).
+// The environment map has a single mip, so it can't be blurred by sampling a high LOD.
+// Instead, project the environment onto the cosine lobe (SH bands 0..2) using a fixed set of
+// well distributed directions. Result is smooth and independent of the pixel position.
+static float3 SampleEnvironmentIrradiance(Texture2D tex, SamplerState samp, float3 normal, int skyType, float cameraAltitudeKm)
+{
+    static const int SAMPLE_COUNT = 32;
+    static const float GOLDEN_ANGLE = 2.39996323f;
+    static const float MAX_RADIANCE = 16.0f; // avoid the sun disc dominating the ambient term
+
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    [unroll]
+    for (int i = 0; i < SAMPLE_COUNT; ++i)
+    {
+        float y = 1.0f - 2.0f * (float(i) + 0.5f) / float(SAMPLE_COUNT);
+        float r = sqrt(max(1.0f - y * y, 0.0f));
+        float phi = GOLDEN_ANGLE * float(i);
+        float3 dir = float3(cos(phi) * r, y, sin(phi) * r);
+
+        // cosine lobe truncated to SH bands 0..2: 0.375 + 2c + 1.875c^2 (averages to 1 over the sphere)
+        float c = dot(normal, dir);
+        float kernel = 0.375f + 2.0f * c + 1.875f * c * c;
+
+        float3 radiance = min(SampleEnvironmentMap(tex, samp, dir, skyType, cameraAltitudeKm), MAX_RADIANCE);
+        sum += radiance * kernel;
+    }
+    return max(sum / float(SAMPLE_COUNT), 0.0f);
+}
+
 // Convert RGB to Luminance 
 static float Luminance(float3 color)
 {

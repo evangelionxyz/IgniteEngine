@@ -4,6 +4,9 @@
 
 #include "shader.hpp"
 #include "renderer.hpp"
+#include "ignite/core/application.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -112,6 +115,13 @@ namespace ignite
                 LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
                 m_ReflectionInfo = Reflect(m_Type, shaderCode, m_VertexAttributes);
             }
+        }
+
+        // Emit GraphicsPipeline reload
+        const bool success = newShaderHandle != nullptr;
+        if (success)
+        {
+            NotifyChange();
         }
 
         return newShaderHandle != nullptr;

@@ -20,7 +20,24 @@ namespace ignite
     GraphicsPipeline& GraphicsPipeline::SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile)
     {
         m_Shaders = shaders;
-        m_NeedsToCompileShader = true;
+
+        // Unsubscribe first (on shot only)
+        for (SignalToken token : m_ShaderSignalTokens)
+        {
+            SignalBus::Unsubscribe<AssetChangeSignal>(token);
+        }
+
+        m_ShaderSignalTokens.resize(m_Shaders.size());
+        for (size_t i = 0; i < m_Shaders.size(); ++i)
+        {
+            m_ShaderSignalTokens[i] = SignalBus::Subscribe<AssetChangeSignal>(
+                [this](const AssetChangeSignal &signal)
+                {
+                    // if (signal.type == AssetType::Shader)
+                    //     OnShaderReload(signal);
+                }
+            );
+        }
         return *this;
     }
 
@@ -33,6 +50,8 @@ namespace ignite
 
     void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params)
     {
+        m_FramebufferHandle = framebuffer;
+
         nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
 
         LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline");
@@ -120,4 +139,12 @@ namespace ignite
         return CreateRef<GraphicsPipeline>(name);
     }
 
+    void GraphicsPipeline::OnShaderReload(const AssetChangeSignal &signal)
+    {
+        // Reset
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        GPUUploadSync::DeviceWaitIdle(device);
+        m_Handle = nullptr;
+        Build(m_FramebufferHandle, m_Params);
+    }
 }

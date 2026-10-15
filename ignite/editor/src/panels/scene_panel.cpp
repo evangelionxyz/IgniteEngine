@@ -4736,13 +4736,13 @@ namespace ignite
             const glm::vec2 &camMoveAxis = j->GetLeftAxis();
             const glm::vec2 &l2r2 = j->GetTriggerAxis();
 
-            m_EditorCamera.yaw += deltaTime * camViewAxis.x;
-            m_EditorCamera.pitch += deltaTime * camViewAxis.y;
+            // m_EditorCamera.yaw += deltaTime * camViewAxis.x;
+            // m_EditorCamera.pitch += deltaTime * camViewAxis.y;
 
             // m_Camera.position += m_Camera.GetForwardDirection() * deltaTime * m_CameraData.moveSpeed * -camMoveAxis.y;
             // m_Camera.position += m_Camera.GetRightDirection() * deltaTime * m_CameraData.moveSpeed * camMoveAxis.x;
 
-            LOG_INFO(j->ToString());
+            // LOG_INFO(j->ToString());
         }
 
         m_EditorCamera.UpdateMouseState();

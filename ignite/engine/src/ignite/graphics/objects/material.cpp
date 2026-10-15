@@ -146,7 +146,8 @@ namespace ignite
         gpuData.emissiveTextureIndex = getBindlessIndex(emissiveTextureHandle, whiteIdx);
         gpuData.metallicTextureIndex = getBindlessIndex(metallicTextureHandle, whiteIdx);
         gpuData.roughnessTextureIndex = getBindlessIndex(roughnessTextureHandle, whiteIdx);
-        gpuData.normalTextureIndex = getBindlessIndex(normalTextureHandle, whiteIdx);
+        // -1 tells the shader there is no normal map (a white fallback would decode to an invalid normal)
+        gpuData.normalTextureIndex = static_cast<int>(getBindlessIndex(normalTextureHandle, static_cast<uint32_t>(-1)));
         gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);
 
         m_GPUDataBuffer->SetData(cmd, &gpuData, sizeof(Material_GPUData));

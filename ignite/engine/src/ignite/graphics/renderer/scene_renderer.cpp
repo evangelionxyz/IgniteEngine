@@ -1189,10 +1189,7 @@ namespace ignite
             {
                 m_CascadedShadowMap->Resize(quality);
 
-                Application::SubmitToMainThread([]()
-                    {
-                        SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment });
-                    });
+                Application::SubmitToMainThread([]() { SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment }); });
             }
 
             break;
@@ -1207,7 +1204,7 @@ namespace ignite
             frameContext->csmBuffer.SetData(cmd, &sceneCascadeData, sizeof(sceneCascadeData));
             return;
         }
-        else
+        
         {
             m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
 

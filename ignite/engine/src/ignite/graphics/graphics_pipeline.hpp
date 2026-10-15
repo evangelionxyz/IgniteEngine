@@ -7,6 +7,8 @@
 #include "ignite/core/types.hpp"
 #include "shader.hpp"
 
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/signals/asset_signal.hpp"
 #include <nvrhi/nvrhi.h>
 #include <vector>
 #include <unordered_map>
@@ -88,15 +90,19 @@ namespace ignite {
         GraphicsPipelineParams &GetParams() { return m_Params; }
 
     private:
+        void OnShaderReload(const AssetChangeSignal &signal);
+
+    private:
         std::string m_Name;
         nvrhi::GraphicsPipelineHandle m_Handle;
         std::vector<Ref<Shader>> m_Shaders;
+        std::vector<SignalToken> m_ShaderSignalTokens;
+
         nvrhi::InputLayoutHandle m_InputLayout;
         std::vector<nvrhi::BindingLayoutHandle> m_BindingLayouts;
 
         GraphicsPipelineParams m_Params;
-
-        bool m_NeedsToCompileShader = false;
+        nvrhi::IFramebuffer *m_FramebufferHandle;
     };
 }
 

@@ -10,6 +10,7 @@
 #undef GetLastError
 #endif
 
+#include "ignite/asset/asset.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -130,7 +131,7 @@ namespace ignite
     class Shader;
     using ShaderMap = std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher>;
 
-    class IGN_API Shader
+    class IGN_API Shader : Asset
     {
     public:
         Shader() = default;
@@ -161,7 +162,11 @@ namespace ignite
         inline const umbra::ShaderReflectionInfo &GetReflectionInfo() { return m_ReflectionInfo; }
         inline const std::string &GetName() { return m_Name; }
 
+        static AssetType GetStaticAssetType() { return AssetType::Shader; }
+        virtual AssetType GetAssetType() { return GetStaticAssetType(); }
+
     private:
+        
         static void InitShaderData();
         static void ShutdownShaderData();
 

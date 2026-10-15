@@ -9,13 +9,13 @@
 // ==============================
 
 DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0
-cbuffer CameraBuffer                    : register(b1, space0) { Camera camera; }
-StructuredBuffer<Object>   g_ObjectBuffer    : register(t2, space0);
-StructuredBuffer<uint>     g_InstanceIndices : register(t3, space0);
-cbuffer SceneBuffer                     : register(b4, space0) { Scene scene; }
-cbuffer CascadesBuffer                  : register(b5, space0) { CascadesShadows csm; }
-cbuffer PointLightBuffer                : register(b6, space0) { PointLight pointLights[MAX_POINT_LIGHTS]; }
-cbuffer SpotLightBuffer                 : register(b7, space0) { SpotLight spotLights[MAX_SPOT_LIGHTS]; }
+cbuffer                  CameraBuffer      : register(b1, space0) { Camera camera; }
+StructuredBuffer<Object> g_ObjectBuffer    : register(t2, space0);
+StructuredBuffer<uint>   g_InstanceIndices : register(t3, space0);
+cbuffer                  SceneBuffer       : register(b4, space0) { Scene scene; }
+cbuffer                  CascadesBuffer    : register(b5, space0) { CascadesShadows csm; }
+cbuffer                  PointLightBuffer  : register(b6, space0) { PointLight pointLights[MAX_POINT_LIGHTS]; }
+cbuffer                  SpotLightBuffer   : register(b7, space0) { SpotLight spotLights[MAX_SPOT_LIGHTS]; }
 
 // ==============================
 // set 1
@@ -32,13 +32,6 @@ struct PSOutput
     uint objectID : SV_TARGET1;
 };
 
-float3 GenNormalFromMap(float3x3 TBN, float2 uv)
-{
-    float2 tiledUV = uv * material.tilingFactor;
-    Texture2D normalMapTex = ResourceDescriptorHeap[material.normalTextureIndex];
-    float3 normalMap = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
-    return normalize(mul(TBN, normalMap));
-}
 
 float SelectChannel(float4 value, int channel)
 {
@@ -72,7 +65,6 @@ PSOutput main(PixelVertexInput input)
     float3 lightDirection = normalize(sunDirection);
 
     Texture2D baseColorTex = ResourceDescriptorHeap[material.baseColorTextureIndex];
-    Texture2D normalMapTex = ResourceDescriptorHeap[material.normalTextureIndex];
     Texture2D emissiveTex = ResourceDescriptorHeap[material.emissiveTextureIndex];
     Texture2D metallicTex = ResourceDescriptorHeap[material.metallicTextureIndex];
     Texture2D roughnessTex = ResourceDescriptorHeap[material.roughnessTextureIndex];
@@ -81,7 +73,6 @@ PSOutput main(PixelVertexInput input)
     float3 emissiveColor = emissiveTex.Sample(sampler0, tiledUV).rgb * material.emissiveFactor.rgb;
     float4 metallicColor = metallicTex.Sample(sampler0, tiledUV);
     float4 roughnessColor = roughnessTex.Sample(sampler0, tiledUV);
-    float3 normalMap = normalMapTex.Sample(sampler0, tiledUV).rgb;
     float occlusionSample = occlusionTex.Sample(sampler0, tiledUV).r;
     float ao = lerp(1.0f, occlusionSample, saturate(material.occlusionStrength));
 
@@ -98,12 +89,23 @@ PSOutput main(PixelVertexInput input)
         discard;
     }
 
+    // Tangent space normal mapping. normalTextureIndex < 0 means the material has no normal map.
+    float3 finalNormal = N;
+    float3 T = normalize(input.tangent);
+    float3 B = normalize(input.bitangent);
+    if (material.normalTextureIndex >= 0)
+    {
+        Texture2D normalMapTex = ResourceDescriptorHeap[material.normalTextureIndex];
+        float3 tangentNormal = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
+
+        T = normalize(T - N * dot(N, T));
+        float3 bitangent = cross(N, T);
+        B = dot(bitangent, B) < 0.0f ? -bitangent : bitangent;
+        finalNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
+    }
+
     if (scene.renderMode == RENDER_MODE_COLOR)
     {
-        float3 finalNormal = normalize(N * normalMap);
-        float3 T = normalize(input.tangent);
-        float3 B = normalize(input.bitangent);
-
         OpenPBRSurface surface;
         surface.baseColor = baseColorSample.rgb * material.baseColorFactor.rgb;
         surface.baseWeight = saturate(material.baseWeight);
@@ -131,15 +133,17 @@ PSOutput main(PixelVertexInput input)
         surface.useMultiScatter = saturate(material.useMultiScatter);
 
         float3 reflectDirection = reflect(-viewDirection, finalNormal);
-        float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, camera.position.y * 0.001f);
-        float3 reflectedSpecular = OpenPBREnvironment(surface, finalNormal, viewDirection, reflectRadiance);
+        const float cameraAltitudeKm = camera.position.y * 0.001f;
+        float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, cameraAltitudeKm);
+        float3 blurredReflectRadiance = SampleEnvironmentIrradiance(environmentMapTexture, sampler0, reflectDirection, scene.skyType, cameraAltitudeKm);
+        float3 reflectedSpecular = OpenPBREnvironment(surface, finalNormal, viewDirection, reflectRadiance, blurredReflectRadiance);
 
         float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
         float3 directLighting = OpenPBRDirect(surface, finalNormal, lightDirection, viewDirection, T, B, irradiance);
 
-        float shadowTerm = SampleShadow(csm, shadowMap, shadowSampler, camera.view, 
+        float shadowTerm = SampleShadow(csm, shadowMap, shadowSampler, camera.view,
             input.worldPos, finalNormal, lightDirection, input.position.xy);
-        
+
         directLighting *= shadowTerm;
 
         // Point Lights PBR
@@ -200,25 +204,22 @@ PSOutput main(PixelVertexInput input)
             directLighting += OpenPBRDirect(surface, finalNormal, toLight, viewDirection, T, B, spIrradiance);
         }
 
-        // Calculate diffuse irradiance from the environment map (using a high mip level for blurriness)
-        float shadowAmbientFactor = lerp(0.0f, 1.0f, shadowTerm);
-        float3 diffuseIrradiance = SampleEnvironmentMap(environmentMapTexture, sampler0, finalNormal, scene.skyType, 100.0f); // use high LOD
-                
-        float3 F0 = lerp(0.04f, surface.baseColor, surface.metalness);
-        float3 F = F0 + (max(float3(1.0f - surface.specularRoughness, 1.0f - surface.specularRoughness, 1.0f - surface.specularRoughness), F0) - F0) * pow(clamp(1.0 - dot(finalNormal, viewDirection), 0.0, 1.0), 5.0);
-        float3 kS = F;
-        float3 kD = 1.0 - kS;
-        kD *= 1.0 - surface.metalness;
+        // Diffuse ambient from the (cosine convolved) environment. Not affected by the sun shadow.
+        float3 diffuseIrradiance = SampleEnvironmentIrradiance(environmentMapTexture, sampler0, finalNormal, scene.skyType, cameraAltitudeKm);
 
-        float3 ambient = (kD * surface.baseColor * diffuseIrradiance) * shadowAmbientFactor * ao;
-        
-        reflectedSpecular *= (shadowTerm * ao);
+        float3 kS = OpenPBRBaseSpecularAlbedo(surface, saturate(dot(finalNormal, viewDirection)));
+        float3 kD = (1.0f - kS) * (1.0f - surface.metalness);
 
-        float3 finalColor = directLighting + ambient + reflectedSpecular;
+        float3 ambient = kD * surface.baseWeight * surface.baseColor * diffuseIrradiance * ao;
+
+        reflectedSpecular *= ao;
+
+        float3 finalColor = directLighting + ambient;
 
         if (length(emissiveColor) > 0.01f)
         {
-            finalColor += emissiveColor * material.emissiveFactor.rgb * material.emissiveFactor.a * material.emissionLuminance;
+            // emissiveColor already includes emissiveFactor.rgb
+            finalColor += emissiveColor * material.emissiveFactor.a * material.emissionLuminance;
         }
 
         if (scene.debugShadow == 2)
@@ -250,8 +251,7 @@ PSOutput main(PixelVertexInput input)
     }
     else if (scene.renderMode == RENDER_MODE_NORMALS)
     {
-        float3 finalNormal = normalize(N * normalMap) * 0.5f + 0.5f;
-        result.color = float4(finalNormal, 1.0f);
+        result.color = float4(finalNormal * 0.5f + 0.5f, 1.0f);
     }
     else if (scene.renderMode == RENDER_MODE_METALLIC)
     {
