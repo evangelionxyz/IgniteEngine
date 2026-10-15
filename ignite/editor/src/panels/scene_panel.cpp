@@ -451,6 +451,46 @@ namespace ignite
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("Effects"))
+        {
+            if (ImGui::MenuItem("Smoke Emitter"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Smoke Particle"));
+                if (entity.IsValid() && !entity.HasComponent<ParticleSystemComponent>())
+                {
+                    auto &comp = entity.AddComponent<ParticleSystemComponent>();
+                    comp.settings = ParticleEmitterSettings::CreateSmoke();
+                }
+            }
+            if (ImGui::MenuItem("Fire Emitter"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Fire Particle"));
+                if (entity.IsValid() && !entity.HasComponent<ParticleSystemComponent>())
+                {
+                    auto &comp = entity.AddComponent<ParticleSystemComponent>();
+                    comp.settings = ParticleEmitterSettings::CreateFire();
+                }
+            }
+            if (ImGui::MenuItem("Spark Emitter"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Spark Particle"));
+                if (entity.IsValid() && !entity.HasComponent<ParticleSystemComponent>())
+                {
+                    auto &comp = entity.AddComponent<ParticleSystemComponent>();
+                    comp.settings = ParticleEmitterSettings::CreateSpark();
+                }
+            }
+            if (ImGui::MenuItem("Particle System"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Particle System"));
+                if (entity.IsValid() && !entity.HasComponent<ParticleSystemComponent>())
+                {
+                    entity.AddComponent<ParticleSystemComponent>();
+                }
+            }
+            ImGui::EndMenu();
+        }
+
         if (entity.IsValid())
         {
             SetHierarchyDirty();
@@ -3089,6 +3129,126 @@ namespace ignite
                 }
             });
 
+            RenderComponent<ParticleSystemComponent>("Particle System", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<ParticleSystemComponent>();
+
+                // Playback & Controls
+                UI::DrawCheckbox("Playing", &c.isPlaying);
+                ImGui::SameLine();
+                if (UI::DrawButton("Reset", { 60.0f, 26.0f }))
+                {
+                    c.system = nullptr;
+                }
+
+                ImGui::Spacing();
+                ImGui::SeparatorText("Presets");
+                if (UI::DrawButton("Smoke", { 75.0f, 26.0f }))
+                {
+                    c.settings = ParticleEmitterSettings::CreateSmoke();
+                    c.system = nullptr;
+                }
+                ImGui::SameLine();
+                if (UI::DrawButton("Fire", { 75.0f, 26.0f }))
+                {
+                    c.settings = ParticleEmitterSettings::CreateFire();
+                    c.system = nullptr;
+                }
+                ImGui::SameLine();
+                if (UI::DrawButton("Spark", { 75.0f, 26.0f }))
+                {
+                    c.settings = ParticleEmitterSettings::CreateSpark();
+                    c.system = nullptr;
+                }
+
+                ImGui::Spacing();
+                ImGui::SeparatorText("Emitter");
+
+                int typeIdx = static_cast<int>(c.settings.type);
+                static const char *emitterTypeLabels[] = { "Smoke", "Fire", "Spark", "Custom" };
+                if (UI::DrawComboBox("Emitter Type", emitterTypeLabels, IM_ARRAYSIZE(emitterTypeLabels), &typeIdx))
+                {
+                    c.settings.type = static_cast<ParticleEmitterType>(typeIdx);
+                }
+
+                int blendIdx = static_cast<int>(c.settings.blendMode);
+                static const char *blendModeLabels[] = { "Alpha", "Additive" };
+                if (UI::DrawComboBox("Blend Mode", blendModeLabels, IM_ARRAYSIZE(blendModeLabels), &blendIdx))
+                {
+                    c.settings.blendMode = static_cast<ParticleBlendMode>(blendIdx);
+                }
+
+                int maxP = static_cast<int>(c.settings.maxParticles);
+                if (UI::DrawIntControl("Max Particles", &maxP, 100, 10, 200000))
+                {
+                    c.settings.maxParticles = static_cast<uint32_t>(std::max(10, maxP));
+                    c.system = nullptr;
+                }
+
+                UI::DrawFloatControl("Emission Rate", &c.settings.emissionRate, 1.0f, 0.0f, 10000.0f);
+                UI::DrawFloatControl("Spawn Radius", &c.settings.spawnRadius, 0.01f, 0.0f, 50.0f);
+
+                ImGui::Spacing();
+                ImGui::SeparatorText("Lifetime");
+                UI::DrawFloatControl("Lifetime Min", &c.settings.lifetimeMin, 0.05f, 0.01f, 60.0f);
+                UI::DrawFloatControl("Lifetime Max", &c.settings.lifetimeMax, 0.05f, 0.01f, 60.0f);
+                if (c.settings.lifetimeMax < c.settings.lifetimeMin)
+                {
+                    c.settings.lifetimeMax = c.settings.lifetimeMin;
+                }
+
+                ImGui::Spacing();
+                ImGui::SeparatorText("Physics & Motion");
+                UI::DrawVec3Control("Velocity Min", c.settings.velocityMin, 0.05f);
+                UI::DrawVec3Control("Velocity Max", c.settings.velocityMax, 0.05f);
+                UI::DrawVec3Control("Acceleration", c.settings.acceleration, 0.05f);
+                UI::DrawFloatControl("Drag", &c.settings.drag, 0.01f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Velocity Align", &c.settings.velocityAlignment, 0.02f, 0.0f, 1.0f);
+
+                ImGui::Spacing();
+                ImGui::SeparatorText("Size & Rotation");
+                UI::DrawVec2Control("Start Size", c.settings.startSize, 0.02f);
+                UI::DrawVec2Control("End Size", c.settings.endSize, 0.02f);
+                UI::DrawFloatControl("Rot Speed Min", &c.settings.rotationSpeedMin, 0.05f, -30.0f, 30.0f);
+                UI::DrawFloatControl("Rot Speed Max", &c.settings.rotationSpeedMax, 0.05f, -30.0f, 30.0f);
+
+                ImGui::Spacing();
+                ImGui::SeparatorText("Color");
+                UI::DrawColorVec4("Start Color", c.settings.startColor);
+                UI::DrawColorVec4("End Color", c.settings.endColor);
+
+                ImGui::Spacing();
+                ImGui::SeparatorText("Texture (Optional)");
+                const bool isTextureLoaded = c.settings.textureHandle != AssetHandle(0);
+                const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.settings.textureHandle) : "Drag Texture Here";
+                UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, assetManager]()
+                {
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                            AssetType type = assetManager->GetAssetType(handle);
+                            if (type == AssetType::Texture)
+                            {
+                                c.settings.textureHandle = handle;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    if (isTextureLoaded)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X##ClearParticleTex"))
+                        {
+                            c.settings.textureHandle = AssetHandle(0);
+                        }
+                    }
+                });
+            });
+
             static bool focusComponentInput = true;
 
             if (ImGui::BeginPopup("##add_component_context", ImGuiWindowFlags_NoDecoration))
@@ -3206,6 +3366,9 @@ namespace ignite
                         break;
                     case CompType_Script:
                         entity.AddComponent<ScriptComponent>();
+                        break;
+                    case CompType_ParticleSystem:
+                        entity.AddComponent<ParticleSystemComponent>();
                         break;
                     default: break;
                     }
@@ -3490,13 +3653,13 @@ namespace ignite
                 }
 
                 // UI Input
-				if (activeSceneRenderer)
-				{
-					const auto localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
-					const auto localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
-					activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
-					activeSceneRenderer->SetCameraWidgetMousePosition(&m_EditorCamera, localMouseX, localMouseY, imageHovered);
-				}
+                if (activeSceneRenderer)
+                {
+                    const auto localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
+                    const auto localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
+                    activeSceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                    activeSceneRenderer->SetCameraWidgetMousePosition(&m_EditorCamera, localMouseX, localMouseY, imageHovered);
+                }
 
                 // Mouse picking from viewport object-id attachment (on mouse down only)
                 if (!m_Scene->IsPlaying())
@@ -4156,7 +4319,7 @@ namespace ignite
                             float yPosition = 6.0f;
                             const float fps = ImGui::GetIO().Framerate;
                             std::string statusStr = std::format("FPS {:.7}", fps);
-							drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFF00FF00, statusStr.c_str());
+                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFF00FF00, statusStr.c_str());
 
                             yPosition += padding;
                             statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);

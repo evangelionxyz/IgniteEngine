@@ -1722,6 +1722,11 @@ namespace ignite
     }
 
     template<>
+    IGN_API void Scene::OnComponentAdded<ParticleSystemComponent>(Entity entity, ParticleSystemComponent &comp)
+    {
+    }
+
+    template<>
     IGN_API void Scene::OnComponentAdded<TerrainComponent>(Entity entity, TerrainComponent &comp)
     {
         if (!comp.data)

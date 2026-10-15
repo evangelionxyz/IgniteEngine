@@ -111,6 +111,7 @@ namespace ignite
         }
 
         static float GetDeltaTime();
+        static int32_t GetFrameIndex();
 
         static void SetWindowTitle(const std::string &title);
         static void Shutdown();

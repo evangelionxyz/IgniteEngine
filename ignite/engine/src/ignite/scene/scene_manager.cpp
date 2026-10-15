@@ -437,6 +437,13 @@ namespace ignite
             parentIDComp.AddChild(newEntityIDComp.uuid);
         }
 
+        // Do not copy Particle System 
+        if (newEntity.HasComponent<ParticleSystemComponent>())
+        {
+            auto &particleSystem = newEntity.GetComponent<ParticleSystemComponent>();
+            particleSystem.system = nullptr;
+        }
+
         if (scene->IsRunning())
         {
             // IMPORTANT!: Need to reset copied body from source

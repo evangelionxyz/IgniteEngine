@@ -281,6 +281,20 @@ namespace ignite
             }
         }
 
+        // Check for Particle Systems
+        {
+            auto particleView = registry->view<TransformComponent, RenderingComponent, ParticleSystemComponent>();
+            for (entt::entity e : particleView)
+            {
+                const auto &[tr, rc, pc] = registry->get<TransformComponent, RenderingComponent, ParticleSystemComponent>(e);
+                if (rc.visible && pc.isPlaying)
+                {
+                    plan.hasParticles = true;
+                    break;
+                }
+            }
+        }
+
         // 4. Check for World Environment / Sky
         if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
         {
@@ -308,7 +322,7 @@ namespace ignite
         }
 
         // 7. Check for Selection / Object ID
-        plan.requiresObjectId = !m_SelectedEntities.empty();
+        plan.requiresObjectId = !isGameCamera || !m_SelectedEntities.empty();
 
         // 8. Check for Debug Overlays
         if (drawDebug && (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider))
@@ -1782,6 +1796,29 @@ namespace ignite
             }
         }
 
+        // Particle Systems Pass (Smoke, Fire, Sparks, etc.)
+        {
+            IGN_PROFILE_SCOPE("SceneRenderer::ColorPass::ParticleSystems");
+            const float dt = Application::GetDeltaTime();
+            auto particleView = m_Scene->registry->view<TransformComponent, RenderingComponent, ParticleSystemComponent>();
+            for (entt::entity e : particleView)
+            {
+                auto [tr, rc, pc] = m_Scene->registry->get<TransformComponent, RenderingComponent, ParticleSystemComponent>(e);
+                if (!rc.visible || !pc.isPlaying)
+                    continue;
+
+                if (!pc.system)
+                {
+                    pc.system = ParticleSystem::Create(pc.settings.maxParticles);
+                    pc.system->Reset(cmd);
+                }
+
+                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                pc.system->Simulate(cmd, dt, tr.world.translation, pc.settings);
+                pc.system->Render(cmd, camera, framebuffer, pc.settings, objectID);
+            }
+        }
+
         // 2D Pass
         {
             std::vector<PointLight2D_GPUData> pointLights2D;
@@ -3189,6 +3226,26 @@ namespace ignite
                 args.setVertexCount(chunk.primitive->indexBuffer->GetCount());
                 args.instanceCount = 1;
                 cmd->drawIndexed(args);
+            }
+        }
+
+        // Particle Systems Pass (Selected outline mask)
+        {
+            auto particleView = m_Scene->registry->view<TransformComponent, RenderingComponent, ParticleSystemComponent>();
+            for (entt::entity e : particleView)
+            {
+                const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                if (std::ranges::find(m_SelectedEntities, objectID) == m_SelectedEntities.end())
+                    continue;
+
+                auto [tr, rc, pc] = particleView.get<TransformComponent, RenderingComponent, ParticleSystemComponent>(e);
+                if (!rc.visible || !pc.isPlaying)
+                    continue;
+
+                if (pc.system)
+                {
+                    pc.system->Render(cmd, camera, framebuffer, pc.settings, objectID);
+                }
             }
         }
 

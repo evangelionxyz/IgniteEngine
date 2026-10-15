@@ -62,6 +62,7 @@ namespace ignite
         Animator2DComponent,
         TerrainComponent,
         HeightFieldColliderComponent,
+        ParticleSystemComponent,
         PrefabComponent
     >; 
 }

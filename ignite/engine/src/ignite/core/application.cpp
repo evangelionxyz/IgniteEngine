@@ -755,4 +755,9 @@ namespace ignite
         return GetInstance()->m_DeltaTime;
     }
 
+    int32_t Application::GetFrameIndex()
+    {
+        return GetInstance()->m_FrameIndex;
+    }
+
 }

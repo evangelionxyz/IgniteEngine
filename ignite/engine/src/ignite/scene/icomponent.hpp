@@ -45,6 +45,7 @@ namespace ignite
         CompType_Terrain,
         CompType_HeightFieldCollider,
         CompType_Prefab,
+        CompType_ParticleSystem,
 
         CompType_COUNT
     };

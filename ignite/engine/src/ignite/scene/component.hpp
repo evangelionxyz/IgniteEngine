@@ -21,6 +21,7 @@
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/objects/procedural_sky.hpp"
+#include "ignite/graphics/objects/particle_system.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/math/aabb.hpp"
 #include "ignite/math/transform.hpp"
@@ -78,6 +79,7 @@ namespace ignite
         { "Terrain", CompType_Terrain },
         { "HeightField Collider", CompType_HeightFieldCollider },
         { "Prefab", CompType_Prefab },
+        { "Particle System", CompType_ParticleSystem },
     };
 
     enum EntityType : uint8_t
@@ -198,6 +200,7 @@ namespace ignite
             case CompType_CharacterController: return "CompType_CharacterController";
             case CompType_Terrain: return "CompType_Terrain";
             case CompType_Prefab: return "CompType_Prefab";
+            case CompType_ParticleSystem: return "CompType_ParticleSystem";
             case CompType_Invalid:
             default: return "Invalid Component";
         }
@@ -908,6 +911,18 @@ namespace ignite
             : prefabHandle(handle), prefabEntityUUID(entityUUID) {}
 
         COMPONENT_CLASS_TYPE(CompType_Prefab)
+    };
+
+    class ParticleSystemComponent : public IComponent
+    {
+    public:
+        ParticleEmitterSettings settings = ParticleEmitterSettings::CreateFire();
+        Ref<ParticleSystem> system = nullptr;
+        bool isPlaying = true;
+
+        ParticleSystemComponent() = default;
+
+        COMPONENT_CLASS_TYPE(CompType_ParticleSystem)
     };
 
 }

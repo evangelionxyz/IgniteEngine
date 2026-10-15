@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -816,6 +816,36 @@ namespace ignite
                 }
                 sr.EndMap();
             }
+
+            // Particle System Component
+            if (entity.HasComponent<ParticleSystemComponent>())
+            {
+                const auto &comp = entity.GetComponent<ParticleSystemComponent>();
+                sr.BeginMap("ParticleSystem");
+                {
+                    sr.AddKeyValue("IsPlaying", comp.isPlaying);
+                    sr.AddKeyValue("EmitterType", static_cast<uint32_t>(comp.settings.type));
+                    sr.AddKeyValue("BlendMode", static_cast<uint32_t>(comp.settings.blendMode));
+                    sr.AddKeyValue("MaxParticles", comp.settings.maxParticles);
+                    sr.AddKeyValue("EmissionRate", comp.settings.emissionRate);
+                    sr.AddKeyValue("LifetimeMin", comp.settings.lifetimeMin);
+                    sr.AddKeyValue("LifetimeMax", comp.settings.lifetimeMax);
+                    sr.AddKeyValue("VelocityMin", comp.settings.velocityMin);
+                    sr.AddKeyValue("VelocityMax", comp.settings.velocityMax);
+                    sr.AddKeyValue("Acceleration", comp.settings.acceleration);
+                    sr.AddKeyValue("Drag", comp.settings.drag);
+                    sr.AddKeyValue("StartColor", comp.settings.startColor);
+                    sr.AddKeyValue("EndColor", comp.settings.endColor);
+                    sr.AddKeyValue("StartSize", comp.settings.startSize);
+                    sr.AddKeyValue("EndSize", comp.settings.endSize);
+                    sr.AddKeyValue("RotationSpeedMin", comp.settings.rotationSpeedMin);
+                    sr.AddKeyValue("RotationSpeedMax", comp.settings.rotationSpeedMax);
+                    sr.AddKeyValue("SpawnRadius", comp.settings.spawnRadius);
+                    sr.AddKeyValue("VelocityAlignment", comp.settings.velocityAlignment);
+                    sr.AddKeyValue("TextureHandle", static_cast<uint64_t>(comp.settings.textureHandle));
+                }
+                sr.EndMap();
+            }
         }
         sr.EndMap(); // END Entity
     }
@@ -1387,6 +1417,32 @@ namespace ignite
             auto &comp = desEntity.AddComponent<PrefabComponent>();
             if (auto n = node["PrefabHandle"]) comp.prefabHandle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["PrefabEntityUUID"]) comp.prefabEntityUUID = UUID(n.as<uint64_t>());
+        }
+
+        // Particle System Component
+        if (JsonNode node = entityNode["ParticleSystem"])
+        {
+            auto &comp = desEntity.AddComponent<ParticleSystemComponent>();
+            if (auto n = node["IsPlaying"]) comp.isPlaying = n.as<bool>();
+            if (auto n = node["EmitterType"]) comp.settings.type = static_cast<ParticleEmitterType>(n.as<uint32_t>());
+            if (auto n = node["BlendMode"]) comp.settings.blendMode = static_cast<ParticleBlendMode>(n.as<uint32_t>());
+            if (auto n = node["MaxParticles"]) comp.settings.maxParticles = n.as<uint32_t>();
+            if (auto n = node["EmissionRate"]) comp.settings.emissionRate = n.as<float>();
+            if (auto n = node["LifetimeMin"]) comp.settings.lifetimeMin = n.as<float>();
+            if (auto n = node["LifetimeMax"]) comp.settings.lifetimeMax = n.as<float>();
+            if (auto n = node["VelocityMin"]) comp.settings.velocityMin = n.as<glm::vec3>();
+            if (auto n = node["VelocityMax"]) comp.settings.velocityMax = n.as<glm::vec3>();
+            if (auto n = node["Acceleration"]) comp.settings.acceleration = n.as<glm::vec3>();
+            if (auto n = node["Drag"]) comp.settings.drag = n.as<float>();
+            if (auto n = node["StartColor"]) comp.settings.startColor = n.as<glm::vec4>();
+            if (auto n = node["EndColor"]) comp.settings.endColor = n.as<glm::vec4>();
+            if (auto n = node["StartSize"]) comp.settings.startSize = n.as<glm::vec2>();
+            if (auto n = node["EndSize"]) comp.settings.endSize = n.as<glm::vec2>();
+            if (auto n = node["RotationSpeedMin"]) comp.settings.rotationSpeedMin = n.as<float>();
+            if (auto n = node["RotationSpeedMax"]) comp.settings.rotationSpeedMax = n.as<float>();
+            if (auto n = node["SpawnRadius"]) comp.settings.spawnRadius = n.as<float>();
+            if (auto n = node["VelocityAlignment"]) comp.settings.velocityAlignment = n.as<float>();
+            if (auto n = node["TextureHandle"]) comp.settings.textureHandle = AssetHandle(n.as<uint64_t>());
         }
 
         return desEntity;

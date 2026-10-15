@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -95,7 +95,7 @@ namespace ignite
 
         Ref<Texture> environmentTexture = envMap;
         if (!environmentTexture)
-            environmentTexture = Renderer::GetBlackTexture();
+            environmentTexture = Renderer::GetWhiteTexture();
 
         Ref<Texture> shadowTexture = shadowMap;
         if (!shadowTexture)

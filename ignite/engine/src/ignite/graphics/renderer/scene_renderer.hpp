@@ -32,6 +32,7 @@ namespace ignite
         bool has2D = false;
         bool hasTerrain = false;
         bool hasEnvironment = false;
+        bool hasParticles = false;
         bool hasWidgets = false;
         bool hasActiveShadows = false;
         bool requiresObjectId = false;
@@ -44,7 +45,7 @@ namespace ignite
 
         bool HasRenderables() const
         {
-            return hasMeshes || has2D || hasTerrain || hasEnvironment;
+            return hasMeshes || has2D || hasTerrain || hasEnvironment || hasParticles;
         }
 
         bool IsEmptyScene() const
