@@ -58,6 +58,7 @@ group ""
 group "App"
     include "../ignite/editorv2/ignite.editorv2.lua"
     include "../ignite/editor/ignite.editor.lua"
+    include "../ignite/runtime/ignite.runtime.lua"
 group ""
 
 group "App/Tests"

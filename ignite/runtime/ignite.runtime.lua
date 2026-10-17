@@ -1,0 +1,285 @@
+project "Ignite.Runtime"
+    location "%{wks.location}/ignite/runtime"
+    kind "ConsoleApp"
+    staticruntime "off"
+    architecture "x64"
+    language "c++"
+    cppdialect "c++23"
+
+    vectorextensions "AVX2"
+
+    targetdir (OUTPUT_DIR)
+    objdir (INTOUTPUT_DIR)
+
+    pchheader "pch.hpp"
+    pchsource "src/pch.cpp"
+
+    files {
+        "src/**.cpp",
+        "src/**.hpp",
+        "src/**.h",
+    }
+
+    links {
+        "Ignite.Engine",
+        "Ignite.Core",
+        "Ignite.Physics",
+        "JOLT",
+        "ZLIB",
+        "yaml-cpp",
+        "Lua",
+        "UmbraShaderCompiler",
+        "IMGUI",
+        "BOX2D",
+        "STB",
+        "SPDLOG",
+        "TINYGLTF",
+        "NVRHI",
+        "msdf-atlas-gen",
+        "msdfgen",
+        "freetype",
+        "tracy",
+        "MochiSharp.Native",
+
+        "ignite_core.dll.lib", -- rust based
+    }
+
+    includedirs {
+        "src",
+        "%{wks.location}/ignite/core/src",
+        "%{wks.location}/ignite/engine/src",
+        "%{wks.location}/ignite/physics/src",
+
+        "%{wks.location}/crates/src/include",
+
+        "%{IncludeDir.SDL3}",
+        "%{IncludeDir.UmbraShaderCompiler}",
+        "%{IncludeDir.BOX2D}",
+        "%{IncludeDir.ENTT}",
+        "%{IncludeDir.JOLT}",
+        "%{IncludeDir.GLM}",
+        "%{IncludeDir.FMOD}",
+        "%{IncludeDir.IMGUI}",
+        "%{IncludeDir.IMGUIZMO}",
+        "%{IncludeDir.IMGUI_NODE}",
+        "%{IncludeDir.MONO}",
+        "%{IncludeDir.SPDLOG}",
+        "%{IncludeDir.NVRHI}",
+        "%{IncludeDir.STB}",
+        "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
+        "%{IncludeDir.NVRHI_DIRECTX_HEADERS}",
+        "%{IncludeDir.VULKAN_SDK}",
+        "%{IncludeDir.FILEWATCHER}",
+        "%{IncludeDir.ZLIB}",
+        "%{IncludeDir.YAMLCPP}",
+        "%{IncludeDir.ASSIMP}",
+        "%{IncludeDir.TINYGLTF}",
+        "%{IncludeDir.MSDFATLASGEN}",
+        "%{IncludeDir.OPENEXR}",
+        "%{IncludeDir.IMATH}",
+        "%{IncludeDir.MSDFGEN}",
+        "%{IncludeDir.FREETYPE}",
+        "%{IncludeDir.TRACY}",
+        "%{IncludeDir.JSON}",
+        "%{IncludeDir.NUKLEAR}",
+        "%{IncludeDir.MochiSharpNative}",
+        "%{IncludeDir.Hostfxr}",
+        "%{IncludeDir.FASTNOISE2}",
+        "%{IncludeDir.FASTSIMD}",
+        "%{IncludeDir.LUA}",
+        "%{IncludeDir.FASTSIMD_CONFIG}"
+    }
+
+    defines {
+        "IMGUI_DEFINE_MATH_OPERATORS",
+        "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
+        "NVRHI_SHARED_LIBRARY_INCLUDE",
+        "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+        "JPH_DEBUG_RENDERER",
+        "JPH_PROFILE_ENABLED",
+        "JPH_OBJECT_STREAM",
+        "GLM_FORCE_SSE2"
+    }
+
+    -- build rust
+    filter "configurations:Debug or Debug-Profiling"
+        libdirs { "%{wks.location}/crates/target/debug" }
+        postbuildcommands {
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
+        }
+
+    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
+        libdirs { "%{wks.location}/crates/target/release" }
+        postbuildcommands {
+            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+        }
+
+    filter {}
+
+    postbuildcommands {
+        -- copy_dir("%{prj.location}/resources", "%{cfg.targetdir}/resources"),
+    }
+
+    filter "system:windows"
+        files {
+            -- Resource
+            "resource.h",
+            "ignite-icon256px.ico",
+            "ignite-icon256px.png",
+        }
+
+    --linux
+    filter "system:linux"
+        pic "on"
+        defines {
+            "PLATFORM_LINUX",
+            "IGNITE_WITH_VULKAN"
+        }
+        libdirs {
+            "/usr/lib",
+            "/usr/local/lib",
+            "%{LibraryDir.FMOD_LINUX}",
+            "%{LibraryDir.SDL3_LINUX}"
+        }
+        includedirs {
+            "/usr/include",
+            "%{IncludeDir.OPENEXR_LINUX}",
+            "%{IncludeDir.IMATH_LINUX}"
+        }
+        links {
+            "vulkan",
+            "shaderc",
+            "spirv-cross-c",
+            "spirv-cross-core",
+            "spirv-cross-glsl",
+            "nethost",
+            "SDL3",
+            "OpenEXRUtil",
+            "OpenEXR",
+            "OpenEXRCore",
+            "IlmThread",
+            "Iex",
+            "Imath",
+            "xml2",
+            "pthread",
+            "dl",
+            "m",
+            "rt",
+            "glib-2.0"
+        }
+        linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+
+    filter { "system:linux", "configurations:Debug" }
+        libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
+        links { "fmodL" }
+        linkoptions { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}/libfbxsdk.a" }
+
+    filter { "system:linux", "configurations:Release or Shipping" }
+        libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
+        links { "fmod" }
+        linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
+
+    --windows
+    filter { "system:windows", "toolset:msc*"}
+        disablewarnings { "4099" }
+        buildoptions {
+            "/utf-8",
+            "/bigobj"
+        }
+
+    filter "system:windows"
+    filter "system:windows"
+        systemversion "latest"
+        links {
+            "d3d12.lib",
+            "dxgi.lib",
+            "d3dcompiler",
+            "dxguid",
+            "%{Library.winmm}",
+            "%{Library.winsock}",
+            "%{Library.winversion}",
+            "%{Library.bcrypt}",
+            "%{Library.vulkan}",
+            "%{Library.mono}",
+            "%{Library.ASSIMP}",
+            "%{Library.FMOD}",
+            "%{Library.Iex}",
+            "%{Library.OpenEXR}",
+            "%{Library.OpenEXRCore}",
+            "%{Library.OpenEXRUtil}",
+            "%{Library.IlmThread}",
+            "%{Library.Imath}",
+            "%{Library.SDL3}"
+        }
+        defines {
+            "PLATFORM_WINDOWS",
+            "IGNITE_WITH_DX12",
+            "IGNITE_WITH_VULKAN",
+            "NOMINMAX",
+            "_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING",
+            "_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS",
+            "_CRT_SECURE_NO_WARNINGS",
+            "_WIN32_WINNT=0x0A00",
+        }
+
+    links { "d3dcompiler", "dxcompiler", "delayimp" }
+
+    filter "configurations:Debug"
+        runtime "Debug"
+        optimize "off"
+        symbols "on"
+        defines {
+            "IGN_DEBUG_BUILD",
+            "DEBUG",
+            "_DEBUG"
+        }
+
+    filter "configurations:Debug-Profiling"
+        runtime "Debug"
+        symbols "on" -- with debug info
+        defines {
+            "IGN_ENABLE_TRACY",
+            "IGN_DEBUG_BUILD",
+            "DEBUG",
+            "_DEBUG"
+        }
+
+    filter "configurations:Release"
+        runtime "Release"
+        optimize "on"
+        symbols "on"
+        defines {
+            "IGN_RELEASE_BUILD",
+            "NDEBUG"
+        }
+
+    filter "configurations:Release-Profiling"
+        runtime "release"
+        optimize "on"
+        symbols "on" -- with debug info
+        defines {
+            "IGN_ENABLE_TRACY",
+            "IGN_RELEASE_BUILD",
+            "NDEBUG"
+        }
+
+    filter "configurations:Shipping"
+        runtime "Release"
+        optimize "on"
+        symbols "off"
+        defines {
+            "IGN_SHIPPING_BUILD",
+            "NDEBUG"
+        }
+
+    filter "configurations:Shipping-Profiling"
+        runtime "release"
+        optimize "speed"
+        symbols "off" -- without debug info
+        defines {
+            "IGN_ENABLE_TRACY",
+            "IGN_SHIPPING_BUILD",
+            "NDEBUG"
+        }
