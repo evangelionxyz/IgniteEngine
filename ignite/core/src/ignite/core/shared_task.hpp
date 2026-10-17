@@ -68,33 +68,6 @@ namespace ignite
                 return shared_task(std::shared_ptr<state>(taskState));
             }
 
-        T Get()
-        {
-            bool startTask = false;
-            {
-                std::lock_guard lock(m_State->mutex);
-                if (!m_State->completed && !m_State->started)
-                {
-                    m_State->started = true;
-                    startTask = true;
-                }
-            }
-
-            if (startTask)
-            {
-                m_State->coroutine.resume();
-            }
-
-            std::unique_lock lock(m_State->mutex);
-            m_State->completion.wait(lock, [this] { return m_State->completed; });
-            if (m_State->exception)
-            {
-                std::rethrow_exception(m_State->exception);
-            }
-
-            return *m_State->value;
-        }
-
             std::suspend_always initial_suspend() const noexcept { return {}; }
 
             auto final_suspend() const noexcept
