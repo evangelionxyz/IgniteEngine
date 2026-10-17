@@ -3865,12 +3865,10 @@ namespace ignite
         return SSAOs;
     }
 
-    // ---------------------------------------------------------------------------
     // FlushOpaqueBatches — dispatch all opaque static mesh batches as instanced draws.
     // Each DrawBatch contains N instances sharing the same vertex buffer, index buffer,
     // material binding set, and PSO. The object indices are uploaded to the
     // InstanceIndexBuffer and referenced via push constant base offset.
-    // ---------------------------------------------------------------------------
     void SceneRenderer::FlushOpaqueBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer)
     {
         if (m_OpaqueBatchBuilder.IsEmpty())
@@ -3893,10 +3891,8 @@ namespace ignite
             allObjectIndices.insert(allObjectIndices.end(), batch.objectIndices.begin(), batch.objectIndices.end());
         }
 
-        const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator.Allocate(
-            cmd,
-            allObjectIndices.data(),
-            static_cast<uint32_t>(allObjectIndices.size()));
+        const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator
+            .Allocate(cmd, allObjectIndices.data(), static_cast<uint32_t>(allObjectIndices.size()));
 
         nvrhi::GraphicsState graphicsState = nvrhi::GraphicsState();
         graphicsState.framebuffer = framebuffer;

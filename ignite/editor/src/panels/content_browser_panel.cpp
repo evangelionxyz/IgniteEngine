@@ -423,23 +423,105 @@ namespace ignite
                 return;
             }
 
+            // Searching variables
+            // Allocate enough memory content searching
+            static bool recursiveSearch = true;
+            static char buffer[256] = { 0 };
+            static std::string contentNameSearchResultStr;
+            // Non static to re-create empty set
+            std::vector<std::filesystem::path> filteredContentNames;
+
             // Navigation bar
-            UIRenderNavigationBar();
-
-            // -------------------------------
-            // ---------- FILE TREE ----------
-            // -------------------------------
+            const ImGuiStyle &style = ImGui::GetStyle();
+            constexpr auto navbarBtSize = ImVec2(24.0f, 24.0f);
+            // const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
+            if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarBtSize.y), ImGuiChildFlags_Borders))
             {
-                IGN_PROFILE_SCOPE_COLOR("ContentBrowser::FileTree", 0xCD5C5C);
+                ImTextureID arrow = (ImTextureID)s_SharedIcons["arrow"]->GetHandle().Get();
+                if (UI::DrawImageButton("##bw_arrow", arrow, navbarBtSize))
+                {
+                    if (!m_BackwardPathStack.empty())
+                    {
+                        const std::filesystem::path previousPath = m_BackwardPathStack.top();
+                        m_BackwardPathStack.pop();
 
+                        if (previousPath != m_CurrentDirectory)
+                        {
+                            if (m_ForwardPathStack.empty() || m_ForwardPathStack.top() != m_CurrentDirectory)
+                            {
+                                m_ForwardPathStack.push(m_CurrentDirectory);
+                            }
+                            m_CurrentDirectory = previousPath;
+                        }
+                    }
+                }
+
+                ImGui::SameLine(0.0f, 4.0f);
+                if (UI::DrawImageButton("##fw_arrow", arrow, navbarBtSize, { 1.0f, 0.0f }, { 0.0f, 1.0f }))
+                {
+                    if (!m_ForwardPathStack.empty())
+                    {
+                        const std::filesystem::path nextPath = m_ForwardPathStack.top();
+                        m_ForwardPathStack.pop();
+
+                        if (nextPath != m_CurrentDirectory)
+                        {
+                            if (m_BackwardPathStack.empty() || m_BackwardPathStack.top() != m_CurrentDirectory)
+                            {
+                                m_BackwardPathStack.push(m_CurrentDirectory);
+                            }
+                            m_CurrentDirectory = nextPath;
+                        }
+                    }
+                }
+
+                ImGui::SameLine(0.0f, 4.0f);
+                ImTextureID refreshBt = (ImTextureID)s_SharedIcons["roll"]->GetHandle().Get();
+                if (UI::DrawImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
+                {
+                    m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
+                    PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
+                    RefreshAssetTree();
+                    CompactTree();
+                }
+
+                ImGui::SameLine(0.0f, 4.0f);
+
+                // Query search string
+                ImGui::SameLine();
+                ImGui::InputTextEx("##content_search", "Search", buffer, sizeof(buffer) + 1, { 256.0f, 24.0f },
+                    ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll, nullptr, nullptr);
+
+                ImGui::SameLine();
+                ImGui::Checkbox("Recursive", &recursiveSearch);
+
+                contentNameSearchResultStr = std::string(buffer);
+                if (!contentNameSearchResultStr.empty())
+                {
+                    // Clear Search Query
+                    ImGui::SameLine();
+                    if (UI::DrawButton("X", { navbarBtSize.y, navbarBtSize.y }))
+                    {
+                        contentNameSearchResultStr.clear();
+                        std::memset(buffer, NULL, sizeof(buffer));
+                    }
+                }
+            }
+            ImGui::EndChild();
+
+            // File tree
+            {
                 // Left side directory tree
                 ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
                 if (!m_TreeNodes.empty())
                 {
-                    const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetDirectory();
-                    const std::string rootLabel = assetDir.filename().string().empty() ? assetDir.generic_string() : assetDir.filename().string();
+                    const auto assetDirectory = m_EditorLayer->GetActiveProject()->GetDirectory();
+                    const std::string rootLabel =
+                        assetDirectory.filename().string().empty()
+                        ? assetDirectory.generic_string()
+                        : assetDirectory.filename().string();
 
-                    ImGuiTreeNodeFlags rootFlags = (m_SelectedFileTree == assetDir ? ImGuiTreeNodeFlags_Selected : 0)
+                    ImGuiTreeNodeFlags rootFlags = (m_SelectedFileTree == assetDirectory ? ImGuiTreeNodeFlags_Selected : 0)
                         | ImGuiTreeNodeFlags_OpenOnArrow
                         | ImGuiTreeNodeFlags_SpanAvailWidth
                         | ImGuiTreeNodeFlags_SpanFullWidth
@@ -447,12 +529,12 @@ namespace ignite
 
                     const bool rootOpened = ImGui::TreeNodeEx("##content_browser_root", rootFlags, "%s", rootLabel.c_str());
 
-                    DragDropSource(assetDir);
+                    DragDropSource(assetDirectory);
 
                     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && ImGui::IsItemHovered())
                     {
-                        UpdateSelection(assetDir);
-                        m_SelectedFileTree = assetDir;
+                        UpdateSelection(assetDirectory);
+                        m_SelectedFileTree = assetDirectory;
                     }
 
                     if (ImGui::BeginDragDropTarget())
@@ -468,7 +550,7 @@ namespace ignite
                                 Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
                                 if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
                                 {
-                                    QueueMoveCopyPopup(project->GetProjectFilepath(droppedMetadata.filepath), assetDir);
+                                    QueueMoveCopyPopup(project->GetProjectFilepath(droppedMetadata.filepath), assetDirectory);
                                     queuedPopup = true;
                                 }
                             }
@@ -481,7 +563,7 @@ namespace ignite
                                 if (pathPayload->DataSize == sizeof(ContentBrowserPathPayload))
                                 {
                                     const auto *dropData = static_cast<const ContentBrowserPathPayload *>(pathPayload->Data);
-                                    QueueMoveCopyPopup(std::filesystem::path(dropData->path), assetDir);
+                                    QueueMoveCopyPopup(std::filesystem::path(dropData->path), assetDirectory);
                                 }
                             }
                         }
@@ -491,7 +573,7 @@ namespace ignite
 
                     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
-                        if (assetDir != m_CurrentDirectory)
+                        if (assetDirectory != m_CurrentDirectory)
                         {
                             m_BackwardPathStack.push(m_CurrentDirectory);
                             while (!m_ForwardPathStack.empty())
@@ -499,7 +581,7 @@ namespace ignite
                                 m_ForwardPathStack.pop();
                             }
 
-                            m_CurrentDirectory = assetDir;
+                            m_CurrentDirectory = assetDirectory;
                         }
                     }
 
@@ -517,50 +599,73 @@ namespace ignite
 
             ImGui::SameLine();
 
-
-            // -------------------------------
-            // ---------- FILE LIST ----------
-            // -------------------------------
+            // File list
             {
-                IGN_PROFILE_SCOPE_COLOR("ContentBrowser::FileList", 0xCD5C5C);
-
-
                 if (ImGui::BeginChild("##file_lists", { 0.0f, 0.0f }))
                 {
                     // Insert path nodes
                     FileTreeNode *node = m_TreeNodes.data();
                     if (node)
                     {
-                        auto &f = m_EditorLayer->GetActiveProject()->GetDirectory();
-                        const auto &relativePath = std::filesystem::relative(m_CurrentDirectory.string(), f.string());
-
+                        auto &assetDirectory = m_EditorLayer->GetActiveProject()->GetDirectory();
+                        const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, assetDirectory);
+                        for (const auto &path : relativePath)
                         {
-                            IGN_PROFILE_SCOPE_COLOR("ContentBrowser::Submitting paths", 0xCD5C5C);
-                            for (const auto &path : relativePath)
-                            {
-                                if (node->path == relativePath.string())
-                                {
-                                    break;
-                                }
-
-                                if (node->children.contains(path.string()))
-                                {
-                                    node = &m_TreeNodes[node->children[path.string()]];
-                                }
-                            }
+                            if (node->path == relativePath)
+                                break;
+                            if (node->children.contains(path))
+                                node = &m_TreeNodes[node->children[path]];
                         }
 
-                        if (node->children.empty())
+                        const bool searchActive = !contentNameSearchResultStr.empty();
+                        if (!searchActive && node->children.empty())
+                            UI::DrawCenteredText("Empty folder", 0xFFAAAAAA);
+
+                        if (searchActive)
                         {
-                            UI::DrawCenteredText("Empty folder");
+                            std::string search = stringutils::ToLower(contentNameSearchResultStr);
+                            if (recursiveSearch)
+                            {
+                                // Recursive search
+                                for (auto &node : m_TreeNodes)
+                                {
+                                    for (const uint32_t childNodeIndex : node.sortedChildren)
+                                    {
+                                        const auto path = std::filesystem::relative(
+                                            assetDirectory / GetNodeFullpath(childNodeIndex), m_CurrentDirectory);
+                                        std::string pathLower = stringutils::ToLower(path.generic_string());
+                                        if (pathLower.find(search) != std::string::npos)
+                                            filteredContentNames.push_back(path);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Child search
+                                for (const uint32_t childNodeIndex : node->sortedChildren)
+                                {
+                                    const auto path = std::filesystem::relative(
+                                        assetDirectory / GetNodeFullpath(childNodeIndex), m_CurrentDirectory);
+                                    std::string pathLower = stringutils::ToLower(path.generic_string());
+                                    if (pathLower.find(search) != std::string::npos)
+                                        filteredContentNames.push_back(path);
+                                }
+                            }
+
                         }
 
                         const float spacing = 12.0f;
                         const float contentWidth = ImGui::GetContentRegionAvail().x;
-                        const float itemWidth = static_cast<float>(m_ThumbnailSize);
+                        const auto itemWidth = static_cast<float>(m_ThumbnailSize);
 
                         const int itemPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (itemWidth + spacing)));
-                        const int itemCount = static_cast<int>(node->sortedChildren.size());
+                        const auto itemCount = searchActive
+                            ? static_cast<int>(filteredContentNames.size())
+                            : static_cast<int>(node->sortedChildren.size());
+
+                        if (searchActive && itemCount == 0)
+                            UI::DrawCenteredText("No matching items", 0xFFAAAAAA);
+
                         const int rowCount = (itemCount + itemPerRow - 1) / itemPerRow;
                         const float rowHeight = static_cast<float>(m_ThumbnailSize) + ImGui::GetTextLineHeightWithSpacing() * 2.0f + spacing;
                         const float cursorStartY = ImGui::GetCursorPosY();
@@ -575,16 +680,14 @@ namespace ignite
                             {
                                 const int rowStart = row * itemPerRow;
                                 const int rowEnd = std::min(rowStart + itemPerRow, itemCount);
-
                                 for (int i = rowStart; i < rowEnd; ++i)
                                 {
-                                    const auto childNodeIndex = node->sortedChildren[static_cast<size_t>(i)];
-                                    const auto &item = m_TreeNodes[childNodeIndex].path;
-
                                     if (i > rowStart)
-                                    {
                                         ImGui::SameLine(0.0f, spacing);
-                                    }
+
+                                    const std::filesystem::path &item = searchActive
+                                        ? filteredContentNames[static_cast<size_t>(i)]
+                                        : m_TreeNodes[node->sortedChildren[static_cast<size_t>(i)]].path;
 
                                     ImGui::PushID(item.generic_string().c_str());
                                     UIRenderFileButton(item);
@@ -1484,7 +1587,7 @@ namespace ignite
     {
         IGN_PROFILE_SCOPE_COLOR("ContentBrowser::UIRenderFileButton", 0xCD5C5C);
 
-        std::filesystem::path path = m_CurrentDirectory / item;
+        const std::filesystem::path path = m_CurrentDirectory / item;
         std::error_code statusError;
         const std::filesystem::file_status fileStatus = std::filesystem::status(path.string(), statusError);
         if (statusError || !std::filesystem::exists(fileStatus))
@@ -2206,67 +2309,6 @@ namespace ignite
         }
 
         return changed;
-    }
-
-    void ContentBrowserPanel::UIRenderNavigationBar()
-    {
-        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::UIRenderNavigationBar", 0xCD5C5C);
-
-        const ImGuiStyle &style = ImGui::GetStyle();
-
-        const auto navbarBtSize = ImVec2(38.0f, 32.0f);
-        // const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
-        if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarBtSize.y), ImGuiChildFlags_Borders))
-        {
-            ImTextureID arrow = (ImTextureID)s_SharedIcons["arrow"]->GetHandle().Get();
-            if (UI::DrawImageButton("##bw_arrow", arrow, navbarBtSize))
-            {
-                if (!m_BackwardPathStack.empty())
-                {
-                    const std::filesystem::path previousPath = m_BackwardPathStack.top();
-                    m_BackwardPathStack.pop();
-
-                    if (previousPath != m_CurrentDirectory)
-                    {
-                        if (m_ForwardPathStack.empty() || m_ForwardPathStack.top() != m_CurrentDirectory)
-                        {
-                            m_ForwardPathStack.push(m_CurrentDirectory);
-                        }
-                        m_CurrentDirectory = previousPath;
-                    }
-                }
-            }
-
-            ImGui::SameLine(0.0f, 4.0f);
-            if (UI::DrawImageButton("##fw_arrow", arrow, navbarBtSize, {1.0f, 0.0f}, { 0.0f, 1.0f }))
-            {
-                if (!m_ForwardPathStack.empty())
-                {
-                    const std::filesystem::path nextPath = m_ForwardPathStack.top();
-                    m_ForwardPathStack.pop();
-
-                    if (nextPath != m_CurrentDirectory)
-                    {
-                        if (m_BackwardPathStack.empty() || m_BackwardPathStack.top() != m_CurrentDirectory)
-                        {
-                            m_BackwardPathStack.push(m_CurrentDirectory);
-                        }
-                        m_CurrentDirectory = nextPath;
-                    }
-                }
-            }
-
-            ImGui::SameLine(0.0f, 4.0f);
-            ImTextureID refreshBt = (ImTextureID)s_SharedIcons["roll"]->GetHandle().Get();
-            if (UI::DrawImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
-            {
-                m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
-                PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
-                RefreshAssetTree();
-                CompactTree();
-            }
-        }
-        ImGui::EndChild();
     }
 
     void ContentBrowserPanel::PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path &basePath)

@@ -689,7 +689,7 @@ namespace ignite
         if (ImGui::BeginMenuBar())
         {
             // FILE MENU
-            if (ImGui::BeginMenu("File"))
+            if (ImGui::BeginMenu("File", !m_State.isLoading))
             {
                 if (ImGui::MenuItem("New Scene", nullptr, false, m_ActiveProject != nullptr))
                 {
@@ -733,7 +733,8 @@ namespace ignite
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Edit"))
+            // EDIT MENU
+            if (ImGui::BeginMenu("Edit", !m_State.isLoading))
             {
                 const std::string vsyncLabel = DeviceManager::GetInstance()->IsVsyncEnabled() ? "Disable Vsync" : "Enable Vsync";
                 if (ImGui::MenuItem(vsyncLabel.c_str(), nullptr, nullptr))
@@ -754,7 +755,7 @@ namespace ignite
             }
 
             // VIEW MENU
-            if (ImGui::BeginMenu("View"))
+            if (ImGui::BeginMenu("View", !m_State.isLoading))
             {
                 const bool canAddContentBrowser = (GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) < 4;
                 if (ImGui::MenuItem("Add Content Browser", nullptr, false, canAddContentBrowser))
@@ -786,7 +787,7 @@ namespace ignite
             }
 
             // BUILD MENU
-            if (ImGui::BeginMenu("Script", m_ActiveProject != nullptr))
+            if (ImGui::BeginMenu("Script", m_ActiveProject != nullptr && !m_State.isLoading))
             {
                 if (ImGui::MenuItem("Build Solution"))
                 {
@@ -1458,6 +1459,8 @@ namespace ignite
             return;
         }
 
+        m_State.isLoading = true;
+
         // Clear old project's loaded assets before opening new project
         if (m_ActiveProject)
         {
@@ -1743,6 +1746,8 @@ namespace ignite
             // Create a default scene
             NewScene();
         }
+
+        m_State.isLoading = false;
     }
 
     void EditorLayer::OnFileImport(const FileImportPayload &payload)
