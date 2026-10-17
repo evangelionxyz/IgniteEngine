@@ -199,6 +199,33 @@ namespace ignite
             return awaiter{ m_State };
         }
 
+        T Get()
+        {
+            bool startTask = false;
+            {
+                std::lock_guard lock(m_State->mutex);
+                if (!m_State->completed && !m_State->started)
+                {
+                    m_State->started = true;
+                    startTask = true;
+                }
+            }
+
+            if (startTask)
+            {
+                m_State->coroutine.resume();
+            }
+
+            std::unique_lock lock(m_State->mutex);
+            m_State->completion.wait(lock, [this] { return m_State->completed; });
+            if (m_State->exception)
+            {
+                std::rethrow_exception(m_State->exception);
+            }
+
+            return *m_State->value;
+        }
+
     private:
         explicit shared_task(std::shared_ptr<state> taskState) noexcept
             : m_State(std::move(taskState))
