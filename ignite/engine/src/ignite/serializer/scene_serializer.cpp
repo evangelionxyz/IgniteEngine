@@ -234,7 +234,7 @@ namespace ignite
                 entry.parent = entityNode["Parent"].as<uint64_t>(0);
             }
 
-            // 1. Transform
+            // Transform
             if (entityNode["Transform"])
             {
                 JsonNode tNode = entityNode["Transform"];
@@ -279,7 +279,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 2. Camera
+            // Camera
             if (entityNode["Camera"])
             {
                 JsonNode cNode = entityNode["Camera"];
@@ -300,7 +300,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 3. DirectionalLight
+            // DirectionalLight
             if (entityNode["DirectionalLight"])
             {
                 JsonNode lNode = entityNode["DirectionalLight"];
@@ -315,7 +315,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 4. PointLight
+            // PointLight
             if (entityNode["PointLight"])
             {
                 JsonNode lNode = entityNode["PointLight"];
@@ -332,7 +332,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 5. SpotLight
+            // SpotLight
             if (entityNode["SpotLight"])
             {
                 JsonNode lNode = entityNode["SpotLight"];
@@ -349,7 +349,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 6. Sprite2D
+            // Sprite2D
             if (entityNode["Sprite2D"])
             {
                 JsonNode sNode = entityNode["Sprite2D"];
@@ -362,7 +362,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 7. Circle2D
+            // Circle2D
             if (entityNode["Circle2D"])
             {
                 JsonNode sNode = entityNode["Circle2D"];
@@ -375,7 +375,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 8. StaticMesh
+            // StaticMesh
             if (entityNode["StaticMesh"])
             {
                 json c;
@@ -384,7 +384,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 9. SkeletalMesh
+            // SkeletalMesh
             if (entityNode["SkeletalMesh"])
             {
                 json c;
@@ -393,7 +393,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 10. Rigidbody
+            // Rigidbody
             if (entityNode["Rigidbody"])
             {
                 JsonNode rbNode = entityNode["Rigidbody"];
@@ -406,7 +406,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 11. BoxCollider
+            // BoxCollider
             if (entityNode["BoxCollider"])
             {
                 json c;
@@ -415,7 +415,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 12. SphereCollider
+            // SphereCollider
             if (entityNode["SphereCollider"])
             {
                 json c;
@@ -424,7 +424,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 13. CapsuleCollider
+            // CapsuleCollider
             if (entityNode["CapsuleCollider"])
             {
                 json c;
@@ -433,7 +433,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 14. MeshCollider
+            // MeshCollider
             if (entityNode["MeshCollider"])
             {
                 json c;
@@ -442,7 +442,16 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 15. AudioSource
+            // MeshCollider
+            if (entityNode["PlaneCollider"])
+            {
+                json c;
+                c["type"] = "PlaneCollider";
+                c["displayName"] = "Plane Collider";
+                entry.components.push_back(c);
+            }
+
+            // AudioSource
             if (entityNode["AudioSource"])
             {
                 json c;
@@ -451,7 +460,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 16. Script
+            // Script
             if (entityNode["Script"])
             {
                 json c;
@@ -460,7 +469,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 17. WorldEnvironment
+            // WorldEnvironment
             if (entityNode["WorldEnvironment"])
             {
                 json c;
@@ -469,7 +478,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 18. CharacterController
+            // CharacterController
             if (entityNode["CharacterController"])
             {
                 json c;
@@ -478,7 +487,7 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
-            // 19. PhysicsJoint
+            // PhysicsJoint
             if (JsonNode pj = entityNode["PhysicsJoint"])
             {
                 json c;
@@ -783,6 +792,17 @@ namespace ignite
                 c["displayName"] = "Mesh Collider";
                 c["center"] = { comp.center.x, comp.center.y, comp.center.z };
                 c["convex"] = comp.convex;
+                entry.components.push_back(c);
+            }
+
+            // PlaneCollider
+            if (entity.HasComponent<PlaneColliderComponent>())
+            {
+                const auto &comp = entity.GetComponent<PlaneColliderComponent>();
+                json c;
+                c["type"] = "PlaneCollider";
+                c["displayName"] = "Plane Collider";
+                c["scale"] = { comp.scale.x, comp.scale.y, comp.scale.z };
                 entry.components.push_back(c);
             }
 

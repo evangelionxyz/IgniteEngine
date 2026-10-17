@@ -639,6 +639,17 @@ namespace ignite
                 sr.EndMap();
             }
 
+            // PlaneCollider
+            if (entity.HasComponent<PlaneColliderComponent>())
+            {
+                const auto &comp = entity.GetComponent<PlaneColliderComponent>();
+                sr.BeginMap("PlaneCollider");
+                {
+                    sr.AddKeyValue("Scale", comp.scale);
+                }
+                sr.EndMap();
+            }
+
             // HeightFieldCollider
             if (entity.HasComponent<HeightFieldColliderComponent>())
             {
@@ -1298,6 +1309,13 @@ namespace ignite
                     comp.indices.push_back(iNode.as<uint32_t>());
                 }
             }
+        }
+
+        // PlaneCollider Component
+        if (JsonNode node = entityNode["PlaneCollider"])
+        {
+            auto &comp = desEntity.AddComponent<PlaneColliderComponent>();
+            if (auto n = node["Scale"]) comp.scale = n.as<glm::vec3>();
         }
 
         // HeightFieldCollider Component

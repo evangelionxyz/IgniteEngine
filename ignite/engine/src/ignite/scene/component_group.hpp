@@ -52,6 +52,7 @@ namespace ignite
         SphereColliderComponent,
         CapsuleColliderComponent,
         MeshColliderComponent,
+        PlaneColliderComponent,
         AudioSourceComponent,
         ScriptComponent,
         TextComponent,

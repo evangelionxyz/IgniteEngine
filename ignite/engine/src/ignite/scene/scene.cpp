@@ -1958,6 +1958,11 @@ namespace ignite
     }
 
     template<>
+    IGN_API void Scene::OnComponentAdded<PlaneColliderComponent>(Entity entity, PlaneColliderComponent &comp)
+    {
+    }
+
+    template<>
     IGN_API void Scene::OnComponentAdded<HeightFieldColliderComponent>(Entity entity, HeightFieldColliderComponent &comp)
     {
     }

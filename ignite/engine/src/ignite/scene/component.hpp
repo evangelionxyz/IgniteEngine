@@ -69,6 +69,7 @@ namespace ignite
         { "Sphere Collider", CompType_SphereCollider },
         { "Capsule Collider", CompType_CapsuleCollider },
         { "Mesh Collider", CompType_MeshCollider },
+        { "Plane Collider", CompType_PlaneCollider },
         { "Audio Source", CompType_AudioSource },
         { "World Environment", CompType_WorldEnvironment },
         { "C# Script", CompType_Script },
@@ -80,7 +81,7 @@ namespace ignite
         { "HeightField Collider", CompType_HeightFieldCollider },
         { "Prefab", CompType_Prefab },
         { "Particle System", CompType_ParticleSystem },
-        { "Physics Joint", CompType_PhysicsJoint },
+        { "Joint", CompType_PhysicsJoint },
     };
 
     enum EntityType : uint8_t

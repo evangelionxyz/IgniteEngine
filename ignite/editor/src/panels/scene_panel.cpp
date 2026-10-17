@@ -2035,6 +2035,13 @@ namespace ignite
                 }
             });
 
+            RenderComponent<PlaneColliderComponent>("Plane Collider", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<PlaneColliderComponent>();
+                c.dirty |= UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
+                // TODO: Collider Edit from UI (TOGGLES)
+            });
+
             RenderComponent<HeightFieldColliderComponent>("HeightField Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<HeightFieldColliderComponent>();
@@ -3520,7 +3527,7 @@ namespace ignite
                     }
                 }
 
-                static std::function<void(Entity, CompType)> addCompFunc = [=](Entity entity, CompType type)-> void
+                static auto addCompFunc = [=](Entity entity, CompType type) -> void
                 {
                     switch (type)
                     {
@@ -3587,6 +3594,9 @@ namespace ignite
                     case CompType_MeshCollider:
                         entity.AddComponent<MeshColliderComponent>();
                         break;
+                    case CompType_PlaneCollider:
+                        entity.AddComponent<PlaneColliderComponent>();
+                        break;
                     case CompType_Terrain:
                         entity.AddComponent<TerrainComponent>();
                         break;
@@ -3640,8 +3650,6 @@ namespace ignite
                         }
                     }
                 }
-
-                
 
                 ImGui::EndChild();
 
