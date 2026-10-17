@@ -1,9 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite/core/threadpool.hpp"
+#include "ignite/core/shared_task.hpp"
 
-#include <cppcoro/sync_wait.hpp>
-#include <cppcoro/task.hpp>
 #include <gtest/gtest.h>
 
 #include <atomic>
@@ -12,7 +11,7 @@
 
 namespace
 {
-    cppcoro::task<std::thread::id> ScheduleOn(ignite::ThreadPool &pool)
+    ignite::shared_task<std::thread::id> ScheduleOn(ignite::ThreadPool &pool)
     {
         co_await pool.Schedule();
         co_return std::this_thread::get_id();
@@ -64,7 +63,7 @@ TEST(ThreadPool, ResumesCoroutineOnWorker)
 {
     ignite::ThreadPool pool(1, "CoroutineTest");
     const std::thread::id callerThread = std::this_thread::get_id();
-    const std::thread::id workerThread = cppcoro::sync_wait(ScheduleOn(pool));
+    const std::thread::id workerThread = ignite::sync_wait(ScheduleOn(pool));
 
     EXPECT_NE(workerThread, callerThread);
 }

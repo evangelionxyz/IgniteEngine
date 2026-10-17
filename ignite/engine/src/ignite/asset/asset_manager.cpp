@@ -17,8 +17,6 @@
 #include "ignite/terrain/terrain.hpp"
 
 #include "ignite_rs/core.h"
-
-#include <cppcoro/sync_wait.hpp>
 #include <fbxsdk.h>
 #include <stdexcept>
 
@@ -27,7 +25,7 @@ namespace ignite
     static AssetMetaData s_NullMetaData;
     static AssetManager *s_AssetManagerInstance = nullptr;
 
-    static cppcoro::shared_task<Ref<Asset>> MakeCompletedAssetTask(Ref<Asset> asset)
+    static shared_task<Ref<Asset>> MakeCompletedAssetTask(Ref<Asset> asset)
     {
         co_return asset;
     }
@@ -54,7 +52,7 @@ namespace ignite
             std::error_code ec;
             const auto absolutePath = project->GetProjectFilepath(metadata.filepath);
             const uint64_t size = std::filesystem::file_size(absolutePath.string(), ec);
-            return ec ? 0 : size;    
+            return ec ? 0 : size;
         }
 
         return 0;
@@ -95,7 +93,7 @@ namespace ignite
             std::lock_guard<std::mutex> scopeLock(m_LoadScopeMutex);
             m_ShuttingDown.store(true, std::memory_order_release);
             m_Generation.fetch_add(1, std::memory_order_acq_rel);
-            cppcoro::sync_wait(m_LoadScope.join());
+            m_LoadScope.Wait();
         }
 
         if (m_FbxSdkManager)
@@ -301,7 +299,7 @@ namespace ignite
         (void)GetAssetImmediateInternal(handle);
     }
 
-    cppcoro::shared_task<Ref<Asset>> AssetManager::RequestAssetAsync(AssetHandle handle)
+    shared_task<Ref<Asset>> AssetManager::RequestAssetAsync(AssetHandle handle)
     {
         std::lock_guard<std::mutex> scopeLock(m_LoadScopeMutex);
         if (m_ShuttingDown.load(std::memory_order_acquire) || handle == AssetHandle(0))
@@ -309,7 +307,7 @@ namespace ignite
             return MakeCompletedAssetTask(nullptr);
         }
 
-        cppcoro::shared_task<Ref<Asset>> task;
+        shared_task<Ref<Asset>> task;
         {
             std::unique_lock lock(m_AssetMutex);
 
@@ -354,7 +352,7 @@ namespace ignite
             record->loadTask = task;
         }
 
-        m_LoadScope.spawn(task);
+        m_LoadScope.Spawn(task);
         return task;
     }
 
@@ -494,7 +492,7 @@ namespace ignite
         return nullptr;
     }
 
-    cppcoro::shared_task<Ref<Asset>> AssetManager::LoadAssetPipeline(AssetHandle handle, AssetMetaData metadata,
+    shared_task<Ref<Asset>> AssetManager::LoadAssetPipeline(AssetHandle handle, AssetMetaData metadata,
         Ref<AssetRecord> record, std::uint64_t managerGeneration, std::uint64_t requestGeneration)
     {
         try

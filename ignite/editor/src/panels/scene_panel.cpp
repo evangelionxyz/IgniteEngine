@@ -1321,7 +1321,7 @@ namespace ignite
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
                 std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, assetManager, &isMeshLoaded]()
+                UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, assetManager, &isMeshLoaded, &selectedEntity]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -1337,6 +1337,13 @@ namespace ignite
                                 assetManager->AssignMetaData(handle, metadata);
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
+                                if (selectedEntity.HasComponent<MeshColliderComponent>())
+                                {
+                                    auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
+                                    mc.vertices.clear();
+                                    mc.indices.clear();
+                                    mc.dirty = true;
+                                }
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -1348,6 +1355,13 @@ namespace ignite
                         if (ImGui::Button("X"))
                         {
                             c.handle = AssetHandle(0); // reset the mesh
+                            if (selectedEntity.HasComponent<MeshColliderComponent>())
+                            {
+                                auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
+                                mc.vertices.clear();
+                                mc.indices.clear();
+                                mc.dirty = true;
+                            }
                         }
                     }
                 });
@@ -1427,7 +1441,7 @@ namespace ignite
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
                 std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Skeletal Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, assetManager, &isMeshLoaded]()
+                UI::DrawButtonWithColumn("Skeletal Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, assetManager, &isMeshLoaded, &selectedEntity]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -1443,6 +1457,13 @@ namespace ignite
                                 assetManager->AssignMetaData(handle, metadata);
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
+                                if (selectedEntity.HasComponent<MeshColliderComponent>())
+                                {
+                                    auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
+                                    mc.vertices.clear();
+                                    mc.indices.clear();
+                                    mc.dirty = true;
+                                }
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -1454,6 +1475,13 @@ namespace ignite
                         if (ImGui::Button("X"))
                         {
                             c.handle = AssetHandle(0); // reset the mesh
+                            if (selectedEntity.HasComponent<MeshColliderComponent>())
+                            {
+                                auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
+                                mc.vertices.clear();
+                                mc.indices.clear();
+                                mc.dirty = true;
+                            }
                         }
                     }
                 });
@@ -2027,6 +2055,35 @@ namespace ignite
                 c.dirty |= UI::DrawCheckbox("Convex", &c.convex);
                 ImGui::Text("Vertices: %zu", c.vertices.size());
                 ImGui::Text("Indices: %zu", c.indices.size());
+                if (ImGui::Button("Rebuild From Mesh"))
+                {
+                    c.vertices.clear();
+                    c.indices.clear();
+                    if (selectedEntity.HasComponent<StaticMeshComponent>())
+                    {
+                        const auto &smc = selectedEntity.GetComponent<StaticMeshComponent>();
+                        if (smc.handle != AssetHandle(0))
+                        {
+                            if (auto sm = assetManager->GetAsset<StaticMesh>(smc.handle))
+                            {
+                                sm->ExtractMeshData(c.vertices, c.indices);
+                            }
+                        }
+                    }
+                    else if (selectedEntity.HasComponent<SkeletalMeshComponent>())
+                    {
+                        const auto &skc = selectedEntity.GetComponent<SkeletalMeshComponent>();
+                        if (skc.handle != AssetHandle(0))
+                        {
+                            if (auto skm = assetManager->GetAsset<SkeletalMesh>(skc.handle))
+                            {
+                                skm->ExtractMeshData(c.vertices, c.indices);
+                            }
+                        }
+                    }
+                    c.dirty = true;
+                }
+                ImGui::SameLine();
                 if (ImGui::Button("Clear Mesh Data"))
                 {
                     c.dirty = true;

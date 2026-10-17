@@ -145,6 +145,9 @@ namespace ignite::physics
 		bodySettings.mIsSensor = desc.isSensor;
 		bodySettings.mAllowSleeping = desc.allowSleeping;
 
+        bodySettings.mMassPropertiesOverride.mMass = desc.mass;
+        bodySettings.mOverrideMassProperties = JPH::EOverrideMassProperties::MassAndInertiaProvided;
+
 		bodySettings.mAllowedDOFs = JPH::EAllowedDOFs::None;
 		if (desc.rotateX) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::RotationX;
 		if (desc.rotateY) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::RotationY;
@@ -185,6 +188,9 @@ namespace ignite::physics
 		bodySettings.mUserData = userData;
 		bodySettings.mFriction = desc.friction;
 		bodySettings.mRestitution = desc.restitution;
+
+        bodySettings.mMassPropertiesOverride.mMass = desc.mass;
+        bodySettings.mOverrideMassProperties = JPH::EOverrideMassProperties::MassAndInertiaProvided;
 
 		JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         LOG_ASSERT(body, "[Jolt Physics] Failed to create Static Body!");

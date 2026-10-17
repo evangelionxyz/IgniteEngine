@@ -342,14 +342,56 @@ namespace ignite
                 {
                     auto &meshComp = entity.GetComponent<MeshColliderComponent>();
                     physics::MeshColliderDesc desc;
-                    desc.center = meshComp.center * tr.world.scale;
+
+                    if (meshComp.vertices.empty() || meshComp.indices.empty())
+                    {
+                        AssetManager *assetMgr = m_AssetManager ? m_AssetManager : AssetManager::GetInstance();
+                        if (assetMgr)
+                        {
+                            if (entity.HasComponent<StaticMeshComponent>())
+                            {
+                                const auto &smc = entity.GetComponent<StaticMeshComponent>();
+                                if (smc.handle != AssetHandle(0))
+                                {
+                                    auto sm = assetMgr->GetAsset<StaticMesh>(smc.handle);
+                                    if (!sm)
+                                    {
+                                        sm = assetMgr->GetAssetImmediate<StaticMesh>(smc.handle);
+                                    }
+                                    if (sm)
+                                    {
+                                        sm->ExtractMeshData(meshComp.vertices, meshComp.indices);
+                                    }
+                                }
+                            }
+                            else if (entity.HasComponent<SkeletalMeshComponent>())
+                            {
+                                const auto &skc = entity.GetComponent<SkeletalMeshComponent>();
+                                if (skc.handle != AssetHandle(0))
+                                {
+                                    auto skm = assetMgr->GetAsset<SkeletalMesh>(skc.handle);
+                                    if (!skm)
+                                    {
+                                        skm = assetMgr->GetAssetImmediate<SkeletalMesh>(skc.handle);
+                                    }
+                                    if (skm)
+                                    {
+                                        skm->ExtractMeshData(meshComp.vertices, meshComp.indices);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     desc.vertices.reserve(meshComp.vertices.size());
                     for (const auto &v : meshComp.vertices)
                     {
                         desc.vertices.push_back(v * tr.world.scale);
                     }
                     desc.indices = meshComp.indices;
-                    desc.isConvex = meshComp.convex;
+
+                    desc.center = meshComp.center * tr.world.scale;
+                    desc.isConvex = meshComp.convex || (entity.HasComponent<RigidbodyComponent>() && entity.GetComponent<RigidbodyComponent>().bodyType == physics::BodyType::Dynamic);
                     auto col = m_Physics3D->CreateMeshCollider(desc);
                     meshComp.collider = col;
                     return col;
@@ -730,6 +772,34 @@ namespace ignite
                 const auto worldMatrix = tr.world.GetMatrix();
                 smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
                 smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
+
+                if (registry->any_of<MeshColliderComponent>(e))
+                {
+                    auto &mc = registry->get<MeshColliderComponent>(e);
+                    if (mc.vertices.empty() || mc.indices.empty())
+                    {
+                        if (mesh->ExtractMeshData(mc.vertices, mc.indices))
+                        {
+                            mc.dirty = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        auto meshColliderSkelView = registry->view<SkeletalMeshComponent, MeshColliderComponent>();
+        for (entt::entity e : meshColliderSkelView)
+        {
+            auto [skc, mc] = meshColliderSkelView.get<SkeletalMeshComponent, MeshColliderComponent>(e);
+            if (skc.handle == AssetHandle(0) || (!mc.vertices.empty() && !mc.indices.empty()))
+                continue;
+
+            if (auto skm = m_AssetManager->GetAsset<SkeletalMesh>(skc.handle))
+            {
+                if (skm->ExtractMeshData(mc.vertices, mc.indices))
+                {
+                    mc.dirty = true;
+                }
             }
         }
 
@@ -1109,6 +1179,36 @@ namespace ignite
                             auto &meshComp = registry->get<MeshColliderComponent>(e);
                             if (meshComp.dirty)
                             {
+                                if (meshComp.vertices.empty() || meshComp.indices.empty())
+                                {
+                                    AssetManager *assetMgr = m_AssetManager ? m_AssetManager : AssetManager::GetInstance();
+                                    if (assetMgr)
+                                    {
+                                        if (registry->any_of<StaticMeshComponent>(e))
+                                        {
+                                            const auto &smc = registry->get<StaticMeshComponent>(e);
+                                            if (smc.handle != AssetHandle(0))
+                                            {
+                                                if (auto sm = assetMgr->GetAsset<StaticMesh>(smc.handle))
+                                                {
+                                                    sm->ExtractMeshData(meshComp.vertices, meshComp.indices);
+                                                }
+                                            }
+                                        }
+                                        else if (registry->any_of<SkeletalMeshComponent>(e))
+                                        {
+                                            const auto &skc = registry->get<SkeletalMeshComponent>(e);
+                                            if (skc.handle != AssetHandle(0))
+                                            {
+                                                if (auto skm = assetMgr->GetAsset<SkeletalMesh>(skc.handle))
+                                                {
+                                                    skm->ExtractMeshData(meshComp.vertices, meshComp.indices);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 physics::MeshColliderDesc desc;
                                 desc.center = meshComp.center * tr.world.scale;
                                 desc.vertices.reserve(meshComp.vertices.size());
@@ -1117,7 +1217,7 @@ namespace ignite
                                     desc.vertices.push_back(v * tr.world.scale);
                                 }
                                 desc.indices = meshComp.indices;
-                                desc.isConvex = meshComp.convex;
+                                desc.isConvex = meshComp.convex || (rb.bodyType == physics::BodyType::Dynamic);
                                 auto col = m_Physics3D->CreateMeshCollider(desc);
                                 meshComp.collider = col;
                                 updateBodyCollider(col);
@@ -1955,6 +2055,35 @@ namespace ignite
     template<>
     IGN_API void Scene::OnComponentAdded<MeshColliderComponent>(Entity entity, MeshColliderComponent &comp)
     {
+        if (!comp.vertices.empty() && !comp.indices.empty())
+            return;
+
+        AssetManager *assetMgr = m_AssetManager ? m_AssetManager : AssetManager::GetInstance();
+        if (!assetMgr)
+            return;
+
+        if (entity.HasComponent<StaticMeshComponent>())
+        {
+            const auto &smc = entity.GetComponent<StaticMeshComponent>();
+            if (smc.handle != AssetHandle(0))
+            {
+                if (auto sm = assetMgr->GetAsset<StaticMesh>(smc.handle))
+                {
+                    sm->ExtractMeshData(comp.vertices, comp.indices);
+                }
+            }
+        }
+        else if (entity.HasComponent<SkeletalMeshComponent>())
+        {
+            const auto &skc = entity.GetComponent<SkeletalMeshComponent>();
+            if (skc.handle != AssetHandle(0))
+            {
+                if (auto skm = assetMgr->GetAsset<SkeletalMesh>(skc.handle))
+                {
+                    skm->ExtractMeshData(comp.vertices, comp.indices);
+                }
+            }
+        }
     }
 
     template<>

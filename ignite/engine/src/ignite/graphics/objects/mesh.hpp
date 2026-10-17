@@ -222,6 +222,7 @@ namespace ignite
         virtual ~Mesh() = default;
 
         virtual const AABB &CalculateLocalAABB() = 0;
+        virtual bool ExtractMeshData(std::vector<glm::vec3> &outVertices, std::vector<uint32_t> &outIndices) const = 0;
 
         static AssetType GetStaticType() { return AssetType::Mesh; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
@@ -247,6 +248,7 @@ namespace ignite
         static Ref<StaticMesh> Deserialize(const std::filesystem::path &filepath);
 
         virtual const AABB &CalculateLocalAABB() override;
+        virtual bool ExtractMeshData(std::vector<glm::vec3> &outVertices, std::vector<uint32_t> &outIndices) const override;
     private:
         std::vector<Ref<StaticMeshInstance>> m_MeshInstances;
     };
@@ -275,6 +277,7 @@ namespace ignite
         static Ref<SkeletalMesh> Deserialize(const std::filesystem::path &filepath);
 
         virtual const AABB &CalculateLocalAABB() override;
+        virtual bool ExtractMeshData(std::vector<glm::vec3> &outVertices, std::vector<uint32_t> &outIndices) const override;
     private:
         AssetHandle m_AnimatorHandle = AssetHandle(0);
         AssetHandle m_SkeletonHandle = AssetHandle(0);

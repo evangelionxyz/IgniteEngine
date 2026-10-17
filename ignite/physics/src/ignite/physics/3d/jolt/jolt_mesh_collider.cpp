@@ -26,37 +26,78 @@ namespace ignite::physics
 			joltVerts.push_back({ v.x, v.y, v.z });
 		}
 
+		auto buildMeshShape = [&]() -> JPH::ShapeRefC
+		{
+			JPH::TriangleList triangles;
+			if (!desc.indices.empty())
+			{
+				triangles.reserve(desc.indices.size() / 3);
+				for (size_t i = 0; i + 2 < desc.indices.size(); i += 3)
+				{
+					const uint32_t i0 = desc.indices[i];
+					const uint32_t i1 = desc.indices[i + 1];
+					const uint32_t i2 = desc.indices[i + 2];
+					if (i0 >= joltVerts.size() || i1 >= joltVerts.size() || i2 >= joltVerts.size())
+						continue;
+
+					const JPH::Vec3 &v0 = joltVerts[i0];
+					const JPH::Vec3 &v1 = joltVerts[i1];
+					const JPH::Vec3 &v2 = joltVerts[i2];
+					if ((v1 - v0).Cross(v2 - v0).LengthSq() <= 1e-12f)
+						continue;
+
+					triangles.push_back(JPH::Triangle(v0, v1, v2));
+				}
+			}
+			else
+			{
+				triangles.reserve(joltVerts.size() / 3);
+				for (size_t i = 0; i + 2 < joltVerts.size(); i += 3)
+				{
+					const JPH::Vec3 &v0 = joltVerts[i];
+					const JPH::Vec3 &v1 = joltVerts[i + 1];
+					const JPH::Vec3 &v2 = joltVerts[i + 2];
+					if ((v1 - v0).Cross(v2 - v0).LengthSq() <= 1e-12f)
+						continue;
+
+					triangles.push_back(JPH::Triangle(v0, v1, v2));
+				}
+			}
+
+			if (triangles.empty())
+			{
+				LOG_WARN("[Jolt Physics] MeshCollider has no valid non-degenerate triangles!");
+				return nullptr;
+			}
+
+			JPH::MeshShapeSettings shapeSettings(triangles);
+			auto result = shapeSettings.Create();
+			if (!result.IsValid())
+			{
+				LOG_WARN("[Jolt Physics] Failed to create Mesh shape: {}", result.GetError().c_str());
+				return nullptr;
+			}
+			return result.Get();
+		};
+
 		JPH::ShapeRefC innerShape;
 		if (m_IsConvex)
 		{
 			JPH::ConvexHullShapeSettings shapeSettings(joltVerts.data(), static_cast<int>(joltVerts.size()));
 			auto result = shapeSettings.Create();
-            LOG_ASSERT(result.IsValid(), "[Jolt Physics] Failed to create Convex hull shape!");
 			if (result.IsValid())
 			{
 				innerShape = result.Get();
+			}
+			else
+			{
+				LOG_WARN("[Jolt Physics] ConvexHullShape creation failed ({}), falling back to MeshShape", result.GetError().c_str());
+				innerShape = buildMeshShape();
 			}
 		}
 		else
 		{
-			JPH::TriangleList triangles;
-			triangles.reserve(desc.indices.size() / 3);
-			for (size_t i = 0; i + 2 < desc.indices.size(); i += 3)
-			{
-				triangles.push_back(JPH::Triangle(
-					joltVerts[desc.indices[i]],
-					joltVerts[desc.indices[i + 1]],
-					joltVerts[desc.indices[i + 2]]
-				));
-			}
-
-			JPH::MeshShapeSettings shapeSettings(triangles);
-			auto result = shapeSettings.Create();
-            LOG_ASSERT(result.IsValid(), "[Jolt Physics] Failed to create Mesh shape!");
-			if (result.IsValid())
-			{
-				innerShape = result.Get();
-			}
+			innerShape = buildMeshShape();
 		}
 
 		if (innerShape && m_Center != glm::vec3(0.0f))

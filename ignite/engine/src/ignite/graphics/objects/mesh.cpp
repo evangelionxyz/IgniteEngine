@@ -493,6 +493,9 @@ namespace ignite
 
     const AABB &StaticMesh::CalculateLocalAABB()
     {
+        bool initialized = false;
+        localAABB = AABB{};
+
         for (const auto &mesh : m_MeshInstances)
         {
             if (!mesh)
@@ -504,20 +507,98 @@ namespace ignite
                 continue;
             }
 
-            AABB meshBounds;
             // Vertices are already transformed when the mesh is loaded, so
             // use vertex positions directly and do not apply the mesh local transform.
             for (const auto &vertex : prim->vertices)
             {
-                meshBounds.min = glm::min(meshBounds.min, vertex.position);
-                meshBounds.max = glm::max(meshBounds.max, vertex.position);
+                if (!initialized)
+                {
+                    localAABB.min = vertex.position;
+                    localAABB.max = vertex.position;
+                    initialized = true;
+                }
+                else
+                {
+                    localAABB.min = glm::min(localAABB.min, vertex.position);
+                    localAABB.max = glm::max(localAABB.max, vertex.position);
+                }
             }
-
-            localAABB.min = glm::min(localAABB.min, meshBounds.min);
-            localAABB.max = glm::max(localAABB.max, meshBounds.max);
         }
 
         return this->localAABB;
+    }
+
+    bool StaticMesh::ExtractMeshData(std::vector<glm::vec3> &outVertices, std::vector<uint32_t> &outIndices) const
+    {
+        outVertices.clear();
+        outIndices.clear();
+
+        size_t totalVertices = 0;
+        size_t totalIndices = 0;
+        for (const auto &mesh : m_MeshInstances)
+        {
+            if (!mesh)
+                continue;
+
+            const auto &prim = mesh->GetPrimitive();
+            if (!prim || prim->vertices.empty())
+                continue;
+
+            totalVertices += prim->vertices.size();
+            totalIndices += prim->indices.empty() ? prim->vertices.size() : prim->indices.size();
+        }
+
+        if (totalVertices == 0 || totalIndices == 0)
+            return false;
+
+        outVertices.reserve(totalVertices);
+        outIndices.reserve(totalIndices);
+
+        for (const auto &mesh : m_MeshInstances)
+        {
+            if (!mesh)
+                continue;
+
+            const auto &prim = mesh->GetPrimitive();
+            if (!prim || prim->vertices.empty())
+                continue;
+
+            const uint32_t baseVertex = static_cast<uint32_t>(outVertices.size());
+            const bool isIdentity = Mat4NearEqual(mesh->global, glm::mat4(1.0f));
+
+            for (const auto &vertex : prim->vertices)
+            {
+                if (isIdentity)
+                {
+                    outVertices.push_back(vertex.position);
+                }
+                else
+                {
+                    outVertices.push_back(glm::vec3(mesh->global * glm::vec4(vertex.position, 1.0f)));
+                }
+            }
+
+            if (!prim->indices.empty())
+            {
+                const uint32_t vertexCount = static_cast<uint32_t>(prim->vertices.size());
+                for (uint32_t idx : prim->indices)
+                {
+                    if (idx < vertexCount)
+                    {
+                        outIndices.push_back(baseVertex + idx);
+                    }
+                }
+            }
+            else
+            {
+                for (uint32_t i = 0; i < static_cast<uint32_t>(prim->vertices.size()); ++i)
+                {
+                    outIndices.push_back(baseVertex + i);
+                }
+            }
+        }
+
+        return !outVertices.empty() && !outIndices.empty();
     }
 
     // ===================================
@@ -552,6 +633,9 @@ namespace ignite
 
     const AABB &SkeletalMesh::CalculateLocalAABB()
     {
+        bool initialized = false;
+        localAABB = AABB{};
+
         for (const auto &mesh : m_MeshInstances)
         {
             if (!mesh)
@@ -563,20 +647,98 @@ namespace ignite
                 continue;
             }
 
-            AABB meshBounds;
             // Vertices are already transformed when the mesh is loaded, so
             // use vertex positions directly and do not apply the mesh local transform.
             for (const auto &vertex : prim->vertices)
             {
-                meshBounds.min = glm::min(meshBounds.min, vertex.position);
-                meshBounds.max = glm::max(meshBounds.max, vertex.position);
+                if (!initialized)
+                {
+                    localAABB.min = vertex.position;
+                    localAABB.max = vertex.position;
+                    initialized = true;
+                }
+                else
+                {
+                    localAABB.min = glm::min(localAABB.min, vertex.position);
+                    localAABB.max = glm::max(localAABB.max, vertex.position);
+                }
             }
-
-            localAABB.min = glm::min(localAABB.min, meshBounds.min);
-            localAABB.max = glm::max(localAABB.max, meshBounds.max);
         }
 
         return this->localAABB;
+    }
+
+    bool SkeletalMesh::ExtractMeshData(std::vector<glm::vec3> &outVertices, std::vector<uint32_t> &outIndices) const
+    {
+        outVertices.clear();
+        outIndices.clear();
+
+        size_t totalVertices = 0;
+        size_t totalIndices = 0;
+        for (const auto &mesh : m_MeshInstances)
+        {
+            if (!mesh)
+                continue;
+
+            const auto &prim = mesh->GetPrimitive();
+            if (!prim || prim->vertices.empty())
+                continue;
+
+            totalVertices += prim->vertices.size();
+            totalIndices += prim->indices.empty() ? prim->vertices.size() : prim->indices.size();
+        }
+
+        if (totalVertices == 0 || totalIndices == 0)
+            return false;
+
+        outVertices.reserve(totalVertices);
+        outIndices.reserve(totalIndices);
+
+        for (const auto &mesh : m_MeshInstances)
+        {
+            if (!mesh)
+                continue;
+
+            const auto &prim = mesh->GetPrimitive();
+            if (!prim || prim->vertices.empty())
+                continue;
+
+            const uint32_t baseVertex = static_cast<uint32_t>(outVertices.size());
+            const bool isIdentity = Mat4NearEqual(mesh->global, glm::mat4(1.0f));
+
+            for (const auto &vertex : prim->vertices)
+            {
+                if (isIdentity)
+                {
+                    outVertices.push_back(vertex.position);
+                }
+                else
+                {
+                    outVertices.push_back(glm::vec3(mesh->global * glm::vec4(vertex.position, 1.0f)));
+                }
+            }
+
+            if (!prim->indices.empty())
+            {
+                const uint32_t vertexCount = static_cast<uint32_t>(prim->vertices.size());
+                for (uint32_t idx : prim->indices)
+                {
+                    if (idx < vertexCount)
+                    {
+                        outIndices.push_back(baseVertex + idx);
+                    }
+                }
+            }
+            else
+            {
+                for (uint32_t i = 0; i < static_cast<uint32_t>(prim->vertices.size()); ++i)
+                {
+                    outIndices.push_back(baseVertex + i);
+                }
+            }
+        }
+
+        return !outVertices.empty() && !outIndices.empty();
     }
 
     SkeletalMesh::~SkeletalMesh()

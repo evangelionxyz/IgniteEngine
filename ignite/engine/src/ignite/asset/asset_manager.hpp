@@ -9,6 +9,7 @@
 #include "ignite/core/subsystem.hpp"
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/signals/asset_signal.hpp"
+#include "ignite/core/shared_task.hpp"
 
 #include <map>
 #include <memory>
@@ -19,9 +20,7 @@
 #include <queue>
 #include <string_view>
 #include <atomic>
-
-#include <cppcoro/async_scope.hpp>
-#include <cppcoro/shared_task.hpp>
+#include <coroutine>
 
 namespace fbxsdk
 {
@@ -49,7 +48,7 @@ namespace ignite
         std::string error;
         float progress = 0.0f;
         std::atomic<std::uint64_t> generation{ 0 };
-        cppcoro::shared_task<Ref<Asset>> loadTask;
+        shared_task<Ref<Asset>> loadTask;
     };
 
 
@@ -111,7 +110,7 @@ namespace ignite
         void LoadAssetAsync(AssetHandle handle);
         void LoadAssetImmediate(AssetHandle handle);
 
-        cppcoro::shared_task<Ref<Asset>> RequestAssetAsync(AssetHandle handle);
+        shared_task<Ref<Asset>> RequestAssetAsync(AssetHandle handle);
         Ref<Asset> TryGetAsset(AssetHandle handle) const;
         AssetState GetAssetState(AssetHandle handle) const;
         AssetStatus GetAssetStatus(AssetHandle handle) const;
@@ -185,7 +184,7 @@ namespace ignite
         static void VerifyNotRenderThread();
 
         Ref<Asset> GetAssetImmediateInternal(AssetHandle handle);
-        cppcoro::shared_task<Ref<Asset>> LoadAssetPipeline(AssetHandle handle, AssetMetaData metadata,
+        shared_task<Ref<Asset>> LoadAssetPipeline(AssetHandle handle, AssetMetaData metadata,
             Ref<AssetRecord> record, std::uint64_t managerGeneration, std::uint64_t requestGeneration);
         bool IsRequestCurrent(const Ref<AssetRecord> &record, std::uint64_t managerGeneration, std::uint64_t requestGeneration) const;
         void SetRecordState(const Ref<AssetRecord> &record, AssetState state, float progress, std::string error = {});
@@ -199,7 +198,7 @@ namespace ignite
         std::unordered_map<AssetHandle, Ref<AssetRecord>> m_AssetRecords;
         WeakRef<Project> m_Project;
 
-        cppcoro::async_scope m_LoadScope;
+        task_scope m_LoadScope;
         std::mutex m_LoadScopeMutex;
         std::atomic<std::uint64_t> m_Generation{ 1 };
         std::atomic<bool> m_ShuttingDown{ false };
