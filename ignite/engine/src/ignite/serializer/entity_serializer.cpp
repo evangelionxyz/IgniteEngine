@@ -620,6 +620,8 @@ namespace ignite
                 const auto &comp = entity.GetComponent<MeshColliderComponent>();
                 sr.BeginMap("MeshCollider");
                 {
+                    sr.AddKeyValue("Center", comp.center);
+                    sr.AddKeyValue("Convex", comp.convex);
                     sr.BeginSequence("Vertices");
                     for (const auto &vertex : comp.vertices)
                     {
@@ -652,6 +654,46 @@ namespace ignite
                         sr.AddValue(h);
                     }
                     sr.EndSequence();
+                }
+                sr.EndMap();
+            }
+
+            // Physics Joint
+            if (entity.HasComponent<PhysicsJointComponent>())
+            {
+                const auto &comp = entity.GetComponent<PhysicsJointComponent>();
+                const auto &d = comp.desc;
+                sr.BeginMap("PhysicsJoint");
+                {
+                    sr.AddKeyValue("ConnectedEntity", static_cast<uint64_t>(comp.connectedEntity));
+                    sr.AddKeyValue("Type", physics::JointTypeToString(d.type));
+                    sr.AddKeyValue("Space", d.space == physics::JointSpace::World ? "World" : "Local");
+                    sr.AddKeyValue("Enabled", d.enabled);
+                    sr.AddKeyValue("AutoConfigureConnected", d.autoConfigureConnected);
+                    sr.AddKeyValue("LocalAnchorA", d.localAnchorA);
+                    sr.AddKeyValue("LocalAxisA", d.localAxisA);
+                    sr.AddKeyValue("LocalNormalA", d.localNormalA);
+                    sr.AddKeyValue("LocalAnchorB", d.localAnchorB);
+                    sr.AddKeyValue("LocalAxisB", d.localAxisB);
+                    sr.AddKeyValue("LocalNormalB", d.localNormalB);
+                    sr.AddKeyValue("BreakForce", d.breakForce);
+                    sr.AddKeyValue("BreakTorque", d.breakTorque);
+                    sr.AddKeyValue("MinDistance", d.minDistance);
+                    sr.AddKeyValue("MaxDistance", d.maxDistance);
+                    sr.AddKeyValue("EnableLimits", d.enableLimits);
+                    sr.AddKeyValue("LimitsMin", d.limitsMin);
+                    sr.AddKeyValue("LimitsMax", d.limitsMax);
+                    sr.AddKeyValue("EnableSpring", d.enableSpring);
+                    sr.AddKeyValue("SpringFrequency", d.springFrequency);
+                    sr.AddKeyValue("SpringDamping", d.springDamping);
+                    sr.AddKeyValue("MaxFriction", d.maxFriction);
+                    sr.AddKeyValue("MotorState", physics::JointMotorStateToString(d.motorState));
+                    sr.AddKeyValue("MotorTargetVelocity", d.motorTargetVelocity);
+                    sr.AddKeyValue("MotorTargetPosition", d.motorTargetPosition);
+                    sr.AddKeyValue("MaxMotorForce", d.maxMotorForce);
+                    sr.AddKeyValue("MotorFrequency", d.motorFrequency);
+                    sr.AddKeyValue("MotorDamping", d.motorDamping);
+                    sr.AddKeyValue("HalfConeAngle", d.halfConeAngle);
                 }
                 sr.EndMap();
             }
@@ -1240,6 +1282,8 @@ namespace ignite
         if (JsonNode node = entityNode["MeshCollider"])
         {
             auto &comp = desEntity.AddComponent<MeshColliderComponent>();
+            if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
+            if (auto n = node["Convex"]) comp.convex = n.as<bool>();
             if (JsonNode verticesNode = node["Vertices"])
             {
                 for (JsonNode vNode : verticesNode)
@@ -1270,6 +1314,42 @@ namespace ignite
                     comp.heights.push_back(hNode.as<float>());
                 }
             }
+        }
+
+        // PhysicsJoint Component
+        if (JsonNode node = entityNode["PhysicsJoint"])
+        {
+            auto &comp = desEntity.AddComponent<PhysicsJointComponent>();
+            auto &d = comp.desc;
+            if (auto n = node["ConnectedEntity"]) comp.connectedEntity = UUID(n.as<uint64_t>());
+            if (auto n = node["Type"]) d.type = physics::JointTypeFromString(n.as<std::string>());
+            if (auto n = node["Space"]) d.space = (n.as<std::string>() == "World") ? physics::JointSpace::World : physics::JointSpace::Local;
+            if (auto n = node["Enabled"]) d.enabled = n.as<bool>();
+            if (auto n = node["AutoConfigureConnected"]) d.autoConfigureConnected = n.as<bool>();
+            if (auto n = node["LocalAnchorA"]) d.localAnchorA = n.as<glm::vec3>();
+            if (auto n = node["LocalAxisA"]) d.localAxisA = n.as<glm::vec3>();
+            if (auto n = node["LocalNormalA"]) d.localNormalA = n.as<glm::vec3>();
+            if (auto n = node["LocalAnchorB"]) d.localAnchorB = n.as<glm::vec3>();
+            if (auto n = node["LocalAxisB"]) d.localAxisB = n.as<glm::vec3>();
+            if (auto n = node["LocalNormalB"]) d.localNormalB = n.as<glm::vec3>();
+            if (auto n = node["BreakForce"]) d.breakForce = n.as<float>();
+            if (auto n = node["BreakTorque"]) d.breakTorque = n.as<float>();
+            if (auto n = node["MinDistance"]) d.minDistance = n.as<float>();
+            if (auto n = node["MaxDistance"]) d.maxDistance = n.as<float>();
+            if (auto n = node["EnableLimits"]) d.enableLimits = n.as<bool>();
+            if (auto n = node["LimitsMin"]) d.limitsMin = n.as<float>();
+            if (auto n = node["LimitsMax"]) d.limitsMax = n.as<float>();
+            if (auto n = node["EnableSpring"]) d.enableSpring = n.as<bool>();
+            if (auto n = node["SpringFrequency"]) d.springFrequency = n.as<float>();
+            if (auto n = node["SpringDamping"]) d.springDamping = n.as<float>();
+            if (auto n = node["MaxFriction"]) d.maxFriction = n.as<float>();
+            if (auto n = node["MotorState"]) d.motorState = physics::JointMotorStateFromString(n.as<std::string>());
+            if (auto n = node["MotorTargetVelocity"]) d.motorTargetVelocity = n.as<float>();
+            if (auto n = node["MotorTargetPosition"]) d.motorTargetPosition = n.as<float>();
+            if (auto n = node["MaxMotorForce"]) d.maxMotorForce = n.as<float>();
+            if (auto n = node["MotorFrequency"]) d.motorFrequency = n.as<float>();
+            if (auto n = node["MotorDamping"]) d.motorDamping = n.as<float>();
+            if (auto n = node["HalfConeAngle"]) d.halfConeAngle = n.as<float>();
         }
 
         // AudioSource Component

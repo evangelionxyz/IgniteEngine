@@ -69,6 +69,10 @@ namespace ignite::physics
 
 	void JoltPhysics::SimulationStop()
 	{
+		for (auto &j : m_Joints)
+			if (j) j->DestroyJoint();
+		m_Joints.clear();
+
 		for (auto &b : m_DynamicBodies)
 			if (b) b->DestroyBody();
 		for (auto &b : m_StaticBodies)
@@ -85,6 +89,14 @@ namespace ignite::physics
 	{
 		constexpr int cCollisionSteps = 1;
 		m_PhysicsSystem.Update(deltaTime, cCollisionSteps, m_TempAllocator.get(), m_JobSystem.get());
+
+		for (auto &j : m_Joints)
+		{
+			if (j)
+			{
+				j->CheckBreakCondition(deltaTime);
+			}
+		}
 	}
 
 	static JPH::ShapeRefC GetJoltShapeFromCollider(const Ref<PhysicsCollider> &collider)
@@ -224,10 +236,67 @@ namespace ignite::physics
 		return ccRef;
 	}
 
+	static JPH::BodyID ResolveJoltBodyID(const Ref<PhysicsDynamicActor> &dynamicBody, const Ref<PhysicsStaticActor> &staticBody)
+	{
+		if (dynamicBody)
+		{
+			return JPH::BodyID(std::static_pointer_cast<JoltDynamicPhysicsBody>(dynamicBody)->GetJoltBodyID());
+		}
+		if (staticBody)
+		{
+			return JPH::BodyID(std::static_pointer_cast<JoltStaticPhysicsBody>(staticBody)->GetJoltBodyID());
+		}
+		return JPH::BodyID();
+	}
+
+	Ref<PhysicsJoint> JoltPhysics::CreateJoint(
+		const JointDesc &desc,
+		uint64_t userData,
+		const Ref<PhysicsDynamicActor> &dynamicBodyA,
+		const Ref<PhysicsStaticActor> &staticBodyA,
+		const TransformDesc &transformA,
+		const Ref<PhysicsDynamicActor> &dynamicBodyB,
+		const Ref<PhysicsStaticActor> &staticBodyB,
+		const TransformDesc &transformB
+	)
+	{
+		const JPH::BodyID bodyID1 = ResolveJoltBodyID(dynamicBodyA, staticBodyA);
+		const JPH::BodyID bodyID2 = ResolveJoltBodyID(dynamicBodyB, staticBodyB);
+		if (bodyID1.IsInvalid())
+		{
+			return nullptr;
+		}
+
+		auto jointRef = CreateRef<JoltJoint>(desc, userData, &m_PhysicsSystem, m_BodyInterface, bodyID1, bodyID2, transformA, transformB);
+		if (!jointRef->GetJoltConstraint())
+		{
+			return nullptr;
+		}
+
+		m_Joints.push_back(jointRef);
+		return jointRef;
+	}
+
 	void JoltPhysics::DestroyDynamicBody(Ref<PhysicsDynamicActor> body)
 	{
 		if (body)
 		{
+			const JPH::BodyID bodyID(std::static_pointer_cast<JoltDynamicPhysicsBody>(body)->GetJoltBodyID());
+			for (auto &j : m_Joints)
+			{
+				if (j)
+				{
+					auto joltJoint = std::static_pointer_cast<JoltJoint>(j);
+					if (JPH::TwoBodyConstraint *c = joltJoint->GetJoltConstraint())
+					{
+						if (c->GetBody1()->GetID() == bodyID || c->GetBody2()->GetID() == bodyID)
+						{
+							joltJoint->DestroyJoint();
+						}
+					}
+				}
+			}
+
 			body->DestroyBody();
 			std::erase(m_DynamicBodies, body);
 		}
@@ -237,6 +306,22 @@ namespace ignite::physics
 	{
 		if (body)
 		{
+			const JPH::BodyID bodyID(std::static_pointer_cast<JoltStaticPhysicsBody>(body)->GetJoltBodyID());
+			for (auto &j : m_Joints)
+			{
+				if (j)
+				{
+					auto joltJoint = std::static_pointer_cast<JoltJoint>(j);
+					if (JPH::TwoBodyConstraint *c = joltJoint->GetJoltConstraint())
+					{
+						if (c->GetBody1()->GetID() == bodyID || c->GetBody2()->GetID() == bodyID)
+						{
+							joltJoint->DestroyJoint();
+						}
+					}
+				}
+			}
+
 			body->DestroyBody();
 			std::erase(m_StaticBodies, body);
 		}
@@ -251,6 +336,15 @@ namespace ignite::physics
 		if (character)
 		{
 			std::erase(m_CharacterControllers, character);
+		}
+	}
+
+	void JoltPhysics::DestroyJoint(Ref<PhysicsJoint> joint)
+	{
+		if (joint)
+		{
+			joint->DestroyJoint();
+			std::erase(m_Joints, joint);
 		}
 	}
 

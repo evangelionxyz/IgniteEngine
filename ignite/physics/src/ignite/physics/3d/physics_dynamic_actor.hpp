@@ -7,6 +7,8 @@
 
 namespace ignite::physics
 {
+	class PhysicsCollider;
+
 	class IGN_PHYSICS_API PhysicsDynamicActor
 	{
 	public:
@@ -29,6 +31,7 @@ namespace ignite::physics
 		virtual void SetFriction(float value) = 0;
 		virtual void SetRestitution(float value) = 0;
 		virtual void SetMotionType(BodyType bodyType) = 0;
+		virtual void SetCollider(const Ref<PhysicsCollider> &collider, bool activate = true) = 0;
 
 		virtual void ActivateBody() = 0;
 		virtual void DeactivateBody() = 0;

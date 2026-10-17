@@ -8,6 +8,7 @@
 #include "physics_static_actor.hpp"
 #include "physics_collider.hpp"
 #include "physics_character_controller.hpp"
+#include "physics_joint.hpp"
 
 namespace ignite::physics
 {
@@ -32,10 +33,22 @@ namespace ignite::physics
 
 		virtual Ref<PhysicsCharacterController> CreateCharacterController(const CharacterControllerDesc &desc, uint64_t userData) = 0;
 
+		virtual Ref<PhysicsJoint> CreateJoint(
+			const JointDesc &desc,
+			uint64_t userData,
+			const Ref<PhysicsDynamicActor> &dynamicBodyA,
+			const Ref<PhysicsStaticActor> &staticBodyA,
+			const TransformDesc &transformA,
+			const Ref<PhysicsDynamicActor> &dynamicBodyB,
+			const Ref<PhysicsStaticActor> &staticBodyB,
+			const TransformDesc &transformB
+		) = 0;
+
 		virtual void DestroyDynamicBody(Ref<PhysicsDynamicActor> body) = 0;
 		virtual void DestroyStaticBody(Ref<PhysicsStaticActor> body) = 0;
 		virtual void DestroyCollider(Ref<PhysicsCollider> collider) = 0;
 		virtual void DestroyCharacterController(Ref<PhysicsCharacterController> character) = 0;
+		virtual void DestroyJoint(Ref<PhysicsJoint> joint) = 0;
 
 		virtual bool Raycast(const Ray &ray, RaycastHit &outHit, float maxDistance = 1000.0f, uint32_t layerMask = 0xFFFFFFFF) = 0;
 

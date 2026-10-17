@@ -361,6 +361,45 @@ namespace ignite
         if (!scene || !scene->registry->valid(entity))
             return;
 
+        if (entity.HasComponent<PhysicsJointComponent>())
+        {
+            auto &jointComp = entity.GetComponent<PhysicsJointComponent>();
+            if (auto jointActor = jointComp.runtimeJoint.lock())
+            {
+                if (scene->GetPhysics3D())
+                {
+                    scene->GetPhysics3D()->DestroyJoint(jointActor);
+                }
+                else
+                {
+                    jointActor->DestroyJoint();
+                }
+            }
+            jointComp.runtimeJoint.reset();
+        }
+
+        // Destroy any joints on other entities that are connected to this entity
+        const UUID entityUuid = entity.GetUUID();
+        for (entt::entity e : scene->registry->view<PhysicsJointComponent>())
+        {
+            auto &otherJoint = scene->registry->get<PhysicsJointComponent>(e);
+            if (otherJoint.connectedEntity == entityUuid)
+            {
+                if (auto jointActor = otherJoint.runtimeJoint.lock())
+                {
+                    if (scene->GetPhysics3D())
+                    {
+                        scene->GetPhysics3D()->DestroyJoint(jointActor);
+                    }
+                    else
+                    {
+                        jointActor->DestroyJoint();
+                    }
+                }
+                otherJoint.runtimeJoint.reset();
+            }
+        }
+
 		if (entity.HasComponent<RigidbodyComponent>())
 		{
 			auto &rb = entity.GetComponent<RigidbodyComponent>();
@@ -444,6 +483,11 @@ namespace ignite
             particleSystem.system = nullptr;
         }
 
+        if (newEntity.HasComponent<PhysicsJointComponent>())
+        {
+            newEntity.GetComponent<PhysicsJointComponent>().runtimeJoint.reset();
+        }
+
         if (scene->IsRunning())
         {
             // IMPORTANT!: Need to reset copied body from source
@@ -513,6 +557,57 @@ namespace ignite
                         charActor->SetRotation(tr.world.rotation);
                     }
                     cc.character = charActor;
+                }
+            }
+
+            if (newEntity.HasComponent<PhysicsJointComponent>() && newEntity.HasComponent<RigidbodyComponent>() && scene->GetPhysics3D())
+            {
+                auto &jointComp = newEntity.GetComponent<PhysicsJointComponent>();
+                auto &rbA = newEntity.GetComponent<RigidbodyComponent>();
+                auto &trA = newEntity.GetTransform();
+
+                auto dynamicBodyA = rbA.dynamicActor.lock();
+                auto staticBodyA = rbA.staticActor.lock();
+                if (dynamicBodyA || staticBodyA)
+                {
+                    physics::TransformDesc transformA;
+                    transformA.position = trA.world.translation;
+                    transformA.rotation = trA.world.rotation;
+                    transformA.scale = trA.world.scale;
+
+                    Ref<physics::PhysicsDynamicActor> dynamicBodyB = nullptr;
+                    Ref<physics::PhysicsStaticActor> staticBodyB = nullptr;
+                    physics::TransformDesc transformB;
+
+                    if (jointComp.connectedEntity != UUID(0) && jointComp.connectedEntity != newEntity.GetUUID())
+                    {
+                        Entity connected = GetEntity(scene, jointComp.connectedEntity);
+                        if (connected.IsValid())
+                        {
+                            auto &trB = connected.GetTransform();
+                            transformB.position = trB.world.translation;
+                            transformB.rotation = trB.world.rotation;
+                            transformB.scale = trB.world.scale;
+
+                            if (connected.HasComponent<RigidbodyComponent>())
+                            {
+                                auto &rbB = connected.GetComponent<RigidbodyComponent>();
+                                dynamicBodyB = rbB.dynamicActor.lock();
+                                staticBodyB = rbB.staticActor.lock();
+                            }
+                        }
+                    }
+
+                    jointComp.runtimeJoint = scene->GetPhysics3D()->CreateJoint(
+                        jointComp.desc,
+                        static_cast<uint64_t>(newEntity.GetUUID()),
+                        dynamicBodyA,
+                        staticBodyA,
+                        transformA,
+                        dynamicBodyB,
+                        staticBodyB,
+                        transformB
+                    );
                 }
             }
 

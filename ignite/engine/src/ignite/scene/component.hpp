@@ -80,6 +80,7 @@ namespace ignite
         { "HeightField Collider", CompType_HeightFieldCollider },
         { "Prefab", CompType_Prefab },
         { "Particle System", CompType_ParticleSystem },
+        { "Physics Joint", CompType_PhysicsJoint },
     };
 
     enum EntityType : uint8_t
@@ -201,6 +202,7 @@ namespace ignite
             case CompType_Terrain: return "CompType_Terrain";
             case CompType_Prefab: return "CompType_Prefab";
             case CompType_ParticleSystem: return "CompType_ParticleSystem";
+            case CompType_PhysicsJoint: return "CompType_PhysicsJoint";
             case CompType_Invalid:
             default: return "Invalid Component";
         }
@@ -771,6 +773,36 @@ namespace ignite
         HeightFieldColliderComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_HeightFieldCollider)
+    };
+
+    class PhysicsJointComponent : public IComponent
+    {
+    public:
+        UUID connectedEntity = UUID(0);
+        physics::JointDesc desc;
+        WeakRef<physics::PhysicsJoint> runtimeJoint;
+
+        PhysicsJointComponent() = default;
+
+        PhysicsJointComponent(const PhysicsJointComponent &other)
+            : connectedEntity(other.connectedEntity)
+            , desc(other.desc)
+            , runtimeJoint(other.runtimeJoint)
+        {
+        }
+
+        PhysicsJointComponent &operator=(const PhysicsJointComponent &other)
+        {
+            if (this != &other)
+            {
+                connectedEntity = other.connectedEntity;
+                desc = other.desc;
+                runtimeJoint = other.runtimeJoint;
+            }
+            return *this;
+        }
+
+        COMPONENT_CLASS_TYPE(CompType_PhysicsJoint)
     };
 
     class AudioSourceComponent : public IComponent

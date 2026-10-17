@@ -63,6 +63,7 @@ namespace ignite
         TerrainComponent,
         HeightFieldColliderComponent,
         ParticleSystemComponent,
-        PrefabComponent
+        PrefabComponent,
+        PhysicsJointComponent
     >; 
 }

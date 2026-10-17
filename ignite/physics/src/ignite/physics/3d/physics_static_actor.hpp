@@ -7,6 +7,8 @@
 
 namespace ignite::physics
 {
+	class PhysicsCollider;
+
 	class IGN_PHYSICS_API PhysicsStaticActor
 	{
 	public:
@@ -22,6 +24,7 @@ namespace ignite::physics
 		virtual void SetRotation(const glm::quat &rotation, bool activate) = 0;
 		virtual void SetFriction(float value) = 0;
 		virtual void SetRestitution(float value) = 0;
+		virtual void SetCollider(const Ref<PhysicsCollider> &collider, bool activate = true) = 0;
 
 		virtual float GetRestitution() = 0;
 		virtual float GetFriction() = 0;

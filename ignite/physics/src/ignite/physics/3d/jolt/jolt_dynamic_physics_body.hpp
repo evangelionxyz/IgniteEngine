@@ -35,6 +35,7 @@ namespace ignite::physics
 		virtual void SetFriction(float value) override;
 		virtual void SetRestitution(float value) override;
 		virtual void SetMotionType(BodyType bodyType) override;
+		virtual void SetCollider(const Ref<PhysicsCollider> &collider, bool activate = true) override;
 
 		virtual void ActivateBody() override;
 		virtual void DeactivateBody() override;

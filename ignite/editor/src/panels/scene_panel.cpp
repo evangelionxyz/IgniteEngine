@@ -448,6 +448,17 @@ namespace ignite
                     entity.AddComponent<TerrainComponent>();
                 }
             }
+            if (ImGui::MenuItem("Physics Joint"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Physics Joint"));
+                if (entity.IsValid())
+                {
+                    if (!entity.HasComponent<RigidbodyComponent>())
+                        entity.AddComponent<RigidbodyComponent>();
+                    if (!entity.HasComponent<PhysicsJointComponent>())
+                        entity.AddComponent<PhysicsJointComponent>();
+                }
+            }
             ImGui::EndMenu();
         }
 
@@ -1964,7 +1975,7 @@ namespace ignite
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<BoxColliderComponent>();
-                c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
                 // TODO: Collider Edit from UI (TOGGLES)
             });
@@ -1972,7 +1983,7 @@ namespace ignite
             RenderComponent<SphereColliderComponent>("Sphere Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<SphereColliderComponent>();
-                c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
 
                 // TODO: Collider Edit from UI (TOGGLES)
@@ -1981,7 +1992,7 @@ namespace ignite
             RenderComponent<CapsuleColliderComponent>("Capsule Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<CapsuleColliderComponent>();
-                c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Height", &c.height, 0.025f, 0.01f, 10000.0f, 1.0f);
 
@@ -2012,12 +2023,13 @@ namespace ignite
             RenderComponent<MeshColliderComponent>("Mesh Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<MeshColliderComponent>();
-                c.dirty = UI::DrawCheckbox("Convex", &c.convex);
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawCheckbox("Convex", &c.convex);
                 ImGui::Text("Vertices: %zu", c.vertices.size());
                 ImGui::Text("Indices: %zu", c.indices.size());
                 if (ImGui::Button("Clear Mesh Data"))
                 {
-                    c.dirty = false;
+                    c.dirty = true;
                     c.vertices.clear();
                     c.indices.clear();
                 }
@@ -2026,10 +2038,236 @@ namespace ignite
             RenderComponent<HeightFieldColliderComponent>("HeightField Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<HeightFieldColliderComponent>();
-                c.dirty = UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
                 ImGui::Text("Sample Count: %u", c.sampleCount);
                 ImGui::Text("Heights Size: %zu", c.heights.size());
+            });
+
+            RenderComponent<PhysicsJointComponent>("Physics Joint", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<PhysicsJointComponent>();
+                auto &d = c.desc;
+
+                if (!selectedEntity.HasComponent<RigidbodyComponent>())
+                {
+                    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f), "Requires a Rigid Body component on this entity.");
+                }
+
+                // Connected Entity drag & drop field
+                std::string connectedLabel = "World (Fixed)";
+                if (c.connectedEntity != UUID(0))
+                {
+                    Entity targetEnt = SceneManager::GetEntity(m_Scene, c.connectedEntity);
+                    if (targetEnt.IsValid())
+                    {
+                        connectedLabel = targetEnt.GetName();
+                    }
+                    else
+                    {
+                        connectedLabel = std::format("Missing ({})", static_cast<uint64_t>(c.connectedEntity));
+                    }
+                }
+
+                UI::DrawButtonWithColumn("Connected Entity", connectedLabel.c_str(), nullptr, [&, this]()
+                {
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                        {
+                            const UUID droppedUuid = *static_cast<const UUID *>(payload->Data);
+                            if (droppedUuid != selectedEntity.GetUUID())
+                            {
+                                PhysicsJointComponent beforeSnap = c;
+                                c.connectedEntity = droppedUuid;
+                                c.dirty = true;
+                                m_Scene->SetDirtyFlag(true);
+                                if (!m_Scene->IsRunning())
+                                {
+                                    UUID entityUuid = selectedEntity.GetUUID();
+                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<PhysicsJointComponent>>(m_Scene, entityUuid, beforeSnap, c));
+                                }
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                });
+
+                if (c.connectedEntity != UUID(0))
+                {
+                    if (ImGui::SmallButton("Clear Connected Entity"))
+                    {
+                        PhysicsJointComponent beforeSnap = c;
+                        c.connectedEntity = UUID(0);
+                        c.dirty = true;
+                        m_Scene->SetDirtyFlag(true);
+                        if (!m_Scene->IsRunning())
+                        {
+                            UUID entityUuid = selectedEntity.GetUUID();
+                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<PhysicsJointComponent>>(m_Scene, entityUuid, beforeSnap, c));
+                        }
+                    }
+                }
+
+                // Joint Type
+                static std::array<const char *, 6> jointTypes = { "Fixed", "Distance", "Point", "Hinge", "Slider", "Cone" };
+                int selectedType = static_cast<int>(d.type);
+                if (UI::DrawComboBox("Joint Type", jointTypes.data(), static_cast<int>(jointTypes.size()), &selectedType))
+                {
+                    d.type = static_cast<physics::JointType>(selectedType);
+                    c.dirty = true;
+                }
+
+                // Space
+                static std::array<const char *, 2> jointSpaces = { "Local", "World" };
+                int selectedSpace = static_cast<int>(d.space);
+                if (UI::DrawComboBox("Space", jointSpaces.data(), static_cast<int>(jointSpaces.size()), &selectedSpace))
+                {
+                    d.space = static_cast<physics::JointSpace>(selectedSpace);
+                    c.dirty = true;
+                }
+
+                c.dirty |= UI::DrawCheckbox("Enabled", &d.enabled);
+                c.dirty |= UI::DrawCheckbox("Auto Configure Connected", &d.autoConfigureConnected);
+
+                if (auto rtJoint = c.runtimeJoint.lock())
+                {
+                    if (rtJoint->IsBroken())
+                    {
+                        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Status: Broken");
+                    }
+                }
+
+                // Anchor & Axis A
+                c.dirty |= UI::DrawVec3Control("Anchor A", d.localAnchorA, 0.025f, 0.0f);
+                if (d.type == physics::JointType::Fixed || d.type == physics::JointType::Hinge || d.type == physics::JointType::Slider || d.type == physics::JointType::Cone)
+                {
+                    c.dirty |= UI::DrawVec3Control("Axis A", d.localAxisA, 0.025f, 0.0f);
+                }
+                if (d.type == physics::JointType::Fixed || d.type == physics::JointType::Hinge || d.type == physics::JointType::Slider)
+                {
+                    c.dirty |= UI::DrawVec3Control("Normal A", d.localNormalA, 0.025f, 0.0f);
+                }
+
+                // Anchor & Axis B
+                if (!d.autoConfigureConnected || d.type == physics::JointType::Distance)
+                {
+                    c.dirty |= UI::DrawVec3Control("Anchor B", d.localAnchorB, 0.025f, 0.0f);
+                }
+                if (!d.autoConfigureConnected)
+                {
+                    if (d.type == physics::JointType::Fixed || d.type == physics::JointType::Hinge || d.type == physics::JointType::Slider || d.type == physics::JointType::Cone)
+                    {
+                        c.dirty |= UI::DrawVec3Control("Axis B", d.localAxisB, 0.025f, 0.0f);
+                    }
+                    if (d.type == physics::JointType::Fixed || d.type == physics::JointType::Hinge || d.type == physics::JointType::Slider)
+                    {
+                        c.dirty |= UI::DrawVec3Control("Normal B", d.localNormalB, 0.025f, 0.0f);
+                    }
+                }
+
+                // Type-specific parameters
+                if (d.type == physics::JointType::Distance)
+                {
+                    ImGui::SeparatorText("Distance Settings");
+                    c.dirty |= UI::DrawFloatControl("Min Distance", &d.minDistance, 0.025f, 0.0f, 10000.0f);
+                    c.dirty |= UI::DrawFloatControl("Max Distance (-1 = Auto)", &d.maxDistance, 0.025f, -1.0f, 10000.0f, -1.0f);
+                    c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
+                    if (d.enableSpring)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
+                        c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
+                    }
+                }
+                else if (d.type == physics::JointType::Hinge)
+                {
+                    ImGui::SeparatorText("Hinge Limits & Spring");
+                    c.dirty |= UI::DrawCheckbox("Enable Limits", &d.enableLimits);
+                    if (d.enableLimits)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Min Angle (deg)", &d.limitsMin, 0.5f, -180.0f, 0.0f, -45.0f);
+                        c.dirty |= UI::DrawFloatControl("Max Angle (deg)", &d.limitsMax, 0.5f, 0.0f, 180.0f, 45.0f);
+                    }
+                    c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
+                    if (d.enableSpring)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
+                        c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
+                    }
+                    c.dirty |= UI::DrawFloatControl("Max Friction Torque", &d.maxFriction, 0.1f, 0.0f, 100000.0f);
+
+                    ImGui::SeparatorText("Hinge Motor");
+                    static std::array<const char *, 3> motorStates = { "Off", "Velocity", "Position" };
+                    int selectedMotor = static_cast<int>(d.motorState);
+                    if (UI::DrawComboBox("Motor Mode", motorStates.data(), static_cast<int>(motorStates.size()), &selectedMotor))
+                    {
+                        d.motorState = static_cast<physics::JointMotorState>(selectedMotor);
+                        c.dirty = true;
+                    }
+                    if (d.motorState == physics::JointMotorState::Velocity)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Target Velocity (deg/s)", &d.motorTargetVelocity, 1.0f, -10000.0f, 10000.0f);
+                    }
+                    else if (d.motorState == physics::JointMotorState::Position)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Target Angle (deg)", &d.motorTargetPosition, 0.5f, -180.0f, 180.0f);
+                        c.dirty |= UI::DrawFloatControl("Motor Frequency (Hz)", &d.motorFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
+                        c.dirty |= UI::DrawFloatControl("Motor Damping", &d.motorDamping, 0.025f, 0.0f, 50.0f, 1.0f);
+                    }
+                    if (d.motorState != physics::JointMotorState::Off)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Max Motor Torque", &d.maxMotorForce, 1.0f, 0.0f, 1000000.0f, 1000.0f);
+                    }
+                }
+                else if (d.type == physics::JointType::Slider)
+                {
+                    ImGui::SeparatorText("Slider Limits & Spring");
+                    c.dirty |= UI::DrawCheckbox("Enable Limits", &d.enableLimits);
+                    if (d.enableLimits)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Min Limit (m)", &d.limitsMin, 0.05f, -10000.0f, 0.0f, -1.0f);
+                        c.dirty |= UI::DrawFloatControl("Max Limit (m)", &d.limitsMax, 0.05f, 0.0f, 10000.0f, 1.0f);
+                    }
+                    c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
+                    if (d.enableSpring)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
+                        c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
+                    }
+                    c.dirty |= UI::DrawFloatControl("Max Friction Force", &d.maxFriction, 0.1f, 0.0f, 100000.0f);
+
+                    ImGui::SeparatorText("Slider Motor");
+                    static std::array<const char *, 3> motorStates = { "Off", "Velocity", "Position" };
+                    int selectedMotor = static_cast<int>(d.motorState);
+                    if (UI::DrawComboBox("Motor Mode", motorStates.data(), static_cast<int>(motorStates.size()), &selectedMotor))
+                    {
+                        d.motorState = static_cast<physics::JointMotorState>(selectedMotor);
+                        c.dirty = true;
+                    }
+                    if (d.motorState == physics::JointMotorState::Velocity)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Target Velocity (m/s)", &d.motorTargetVelocity, 0.1f, -10000.0f, 10000.0f);
+                    }
+                    else if (d.motorState == physics::JointMotorState::Position)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Target Position (m)", &d.motorTargetPosition, 0.05f, -10000.0f, 10000.0f);
+                        c.dirty |= UI::DrawFloatControl("Motor Frequency (Hz)", &d.motorFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
+                        c.dirty |= UI::DrawFloatControl("Motor Damping", &d.motorDamping, 0.025f, 0.0f, 50.0f, 1.0f);
+                    }
+                    if (d.motorState != physics::JointMotorState::Off)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Max Motor Force", &d.maxMotorForce, 1.0f, 0.0f, 1000000.0f, 1000.0f);
+                    }
+                }
+                else if (d.type == physics::JointType::Cone)
+                {
+                    ImGui::SeparatorText("Cone Settings");
+                    c.dirty |= UI::DrawFloatControl("Half Cone Angle (deg)", &d.halfConeAngle, 0.5f, 0.0f, 180.0f, 45.0f);
+                }
+
+                ImGui::SeparatorText("Breaking Thresholds");
+                c.dirty |= UI::DrawFloatControl("Break Force (0 = Unbreakable)", &d.breakForce, 1.0f, 0.0f, 10000000.0f);
+                c.dirty |= UI::DrawFloatControl("Break Torque (0 = Unbreakable)", &d.breakTorque, 1.0f, 0.0f, 10000000.0f);
             });
 
             RenderComponent<TextComponent>("Text", selectedEntity, [&]()
@@ -3370,6 +3608,9 @@ namespace ignite
                     case CompType_ParticleSystem:
                         entity.AddComponent<ParticleSystemComponent>();
                         break;
+                    case CompType_PhysicsJoint:
+                        entity.AddComponent<PhysicsJointComponent>();
+                        break;
                     default: break;
                     }
                 };
@@ -4277,7 +4518,7 @@ namespace ignite
                                 uint32_t localMouseY = 0;
 
                                 // We need to store the Game-play Mouse Position if only the Image is hovered
-                                if (imageHovered)
+                                if (imageHovered && target->widgetRT)
                                 {
                                     const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
                                     const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);

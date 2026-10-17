@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -478,6 +478,17 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
+            // 19. PhysicsJoint
+            if (JsonNode pj = entityNode["PhysicsJoint"])
+            {
+                json c;
+                c["type"] = "PhysicsJoint";
+                c["displayName"] = "Physics Joint";
+                if (auto n = pj["Type"]) c["jointType"] = n.as<std::string>();
+                if (auto n = pj["ConnectedEntity"]) c["connectedEntity"] = n.as<uint64_t>();
+                entry.components.push_back(c);
+            }
+
             entries[entry.id] = std::move(entry);
             allIdsInOrder.push_back(entry.id);
         }
@@ -766,9 +777,24 @@ namespace ignite
             // MeshCollider
             if (entity.HasComponent<MeshColliderComponent>())
             {
+                const auto &comp = entity.GetComponent<MeshColliderComponent>();
                 json c;
                 c["type"] = "MeshCollider";
                 c["displayName"] = "Mesh Collider";
+                c["center"] = { comp.center.x, comp.center.y, comp.center.z };
+                c["convex"] = comp.convex;
+                entry.components.push_back(c);
+            }
+
+            // PhysicsJoint
+            if (entity.HasComponent<PhysicsJointComponent>())
+            {
+                const auto &comp = entity.GetComponent<PhysicsJointComponent>();
+                json c;
+                c["type"] = "PhysicsJoint";
+                c["displayName"] = "Physics Joint";
+                c["jointType"] = physics::JointTypeToString(comp.desc.type);
+                c["connectedEntity"] = static_cast<uint64_t>(comp.connectedEntity);
                 entry.components.push_back(c);
             }
 

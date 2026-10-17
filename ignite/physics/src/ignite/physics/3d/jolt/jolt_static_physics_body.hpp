@@ -28,6 +28,7 @@ namespace ignite::physics
 		virtual void SetRotation(const glm::quat &rotation, bool activate) override;
 		virtual void SetFriction(float value) override;
 		virtual void SetRestitution(float value) override;
+		virtual void SetCollider(const Ref<PhysicsCollider> &collider, bool activate = true) override;
 
 		virtual float GetRestitution() override;
 		virtual float GetFriction() override;

@@ -14,6 +14,7 @@
 #include "jolt_plane_collider.hpp"
 #include "jolt_height_field_collider.hpp"
 #include "jolt_character_controller.hpp"
+#include "jolt_joint.hpp"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Math/Real.h>
@@ -222,10 +223,22 @@ namespace ignite::physics
 
 		virtual Ref<PhysicsCharacterController> CreateCharacterController(const CharacterControllerDesc &desc, uint64_t userData) override;
 
+		virtual Ref<PhysicsJoint> CreateJoint(
+			const JointDesc &desc,
+			uint64_t userData,
+			const Ref<PhysicsDynamicActor> &dynamicBodyA,
+			const Ref<PhysicsStaticActor> &staticBodyA,
+			const TransformDesc &transformA,
+			const Ref<PhysicsDynamicActor> &dynamicBodyB,
+			const Ref<PhysicsStaticActor> &staticBodyB,
+			const TransformDesc &transformB
+		) override;
+
 		virtual void DestroyDynamicBody(Ref<PhysicsDynamicActor> body) override;
 		virtual void DestroyStaticBody(Ref<PhysicsStaticActor> body) override;
 		virtual void DestroyCollider(Ref<PhysicsCollider> collider) override;
 		virtual void DestroyCharacterController(Ref<PhysicsCharacterController> character) override;
+		virtual void DestroyJoint(Ref<PhysicsJoint> joint) override;
 
 		virtual bool Raycast(const Ray &ray, RaycastHit &outHit, float maxDistance = 1000.0f, uint32_t layerMask = 0xFFFFFFFF) override;
 
@@ -253,6 +266,7 @@ namespace ignite::physics
 		std::vector<Ref<PhysicsDynamicActor>> m_DynamicBodies;
 		std::vector<Ref<PhysicsStaticActor>> m_StaticBodies;
 		std::vector<Ref<PhysicsCharacterController>> m_CharacterControllers;
+		std::vector<Ref<PhysicsJoint>> m_Joints;
 	};
 }
 

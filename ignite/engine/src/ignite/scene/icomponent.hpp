@@ -46,6 +46,7 @@ namespace ignite
         CompType_HeightFieldCollider,
         CompType_Prefab,
         CompType_ParticleSystem,
+        CompType_PhysicsJoint,
 
         CompType_COUNT
     };

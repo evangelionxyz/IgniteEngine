@@ -59,13 +59,14 @@ namespace ignite::physics
 		if (m_Shape)
 		{
 			JPH::AABox bounds = m_Shape->GetLocalBounds();
+			bounds.Translate(m_Shape->GetCenterOfMass());
 			outAABB.min = glm::vec3(bounds.mMin.GetX(), bounds.mMin.GetY(), bounds.mMin.GetZ());
 			outAABB.max = glm::vec3(bounds.mMax.GetX(), bounds.mMax.GetY(), bounds.mMax.GetZ());
 		}
 		else
 		{
-			outAABB.min = glm::vec3(-m_Radius);
-			outAABB.max = glm::vec3(m_Radius);
+			outAABB.min = m_Center - glm::vec3(m_Radius);
+			outAABB.max = m_Center + glm::vec3(m_Radius);
 		}
 	}
 
@@ -74,8 +75,9 @@ namespace ignite::physics
 		if (!m_Shape)
 			return false;
 
+		const JPH::Vec3 com = m_Shape->GetCenterOfMass();
 		JPH::RayCast rayCast(
-			JPH::Vec3(ray.origin.x, ray.origin.y, ray.origin.z),
+			JPH::Vec3(ray.origin.x, ray.origin.y, ray.origin.z) - com,
 			JPH::Vec3(ray.direction.x * maxDistance, ray.direction.y * maxDistance, ray.direction.z * maxDistance)
 		);
 
@@ -84,9 +86,10 @@ namespace ignite::physics
 		if (m_Shape->CastRay(rayCast, subShapeIDCreator, hit))
 		{
 			out.fraction = hit.mFraction;
-			JPH::Vec3 hitPos = rayCast.GetPointOnRay(hit.mFraction);
+			JPH::Vec3 hitPosOnShape = rayCast.GetPointOnRay(hit.mFraction);
+			JPH::Vec3 hitPos = hitPosOnShape + com;
 			out.hitPoint = glm::vec3(hitPos.GetX(), hitPos.GetY(), hitPos.GetZ());
-			JPH::Vec3 normal = m_Shape->GetSurfaceNormal(hit.mSubShapeID2, hitPos);
+			JPH::Vec3 normal = m_Shape->GetSurfaceNormal(hit.mSubShapeID2, hitPosOnShape);
 			out.hitNormal = glm::vec3(normal.GetX(), normal.GetY(), normal.GetZ());
 			return true;
 		}

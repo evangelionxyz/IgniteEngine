@@ -3039,7 +3039,9 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
             {
-                entity.GetComponent<BoxColliderComponent>().center = *value;
+                auto &comp = entity.GetComponent<BoxColliderComponent>();
+                comp.center = *value;
+                comp.dirty = true;
             }
         }
 
@@ -3058,7 +3060,9 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
             {
-                entity.GetComponent<BoxColliderComponent>().scale = *value;
+                auto &comp = entity.GetComponent<BoxColliderComponent>();
+                comp.scale = *value;
+                comp.dirty = true;
             }
         }
 
@@ -3078,7 +3082,9 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
             {
-                entity.GetComponent<SphereColliderComponent>().center = *value;
+                auto &comp = entity.GetComponent<SphereColliderComponent>();
+                comp.center = *value;
+                comp.dirty = true;
             }
         }
 
@@ -3096,7 +3102,9 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
             {
-                entity.GetComponent<SphereColliderComponent>().radius = value;
+                auto &comp = entity.GetComponent<SphereColliderComponent>();
+                comp.radius = value;
+                comp.dirty = true;
             }
         }
 
@@ -3116,7 +3124,9 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
             {
-                entity.GetComponent<CapsuleColliderComponent>().center = *value;
+                auto &comp = entity.GetComponent<CapsuleColliderComponent>();
+                comp.center = *value;
+                comp.dirty = true;
             }
         }
 
@@ -3134,7 +3144,9 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
             {
-                entity.GetComponent<CapsuleColliderComponent>().radius = value;
+                auto &comp = entity.GetComponent<CapsuleColliderComponent>();
+                comp.radius = value;
+                comp.dirty = true;
             }
         }
 
@@ -3152,7 +3164,9 @@ namespace ignite
             Entity entity = GetEntityByID(entityID);
             if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
             {
-                entity.GetComponent<CapsuleColliderComponent>().height = value;
+                auto &comp = entity.GetComponent<CapsuleColliderComponent>();
+                comp.height = value;
+                comp.dirty = true;
             }
         }
 

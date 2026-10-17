@@ -1,6 +1,12 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "jolt_static_physics_body.hpp"
+#include "jolt_box_collider.hpp"
+#include "jolt_sphere_collider.hpp"
+#include "jolt_capsule_collider.hpp"
+#include "jolt_plane_collider.hpp"
+#include "jolt_mesh_collider.hpp"
+#include "jolt_height_field_collider.hpp"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
@@ -8,6 +14,27 @@
 
 namespace ignite::physics
 {
+	static JPH::ShapeRefC ResolveJoltStaticShape(const Ref<PhysicsCollider> &collider)
+	{
+		if (!collider) return nullptr;
+		switch (collider->GetColliderType())
+		{
+		case ColliderType::Box:
+			return std::static_pointer_cast<JoltBoxCollider>(collider)->GetJoltShape();
+		case ColliderType::Sphere:
+			return std::static_pointer_cast<JoltSphereCollider>(collider)->GetJoltShape();
+		case ColliderType::Capsule:
+			return std::static_pointer_cast<JoltCapsuleCollider>(collider)->GetJoltShape();
+		case ColliderType::Plane:
+			return std::static_pointer_cast<JoltPlaneCollider>(collider)->GetJoltShape();
+		case ColliderType::Mesh:
+			return std::static_pointer_cast<JoltMeshCollider>(collider)->GetJoltShape();
+		case ColliderType::HeightField:
+			return std::static_pointer_cast<JoltHeightFieldCollider>(collider)->GetJoltShape();
+		}
+		return nullptr;
+	}
+
 	static JPH::Vec3 GlmToJoltVec3(const glm::vec3 &v)
 	{
 		return { v.x, v.y, v.z };
@@ -89,6 +116,18 @@ namespace ignite::physics
 	{
 		if (m_BodyInterface)
 			m_BodyInterface->SetRestitution(JPH::BodyID(m_BodyId), value);
+	}
+
+	void JoltStaticPhysicsBody::SetCollider(const Ref<PhysicsCollider> &collider, bool activate)
+	{
+		if (!m_BodyInterface || m_BodyId == JPH::BodyID::cInvalidBodyID)
+			return;
+
+		JPH::ShapeRefC shape = ResolveJoltStaticShape(collider);
+		if (shape)
+		{
+			m_BodyInterface->SetShape(JPH::BodyID(m_BodyId), shape, false, activate ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+		}
 	}
 
 	float JoltStaticPhysicsBody::GetRestitution()

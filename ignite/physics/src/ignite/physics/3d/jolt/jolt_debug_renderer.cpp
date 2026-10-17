@@ -6,10 +6,7 @@
 
 namespace ignite::physics
 {
-    JoltDebugRenderer::JoltDebugRenderer()
-    {
-        Initialize();
-    }
+    JoltDebugRenderer::JoltDebugRenderer() = default;
 
     void JoltDebugRenderer::DrawLine(JPH::RVec3Arg inFrom, JPH::RVec3Arg inTo, JPH::ColorArg inColor)
     {

@@ -64,6 +64,13 @@ namespace ignite::physics
 		glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
 	};
 
+	struct TransformDesc
+	{
+		glm::vec3 position = { 0.0f, 0.0f, 0.0f };
+		glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+		glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
+	};
+
 	static constexpr uint32_t MAX_PHYSICS_LAYERS = 32;
 
 	struct Physics3DSettings
@@ -214,6 +221,125 @@ namespace ignite::physics
 		glm::vec3 up = { 0.0f, 1.0f, 0.0f };
 		glm::vec3 linearVelocity = { 0.0f, 0.0f, 0.0f };
 	};
+
+	enum class JointType : uint8_t
+	{
+		Fixed = 0,
+		Distance,
+		Point,
+		Hinge,
+		Slider,
+		Cone
+	};
+
+	enum class JointSpace : uint8_t
+	{
+		Local = 0,
+		World = 1
+	};
+
+	enum class JointMotorState : uint8_t
+	{
+		Off = 0,
+		Velocity = 1,
+		Position = 2
+	};
+
+	static const char *JointTypeToString(const JointType type)
+	{
+		switch (type)
+		{
+			case JointType::Fixed:    return "Fixed";
+			case JointType::Distance: return "Distance";
+			case JointType::Point:    return "Point";
+			case JointType::Hinge:    return "Hinge";
+			case JointType::Slider:   return "Slider";
+			case JointType::Cone:     return "Cone";
+		}
+		return "Fixed";
+	}
+
+	static JointType JointTypeFromString(const std::string &str)
+	{
+		if (str == "Fixed")    return JointType::Fixed;
+		if (str == "Distance") return JointType::Distance;
+		if (str == "Point")    return JointType::Point;
+		if (str == "Hinge")    return JointType::Hinge;
+		if (str == "Slider")   return JointType::Slider;
+		if (str == "Cone")     return JointType::Cone;
+		return JointType::Fixed;
+	}
+
+	static const char *JointMotorStateToString(const JointMotorState state)
+	{
+		switch (state)
+		{
+			case JointMotorState::Off:      return "Off";
+			case JointMotorState::Velocity: return "Velocity";
+			case JointMotorState::Position: return "Position";
+		}
+		return "Off";
+	}
+
+	static JointMotorState JointMotorStateFromString(const std::string &str)
+	{
+		if (str == "Off")      return JointMotorState::Off;
+		if (str == "Velocity") return JointMotorState::Velocity;
+		if (str == "Position") return JointMotorState::Position;
+		return JointMotorState::Off;
+	}
+
+	struct JointDesc
+	{
+		JointType type = JointType::Fixed;
+		JointSpace space = JointSpace::Local;
+
+		bool enabled = true;
+		bool autoConfigureConnected = true;
+
+		// Anchor & axes in entity A local space (or world space when JointSpace::World)
+		glm::vec3 localAnchorA = { 0.0f, 0.0f, 0.0f };
+		glm::vec3 localAxisA = { 1.0f, 0.0f, 0.0f };
+		glm::vec3 localNormalA = { 0.0f, 1.0f, 0.0f };
+
+		// Anchor & axes in entity B local space (used when autoConfigureConnected == false)
+		glm::vec3 localAnchorB = { 0.0f, 0.0f, 0.0f };
+		glm::vec3 localAxisB = { 1.0f, 0.0f, 0.0f };
+		glm::vec3 localNormalB = { 0.0f, 1.0f, 0.0f };
+
+		// Break thresholds (<= 0 means unbreakable)
+		float breakForce = 0.0f;
+		float breakTorque = 0.0f;
+
+		// Distance joint settings
+		float minDistance = 0.0f;
+		float maxDistance = -1.0f; // < 0 means auto-calculate from initial distance
+
+		// Limits (Hinge: degrees in [-180, 180], Slider: meters)
+		bool enableLimits = false;
+		float limitsMin = -45.0f;
+		float limitsMax = 45.0f;
+
+		// Spring settings (Distance, Hinge limits, Slider limits)
+		bool enableSpring = false;
+		float springFrequency = 2.0f;
+		float springDamping = 0.5f;
+
+		// Friction (Hinge: max friction torque, Slider: max friction force)
+		float maxFriction = 0.0f;
+
+		// Motor settings (Hinge & Slider)
+		JointMotorState motorState = JointMotorState::Off;
+		float motorTargetVelocity = 0.0f; // Hinge: deg/s, Slider: m/s
+		float motorTargetPosition = 0.0f; // Hinge: deg, Slider: m
+		float maxMotorForce = 1000.0f;    // Hinge: max torque (N*m), Slider: max force (N)
+		float motorFrequency = 2.0f;
+		float motorDamping = 1.0f;
+
+		// Cone joint settings
+		float halfConeAngle = 45.0f; // degrees in [0, 180]
+	};
 }
 
 #endif
+

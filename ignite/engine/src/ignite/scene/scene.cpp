@@ -296,8 +296,8 @@ namespace ignite
                 {
                     auto &box = entity.GetComponent<BoxColliderComponent>();
                     physics::BoxColliderDesc desc;
-                    desc.center = box.center;
-                    desc.halfExtents = box.scale * tr.world.scale;
+                    desc.center = box.center * tr.world.scale;
+                    desc.halfExtents = glm::abs(box.scale * tr.world.scale);
                     auto col = m_Physics3D->CreateBoxCollider(desc);
                     box.collider = col;
                     return col;
@@ -306,8 +306,8 @@ namespace ignite
                 {
                     auto &sphere = entity.GetComponent<SphereColliderComponent>();
                     physics::SphereColliderDesc desc;
-                    desc.center = sphere.center;
-                    float maxScale = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
+                    desc.center = sphere.center * tr.world.scale;
+                    const float maxScale = glm::compMax(glm::abs(tr.world.scale));
                     desc.radius = sphere.radius * maxScale;
                     auto col = m_Physics3D->CreateSphereCollider(desc);
                     sphere.collider = col;
@@ -317,11 +317,11 @@ namespace ignite
                 {
                     auto &capsule = entity.GetComponent<CapsuleColliderComponent>();
 
-					const float maxScale = glm::compMax(glm::abs(tr.world.scale));
-					const float radius = capsule.radius * maxScale;
+                    const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+                    const float radius = capsule.radius * maxScale;
 
                     physics::CapsuleColliderDesc desc;
-                    desc.center = capsule.center;
+                    desc.center = capsule.center * tr.world.scale;
                     desc.radius = radius;
                     desc.halfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxScale;
                     auto col = m_Physics3D->CreateCapsuleCollider(desc);
@@ -332,8 +332,8 @@ namespace ignite
                 {
                     auto &plane = entity.GetComponent<PlaneColliderComponent>();
                     physics::PlaneColliderDesc desc;
-                    desc.center = plane.center;
-                    desc.scale = plane.scale * tr.world.scale;
+                    desc.center = plane.center * tr.world.scale;
+                    desc.scale = glm::abs(plane.scale * tr.world.scale);
                     auto col = m_Physics3D->CreatePlaneCollider(desc);
                     plane.collider = col;
                     return col;
@@ -342,8 +342,12 @@ namespace ignite
                 {
                     auto &meshComp = entity.GetComponent<MeshColliderComponent>();
                     physics::MeshColliderDesc desc;
-                    desc.center = meshComp.center;
-                    desc.vertices = meshComp.vertices;
+                    desc.center = meshComp.center * tr.world.scale;
+                    desc.vertices.reserve(meshComp.vertices.size());
+                    for (const auto &v : meshComp.vertices)
+                    {
+                        desc.vertices.push_back(v * tr.world.scale);
+                    }
                     desc.indices = meshComp.indices;
                     desc.isConvex = meshComp.convex;
                     auto col = m_Physics3D->CreateMeshCollider(desc);
@@ -375,7 +379,7 @@ namespace ignite
                         return col;
                     }
 
-                    desc.center = hfComp.center;
+                    desc.center = hfComp.center * tr.world.scale;
                     desc.scale = hfComp.scale * tr.world.scale;
                     desc.sampleCount = hfComp.sampleCount;
                     desc.heights = hfComp.heights;
@@ -522,6 +526,68 @@ namespace ignite
                 }
                 cc.character = charActor;
             }
+
+            // Create physics joints after all dynamic and static bodies have been created
+            for (entt::entity e : registry->view<PhysicsJointComponent>())
+            {
+                Entity entity{ e, this };
+                if (!entity.HasComponent<RigidbodyComponent>())
+                {
+                    continue;
+                }
+
+                auto &jointComp = entity.GetComponent<PhysicsJointComponent>();
+                auto &rbA = entity.GetComponent<RigidbodyComponent>();
+                auto &trA = entity.GetTransform();
+
+                auto dynamicBodyA = rbA.dynamicActor.lock();
+                auto staticBodyA = rbA.staticActor.lock();
+                if (!dynamicBodyA && !staticBodyA)
+                {
+                    continue;
+                }
+
+                physics::TransformDesc transformA;
+                transformA.position = trA.world.translation;
+                transformA.rotation = trA.world.rotation;
+                transformA.scale = trA.world.scale;
+
+                Ref<physics::PhysicsDynamicActor> dynamicBodyB = nullptr;
+                Ref<physics::PhysicsStaticActor> staticBodyB = nullptr;
+                physics::TransformDesc transformB;
+
+                if (jointComp.connectedEntity != UUID(0) && jointComp.connectedEntity != entity.GetUUID())
+                {
+                    Entity connected = SceneManager::GetEntity(this, jointComp.connectedEntity);
+                    if (connected.IsValid())
+                    {
+                        auto &trB = connected.GetTransform();
+                        transformB.position = trB.world.translation;
+                        transformB.rotation = trB.world.rotation;
+                        transformB.scale = trB.world.scale;
+
+                        if (connected.HasComponent<RigidbodyComponent>())
+                        {
+                            auto &rbB = connected.GetComponent<RigidbodyComponent>();
+                            dynamicBodyB = rbB.dynamicActor.lock();
+                            staticBodyB = rbB.staticActor.lock();
+                        }
+                    }
+                }
+
+                uint64_t userData = static_cast<uint64_t>(entity.GetUUID());
+                jointComp.runtimeJoint = m_Physics3D->CreateJoint(
+                    jointComp.desc,
+                    userData,
+                    dynamicBodyA,
+                    staticBodyA,
+                    transformA,
+                    dynamicBodyB,
+                    staticBodyB,
+                    transformB
+                );
+                jointComp.dirty = false;
+            }
         }
 
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
@@ -592,6 +658,12 @@ namespace ignite
         if (m_Physics3D)
         {
             m_Physics3D->SimulationStop();
+            for (entt::entity e : registry->view<PhysicsJointComponent>())
+            {
+                auto &jointComp = registry->get<PhysicsJointComponent>(e);
+                jointComp.runtimeJoint.reset();
+            }
+
             for (entt::entity e : registry->view<RigidbodyComponent>())
             {
                 auto &rb = registry->get<RigidbodyComponent>(e);
@@ -940,14 +1012,143 @@ namespace ignite
                         auto &idc = registry->get<IDComponent>(e);
                         auto &tr = registry->get<TransformComponent>(e);
 
-                        if (auto dynActor = rb.dynamicActor.lock())
+                        if (rb.isGizmoDragging)
+                            continue;
+
+                        auto dynActor = rb.dynamicActor.lock();
+                        auto stActor = rb.staticActor.lock();
+
+                        auto updateBodyCollider = [&](const Ref<physics::PhysicsCollider> &col)
+                        {
+                            if (!col) return;
+                            if (dynActor) dynActor->SetCollider(col, true);
+                            else if (stActor) stActor->SetCollider(col, true);
+                        };
+
+                        if (rb.dirty)
+                        {
+                            if (dynActor)
+                            {
+                                dynActor->SetGravityFactor(rb.useGravity ? rb.gravityFactor : 0.0f);
+                                dynActor->SetFriction(rb.friction);
+                                dynActor->SetRestitution(rb.restitution);
+                                dynActor->SetMaxLinearVelocity(rb.maxLinearVelocity);
+                                dynActor->SetMaxAngularVelocity(rb.maxAngularVelocity);
+                                dynActor->SetLinearDamping(rb.linearDamping);
+                                dynActor->SetAngularDamping(rb.angularDamping);
+                            }
+                            else if (stActor)
+                            {
+                                stActor->SetFriction(rb.friction);
+                                stActor->SetRestitution(rb.restitution);
+                            }
+                            rb.dirty = false;
+                        }
+
+                        if (registry->any_of<BoxColliderComponent>(e))
+                        {
+                            auto &box = registry->get<BoxColliderComponent>(e);
+                            if (box.dirty)
+                            {
+                                physics::BoxColliderDesc desc;
+                                desc.center = box.center * tr.world.scale;
+                                desc.halfExtents = glm::abs(box.scale * tr.world.scale);
+                                auto col = m_Physics3D->CreateBoxCollider(desc);
+                                box.collider = col;
+                                updateBodyCollider(col);
+                                box.dirty = false;
+                            }
+                        }
+                        else if (registry->any_of<SphereColliderComponent>(e))
+                        {
+                            auto &sphere = registry->get<SphereColliderComponent>(e);
+                            if (sphere.dirty)
+                            {
+                                physics::SphereColliderDesc desc;
+                                desc.center = sphere.center * tr.world.scale;
+                                const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+                                desc.radius = sphere.radius * maxScale;
+                                auto col = m_Physics3D->CreateSphereCollider(desc);
+                                sphere.collider = col;
+                                updateBodyCollider(col);
+                                sphere.dirty = false;
+                            }
+                        }
+                        else if (registry->any_of<CapsuleColliderComponent>(e))
+                        {
+                            auto &capsule = registry->get<CapsuleColliderComponent>(e);
+                            if (capsule.dirty)
+                            {
+                                const float maxScale = glm::compMax(glm::abs(tr.world.scale));
+                                physics::CapsuleColliderDesc desc;
+                                desc.center = capsule.center * tr.world.scale;
+                                desc.radius = capsule.radius * maxScale;
+                                desc.halfHeight = glm::max(capsule.height * 0.5f - capsule.radius, 0.0f) * maxScale;
+                                auto col = m_Physics3D->CreateCapsuleCollider(desc);
+                                capsule.collider = col;
+                                updateBodyCollider(col);
+                                capsule.dirty = false;
+                            }
+                        }
+                        else if (registry->any_of<PlaneColliderComponent>(e))
+                        {
+                            auto &plane = registry->get<PlaneColliderComponent>(e);
+                            if (plane.dirty)
+                            {
+                                physics::PlaneColliderDesc desc;
+                                desc.center = plane.center * tr.world.scale;
+                                desc.scale = glm::abs(plane.scale * tr.world.scale);
+                                auto col = m_Physics3D->CreatePlaneCollider(desc);
+                                plane.collider = col;
+                                updateBodyCollider(col);
+                                plane.dirty = false;
+                            }
+                        }
+                        else if (registry->any_of<MeshColliderComponent>(e))
+                        {
+                            auto &meshComp = registry->get<MeshColliderComponent>(e);
+                            if (meshComp.dirty)
+                            {
+                                physics::MeshColliderDesc desc;
+                                desc.center = meshComp.center * tr.world.scale;
+                                desc.vertices.reserve(meshComp.vertices.size());
+                                for (const auto &v : meshComp.vertices)
+                                {
+                                    desc.vertices.push_back(v * tr.world.scale);
+                                }
+                                desc.indices = meshComp.indices;
+                                desc.isConvex = meshComp.convex;
+                                auto col = m_Physics3D->CreateMeshCollider(desc);
+                                meshComp.collider = col;
+                                updateBodyCollider(col);
+                                meshComp.dirty = false;
+                            }
+                        }
+                        else if (registry->any_of<HeightFieldColliderComponent>(e))
+                        {
+                            auto &hfComp = registry->get<HeightFieldColliderComponent>(e);
+                            if (hfComp.dirty)
+                            {
+                                physics::HeightFieldColliderDesc desc;
+                                desc.center = hfComp.center * tr.world.scale;
+                                desc.scale = hfComp.scale * tr.world.scale;
+                                desc.sampleCount = hfComp.sampleCount;
+                                desc.heights = hfComp.heights;
+                                auto col = m_Physics3D->CreateHeightFieldCollider(desc);
+                                hfComp.collider = col;
+                                updateBodyCollider(col);
+                                hfComp.dirty = false;
+                            }
+                        }
+
+                        if (dynActor)
                         {
                             if (dynActor->IsActive())
                             {
                                 CalculateParentTransform(idc, tr, dynActor->GetPosition(), dynActor->GetRotation());
                             }
                         }
-                        else if (auto stActor = rb.staticActor.lock())
+                        else if (stActor)
                         {
                             CalculateParentTransform(idc, tr, stActor->GetPosition(), stActor->GetRotation());
                         }
@@ -998,6 +1199,76 @@ namespace ignite
                         {
                             ccActor->Move(cc.linearVelocity, 1.0f / 60.0f);
                             CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
+                        }
+                    }
+
+                    // Sync dirty PhysicsJointComponent changes at runtime
+                    for (auto e : registry->view<PhysicsJointComponent>())
+                    {
+                        auto &jointComp = registry->get<PhysicsJointComponent>(e);
+                        if (jointComp.dirty)
+                        {
+                            if (auto jointActor = jointComp.runtimeJoint.lock())
+                            {
+                                if (jointActor->GetJointType() == jointComp.desc.type)
+                                {
+                                    jointActor->UpdateFromDesc(jointComp.desc);
+                                }
+                                else
+                                {
+                                    m_Physics3D->DestroyJoint(jointActor);
+                                    jointComp.runtimeJoint.reset();
+
+                                    Entity entity{ e, this };
+                                    if (entity.HasComponent<RigidbodyComponent>())
+                                    {
+                                        auto &rbA = entity.GetComponent<RigidbodyComponent>();
+                                        auto &trA = entity.GetTransform();
+                                        auto dynamicBodyA = rbA.dynamicActor.lock();
+                                        auto staticBodyA = rbA.staticActor.lock();
+
+                                        physics::TransformDesc transformA;
+                                        transformA.position = trA.world.translation;
+                                        transformA.rotation = trA.world.rotation;
+                                        transformA.scale = trA.world.scale;
+
+                                        Ref<physics::PhysicsDynamicActor> dynamicBodyB = nullptr;
+                                        Ref<physics::PhysicsStaticActor> staticBodyB = nullptr;
+                                        physics::TransformDesc transformB;
+
+                                        if (jointComp.connectedEntity != UUID(0) && jointComp.connectedEntity != entity.GetUUID())
+                                        {
+                                            Entity connected = SceneManager::GetEntity(this, jointComp.connectedEntity);
+                                            if (connected.IsValid())
+                                            {
+                                                auto &trB = connected.GetTransform();
+                                                transformB.position = trB.world.translation;
+                                                transformB.rotation = trB.world.rotation;
+                                                transformB.scale = trB.world.scale;
+
+                                                if (connected.HasComponent<RigidbodyComponent>())
+                                                {
+                                                    auto &rbB = connected.GetComponent<RigidbodyComponent>();
+                                                    dynamicBodyB = rbB.dynamicActor.lock();
+                                                    staticBodyB = rbB.staticActor.lock();
+                                                }
+                                            }
+                                        }
+
+                                        jointComp.runtimeJoint = m_Physics3D->CreateJoint(
+                                            jointComp.desc,
+                                            static_cast<uint64_t>(entity.GetUUID()),
+                                            dynamicBodyA,
+                                            staticBodyA,
+                                            transformA,
+                                            dynamicBodyB,
+                                            staticBodyB,
+                                            transformB
+                                        );
+                                    }
+                                }
+                            }
+                            jointComp.dirty = false;
                         }
                     }
                 }
@@ -1788,5 +2059,12 @@ namespace ignite
     template<>
     IGN_API void Scene::OnComponentAdded<PrefabComponent>(Entity entity, PrefabComponent &comp)
     {
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<PhysicsJointComponent>(Entity entity, PhysicsJointComponent &comp)
+    {
+        auto &id = entity.GetComponent<IDComponent>();
+        id.type = id.type | EntityType_Joint;
     }
 }
