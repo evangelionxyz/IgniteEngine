@@ -6,6 +6,8 @@ project "BOX2D"
     staticruntime "off"
     architecture "x64"
 
+    vectorextensions "AVX2"
+
     targetdir (THIRDPARTY_OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
