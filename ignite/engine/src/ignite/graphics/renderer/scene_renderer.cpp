@@ -74,11 +74,13 @@ namespace ignite
     // ===============================
     SceneRenderer::SceneRenderer()
     {
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+
         nri::SamplerDesc compositeSamplerDesc = {};
         compositeSamplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR, nri::Filter::LINEAR };
         compositeSamplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
         compositeSamplerDesc.mipMax = 16.0f;
-        DeviceManager::GetInstance()->GetCoreInterface().CreateSampler(*m_Device, compositeSamplerDesc, m_CompositeSampler);
+        nri.CreateSampler(*m_Device, compositeSamplerDesc, m_CompositeSampler);
 
         m_Renderer2D = Renderer2D::Create();
         m_OutlineJFA = OutlineJFA::Create();
@@ -112,10 +114,18 @@ namespace ignite
         m_DebugGridBindingSetCache.clear();
         m_FXAABindingSetCache.clear();
         m_RenderTargets.clear();
+        m_Blooms.clear();
+        m_SSAOs.clear();
 
         m_ResolvedAssetsCache.clear();
         m_RuntimeMaterial.reset();
         m_TerrainRenderer.reset();
+
+        if (m_Scene)
+        {
+            m_Scene->SetSceneRenderer(nullptr);
+            m_Scene.reset();
+        }
     }
 
     void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
@@ -160,10 +170,12 @@ namespace ignite
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
         m_FXAABindingSetCache.clear();
+
         if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
             GPUUploadSync::DeviceWaitIdle(device);
         }
+
         m_RenderTargets.clear();
         m_EntityObjectIndexCache.clear();
         m_EntityBoneOffsetCache.clear();
@@ -420,6 +432,7 @@ namespace ignite
             sceneRenderSettings.enableFXAA = true;
             break;
         }
+
         postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
 
         // Ensure MSAA render targets match current settings
@@ -1565,8 +1578,16 @@ namespace ignite
                         const uint32_t objectIndex = cacheIt->second[idx];
 
                         Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
-                        if (material && uploadedMaterialsThisPass.insert(material.get()).second)
-                            material->UploadToGpu(cmd);
+                        if (material)
+                        {
+                            if (uploadedMaterialsThisPass.insert(material.get()).second)
+                                material->UploadToGpu(cmd);
+                        }
+                        else
+                        {
+                            if (uploadedMaterialsThisPass.insert(m_RuntimeMaterial.get()).second)
+                                m_RuntimeMaterial->UploadToGpu(cmd);
+                        }
 
                         const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
                             ? material->GetBindingSet()

@@ -129,6 +129,16 @@ namespace ignite
             m_AssetHandleByPath.clear();
         }
 
+        for (auto &[h, rec] : oldAssetRecords)
+        {
+            if (rec)
+            {
+                rec->loadTask = {};
+                rec->asset.reset();
+            }
+        }
+        oldAssetRecords.clear();
+
         oldLoadedAssets.clear();
         oldAssetRegistry.clear();
 
@@ -529,6 +539,7 @@ namespace ignite
             AssignAsset(handle, asset);
 
             LOG_TRACE("[Asset Manager] Asset ready: {} ({})", static_cast<uint64_t>(handle), metadata.filepath.generic_string());
+            record.reset();
             co_return asset;
         }
         catch (const std::exception &e)

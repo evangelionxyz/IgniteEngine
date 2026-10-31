@@ -92,6 +92,8 @@ namespace ignite
             }
 
             m_Stop = true;
+            std::queue<std::function<void()>> empty;
+            m_Tasks.swap(empty);
         }
 
         m_Cv.notify_all();

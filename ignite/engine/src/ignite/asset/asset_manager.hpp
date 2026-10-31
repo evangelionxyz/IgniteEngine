@@ -99,6 +99,7 @@ namespace ignite
                     }
 
                     record->asset = asset;
+                    record->loadTask = {};
                     record->error.clear();
                     record->progress = 1.0f;
                     record->state.store(AssetState::Ready, std::memory_order_release);

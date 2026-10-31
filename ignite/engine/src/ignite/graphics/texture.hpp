@@ -191,6 +191,7 @@ namespace ignite
         static void SubmitAsyncUpload(Ref<Texture> texture, std::function<void()> onComplete = nullptr);
         static void ProcessAsyncUploads(uint32_t maxUploadsPerFrame = 4, uint64_t maxBytesPerFrame = 16 * 1024 * 1024);
         static bool HasPendingUploads();
+        static void ClearPendingUploads();
 
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nri::Texture *GetHandle() const { return m_Handle; }

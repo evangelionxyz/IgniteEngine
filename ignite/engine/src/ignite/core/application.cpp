@@ -47,37 +47,79 @@ namespace ignite
 
     Application::~Application()
     {
-        // Shutdown render thread
+        // 1. Shutdown render thread first so no GPU rendering occurs
         StopRenderThread();
 
+        // 2. Shutdown file watcher
         FileWatcher::Shutdown();
 
-        GPUUploadSync::DeviceWaitIdle(DeviceManager::GetInstance()->GetDevice());
+        // 3. Shutdown worker threads so no background tasks produce new GPU uploads or touch assets
+        WorkerManager::Get().Shutdown();
 
-		// Detach and delete layers in reverse order
+        // 4. Clear pending texture uploads and application-level queued callbacks
+        Texture::ClearPendingUploads();
+        {
+            std::lock_guard lock(m_ThreadFuncsMutex);
+            std::queue<std::pair<std::function<void()>, std::string>> empty;
+            m_ThreadFuncs.swap(empty);
+        }
+        {
+            std::lock_guard lock(m_RenderThreadFuncsMutex);
+            std::queue<std::pair<std::function<void()>, std::string>> empty;
+            m_RenderThreadFuncs.swap(empty);
+        }
+        {
+            std::lock_guard lock(m_CommandListMutex);
+            m_PendingCommandLists.clear();
+            m_PendingCommandListCallbacks.clear();
+        }
+        m_CommandManager.reset();
+
+        // 5. Wait for any in-flight GPU work before tearing down resources
+        if (auto *dm = DeviceManager::GetInstance())
+        {
+            if (auto *device = dm->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(device);
+            }
+        }
+
+        // 6. Detach and delete layers in reverse order
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             (*it)->OnDetach();
             delete *it;
         }
+        m_LayerStack.Clear();
 
-			// Destroy subsystems in reverse order while their worker dependencies
-            // and the Rust backend are still available.
-			for (auto it = m_Subsystems.rbegin(); it != m_Subsystems.rend(); ++it)
-			{
-				(*it)->Shutdown();
-				delete *it;
-			}
-			m_Subsystems.clear();
+        // 7. Destroy subsystems in reverse order while Rust backend is still available
+        for (auto it = m_Subsystems.rbegin(); it != m_Subsystems.rend(); ++it)
+        {
+            (*it)->Shutdown();
+            delete *it;
+        }
+        m_Subsystems.clear();
 
-        WorkerManager::Get().Shutdown();
+        // 8. Clear any texture uploads or callbacks that might have been queued during layer/subsystem teardown
+        Texture::ClearPendingUploads();
+
+        // 9. Shutdown Rust engine
         ignite_rs_engine_shutdown();
 
-        // destroy device
+        // 10. Final GPU wait-idle before destroying the graphics device
+        if (auto *dm = DeviceManager::GetInstance())
+        {
+            if (auto *device = dm->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(device);
+            }
+        }
+
+        // 11. Destroy graphics device and swap chain
         DeviceManager::GetInstance()->Destroy();
         m_Window->Destroy();
 
-		ignite_rs_log_unregister_callback();
+        ignite_rs_log_unregister_callback();
     }
 
     Application::Application(const ApplicationCreateInfo &createInfo)
@@ -152,13 +194,13 @@ namespace ignite
 
         WorkerManager::Get().Initialize();
 
-		// Create subsystems
-		m_AssetManager = (AssetManager *)AddSubsystem(new AssetManager());
+        // Create subsystems
+        m_AssetManager = (AssetManager *)AddSubsystem(new AssetManager());
         m_EditorInputSystem = (EditorInputSystem *)AddSubsystem(new EditorInputSystem());
         m_GameInputSystem = (GameInputSystem *)AddSubsystem(new GameInputSystem());
         m_Renderer = (Renderer *)AddSubsystem(new Renderer(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi));
 
-		InputSystem::SetActiveSystem(m_EditorInputSystem);
+        InputSystem::SetActiveSystem(m_EditorInputSystem);
 
         if (createInfo.useGui)
         {
@@ -413,7 +455,13 @@ namespace ignite
                 }
             }
 
-			// Begin frame (must be done after framebuffer clear to avoid GPU sync issues)
+            if (Texture::HasPendingUploads())
+            {
+                IGN_PROFILE_SCOPE("RenderThread::TextureAsyncUploads");
+                Texture::ProcessAsyncUploads();
+            }
+
+            // Begin frame (must be done after framebuffer clear to avoid GPU sync issues)
             m_Renderer->BeginFrame(m_FrameCounter);
 
             // Render layers

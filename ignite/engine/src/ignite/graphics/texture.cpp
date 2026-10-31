@@ -1194,6 +1194,10 @@ namespace ignite
                 texture->SetReadyFlag(false);
                 texture->SetData(nullptr, 4);
                 texture->SetReadyFlag(true);
+                if (BindlessSystem::HasPendingWrites())
+                {
+                    BindlessSystem::FlushPendingWrites();
+                }
                 if (onComplete) onComplete();
             }
             return;
@@ -1211,6 +1215,15 @@ namespace ignite
     {
         std::lock_guard<std::mutex> lock(s_UploadQueueMutex);
         return !s_UploadQueue.empty();
+    }
+
+    void Texture::ClearPendingUploads()
+    {
+        std::lock_guard<std::mutex> lock(s_UploadQueueMutex);
+        while (!s_UploadQueue.empty())
+        {
+            s_UploadQueue.pop();
+        }
     }
 
     void Texture::ProcessAsyncUploads(uint32_t maxUploadsPerFrame, uint64_t maxBytesPerFrame)
@@ -1264,6 +1277,11 @@ namespace ignite
             {
                 task.onComplete();
             }
+        }
+
+        if (BindlessSystem::HasPendingWrites())
+        {
+            BindlessSystem::FlushPendingWrites();
         }
     }
 }

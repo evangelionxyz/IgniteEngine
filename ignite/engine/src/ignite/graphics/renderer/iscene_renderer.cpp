@@ -279,6 +279,11 @@ namespace ignite
         {
             CSMPerCascadeBuffer = nullptr;
         }
+
+        m_CascadedShadowMap.reset();
+        m_CompositeVertexBuffer.reset();
+        m_Renderer2D.reset();
+        m_OutlineJFA.reset();
     }
 
     void ISceneRenderer::ResizeFramebuffer([[maybe_unused]] ICamera *camera, uint32_t width, uint32_t height)

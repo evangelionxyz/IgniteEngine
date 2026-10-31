@@ -61,40 +61,6 @@ namespace ignite
             }
         }
 
-        auto isTextureReady = [this](AssetHandle textureHandle, Ref<Texture> &outTexture, Ref<Texture> fallback) -> bool
-        {
-            if (textureHandle == AssetHandle(0))
-            {
-                outTexture = fallback;
-                return false;
-            }
-
-            Ref<Texture> result = AssetManager::GetInstance()->GetAsset<Texture>(textureHandle);
-            const bool ready = result && result->IsReady();
-            if (result && result->IsReady())
-            {
-                outTexture = result;
-            }
-            return ready;
-        };
-
-        Ref<Texture> baseColor, emissive, metallic, roughness, normal, occlusion;
-        bool allTexturesReady = isTextureReady(baseColorTextureHandle, baseColor, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(emissiveTextureHandle, emissive, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(metallicTextureHandle, metallic, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(roughnessTextureHandle, roughness, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(normalTextureHandle, normal, Renderer::GetWhiteTexture());
-        allTexturesReady &= isTextureReady(occlusionTextureHandle, occlusion, Renderer::GetWhiteTexture());
-
-        // Waiting for all textures loaded
-        // binding set is still not created
-        if (!allTexturesReady && !(baseColor && emissive && metallic && roughness && normal && occlusion))
-        {
-            m_BindingSet = nullptr;
-            m_BindingSetDirty = true;
-            return false;
-        }
-
         EnsureGpuResources();
 
         BindingSetDesc desc = BindingSetDesc();

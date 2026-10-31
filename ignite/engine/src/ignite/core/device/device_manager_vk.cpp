@@ -1351,6 +1351,7 @@ namespace ignite
                 return false;
             }
 
+            m_NRI.SetDebugName((nri::Object *)m_BackBufferTextures[n], ("[BackBuffer Color " + std::to_string(n) + "]").c_str());
             nri::TextureViewDesc rtvDesc{};
             rtvDesc.texture = m_BackBufferTextures[n];
             rtvDesc.type = nri::TextureView::COLOR_ATTACHMENT;
@@ -1382,6 +1383,7 @@ namespace ignite
                 LOG_ERROR("Failed to create depth texture for swapchain image {}", n);
                 return false;
             }
+            m_NRI.SetDebugName((nri::Object *)m_DepthBufferTextures[n], ("[BackBuffer Depth " + std::to_string(n) + "]").c_str());
 
             nri::ResourceGroupDesc resGroup{};
             resGroup.textureNum = 1;
@@ -1578,6 +1580,7 @@ namespace ignite
             if (m_HelperNRI.AllocateAndBindMemory(*m_Device, colorResGroup, &m_OffscreenColorMemories[i]) != nri::Result::SUCCESS)
                 return false;
 
+            m_NRI.SetDebugName((nri::Object *)m_BackBufferTextures[i], ("[Offscreen Color " + std::to_string(i) + "]").c_str());
             nri::TextureViewDesc rtvDesc{};
             rtvDesc.texture = m_BackBufferTextures[i];
             rtvDesc.type = nri::TextureView::COLOR_ATTACHMENT;
@@ -1603,6 +1606,7 @@ namespace ignite
 
             if (m_NRI.CreateTexture(*m_Device, depthDesc, m_DepthBufferTextures[i]) != nri::Result::SUCCESS)
                 return false;
+            m_NRI.SetDebugName((nri::Object *)m_DepthBufferTextures[i], ("[Offscreen Depth " + std::to_string(i) + "]").c_str());
 
             nri::ResourceGroupDesc depthResGroup{};
             depthResGroup.textureNum = 1;

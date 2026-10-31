@@ -342,7 +342,22 @@ namespace ignite
             }
             else if (m_AttachmentsInitialized && m_CreateInfo.colorAttachmentOverrides.empty())
             {
-                b.before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                if (m_ColorAttachments[i]->GetCreateInfo().initialLayout == nri::Layout::PRESENT)
+                {
+                    b.before = { nri::AccessBits::NONE, nri::Layout::PRESENT, nri::StageBits::NONE };
+                }
+                else
+                {
+                    const auto &colorDesc = nri.GetTextureDesc(*m_ColorAttachments[i]->GetHandle());
+                    if ((colorDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
+                    {
+                        b.before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    }
+                    else
+                    {
+                        b.before = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT, nri::StageBits::COLOR_ATTACHMENT };
+                    }
+                }
             }
             else
             {
@@ -360,6 +375,9 @@ namespace ignite
 
         if (m_DepthAttachment && m_DepthAttachment->GetHandle())
         {
+            const auto &depthDesc = nri.GetTextureDesc(*m_DepthAttachment->GetHandle());
+            const bool depthSupportsShaderResource = (depthDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0;
+
             nri::TextureBarrierDesc b = {};
             b.texture = m_DepthAttachment->GetHandle();
             if (m_DepthAttachment->GetCurrentLayout() != nri::Layout::UNDEFINED)
@@ -368,7 +386,14 @@ namespace ignite
             }
             else if (m_AttachmentsInitialized && !m_CreateInfo.depthAttachmentOverride)
             {
-                b.before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                if (depthSupportsShaderResource)
+                {
+                    b.before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                }
+                else
+                {
+                    b.before = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT, nri::StageBits::DEPTH_STENCIL_ATTACHMENT };
+                }
             }
             else
             {
@@ -484,7 +509,15 @@ namespace ignite
             }
             else
             {
-                b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                const auto &colorDesc = nri.GetTextureDesc(*m_ColorAttachments[i]->GetHandle());
+                if ((colorDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
+                {
+                    b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                }
+                else
+                {
+                    b.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT, nri::StageBits::COLOR_ATTACHMENT };
+                }
             }
             b.mipOffset = 0;
             b.mipNum = nri::REMAINING;
@@ -497,19 +530,29 @@ namespace ignite
 
         if (m_DepthAttachment && m_DepthAttachment->GetHandle())
         {
-            nri::TextureBarrierDesc b = {};
-            b.texture = m_DepthAttachment->GetHandle();
-            b.before = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT, nri::StageBits::DEPTH_STENCIL_ATTACHMENT };
-            b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
-            b.mipOffset = 0;
-            b.mipNum = nri::REMAINING;
-            b.layerOffset = 0;
-            b.layerNum = nri::REMAINING;
-            b.planes = HasStencilComponent(m_DepthAttachment->GetFormat())
-                ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL)
-                : nri::PlaneBits::DEPTH;
-            barriers.push_back(b);
-            m_DepthAttachment->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
+            const auto &depthDesc = nri.GetTextureDesc(*m_DepthAttachment->GetHandle());
+            const bool depthSupportsShaderResource = (depthDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0;
+
+            if (depthSupportsShaderResource)
+            {
+                nri::TextureBarrierDesc b = {};
+                b.texture = m_DepthAttachment->GetHandle();
+                b.before = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT, nri::StageBits::DEPTH_STENCIL_ATTACHMENT };
+                b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                b.mipOffset = 0;
+                b.mipNum = nri::REMAINING;
+                b.layerOffset = 0;
+                b.layerNum = nri::REMAINING;
+                b.planes = HasStencilComponent(m_DepthAttachment->GetFormat())
+                    ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL)
+                    : nri::PlaneBits::DEPTH;
+                barriers.push_back(b);
+                m_DepthAttachment->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
+            }
+            else
+            {
+                m_DepthAttachment->SetCurrentState(nri::Layout::DEPTH_STENCIL_ATTACHMENT, nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::StageBits::DEPTH_STENCIL_ATTACHMENT);
+            }
         }
 
         if (!barriers.empty())
@@ -623,7 +666,15 @@ namespace ignite
         }
         else
         {
-            barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            const auto &colorDesc = nri.GetTextureDesc(*m_ColorAttachments[attachmentIndex]->GetHandle());
+            if ((colorDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
+            {
+                barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            }
+            else
+            {
+                barrier.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT, nri::StageBits::COLOR_ATTACHMENT };
+            }
         }
         nri.CmdBarrier(*commandBuffer, barrierDesc);
         m_ColorAttachments[attachmentIndex]->SetCurrentState(barrier.after.layout, barrier.after.access, barrier.after.stages);
@@ -704,7 +755,15 @@ namespace ignite
         }
         else
         {
-            barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            const auto &colorDesc = nri.GetTextureDesc(*m_ColorAttachments[attachmentIndex]->GetHandle());
+            if ((colorDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
+            {
+                barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            }
+            else
+            {
+                barrier.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT, nri::StageBits::COLOR_ATTACHMENT };
+            }
         }
         nri.CmdBarrier(*commandBuffer, barrierDesc);
         m_ColorAttachments[attachmentIndex]->SetCurrentState(barrier.after.layout, barrier.after.access, barrier.after.stages);

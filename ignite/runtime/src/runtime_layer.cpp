@@ -172,13 +172,27 @@ namespace ignite
         if (!m_ActiveProject)
             return;
 
+        GameUISystem::SetSceneContext(nullptr);
+
         if (m_ActiveScene)
             m_ActiveScene->OnStop();
 
-        AssetManager::GetInstance()->Reset();
+        if (m_SceneRenderer)
+            m_SceneRenderer->SetActiveScene(nullptr);
 
-        m_ActiveProject.reset();
+        if (m_ActiveProject)
+            m_ActiveProject->SetActiveScene(nullptr);
+
+        m_ActiveScene.reset();
+        m_SceneRenderer.reset();
+
         Project::CloseActive();
+        m_ActiveProject.reset();
+
+        if (auto *am = AssetManager::GetInstance())
+        {
+            am->Reset();
+        }
     }
 
     void RuntimeLayer::OnEvent(Event &e)

@@ -561,6 +561,7 @@ namespace ignite
                 LOG_ERROR("Failed to wrap D3D12 swapchain buffer {} into NRI texture", n);
                 return false;
             }
+            m_NRI.SetDebugName((nri::Object *)m_BackBufferTextures[n], ("[BackBuffer Color " + std::to_string(n) + "]").c_str());
 
             // Create Color Attachment (RTV) descriptor
             nri::TextureViewDesc rtvDesc{};
@@ -594,6 +595,7 @@ namespace ignite
                 LOG_ERROR("Failed to create depth texture for back buffer {}", n);
                 return false;
             }
+            m_NRI.SetDebugName((nri::Object *)m_DepthBufferTextures[n], ("[BackBuffer Depth " + std::to_string(n) + "]").c_str());
 
             // Allocate and bind memory for depth texture
             nri::ResourceGroupDesc resGroup{};

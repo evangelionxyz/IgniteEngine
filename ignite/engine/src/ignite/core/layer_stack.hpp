@@ -45,6 +45,7 @@ namespace ignite
         }
 
         std::list<Layer*>::const_iterator begin() { return m_Layers.begin(); }
+        void Clear() { m_Layers.clear(); }
         std::list<Layer*>::const_iterator end() { return m_Layers.end(); }
         std::list<Layer*>::const_reverse_iterator rbegin() { return m_Layers.rbegin(); }
         std::list<Layer*>::const_reverse_iterator rend() { return m_Layers.rend(); }
