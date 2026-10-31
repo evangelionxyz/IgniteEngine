@@ -27,7 +27,7 @@ namespace ignite
         float angularDamping = 0.2f;
         bool isAwake = true;
         bool isEnabled = true;
-        bool isEnableSleep = false;
+        bool enableSleeping = false;
         bool allowFastRotation = true;
         bool fixedRotation = false;
         b2BodyId bodyId = {};

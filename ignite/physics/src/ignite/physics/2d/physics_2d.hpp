@@ -35,7 +35,9 @@ namespace ignite::physics
 
         bool IsValidWorld() const;
         bool IsValidBody(b2BodyId bodyId);
+        bool IsSleepingEnabled(b2BodyId bodyId) const;
         bool IsValidShape(b2ShapeId shapeId) const;
+
         void SetBodyType(b2BodyId bodyId, b2BodyType type);
         void SetPosition(b2BodyId bodyId, const glm::vec2 &position);
         void SetRotation(b2BodyId bodyId, float rotation);
@@ -56,7 +58,7 @@ namespace ignite::physics
         void ActivateBody(b2BodyId bodyId);
         void DeactivateBody(b2BodyId bodyId);
         void SetAwake(b2BodyId bodyId, bool awake);
-        void SetEnableSleep(b2BodyId bodyId, bool enable);
+        void SetEnableSleeping(b2BodyId bodyId, bool enable);
         void SetGravityScale(b2BodyId bodyId, float scale);
         void SetLinearDamping(b2BodyId bodyId, float damping);
         void SetAngularDamping(b2BodyId bodyId, float damping);

@@ -147,7 +147,7 @@ namespace ignite
             s.angularDamping   = rb.angularDamping;
             s.isAwake          = rb.isAwake;
             s.isEnabled        = rb.isEnabled;
-            s.isEnableSleep    = rb.isEnableSleep;
+            s.isEnableSleep    = rb.enableSleeping;
             s.allowFastRotation = rb.allowFastRotation;
             s.fixedRotation    = rb.fixedRotation;
             snap.rigidbody2D   = s;
@@ -253,7 +253,7 @@ namespace ignite
         {
             const auto &s = *snap.rigidbody2D;
             Rigidbody2DComponent rb;
-            rb.bodyType              = s.bodyType;
+            rb.bodyType          = s.bodyType;
             rb.linearVelocity    = s.linearVelocity;
             rb.angularVelocity   = s.angularVelocity;
             rb.gravityScale      = s.gravityScale;
@@ -261,7 +261,7 @@ namespace ignite
             rb.angularDamping    = s.angularDamping;
             rb.isAwake           = s.isAwake;
             rb.isEnabled         = s.isEnabled;
-            rb.isEnableSleep     = s.isEnableSleep;
+            rb.enableSleeping       = s.isEnableSleep;
             rb.allowFastRotation = s.allowFastRotation;
             rb.fixedRotation     = s.fixedRotation;
             // bodyId is left default — physics system initialises it at runtime

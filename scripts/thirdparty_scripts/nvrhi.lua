@@ -37,8 +37,8 @@ project "NVRHI"
 
     includedirs {
         "%{THIRDPARTY_DIR}/NVRHI/include/",
-        "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
-        "%{IncludeDir.NVRHI_DIRECTX_HEADERS}",
+        "%{IncludeDir.VULKAN_HEADERS}",
+        "%{IncludeDir.DIRECTX_HEADERS}",
     }
 
     defines {

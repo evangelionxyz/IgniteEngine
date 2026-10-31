@@ -432,7 +432,7 @@ namespace ignite
                     sr.AddKeyValue("FixedRotation", comp.fixedRotation);
                     sr.AddKeyValue("AllowFastRotation", comp.allowFastRotation);
                     sr.AddKeyValue("IsEnabled", comp.isEnabled);
-                    sr.AddKeyValue("IsEnableSleep", comp.isEnableSleep);
+                    sr.AddKeyValue("Sleeping", comp.enableSleeping);
                 }
                 sr.EndMap();
             }
@@ -1144,7 +1144,7 @@ namespace ignite
             if (auto n = node["FixedRotation"]) comp.fixedRotation = n.as<bool>();
             if (auto n = node["AllowFastRotation"]) comp.allowFastRotation = n.as<bool>();
             if (auto n = node["IsEnabled"]) comp.isEnabled = n.as<bool>();
-            if (auto n = node["IsEnableSleep"]) comp.isEnableSleep = n.as<bool>();
+            if (auto n = node["Sleeping"]) comp.enableSleeping = n.as<bool>();
         }
 
         // Box collider 2D
@@ -1181,7 +1181,7 @@ namespace ignite
             {
                 for (JsonNode matNode : matsNode)
                 {
-                    uint32_t meshIndex = matNode["Mesh"].as<uint32_t>();
+                    const auto meshIndex = matNode["Mesh"].as<uint32_t>();
                     AssetHandle materialHandle = AssetHandle(matNode["MaterialHandle"].as<uint64_t>());
                     comp.overrideMaterials[meshIndex] = materialHandle;
                 }

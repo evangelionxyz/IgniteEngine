@@ -87,14 +87,14 @@ public sealed class Rigidbody2DComponent : IComponent
         set => ComponentInternalCalls.Rigidbody2DComponent_SetIsEnabled(Entity!.ID, value);
     }
 
-    public bool IsEnableSleep
+    public bool IsSleepingEnabled
     {
         get
         {
-            ComponentInternalCalls.Rigidbody2DComponent_GetIsEnableSleep(Entity!.ID, out bool result);
+            ComponentInternalCalls.Rigidbody2DComponent_GetIsSleepingEnabled(Entity!.ID, out bool result);
             return result;
         }
-        set => ComponentInternalCalls.Rigidbody2DComponent_SetIsEnableSleep(Entity!.ID, value);
+        set => ComponentInternalCalls.Rigidbody2DComponent_SetIsSleepingEnabled(Entity!.ID, value);
     }
 
     public bool IsBullet

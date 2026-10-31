@@ -234,10 +234,10 @@ namespace ignite::physics
             b2Body_SetAwake(bodyId, awake);
     }
 
-    void Physics2D::SetEnableSleep(b2BodyId bodyId, bool enable)
+    void Physics2D::SetEnableSleeping(b2BodyId bodyId, bool enable)
     {
         if (b2Body_IsValid(bodyId))
-            b2Body_EnableSleep(bodyId, enable);
+            b2Body_EnableSleeping(bodyId, enable);
     }
 
     void Physics2D::SetGravityScale(b2BodyId bodyId, float scale)
@@ -282,6 +282,13 @@ namespace ignite::physics
     {
         if (b2Body_IsValid(bodyId))
             b2Body_SetBullet(bodyId, bullet);
+    }
+
+    bool Physics2D::IsSleepingEnabled(b2BodyId bodyId) const
+    {
+        if (b2Body_IsValid(bodyId))
+            return b2Body_IsSleepingEnabled(bodyId);
+        return false;
     }
 
 } // namespace ignite::physics

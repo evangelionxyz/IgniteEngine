@@ -1880,7 +1880,7 @@ namespace ignite
                 UI::DrawFloatControl("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
                 UI::DrawCheckbox("Awake", &c.isAwake);
                 UI::DrawCheckbox("Enabled", &c.isEnabled);
-                UI::DrawCheckbox("Sleep", &c.isEnableSleep);
+                UI::DrawCheckbox("Enable Sleeping", &c.enableSleeping);
                 UI::DrawCheckbox("Fixed Rotation", &c.fixedRotation);
 
                 if (!c.fixedRotation)

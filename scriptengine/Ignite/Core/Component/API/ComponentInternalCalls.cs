@@ -96,8 +96,8 @@ public static class ComponentInternalCalls
     private static CoreNativeAPI.Funcs.SetBoolFn? s_Rigidbody2DSetIsAwake;
     private static CoreNativeAPI.Funcs.GetBoolFn? s_Rigidbody2DGetIsEnabled;
     private static CoreNativeAPI.Funcs.SetBoolFn? s_Rigidbody2DSetIsEnabled;
-    private static CoreNativeAPI.Funcs.GetBoolFn? s_Rigidbody2DGetIsEnableSleep;
-    private static CoreNativeAPI.Funcs.SetBoolFn? s_Rigidbody2DSetIsEnableSleep;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_Rigidbody2DGetIsSleepingEnabled;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_Rigidbody2DSetIsSleepingEnabled;
     private static ComponentNativeAPI.Funcs.Rigidbody2DApplyForceFn? s_Rigidbody2DApplyForce;
     private static ComponentNativeAPI.Funcs.Rigidbody2DApplyForceToCenterFn? s_Rigidbody2DApplyForceToCenter;
     private static ComponentNativeAPI.Funcs.Rigidbody2DApplyLinearImpulseFn? s_Rigidbody2DApplyLinearImpulse;
@@ -343,8 +343,8 @@ public static class ComponentInternalCalls
         s_Rigidbody2DSetIsAwake = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetBoolFn>(api.Rigidbody2DComponent_SetIsAwake);
         s_Rigidbody2DGetIsEnabled = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.Rigidbody2DComponent_GetIsEnabled);
         s_Rigidbody2DSetIsEnabled = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetBoolFn>(api.Rigidbody2DComponent_SetIsEnabled);
-        s_Rigidbody2DGetIsEnableSleep = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.Rigidbody2DComponent_GetIsEnableSleep);
-        s_Rigidbody2DSetIsEnableSleep = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetBoolFn>(api.Rigidbody2DComponent_SetIsEnableSleep);
+        s_Rigidbody2DGetIsSleepingEnabled = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.Rigidbody2DComponent_GetIsEnableSleep);
+        s_Rigidbody2DSetIsSleepingEnabled = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SetBoolFn>(api.Rigidbody2DComponent_SetIsEnableSleep);
         s_Rigidbody2DApplyForce = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.Rigidbody2DApplyForceFn>(api.Rigidbody2DComponent_ApplyForce);
         s_Rigidbody2DApplyForceToCenter = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.Rigidbody2DApplyForceToCenterFn>(api.Rigidbody2DComponent_ApplyForceToCenter);
         s_Rigidbody2DApplyLinearImpulse = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.Rigidbody2DApplyLinearImpulseFn>(api.Rigidbody2DComponent_ApplyLinearImpulse);
@@ -1166,16 +1166,16 @@ public static class ComponentInternalCalls
         s_Rigidbody2DSetIsEnabled!(entityID, value);
     }
 
-    internal static void Rigidbody2DComponent_GetIsEnableSleep(ulong entityID, out bool result)
+    internal static void Rigidbody2DComponent_GetIsSleepingEnabled(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetIsEnableSleep!(entityID, out result);
+        s_Rigidbody2DGetIsSleepingEnabled!(entityID, out result);
     }
 
-    internal static void Rigidbody2DComponent_SetIsEnableSleep(ulong entityID, bool value)
+    internal static void Rigidbody2DComponent_SetIsSleepingEnabled(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetIsEnableSleep!(entityID, value);
+        s_Rigidbody2DSetIsSleepingEnabled!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_ApplyForce(ulong entityID, Mathf.Vector2 force, Mathf.Vector2 point, bool wake)

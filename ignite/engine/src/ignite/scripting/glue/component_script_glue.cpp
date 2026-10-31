@@ -1656,8 +1656,7 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.bodyType = static_cast<physics::BodyType>(value);
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->SetBodyType(rb.bodyId, static_cast<b2BodyType>(rb.bodyType));
             }
@@ -1685,8 +1684,7 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.linearVelocity = *value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->SetLinearVelocity(rb.bodyId, *value);
             }
@@ -1715,8 +1713,7 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.angularVelocity = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->SetAngularVelocity(rb.bodyId, value);
             }
@@ -1745,8 +1742,7 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.gravityScale = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->SetGravityScale(rb.bodyId, value);
             }
@@ -1775,8 +1771,7 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.linearDamping = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->SetLinearDamping(rb.bodyId, value);
             }
@@ -1805,8 +1800,7 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.angularDamping = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->SetAngularDamping(rb.bodyId, value);
             }
@@ -1835,8 +1829,7 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.isAwake = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->SetAwake(rb.bodyId, value);
             }
@@ -1865,8 +1858,7 @@ namespace ignite
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.isEnabled = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 if (value)
                 {
@@ -1879,7 +1871,7 @@ namespace ignite
             }
         }
 
-        static void Rigidbody2DComponent_GetIsEnableSleep(uint64_t entityID, bool *result)
+        static void Rigidbody2DComponent_GetIsEnableSleeping(uint64_t entityID, bool *result)
         {
             if (!result)
             {
@@ -1891,21 +1883,24 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
                 return;
 
-            *result = entity.GetComponent<Rigidbody2DComponent>().isEnableSleep;
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
+            {
+                *result = scene->GetPhysics2D()->IsSleepingEnabled(rb.bodyId);
+            }
         }
 
-        static void Rigidbody2DComponent_SetIsEnableSleep(uint64_t entityID, bool value)
+        static void Rigidbody2DComponent_SetIsEnableSleeping(uint64_t entityID, bool value)
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            rb.isEnableSleep = value;
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
-                scene->GetPhysics2D()->SetEnableSleep(rb.bodyId, value);
+                rb.enableSleeping = value;
+                scene->GetPhysics2D()->SetEnableSleeping(rb.bodyId, value);
             }
         }
 
@@ -1916,8 +1911,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->ApplyForce(rb.bodyId, force, point, wake);
             }
@@ -1930,8 +1924,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->ApplyForceToCenter(rb.bodyId, force, wake);
             }
@@ -1944,8 +1937,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->ApplyLinearImpulse(rb.bodyId, impulse, point, wake);
             }
@@ -1958,8 +1950,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->ApplyLinearImpulseToCenter(rb.bodyId, impulse, wake);
             }
@@ -1972,8 +1963,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->ApplyAngularImpulse(rb.bodyId, impulse, wake);
             }
@@ -1986,8 +1976,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->ApplyTorque(rb.bodyId, torque, wake);
             }
@@ -2006,8 +1995,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 *result = scene->GetPhysics2D()->GetMass(rb.bodyId);
             }
@@ -2026,8 +2014,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 *result = scene->GetPhysics2D()->IsBullet(rb.bodyId);
             }
@@ -2040,8 +2027,7 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            Scene *scene = GetSceneContext();
-            if (scene && scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb.bodyId))
+            if (Scene *scene = GetSceneContext(); scene->GetPhysics2D())
             {
                 scene->GetPhysics2D()->SetBullet(rb.bodyId, value);
             }
@@ -3853,8 +3839,8 @@ namespace ignite
             &Rigidbody2DComponent_SetIsAwake,
             &Rigidbody2DComponent_GetIsEnabled,
             &Rigidbody2DComponent_SetIsEnabled,
-            &Rigidbody2DComponent_GetIsEnableSleep,
-            &Rigidbody2DComponent_SetIsEnableSleep,
+            &Rigidbody2DComponent_GetIsEnableSleeping,
+            &Rigidbody2DComponent_SetIsEnableSleeping,
             &Rigidbody2DComponent_ApplyForce,
             &Rigidbody2DComponent_ApplyForceToCenter,
             &Rigidbody2DComponent_ApplyLinearImpulse,

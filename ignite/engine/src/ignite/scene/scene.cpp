@@ -938,7 +938,7 @@ namespace ignite
                             m_Physics2D->SetAngularDamping(rb.bodyId, rb.angularDamping);
                             m_Physics2D->SetAwake(rb.bodyId, rb.isAwake);
                             rb.isEnabled ? m_Physics2D->ActivateBody(rb.bodyId) : m_Physics2D->DeactivateBody(rb.bodyId);
-                            m_Physics2D->SetEnableSleep(rb.bodyId, rb.isEnableSleep);
+                            m_Physics2D->SetEnableSleeping(rb.bodyId, rb.enableSleeping);
                             m_Physics2D->SetMotionLock(rb.bodyId, false, false, rb.fixedRotation);
                             rb.dirty = false;
                         }

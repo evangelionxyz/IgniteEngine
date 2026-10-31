@@ -42,7 +42,7 @@ project "IMGUI"
     includedirs {
         "%{THIRDPARTY_DIR}/ImGui/",
         "%{THIRDPARTY_DIR}/SDL3/include",
-        "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
+        "%{IncludeDir.VULKAN_HEADERS}",
     }
 
     filter "system:linux"
