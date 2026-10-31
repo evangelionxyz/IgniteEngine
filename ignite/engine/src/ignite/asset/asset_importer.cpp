@@ -388,7 +388,7 @@ namespace ignite
                         continue;
                     }
 
-                    const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
+                    const bool writeEXR = texture->GetFormat() == nri::Format::RGBA32_SFLOAT;
                     const std::string textureExtension = writeEXR ? ".exr" : ".png";
                     const std::filesystem::path textureOutputFullPath = outputRootDirectory / (name + textureExtension);
                     const auto relativeTexturePath = project->GetProjectFilepath(textureOutputFullPath);
@@ -654,7 +654,7 @@ namespace ignite
                         continue;
                     }
 
-                    const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
+                    const bool writeEXR = texture->GetFormat() == nri::Format::RGBA32_SFLOAT;
                     const std::string textureExtension = writeEXR ? ".exr" : ".png";
                     const std::filesystem::path textureOutputFullPath = outputRootDirectory / (name + textureExtension);
                     const auto relativeTexturePath = project->GetProjectFilepath(textureOutputFullPath);
@@ -899,10 +899,10 @@ namespace ignite
         const std::string extension = metadata.filepath.extension().string();
         const bool isHDR = extension == ".hdr" || extension == ".exr";
 
-        createInfo.format = isHDR ? nvrhi::Format::RGBA32_FLOAT : nvrhi::Format::RGBA8_UNORM;
+        createInfo.format = isHDR ? nri::Format::RGBA32_SFLOAT : nri::Format::RGBA8_UNORM;
         createInfo.mipLevels = isHDR ? 1 : 4;
         createInfo.flip = isHDR;
-        createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
         createInfo.keepInitialState = true; // should keep initial state
         createInfo.deferGpuCreate = true;
 
@@ -913,9 +913,9 @@ namespace ignite
     {
         TextureCreateInfo importCreateInfo = createInfo;
 
-        if (importCreateInfo.format == nvrhi::Format::UNKNOWN)
+        if (importCreateInfo.format == nri::Format::UNKNOWN)
         {
-            importCreateInfo.format = nvrhi::Format::RGBA8_UNORM;
+            importCreateInfo.format = nri::Format::RGBA8_UNORM;
         }
 
         if (importCreateInfo.mipLevels == 0)
@@ -923,9 +923,9 @@ namespace ignite
             importCreateInfo.mipLevels = 1;
         }
 
-        if (importCreateInfo.initialState == nvrhi::ResourceStates::Unknown)
+        if (importCreateInfo.initialLayout == nri::Layout::UNDEFINED)
         {
-            importCreateInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            importCreateInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
         }
 
         // Load texture pixel data on worker thread (no GPU operations)

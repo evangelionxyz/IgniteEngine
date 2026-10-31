@@ -7,7 +7,8 @@
 #include "ignite/scene/icamera.hpp"
 #include "ignite/core/types.hpp"
 #include "gpu_data.hpp"
-#include <nvrhi/nvrhi.h>
+#include "binding_set.hpp"
+#include <NRI.h>
 #include <glm/glm.hpp>
 
 #include <array>
@@ -17,22 +18,22 @@
 namespace ignite
 {
     template<typename T>
-	concept MeshVertex = requires(T v)
-	{
-		{ v.position } -> std::convertible_to<glm::vec3>;
-		{ v.normal } -> std::convertible_to<glm::vec3>;
-		{ v.tangent } -> std::convertible_to<glm::vec3>;
-		{ v.bitangent } -> std::convertible_to<glm::vec3>;
-		{ v.uv } -> std::convertible_to<glm::vec2>;
-		{ v.color } -> std::convertible_to<glm::vec4>;
-	};
+    concept MeshVertex = requires(T v)
+    {
+        { v.position } -> std::convertible_to<glm::vec3>;
+        { v.normal } -> std::convertible_to<glm::vec3>;
+        { v.tangent } -> std::convertible_to<glm::vec3>;
+        { v.bitangent } -> std::convertible_to<glm::vec3>;
+        { v.uv } -> std::convertible_to<glm::vec2>;
+        { v.color } -> std::convertible_to<glm::vec4>;
+    };
 
-	template<typename T>
-	concept AnimatedVertex = requires(T v)
-	{
+    template<typename T>
+    concept AnimatedVertex = requires(T v)
+    {
         { v.boneIDs } -> std::convertible_to<std::array<uint32_t, 4>>;
         { v.weights } -> std::convertible_to<std::array<float, 4>>;
-	};
+    };
 
     template<typename T>
     concept StaticMeshVertex = MeshVertex<T> && (!AnimatedVertex<T>);
@@ -42,28 +43,27 @@ namespace ignite
 
     struct VertexMeshStatic
     {
-		glm::vec3 position;
-		glm::vec3 normal;
-		glm::vec3 tangent;
-		glm::vec3 bitangent;
-		glm::vec2 uv;
-		glm::vec4 color = glm::vec4(1.0f);
+        glm::vec3 position;
+        glm::vec3 normal;
+        glm::vec3 tangent;
+        glm::vec3 bitangent;
+        glm::vec2 uv;
+        glm::vec4 color = glm::vec4(1.0f);
 
-		static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
-		{
-			return nvrhi::BindingLayoutDesc()
-				.setRegisterSpace(0) // set 0
-				.setRegisterSpaceIsDescriptorSet(true)
-				.setVisibility(nvrhi::ShaderType::All)
-				.addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(uint32_t)))  // b0: Push Constants - base instance offset
-				.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))           // b1: Camera
-                .addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2))             // t2: ObjectBuffer (Mesh_GPUData[])
-                .addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3))             // t3: InstanceIndexBuffer (uint[])
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(4))           // b4: Scene
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(5))           // b5: CSM
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(6))           // b6: PointLight
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(7));          // b7: SpotLight
-		}
+        static BindingLayoutDesc GetBindingLayoutDesc()
+        {
+            return BindingLayoutDesc()
+                .SetRegisterSpace(0) // set 0
+                .SetVisibility(nri::StageBits::ALL)
+                .AddItem(BindingLayoutItem::PushConstants(0, sizeof(uint32_t))) // b0: Push Constants - base instance offset
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(1))          // b1: Camera
+                .AddItem(BindingLayoutItem::StructuredBufferSRV(2))             // t2: ObjectBuffer (Mesh_GPUData[])
+                .AddItem(BindingLayoutItem::StructuredBufferSRV(3))             // t3: InstanceIndexBuffer (uint[])
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(4))          // b4: Scene
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(5))          // b5: CSM
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(6))          // b6: PointLight
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(7));         // b7: SpotLight
+        }
     };
 
     struct VertexMeshAnim
@@ -77,20 +77,19 @@ namespace ignite
         std::array<uint32_t, VERTEX_MAX_BONES> boneIDs = { 0 };
         std::array<float, VERTEX_MAX_BONES> weights = { 0.0f };
 
-        static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
+        static BindingLayoutDesc GetBindingLayoutDesc()
         {
-            return nvrhi::BindingLayoutDesc()
-                .setRegisterSpace(0) // set 0
-                .setRegisterSpaceIsDescriptorSet(true)
-                .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(uint32_t)))  // Push Constants
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))  // Camera
-                .addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2))  // Object
-                .addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3))  // Skeleton
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(4))  // Scene
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(5))  // CSM
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(6))  // PointLight
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(7)); // SpotLight
+            return BindingLayoutDesc()
+                .SetRegisterSpace(0) // set 0
+                .SetVisibility(nri::StageBits::ALL)
+                .AddItem(BindingLayoutItem::PushConstants(0, sizeof(uint32_t))) // Push Constants
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(1)) // Camera
+                .AddItem(BindingLayoutItem::StructuredBufferSRV(2))    // Object
+                .AddItem(BindingLayoutItem::StructuredBufferSRV(3))    // Skeleton
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(4)) // Scene
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(5)) // CSM
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(6)) // PointLight
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(7));// SpotLight
         }
     };
 

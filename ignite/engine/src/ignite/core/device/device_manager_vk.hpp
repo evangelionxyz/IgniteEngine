@@ -5,16 +5,18 @@
 #define IGN_DEVICE_MANAGER_VK_HPP
 
 #include <string>
-#include <queue>
+#include <vector>
 #include <unordered_set>
+#include <memory>
 
 #include "device_manager.hpp"
+#include "ignite/core/logger.hpp"
 #include "ignite/graphics/render_target.hpp"
 
-#include "ignite/core/logger.hpp"
-
-#include <nvrhi/vulkan.h>
-#include <nvrhi/validation.h>
+#include <NRI.h>
+#include <NRIDescs.h>
+#include <Extensions/NRIWrapperVK.h>
+#include <Extensions/NRIHelper.h>
 
 #define VK_NO_PROTOTYPES
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
@@ -25,7 +27,7 @@ namespace ignite
     class IGN_API DeviceManager_VK : public DeviceManager
     {
     public:
-		DeviceManager_VK(Window* window, const DeviceParameters& params);
+        DeviceManager_VK(Window *window, const DeviceParameters &params);
 
         bool EnumerateAdapters(std::vector<AdapterInfo> &outAdapters) override;
 
@@ -36,11 +38,17 @@ namespace ignite
 
         void ResizeSwapChain() override;
 
-        nvrhi::ITexture *GetCurrentBackBuffer() override;
-        nvrhi::ITexture *GetBackBuffer(uint32_t index) override;
-        nvrhi::ITexture *GetBackDepthBuffer(uint32_t index) override;
+        nri::Texture *GetCurrentBackBuffer() override;
+        nri::Texture *GetBackBuffer(uint32_t index) override;
+        nri::Texture *GetBackDepthBuffer(uint32_t index) override;
+        nri::Descriptor *GetCurrentBackBufferRTV() override;
+        nri::Descriptor *GetBackBufferRTV(uint32_t index) override;
+        nri::Descriptor *GetCurrentBackDepthBufferDSV() override;
+        nri::Descriptor *GetBackDepthBufferDSV(uint32_t index) override;
         uint32_t GetCurrentBackBufferIndex() override;
         uint32_t GetBackBufferCount() override;
+        RenderTarget *GetCurrentBackBufferRenderTarget() override;
+        RenderTarget *GetBackBufferRenderTarget(uint32_t index) override;
 
         bool BeginFrame() override;
         bool Present() override;
@@ -71,11 +79,13 @@ namespace ignite
 
         void WaitForIdle() override;
 
-        nvrhi::IDevice* GetDevice() const override;
-        nvrhi::GraphicsAPI GetGraphicsAPI() const override;
+        nri::Device *GetDevice() const override { return m_Device; }
+        nri::GraphicsAPI GetGraphicsAPI() const override { return nri::GraphicsAPI::VK; }
+        const nri::CoreInterface &GetCoreInterface() const override { return m_NRI; }
+        const nri::HelperInterface &GetHelperInterface() const override { return m_HelperNRI; }
+        nri::Queue *GetGraphicsQueue() const override { return m_NriGraphicsQueue; }
 
-        static DeviceManager_VK* GetInstance();
-
+        static DeviceManager_VK *GetInstance();
 
         struct VulkanExtensionSet
         {
@@ -148,33 +158,37 @@ namespace ignite
         vk::SurfaceFormatKHR m_SwapChainFormat;
         vk::SwapchainKHR m_SwapChain;
         vk::RenderPass m_RenderPass;
+
         vk::PipelineCache m_PipelineCache;
         vk::DescriptorPool m_DescriptorPool;
 
         bool m_SwapChainMutableFormatSupported = false;
 
-        // Swapchain data
+        // Swapchain images
         std::vector<vk::Image> m_SwapchainImages;
-        std::vector<Ref<RenderTarget>> m_SwapChainRenderTargets;
-        uint32_t m_SwapChainIndex = static_cast<uint32_t>(-1);
+        uint32_t m_SwapChainIndex = 0;
 
-        // Offscreen data
-        std::vector<nvrhi::TextureHandle> m_OffscreenColorTextures;
-        std::vector<nvrhi::TextureHandle> m_OffscreenDepthTextures;
-        nvrhi::StagingTextureHandle m_ReadbackStagingTexture;
-        nvrhi::CommandListHandle m_ReadbackCommandList;
+        // NRI Device, interfaces and queues
+        nri::Device *m_Device = nullptr;
+        nri::CoreInterface m_NRI{};
+        nri::HelperInterface m_HelperNRI{};
+        nri::WrapperVKInterface m_WrapperVK{};
+        nri::Queue *m_NriGraphicsQueue = nullptr;
 
-        nvrhi::vulkan::DeviceHandle m_NvrhiDevice;
-        nvrhi::DeviceHandle m_ValidationLayer;
+        // NRI Back buffers & depth buffers
+        std::vector<Ref<RenderTarget>> m_BackBufferRenderTargets;
+        std::vector<nri::Texture *> m_BackBufferTextures;
+        std::vector<nri::Descriptor *> m_BackBufferRTVs;
+        std::vector<nri::Texture *> m_DepthBufferTextures;
+        std::vector<nri::Memory *> m_DepthBufferMemories;
+        std::vector<nri::Descriptor *> m_DepthBufferDSVs;
+        std::vector<nri::Memory *> m_OffscreenColorMemories;
 
+        // Vulkan synchronization
         std::vector<vk::Semaphore> m_AcquireSemaphores;
         std::vector<vk::Semaphore> m_PresentSemaphores;
-
-        uint32_t m_AcquireSemaphoreIndex = 0;
-        uint32_t m_PresentSemaphoreIndex = 0;
-
-        std::queue<nvrhi::EventQueryHandle> m_FramesInFlight;
-        std::vector<nvrhi::EventQueryHandle> m_QueryPool;
+        std::vector<vk::Fence> m_InFlightFences;
+        uint32_t m_CurrentFrame = 0;
 
         bool m_BufferDeviceAddressSupported = false;
 

@@ -254,11 +254,11 @@ namespace ignite
                 };
 
             bool bufferDecoded = false;
-            if (texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT)
+            if (texture->GetFormat() == nri::Format::RGBA32_SFLOAT)
             {
                 bufferDecoded = fillFromFloatRGBA();
             }
-            else if (texture->GetFormat() == nvrhi::Format::RGBA8_UNORM)
+            else if (texture->GetFormat() == nri::Format::RGBA8_UNORM)
             {
                 bufferDecoded = fillFromByteRGBA();
             }

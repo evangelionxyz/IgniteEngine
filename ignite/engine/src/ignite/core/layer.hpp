@@ -11,14 +11,10 @@
 #include <string>
 #include "SDL3/SDL_events.h"
 
-namespace nvrhi
-{
-    class IFramebuffer;
-}
-
 namespace ignite
 {
     class Event;
+    class RenderTarget;
 
     class IGN_API Layer
     {
@@ -33,7 +29,7 @@ namespace ignite
         virtual void OnAttach() { }
         virtual void OnDetach() { }
         virtual void OnUpdate(float deltaTime) { }
-        virtual void OnRender(nvrhi::IFramebuffer *framebuffer) { }
+        virtual void OnRender(RenderTarget *framebuffer) { }
         virtual void OnEvent(Event &e) { }
         virtual void OnGuiRender() { }
         std::string GetName() { return m_Name; }

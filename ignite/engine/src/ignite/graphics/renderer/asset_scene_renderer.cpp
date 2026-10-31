@@ -11,6 +11,7 @@
 #include "ignite/graphics/shader.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/graphics/binding_cache.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
@@ -38,10 +39,11 @@ namespace ignite
 
     AssetSceneRenderer::AssetSceneRenderer()
     {
-		auto samplerDesc = nvrhi::SamplerDesc();
-		samplerDesc.setAllFilters(false);
-		samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
-		m_CompositeSampler = m_Device->createSampler(samplerDesc);
+        nri::SamplerDesc samplerDesc = {};
+        samplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST, nri::Filter::NEAREST };
+        samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
+        samplerDesc.mipMax = 16.0f;
+        DeviceManager::GetInstance()->GetCoreInterface().CreateSampler(*m_Device, samplerDesc, m_CompositeSampler);
 
         m_PreviewStaticMesh   = nullptr;
         m_PreviewSkeletalMesh = nullptr;
@@ -65,6 +67,7 @@ namespace ignite
         m_StaticTransparentPipelineCache.clear();
         m_SkeletalGeometryPipelineCache.clear();
         m_SkeletalTransparentPipelineCache.clear();
+        m_EnvironmentPipelineCache.clear();
         m_CompositePipelineCache.clear();
         m_Environment = nullptr;
 
@@ -87,27 +90,34 @@ namespace ignite
         if (m_StaticMeshBindingSets.find(frameContext) != m_StaticMeshBindingSets.end())
             return;
 
-        nvrhi::BindingSetDesc staticDesc;
-        staticDesc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));
-        staticDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, frameContext->cameraBuffer));
-        staticDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, frameContext->objectBuffer));
-        staticDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, frameContext->instanceIndexBuffer));
-        staticDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, frameContext->sceneBuffer));
-        staticDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, frameContext->csmBuffer));
-        staticDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, frameContext->pointLightBuffer));
-        staticDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, frameContext->spotLightBuffer));
-        m_StaticMeshBindingSets[frameContext] = m_Device->createBindingSet(staticDesc, Renderer::GetBindingLayout(EBindingLayout::MESH_STATIC));
+        if (frameContext->staticMeshBindingSet && frameContext->animatedBindingSet)
+        {
+            m_StaticMeshBindingSets[frameContext] = frameContext->staticMeshBindingSet;
+            m_AnimatedBindingSets[frameContext] = frameContext->animatedBindingSet;
+            return;
+        }
 
-        nvrhi::BindingSetDesc animDesc;
-        animDesc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)));
-        animDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, frameContext->cameraBuffer));
-        animDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, frameContext->objectBuffer));
-        animDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, frameContext->boneBuffer));
-        animDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, frameContext->sceneBuffer));
-        animDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, frameContext->csmBuffer));
-        animDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, frameContext->pointLightBuffer));
-        animDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(7, frameContext->spotLightBuffer));
-        m_AnimatedBindingSets[frameContext] = m_Device->createBindingSet(animDesc, Renderer::GetBindingLayout(EBindingLayout::MESH_ANIM));
+        BindingSetDesc staticDesc;
+        staticDesc.AddItem(BindingSetItem::PushConstants(0, sizeof(uint32_t)));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(1, frameContext->cameraBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(2, frameContext->objectBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(3, frameContext->instanceIndexBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(4, frameContext->sceneBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(5, frameContext->csmBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(6, frameContext->pointLightBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(7, frameContext->spotLightBuffer.GetDescriptor()));
+        m_StaticMeshBindingSets[frameContext] = BindingSet::Create(staticDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_STATIC), 0);
+
+        BindingSetDesc animDesc;
+        animDesc.AddItem(BindingSetItem::PushConstants(0, sizeof(uint32_t)));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(1, frameContext->cameraBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(2, frameContext->objectBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(3, frameContext->boneBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(4, frameContext->sceneBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(5, frameContext->csmBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(6, frameContext->pointLightBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(7, frameContext->spotLightBuffer.GetDescriptor()));
+        m_AnimatedBindingSets[frameContext] = BindingSet::Create(animDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_ANIM), 0);
     }
 
     // ---------------------------------------------------------------------------
@@ -213,8 +223,7 @@ namespace ignite
             return;
         }
 
-        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-        cmd->open();
+        nri::CommandBuffer *cmd = BeginCommandBuffer();
 
         // Reload environment
         if (!m_EnvironmentTextureLoadAttempted && m_UseEnvironment)
@@ -223,12 +232,13 @@ namespace ignite
             if (!m_DefaultEnvTexture && m_EnvTexHandle == AssetHandle(0))
             {
                 TextureCreateInfo textureCI;
-                textureCI.dimension    = nvrhi::TextureDimension::Texture2D;
-                textureCI.format       = nvrhi::Format::RGBA32_FLOAT;
-                textureCI.flip         = true;
+                textureCI.dimension       = nri::TextureType::TEXTURE_2D;
+                textureCI.format          = nri::Format::RGBA32_SFLOAT;
+                textureCI.flip            = true;
                 textureCI.keepInitialState = true;
-                textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
-                m_DefaultEnvTexture    = Texture::Create("resources/hdr/snowy_field_2k.hdr", textureCI, cmd, "Asset Preview HDR");
+                textureCI.initialLayout   = nri::Layout::SHADER_RESOURCE;
+                textureCI.initialAccess   = nri::AccessBits::SHADER_RESOURCE;
+                m_DefaultEnvTexture       = Texture::Create("resources/hdr/snowy_field_2k.hdr", textureCI, cmd, "Asset Preview HDR");
                 m_DefaultEnvTexture->SetReadyFlag(true);
             }
 
@@ -262,18 +272,18 @@ namespace ignite
         frameContext->cameraBuffer.SetData(cmd, &cameraBufferData, sizeof(CameraBufferData));
         frameContext->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(Scene_GPUData));
         {
-		    // Cascaded Shadow Map — disabled in preview (shadowStrength = 0)
+            // Cascaded Shadow Map — disabled in preview (shadowStrength = 0)
             CSM_GPUData csmGpuData = {};
             csmGpuData.cascadeIndex = -1;
             csmGpuData.shadowStrength = 0.0f;
             frameContext->csmBuffer.SetData(cmd, &csmGpuData, sizeof(csmGpuData));
 
-			PointLightBufferData pointLightData = {};
-			SpotLightBufferData spotLightData = {};
-			frameContext->pointLightBuffer.SetData(cmd, &pointLightData, sizeof(pointLightData));
-			frameContext->spotLightBuffer.SetData(cmd, &spotLightData, sizeof(spotLightData));
+            PointLightBufferData pointLightData = {};
+            SpotLightBufferData spotLightData = {};
+            frameContext->pointLightBuffer.SetData(cmd, &pointLightData, sizeof(pointLightData));
+            frameContext->spotLightBuffer.SetData(cmd, &spotLightData, sizeof(spotLightData));
         }
-		
+
         uiRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
         uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
@@ -281,23 +291,22 @@ namespace ignite
         sceneRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
         sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
-        
+
         if (m_Environment && m_UseEnvironment)
         {
-            DrawEnvironment(cmd, camera, sceneRT->GetFramebuffer(), frameContext);
+            DrawEnvironment(cmd, camera, sceneRT.get(), frameContext);
         }
 
         if (hasMeshPreview)
         {
-            DrawPreviewStaticMesh(cmd, sceneRT->GetFramebuffer(), frameContext);
-            DrawPreviewSkeletalMesh(cmd, sceneRT->GetFramebuffer(), frameContext);
+            DrawPreviewStaticMesh(cmd, sceneRT.get(), frameContext);
+            DrawPreviewSkeletalMesh(cmd, sceneRT.get(), frameContext);
         }
 
         if (m_PreviewWidget)
         {
-            const nvrhi::Viewport viewport = uiRT->GetFramebuffer()->getFramebufferInfo().getViewport();
-            const uint32_t width  = std::max(1u, static_cast<uint32_t>(viewport.maxX - viewport.minX));
-            const uint32_t height = std::max(1u, static_cast<uint32_t>(viewport.maxY - viewport.minY));
+            const uint32_t width  = std::max(1u, uiRT->GetWidth());
+            const uint32_t height = std::max(1u, uiRT->GetHeight());
 
             if (m_WidgetRenderer->GetWidth() != width || m_WidgetRenderer->GetHeight() != height)
             {
@@ -315,27 +324,11 @@ namespace ignite
             }
 
             m_WidgetRenderer->Update(0.0f);
-            m_WidgetRenderer->Render(cmd, uiRT->GetFramebuffer());
+            m_WidgetRenderer->Render(cmd, uiRT.get());
         }
 
-        // Transition the scene and UI textures to shader resource state for sampling in the composite pass
-        cmd->setTextureState(*sceneRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-        cmd->setTextureState(*sceneRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-        cmd->setTextureState(*sceneRT->GetDepthAttachment(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-        
-        cmd->setTextureState(*uiRT->GetColorAttachment(0), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-        cmd->setTextureState(*uiRT->GetColorAttachment(1), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-        cmd->setTextureState(*uiRT->GetDepthAttachment(), nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
-
-        cmd->commitBarriers();
-
-        CompositePass(cmd, camera, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
-        cmd->close();
-
-        {
-            std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
-            m_Device->executeCommandList(cmd);
-        }
+        CompositePass(cmd, camera, compositeRT.get(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
+        SubmitCommandBuffer(cmd);
     }
 
     Ref<Texture> AssetSceneRenderer::GetEnvironmentMapColorTexture() const
@@ -383,26 +376,25 @@ namespace ignite
     // ---------------------------------------------------------------------------
     // DrawEnvironment
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawEnvironment(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
+    void AssetSceneRenderer::DrawEnvironment(nri::CommandBuffer *cmd, [[maybe_unused]] ICamera *camera, RenderTarget *rt, FrameContext *frameContext)
     {
         Ref<GraphicsPipeline> envPipeline;
-        if (auto it = m_EnvironmentPipelineCache.find(framebuffer); it != m_EnvironmentPipelineCache.end())
+        if (auto it = m_EnvironmentPipelineCache.find(rt); it != m_EnvironmentPipelineCache.end())
         {
             envPipeline = it->second;
         }
         else
         {
-            const nvrhi::FramebufferDesc &fbDesc   = framebuffer->getDesc();
-            const bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+            const bool hasDepthAttachment = rt->HasDepthAttachment();
 
             GraphicsPipelineParams params;
-            params.enableBlend       = true;
-            params.enableDepthWrite  = hasDepthAttachment;
-            params.enableDepthTest   = hasDepthAttachment;
+            params.enableBlend        = true;
+            params.enableDepthWrite   = hasDepthAttachment;
+            params.enableDepthTest    = hasDepthAttachment;
             params.enableDepthStencil = false;
-            params.fillMode          = nvrhi::RasterFillMode::Solid;
-            params.cullMode          = nvrhi::RasterCullMode::Front;
-            params.depthFunc         = nvrhi::ComparisonFunc::Always;
+            params.fillMode           = nri::FillMode::SOLID;
+            params.cullMode           = nri::CullMode::FRONT;
+            params.depthFunc          = nri::CompareOp::ALWAYS;
 
             Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
             Ref<Shader> pixelShader  = Shader::Create("resources/shaders/skybox.pixel.hlsl",  UMBRA_SHADER_TYPE_PIXEL,  false);
@@ -410,10 +402,10 @@ namespace ignite
             envPipeline = GraphicsPipeline::Create("Asset Preview Environment Pipeline");
             envPipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT))
-                .Build(framebuffer, params);
+                .Build(rt, params);
 
             m_EnvironmentPipelineCache.clear();
-            m_EnvironmentPipelineCache[framebuffer] = envPipeline;
+            m_EnvironmentPipelineCache[rt] = envPipeline;
         }
 
         if (m_EnvTextureInvalidating)
@@ -426,33 +418,32 @@ namespace ignite
             }
         }
 
-        m_Environment->Draw(cmd, framebuffer, envPipeline, frameContext->cameraBuffer, frameContext->sceneBuffer);
+        m_Environment->Draw(cmd, rt, envPipeline, frameContext->cameraBuffer, frameContext->sceneBuffer);
     }
 
     // ---------------------------------------------------------------------------
     // DrawPreviewMeshImpl — generic implementation for static and skeletal meshes.
     //
     // Key per-type differences handled via if constexpr:
-    //   • Skeletal: applies bone transforms to the per-instance world matrix and
-    //     uploads the skeleton constant buffer via SetSkeletonData.
-    //   • Static:   no skeleton data needed.
+    //   Skeletal: applies bone transforms to the per-instance world matrix and uploads the skeleton constant buffer via SetSkeletonData.
+    //   Static:   no skeleton data needed.
     //
     // The caller (DrawPreviewStaticMesh / DrawPreviewSkeletalMesh) passes the
     // correct shader paths, binding layout enum, and pipeline cache references so
     // no global state is shared between the two mesh types.
     // ---------------------------------------------------------------------------
     template<typename MeshT>
-    void AssetSceneRenderer::DrawPreviewMeshImpl(const Ref<MeshT> &mesh, nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext,
+    void AssetSceneRenderer::DrawPreviewMeshImpl(const Ref<MeshT> &mesh, nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext,
         const char *vertexShaderPath, const char *pixelShaderPath, EBindingLayout meshBindingLayout,
-        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> &opaqueCache,
-        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> &transparentCache)
+        std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> &opaqueCache,
+        std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> &transparentCache)
     {
         constexpr bool isSkeletal = std::is_same_v<MeshT, SkeletalMesh>;
 
         static_assert(std::is_same_v<MeshT, StaticMesh> || std::is_same_v<MeshT, SkeletalMesh>,
             "DrawPreviewMeshImpl: MeshT must be StaticMesh or SkeletalMesh");
 
-        if (!mesh || !m_RuntimeMaterial)
+        if (!mesh || !m_RuntimeMaterial || !rt)
             return;
 
         // Update the shared runtime material binding set.
@@ -463,9 +454,12 @@ namespace ignite
 
         m_RuntimeMaterial->UploadToGpu(cmd);
 
-        nvrhi::GraphicsState state;
-        state.framebuffer = framebuffer;
-        state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+        for (auto &meshInstance : mesh->GetMeshInstances())
+        {
+            auto &primitive = meshInstance->GetPrimitive();
+            if (primitive && (!primitive->vertexBuffer || !primitive->indexBuffer))
+                primitive->WriteBuffer(cmd);
+        }
 
         // Pre-build bone matrix array (only for skeletal meshes)
         glm::mat4 bones[MAX_BONES];
@@ -486,21 +480,23 @@ namespace ignite
                 std::memcpy(bones, s_IdentitySkeleton.data(), sizeof(bones));
             }
         }
-        
+
         uint32_t boneOffset = 0;
         if constexpr (isSkeletal)
         {
             boneOffset = frameContext->boneAllocator.Allocate(cmd, bones, MAX_BONES);
         }
 
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        const bool startedRendering = !rt->IsRendering();
+        if (startedRendering)
+            rt->BeginRendering(cmd, false, false);
+
         for (auto &meshInstance : mesh->GetMeshInstances())
         {
             auto &primitive = meshInstance->GetPrimitive();
-            if (!primitive)
+            if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                 continue;
-
-            if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                primitive->WriteBuffer(cmd);
 
             // Resolve material:
             //  - Material-preview mode (m_SourceMaterial set): always use the runtime material
@@ -527,7 +523,7 @@ namespace ignite
             auto &pipelineCache = isTransparent ? transparentCache : opaqueCache;
 
             Ref<GraphicsPipeline> geopPipeline;
-            if (auto it = pipelineCache.find(framebuffer); it != pipelineCache.end())
+            if (auto it = pipelineCache.find(rt); it != pipelineCache.end())
             {
                 geopPipeline = it->second;
             }
@@ -536,17 +532,17 @@ namespace ignite
                 GraphicsPipelineParams params;
                 params.enableDepthTest = true;
                 params.enableDepthStencil = false;
-                params.fillMode = nvrhi::RasterFillMode::Solid;
-                params.cullMode = nvrhi::RasterCullMode::None;
-                params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+                params.fillMode = nri::FillMode::SOLID;
+                params.cullMode = nri::CullMode::NONE;
+                params.depthFunc = nri::CompareOp::LESS_EQUAL;
                 params.enableBlend = isTransparent;
 
                 if (isTransparent)
                 {
-                    params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
-                    params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
-                    params.srcBlendAlpha = nvrhi::BlendFactor::One;
-                    params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+                    params.srcBlend = nri::BlendFactor::SRC_ALPHA;
+                    params.destBlend = nri::BlendFactor::ONE_MINUS_SRC_ALPHA;
+                    params.srcBlendAlpha = nri::BlendFactor::ONE;
+                    params.destBlendAlpha = nri::BlendFactor::ONE_MINUS_SRC_ALPHA;
                     params.enableDepthWrite = false;
                 }
                 else
@@ -562,13 +558,11 @@ namespace ignite
                     .AddBindingLayout(Renderer::GetBindingLayout(meshBindingLayout))
                     .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::MATERIAL))
                     .AddBindingLayout(BindlessSystem::GetBindingLayout())
-                    .Build(framebuffer, params);
+                    .Build(rt, params);
 
                 pipelineCache.clear();
-                pipelineCache[framebuffer] = geopPipeline;
+                pipelineCache[rt] = geopPipeline;
             }
-
-            state.pipeline = *geopPipeline;
 
             // Build per-instance GPU transform
             Mesh_GPUData gpuData;
@@ -605,39 +599,55 @@ namespace ignite
 
             EnsureBindingSets(frameContext);
 
-            nvrhi::BindingSetHandle meshBindingSet = m_StaticMeshBindingSets[frameContext];
+            Ref<BindingSet> meshBindingSet = m_StaticMeshBindingSets[frameContext];
             if constexpr (isSkeletal)
             {
                 meshBindingSet = m_AnimatedBindingSets[frameContext];
             }
 
-            const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+            const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
                 ? material->GetBindingSet()
                 : m_RuntimeMaterial->GetBindingSet();
 
-            if (meshBindingSet && materialBindingSet)
+            if (meshBindingSet && materialBindingSet && geopPipeline && geopPipeline->GetHandle())
             {
-                state.bindings = { meshBindingSet, materialBindingSet, BindlessSystem::GetDescriptorTable() };
-                state.vertexBuffers = { nvrhi::VertexBufferBinding{ *primitive->vertexBuffer, 0, 0 } };
-                state.setIndexBuffer({ *primitive->indexBuffer, nvrhi::Format::R32_UINT });
-                cmd->setGraphicsState(state);
+                nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *geopPipeline->GetPipelineLayout());
+                nri.CmdSetPipeline(*cmd, *geopPipeline->GetHandle());
+
+                nri::SetDescriptorSetDesc set0 = { 0, meshBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                nri::SetDescriptorSetDesc set1 = { 1, materialBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                nri::SetDescriptorSetDesc set2 = { 2, BindlessSystem::GetDescriptorSet(), nri::BindPoint::GRAPHICS };
+                nri.CmdSetDescriptorSet(*cmd, set0);
+                nri.CmdSetDescriptorSet(*cmd, set1);
+                nri.CmdSetDescriptorSet(*cmd, set2);
+
+                constexpr uint32_t vertexStride = isSkeletal ? static_cast<uint32_t>(sizeof(VertexMeshAnim)) : static_cast<uint32_t>(sizeof(VertexMeshStatic));
+                nri::VertexBufferDesc vbDesc = {};
+                vbDesc.buffer = primitive->vertexBuffer->GetHandle();
+                vbDesc.offset = 0;
+                vbDesc.stride = vertexStride;
+                nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+                nri.CmdSetIndexBuffer(*cmd, *primitive->indexBuffer->GetHandle(), 0, nri::IndexType::UINT32);
 
                 // Push the object ID to the shader via push constants
-                if constexpr (!isSkeletal)
-                {
-                    cmd->setPushConstants(&baseOffset, sizeof(baseOffset));
-                }
-                else
-                {
-                    cmd->setPushConstants(&PushConstant_ObjectIndex, sizeof(PushConstant_ObjectIndex));
-                }
+                const uint32_t rootConstantVal = isSkeletal ? PushConstant_ObjectIndex : baseOffset;
+                nri::SetRootConstantsDesc rootConstDesc = {};
+                rootConstDesc.rootConstantIndex = 0;
+                rootConstDesc.data = &rootConstantVal;
+                rootConstDesc.size = sizeof(uint32_t);
+                rootConstDesc.offset = 0;
+                rootConstDesc.bindPoint = nri::BindPoint::GRAPHICS;
+                nri.CmdSetRootConstants(*cmd, rootConstDesc);
 
-                nvrhi::DrawArguments args;
-                args.setVertexCount(primitive->indexBuffer->GetCount());
-                args.instanceCount = 1;
-                cmd->drawIndexed(args);
+                nri::DrawIndexedDesc drawDesc = {};
+                drawDesc.indexNum = primitive->indexBuffer->GetCount();
+                drawDesc.instanceNum = 1;
+                nri.CmdDrawIndexed(*cmd, drawDesc);
             }
         }
+
+        if (startedRendering)
+            rt->EndRendering(cmd);
     }
 
     // ---------------------------------------------------------------------------
@@ -645,9 +655,9 @@ namespace ignite
     // Uses the static-mesh shaders and its own pipeline cache pair so it never
     // collides with the skeletal-mesh pipeline cache.
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawPreviewStaticMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
+    void AssetSceneRenderer::DrawPreviewStaticMesh(nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext)
     {
-        DrawPreviewMeshImpl(m_PreviewStaticMesh, cmd, framebuffer, frameContext,
+        DrawPreviewMeshImpl(m_PreviewStaticMesh, cmd, rt, frameContext,
             "resources/shaders/mesh_static.vertex.hlsl",
             "resources/shaders/mesh_static.pixel.hlsl",
             EBindingLayout::MESH_STATIC,
@@ -659,9 +669,9 @@ namespace ignite
     // DrawPreviewSkeletalMesh — delegates to the generic template.
     // Uses the animated-mesh shaders and its own pipeline cache pair.
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawPreviewSkeletalMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext)
+    void AssetSceneRenderer::DrawPreviewSkeletalMesh(nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext)
     {
-        DrawPreviewMeshImpl(m_PreviewSkeletalMesh, cmd, framebuffer, frameContext,
+        DrawPreviewMeshImpl(m_PreviewSkeletalMesh, cmd, rt, frameContext,
             "resources/shaders/mesh_anim.vertex.hlsl",
             "resources/shaders/mesh_anim.pixel.hlsl",
             EBindingLayout::MESH_ANIM,
@@ -672,13 +682,16 @@ namespace ignite
     // ---------------------------------------------------------------------------
     // CompositePass
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
+    void AssetSceneRenderer::CompositePass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
     {
+        if (!cmd || !rt || !sceneTexture || !uiTexture)
+            return;
+
         m_PostProcessingData.flags.x = 0.0f;
         m_PostProcessingData.flags.y = m_PostProcessing.bloomIntensity;
         m_PostProcessingData.flags.z = m_PostProcessing.enableVignette ? 1.0f : 0.0f;
         m_PostProcessingData.flags.w = m_PostProcessing.enableChromAb ? 1.0f : 0.0f;
-		m_PostProcessingData.tonemapMode = static_cast<int>(m_PostProcessing.tonemapMode);
+        m_PostProcessingData.tonemapMode = static_cast<int>(m_PostProcessing.tonemapMode);
         m_PostProcessingData.vignetteParams = glm::vec4(
             m_PostProcessing.vignetteRadius,
             glm::max(m_PostProcessing.vignetteSoftness, 0.001f),
@@ -702,35 +715,33 @@ namespace ignite
         m_CompositePostProcessBuffer.SetData(cmd, &m_PostProcessingData, sizeof(m_PostProcessingData));
 
         Ref<GraphicsPipeline> pipeline;
-        if (auto it = m_CompositePipelineCache.find(framebuffer); it != m_CompositePipelineCache.end())
+        if (auto it = m_CompositePipelineCache.find(rt); it != m_CompositePipelineCache.end())
         {
             pipeline = it->second;
         }
         else
         {
-            nvrhi::BindingLayoutDesc layoutDesc = {};
-            layoutDesc.visibility = nvrhi::ShaderType::All;
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)); // depth
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)); // debug
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(7)); // objectID
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(8)); // TAA history
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
-            layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-
-            m_CompositeBindingLayout = m_Device->createBindingLayout(layoutDesc);
+            m_CompositeBindingLayout = BindingLayoutDesc{};
+            m_CompositeBindingLayout.SetVisibility(nri::StageBits::ALL);
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(0)); // scene
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(1)); // ui
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(2)); // edge
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(3)); // bloom
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(4)); // ssao
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(5)); // depth
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(6)); // debug
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(7)); // objectID
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(8)); // TAA history
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::Sampler(0));
 
             GraphicsPipelineParams params;
             params.enableBlend        = true;
             params.enableDepthWrite   = false;
             params.enableDepthTest    = false;
             params.enableDepthStencil = false;
-            params.fillMode           = nvrhi::RasterFillMode::Solid;
-            params.cullMode           = nvrhi::RasterCullMode::None;
+            params.fillMode           = nri::FillMode::SOLID;
+            params.cullMode           = nri::CullMode::NONE;
 
             Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
             Ref<Shader> pixelShader  = Shader::Create("resources/shaders/composite.pixel.hlsl",  UMBRA_SHADER_TYPE_PIXEL,  false);
@@ -738,40 +749,55 @@ namespace ignite
             pipeline = GraphicsPipeline::Create("Asset Preview Composite Pipeline");
             pipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(m_CompositeBindingLayout)
-                .Build(framebuffer, params);
+                .Build(rt, params);
 
             m_CompositePipelineCache.clear();
-            m_CompositePipelineCache[framebuffer] = pipeline;
+            m_CompositePipelineCache[rt] = pipeline;
         }
 
-        auto bindingSetDesc = nvrhi::BindingSetDesc();
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, *sceneTexture));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, *uiTexture));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, *Renderer::GetBlackTexture()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, *Renderer::GetBlackTexture()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, *Renderer::GetWhiteTexture()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, *Renderer::GetBlackTexture()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, *Renderer::GetBlackTexture()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, *Renderer::GetBlackUIntTexture()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(8, *Renderer::GetBlackTexture()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_CompositePostProcessBuffer));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_CompositeSampler));
+        BindingSetDesc bindingSetDesc;
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(0, sceneTexture->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(1, uiTexture->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(2, Renderer::GetBlackTexture()->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(3, Renderer::GetBlackTexture()->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(4, Renderer::GetWhiteTexture()->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(5, Renderer::GetBlackTexture()->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(6, Renderer::GetBlackTexture()->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(7, Renderer::GetBlackUIntTexture()->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(8, Renderer::GetBlackTexture()->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_CompositePostProcessBuffer.GetDescriptor()));
+        bindingSetDesc.AddItem(BindingSetItem::Sampler(0, m_CompositeSampler));
 
-        nvrhi::BindingSetHandle bindingSet = m_Device->createBindingSet(bindingSetDesc, pipeline->GetBindingLayout(0));
+        Ref<BindingSet> bindingSet = BindingCache::GetOrCreateBindingSet(bindingSetDesc, pipeline->GetPipelineLayout(), 0);
+        if (!bindingSet || !pipeline || !pipeline->GetHandle())
+            return;
 
-        cmd->setBufferState(*m_CompositeVertexBuffer, nvrhi::ResourceStates::VertexBuffer);
+        const bool startedRendering = !rt->IsRendering();
+        if (startedRendering)
+            rt->BeginRendering(cmd, false, false);
 
-        nvrhi::GraphicsState state;
-        state.pipeline      = *pipeline;
-        state.framebuffer   = framebuffer;
-        state.vertexBuffers = { nvrhi::VertexBufferBinding{ *m_CompositeVertexBuffer, 0, 0 } };
-        state.viewport      = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-        state.bindings      = { bindingSet };
-        cmd->setGraphicsState(state);
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *pipeline->GetPipelineLayout());
+        nri.CmdSetPipeline(*cmd, *pipeline->GetHandle());
 
-        nvrhi::DrawArguments args;
-        args.instanceCount = 1;
-        args.vertexCount   = 6;
-        cmd->draw(args);
+        nri::SetDescriptorSetDesc setDesc = {};
+        setDesc.setIndex = 0;
+        setDesc.descriptorSet = bindingSet->GetHandle();
+        setDesc.bindPoint = nri::BindPoint::GRAPHICS;
+        nri.CmdSetDescriptorSet(*cmd, setDesc);
+
+        nri::VertexBufferDesc vbDesc = {};
+        vbDesc.buffer = m_CompositeVertexBuffer->GetHandle();
+        vbDesc.offset = 0;
+        vbDesc.stride = sizeof(VertexScreen);
+        nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+
+        nri::DrawDesc drawDesc = {};
+        drawDesc.vertexNum = 6;
+        drawDesc.instanceNum = 1;
+        nri.CmdDraw(*cmd, drawDesc);
+
+        if (startedRendering)
+            rt->EndRendering(cmd);
     }
 }

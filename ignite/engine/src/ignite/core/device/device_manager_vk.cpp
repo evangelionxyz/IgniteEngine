@@ -8,7 +8,7 @@
 
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
-#include "ignite/graphics/bindless_system.hpp"
+// #include "ignite/graphics/bindless_system.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <SDL3/SDL_vulkan.h>
@@ -69,19 +69,6 @@ namespace ignite
     }
 
     static DeviceManager_VK *s_VulkanDeviceInstance = nullptr;
-
-    nvrhi::IDevice* DeviceManager_VK::GetDevice() const
-    {
-        if (m_ValidationLayer)
-            return m_ValidationLayer;
-
-        return m_NvrhiDevice;
-    }
-
-    nvrhi::GraphicsAPI DeviceManager_VK::GetGraphicsAPI() const
-    {
-        return nvrhi::GraphicsAPI::VULKAN;
-    }
 
     DeviceManager *DeviceManager::CreateVK(Window *window, const DeviceParameters &params)
     {
@@ -192,10 +179,10 @@ namespace ignite
         if (!m_DeviceParameters.headlessDevice && !m_DeviceParameters.offscreen)
         {
             // Need to adjust the swap chain format before creating the device because it affects physical device selection
-            if (m_DeviceParameters.swapChainFormat == nvrhi::Format::SRGBA8_UNORM)
-                m_DeviceParameters.swapChainFormat = nvrhi::Format::SBGRA8_UNORM;
-            else if (m_DeviceParameters.swapChainFormat == nvrhi::Format::RGBA8_UNORM)
-                m_DeviceParameters.swapChainFormat = nvrhi::Format::BGRA8_UNORM;
+            if (m_DeviceParameters.swapChainFormat == nri::Format::RGBA8_SRGB)
+                m_DeviceParameters.swapChainFormat = nri::Format::BGRA8_SRGB;
+            else if (m_DeviceParameters.swapChainFormat == nri::Format::RGBA8_UNORM)
+                m_DeviceParameters.swapChainFormat = nri::Format::BGRA8_UNORM;
 
             CHECK(CreateWindowSurface())
         }
@@ -210,41 +197,68 @@ namespace ignite
         auto vecLayers = StringSetToVector(enabledExtensions.layers);
         auto vecDeviceExt = StringSetToVector(enabledExtensions.device);
 
-        nvrhi::vulkan::DeviceDesc deviceDesc;
-        deviceDesc.errorCB = &DefaultMessageCallback::GetInstance();
-        deviceDesc.instance = m_VulkanInstance;
-        deviceDesc.physicalDevice = m_VulkanPhysicalDevice;
-        deviceDesc.device = m_VulkanDevice;
-        deviceDesc.graphicsQueue = m_GraphicsQueue;
-        deviceDesc.graphicsQueueIndex = m_GraphicsQueueFamily;
-
-        if (m_DeviceParameters.enableComputeQueue)
+        std::vector<nri::QueueFamilyVKDesc> queueFamilies;
+        queueFamilies.push_back({ 1, nri::QueueType::GRAPHICS, static_cast<uint32_t>(m_GraphicsQueueFamily) });
+        if (m_DeviceParameters.enableComputeQueue && m_ComputeQueueFamily != -1)
         {
-            deviceDesc.computeQueue = m_ComputeQueue;
-            deviceDesc.computeQueueIndex = m_ComputeQueueFamily;
+            queueFamilies.push_back({ 1, nri::QueueType::COMPUTE, static_cast<uint32_t>(m_ComputeQueueFamily) });
+        }
+        if (m_DeviceParameters.enableCopyQueue && m_TransferQueueFamily != -1)
+        {
+            queueFamilies.push_back({ 1, nri::QueueType::COPY, static_cast<uint32_t>(m_TransferQueueFamily) });
         }
 
-        if (m_DeviceParameters.enableCopyQueue)
+        nri::VKExtensions vkExt{};
+        vkExt.instanceExtensions = vecInstanceExt.data();
+        vkExt.instanceExtensionNum = static_cast<uint32_t>(vecInstanceExt.size());
+        vkExt.deviceExtensions = vecDeviceExt.data();
+        vkExt.deviceExtensionNum = static_cast<uint32_t>(vecDeviceExt.size());
+
+        nri::DeviceCreationVKDesc deviceCreationVKDesc{};
+        deviceCreationVKDesc.callbackInterface = DefaultMessageCallback::GetInterface();
+        deviceCreationVKDesc.vkInstance = (VKHandle)(VkInstance)m_VulkanInstance;
+        deviceCreationVKDesc.vkDevice = (VKHandle)(VkDevice)m_VulkanDevice;
+        deviceCreationVKDesc.vkPhysicalDevice = (VKHandle)(VkPhysicalDevice)m_VulkanPhysicalDevice;
+        deviceCreationVKDesc.queueFamilies = queueFamilies.data();
+        deviceCreationVKDesc.queueFamilyNum = static_cast<uint32_t>(queueFamilies.size());
+        deviceCreationVKDesc.minorVersion = 2;
+        deviceCreationVKDesc.vkExtensions = vkExt;
+        deviceCreationVKDesc.vkBindingOffsets = { 128, 0, 256, 384 };
+        deviceCreationVKDesc.enableNRIValidation = m_DeviceParameters.enableNRIValidation || m_DeviceParameters.enableNvrhiValidationLayer;
+
+        nri::Result res = nriCreateDeviceFromVKDevice(deviceCreationVKDesc, m_Device);
+        if (res != nri::Result::SUCCESS)
         {
-            deviceDesc.transferQueue = m_TransferQueue;
-            deviceDesc.transferQueueIndex = m_TransferQueueFamily;
+            LOG_ERROR("Failed to create NRI device from Vulkan device");
+            return false;
         }
 
-        deviceDesc.instanceExtensions = vecInstanceExt.data();
-        deviceDesc.numInstanceExtensions = vecInstanceExt.size();
-        deviceDesc.deviceExtensions = vecDeviceExt.data();
-        deviceDesc.numDeviceExtensions = vecDeviceExt.size();
-        deviceDesc.bufferDeviceAddressSupported = m_BufferDeviceAddressSupported;
-        deviceDesc.vulkanLibraryName = m_DeviceParameters.vulkanLibraryName;
-
-        m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
-
-        if (m_DeviceParameters.enableNvrhiValidationLayer)
+        if (nriGetInterface(*m_Device, NRI_INTERFACE(nri::CoreInterface), &m_NRI) != nri::Result::SUCCESS)
         {
-            m_ValidationLayer = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
+            LOG_ERROR("Failed to get NRI CoreInterface");
+            return false;
         }
 
-        BindlessSystem::Initialize(GetDevice());
+        if (nriGetInterface(*m_Device, NRI_INTERFACE(nri::HelperInterface), &m_HelperNRI) != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("Failed to get NRI HelperInterface");
+            return false;
+        }
+
+        if (nriGetInterface(*m_Device, NRI_INTERFACE(nri::WrapperVKInterface), &m_WrapperVK) != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("Failed to get NRI WrapperVKInterface");
+            return false;
+        }
+
+        if (m_NRI.GetQueue(*m_Device, nri::QueueType::GRAPHICS, 0, m_NriGraphicsQueue) != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("Failed to get NRI graphics queue");
+            return false;
+        }
+
+        const auto &devDesc = m_NRI.GetDeviceDesc(*m_Device);
+        LOG_INFO("[Vulkan Device] Initialized NRI device with {} (Adapter: {})", nriGetGraphicsAPIString(devDesc.graphicsAPI), devDesc.adapterDesc.name);
 
         return true;
     }
@@ -263,12 +277,15 @@ namespace ignite
 
         if (m_PresentSemaphores.empty())
         {
-            m_PresentSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
-            m_AcquireSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
-            for (uint32_t i = 0; i < m_DeviceParameters.maxFramesInFlight + 1; ++i)
+            const uint32_t maxFrames = m_DeviceParameters.maxFramesInFlight;
+            m_PresentSemaphores.reserve(maxFrames);
+            m_AcquireSemaphores.reserve(maxFrames);
+            m_InFlightFences.reserve(maxFrames);
+            for (uint32_t i = 0; i < maxFrames; ++i)
             {
                 m_PresentSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
                 m_AcquireSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
+                m_InFlightFences.push_back(m_VulkanDevice.createFence(vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)));
             }
         }
 
@@ -277,6 +294,8 @@ namespace ignite
 
     void DeviceManager_VK::DestroyDeviceAndSwapChain()
     {
+        WaitForIdle();
+
         if (m_DeviceParameters.offscreen)
         {
             DestroyOffscreenBuffers();
@@ -294,6 +313,7 @@ namespace ignite
                 semaphore = nullptr;
             }
         }
+        m_PresentSemaphores.clear();
 
         for (auto &semaphore : m_AcquireSemaphores)
         {
@@ -303,14 +323,33 @@ namespace ignite
                 semaphore = nullptr;
             }
         }
-        
-        m_VulkanDevice.destroyDescriptorPool(m_DescriptorPool);
+        m_AcquireSemaphores.clear();
+
+        for (auto &fence : m_InFlightFences)
+        {
+            if (fence)
+            {
+                m_VulkanDevice.destroyFence(fence);
+                fence = nullptr;
+            }
+        }
+        m_InFlightFences.clear();
+
+        if (m_DescriptorPool)
+        {
+            m_VulkanDevice.destroyDescriptorPool(m_DescriptorPool);
+            m_DescriptorPool = nullptr;
+        }
 
         m_RendererString.clear();
-        
-        m_NvrhiDevice = nullptr;
-        m_ValidationLayer = nullptr;
-        m_RendererString.clear();
+
+        if (m_Device)
+        {
+            m_NRI.DeviceWaitIdle(m_Device);
+            nriDestroyDevice(m_Device);
+            m_Device = nullptr;
+            m_NriGraphicsQueue = nullptr;
+        }
 
         if (m_VulkanDevice)
         {
@@ -319,7 +358,6 @@ namespace ignite
         }
 
         // destroy instance
-
         if (m_WindowSurface)
         {
             assert(m_VulkanInstance);
@@ -330,6 +368,7 @@ namespace ignite
         if (m_DebugReportCallback)
         {
             m_VulkanInstance.destroyDebugReportCallbackEXT(m_DebugReportCallback);
+            m_DebugReportCallback = nullptr;
         }
 
         if (m_VulkanInstance)
@@ -349,38 +388,74 @@ namespace ignite
             }
             else
             {
-                CreateSwapChain();
+                CreateVkSwapChain();
             }
         }
     }
 
-    nvrhi::ITexture *DeviceManager_VK::GetCurrentBackBuffer()
+    nri::Texture *DeviceManager_VK::GetCurrentBackBuffer()
     {
-        return m_SwapChainRenderTargets[m_SwapChainIndex]->GetColorAttachment(0)->GetHandle().Get();
+        return GetBackBuffer(GetCurrentBackBufferIndex());
     }
 
-    nvrhi::ITexture *DeviceManager_VK::GetBackBuffer(uint32_t index)
+    nri::Texture *DeviceManager_VK::GetBackBuffer(uint32_t index)
     {
-        if (index < m_SwapChainRenderTargets.size())
-            return m_SwapChainRenderTargets[index]->GetColorAttachment(0)->GetHandle().Get();
+        if (index < m_BackBufferTextures.size())
+            return m_BackBufferTextures[index];
         return nullptr;
     }
 
-	nvrhi::ITexture *DeviceManager_VK::GetBackDepthBuffer(uint32_t index)
-	{
-		if (index < m_SwapChainRenderTargets.size())
-			return m_SwapChainRenderTargets[index]->GetDepthAttachment()->GetHandle().Get();
-		return nullptr;
-	}
+    nri::Texture *DeviceManager_VK::GetBackDepthBuffer(uint32_t index)
+    {
+        if (index < m_DepthBufferTextures.size())
+            return m_DepthBufferTextures[index];
+        return nullptr;
+    }
 
-	uint32_t DeviceManager_VK::GetCurrentBackBufferIndex()
+    nri::Descriptor *DeviceManager_VK::GetCurrentBackBufferRTV()
+    {
+        return GetBackBufferRTV(GetCurrentBackBufferIndex());
+    }
+
+    nri::Descriptor *DeviceManager_VK::GetBackBufferRTV(uint32_t index)
+    {
+        if (index < m_BackBufferRTVs.size())
+            return m_BackBufferRTVs[index];
+        return nullptr;
+    }
+
+    nri::Descriptor *DeviceManager_VK::GetCurrentBackDepthBufferDSV()
+    {
+        return GetBackDepthBufferDSV(GetCurrentBackBufferIndex());
+    }
+
+    nri::Descriptor *DeviceManager_VK::GetBackDepthBufferDSV(uint32_t index)
+    {
+        if (index < m_DepthBufferDSVs.size())
+            return m_DepthBufferDSVs[index];
+        return nullptr;
+    }
+
+    uint32_t DeviceManager_VK::GetCurrentBackBufferIndex()
     {
         return m_SwapChainIndex;
     }
 
     uint32_t DeviceManager_VK::GetBackBufferCount()
     {
-        return uint32_t(m_SwapChainRenderTargets.size());
+        return static_cast<uint32_t>(m_BackBufferTextures.size());
+    }
+
+    RenderTarget *DeviceManager_VK::GetCurrentBackBufferRenderTarget()
+    {
+        return GetBackBufferRenderTarget(GetCurrentBackBufferIndex());
+    }
+
+    RenderTarget *DeviceManager_VK::GetBackBufferRenderTarget(uint32_t index)
+    {
+        if (index < m_BackBufferRenderTargets.size())
+            return m_BackBufferRenderTargets[index].get();
+        return nullptr;
     }
 
     bool DeviceManager_VK::BeginFrame()
@@ -390,82 +465,55 @@ namespace ignite
 
         if (m_DeviceParameters.offscreen)
         {
-            if (m_SwapChainRenderTargets.empty())
+            if (m_BackBufferTextures.empty())
                 return false;
 
-            while (m_FramesInFlight.size() >= m_DeviceParameters.maxFramesInFlight)
-            {
-                auto query = m_FramesInFlight.front();
-                m_FramesInFlight.pop();
-
-                {
-                    IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::WaitEventQuery");
-                    m_NvrhiDevice->waitEventQuery(query);
-                }
-
-                m_QueryPool.push_back(query);
-            }
-
-            m_SwapChainIndex = (m_SwapChainIndex + 1) % m_SwapChainRenderTargets.size();
+            m_SwapChainIndex = (m_SwapChainIndex + 1) % m_BackBufferTextures.size();
             return true;
         }
 
-        if (BindlessSystem::HasPendingWrites())
-        {
-            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-            BindlessSystem::FlushPendingWrites();
-        }
+        if (m_InFlightFences.empty())
+            return false;
 
-        while (m_FramesInFlight.size() >= m_DeviceParameters.maxFramesInFlight)
-        {
-            auto query = m_FramesInFlight.front();
-            m_FramesInFlight.pop();
+        // Wait for previous frame in flight
+        (void)m_VulkanDevice.waitForFences(1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+        vk::Result resetRes = m_VulkanDevice.resetFences(1, &m_InFlightFences[m_CurrentFrame]); (void)resetRes;
 
-            {
-                IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::WaitEventQuery");
-                m_NvrhiDevice->waitEventQuery(query);
-            }
-
-            m_QueryPool.push_back(query);
-        }
-
-        const auto &semaphore = m_AcquireSemaphores[m_AcquireSemaphoreIndex];
+        const auto &acquireSemaphore = m_AcquireSemaphores[m_CurrentFrame];
 
         vk::Result res;
-
-        int const maxAttempts = 3;
-        for (int attempt = 0; attempt < maxAttempts; ++attempt)
+        for (int attempt = 0; attempt < 3; ++attempt)
         {
             res = m_VulkanDevice.acquireNextImageKHR(
                 m_SwapChain,
-                std::numeric_limits<uint64_t>::max(), // blocking acquire to wait for vsync or swapchain images
-                semaphore,
+                std::numeric_limits<uint64_t>::max(),
+                acquireSemaphore,
                 vk::Fence(),
                 &m_SwapChainIndex);
 
-            if (res == vk::Result::eErrorOutOfDateKHR && attempt < maxAttempts)
+            if (res == vk::Result::eErrorOutOfDateKHR)
             {
                 ResizeSwapChain();
-                CreateBackBuffers();
+                return false;
             }
-            else
-            {
+
+            if (res == vk::Result::eSuccess || res == vk::Result::eSuboptimalKHR)
                 break;
+        }
+
+        if (res == vk::Result::eSuccess || res == vk::Result::eSuboptimalKHR)
+        {
+            // Submit acquire semaphore wait on graphics queue so all GPU work submitted this frame waits for image acquisition
+            vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eTransfer;
+            vk::SubmitInfo submitInfo{};
+            submitInfo.waitSemaphoreCount = 1;
+            submitInfo.pWaitSemaphores = &acquireSemaphore;
+            submitInfo.pWaitDstStageMask = &waitStage;
+
+            {
+                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                vk::Result submitRes = m_GraphicsQueue.submit(1, &submitInfo, vk::Fence()); (void)submitRes;
             }
-        }
-
-        if (res == vk::Result::eTimeout || res == vk::Result::eNotReady)
-        {
-            return false;
-        }
-
-        m_AcquireSemaphoreIndex = (m_AcquireSemaphoreIndex + 1) % m_AcquireSemaphores.size();
-
-        if (res == vk::Result::eSuccess)
-        {
-            // Schedule the wait. The actual wait operation will be submitted when the app executes any command list.
-            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-            m_NvrhiDevice->queueWaitForSemaphore(nvrhi::CommandQueue::Graphics, semaphore, 0);
             return true;
         }
 
@@ -479,61 +527,26 @@ namespace ignite
 
         if (m_DeviceParameters.offscreen)
         {
-            nvrhi::EventQueryHandle query;
-            if (!m_QueryPool.empty())
-            {
-                query = m_QueryPool.back();
-                m_QueryPool.pop_back();
-            }
-            else
-            {
-                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-                query = m_NvrhiDevice->createEventQuery();
-            }
-
-            {
-                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-                m_NvrhiDevice->resetEventQuery(query);
-                m_NvrhiDevice->setEventQuery(query, nvrhi::CommandQueue::Graphics);
-                m_FramesInFlight.push(query);
-            }
-
             m_FrameIndex++;
             return true;
         }
 
         IGN_PROFILE_FUNCTION();
-        const auto &semaphore = m_PresentSemaphores[m_PresentSemaphoreIndex];
+        const auto &presentSemaphore = m_PresentSemaphores[m_CurrentFrame];
 
-        nvrhi::EventQueryHandle query;
-        if (!m_QueryPool.empty())
-        {
-            query = m_QueryPool.back();
-            m_QueryPool.pop_back();
-        }
-        else
+        // Submit sync on graphics queue to signal present semaphore and in-flight fence after rendering
+        vk::SubmitInfo submitInfo{};
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = &presentSemaphore;
+
         {
             std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-            query = m_NvrhiDevice->createEventQuery();
-        }
-
-        {
-            IGN_PROFILE_SCOPE("DeviceManager_VK::Present::SubmitSync");
-            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-            m_NvrhiDevice->resetEventQuery(query);
-            m_NvrhiDevice->setEventQuery(query, nvrhi::CommandQueue::Graphics);
-            m_FramesInFlight.push(query);
-
-            m_NvrhiDevice->queueSignalSemaphore(nvrhi::CommandQueue::Graphics, semaphore, 0);
-
-            // NVRHI buffers the semaphores and signals them when something is submitted to a queue.
-            // Call 'executeCommandLists' with no command lists to actually signal the semaphore.
-            m_NvrhiDevice->executeCommandLists(nullptr, 0);
+            vk::Result submitRes = m_GraphicsQueue.submit(1, &submitInfo, m_InFlightFences[m_CurrentFrame]); (void)submitRes;
         }
 
         vk::PresentInfoKHR info = vk::PresentInfoKHR()
             .setWaitSemaphoreCount(1)
-            .setPWaitSemaphores(&semaphore)
+            .setPWaitSemaphores(&presentSemaphore)
             .setSwapchainCount(1)
             .setPSwapchains(&m_SwapChain)
             .setPImageIndices(&m_SwapChainIndex);
@@ -541,33 +554,18 @@ namespace ignite
         vk::Result res;
         {
             IGN_PROFILE_SCOPE("DeviceManager_VK::Present::PresentKHR");
-            if (m_PresentQueueFamily == m_GraphicsQueueFamily)
-            {
-                // std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-                res = m_PresentQueue.presentKHR(&info);
-            }
-            else
-            {
-                res = m_PresentQueue.presentKHR(&info);
-            }
+            res = m_PresentQueue.presentKHR(&info);
         }
-        if (!(res == vk::Result::eSuccess || res == vk::Result::eErrorOutOfDateKHR))
+
+        if (res == vk::Result::eErrorOutOfDateKHR || res == vk::Result::eSuboptimalKHR)
         {
-            return false;
+            ResizeSwapChain();
         }
 
-        m_PresentSemaphoreIndex = (m_PresentSemaphoreIndex + 1) % m_PresentSemaphores.size();
+        m_CurrentFrame = (m_CurrentFrame + 1) % m_DeviceParameters.maxFramesInFlight;
+        m_FrameIndex++;
 
-#ifndef PLATFORM_WINDOWS
-        if (m_DeviceParameters.vsyncEnable || m_DeviceParameters.enableDebugRuntime)
-        {
-            // according to vulkan-tutorial.com, "the validation layer implementation expects
-            // the application to explicitly synchronize with the GPU"
-            m_PresentQueue.waitIdle();
-        }
-#endif
-
-        return true;
+        return (res == vk::Result::eSuccess || res == vk::Result::eSuboptimalKHR);
     }
 
     const char *DeviceManager_VK::GetRendererString() const
@@ -716,7 +714,7 @@ namespace ignite
 
         if (res != vk::Result::eSuccess)
         {
-            std::string resultStr = nvrhi::vulkan::resultToString(VkResult(res));
+            std::string resultStr = vk::to_string(res);
             LOG_ASSERT(false, "Call to vkEnumerateInstanceVerion failed, error code {}", resultStr);
             return false;
         }
@@ -759,7 +757,7 @@ namespace ignite
         res = vk::createInstance(&info, nullptr, &m_VulkanInstance);
         if (res != vk::Result::eSuccess)
         {
-            std::string resultStr = nvrhi::vulkan::resultToString(VkResult(res));
+            std::string resultStr = vk::to_string(res);
             LOG_ASSERT(false, "Failed to create a Vulkan instance, error code: {}", resultStr);
         }
 
@@ -793,7 +791,7 @@ namespace ignite
 
     bool DeviceManager_VK::PickPhysicalDevice()
     {
-        VkFormat requestedFormat = nvrhi::vulkan::convertFormat(m_DeviceParameters.swapChainFormat);
+        VkFormat requestedFormat = (VkFormat)nriConvertNRIFormatToVK(m_DeviceParameters.swapChainFormat);
         vk::Extent2D requestedExtent(m_DeviceParameters.backBufferWidth, m_DeviceParameters.backBufferHeight);
 
         auto devices = m_VulkanInstance.enumeratePhysicalDevices();
@@ -1229,7 +1227,7 @@ namespace ignite
         const vk::Result res = m_VulkanPhysicalDevice.createDevice(&deviceDesc, nullptr, &m_VulkanDevice);
         if (res != vk::Result::eSuccess)
         {
-            LOG_ERROR("Failed to create a Vulkan physical device, error code: {}", nvrhi::vulkan::resultToString(VkResult(res)));
+            LOG_ERROR("Failed to create a Vulkan physical device, error code: {}", vk::to_string(res));
             return false;
         }
 
@@ -1256,7 +1254,7 @@ namespace ignite
         DestroySwapChain();
 
         m_SwapChainFormat = {
-            vk::Format(nvrhi::vulkan::convertFormat(m_DeviceParameters.swapChainFormat)),
+            vk::Format(nriConvertNRIFormatToVK(m_DeviceParameters.swapChainFormat)),
             vk::ColorSpaceKHR::eSrgbNonlinear
         };
 
@@ -1318,48 +1316,185 @@ namespace ignite
 
         const vk::Result res = m_VulkanDevice.createSwapchainKHR(&desc, nullptr, &m_SwapChain);
 
-        LOG_ASSERT(res == vk::Result::eSuccess, "Failed to create a Vulkan swap chain, error code = %s", nvrhi::vulkan::resultToString(VkResult(res)));
+        LOG_ASSERT(res == vk::Result::eSuccess, "Failed to create a Vulkan swap chain, error code = %s", vk::to_string(res));
 
 
         // retrieve swap chain images
-        auto images = m_VulkanDevice.getSwapchainImagesKHR(m_SwapChain);
-        for (auto image : images)
+        m_SwapchainImages = m_VulkanDevice.getSwapchainImagesKHR(m_SwapChain);
+        const uint32_t imageCount = static_cast<uint32_t>(m_SwapchainImages.size());
+
+        m_BackBufferTextures.resize(imageCount, nullptr);
+        m_BackBufferRTVs.resize(imageCount, nullptr);
+        m_DepthBufferTextures.resize(imageCount, nullptr);
+        m_DepthBufferMemories.resize(imageCount, nullptr);
+        m_DepthBufferDSVs.resize(imageCount, nullptr);
+
+        for (uint32_t n = 0; n < imageCount; ++n)
         {
-            RenderTargetCreateInfo createInfo;
-            createInfo.width = m_DeviceParameters.backBufferWidth;
-            createInfo.height = m_DeviceParameters.backBufferHeight;
-            createInfo.attachments =
+            auto image = m_SwapchainImages[n];
+
+            nri::TextureVKDesc texVKDesc{};
+            texVKDesc.vkImage = (uint64_t)(VkImage)image;
+            texVKDesc.vkFormat = (int32_t)m_SwapChainFormat.format;
+            texVKDesc.vkImageType = (int32_t)VK_IMAGE_TYPE_2D;
+            texVKDesc.vkImageUsageFlags = (uint32_t)(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+            texVKDesc.width = static_cast<nri::Dim_t>(m_DeviceParameters.backBufferWidth);
+            texVKDesc.height = static_cast<nri::Dim_t>(m_DeviceParameters.backBufferHeight);
+            texVKDesc.depth = 1;
+            texVKDesc.mipNum = 1;
+            texVKDesc.layerNum = 1;
+            texVKDesc.sampleNum = 1;
+
+            if (m_WrapperVK.CreateTextureVK(*m_Device, texVKDesc, m_BackBufferTextures[n]) != nri::Result::SUCCESS)
             {
-				FramebufferAttachments {
-					.name = "Swapchain RT",
-					.format = nvrhi::Format::D32S8,
-					.state = nvrhi::ResourceStates::DepthWrite
-				},
+                LOG_ERROR("Failed to wrap Vulkan swapchain image {} into NRI texture", n);
+                return false;
+            }
+
+            nri::TextureViewDesc rtvDesc{};
+            rtvDesc.texture = m_BackBufferTextures[n];
+            rtvDesc.type = nri::TextureView::COLOR_ATTACHMENT;
+            rtvDesc.format = m_DeviceParameters.swapChainFormat;
+            rtvDesc.mipOffset = 0;
+            rtvDesc.mipNum = 1;
+            rtvDesc.layerOffset = 0;
+            rtvDesc.layerNum = 1;
+            if (m_NRI.CreateTextureView(rtvDesc, m_BackBufferRTVs[n]) != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("Failed to create RTV descriptor for back buffer {}", n);
+                return false;
+            }
+
+            // Depth Stencil texture
+            nri::TextureDesc depthDesc{};
+            depthDesc.type = nri::TextureType::TEXTURE_2D;
+            depthDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT;
+            depthDesc.format = nri::Format::D32_SFLOAT;
+            depthDesc.width = static_cast<nri::Dim_t>(m_DeviceParameters.backBufferWidth);
+            depthDesc.height = static_cast<nri::Dim_t>(m_DeviceParameters.backBufferHeight);
+            depthDesc.depth = 1;
+            depthDesc.mipNum = 1;
+            depthDesc.layerNum = 1;
+            depthDesc.sampleNum = 1;
+
+            if (m_NRI.CreateTexture(*m_Device, depthDesc, m_DepthBufferTextures[n]) != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("Failed to create depth texture for swapchain image {}", n);
+                return false;
+            }
+
+            nri::ResourceGroupDesc resGroup{};
+            resGroup.textureNum = 1;
+            resGroup.textures = &m_DepthBufferTextures[n];
+            resGroup.memoryLocation = nri::MemoryLocation::DEVICE;
+            if (m_HelperNRI.AllocateAndBindMemory(*m_Device, resGroup, &m_DepthBufferMemories[n]) != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("Failed to allocate and bind memory for depth texture {}", n);
+                return false;
+            }
+
+            nri::TextureViewDesc dsvDesc{};
+            dsvDesc.texture = m_DepthBufferTextures[n];
+            dsvDesc.type = nri::TextureView::DEPTH_STENCIL_ATTACHMENT;
+            dsvDesc.format = nri::Format::D32_SFLOAT;
+            dsvDesc.mipOffset = 0;
+            dsvDesc.mipNum = 1;
+            dsvDesc.layerOffset = 0;
+            dsvDesc.layerNum = 1;
+            if (m_NRI.CreateTextureView(dsvDesc, m_DepthBufferDSVs[n]) != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("Failed to create DSV descriptor for depth buffer {}", n);
+                return false;
+            }
+        }
+
+        m_BackBufferRenderTargets.resize(imageCount);
+        for (uint32_t n = 0; n < imageCount; ++n)
+        {
+            RenderTargetCreateInfo rtDesc;
+            rtDesc.width = m_DeviceParameters.backBufferWidth;
+            rtDesc.height = m_DeviceParameters.backBufferHeight;
+            rtDesc.attachments = {
                 FramebufferAttachments {
-                    .name = "Swapchain RT", 
+                    .name = "[BackBufferColor " + std::to_string(n) + "]",
                     .format = m_DeviceParameters.swapChainFormat,
-                    .state = nvrhi::ResourceStates::Present,
-                    .nativeObjectPtr = image,
+                    .state = nri::Layout::PRESENT,
+                    .nativeObjectPtr = m_BackBufferTextures[n],
                     .isNativeObject = true,
-                    .nativeObjectType = nvrhi::ObjectTypes::VK_Image
+                    .nativeObjectType = 2
+                },
+                FramebufferAttachments {
+                    .name = "[BackBufferDepth " + std::to_string(n) + "]",
+                    .format = nri::Format::D32_SFLOAT,
+                    .state = nri::Layout::DEPTH_STENCIL_ATTACHMENT,
+                    .nativeObjectPtr = m_DepthBufferTextures[n],
+                    .isNativeObject = true,
+                    .nativeObjectType = 2
                 }
             };
 
-            m_SwapChainRenderTargets.emplace_back(RenderTarget::Create(createInfo, "Swapchain RT"));
+            m_BackBufferRenderTargets[n] = RenderTarget::Create(rtDesc, "[BackBuffer RT " + std::to_string(n) + "]");
         }
 
         m_SwapChainIndex = 0;
-
         return true;
     }
 
     void DeviceManager_VK::DestroySwapChain()
     {
-        if (m_VulkanDevice)
+        WaitForIdle();
+
+        m_BackBufferRenderTargets.clear();
+
+        for (auto &rtv : m_BackBufferRTVs)
         {
-            std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
-            m_VulkanDevice.waitIdle();
+            if (rtv)
+            {
+                m_NRI.DestroyDescriptor(rtv);
+                rtv = nullptr;
+            }
         }
+        m_BackBufferRTVs.clear();
+
+        for (auto &tex : m_BackBufferTextures)
+        {
+            if (tex)
+            {
+                m_NRI.DestroyTexture(tex);
+                tex = nullptr;
+            }
+        }
+        m_BackBufferTextures.clear();
+
+        for (auto &dsv : m_DepthBufferDSVs)
+        {
+            if (dsv)
+            {
+                m_NRI.DestroyDescriptor(dsv);
+                dsv = nullptr;
+            }
+        }
+        m_DepthBufferDSVs.clear();
+
+        for (auto &tex : m_DepthBufferTextures)
+        {
+            if (tex)
+            {
+                m_NRI.DestroyTexture(tex);
+                tex = nullptr;
+            }
+        }
+        m_DepthBufferTextures.clear();
+
+        for (auto &mem : m_DepthBufferMemories)
+        {
+            if (mem)
+            {
+                m_NRI.FreeMemory(mem);
+                mem = nullptr;
+            }
+        }
+        m_DepthBufferMemories.clear();
 
         if (m_SwapChain)
         {
@@ -1367,7 +1502,7 @@ namespace ignite
             m_SwapChain = nullptr;
         }
 
-        m_SwapChainRenderTargets.clear();
+        m_SwapchainImages.clear();
     }
 
     void DeviceManager_VK::CreateDescriptorPool()
@@ -1392,7 +1527,12 @@ namespace ignite
 
     void DeviceManager_VK::WaitForIdle()
     {
-        if (m_VulkanDevice)
+        if (m_Device)
+        {
+            std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
+            m_NRI.DeviceWaitIdle(m_Device);
+        }
+        else if (m_VulkanDevice)
         {
             std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
             m_VulkanDevice.waitIdle();
@@ -1407,32 +1547,107 @@ namespace ignite
         uint32_t height = std::max(1u, m_DeviceParameters.backBufferHeight);
         uint32_t bufferCount = std::max(1u, m_DeviceParameters.swapChainBufferCount);
 
-        m_OffscreenColorTextures.clear();
-        m_OffscreenDepthTextures.clear();
-        m_SwapChainRenderTargets.clear();
+        m_BackBufferTextures.resize(bufferCount, nullptr);
+        m_BackBufferRTVs.resize(bufferCount, nullptr);
+        m_DepthBufferTextures.resize(bufferCount, nullptr);
+        m_DepthBufferMemories.resize(bufferCount, nullptr);
+        m_DepthBufferDSVs.resize(bufferCount, nullptr);
+        m_OffscreenColorMemories.resize(bufferCount, nullptr);
 
         for (uint32_t i = 0; i < bufferCount; ++i)
         {
-            RenderTargetCreateInfo rtInfo;
-            rtInfo.width = width;
-            rtInfo.height = height;
-            rtInfo.attachments = {
+            // Color texture
+            nri::TextureDesc colorDesc{};
+            colorDesc.type = nri::TextureType::TEXTURE_2D;
+            colorDesc.usage = nri::TextureUsageBits::COLOR_ATTACHMENT;
+            colorDesc.format = m_DeviceParameters.swapChainFormat;
+            colorDesc.width = static_cast<nri::Dim_t>(width);
+            colorDesc.height = static_cast<nri::Dim_t>(height);
+            colorDesc.depth = 1;
+            colorDesc.mipNum = 1;
+            colorDesc.layerNum = 1;
+            colorDesc.sampleNum = 1;
+
+            if (m_NRI.CreateTexture(*m_Device, colorDesc, m_BackBufferTextures[i]) != nri::Result::SUCCESS)
+                return false;
+
+            nri::ResourceGroupDesc colorResGroup{};
+            colorResGroup.textureNum = 1;
+            colorResGroup.textures = &m_BackBufferTextures[i];
+            colorResGroup.memoryLocation = nri::MemoryLocation::DEVICE;
+            if (m_HelperNRI.AllocateAndBindMemory(*m_Device, colorResGroup, &m_OffscreenColorMemories[i]) != nri::Result::SUCCESS)
+                return false;
+
+            nri::TextureViewDesc rtvDesc{};
+            rtvDesc.texture = m_BackBufferTextures[i];
+            rtvDesc.type = nri::TextureView::COLOR_ATTACHMENT;
+            rtvDesc.format = m_DeviceParameters.swapChainFormat;
+            rtvDesc.mipOffset = 0;
+            rtvDesc.mipNum = 1;
+            rtvDesc.layerOffset = 0;
+            rtvDesc.layerNum = 1;
+            if (m_NRI.CreateTextureView(rtvDesc, m_BackBufferRTVs[i]) != nri::Result::SUCCESS)
+                return false;
+
+            // Depth texture
+            nri::TextureDesc depthDesc{};
+            depthDesc.type = nri::TextureType::TEXTURE_2D;
+            depthDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT;
+            depthDesc.format = nri::Format::D32_SFLOAT;
+            depthDesc.width = static_cast<nri::Dim_t>(width);
+            depthDesc.height = static_cast<nri::Dim_t>(height);
+            depthDesc.depth = 1;
+            depthDesc.mipNum = 1;
+            depthDesc.layerNum = 1;
+            depthDesc.sampleNum = 1;
+
+            if (m_NRI.CreateTexture(*m_Device, depthDesc, m_DepthBufferTextures[i]) != nri::Result::SUCCESS)
+                return false;
+
+            nri::ResourceGroupDesc depthResGroup{};
+            depthResGroup.textureNum = 1;
+            depthResGroup.textures = &m_DepthBufferTextures[i];
+            depthResGroup.memoryLocation = nri::MemoryLocation::DEVICE;
+            if (m_HelperNRI.AllocateAndBindMemory(*m_Device, depthResGroup, &m_DepthBufferMemories[i]) != nri::Result::SUCCESS)
+                return false;
+
+            nri::TextureViewDesc dsvDesc{};
+            dsvDesc.texture = m_DepthBufferTextures[i];
+            dsvDesc.type = nri::TextureView::DEPTH_STENCIL_ATTACHMENT;
+            dsvDesc.format = nri::Format::D32_SFLOAT;
+            dsvDesc.mipOffset = 0;
+            dsvDesc.mipNum = 1;
+            dsvDesc.layerOffset = 0;
+            dsvDesc.layerNum = 1;
+            if (m_NRI.CreateTextureView(dsvDesc, m_DepthBufferDSVs[i]) != nri::Result::SUCCESS)
+                return false;
+        }
+
+        m_BackBufferRenderTargets.resize(bufferCount);
+        for (uint32_t n = 0; n < bufferCount; ++n)
+        {
+            RenderTargetCreateInfo rtDesc;
+            rtDesc.width = width;
+            rtDesc.height = height;
+            rtDesc.attachments = {
                 FramebufferAttachments {
-                    .name = "Offscreen Depth RT",
-                    .format = nvrhi::Format::D32S8,
-                    .state = nvrhi::ResourceStates::DepthWrite
+                    .name = "[OffscreenColor " + std::to_string(n) + "]",
+                    .format = m_DeviceParameters.swapChainFormat,
+                    .state = nri::Layout::PRESENT,
+                    .nativeObjectPtr = m_BackBufferTextures[n],
+                    .isNativeObject = true,
+                    .nativeObjectType = 2
                 },
                 FramebufferAttachments {
-                    .name = "Offscreen Color RT",
-                    .format = m_DeviceParameters.swapChainFormat,
-                    .state = nvrhi::ResourceStates::RenderTarget
+                    .name = "[OffscreenDepth " + std::to_string(n) + "]",
+                    .format = nri::Format::D32_SFLOAT,
+                    .state = nri::Layout::DEPTH_STENCIL_ATTACHMENT,
+                    .nativeObjectPtr = m_DepthBufferTextures[n],
+                    .isNativeObject = true,
+                    .nativeObjectType = 2
                 }
             };
-
-            auto rt = RenderTarget::Create(rtInfo, std::format("Offscreen RT {}", i));
-            m_SwapChainRenderTargets.emplace_back(rt);
-            m_OffscreenColorTextures.push_back(rt->GetColorAttachment(0)->GetHandle());
-            m_OffscreenDepthTextures.push_back(rt->GetDepthAttachment()->GetHandle());
+            m_BackBufferRenderTargets[n] = RenderTarget::Create(rtDesc, "[Offscreen RT " + std::to_string(n) + "]");
         }
 
         m_SwapChainIndex = 0;
@@ -1441,25 +1656,53 @@ namespace ignite
 
     void DeviceManager_VK::DestroyOffscreenBuffers()
     {
-        if (m_VulkanDevice)
-        {
-            std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
-            m_VulkanDevice.waitIdle();
-        }
+        WaitForIdle();
 
-        m_SwapChainRenderTargets.clear();
-        m_OffscreenColorTextures.clear();
-        m_OffscreenDepthTextures.clear();
-        m_ReadbackStagingTexture = nullptr;
-        m_ReadbackCommandList = nullptr;
+        m_BackBufferRenderTargets.clear();
+
+        for (auto &rtv : m_BackBufferRTVs)
+        {
+            if (rtv) m_NRI.DestroyDescriptor(rtv);
+        }
+        m_BackBufferRTVs.clear();
+
+        for (auto &tex : m_BackBufferTextures)
+        {
+            if (tex) m_NRI.DestroyTexture(tex);
+        }
+        m_BackBufferTextures.clear();
+
+        for (auto &mem : m_OffscreenColorMemories)
+        {
+            if (mem) m_NRI.FreeMemory(mem);
+        }
+        m_OffscreenColorMemories.clear();
+
+        for (auto &dsv : m_DepthBufferDSVs)
+        {
+            if (dsv) m_NRI.DestroyDescriptor(dsv);
+        }
+        m_DepthBufferDSVs.clear();
+
+        for (auto &tex : m_DepthBufferTextures)
+        {
+            if (tex) m_NRI.DestroyTexture(tex);
+        }
+        m_DepthBufferTextures.clear();
+
+        for (auto &mem : m_DepthBufferMemories)
+        {
+            if (mem) m_NRI.FreeMemory(mem);
+        }
+        m_DepthBufferMemories.clear();
     }
 
     void *DeviceManager_VK::GetSharedBackBufferHandle()
     {
-        nvrhi::ITexture *backBuffer = GetCurrentBackBuffer();
+        nri::Texture *backBuffer = GetCurrentBackBuffer();
         if (!backBuffer)
             return nullptr;
-        return backBuffer->getNativeObject(nvrhi::ObjectTypes::VK_Image);
+        return (void*)(uintptr_t)m_NRI.GetTextureNativeObject(backBuffer);
     }
 
     bool DeviceManager_VK::ReadbackBackBuffer(void *outPixels, size_t bufferSize)
@@ -1467,52 +1710,24 @@ namespace ignite
         if (!outPixels || bufferSize == 0)
             return false;
 
-        nvrhi::ITexture *backBuffer = GetCurrentBackBuffer();
+        nri::Texture *backBuffer = GetCurrentBackBuffer();
         if (!backBuffer)
             return false;
 
-        const nvrhi::TextureDesc &desc = backBuffer->getDesc();
+        const auto &desc = m_NRI.GetTextureDesc(*backBuffer);
         size_t rowPitch = desc.width * 4;
         size_t requiredSize = rowPitch * desc.height;
         if (bufferSize < requiredSize)
             return false;
 
-        if (!m_ReadbackCommandList)
-        {
-            m_ReadbackCommandList = m_NvrhiDevice->createCommandList();
-        }
-
-        if (!m_ReadbackStagingTexture ||
-            m_ReadbackStagingTexture->getDesc().width != desc.width ||
-            m_ReadbackStagingTexture->getDesc().height != desc.height)
-        {
-            m_ReadbackStagingTexture = m_NvrhiDevice->createStagingTexture(desc, nvrhi::CpuAccessMode::Read);
-        }
-
-        m_ReadbackCommandList->open();
-        m_ReadbackCommandList->copyTexture(m_ReadbackStagingTexture, nvrhi::TextureSlice(), backBuffer, nvrhi::TextureSlice());
-        m_ReadbackCommandList->close();
-
-        {
-            std::scoped_lock lock(GPUUploadSync::GetQueueMutex());
-            m_NvrhiDevice->executeCommandList(m_ReadbackCommandList);
-        }
+        nri::ReadbackTextureToHostMemoryDesc readbackDesc{};
+        readbackDesc.srcTexture = backBuffer;
+        readbackDesc.dstData = outPixels;
+        readbackDesc.srcRegion = { 0, 0, 0, (nri::Dim_t)desc.width, (nri::Dim_t)desc.height, 1, 0, 0 };
+        readbackDesc.dstRowPitch = (uint32_t)rowPitch;
 
         WaitForIdle();
-
-        size_t actualPitch = 0;
-        void *mapped = m_NvrhiDevice->mapStagingTexture(m_ReadbackStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &actualPitch);
-        if (!mapped)
-            return false;
-
-        for (uint32_t y = 0; y < desc.height; ++y)
-        {
-            memcpy(static_cast<uint8_t *>(outPixels) + y * rowPitch,
-                   static_cast<const uint8_t *>(mapped) + y * actualPitch,
-                   rowPitch);
-        }
-
-        m_NvrhiDevice->unmapStagingTexture(m_ReadbackStagingTexture);
-        return true;
+        nri::Result res = m_NRI.ReadbackTextureToHostMemory(*m_NriGraphicsQueue, &readbackDesc, 1);
+        return (res == nri::Result::SUCCESS);
     }
 }

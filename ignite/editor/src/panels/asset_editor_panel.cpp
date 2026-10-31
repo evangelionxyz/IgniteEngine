@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "pch.hpp"
 
@@ -748,7 +748,7 @@ namespace ignite
     }
 
     // UI
-    void AssetEditorPanel::OnRender(nvrhi::IFramebuffer *framebuffer)
+    void AssetEditorPanel::OnRender(RenderTarget *framebuffer)
     {
         if (!m_EditorLayer || !m_EditorLayer->GetActiveProject())
         {

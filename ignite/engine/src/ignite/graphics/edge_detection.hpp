@@ -5,11 +5,11 @@
 #define IGN_EDGE_DETECTION_HPP
 
 #include "ignite/core/types.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "buffers/constant_buffer.hpp"
+#include "binding_set.hpp"
 
 #include <glm/glm.hpp>
-#include <nvrhi/nvrhi.h>
-#include <nvrhi/utils.h>
 
 namespace ignite
 {
@@ -36,28 +36,34 @@ namespace ignite
 
         void CreatePipeline();
         void UpdateBindingSet(const Ref<Texture> &sceneTexture, const Ref<Texture> &objectIDTexture, const Ref<Texture> &depth);
-        void ExecuteCompute(nvrhi::ICommandList *commandList, const EdgeDetectionParameter &params, uint32_t width, uint32_t height);
+        void ExecuteCompute(nri::CommandBuffer *commandBuffer, const EdgeDetectionParameter &params, uint32_t width, uint32_t height);
         void CreateOutputTexture(uint32_t width, uint32_t height);
 
-        nvrhi::BufferHandle GetSelectedIDBuffer() { return m_SelectedIDBuffer; }
+        void SetSelectedIDs(const uint32_t *ids, uint32_t count);
+        nri::Buffer *GetSelectedIDBuffer() const { return m_SelectedIDBuffer; }
+        nri::Descriptor *GetSelectedIDDescriptor() const { return m_SelectedIDDescriptor; }
         Ref<Texture> GetOutputTexture() const { return m_OutputTexture; }
 
         static Ref<EdgeDetection> Create();
 
     private:
         Ref<Shader> m_Shader;
-        nvrhi::ComputePipelineHandle m_Pipeline;
+        nri::PipelineLayout *m_PipelineLayout = nullptr;
+        nri::Pipeline *m_Pipeline = nullptr;
 
         Ref<ConstantBuffer> m_ConstantBuffer;
 
         // Resources
-        nvrhi::BufferHandle m_SelectedIDBuffer;
-        nvrhi::BindingLayoutHandle m_BindingLayout;
-        nvrhi::BindingSetHandle m_BindingSet;
+        nri::Buffer *m_SelectedIDBuffer = nullptr;
+        nri::Memory *m_SelectedIDMemory = nullptr;
+        nri::Descriptor *m_SelectedIDDescriptor = nullptr;
+
+        BindingLayoutDesc m_BindingLayout;
+        Ref<BindingSet> m_BindingSet;
 
         // Texture
         Ref<Texture> m_OutputTexture;
-    	nvrhi::SamplerHandle m_Sampler;
+        nri::Descriptor *m_Sampler = nullptr;
     };
 }
 

@@ -77,11 +77,11 @@ IGN_API bool Ignite_Init(const IgniteAppConfig *config)
 
     if (config)
     {
-        createInfo.graphicsApi = (config->graphicsApi == 1) ? nvrhi::GraphicsAPI::D3D12 : nvrhi::GraphicsAPI::VULKAN;
+        createInfo.graphicsApi = (config->graphicsApi == 1) ? nri::GraphicsAPI::D3D12 : nri::GraphicsAPI::VK;
     }
     else
     {
-        createInfo.graphicsApi = nvrhi::GraphicsAPI::VULKAN;
+        createInfo.graphicsApi = nri::GraphicsAPI::VK;
     }
 
     s_EmbeddedApp = new ignite::NativeEmbeddedApp(createInfo);

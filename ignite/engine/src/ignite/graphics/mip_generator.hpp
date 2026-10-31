@@ -6,7 +6,7 @@
 
 #include <vector>
 #include <cstdint>
-#include <nvrhi/nvrhi.h>
+#include <NRI.h>
 
 namespace ignite
 {
@@ -22,7 +22,7 @@ namespace ignite
     class CPUMipGenerator
     {
     public:
-        static std::vector<MipLevelData> GenerateMipChain(const void *baseData, uint32_t baseWidth, uint32_t baseHeight, uint32_t baseRowPitch, nvrhi::Format format, uint32_t mipLevels)
+        static std::vector<MipLevelData> GenerateMipChain(const void *baseData, uint32_t baseWidth, uint32_t baseHeight, uint32_t baseRowPitch, nri::Format format, uint32_t mipLevels)
         {
             std::vector<MipLevelData> mipChain;
             mipChain.reserve(mipLevels);
@@ -49,7 +49,7 @@ namespace ignite
 
         }
 
-        static MipLevelData GenerateNextMipLevel(const MipLevelData &srcMip, nvrhi::Format format)
+        static MipLevelData GenerateNextMipLevel(const MipLevelData &srcMip, nri::Format format)
         {
             MipLevelData dstMip;
             dstMip.width = std::max(1u, srcMip.width / 2);
@@ -61,25 +61,25 @@ namespace ignite
             dstMip.data.resize(dstMip.slicePitch);
 
             switch (format) {
-            case nvrhi::Format::RGBA8_UNORM:
-            case nvrhi::Format::SRGBA8_UNORM:
-            case nvrhi::Format::BGRA8_UNORM:
-            case nvrhi::Format::SBGRA8_UNORM:
+            case nri::Format::RGBA8_UNORM:
+            case nri::Format::RGBA8_SRGB:
+            case nri::Format::BGRA8_UNORM:
+            case nri::Format::BGRA8_SRGB:
                 DownsampleRGBA8(srcMip, dstMip);
                 break;
-            case nvrhi::Format::RG8_UNORM:
+            case nri::Format::RG8_UNORM:
                 DownsampleRG8(srcMip, dstMip);
                 break;
 
-            case nvrhi::Format::R8_UNORM:
+            case nri::Format::R8_UNORM:
                 DownsampleR8(srcMip, dstMip);
                 break;
 
-            case nvrhi::Format::RGBA16_FLOAT:
+            case nri::Format::RGBA16_SFLOAT:
                 DownsampleRGBA16_FLOAT(srcMip, dstMip);
                 break;
 
-            case nvrhi::Format::RGBA32_FLOAT:
+            case nri::Format::RGBA32_SFLOAT:
                 DownsampleRGBA32_FLOAT(srcMip, dstMip);
                 break;
 
@@ -92,21 +92,21 @@ namespace ignite
             return dstMip;
         }
 
-        static uint32_t GetBytesPerPixel(nvrhi::Format format)
+        static uint32_t GetBytesPerPixel(nri::Format format)
         {
             switch (format) {
-            case nvrhi::Format::RGBA8_UNORM:
-            case nvrhi::Format::SRGBA8_UNORM:
-            case nvrhi::Format::BGRA8_UNORM:
-            case nvrhi::Format::SBGRA8_UNORM:
+            case nri::Format::RGBA8_UNORM:
+            case nri::Format::RGBA8_SRGB:
+            case nri::Format::BGRA8_UNORM:
+            case nri::Format::BGRA8_SRGB:
                 return 4;
-            case nvrhi::Format::RG8_UNORM:
+            case nri::Format::RG8_UNORM:
                 return 2;
-            case nvrhi::Format::R8_UNORM:
+            case nri::Format::R8_UNORM:
                 return 1;
-            case nvrhi::Format::RGBA16_FLOAT:
+            case nri::Format::RGBA16_SFLOAT:
                 return 8;
-            case nvrhi::Format::RGBA32_FLOAT:
+            case nri::Format::RGBA32_SFLOAT:
                 return 16;
             default:
                 return 4; // Default to RGBA8

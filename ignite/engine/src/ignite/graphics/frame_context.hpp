@@ -1,131 +1,151 @@
-// Copyritght (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 #ifndef IGN_FRAME_CONTEXT_HPP
 #define IGN_FRAME_CONTEXT_HPP
 
 #include "buffers/constant_buffer.hpp"
+#include "binding_set.hpp"
 #include "gpu_data.hpp"
 
-#include <nvrhi/nvrhi.h>
+#include <NRI.h>
 
 namespace ignite
 {
-	class ObjectAllocator
-	{
-	public:
-		void BeginFrame() { m_ObjectCount = 0; }
-		uint32_t Allocate(nvrhi::ICommandList *cmd, const Mesh_GPUData &data);
-		void SetBuffer(nvrhi::BufferHandle buffer) { m_Buffer = buffer; }
+    class ObjectBuffer
+    {
+    public:
+        void Initialize(uint32_t maxObjects, nri::Device *device);
+        void Shutdown();
+        nri::Buffer *GetHandle() const { return m_Buffer; }
+        nri::Descriptor *GetDescriptor() const { return m_Descriptor; }
+        size_t GetByteSize() const { return m_ByteSize; }
 
-        operator nvrhi::BufferHandle() const { return m_Buffer; }
-        operator nvrhi::IBuffer *() const { return m_Buffer; }
+        operator nri::Buffer *() const { return m_Buffer; }
 
-	private:
-		nvrhi::BufferHandle m_Buffer;
-		uint32_t m_ObjectCount = 0;
-	};
+    private:
+        nri::Buffer *m_Buffer = nullptr;
+        nri::Memory *m_Memory = nullptr;
+        nri::Descriptor *m_Descriptor = nullptr;
+        size_t m_ByteSize = 0;
+    };
 
-	class BoneAllocator
-	{
-	public:
-		void BeginFrame() { m_BoneCount = 0; }
-		uint32_t Allocate(nvrhi::ICommandList *cmd, const glm::mat4 *bones, uint32_t count);
-		void SetBuffer(nvrhi::BufferHandle buffer) { m_Buffer = buffer; }
+    class BoneBuffer
+    {
+    public:
+        void Initialize(uint32_t maxBones, nri::Device *device);
+        void Shutdown();
+        nri::Buffer *GetHandle() const { return m_Buffer; }
+        nri::Descriptor *GetDescriptor() const { return m_Descriptor; }
+        size_t GetByteSize() const { return m_ByteSize; }
 
-        operator nvrhi::BufferHandle() const { return m_Buffer; }
-        operator nvrhi::IBuffer *() const { return m_Buffer; }
+        operator nri::Buffer *() const { return m_Buffer; }
 
-	private:
-		nvrhi::BufferHandle m_Buffer;
-		uint32_t m_BoneCount = 0;
-	};
+    private:
+        nri::Buffer *m_Buffer = nullptr;
+        nri::Memory *m_Memory = nullptr;
+        nri::Descriptor *m_Descriptor = nullptr;
+        size_t m_ByteSize = 0;
+    };
 
-	class InstanceIndexAllocator
-	{
-	public:
-		void BeginFrame() { m_IndexCount = 0; }
-		uint32_t Allocate(nvrhi::ICommandList *cmd, const uint32_t *indices, uint32_t count);
-		void SetBuffer(nvrhi::BufferHandle buffer) { m_Buffer = buffer; }
+    class InstanceIndexBuffer
+    {
+    public:
+        void Initialize(uint32_t maxIndices, nri::Device *device);
+        void Shutdown();
+        nri::Buffer *GetHandle() const { return m_Buffer; }
+        nri::Descriptor *GetDescriptor() const { return m_Descriptor; }
+        size_t GetByteSize() const { return m_ByteSize; }
 
-        operator nvrhi::BufferHandle() const { return m_Buffer; }
-        operator nvrhi::IBuffer *() const { return m_Buffer; }
+        operator nri::Buffer *() const { return m_Buffer; }
 
-	private:
-		nvrhi::BufferHandle m_Buffer;
-		uint32_t m_IndexCount = 0;
-	};
+    private:
+        nri::Buffer *m_Buffer = nullptr;
+        nri::Memory *m_Memory = nullptr;
+        nri::Descriptor *m_Descriptor = nullptr;
+        size_t m_ByteSize = 0;
+    };
 
-	class ObjectBuffer
-	{
-	public:
-		void Initialize(uint32_t maxObjects, nvrhi::IDevice *device);
-		nvrhi::BufferHandle GetHandle() const { return m_Buffer; }
+    class ObjectAllocator
+    {
+    public:
+        void BeginFrame() { m_ObjectCount = 0; }
+        uint32_t Allocate(nri::CommandBuffer *cmd, const Mesh_GPUData &data);
+        void SetBuffer(const ObjectBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_ByteSize = buffer.GetByteSize(); }
 
-        operator nvrhi::BufferHandle() const { return m_Buffer; }
-        operator nvrhi::IBuffer *() const { return m_Buffer; }
+        operator nri::Buffer *() const { return m_Buffer; }
 
-	private:
-		nvrhi::BufferHandle m_Buffer;
-	};
+    private:
+        nri::Buffer *m_Buffer = nullptr;
+        size_t m_ByteSize = 0;
+        uint32_t m_ObjectCount = 0;
+    };
 
-	class BoneBuffer
-	{
-	public:
-		void Initialize(uint32_t maxBones, nvrhi::IDevice *device);
-		nvrhi::BufferHandle GetHandle() const { return m_Buffer; }
+    class BoneAllocator
+    {
+    public:
+        void BeginFrame() { m_BoneCount = 0; }
+        uint32_t Allocate(nri::CommandBuffer *cmd, const glm::mat4 *bones, uint32_t count);
+        void SetBuffer(const BoneBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_ByteSize = buffer.GetByteSize(); }
 
-        operator nvrhi::BufferHandle() const { return m_Buffer; }
-        operator nvrhi::IBuffer *() const { return m_Buffer; }
+        operator nri::Buffer *() const { return m_Buffer; }
 
-	private:
-		nvrhi::BufferHandle m_Buffer;
-	};
+    private:
+        nri::Buffer *m_Buffer = nullptr;
+        size_t m_ByteSize = 0;
+        uint32_t m_BoneCount = 0;
+    };
 
-	class InstanceIndexBuffer
-	{
-	public:
-		void Initialize(uint32_t maxIndices, nvrhi::IDevice *device);
-		nvrhi::BufferHandle GetHandle() const { return m_Buffer; }
+    class InstanceIndexAllocator
+    {
+    public:
+        void BeginFrame() { m_IndexCount = 0; }
+        uint32_t Allocate(nri::CommandBuffer *cmd, const uint32_t *indices, uint32_t count);
+        void SetBuffer(const InstanceIndexBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_ByteSize = buffer.GetByteSize(); }
 
-        operator nvrhi::BufferHandle() const { return m_Buffer; }
-        operator nvrhi::IBuffer *() const { return m_Buffer; }
+        operator nri::Buffer *() const { return m_Buffer; }
 
-	private:
-		nvrhi::BufferHandle m_Buffer;
-	};
+    private:
+        nri::Buffer *m_Buffer = nullptr;
+        size_t m_ByteSize = 0;
+        uint32_t m_IndexCount = 0;
+    };
 
     class FrameContext
     {
-	public:
-		FrameContext(nvrhi::IDevice *device);
-		void InitializeBindingSets(nvrhi::IDevice *device, nvrhi::IBindingLayout *staticLayout, nvrhi::IBindingLayout *animLayout);
+    public:
+        FrameContext(nri::Device *device);
+        void InitializeBindingSets(nri::Device *device, const BindingLayoutDesc &staticLayout, const BindingLayoutDesc &animLayout);
+        void Shutdown();
 
-	public:
-		ConstantBuffer cameraBuffer;
-		ConstantBuffer sceneBuffer;
-		ConstantBuffer csmBuffer;
-		ConstantBuffer pointLightBuffer;
-		ConstantBuffer spotLightBuffer;
+    public:
+        ConstantBuffer cameraBuffer;
+        ConstantBuffer sceneBuffer;
+        ConstantBuffer csmBuffer;
+        ConstantBuffer pointLightBuffer;
+        ConstantBuffer spotLightBuffer;
 
-		ObjectBuffer objectBuffer;
-		ObjectAllocator objectAllocator;
+        ObjectBuffer objectBuffer;
+        ObjectAllocator objectAllocator;
 
-		BoneBuffer boneBuffer;
-		BoneAllocator boneAllocator;
+        BoneBuffer boneBuffer;
+        BoneAllocator boneAllocator;
 
-		InstanceIndexBuffer instanceIndexBuffer;
-		InstanceIndexAllocator instanceIndexAllocator;
+        InstanceIndexBuffer instanceIndexBuffer;
+        InstanceIndexAllocator instanceIndexAllocator;
 
-		nvrhi::BindingSetHandle staticMeshBindingSet;
-		nvrhi::BindingSetHandle animatedBindingSet;	
+        Ref<BindingSet> staticMeshBindingSet;
+        Ref<BindingSet> animatedBindingSet;
 
-		ConstantBuffer csmPerCascadeBuffers[NUM_CASCADES];
-		nvrhi::BindingSetHandle staticMeshCSMBindingSet[NUM_CASCADES];
-		nvrhi::BindingSetHandle animatedMeshCSMBindingSet[NUM_CASCADES];
+        ConstantBuffer csmPerCascadeBuffers[NUM_CASCADES];
+        Ref<BindingSet> staticMeshCSMBindingSet[NUM_CASCADES];
+        Ref<BindingSet> animatedMeshCSMBindingSet[NUM_CASCADES];
 
-		uint32_t frameIndexInFlight = 0;
-	};
+        nri::PipelineLayout *staticPipelineLayout = nullptr;
+        nri::PipelineLayout *animPipelineLayout = nullptr;
+
+        uint32_t frameIndexInFlight = 0;
+    };
 }
 
 #endif

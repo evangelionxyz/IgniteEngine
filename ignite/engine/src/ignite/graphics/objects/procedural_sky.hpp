@@ -5,9 +5,11 @@
 #define IGN_PROCEDURAL_SKY_HPP
 
 #include "ignite/core/base.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/shader.hpp"
-#include <nvrhi/nvrhi.h>
+#include "ignite/graphics/binding_set.hpp"
+#include "ignite/graphics/buffers/constant_buffer.hpp"
 #include <glm/glm.hpp>
 
 namespace ignite
@@ -47,7 +49,7 @@ namespace ignite
         ~ProceduralSky();
 
         void Init();
-        void RenderLUTs(nvrhi::ICommandList *cmd, const glm::vec3 &sunDir, const glm::vec3 &sunColor, float sunIntensity, float sunAngularRadius, const glm::vec3 &cameraPos = glm::vec3(0.0f));
+        void RenderLUTs(nri::CommandBuffer *cmd, const glm::vec3 &sunDir, const glm::vec3 &sunColor, float sunIntensity, float sunAngularRadius, const glm::vec3 &cameraPos = glm::vec3(0.0f));
 
         Ref<Texture> GetSkyViewLUT() const { return m_SkyViewLUTTexture; }
         Ref<Texture> GetTransmittanceLUT() const { return m_TransmittanceLUTTexture; }
@@ -73,16 +75,24 @@ namespace ignite
         Ref<Shader> m_MultiScatteringShader;
         Ref<Shader> m_SkyViewShader;
 
-        nvrhi::BindingLayoutHandle m_TransmittanceLayout;
-        nvrhi::BindingLayoutHandle m_MultiScatteringLayout;
-        nvrhi::BindingLayoutHandle m_SkyViewLayout;
+        BindingLayoutDesc m_TransmittanceLayout;
+        BindingLayoutDesc m_MultiScatteringLayout;
+        BindingLayoutDesc m_SkyViewLayout;
 
-        nvrhi::ComputePipelineHandle m_TransmittancePipeline;
-        nvrhi::ComputePipelineHandle m_MultiScatteringPipeline;
-        nvrhi::ComputePipelineHandle m_SkyViewPipeline;
+        nri::PipelineLayout *m_TransmittancePipelineLayout = nullptr;
+        nri::PipelineLayout *m_MultiScatteringPipelineLayout = nullptr;
+        nri::PipelineLayout *m_SkyViewPipelineLayout = nullptr;
 
-        nvrhi::BufferHandle m_AtmosphereBuffer;
-        nvrhi::SamplerHandle m_LinearSampler;
+        nri::Pipeline *m_TransmittancePipeline = nullptr;
+        nri::Pipeline *m_MultiScatteringPipeline = nullptr;
+        nri::Pipeline *m_SkyViewPipeline = nullptr;
+
+        Ref<BindingSet> m_TransmittanceBindingSet;
+        Ref<BindingSet> m_MultiScatteringBindingSet;
+        Ref<BindingSet> m_SkyViewBindingSet;
+
+        Ref<ConstantBuffer> m_AtmosphereBuffer;
+        nri::Descriptor *m_LinearSampler = nullptr;
     };
 }
 

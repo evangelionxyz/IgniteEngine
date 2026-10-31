@@ -25,12 +25,20 @@ namespace ignite
     {
         // Clear binding set first (references other resources)
         m_BindingSet = nullptr;
+        m_BindingSets.clear();
 
         // Clear GPU data buffer
         m_GPUDataBuffer.reset();
 
         // Clear sampler
-        sampler = nullptr;
+        if (sampler)
+        {
+            if (auto *dm = DeviceManager::GetInstance())
+            {
+                dm->GetNRI().DestroyDescriptor(sampler);
+            }
+            sampler = nullptr;
+        }
     }
 
     bool Material::UpdateBindingSet(Ref<Texture> envMap, Ref<Texture> shadowMap)
@@ -61,17 +69,17 @@ namespace ignite
                 return false;
             }
 
-			Ref<Texture> result = AssetManager::GetInstance()->GetAsset<Texture>(textureHandle);
+            Ref<Texture> result = AssetManager::GetInstance()->GetAsset<Texture>(textureHandle);
             const bool ready = result && result->IsReady();
-			if (result && result->IsReady())
-			{
-				outTexture = result;
-			}
+            if (result && result->IsReady())
+            {
+                outTexture = result;
+            }
             return ready;
         };
 
         Ref<Texture> baseColor, emissive, metallic, roughness, normal, occlusion;
-		bool allTexturesReady = isTextureReady(baseColorTextureHandle, baseColor, Renderer::GetWhiteTexture());
+        bool allTexturesReady = isTextureReady(baseColorTextureHandle, baseColor, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(emissiveTextureHandle, emissive, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(metallicTextureHandle, metallic, Renderer::GetWhiteTexture());
         allTexturesReady &= isTextureReady(roughnessTextureHandle, roughness, Renderer::GetWhiteTexture());
@@ -88,10 +96,9 @@ namespace ignite
         }
 
         EnsureGpuResources();
-        auto device = DeviceManager::GetInstance()->GetDevice();
 
-        nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));
+        BindingSetDesc desc = BindingSetDesc();
+        desc.addItem(BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetDescriptor()));
 
         Ref<Texture> environmentTexture = envMap;
         if (!environmentTexture)
@@ -101,14 +108,15 @@ namespace ignite
         if (!shadowTexture)
             shadowTexture = Renderer::GetWhiteTexture();
 
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, environmentTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, shadowTexture->GetHandle()));
+        desc.addItem(BindingSetItem::TextureSRV(0, environmentTexture->GetShaderResourceView()));
+        desc.addItem(BindingSetItem::TextureSRV(1, shadowTexture->GetShaderResourceView()));
 
         // Sampler
-        desc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-        desc.addItem(nvrhi::BindingSetItem::Sampler(1, shadowMap ? shadowMap->GetSampler() : sampler));
+        desc.addItem(BindingSetItem::Sampler(0, sampler));
+        desc.addItem(BindingSetItem::Sampler(1, shadowMap ? shadowMap->GetSampler() : sampler));
 
-        auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(EBindingLayout::MATERIAL));
+        nri::PipelineLayout *materialPipelineLayout = Renderer::GetPipelineLayout(EBindingLayout::MATERIAL);
+        Ref<BindingSet> newBindingSet = BindingSet::Create("Material", materialPipelineLayout, 0, desc);
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");
 
         // All created
@@ -124,7 +132,7 @@ namespace ignite
         return false;
     }
 
-    void Material::UploadToGpu(nvrhi::ICommandList *cmd)
+    void Material::UploadToGpu(nri::CommandBuffer *)
     {
         EnsureGpuResources();
         // Sync blend mode from material type so the shader always has the correct value
@@ -150,10 +158,10 @@ namespace ignite
         gpuData.normalTextureIndex = static_cast<int>(getBindlessIndex(normalTextureHandle, static_cast<uint32_t>(-1)));
         gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);
 
-        m_GPUDataBuffer->SetData(cmd, &gpuData, sizeof(Material_GPUData));
+        m_GPUDataBuffer->SetData(Buffer(&gpuData, sizeof(Material_GPUData)));
     }
 
-    void Material::SetSamplerDesc(const nvrhi::SamplerDesc &desc)
+    void Material::SetSamplerDesc(const nri::SamplerDesc &desc)
     {
         m_SamplerDesc = desc;
         m_HasSamplerDesc = true;
@@ -188,28 +196,28 @@ namespace ignite
             sr.AddKeyValue("MetallicFactor", gpuData.metallicFactor);
             sr.AddKeyValue("RoughnessFactor", gpuData.roughnessFactor);
             sr.AddKeyValue("OcclusionStrength", gpuData.occlusionStrength);
-			sr.AddKeyValue("BaseWeight", gpuData.baseWeight);
-			sr.AddKeyValue("SpecularWeight", gpuData.specularWeight);
-			sr.AddKeyValue("SpecularIOR", gpuData.specularIOR);
-			sr.AddKeyValue("SpecularColor", gpuData.specularColor);
-			sr.AddKeyValue("CoatWeight", gpuData.coatWeight);
-			sr.AddKeyValue("CoatColor", gpuData.coatColor);
-			sr.AddKeyValue("CoatRoughness", gpuData.coatRoughness);
-			sr.AddKeyValue("CoatIOR", gpuData.coatIOR);
-			sr.AddKeyValue("CoatDarkening", gpuData.coatDarkening);
-			sr.AddKeyValue("SpecularAnisotropy", gpuData.specularAnisotropy);
-			sr.AddKeyValue("SubsurfaceWeight", gpuData.subsurfaceWeight);
-			sr.AddKeyValue("SubsurfaceScale", gpuData.subsurfaceScale);
-			sr.AddKeyValue("SubsurfaceColor", gpuData.subsurfaceColor);
-			sr.AddKeyValue("SubsurfaceRadius", gpuData.subsurfaceRadius);
-			sr.AddKeyValue("TransmissionWeight", gpuData.transmissionWeight);
-			sr.AddKeyValue("TransmissionDepth", gpuData.transmissionDepth);
-			sr.AddKeyValue("TransmissionColor", gpuData.transmissionColor);
-			sr.AddKeyValue("FuzzWeight", gpuData.fuzzWeight);
-			sr.AddKeyValue("FuzzRoughness", gpuData.fuzzRoughness);
-			sr.AddKeyValue("FuzzColor", gpuData.fuzzColor);
-			sr.AddKeyValue("UseMultiScatter", gpuData.useMultiScatter);
-			sr.AddKeyValue("EmissionLuminance", gpuData.emissionLuminance);
+            sr.AddKeyValue("BaseWeight", gpuData.baseWeight);
+            sr.AddKeyValue("SpecularWeight", gpuData.specularWeight);
+            sr.AddKeyValue("SpecularIOR", gpuData.specularIOR);
+            sr.AddKeyValue("SpecularColor", gpuData.specularColor);
+            sr.AddKeyValue("CoatWeight", gpuData.coatWeight);
+            sr.AddKeyValue("CoatColor", gpuData.coatColor);
+            sr.AddKeyValue("CoatRoughness", gpuData.coatRoughness);
+            sr.AddKeyValue("CoatIOR", gpuData.coatIOR);
+            sr.AddKeyValue("CoatDarkening", gpuData.coatDarkening);
+            sr.AddKeyValue("SpecularAnisotropy", gpuData.specularAnisotropy);
+            sr.AddKeyValue("SubsurfaceWeight", gpuData.subsurfaceWeight);
+            sr.AddKeyValue("SubsurfaceScale", gpuData.subsurfaceScale);
+            sr.AddKeyValue("SubsurfaceColor", gpuData.subsurfaceColor);
+            sr.AddKeyValue("SubsurfaceRadius", gpuData.subsurfaceRadius);
+            sr.AddKeyValue("TransmissionWeight", gpuData.transmissionWeight);
+            sr.AddKeyValue("TransmissionDepth", gpuData.transmissionDepth);
+            sr.AddKeyValue("TransmissionColor", gpuData.transmissionColor);
+            sr.AddKeyValue("FuzzWeight", gpuData.fuzzWeight);
+            sr.AddKeyValue("FuzzRoughness", gpuData.fuzzRoughness);
+            sr.AddKeyValue("FuzzColor", gpuData.fuzzColor);
+            sr.AddKeyValue("UseMultiScatter", gpuData.useMultiScatter);
+            sr.AddKeyValue("EmissionLuminance", gpuData.emissionLuminance);
             sr.AddKeyValue("MetallicChannel", gpuData.metallicChannel);
             sr.AddKeyValue("RoughnessChannel", gpuData.roughnessChannel);
             sr.AddKeyValue("TilingFactorX", gpuData.tilingFactor.x);
@@ -239,7 +247,7 @@ namespace ignite
         Ref<Material> material = CreateRef<Material>();
         if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
         if (materialNode["Type"]) material->SetType(static_cast<MaterialType>(materialNode["Type"].as<int>()));
-        if (materialNode["CullMode"]) material->SetCullMode(static_cast<nvrhi::RasterCullMode>(materialNode["CullMode"].as<int>()));
+        if (materialNode["CullMode"]) material->SetCullMode(static_cast<nri::CullMode>(materialNode["CullMode"].as<int>()));
         if (materialNode["BaseColorTextureHandle"]) material->baseColorTextureHandle = AssetHandle(materialNode["BaseColorTextureHandle"].as<uint64_t>());
         if (materialNode["EmissiveTextureHandle"]) material->emissiveTextureHandle = AssetHandle(materialNode["EmissiveTextureHandle"].as<uint64_t>());
         if (materialNode["MetallicTextureHandle"]) material->metallicTextureHandle = AssetHandle(materialNode["MetallicTextureHandle"].as<uint64_t>());
@@ -260,28 +268,28 @@ namespace ignite
             if (gpuDataNode["MetallicFactor"]) material->gpuData.metallicFactor = gpuDataNode["MetallicFactor"].as<float>();
             if (gpuDataNode["RoughnessFactor"]) material->gpuData.roughnessFactor = gpuDataNode["RoughnessFactor"].as<float>();
             if (gpuDataNode["OcclusionStrength"]) material->gpuData.occlusionStrength = gpuDataNode["OcclusionStrength"].as<float>();
-			if (gpuDataNode["BaseWeight"]) material->gpuData.baseWeight = gpuDataNode["BaseWeight"].as<float>();
-			if (gpuDataNode["SpecularWeight"]) material->gpuData.specularWeight = gpuDataNode["SpecularWeight"].as<float>();
-			if (gpuDataNode["SpecularIOR"]) material->gpuData.specularIOR = gpuDataNode["SpecularIOR"].as<float>();
-			if (gpuDataNode["SpecularColor"]) material->gpuData.specularColor = gpuDataNode["SpecularColor"].as<glm::vec4>();
-			if (gpuDataNode["CoatWeight"]) material->gpuData.coatWeight = gpuDataNode["CoatWeight"].as<float>();
-			if (gpuDataNode["CoatColor"]) material->gpuData.coatColor = gpuDataNode["CoatColor"].as<glm::vec4>();
-			if (gpuDataNode["CoatRoughness"]) material->gpuData.coatRoughness = gpuDataNode["CoatRoughness"].as<float>();
-			if (gpuDataNode["CoatIOR"]) material->gpuData.coatIOR = gpuDataNode["CoatIOR"].as<float>();
-			if (gpuDataNode["CoatDarkening"]) material->gpuData.coatDarkening = gpuDataNode["CoatDarkening"].as<float>();
-			if (gpuDataNode["SpecularAnisotropy"]) material->gpuData.specularAnisotropy = gpuDataNode["SpecularAnisotropy"].as<float>();
-			if (gpuDataNode["SubsurfaceWeight"]) material->gpuData.subsurfaceWeight = gpuDataNode["SubsurfaceWeight"].as<float>();
-			if (gpuDataNode["SubsurfaceScale"]) material->gpuData.subsurfaceScale = gpuDataNode["SubsurfaceScale"].as<float>();
-			if (gpuDataNode["SubsurfaceColor"]) material->gpuData.subsurfaceColor = gpuDataNode["SubsurfaceColor"].as<glm::vec4>();
-			if (gpuDataNode["SubsurfaceRadius"]) material->gpuData.subsurfaceRadius = gpuDataNode["SubsurfaceRadius"].as<glm::vec4>();
-			if (gpuDataNode["TransmissionWeight"]) material->gpuData.transmissionWeight = gpuDataNode["TransmissionWeight"].as<float>();
-			if (gpuDataNode["TransmissionDepth"]) material->gpuData.transmissionDepth = gpuDataNode["TransmissionDepth"].as<float>();
-			if (gpuDataNode["TransmissionColor"]) material->gpuData.transmissionColor = gpuDataNode["TransmissionColor"].as<glm::vec4>();
-			if (gpuDataNode["FuzzWeight"]) material->gpuData.fuzzWeight = gpuDataNode["FuzzWeight"].as<float>();
-			if (gpuDataNode["FuzzRoughness"]) material->gpuData.fuzzRoughness = gpuDataNode["FuzzRoughness"].as<float>();
-			if (gpuDataNode["FuzzColor"]) material->gpuData.fuzzColor = gpuDataNode["FuzzColor"].as<glm::vec4>();
-			if (gpuDataNode["UseMultiScatter"]) material->gpuData.useMultiScatter = gpuDataNode["UseMultiScatter"].as<float>();
-			if (gpuDataNode["EmissionLuminance"]) material->gpuData.emissionLuminance = gpuDataNode["EmissionLuminance"].as<float>();
+            if (gpuDataNode["BaseWeight"]) material->gpuData.baseWeight = gpuDataNode["BaseWeight"].as<float>();
+            if (gpuDataNode["SpecularWeight"]) material->gpuData.specularWeight = gpuDataNode["SpecularWeight"].as<float>();
+            if (gpuDataNode["SpecularIOR"]) material->gpuData.specularIOR = gpuDataNode["SpecularIOR"].as<float>();
+            if (gpuDataNode["SpecularColor"]) material->gpuData.specularColor = gpuDataNode["SpecularColor"].as<glm::vec4>();
+            if (gpuDataNode["CoatWeight"]) material->gpuData.coatWeight = gpuDataNode["CoatWeight"].as<float>();
+            if (gpuDataNode["CoatColor"]) material->gpuData.coatColor = gpuDataNode["CoatColor"].as<glm::vec4>();
+            if (gpuDataNode["CoatRoughness"]) material->gpuData.coatRoughness = gpuDataNode["CoatRoughness"].as<float>();
+            if (gpuDataNode["CoatIOR"]) material->gpuData.coatIOR = gpuDataNode["CoatIOR"].as<float>();
+            if (gpuDataNode["CoatDarkening"]) material->gpuData.coatDarkening = gpuDataNode["CoatDarkening"].as<float>();
+            if (gpuDataNode["SpecularAnisotropy"]) material->gpuData.specularAnisotropy = gpuDataNode["SpecularAnisotropy"].as<float>();
+            if (gpuDataNode["SubsurfaceWeight"]) material->gpuData.subsurfaceWeight = gpuDataNode["SubsurfaceWeight"].as<float>();
+            if (gpuDataNode["SubsurfaceScale"]) material->gpuData.subsurfaceScale = gpuDataNode["SubsurfaceScale"].as<float>();
+            if (gpuDataNode["SubsurfaceColor"]) material->gpuData.subsurfaceColor = gpuDataNode["SubsurfaceColor"].as<glm::vec4>();
+            if (gpuDataNode["SubsurfaceRadius"]) material->gpuData.subsurfaceRadius = gpuDataNode["SubsurfaceRadius"].as<glm::vec4>();
+            if (gpuDataNode["TransmissionWeight"]) material->gpuData.transmissionWeight = gpuDataNode["TransmissionWeight"].as<float>();
+            if (gpuDataNode["TransmissionDepth"]) material->gpuData.transmissionDepth = gpuDataNode["TransmissionDepth"].as<float>();
+            if (gpuDataNode["TransmissionColor"]) material->gpuData.transmissionColor = gpuDataNode["TransmissionColor"].as<glm::vec4>();
+            if (gpuDataNode["FuzzWeight"]) material->gpuData.fuzzWeight = gpuDataNode["FuzzWeight"].as<float>();
+            if (gpuDataNode["FuzzRoughness"]) material->gpuData.fuzzRoughness = gpuDataNode["FuzzRoughness"].as<float>();
+            if (gpuDataNode["FuzzColor"]) material->gpuData.fuzzColor = gpuDataNode["FuzzColor"].as<glm::vec4>();
+            if (gpuDataNode["UseMultiScatter"]) material->gpuData.useMultiScatter = gpuDataNode["UseMultiScatter"].as<float>();
+            if (gpuDataNode["EmissionLuminance"]) material->gpuData.emissionLuminance = gpuDataNode["EmissionLuminance"].as<float>();
             if (gpuDataNode["MetallicChannel"]) material->gpuData.metallicChannel = gpuDataNode["MetallicChannel"].as<int>();
             if (gpuDataNode["RoughnessChannel"]) material->gpuData.roughnessChannel = gpuDataNode["RoughnessChannel"].as<int>();
             if (gpuDataNode["TilingFactorX"]) material->gpuData.tilingFactor.x = gpuDataNode["TilingFactorX"].as<float>();
@@ -294,17 +302,17 @@ namespace ignite
         return material;
     }
 
-    nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
+    BindingLayoutDesc Material::GetBindingLayoutDesc()
     {
-        auto bindingLayoutDesc = nvrhi::BindingLayoutDesc()
-            .setRegisterSpace(1) // set 1
-            .setRegisterSpaceIsDescriptorSet(true)
-            .setVisibility(nvrhi::ShaderType::All)
-            .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // material
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0))    // environmentMapTexture
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(1))    // csm shadowMap
-            .addItem(nvrhi::BindingLayoutItem::Sampler(0))        // sampler
-            .addItem(nvrhi::BindingLayoutItem::Sampler(1));       // csm sampler
+        auto bindingLayoutDesc = BindingLayoutDesc()
+            .SetRegisterSpace(1) // set 1
+            .SetRegisterSpaceIsDescriptorSet(true)
+            .SetVisibility(nri::StageBits::ALL)
+            .AddItem(BindingLayoutItem::ConstantBuffer(0)) // material
+            .AddItem(BindingLayoutItem::TextureSRV(0))    // environmentMapTexture
+            .AddItem(BindingLayoutItem::TextureSRV(1))    // csm shadowMap
+            .AddItem(BindingLayoutItem::Sampler(0))        // sampler
+            .AddItem(BindingLayoutItem::Sampler(1));       // csm sampler
         return bindingLayoutDesc;
     }
 
@@ -312,15 +320,17 @@ namespace ignite
     {
         if (!sampler)
         {
-            auto device = DeviceManager::GetInstance()->GetDevice();
-            nvrhi::SamplerDesc desc = m_HasSamplerDesc ? m_SamplerDesc : nvrhi::SamplerDesc();
+            auto &nri = DeviceManager::GetInstance()->GetNRI();
+            nri::Device *device = DeviceManager::GetInstance()->GetDevice();
+            nri::SamplerDesc desc = m_HasSamplerDesc ? m_SamplerDesc : nri::SamplerDesc{};
             if (!m_HasSamplerDesc)
             {
-                desc.setAllFilters(true);
-                desc.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat);
+                desc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR, nri::Filter::LINEAR };
+                desc.addressModes = { nri::AddressMode::REPEAT, nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
+                desc.mipMax = 16.0f;
             }
 
-            sampler = device->createSampler(desc);
+            nri.CreateSampler(*device, desc, sampler);
             LOG_ASSERT(sampler, "Failed to create sampler");
         }
 

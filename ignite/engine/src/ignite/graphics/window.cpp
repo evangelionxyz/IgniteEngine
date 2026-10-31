@@ -29,42 +29,42 @@ namespace ignite
 {
     static const struct
     {
-        nvrhi::Format format;
-        u32 redBits;
-        u32 greenBits;
-        u32 blueBits;
-        u32 alphaBits;
-        u32 depthBits;
-        u32 stencilBits;
+        nri::Format format;
+        uint32_t redBits;
+        uint32_t greenBits;
+        uint32_t blueBits;
+        uint32_t alphaBits;
+        uint32_t depthBits;
+        uint32_t stencilBits;
     } formatInfo[] =
     {
-        { nvrhi::Format::UNKNOWN,            0,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::R8_UINT,            8,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::RG8_UINT,           8,  8,  0,  0,  0,  0, },
-        { nvrhi::Format::RG8_UNORM,          8,  8,  0,  0,  0,  0, },
-        { nvrhi::Format::R16_UINT,          16,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::R16_UNORM,         16,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::R16_FLOAT,         16,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::RGBA8_UNORM,        8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::RGBA8_SNORM,        8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::BGRA8_UNORM,        8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::SRGBA8_UNORM,       8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::SBGRA8_UNORM,       8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::R10G10B10A2_UNORM, 10, 10, 10,  2,  0,  0, },
-        { nvrhi::Format::R11G11B10_FLOAT,   11, 11, 10,  0,  0,  0, },
-        { nvrhi::Format::RG16_UINT,         16, 16,  0,  0,  0,  0, },
-        { nvrhi::Format::RG16_FLOAT,        16, 16,  0,  0,  0,  0, },
-        { nvrhi::Format::R32_UINT,          32,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::R32_FLOAT,         32,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::RGBA16_FLOAT,      16, 16, 16, 16,  0,  0, },
-        { nvrhi::Format::RGBA16_UNORM,      16, 16, 16, 16,  0,  0, },
-        { nvrhi::Format::RGBA16_SNORM,      16, 16, 16, 16,  0,  0, },
-        { nvrhi::Format::RG32_UINT,         32, 32,  0,  0,  0,  0, },
-        { nvrhi::Format::RG32_FLOAT,        32, 32,  0,  0,  0,  0, },
-        { nvrhi::Format::RGB32_UINT,        32, 32, 32,  0,  0,  0, },
-        { nvrhi::Format::RGB32_FLOAT,       32, 32, 32,  0,  0,  0, },
-        { nvrhi::Format::RGBA32_UINT,       32, 32, 32, 32,  0,  0, },
-        { nvrhi::Format::RGBA32_FLOAT,      32, 32, 32, 32,  0,  0, }
+        { nri::Format::UNKNOWN,                0,  0,  0,  0,  0,  0, },
+        { nri::Format::R8_UINT,                8,  0,  0,  0,  0,  0, },
+        { nri::Format::RG8_UINT,               8,  8,  0,  0,  0,  0, },
+        { nri::Format::RG8_UNORM,              8,  8,  0,  0,  0,  0, },
+        { nri::Format::R16_UINT,              16,  0,  0,  0,  0,  0, },
+        { nri::Format::R16_UNORM,             16,  0,  0,  0,  0,  0, },
+        { nri::Format::R16_SFLOAT,            16,  0,  0,  0,  0,  0, },
+        { nri::Format::RGBA8_UNORM,            8,  8,  8,  8,  0,  0, },
+        { nri::Format::RGBA8_SNORM,            8,  8,  8,  8,  0,  0, },
+        { nri::Format::BGRA8_UNORM,            8,  8,  8,  8,  0,  0, },
+        { nri::Format::RGBA8_SRGB,             8,  8,  8,  8,  0,  0, },
+        { nri::Format::BGRA8_SRGB,             8,  8,  8,  8,  0,  0, },
+        { nri::Format::R10_G10_B10_A2_UNORM,  10, 10, 10,  2,  0,  0, },
+        { nri::Format::R11_G11_B10_UFLOAT,    11, 11, 10,  0,  0,  0, },
+        { nri::Format::RG16_UINT,             16, 16,  0,  0,  0,  0, },
+        { nri::Format::RG16_SFLOAT,           16, 16,  0,  0,  0,  0, },
+        { nri::Format::R32_UINT,              32,  0,  0,  0,  0,  0, },
+        { nri::Format::R32_SFLOAT,            32,  0,  0,  0,  0,  0, },
+        { nri::Format::RGBA16_SFLOAT,         16, 16, 16, 16,  0,  0, },
+        { nri::Format::RGBA16_UNORM,          16, 16, 16, 16,  0,  0, },
+        { nri::Format::RGBA16_SNORM,          16, 16, 16, 16,  0,  0, },
+        { nri::Format::RG32_UINT,             32, 32,  0,  0,  0,  0, },
+        { nri::Format::RG32_SFLOAT,           32, 32,  0,  0,  0,  0, },
+        { nri::Format::RGB32_UINT,            32, 32, 32,  0,  0,  0, },
+        { nri::Format::RGB32_SFLOAT,          32, 32, 32,  0,  0,  0, },
+        { nri::Format::RGBA32_UINT,           32, 32, 32, 32,  0,  0, },
+        { nri::Format::RGBA32_SFLOAT,         32, 32, 32, 32,  0,  0, }
     };
 
 #ifdef PLATFORM_WINDOWS
@@ -101,7 +101,7 @@ namespace ignite
     }
 #endif
 
-    Window::Window(const char *windowTitle, const DeviceParameters &params, nvrhi::GraphicsAPI graphicsApi)
+    Window::Window(const char *windowTitle, const DeviceParameters &params, nri::GraphicsAPI graphicsApi)
         : m_WindowTitle(windowTitle)
     {
         m_DeviceManager = DeviceManager::Create(this, params, graphicsApi);
@@ -144,7 +144,7 @@ namespace ignite
             SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, windowTitle);
             SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, params.windowWidth);
             SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, params.windowHeight);
-            if (graphicsApi == nvrhi::GraphicsAPI::VULKAN)
+            if (graphicsApi == nri::GraphicsAPI::VK)
             {
                 SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
             }
@@ -168,7 +168,7 @@ namespace ignite
         else
         {
             SDL_WindowFlags windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
-            if (graphicsApi == nvrhi::GraphicsAPI::VULKAN)
+            if (graphicsApi == nri::GraphicsAPI::VK)
             {
                 windowFlags |= SDL_WINDOW_VULKAN;
             }

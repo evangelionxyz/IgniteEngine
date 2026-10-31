@@ -14,6 +14,7 @@
 #include "device/device_manager.hpp"
 #include "vfs/vfs.hpp"
 #include "input/event.hpp"
+#include <NRI.h>
 
 #include <queue>
 #include <mutex>
@@ -22,6 +23,7 @@ struct ImGuiContext;
 
 namespace ignite
 {
+    class RenderTarget;
     class ShaderFactory;
     class Renderer;
     class Window;
@@ -62,7 +64,7 @@ namespace ignite
         bool offscreen = false;
         void *nativeWindowHandle = nullptr;
 
-        nvrhi::GraphicsAPI graphicsApi = nvrhi::GraphicsAPI::VULKAN;
+        nri::GraphicsAPI graphicsApi = nri::GraphicsAPI::VK;
     };
 
     class IGN_API Application
@@ -121,7 +123,7 @@ namespace ignite
         static void WindowRestore();
         static void SubmitToMainThread(const std::function<void()> func, const std::string &funcName = "MainThread");
         static void SubmitToRenderThread(const std::function<void()> func, const std::string &funcName = "RenderThread");
-        static void SubmitWorkerCommandList(nvrhi::CommandListHandle commandList, std::function<void()> onExecuted = {});
+        static void SubmitWorkerCommandList(nri::CommandBuffer *commandBuffer, std::function<void()> onExecuted = {});
 
         const std::thread *GetRenderThread() const;
         void ProcessMainThreadSubmissions();
@@ -174,7 +176,7 @@ namespace ignite
 
         // Synchronization
         std::mutex m_CommandListMutex;
-        std::vector<nvrhi::CommandListHandle> m_PendingCommandLists;
+        std::vector<nri::CommandBuffer *> m_PendingCommandLists;
         std::vector<std::function<void()>> m_PendingCommandListCallbacks;
 
         // Frame synchronization

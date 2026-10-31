@@ -152,9 +152,6 @@ namespace ignite
 
         Ref<Scene> desScene = Scene::Create(project);
 
-        // Open commandlist for asset deserialization
-        auto device = DeviceManager::GetInstance()->GetDevice();
-        nvrhi::CommandListHandle cmd = device->createCommandList();
 
         for (JsonNode entityNode : sceneNode["Entities"])
         {

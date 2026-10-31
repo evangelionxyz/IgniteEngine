@@ -7,10 +7,10 @@
 #include "ignite/core/base.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
+#include "ignite/graphics/binding_set.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 
 #include <glm/glm.hpp>
-#include <nvrhi/nvrhi.h>
 #include <map>
 
 namespace ignite
@@ -28,7 +28,7 @@ namespace ignite
     {
     public:
         Material();
-    	virtual ~Material() override;
+        virtual ~Material() override;
 
         std::string name;
 
@@ -37,31 +37,31 @@ namespace ignite
         AssetHandle metallicTextureHandle = AssetHandle(0);
         AssetHandle roughnessTextureHandle = AssetHandle(0);
         AssetHandle normalTextureHandle = AssetHandle(0);
-		AssetHandle occlusionTextureHandle = AssetHandle(0);
+        AssetHandle occlusionTextureHandle = AssetHandle(0);
 
-        nvrhi::SamplerHandle sampler;
-        void SetSamplerDesc(const nvrhi::SamplerDesc &desc);
+        nri::Descriptor *sampler = nullptr;
+        void SetSamplerDesc(const nri::SamplerDesc &desc);
 
         bool UpdateBindingSet(Ref<Texture> envMap = nullptr, Ref<Texture> shadowMap = nullptr);
-        void UploadToGpu(nvrhi::ICommandList *cmd);
+        void UploadToGpu(nri::CommandBuffer *cmd = nullptr);
         void SetType(MaterialType type) { m_Type = type; }
-        void SetCullMode(nvrhi::RasterCullMode mode) { m_CullMode = mode; }
-        nvrhi::RasterCullMode GetCullMode() const { return m_CullMode; }
+        void SetCullMode(nri::CullMode mode) { m_CullMode = mode; }
+        nri::CullMode GetCullMode() const { return m_CullMode; }
 
         bool IsNeedToInvalidate() const;
         void InvalidateBindingSet() { m_BindingSetDirty = true; m_BindingSet = nullptr; m_BindingSets.clear(); }
         bool IsBindingSetDirty() const { return m_BindingSetDirty; }
         void SetBindingSetClean() { m_BindingSetDirty = false; }
 
-        nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
+        Ref<BindingSet> GetBindingSet() { return m_BindingSet; }
         Ref<ConstantBuffer> GetGPUDataBuffer() { return m_GPUDataBuffer; }
         MaterialType GetType() const { return m_Type; }
-		Material_GPUData gpuData;
+        Material_GPUData gpuData;
 
-        static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
+        static BindingLayoutDesc GetBindingLayoutDesc();
 
-		static AssetType GetStaticType() { return AssetType::Material; }
-		virtual AssetType GetAssetType() override { return GetStaticType(); }
+        static AssetType GetStaticType() { return AssetType::Material; }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
 
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<Material> Deserialize(const std::filesystem::path &filepath);
@@ -70,11 +70,11 @@ namespace ignite
         void EnsureGpuResources();
 
         MaterialType m_Type = MaterialType::Opaque;
-        nvrhi::RasterCullMode m_CullMode = nvrhi::RasterCullMode::Front;
+        nri::CullMode m_CullMode = nri::CullMode::FRONT;
         Ref<ConstantBuffer> m_GPUDataBuffer;
-        nvrhi::BindingSetHandle m_BindingSet;
-        std::map<std::pair<Texture*, Texture*>, nvrhi::BindingSetHandle> m_BindingSets;
-        nvrhi::SamplerDesc m_SamplerDesc{};
+        Ref<BindingSet> m_BindingSet;
+        std::map<std::pair<Texture*, Texture*>, Ref<BindingSet>> m_BindingSets;
+        nri::SamplerDesc m_SamplerDesc{};
         bool m_BindingSetDirty = true;
         bool m_HasSamplerDesc = false;
     };

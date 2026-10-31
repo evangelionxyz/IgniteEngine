@@ -7,9 +7,10 @@
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
+#include "ignite/core/device/device_manager.hpp"
 
 #include "ignite/graphics/hash_keys.hpp"
-#include <nvrhi/nvrhi.h>
+#include "ignite/graphics/binding_set.hpp"
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
@@ -18,6 +19,7 @@
 namespace ignite
 {
     class GraphicsPipeline;
+    class RenderTarget;
     class Texture;
     class ConstantBuffer;
     class ICamera;
@@ -215,9 +217,9 @@ namespace ignite
         ~ParticleSystem();
 
         void Init(uint32_t maxParticles);
-        void Simulate(nvrhi::ICommandList *cmd, float dt, const glm::vec3 &emitterPos, const ParticleEmitterSettings &settings);
-        void Render(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const ParticleEmitterSettings &settings, uint32_t objectID);
-        void Reset(nvrhi::ICommandList *cmd);
+        void Simulate(nri::CommandBuffer *cmd, float dt, const glm::vec3 &emitterPos, const ParticleEmitterSettings &settings);
+        void Render(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, const ParticleEmitterSettings &settings, uint32_t objectID);
+        void Reset(nri::CommandBuffer *cmd);
 
         uint32_t GetMaxParticles() const { return m_MaxParticles; }
         uint32_t GetCurrentSpawnIndex() const { return m_CurrentSpawnIndex; }
@@ -227,8 +229,10 @@ namespace ignite
     private:
         void CreateBuffers(uint32_t maxParticles);
         void CreatePipelines();
-        Ref<GraphicsPipeline> GetOrCreateRenderPipeline(nvrhi::IFramebuffer *framebuffer, ParticleBlendMode blendMode);
-        void UpdateRenderBindingSet(const nvrhi::BufferHandle &cameraBuffer, Ref<Texture> texture);
+        void DestroyBuffers();
+        void DestroyPipelines();
+        Ref<GraphicsPipeline> GetOrCreateRenderPipeline(RenderTarget *framebuffer, ParticleBlendMode blendMode);
+        void UpdateRenderBindingSet(nri::Descriptor *cameraBufferDescriptor, Ref<Texture> texture, nri::PipelineLayout *pipelineLayout);
 
     private:
         uint32_t m_MaxParticles = 5000;
@@ -238,29 +242,37 @@ namespace ignite
         glm::vec3 m_LastEmitterPosition{ 0.0f };
         uint64_t m_LastSimulatedFrame = UINT64_MAX;
 
-        nvrhi::BufferHandle m_ParticleBuffer;
+        nri::Buffer *m_ParticleBuffer = nullptr;
+        nri::Memory *m_ParticleMemory = nullptr;
+        nri::Descriptor *m_ParticleSRV = nullptr;
+        nri::Descriptor *m_ParticleUAV = nullptr;
+
+        nri::Buffer *m_ResetStagingBuffer = nullptr;
+        nri::Memory *m_ResetStagingMemory = nullptr;
+
         Ref<ConstantBuffer> m_SimulateCB;
         Ref<ConstantBuffer> m_RenderCB;
 
         // Compute Pipeline for Simulation
         Ref<Shader> m_ComputeShader;
-        nvrhi::BindingLayoutHandle m_ComputeBindingLayout;
-        nvrhi::BindingSetHandle m_ComputeBindingSet;
-        nvrhi::ComputePipelineHandle m_ComputePipeline;
+        BindingLayoutDesc m_ComputeBindingLayout;
+        nri::PipelineLayout *m_ComputePipelineLayout = nullptr;
+        Ref<BindingSet> m_ComputeBindingSet;
+        nri::Pipeline *m_ComputePipeline = nullptr;
 
         // Render Pipelines (Alpha and Additive caches keyed by Framebuffer format)
         Ref<Shader> m_VertexShader;
         Ref<Shader> m_PixelShader;
-        nvrhi::BindingLayoutHandle m_RenderBindingLayout;
-        nvrhi::BindingSetHandle m_RenderBindingSet;
+        BindingLayoutDesc m_RenderBindingLayout;
+        Ref<BindingSet> m_RenderBindingSet;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_RenderPipelineAlphaCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_RenderPipelineAdditiveCache;
         Ref<GraphicsPipeline> m_RenderPipelineAlpha;
         Ref<GraphicsPipeline> m_RenderPipelineAdditive;
-        nvrhi::SamplerHandle m_LinearSampler;
+        nri::Descriptor *m_LinearSampler = nullptr;
 
-        nvrhi::IBuffer *m_LastCameraBuffer = nullptr;
-        nvrhi::ITexture *m_LastBoundTexture = nullptr;
+        nri::Descriptor *m_LastCameraBufferDescriptor = nullptr;
+        nri::Texture *m_LastBoundTexture = nullptr;
     };
 }
 

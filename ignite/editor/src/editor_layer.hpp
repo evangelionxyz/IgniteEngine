@@ -89,7 +89,7 @@ namespace ignite
         bool OnKeyPressedEvent(KeyPressedEvent &event);
 	    bool OnMouseMovedEvent(MouseMovedEvent &event);
 
-        virtual void OnRender(nvrhi::IFramebuffer *framebuffer) override;
+        virtual void OnRender(RenderTarget *framebuffer) override;
         virtual void OnGuiRender() override;
 
         void OnScenePlay();

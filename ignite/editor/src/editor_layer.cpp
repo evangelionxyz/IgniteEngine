@@ -504,7 +504,7 @@ namespace ignite
         return false;
     }
 
-    void EditorLayer::OnRender(nvrhi::IFramebuffer *mainFramebuffer)
+    void EditorLayer::OnRender(RenderTarget *mainFramebuffer)
     {
         IGN_PROFILE_FUNCTION();
         Layer::OnRender(mainFramebuffer);

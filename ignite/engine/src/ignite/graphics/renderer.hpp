@@ -8,6 +8,7 @@
 #include "ignite/core/types.hpp"
 #include "frame_context.hpp"
 
+#include <NRI.h>
 #include <string>
 #include <unordered_map>
 #include <mutex>
@@ -39,10 +40,10 @@ namespace ignite
         ENVIRONMENT,
     };
 
-	enum class EMeshType
-	{
-		UV_SPHERE = 0,
-	};
+    enum class EMeshType
+    {
+        UV_SPHERE = 0,
+    };
 
     struct RendererStats
     {
@@ -82,13 +83,13 @@ namespace ignite
     class IGN_API Renderer : public Subsystem
     {
     public:
-        Renderer(DeviceManager *deviceManager, nvrhi::GraphicsAPI api);
+        Renderer(DeviceManager *deviceManager, nri::GraphicsAPI api);
 
         virtual void Shutdown() override;
         void BeginFrame(const uint64_t frameIndex);
         void ResetStatistics();
 
-		static FrameContext *GetCurrentFrameContext();
+        static FrameContext *GetCurrentFrameContext();
 
         static Ref<Texture> GetWhiteTexture();
         static Ref<Texture> GetBlackTexture();
@@ -99,21 +100,23 @@ namespace ignite
 
         static Ref<StaticMesh> GetDefaultMesh(EMeshType type);
 
-        static nvrhi::GraphicsAPI GetGraphicsAPI();
-        static nvrhi::BindingLayoutHandle GetBindingLayout(EBindingLayout type);
+        static nri::GraphicsAPI GetGraphicsAPI();
+        static const BindingLayoutDesc &GetBindingLayout(EBindingLayout type);
+        static nri::PipelineLayout *GetPipelineLayout(EBindingLayout type);
 
-        static void IncrementPipelineCount(const std::string& name);
-        static void DecrementPipelineCount(const std::string& name);
-        static void IncrementBindingSetCount(const std::string& name);
-        static void DecrementBindingSetCount(const std::string& name);
+        static void IncrementPipelineCount(const std::string &name);
+        static void DecrementPipelineCount(const std::string &name);
+        static void IncrementBindingSetCount(const std::string &name);
+        static void DecrementBindingSetCount(const std::string &name);
 
         static RendererStats Stats;
 
     private:
-        nvrhi::GraphicsAPI m_GraphicsAPI;
+        nri::GraphicsAPI m_GraphicsAPI;
 
-        std::unordered_map<EBindingLayout, nvrhi::BindingLayoutHandle> m_BindingLayouts;
-		std::unordered_map<EMeshType, Ref<StaticMesh>> m_DefaultMeshes;
+        std::unordered_map<EBindingLayout, BindingLayoutDesc> m_BindingLayouts;
+        std::unordered_map<EBindingLayout, nri::PipelineLayout *> m_PipelineLayouts;
+        std::unordered_map<EMeshType, Ref<StaticMesh>> m_DefaultMeshes;
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
@@ -121,9 +124,9 @@ namespace ignite
         Ref<Texture> m_BlackUIntTexture;
         Ref<Material> m_DefaultMaterial;
 
-        std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;
-		std::vector<FrameContext> m_Frames; // Triple buffering
-		uint64_t m_MaxFramesInFlight = 3;
+        std::vector<std::function<void(nri::CommandBuffer *)>> m_SubmitFuncs;
+        std::vector<FrameContext> m_Frames; // Triple buffering
+        uint64_t m_MaxFramesInFlight = 3;
         uint64_t m_FrameCounter = 0;
 
         friend class ShaderLibrary;
@@ -131,4 +134,3 @@ namespace ignite
 }
 
 #endif
-

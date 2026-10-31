@@ -6,29 +6,35 @@
 
 #include "ignite/core/types.hpp"
 #include "shader.hpp"
+#include "binding_set.hpp"
+#include "hash_keys.hpp"
 
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/signals/asset_signal.hpp"
-#include <nvrhi/nvrhi.h>
+#include <NRI.h>
 #include <vector>
 #include <unordered_map>
 
-namespace ignite {
+namespace ignite
+{
+    class RenderTarget;
 
     struct GraphicsPipelineParams
     {
-        nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front;
-        nvrhi::PrimitiveType primitiveType = nvrhi::PrimitiveType::TriangleList;
-        nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
+        nri::CullMode cullMode = nri::CullMode::FRONT;
+        nri::Topology primitiveType = nri::Topology::TRIANGLE_LIST;
+        nri::FillMode fillMode = nri::FillMode::SOLID;
 
-        nvrhi::BlendFactor srcBlend = nvrhi::BlendFactor::One;
-        nvrhi::BlendFactor destBlend = nvrhi::BlendFactor::Zero;
-        nvrhi::BlendFactor srcBlendAlpha = nvrhi::BlendFactor::One;
-        nvrhi::BlendFactor destBlendAlpha = nvrhi::BlendFactor::Zero;
+        nri::BlendFactor srcBlend = nri::BlendFactor::ONE;
+        nri::BlendFactor destBlend = nri::BlendFactor::ZERO;
+        nri::BlendFactor srcBlendAlpha = nri::BlendFactor::ONE;
+        nri::BlendFactor destBlendAlpha = nri::BlendFactor::ZERO;
+        nri::BlendOp blendOp = nri::BlendOp::ADD;
+        nri::BlendOp blendOpAlpha = nri::BlendOp::ADD;
 
-        nvrhi::DepthStencilState::StencilOpDesc frontFaceStencilDesc;
-        nvrhi::DepthStencilState::StencilOpDesc backFaceStencilDesc;
-        nvrhi::ComparisonFunc depthFunc = nvrhi::ComparisonFunc::Always;
+        nri::StencilDesc frontFaceStencilDesc = {};
+        nri::StencilDesc backFaceStencilDesc = {};
+        nri::CompareOp depthFunc = nri::CompareOp::ALWAYS;
 
         uint8_t stencilReadMask = 0xff;
         uint8_t stencilWriteMask = 0xff;
@@ -42,34 +48,34 @@ namespace ignite {
         bool enableScissor = false;
         bool enableDepthClip = false;
 
-        nvrhi::ColorMask colorWriteMask[8] = {
-            nvrhi::ColorMask::All, nvrhi::ColorMask::All,
-            nvrhi::ColorMask::All, nvrhi::ColorMask::All,
-            nvrhi::ColorMask::All, nvrhi::ColorMask::All,
-            nvrhi::ColorMask::All, nvrhi::ColorMask::All
+        nri::DepthBiasDesc depthBias = {};
+
+        nri::ColorWriteBits colorWriteMask[8] = {
+            nri::ColorWriteBits::RGBA, nri::ColorWriteBits::RGBA,
+            nri::ColorWriteBits::RGBA, nri::ColorWriteBits::RGBA,
+            nri::ColorWriteBits::RGBA, nri::ColorWriteBits::RGBA,
+            nri::ColorWriteBits::RGBA, nri::ColorWriteBits::RGBA
         };
     };
 
     class GraphicsPipeline
     {
     public:
-        GraphicsPipeline(const std::string& name = "Graphics Pipeline");
+        GraphicsPipeline(const std::string &name = "Graphics Pipeline");
         ~GraphicsPipeline();
 
-        const std::string& GetName() const { return m_Name; }
+        const std::string &GetName() const { return m_Name; }
 
-        GraphicsPipeline &AddBindingLayout(const nvrhi::BindingLayoutHandle &layout);
+        GraphicsPipeline &AddBindingLayout(const BindingLayoutDesc &layout);
         GraphicsPipeline &SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile = false);
-        void Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params);
-        void Build(const nvrhi::FramebufferInfoEx &framebufferInfo, const GraphicsPipelineParams &params);
+        void Build(RenderTarget *framebuffer, const GraphicsPipelineParams &params);
+        void Build(const FramebufferKey &framebufferInfo, const GraphicsPipelineParams &params);
 
-        nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
+        const BindingLayoutDesc &GetBindingLayout(uint32_t index) const;
 
-        nvrhi::GraphicsPipelineHandle GetHandle() { return m_Handle; }
-        operator nvrhi::GraphicsPipelineHandle() const { return m_Handle; }
-        operator nvrhi::IGraphicsPipeline *() const { return m_Handle; }
-
-        nvrhi::InputLayoutHandle GetInputLayout() { return m_InputLayout; }
+        nri::Pipeline *GetHandle() const { return m_Handle; }
+        nri::PipelineLayout *GetPipelineLayout() const { return m_PipelineLayout; }
+        operator nri::Pipeline *() const { return m_Handle; }
 
         Ref<Shader> GetShader(UMBRA_ShaderType shaderType)
         {
@@ -86,11 +92,13 @@ namespace ignite {
             return nullptr;
         }
 
-        static Ref<GraphicsPipeline> Create(const std::string& name = "Graphics Pipeline");
+        static Ref<GraphicsPipeline> Create(const std::string &name = "Graphics Pipeline");
 
         GraphicsPipelineParams &GetParams() { return m_Params; }
+        const GraphicsPipelineParams &GetParams() const { return m_Params; }
 
     private:
+        void ReleasePipelineResources();
         void UnsubscribeShaders();
         void OnShaderReload();
 
@@ -102,19 +110,19 @@ namespace ignite {
         };
 
         std::string m_Name;
-        nvrhi::GraphicsPipelineHandle m_Handle;
+        nri::Pipeline *m_Handle = nullptr;
+        nri::PipelineLayout *m_PipelineLayout = nullptr;
         std::vector<Ref<Shader>> m_Shaders;
         std::vector<ShaderListener> m_ShaderListeners;
 
         // Lets queued render-thread rebuilds detect that this pipeline is gone.
         std::shared_ptr<bool> m_Alive = std::make_shared<bool>(true);
 
-        nvrhi::InputLayoutHandle m_InputLayout;
-        std::vector<nvrhi::BindingLayoutHandle> m_BindingLayouts;
+        std::vector<BindingLayoutDesc> m_BindingLayouts;
 
         GraphicsPipelineParams m_Params;
         // Copy of the format info (not the framebuffer pointer, which may be destroyed/recreated, e.g. on resize)
-        nvrhi::FramebufferInfoEx m_FramebufferInfo;
+        FramebufferKey m_FramebufferInfo;
         bool m_HasFramebufferInfo = false;
     };
 }

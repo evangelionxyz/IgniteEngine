@@ -4,15 +4,14 @@
 
 #ifdef PLATFORM_WINDOWS
 #include "ignite/graphics/window.hpp"
-#include "ignite/graphics/texture.hpp"
 
 #include "device_manager.hpp"
 #include "device_manager_dx12.hpp"
 #include "ignite/core/logger.hpp"
-#include "ignite/graphics/bindless_system.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <Windows.h>
+#include <wrl/client.h>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_system.h>
@@ -23,10 +22,7 @@
 #include <dxgi1_5.h>
 #include <dxgidebug.h>
 
-#include <nvrhi/d3d12.h>
-#include <nvrhi/validation.h>
-
-using nvrhi::RefCountPtr;
+using Microsoft::WRL::ComPtr;
 
 #define HR_RETURN(hr) if (FAILED(hr)) return false
 static bool IsNvDevice(const UINT ID) { return ID == 0x10DE; }
@@ -99,7 +95,7 @@ namespace ignite
     void DescriptorHeapAllocator::Free(D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle, D3D12_GPU_DESCRIPTOR_HANDLE gpuDescHandle)
     {
         const int cpuIdx = (int)((cpuDescHandle.ptr - heapStartCpu.ptr) / heapHandleIncrement);
-		const int gpuIdx = (int)((gpuDescHandle.ptr - heapStartGpu.ptr) / heapHandleIncrement);
+        const int gpuIdx = (int)((gpuDescHandle.ptr - heapStartGpu.ptr) / heapHandleIncrement);
         assert(cpuIdx == gpuIdx);
         freeIndices.push_back(cpuIdx);
     }
@@ -112,7 +108,7 @@ namespace ignite
         uint32_t outputNo = 0;
         while (SUCCEEDED(hr))
         {
-            RefCountPtr<IDXGIOutput> pOutput;
+            ComPtr<IDXGIOutput> pOutput;
             hr = targetAdapter->EnumOutputs(outputNo++, &pOutput);
 
             if (SUCCEEDED(hr) && pOutput)
@@ -140,15 +136,15 @@ namespace ignite
         return false;
     }
 
-    DeviceManager_DX12::DeviceManager_DX12(Window* window, const DeviceParameters& params)
+    DeviceManager_DX12::DeviceManager_DX12(Window *window, const DeviceParameters &params)
     {
-		m_Window = window;
+        m_Window = window;
         m_DeviceParameters = params;
     }
 
     void DeviceManager_DX12::ReportLiveObjects()
     {
-        RefCountPtr<IDXGIDebug> pDebug;
+        ComPtr<IDXGIDebug> pDebug;
         DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDebug));
 
         if (pDebug)
@@ -174,7 +170,7 @@ namespace ignite
         return true;
     }
 
-    bool DeviceManager_DX12::EnumerateAdapters(std::vector<AdapterInfo>& outAdapters)
+    bool DeviceManager_DX12::EnumerateAdapters(std::vector<AdapterInfo> &outAdapters)
     {
         if (!m_DxgiFactory2)
             return false;
@@ -183,7 +179,7 @@ namespace ignite
 
         while (true)
         {
-            RefCountPtr<IDXGIAdapter> adapter;
+            ComPtr<IDXGIAdapter> adapter;
             HRESULT hr = m_DxgiFactory2->EnumAdapters(static_cast<uint32_t>(outAdapters.size()), &adapter);
             if (FAILED(hr))
                 return true;
@@ -212,7 +208,7 @@ namespace ignite
     {
         if (m_DeviceParameters.enableDebugRuntime)
         {
-            RefCountPtr<ID3D12Debug> pDebug;
+            ComPtr<ID3D12Debug> pDebug;
             const HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&pDebug));
             if (SUCCEEDED(hr)) pDebug->EnableDebugLayer();
             else printf("Cannot enable DX12 debug runtime, ID3D12Debug is not available.");
@@ -220,7 +216,7 @@ namespace ignite
 
         if (m_DeviceParameters.enableGPUValidation)
         {
-            RefCountPtr<ID3D12Debug3> debugController3;
+            ComPtr<ID3D12Debug3> debugController3;
             const HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&debugController3));
             if (SUCCEEDED(hr)) debugController3->SetEnableGPUBasedValidation(true);
             else printf("Cannot enable GPU-based validation, ID3D12Debug3 is not available.");
@@ -233,7 +229,7 @@ namespace ignite
         if (FAILED(m_DxgiFactory2->EnumAdapters(adapterIndex, &m_DxgiAdapter)))
         {
             if (adapterIndex == 0) printf("Cannot find any DXGI adapters in the system.");
-            else printf("The specified DXGI adatpter %d does not exists.", adapterIndex);
+            else printf("The specified DXGI adapter %d does not exist.", adapterIndex);
             return false;
         }
 
@@ -245,21 +241,21 @@ namespace ignite
         }
 
         HRESULT hr = D3D12CreateDevice(
-            m_DxgiAdapter,
+            m_DxgiAdapter.Get(),
             m_DeviceParameters.featureLevel,
             IID_PPV_ARGS(&m_Device12)
         );
 
         if (FAILED(hr))
         {
-            printf("DX12CreateDevice failed, error HRESULT = 0x%08x", hr);
+            printf("D3D12CreateDevice failed, error HRESULT = 0x%08x", hr);
             return false;
         }
 
         if (m_DeviceParameters.enableDebugRuntime)
         {
-            RefCountPtr<ID3D12InfoQueue> pInfoQueue;
-            m_Device12->QueryInterface(&pInfoQueue);
+            ComPtr<ID3D12InfoQueue> pInfoQueue;
+            m_Device12.As(&pInfoQueue);
 
             if (pInfoQueue)
             {
@@ -285,7 +281,7 @@ namespace ignite
                 pInfoQueue->AddStorageFilterEntries(&filter);
             }
 
-            RefCountPtr<ID3D12InfoQueue1> pInfoQueue1;
+            ComPtr<ID3D12InfoQueue1> pInfoQueue1;
             if (SUCCEEDED(m_Device12->QueryInterface(IID_PPV_ARGS(&pInfoQueue1))))
             {
                 DWORD cookie = 0;
@@ -299,14 +295,13 @@ namespace ignite
         }
 
         {
-
             D3D12_DESCRIPTOR_HEAP_DESC desc = {};
             desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
             desc.NumDescriptors = m_DeviceParameters.maxFramesInFlight;
             desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
             desc.NodeMask = 1;
             hr = m_Device12->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_RtvDescHeap));
-            LOG_ASSERT(hr == S_OK, "Faield to create RVT descriptor heap");
+            LOG_ASSERT(hr == S_OK, "Failed to create RTV descriptor heap");
             HR_RETURN(hr);
         }
 
@@ -316,10 +311,10 @@ namespace ignite
             desc.NumDescriptors = SRV_HEAP_SIZE;
             desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             hr = m_Device12->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_SrvDescHeap));
-            LOG_ASSERT(hr == S_OK, "Faield to create SRV descriptor heap");
+            LOG_ASSERT(hr == S_OK, "Failed to create SRV descriptor heap");
             HR_RETURN(hr);
 
-            m_SrvDescHeapAlloc.Create(m_Device12, m_SrvDescHeap);
+            m_SrvDescHeapAlloc.Create(m_Device12.Get(), m_SrvDescHeap.Get());
         }
 
         D3D12_COMMAND_QUEUE_DESC queueDesc;
@@ -347,25 +342,63 @@ namespace ignite
             m_CopyQueue->SetName(L"Copy Queue");
         }
 
-        nvrhi::d3d12::DeviceDesc deviceDesc;
-        deviceDesc.errorCB = &DefaultMessageCallback::GetInstance();
-        deviceDesc.pDevice = m_Device12;
-        deviceDesc.pGraphicsCommandQueue = m_GraphicsQueue;
-        deviceDesc.pComputeCommandQueue = m_ComputeQueue;
-        deviceDesc.pCopyCommandQueue =m_CopyQueue;
-        deviceDesc.logBufferLifetime = m_DeviceParameters.logBufferLifetime;
-        deviceDesc.enableHeapDirectlyIndexed = m_DeviceParameters.enableHeapDirectlyIndexed;
+        // Initialize NRI device from D3D12
+        std::vector<nri::QueueFamilyD3D12Desc> queueFamilies;
+        ID3D12CommandQueue *graphicsQueues[] = { m_GraphicsQueue.Get() };
+        queueFamilies.push_back({ graphicsQueues, 1, nri::QueueType::GRAPHICS });
 
-        m_NvrhiDevice = nvrhi::d3d12::createDevice(deviceDesc);
-        if (m_DeviceParameters.enableNvrhiValidationLayer)
+        ID3D12CommandQueue *computeQueues[] = { m_ComputeQueue.Get() };
+        if (m_ComputeQueue)
         {
-            m_NvrhiDevice = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
+            queueFamilies.push_back({ computeQueues, 1, nri::QueueType::COMPUTE });
         }
 
-        const bool hasBindless = m_NvrhiDevice->queryFeatureSupport(nvrhi::Feature::HeapDirectlyIndexed);
-        LOG_INFO("[D3D12 Device] HeapDirectlyIndexed (SM6.6 Bindless) Support: {}", hasBindless ? "ENABLED" : "DISABLED");
+        ID3D12CommandQueue *copyQueues[] = { m_CopyQueue.Get() };
+        if (m_CopyQueue)
+        {
+            queueFamilies.push_back({ copyQueues, 1, nri::QueueType::COPY });
+        }
 
-        BindlessSystem::Initialize(GetDevice());
+        nri::DeviceCreationD3D12Desc nriDeviceDesc{};
+        nriDeviceDesc.d3d12Device = m_Device12.Get();
+        nriDeviceDesc.queueFamilies = queueFamilies.data();
+        nriDeviceDesc.queueFamilyNum = static_cast<uint32_t>(queueFamilies.size());
+        nriDeviceDesc.callbackInterface = DefaultMessageCallback::GetInterface();
+        nriDeviceDesc.enableNRIValidation = m_DeviceParameters.enableNRIValidation || m_DeviceParameters.enableNvrhiValidationLayer;
+
+        nri::Result res = nriCreateDeviceFromD3D12Device(nriDeviceDesc, m_Device);
+        if (res != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("Failed to create NRI device from D3D12 device");
+            return false;
+        }
+
+        if (nriGetInterface(*m_Device, NRI_INTERFACE(nri::CoreInterface), &m_NRI) != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("Failed to get NRI CoreInterface");
+            return false;
+        }
+
+        if (nriGetInterface(*m_Device, NRI_INTERFACE(nri::HelperInterface), &m_HelperNRI) != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("Failed to get NRI HelperInterface");
+            return false;
+        }
+
+        if (nriGetInterface(*m_Device, NRI_INTERFACE(nri::WrapperD3D12Interface), &m_WrapperD3D12) != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("Failed to get NRI WrapperD3D12Interface");
+            return false;
+        }
+
+        if (m_NRI.GetQueue(*m_Device, nri::QueueType::GRAPHICS, 0, m_NriGraphicsQueue) != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("Failed to get NRI graphics queue");
+            return false;
+        }
+
+        const auto &desc = m_NRI.GetDeviceDesc(*m_Device);
+        LOG_INFO("[D3D12 Device] Initialized NRI device with {} (Adapter: {})", nriGetGraphicsAPIString(desc.graphicsAPI), desc.adapterDesc.name);
 
         return true;
     }
@@ -379,48 +412,50 @@ namespace ignite
         RECT rect = { 0, 0, LONG(m_DeviceParameters.backBufferWidth), LONG(m_DeviceParameters.backBufferHeight) };
         AdjustWindowRect(&rect, windowStyle, false);
 
-        if (MoveWindowOntoAdapter(m_DxgiAdapter, rect))
+        if (MoveWindowOntoAdapter(m_DxgiAdapter.Get(), rect))
         {
-			SDL_SetWindowPosition(m_Window->GetWindowHandle(), rect.left, rect.top);
+            m_DeviceParameters.windowPosX = rect.left;
+            m_DeviceParameters.windowPosY = rect.top;
         }
 
-        // Retrieve HWND
-        m_Hwnd = m_Window->GetNativeWindow();
-        HRESULT hr = E_FAIL;
+        HRESULT hr = S_OK;
 
-        RECT clientRect;
-        GetClientRect(m_Hwnd, &clientRect);
-        UINT width = clientRect.right - clientRect.left;
-        UINT height = clientRect.bottom - clientRect.top;
+        m_Hwnd = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties((SDL_Window *)m_Window->GetNativeWindow()),
+            SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
 
-        m_SwapChainDesc.Width = width;
-        m_SwapChainDesc.Height = height;
-        m_SwapChainDesc.SampleDesc.Count = m_DeviceParameters.swapChainSampleCount;
-        m_SwapChainDesc.SampleDesc.Quality = 0;
-        m_SwapChainDesc.BufferUsage = m_DeviceParameters.swapChainUsage;
-        m_SwapChainDesc.BufferCount = m_DeviceParameters.swapChainBufferCount;
-        m_SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        m_SwapChainDesc.Flags = m_DeviceParameters.allowModeSwitch ? DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH : 0;
-
-        // Special processing for sRGB swap chain formats.
-        // DXGI will not create a swap chain with an sRGB format, but its contents will be interpreted as sRGB.
-        // So we need to use a non-sRGB format here, but store the true sRGB format for later framebuffer creation.
-
-        switch (m_DeviceParameters.swapChainFormat) // NOLINT(clang-diagnostic-switch-enum)
+        if (m_DeviceParameters.supportExplicitDisplayScaling)
         {
-            case nvrhi::Format::SRGBA8_UNORM:
-                m_SwapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            break;
-            case nvrhi::Format::SBGRA8_UNORM:
-                m_SwapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-            break;
-            default:
-                m_SwapChainDesc.Format = nvrhi::d3d12::convertFormat(m_DeviceParameters.swapChainFormat);
-            break;
+            m_DPIScaleFactorX = 1.0f;
+            m_DPIScaleFactorY = 1.0f;
+        }
+        else
+        {
+            m_DPIScaleFactorX = float(rect.right - rect.left) / float(m_DeviceParameters.backBufferWidth);
+            m_DPIScaleFactorY = float(rect.bottom - rect.top) / float(m_DeviceParameters.backBufferHeight);
         }
 
-        RefCountPtr<IDXGIFactory5> pDxgiFactory5;
-        if (SUCCEEDED(m_DxgiFactory2->QueryInterface(&pDxgiFactory5)))
+        DXGI_SWAP_CHAIN_DESC1 desc;
+        ZeroMemory(&desc, sizeof(desc));
+        desc.Width = m_DeviceParameters.backBufferWidth;
+        desc.Height = m_DeviceParameters.backBufferHeight;
+        desc.SampleDesc.Count = m_DeviceParameters.swapChainSampleCount;
+        desc.SampleDesc.Quality = m_DeviceParameters.swapChainSampleQuality;
+        desc.BufferUsage = m_DeviceParameters.swapChainUsage;
+        desc.BufferCount = m_DeviceParameters.swapChainBufferCount;
+        desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        desc.Flags = m_DeviceParameters.allowModeSwitch ? DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH : 0;
+        desc.Format = static_cast<DXGI_FORMAT>(nriConvertNRIFormatToDXGI(m_DeviceParameters.swapChainFormat));
+
+        // Special handling for sRGB formats
+        switch (desc.Format)
+        {
+            case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; break;
+            case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; break;
+            case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB: desc.Format = DXGI_FORMAT_B8G8R8X8_UNORM; break;
+        }
+
+        ComPtr<IDXGIFactory5> pDxgiFactory5;
+        if (SUCCEEDED(m_DxgiFactory2->QueryInterface(IID_PPV_ARGS(&pDxgiFactory5))))
         {
             BOOL supported = 0;
             if (SUCCEEDED(pDxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &supported, sizeof(supported))))
@@ -429,24 +464,24 @@ namespace ignite
 
         if (m_TearingSupported)
         {
-            m_SwapChainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+            desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
         }
 
-        m_FullScreenDesc = {};
-        m_FullScreenDesc.RefreshRate.Numerator = m_DeviceParameters.refreshRate;
-        m_FullScreenDesc.RefreshRate.Denominator = 1;
-        m_FullScreenDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE;
-        m_FullScreenDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-        m_FullScreenDesc.Windowed = !m_DeviceParameters.startFullscreen;
+        DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc;
+        ZeroMemory(&fsDesc, sizeof(fsDesc));
+        fsDesc.RefreshRate.Numerator = m_DeviceParameters.refreshRate;
+        fsDesc.RefreshRate.Denominator = 1;
+        fsDesc.Windowed = !m_DeviceParameters.startFullscreen;
 
-        RefCountPtr<IDXGISwapChain1> pSwapChain1;
-        hr = m_DxgiFactory2->CreateSwapChainForHwnd(m_GraphicsQueue, m_Hwnd, &m_SwapChainDesc, &m_FullScreenDesc, nullptr, &pSwapChain1);
-        LOG_ASSERT(hr == S_OK, "Failed to create swapchain for HWND");
+        ComPtr<IDXGISwapChain1> pSwapChain1;
+        hr = m_DxgiFactory2->CreateSwapChainForHwnd(m_GraphicsQueue.Get(), m_Hwnd, &desc, &fsDesc, nullptr, &pSwapChain1);
         HR_RETURN(hr);
 
         hr = pSwapChain1->QueryInterface(IID_PPV_ARGS(&m_SwapChain));
-        LOG_ASSERT(hr == S_OK, "Failed to Query swapchain interface");
         HR_RETURN(hr);
+
+        m_SwapChainDesc = desc;
+        m_FullScreenDesc = fsDesc;
 
         if (!CreateRenderTargets())
         {
@@ -466,7 +501,6 @@ namespace ignite
 
     void DeviceManager_DX12::DestroyDeviceAndSwapChain()
     {
-        m_SwapChainRenderTargets.clear();
         m_RendererString.clear();
 
         ReleaseRenderTargets();
@@ -476,14 +510,21 @@ namespace ignite
             WaitForSingleObject(fenceEvent, INFINITE);
             CloseHandle(fenceEvent);
         }
+        m_FrameFenceEvents.clear();
 
         if (m_SwapChain)
         {
             m_SwapChain->SetFullscreenState(false, nullptr);
         }
 
-        m_FrameFenceEvents.clear();
-        m_SwapChainBuffers.clear();
+        if (m_Device)
+        {
+            m_NRI.DeviceWaitIdle(m_Device);
+            nriDestroyDevice(m_Device);
+            m_Device = nullptr;
+            m_NriGraphicsQueue = nullptr;
+        }
+
         m_SrvDescHeapAlloc.Destroy();
 
         m_RtvDescHeap = nullptr;
@@ -499,37 +540,113 @@ namespace ignite
 
     bool DeviceManager_DX12::CreateRenderTargets()
     {
-        m_SwapChainBuffers.resize(m_SwapChainDesc.BufferCount);
-        m_SwapChainRenderTargets.reserve(m_SwapChainDesc.BufferCount);
+        const uint32_t bufferCount = m_SwapChainDesc.BufferCount;
+        m_SwapChainBuffers.resize(bufferCount);
+        m_BackBufferTextures.resize(bufferCount, nullptr);
+        m_BackBufferRTVs.resize(bufferCount, nullptr);
+        m_DepthBufferTextures.resize(bufferCount, nullptr);
+        m_DepthBufferMemories.resize(bufferCount, nullptr);
+        m_DepthBufferDSVs.resize(bufferCount, nullptr);
 
-        for (UINT n = 0; n < m_SwapChainDesc.BufferCount; n++)
+        for (UINT n = 0; n < bufferCount; n++)
         {
             const HRESULT hr = m_SwapChain->GetBuffer(n, IID_PPV_ARGS(&m_SwapChainBuffers[n]));
             HR_RETURN(hr);
 
-            RenderTargetCreateInfo createInfo;
-            createInfo.width = m_DeviceParameters.backBufferWidth;
-            createInfo.height = m_DeviceParameters.backBufferHeight;
-            createInfo.sampleCount = m_DeviceParameters.swapChainSampleCount;
-            createInfo.sampleQuality = m_DeviceParameters.swapChainSampleQuality;
-            createInfo.attachments =
+            // Wrap D3D12 swapchain backbuffer into NRI texture
+            nri::TextureD3D12Desc texDesc{};
+            texDesc.d3d12Resource = m_SwapChainBuffers[n].Get();
+            if (m_WrapperD3D12.CreateTextureD3D12(*m_Device, texDesc, m_BackBufferTextures[n]) != nri::Result::SUCCESS)
             {
+                LOG_ERROR("Failed to wrap D3D12 swapchain buffer {} into NRI texture", n);
+                return false;
+            }
+
+            // Create Color Attachment (RTV) descriptor
+            nri::TextureViewDesc rtvDesc{};
+            rtvDesc.texture = m_BackBufferTextures[n];
+            rtvDesc.type = nri::TextureView::COLOR_ATTACHMENT;
+            rtvDesc.format = m_DeviceParameters.swapChainFormat;
+            rtvDesc.mipOffset = 0;
+            rtvDesc.mipNum = 1;
+            rtvDesc.layerOffset = 0;
+            rtvDesc.layerNum = 1;
+            if (m_NRI.CreateTextureView(rtvDesc, m_BackBufferRTVs[n]) != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("Failed to create RTV descriptor for back buffer {}", n);
+                return false;
+            }
+
+            // Create Depth Stencil texture
+            nri::TextureDesc depthDesc{};
+            depthDesc.type = nri::TextureType::TEXTURE_2D;
+            depthDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT;
+            depthDesc.format = nri::Format::D32_SFLOAT;
+            depthDesc.width = static_cast<nri::Dim_t>(m_DeviceParameters.backBufferWidth);
+            depthDesc.height = static_cast<nri::Dim_t>(m_DeviceParameters.backBufferHeight);
+            depthDesc.depth = 1;
+            depthDesc.mipNum = 1;
+            depthDesc.layerNum = 1;
+            depthDesc.sampleNum = 1;
+
+            if (m_NRI.CreateTexture(*m_Device, depthDesc, m_DepthBufferTextures[n]) != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("Failed to create depth texture for back buffer {}", n);
+                return false;
+            }
+
+            // Allocate and bind memory for depth texture
+            nri::ResourceGroupDesc resGroup{};
+            resGroup.textureNum = 1;
+            resGroup.textures = &m_DepthBufferTextures[n];
+            resGroup.memoryLocation = nri::MemoryLocation::DEVICE;
+            if (m_HelperNRI.AllocateAndBindMemory(*m_Device, resGroup, &m_DepthBufferMemories[n]) != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("Failed to allocate and bind memory for depth texture {}", n);
+                return false;
+            }
+
+            // Create Depth Stencil (DSV) descriptor
+            nri::TextureViewDesc dsvDesc{};
+            dsvDesc.texture = m_DepthBufferTextures[n];
+            dsvDesc.type = nri::TextureView::DEPTH_STENCIL_ATTACHMENT;
+            dsvDesc.format = nri::Format::D32_SFLOAT;
+            dsvDesc.mipOffset = 0;
+            dsvDesc.mipNum = 1;
+            dsvDesc.layerOffset = 0;
+            dsvDesc.layerNum = 1;
+            if (m_NRI.CreateTextureView(dsvDesc, m_DepthBufferDSVs[n]) != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("Failed to create DSV descriptor for depth buffer {}", n);
+                return false;
+            }
+        }
+
+        m_BackBufferRenderTargets.resize(bufferCount);
+        for (uint32_t n = 0; n < bufferCount; ++n)
+        {
+            RenderTargetCreateInfo rtDesc;
+            rtDesc.width = m_DeviceParameters.backBufferWidth;
+            rtDesc.height = m_DeviceParameters.backBufferHeight;
+            rtDesc.attachments = {
                 FramebufferAttachments {
-                    .name = "Swapchain RT",
-                    .format = nvrhi::Format::D32S8,
-                    .state = nvrhi::ResourceStates::DepthWrite
+                    .name = "[BackBufferColor " + std::to_string(n) + "]",
+                    .format = m_DeviceParameters.swapChainFormat,
+                    .state = nri::Layout::PRESENT,
+                    .nativeObjectPtr = m_BackBufferTextures[n],
+                    .isNativeObject = true,
+                    .nativeObjectType = 2
                 },
                 FramebufferAttachments {
-                    .name = "Swapchain RT",
-                    .format = m_DeviceParameters.swapChainFormat,
-                    .state = nvrhi::ResourceStates::Present,
-                    .nativeObjectPtr = m_SwapChainBuffers[n],
+                    .name = "[BackBufferDepth " + std::to_string(n) + "]",
+                    .format = nri::Format::D32_SFLOAT,
+                    .state = nri::Layout::DEPTH_STENCIL_ATTACHMENT,
+                    .nativeObjectPtr = m_DepthBufferTextures[n],
                     .isNativeObject = true,
-                    .nativeObjectType = nvrhi::ObjectTypes::D3D12_Resource
+                    .nativeObjectType = 2
                 }
             };
-
-            m_SwapChainRenderTargets.emplace_back(RenderTarget::Create(createInfo, "Swapchain RT"));
+            m_BackBufferRenderTargets[n] = RenderTarget::Create(rtDesc, "[BackBuffer RT " + std::to_string(n) + "]");
         }
 
         return true;
@@ -537,37 +654,82 @@ namespace ignite
 
     void DeviceManager_DX12::WaitForIdle()
     {
-        if (m_NvrhiDevice)
+        if (m_Device)
         {
             std::scoped_lock lock(GPUUploadSync::GetWaitIdleMutex(), GPUUploadSync::GetQueueMutex());
-            m_NvrhiDevice->waitForIdle();
+            m_NRI.DeviceWaitIdle(m_Device);
         }
     }
 
     void DeviceManager_DX12::ReleaseRenderTargets()
     {
-        if (m_NvrhiDevice)
-        {
-            m_NvrhiDevice->waitForIdle();
-            m_NvrhiDevice->runGarbageCollection();
-        }
+        WaitForIdle();
+
+        m_BackBufferRenderTargets.clear();
 
         for (auto event : m_FrameFenceEvents)
         {
             SetEvent(event);
         }
 
-        m_SwapChainRenderTargets.clear();
+        for (auto &rtv : m_BackBufferRTVs)
+        {
+            if (rtv)
+            {
+                m_NRI.DestroyDescriptor(rtv);
+                rtv = nullptr;
+            }
+        }
+        m_BackBufferRTVs.clear();
+
+        for (auto &tex : m_BackBufferTextures)
+        {
+            if (tex)
+            {
+                m_NRI.DestroyTexture(tex);
+                tex = nullptr;
+            }
+        }
+        m_BackBufferTextures.clear();
+
+        for (auto &dsv : m_DepthBufferDSVs)
+        {
+            if (dsv)
+            {
+                m_NRI.DestroyDescriptor(dsv);
+                dsv = nullptr;
+            }
+        }
+        m_DepthBufferDSVs.clear();
+
+        for (auto &tex : m_DepthBufferTextures)
+        {
+            if (tex)
+            {
+                m_NRI.DestroyTexture(tex);
+                tex = nullptr;
+            }
+        }
+        m_DepthBufferTextures.clear();
+
+        for (auto &mem : m_DepthBufferMemories)
+        {
+            if (mem)
+            {
+                m_NRI.FreeMemory(mem);
+                mem = nullptr;
+            }
+        }
+        m_DepthBufferMemories.clear();
+
         m_SwapChainBuffers.clear();
     }
 
     void DeviceManager_DX12::ResizeSwapChain()
     {
-        m_SwapChainFramebuffers.clear();
-
         ReleaseRenderTargets();
 
-        if (!m_NvrhiDevice || !m_SwapChain)
+        if (!m_Device || !m_SwapChain)
             return;
 
         const HRESULT hr = m_SwapChain->ResizeBuffers(m_DeviceParameters.swapChainBufferCount,
@@ -584,11 +746,6 @@ namespace ignite
     {
         if (m_DeviceParameters.headlessDevice)
             return true;
-
-        {
-            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-            BindlessSystem::FlushPendingWrites();
-        }
 
         DXGI_SWAP_CHAIN_DESC1 newSwapChainDesc;
         DXGI_SWAP_CHAIN_FULLSCREEN_DESC newFullScreenDesc;
@@ -616,34 +773,69 @@ namespace ignite
         return true;
     }
 
-    nvrhi::ITexture *DeviceManager_DX12::GetCurrentBackBuffer()
+    nri::Texture *DeviceManager_DX12::GetCurrentBackBuffer()
     {
-        return m_SwapChainRenderTargets[m_SwapChain->GetCurrentBackBufferIndex()]->GetColorAttachment(0)->GetHandle().Get();
+        return GetBackBuffer(GetCurrentBackBufferIndex());
     }
 
-    nvrhi::ITexture *DeviceManager_DX12::GetBackBuffer(uint32_t index)
+    nri::Texture *DeviceManager_DX12::GetBackBuffer(uint32_t index)
     {
-        if (index < m_SwapChainRenderTargets.size())
-            return m_SwapChainRenderTargets[index]->GetColorAttachment(0)->GetHandle().Get();
+        if (index < m_BackBufferTextures.size())
+            return m_BackBufferTextures[index];
         return nullptr;
     }
 
-    // TODO: Use render target
-	nvrhi::ITexture *DeviceManager_DX12::GetBackDepthBuffer(uint32_t index)
-	{
-		if (index < m_SwapChainRenderTargets.size())
-			return m_SwapChainRenderTargets[index]->GetDepthAttachment()->GetHandle().Get();
-		return nullptr;
-	}
-
-	uint32_t DeviceManager_DX12::GetCurrentBackBufferIndex()
+    nri::Texture *DeviceManager_DX12::GetBackDepthBuffer(uint32_t index)
     {
-        return m_SwapChain->GetCurrentBackBufferIndex();
+        if (index < m_DepthBufferTextures.size())
+            return m_DepthBufferTextures[index];
+        return nullptr;
+    }
+
+    nri::Descriptor *DeviceManager_DX12::GetCurrentBackBufferRTV()
+    {
+        return GetBackBufferRTV(GetCurrentBackBufferIndex());
+    }
+
+    nri::Descriptor *DeviceManager_DX12::GetBackBufferRTV(uint32_t index)
+    {
+        if (index < m_BackBufferRTVs.size())
+            return m_BackBufferRTVs[index];
+        return nullptr;
+    }
+
+    nri::Descriptor *DeviceManager_DX12::GetCurrentBackDepthBufferDSV()
+    {
+        return GetBackDepthBufferDSV(GetCurrentBackBufferIndex());
+    }
+
+    nri::Descriptor *DeviceManager_DX12::GetBackDepthBufferDSV(uint32_t index)
+    {
+        if (index < m_DepthBufferDSVs.size())
+            return m_DepthBufferDSVs[index];
+        return nullptr;
+    }
+
+    uint32_t DeviceManager_DX12::GetCurrentBackBufferIndex()
+    {
+        return m_SwapChain ? m_SwapChain->GetCurrentBackBufferIndex() : 0;
     }
 
     uint32_t DeviceManager_DX12::GetBackBufferCount()
     {
         return m_SwapChainDesc.BufferCount;
+    }
+
+    RenderTarget *DeviceManager_DX12::GetCurrentBackBufferRenderTarget()
+    {
+        return GetBackBufferRenderTarget(GetCurrentBackBufferIndex());
+    }
+
+    RenderTarget *DeviceManager_DX12::GetBackBufferRenderTarget(uint32_t index)
+    {
+        if (index < m_BackBufferRenderTargets.size())
+            return m_BackBufferRenderTargets[index].get();
+        return nullptr;
     }
 
     bool DeviceManager_DX12::Present()
@@ -660,7 +852,7 @@ namespace ignite
         HRESULT hr = m_SwapChain->Present(m_DeviceParameters.vsyncEnable ? 1 : 0, presentFlags);
 
         m_FrameFence->SetEventOnCompletion(m_FrameCount, m_FrameFenceEvents[bufferIndex]);
-        m_GraphicsQueue->Signal(m_FrameFence, m_FrameCount);
+        m_GraphicsQueue->Signal(m_FrameFence.Get(), m_FrameCount);
         m_FrameCount++;
 
         return SUCCEEDED(hr);
@@ -679,7 +871,7 @@ namespace ignite
         }
     }
 
-    DeviceManager *DeviceManager::CreateD3D12(Window *window, const DeviceParameters& params)
+    DeviceManager *DeviceManager::CreateD3D12(Window *window, const DeviceParameters &params)
     {
         s_D3D12DeviceInstance = new DeviceManager_DX12(window, params);
         return s_D3D12DeviceInstance;

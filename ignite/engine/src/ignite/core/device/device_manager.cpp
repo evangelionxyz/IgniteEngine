@@ -3,8 +3,6 @@
 #include "ignite_pch.hpp"
 #include "ignite/graphics/window.hpp"
 
-#include <nvrhi/utils.h>
-
 #ifdef PLATFORM_WINDOWS
     #include <ShellScalingApi.h>
     #include <dwmapi.h>
@@ -15,46 +13,47 @@
 #include "device_manager.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+
 #include <glm/glm.hpp>
 
 namespace ignite
 {
-
     DeviceManager *s_DeviceManagerInstance = nullptr;
 
-    DefaultMessageCallback &DefaultMessageCallback::GetInstance()
+    void NRI_CALL DefaultMessageCallback::MessageCallback(nri::Message messageType, const char *file, uint32_t line, const char *message, void *userArg)
     {
-        static DefaultMessageCallback *instance = nullptr;
-        if (!instance)
-            instance = new DefaultMessageCallback();
-        return *instance;
-    }
-
-    void DefaultMessageCallback::message(nvrhi::MessageSeverity severity, const char *messageText)
-    {
-        switch (severity)
+        switch (messageType)
         {
-            case nvrhi::MessageSeverity::Info:
+            case nri::Message::INFO:
             {
-                LOG_INFO("NVHRI INFO: {}\n", messageText);
+                LOG_INFO("[NRI INFO] {}:{} - {}", file ? file : "", line, message ? message : "");
                 break;
             }
-            case nvrhi::MessageSeverity::Warning:
+            case nri::Message::WARNING:
             {
-                LOG_WARN("NVHRI WARN: {}\n", messageText);
+                LOG_WARN("[NRI WARN] {}:{} - {}", file ? file : "", line, message ? message : "");
                 break;
             }
-            case nvrhi::MessageSeverity::Error:
+            case nri::Message::ERROR:
             {
-                LOG_ASSERT(false, "NVHRI ERROR: {}\n", messageText);
-                break;
-            }
-            case nvrhi::MessageSeverity::Fatal:
-            {
-                LOG_ASSERT(false, "NVHRI FATAL: {}\n", messageText);
+                LOG_ERROR("[NRI ERROR] {}:{} - {}", file ? file : "", line, message ? message : "");
                 break;
             }
         }
+    }
+
+    void NRI_CALL DefaultMessageCallback::AbortExecution(void *userArg)
+    {
+        LOG_ASSERT(false, "[NRI] Execution aborted due to fatal error");
+    }
+
+    nri::CallbackInterface DefaultMessageCallback::GetInterface()
+    {
+        nri::CallbackInterface cb{};
+        cb.MessageCallback = MessageCallback;
+        cb.AbortExecution = AbortExecution;
+        cb.userArg = nullptr;
+        return cb;
     }
 
     bool DeviceManager::CreateInstance(const InstanceParameters &params)
@@ -97,7 +96,7 @@ namespace ignite
 #endif
         }
 
-		SDL_InitFlags sdlFlags = SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_CAMERA;
+        SDL_InitFlags sdlFlags = SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_CAMERA;
         if (!SDL_Init(sdlFlags))
         {
             return false;
@@ -132,26 +131,12 @@ namespace ignite
     void DeviceManager::SetDPISacaleFactors(float x, float y)
     {
         m_DPIScaleFactorX = x;
-		m_DPIScaleFactorY = y;
+        m_DPIScaleFactorY = y;
     }
 
     void DeviceManager::CreateBackBuffers()
     {
-        if (m_DeviceParameters.headlessDevice)
-            return;
-
-        const uint32_t backBufferCount = GetBackBufferCount();
-        m_SwapChainFramebuffers.resize(backBufferCount);
-
-        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-        for (uint32_t index = 0; index < backBufferCount; ++index)
-        {
-		   m_SwapChainFramebuffers[index] = GetDevice()->createFramebuffer(
-               nvrhi::FramebufferDesc()
-               .addColorAttachment(GetBackBuffer(index))
-			   .setDepthAttachment(GetBackDepthBuffer(index))
-           );
-        }
+        // NRI back buffers and RTV/DSV descriptors are created in CreateRenderTargets() / CreateVkSwapChain()
     }
 
     DeviceManager::DeviceManager()
@@ -160,7 +145,6 @@ namespace ignite
 
     void DeviceManager::Destroy()
     {
-        m_SwapChainFramebuffers.clear();
         DestroyDeviceAndSwapChain();
         m_InstanceCreated = false;
     }
@@ -179,31 +163,17 @@ namespace ignite
         CreateBackBuffers();
     }
 
-    nvrhi::IFramebuffer* DeviceManager::GetCurrentFramebuffer()
-    {
-        return GetFramebuffer(GetCurrentBackBufferIndex());
-    }
-
-    nvrhi::IFramebuffer* DeviceManager::GetFramebuffer(uint32_t index)
-    {
-        if (index < m_SwapChainFramebuffers.size())
-            return m_SwapChainFramebuffers[index];
-
-        LOG_ASSERT(false, "SwapChain framebuffer is empty");
-        return nullptr;
-    }
-
-    DeviceManager* DeviceManager::Create(Window *window, const DeviceParameters &params, nvrhi::GraphicsAPI api)
+    DeviceManager* DeviceManager::Create(Window *window, const DeviceParameters &params, nri::GraphicsAPI api)
     {
         switch (api)
         {
 #if IGNITE_WITH_DX12
-            case nvrhi::GraphicsAPI::D3D12:
+            case nri::GraphicsAPI::D3D12:
                 s_DeviceManagerInstance = CreateD3D12(window, params);
                 return s_DeviceManagerInstance;
 #endif
 #if IGNITE_WITH_VULKAN
-            case nvrhi::GraphicsAPI::VULKAN:
+            case nri::GraphicsAPI::VK:
                 s_DeviceManagerInstance = CreateVK(window, params);
                 return s_DeviceManagerInstance;
 #endif
@@ -212,9 +182,8 @@ namespace ignite
         }
     }
 
-	DeviceManager *DeviceManager::GetInstance()
-	{
+    DeviceManager *DeviceManager::GetInstance()
+    {
         return s_DeviceManagerInstance;
-	}
-
+    }
 }

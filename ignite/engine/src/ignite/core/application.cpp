@@ -25,7 +25,7 @@
 #include "ignite_rs/frame.h"
 
 #include "command.hpp"
-#include <nvrhi/utils.h>
+#include "ignite/graphics/render_target.hpp"
 
 namespace ignite
 {
@@ -94,7 +94,7 @@ namespace ignite
             {
                 if (strcmp(createInfo.cmdLineArgs.args[i], "-dx12") == 0)
                 {
-                    m_CreateInfo.graphicsApi = nvrhi::GraphicsAPI::D3D12;
+                    m_CreateInfo.graphicsApi = nri::GraphicsAPI::D3D12;
                 }
             }
         }
@@ -123,7 +123,7 @@ namespace ignite
         deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
         deviceParams.enableDebugRuntime = false;
-        deviceParams.enableNvrhiValidationLayer = false;
+        deviceParams.enableNRIValidation = false;
         // deviceParams.enableGPUValidation = true;
 #endif
         deviceParams.swapChainBufferCount = 3; // TRIPLE BUFFER
@@ -264,10 +264,21 @@ namespace ignite
         IGN_PROFILE_THREAD_NAME("Render Thread");
         IGN_PROFILE_SCOPE("Application::RenderThread");
         DeviceManager *deviceManager = m_Window->GetDeviceManager();
-        nvrhi::IDevice *device = deviceManager->GetDevice();
+        nri::Device *device = deviceManager ? deviceManager->GetDevice() : nullptr;
+        const nri::CoreInterface &nri = deviceManager ? deviceManager->GetCoreInterface() : nri::CoreInterface{};
+        nri::Queue *graphicsQueue = deviceManager ? deviceManager->GetGraphicsQueue() : nullptr;
 
-        // Create per-thread command list
-        auto renderCommandList = device->createCommandList();
+        // Create per-thread command allocator and command buffer
+        nri::CommandAllocator *renderCmdAllocator = nullptr;
+        nri::CommandBuffer *renderCommandBuffer = nullptr;
+        if (device && graphicsQueue)
+        {
+            nri.CreateCommandAllocator(*graphicsQueue, renderCmdAllocator);
+            if (renderCmdAllocator)
+            {
+                nri.CreateCommandBuffer(*renderCmdAllocator, renderCommandBuffer);
+            }
+        }
 
         while (m_RenderThreadRunning)
         {
@@ -308,17 +319,29 @@ namespace ignite
 
             IGN_PROFILE_SCOPE("RenderThread::Frame");
 
-            // Get the current framebuffer (must be done after BeginFrame on main thread)
-            nvrhi::IFramebuffer *backBufferFrameBuffer = deviceManager->GetCurrentFramebuffer();
+            // Get current back buffer texture and RTV descriptor
+            nri::Texture *backBuffer = deviceManager ? deviceManager->GetCurrentBackBuffer() : nullptr;
+            nri::Descriptor *backBufferRTV = deviceManager ? deviceManager->GetCurrentBackBufferRTV() : nullptr;
+            RenderTarget *backBufferRenderTarget = deviceManager ? deviceManager->GetCurrentBackBufferRenderTarget() : nullptr;
 
             // ------------------------------
             // Clear Back Buffer Framebuffer
             // ------------------------------
+            if (backBufferRenderTarget && renderCmdAllocator && renderCommandBuffer && graphicsQueue)
             {
                 IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
-                renderCommandList->open();
-                nvrhi::utils::ClearColorAttachment(renderCommandList, backBufferFrameBuffer, 0, nvrhi::Color(1.0f, 0.0f, 1.0f, 1.0f));
-                renderCommandList->close();
+                nri.ResetCommandAllocator(*renderCmdAllocator);
+                nri.BeginCommandBuffer(*renderCommandBuffer, nullptr);
+
+                backBufferRenderTarget->SetClearColorAttachmentFloat(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 0);
+                backBufferRenderTarget->BeginRendering(renderCommandBuffer, true, true);
+                backBufferRenderTarget->EndRendering(renderCommandBuffer);
+                nri.EndCommandBuffer(*renderCommandBuffer);
+
+                nri::QueueSubmitDesc submitDesc = {};
+                submitDesc.commandBuffers = &renderCommandBuffer;
+                submitDesc.commandBufferNum = 1;
+
                 {
                     auto &queueMutex = GPUUploadSync::GetQueueMutex();
                     std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
@@ -328,7 +351,64 @@ namespace ignite
                     }
                     {
                         IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexHold");
-                        device->executeCommandList(renderCommandList);
+                        nri.QueueSubmit(*graphicsQueue, submitDesc);
+                    }
+                }
+            }
+            else if (backBuffer && backBufferRTV && renderCmdAllocator && renderCommandBuffer && graphicsQueue)
+            {
+                IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
+                nri.ResetCommandAllocator(*renderCmdAllocator);
+                nri.BeginCommandBuffer(*renderCommandBuffer, nullptr);
+
+                nri::TextureBarrierDesc barrier = {};
+                barrier.texture = backBuffer;
+                barrier.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+                barrier.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT, nri::StageBits::COLOR_ATTACHMENT };
+                barrier.mipOffset = 0;
+                barrier.mipNum = nri::REMAINING;
+                barrier.layerOffset = 0;
+                barrier.layerNum = nri::REMAINING;
+                barrier.planes = nri::PlaneBits::ALL;
+
+                nri::BarrierDesc barrierDesc = {};
+                barrierDesc.textures = &barrier;
+                barrierDesc.textureNum = 1;
+                nri.CmdBarrier(*renderCommandBuffer, barrierDesc);
+
+                nri::AttachmentDesc colorAtt = {};
+                colorAtt.descriptor = backBufferRTV;
+                colorAtt.clearValue.color.f = { 0.0f, 0.0f, 0.0f, 1.0f };
+                colorAtt.loadOp = nri::LoadOp::CLEAR;
+                colorAtt.storeOp = nri::StoreOp::STORE;
+
+                nri::RenderingDesc renderingDesc = {};
+                renderingDesc.colors = &colorAtt;
+                renderingDesc.colorNum = 1;
+
+                nri.CmdBeginRendering(*renderCommandBuffer, renderingDesc);
+                nri.CmdEndRendering(*renderCommandBuffer);
+
+                barrier.before = barrier.after;
+                barrier.after = { nri::AccessBits::NONE, nri::Layout::PRESENT, nri::StageBits::NONE };
+                nri.CmdBarrier(*renderCommandBuffer, barrierDesc);
+
+                nri.EndCommandBuffer(*renderCommandBuffer);
+
+                nri::QueueSubmitDesc submitDesc = {};
+                submitDesc.commandBuffers = &renderCommandBuffer;
+                submitDesc.commandBufferNum = 1;
+
+                {
+                    auto &queueMutex = GPUUploadSync::GetQueueMutex();
+                    std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
+                    {
+                        IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexWait");
+                        queueLock.lock();
+                    }
+                    {
+                        IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexHold");
+                        nri.QueueSubmit(*graphicsQueue, submitDesc);
                     }
                 }
             }
@@ -342,7 +422,7 @@ namespace ignite
                 for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
                 {
                     Layer *layer = *it;
-                    layer->OnRender(backBufferFrameBuffer);
+                    layer->OnRender(backBufferRenderTarget);
                 }
             }
 
@@ -367,7 +447,7 @@ namespace ignite
 
             if (m_CreateInfo.useGui && m_ImGuiLayer)
             {
-                m_ImGuiLayer->EndFrame(backBufferFrameBuffer);
+                m_ImGuiLayer->EndFrame(backBufferRenderTarget);
                 m_ImGuiLayer->RenderPlatformWindows();
             }
 
@@ -378,7 +458,7 @@ namespace ignite
             }
 
             // Collect worker command lists with minimal lock hold.
-            std::vector<nvrhi::CommandListHandle> pendingWorkerCommandLists;
+            std::vector<nri::CommandBuffer *> pendingWorkerCommandLists;
             std::vector<std::function<void()>> callbacks;
             {
                 std::lock_guard<std::mutex> lock(m_CommandListMutex);
@@ -389,22 +469,19 @@ namespace ignite
                 }
             }
 
-            if (!pendingWorkerCommandLists.empty())
+            if (!pendingWorkerCommandLists.empty() && graphicsQueue)
             {
                 IGN_PROFILE_SCOPE("RenderThread::WorkerSubmit");
-                std::vector<nvrhi::ICommandList *> workerLists;
-                workerLists.reserve(pendingWorkerCommandLists.size());
-                for (auto &workerCL : pendingWorkerCommandLists)
-                {
-                    workerLists.push_back(workerCL);
-                }
+                nri::QueueSubmitDesc submitDesc = {};
+                submitDesc.commandBuffers = pendingWorkerCommandLists.data();
+                submitDesc.commandBufferNum = static_cast<uint32_t>(pendingWorkerCommandLists.size());
 
                 {
                     auto &queueMutex = GPUUploadSync::GetQueueMutex();
                     std::unique_lock<std::mutex> queueLock(queueMutex);
                     {
                         IGN_PROFILE_SCOPE("RenderThread::WorkerSubmit::QueueMutexHold");
-                        device->executeCommandLists(workerLists.data(), workerLists.size());
+                        nri.QueueSubmit(*graphicsQueue, submitDesc);
                     }
                 }
             }
@@ -430,6 +507,17 @@ namespace ignite
                 IGN_PROFILE_SCOPE("RenderThread::PostFrameSubmissions");
                 ProcessRenderThreadSubmissions();
             }
+        }
+
+        if (renderCommandBuffer)
+        {
+            nri.DestroyCommandBuffer(renderCommandBuffer);
+            renderCommandBuffer = nullptr;
+        }
+        if (renderCmdAllocator)
+        {
+            nri.DestroyCommandAllocator(renderCmdAllocator);
+            renderCmdAllocator = nullptr;
         }
     }
 
@@ -490,7 +578,7 @@ namespace ignite
         }
 
         DeviceManager *deviceManager = m_Window ? m_Window->GetDeviceManager() : DeviceManager::GetInstance();
-        nvrhi::IDevice *device = deviceManager ? deviceManager->GetDevice() : nullptr;
+        nri::Device *device = deviceManager ? deviceManager->GetDevice() : nullptr;
 
         const bool canRender = m_CreateInfo.offscreen || (m_Window && (m_Window->IsExternalWindow() || (m_Window->IsVisible() && m_Window->IsInFocus())));
         if (canRender)
@@ -547,12 +635,6 @@ namespace ignite
 
         // Flush Rust-side deferred operations before frame ends
         ignite_rs_engine_end_frame();
-
-        // call this at least once per frame!
-        if (device)
-        {
-            device->runGarbageCollection();
-        }
 
         UpdateAverageTimeTime(m_DeltaTime);
         ++m_FrameIndex;
@@ -697,10 +779,10 @@ namespace ignite
         GetInstance()->m_FrameCV.notify_one();
     }
 
-    void Application::SubmitWorkerCommandList(nvrhi::CommandListHandle commandList, std::function<void()> onExecuted)
+    void Application::SubmitWorkerCommandList(nri::CommandBuffer *commandBuffer, std::function<void()> onExecuted)
     {
         std::lock_guard<std::mutex> lock(GetInstance()->m_CommandListMutex);
-        GetInstance()->m_PendingCommandLists.push_back(commandList);
+        GetInstance()->m_PendingCommandLists.push_back(commandBuffer);
         GetInstance()->m_PendingCommandListCallbacks.push_back(std::move(onExecuted));
     }
 

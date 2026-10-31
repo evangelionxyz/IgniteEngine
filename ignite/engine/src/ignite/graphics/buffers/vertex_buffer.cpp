@@ -13,21 +13,22 @@ namespace ignite
     VertexBuffer::VertexBuffer(const size_t size, const std::string &debugName)
     {
         IGN_PROFILE_FUNCTION();
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        nvrhi::BufferDesc desc;
-        desc.byteSize = size;
-        desc.isVertexBuffer = true;
-        desc.keepInitialState = true;
-        desc.initialState = nvrhi::ResourceStates::VertexBuffer;
-        desc.debugName = debugName;
-
         m_ByteSize = size;
-        m_Handle = device->createBuffer(desc);
-        LOG_ASSERT(m_Handle, "[Vertex Buffer] Failed to create handle!");
+
+        auto *deviceManager = DeviceManager::GetInstance();
+        nri::Device *device = deviceManager->GetDevice();
+        const auto &nri = deviceManager->GetCoreInterface();
+
+        nri::BufferDesc desc = {};
+        desc.size = size;
+        desc.usage = nri::BufferUsageBits::VERTEX;
+
+        nri::Result result = nri.CreateCommittedBuffer(*device, nri::MemoryLocation::HOST_UPLOAD, 1.0f, desc, m_Handle);
+        LOG_ASSERT(result == nri::Result::SUCCESS && m_Handle, "[Vertex Buffer] Failed to create handle!");
         if (m_Handle)
         {
-            IGN_PROFILE_ALLOC_N(m_Handle.Get(), size, "GPU Vertex Buffer");
+            nri.SetDebugName((nri::Object*)m_Handle, debugName.c_str());
+            IGN_PROFILE_ALLOC_N(m_Handle, size, "GPU Vertex Buffer");
             Renderer::Stats.gpuVertexBufferBytes += size;
         }
     }
@@ -36,15 +37,29 @@ namespace ignite
     {
         if (m_Handle)
         {
-            IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Vertex Buffer");
+            IGN_PROFILE_FREE_N(m_Handle, "GPU Vertex Buffer");
             Renderer::Stats.gpuVertexBufferBytes -= m_ByteSize;
+            auto *deviceManager = DeviceManager::GetInstance();
+            if (deviceManager)
+            {
+                deviceManager->GetCoreInterface().DestroyBuffer(m_Handle);
+            }
             m_Handle = nullptr;
         }
     }
 
-	void VertexBuffer::SetData(nvrhi::ICommandList *cmd, void *data, size_t dataSize, const size_t offset) const
+    void VertexBuffer::SetData(const void *data, size_t dataSize, size_t offset) const
     {
-        cmd->writeBuffer(m_Handle, data, dataSize, offset);
+        if (!m_Handle || !data || dataSize == 0) return;
+
+        auto *deviceManager = DeviceManager::GetInstance();
+        const auto &nri = deviceManager->GetCoreInterface();
+        void *mapped = nri.MapBuffer(*m_Handle, offset, dataSize);
+        if (mapped)
+        {
+            memcpy(mapped, data, dataSize);
+            nri.UnmapBuffer(*m_Handle);
+        }
     }
 
     Ref<VertexBuffer> VertexBuffer::Create(size_t size, const std::string &debugName)

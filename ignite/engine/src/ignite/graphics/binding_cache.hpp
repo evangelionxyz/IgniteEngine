@@ -3,22 +3,22 @@
 #ifndef IGN_BINDING_CACHE_HPP
 #define IGN_BINDING_CACHE_HPP
 
-#include <nvrhi/nvrhi.h>
+#include "binding_set.hpp"
+#include <NRI.h>
 
 namespace ignite
 {
     class BindingCache
     {
     public:
-        static void Init(nvrhi::IDevice *device);
+        static void Init(nri::Device *device);
         static void Shutdown();
         static void Clear();
 
-        static nvrhi::BindingSetHandle GetCachedBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout);
-        static nvrhi::BindingSetHandle GetOrCreateBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout);
-		static void RemoveBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout);
+        static Ref<BindingSet> GetCachedBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex = 0);
+        static Ref<BindingSet> GetOrCreateBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex = 0, const std::string &debugName = "");
+        static void RemoveBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex = 0);
     };
 }
-
 
 #endif

@@ -1296,7 +1296,7 @@ int main(int argc, char **argv)
     createInfo.useGui = false;
     createInfo.usePhysics = true;
     createInfo.useAudio = false;
-    createInfo.graphicsApi = nvrhi::GraphicsAPI::VULKAN;
+    createInfo.graphicsApi = nri::GraphicsAPI::VK;
     createInfo.headless = true;
 
     auto app = CreateScope<ignite::Application>(createInfo);

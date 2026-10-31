@@ -7,7 +7,7 @@
 #include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/device/device_manager.hpp"
-#include "imgui_nvrhi.hpp"
+#include "imgui_nri.hpp"
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/layer.hpp"
 #include "ignite/core/input/app_event.hpp"
@@ -20,6 +20,7 @@
 namespace ignite
 {
     class ShaderFactory;
+    class RenderTarget;
 
     class GuiFont
     {
@@ -55,7 +56,7 @@ namespace ignite
         void OnDetach() override;
 
         void BeginFrame();
-        void EndFrame(nvrhi::IFramebuffer* framebuffer);
+        void EndFrame(RenderTarget* framebuffer);
         void RenderPlatformWindows();
 
         void PollEvent(const SDL_Event &event);
@@ -80,7 +81,7 @@ namespace ignite
         [[nodiscard]] bool WantCaptureKeyboard() const;
 
     private:
-        Scope<ImGui_NVRHI> imguiNVRHI;
+        Scope<ImGui_NRI> imguiNRI;
         Ref<GuiFont> m_Font;
 
         bool m_SupportExplicitDisplayScaling;

@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "binding_cache.hpp"
+#include "ignite/core/hashing.hpp"
 #include "ignite/core/logger.hpp"
 
 #include <unordered_map>
@@ -10,29 +11,43 @@
 
 namespace ignite
 {
+    namespace
+    {
+        size_t ComputeBindingCacheHash(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex)
+        {
+            size_t seed = Hashing::HashCombineAll(pipelineLayout, setIndex);
+            for (const auto &item : desc.bindings)
+            {
+                Hashing::HashCombine(seed, item.rangeIndex);
+                Hashing::HashCombine(seed, item.baseDescriptor);
+                Hashing::HashCombine(seed, (size_t)item.descriptor);
+            }
+            return seed;
+        }
+    }
 
     struct BindingCacheData
     {
-	    nvrhi::IDevice *device;
-	    std::unordered_map<size_t, nvrhi::BindingSetHandle> bindingSets;
-	    std::shared_mutex mutex;
+        nri::Device *device = nullptr;
+        std::unordered_map<size_t, Ref<BindingSet>> bindingSets;
+        std::shared_mutex mutex;
     };
 
-	BindingCacheData g_BindingCacheData;
+    static BindingCacheData g_BindingCacheData;
 
-    void BindingCache::Init(nvrhi::IDevice *device)
+    void BindingCache::Init(nri::Device *device)
     {
         g_BindingCacheData.device = device;
     }
 
-	void BindingCache::Shutdown()
-	{
-		g_BindingCacheData.mutex.lock();
-		g_BindingCacheData.bindingSets.clear();
-		g_BindingCacheData.mutex.unlock();
+    void BindingCache::Shutdown()
+    {
+        g_BindingCacheData.mutex.lock();
+        g_BindingCacheData.bindingSets.clear();
+        g_BindingCacheData.mutex.unlock();
 
         g_BindingCacheData.device = nullptr;
-	}
+    }
 
     void BindingCache::Clear()
     {
@@ -41,85 +56,62 @@ namespace ignite
         g_BindingCacheData.mutex.unlock();
     }
 
-	nvrhi::BindingSetHandle BindingCache::GetCachedBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout)
+    Ref<BindingSet> BindingCache::GetCachedBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex)
     {
-        size_t hash = 0;
-        nvrhi::hash_combine(hash, desc);
-        nvrhi::hash_combine(hash, layout);
+        const size_t hash = ComputeBindingCacheHash(desc, pipelineLayout, setIndex);
 
         g_BindingCacheData.mutex.lock_shared();
-
-        nvrhi::BindingSetHandle result = nullptr;
+        Ref<BindingSet> result = nullptr;
         auto it = g_BindingCacheData.bindingSets.find(hash);
         if (it != g_BindingCacheData.bindingSets.end())
             result = it->second;
-
         g_BindingCacheData.mutex.unlock_shared();
-
-        if (result)
-        {
-            LOG_ASSERT(result->getDesc(), "[Binding Cache] Cached binding set has no description!");
-            LOG_ASSERT(*result->getDesc() == desc, "[Binding Cache] Cached binding set description does not match the requested description!");
-        }
 
         return result;
     }
 
-    nvrhi::BindingSetHandle BindingCache::GetOrCreateBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout)
+    Ref<BindingSet> BindingCache::GetOrCreateBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex, const std::string &debugName)
     {
-        size_t hash = 0;
-        nvrhi::hash_combine(hash, desc);
-        nvrhi::hash_combine(hash, layout);
+        const size_t hash = ComputeBindingCacheHash(desc, pipelineLayout, setIndex);
 
         g_BindingCacheData.mutex.lock_shared();
-
-        nvrhi::BindingSetHandle result;
+        Ref<BindingSet> result = nullptr;
         auto it = g_BindingCacheData.bindingSets.find(hash);
         if (it != g_BindingCacheData.bindingSets.end())
             result = it->second;
-
         g_BindingCacheData.mutex.unlock_shared();
 
         if (!result)
         {
             g_BindingCacheData.mutex.lock();
-
-            nvrhi::BindingSetHandle &entry = g_BindingCacheData.bindingSets[hash];
+            Ref<BindingSet> &entry = g_BindingCacheData.bindingSets[hash];
             if (!entry)
             {
-                result = g_BindingCacheData.device->createBindingSet(desc, layout);
-                entry = result;
+                nri::DescriptorSet *descriptorSet = BindingSet::AllocateAndUpdate(pipelineLayout, setIndex, desc);
+                if (descriptorSet)
+                {
+                    result = BindingSet::Create(debugName.empty() ? "[Cached BindingSet]" : debugName, descriptorSet);
+                    entry = result;
+                }
             }
             else
             {
                 result = entry;
             }
-
             g_BindingCacheData.mutex.unlock();
-        }
-
-        if (result)
-        {
-            LOG_ASSERT(result->getDesc(), "[Binding Cache] Cached binding set has no description!");
-            LOG_ASSERT(*result->getDesc() == desc, "[Binding Cache] Cached binding set description does not match the requested description!");
         }
 
         return result;
     }
 
-	void BindingCache::RemoveBindingSet(const nvrhi::BindingSetDesc &desc, nvrhi::IBindingLayout *layout)
-	{
-		size_t hash = 0;
-		nvrhi::hash_combine(hash, desc);
-		nvrhi::hash_combine(hash, layout);
+    void BindingCache::RemoveBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex)
+    {
+        const size_t hash = ComputeBindingCacheHash(desc, pipelineLayout, setIndex);
 
-		g_BindingCacheData.mutex.lock();
-
-		auto it = g_BindingCacheData.bindingSets.find(hash);
-		if (it != g_BindingCacheData.bindingSets.end())
-			g_BindingCacheData.bindingSets.erase(it);
-
-		g_BindingCacheData.mutex.unlock();
-	}
-
+        g_BindingCacheData.mutex.lock();
+        auto it = g_BindingCacheData.bindingSets.find(hash);
+        if (it != g_BindingCacheData.bindingSets.end())
+            g_BindingCacheData.bindingSets.erase(it);
+        g_BindingCacheData.mutex.unlock();
+    }
 }

@@ -5,11 +5,13 @@
 
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/base.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/graphics/bloom.hpp"
 #include "ignite/graphics/ssao.hpp"
 #include "ignite/graphics/outline_jfa.hpp"
 #include "ignite/graphics/render_target.hpp"
+#include "ignite/graphics/binding_set.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 
 #include "ignite/graphics/objects/mesh.hpp"
@@ -19,7 +21,7 @@
 
 #include "ignite/asset/asset_manager.hpp"
 
-#include <nvrhi/nvrhi.h>
+#include <array>
 #include <unordered_map>
 
 namespace ignite
@@ -72,7 +74,7 @@ namespace ignite
         bool enableFXAA = true;
         float renderScale = 1.0f;
 
-        nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
+        nri::FillMode fillMode = nri::FillMode::SOLID;
 
         SceneRenderSettings()
         {
@@ -192,6 +194,16 @@ namespace ignite
         SceneRenderSettings sceneRenderSettings;
 
     protected:
+        struct CommandBufferSlot
+        {
+            nri::CommandAllocator *allocator = nullptr;
+            nri::CommandBuffer *commandBuffer = nullptr;
+            uint64_t fenceValue = 0;
+        };
+
+        nri::CommandBuffer *BeginCommandBuffer();
+        void SubmitCommandBuffer(nri::CommandBuffer *cmd, bool waitIdle = false);
+
         static void FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms);
         Ref<Material> ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle);
 
@@ -200,7 +212,7 @@ namespace ignite
         Ref<CascadedShadowMap> m_CascadedShadowMap;
 
         Ref<VertexBuffer> m_CompositeVertexBuffer;
-        nvrhi::SamplerHandle m_CompositeSampler;
+        nri::Descriptor *m_CompositeSampler = nullptr;
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<OutlineJFA> m_OutlineJFA;
@@ -217,12 +229,17 @@ namespace ignite
         PostProcessing m_PostProcessing;
         CompositePostProcess_GPUData m_PostProcessingData;
 
-        nvrhi::BindingSetHandle m_MeshBindingSet;
+        Ref<BindingSet> m_MeshBindingSet;
         Scene_GPUData m_SceneGPUData;
 
         std::vector<uint32_t> m_SelectedEntities;
         Ref<Scene> m_Scene;
-        nvrhi::IDevice *m_Device = nullptr;
+        nri::Device *m_Device = nullptr;
+
+        std::array<CommandBufferSlot, 6> m_CommandBufferSlots;
+        nri::Fence *m_CommandFence = nullptr;
+        uint64_t m_NextFenceValue = 1;
+        uint32_t m_CurrentSlotIndex = 0;
 
         // This is the actual viewport resolution
         // Not the scaled one

@@ -7,17 +7,22 @@
 #ifdef PLATFORM_WINDOWS
 
 #include <vector>
+#include <string>
 
 #include "device_manager.hpp"
-#include "ignite/graphics/render_target.hpp"
 #include "ignite/core/types.hpp"
+#include "ignite/graphics/render_target.hpp"
 
 #include <Windows.h>
+#include <wrl/client.h>
 #include <dxgi1_5.h>
 #include <dxgidebug.h>
-#include <nvrhi/d3d12.h>
+#include <d3d12.h>
 
-#include <nvrhi/validation.h>
+#include <NRI.h>
+#include <NRIDescs.h>
+#include <Extensions/NRIWrapperD3D12.h>
+#include <Extensions/NRIHelper.h>
 
 namespace ignite
 {
@@ -25,9 +30,9 @@ namespace ignite
     {
         ID3D12DescriptorHeap *heap = nullptr;
         D3D12_DESCRIPTOR_HEAP_TYPE heapType = D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES;
-        D3D12_CPU_DESCRIPTOR_HANDLE heapStartCpu;
-        D3D12_GPU_DESCRIPTOR_HANDLE heapStartGpu;
-        UINT heapHandleIncrement;
+        D3D12_CPU_DESCRIPTOR_HANDLE heapStartCpu{};
+        D3D12_GPU_DESCRIPTOR_HANDLE heapStartGpu{};
+        UINT heapHandleIncrement = 0;
         std::vector<int> freeIndices;
 
         void Create(ID3D12Device *device, ID3D12DescriptorHeap *heap);
@@ -39,36 +44,49 @@ namespace ignite
     class IGN_API DeviceManager_DX12 final : public DeviceManager
     {
     public:
-		DeviceManager_DX12(Window* window, const DeviceParameters& params);
+        DeviceManager_DX12(Window *window, const DeviceParameters &params);
 
-        nvrhi::RefCountPtr<IDXGIFactory2> m_DxgiFactory2;
-        nvrhi::RefCountPtr<ID3D12Device> m_Device12;
-        nvrhi::RefCountPtr<ID3D12CommandQueue> m_GraphicsQueue;
-        nvrhi::RefCountPtr<ID3D12CommandQueue> m_ComputeQueue;
-        nvrhi::RefCountPtr<ID3D12CommandQueue> m_CopyQueue;
-        nvrhi::RefCountPtr<IDXGISwapChain3> m_SwapChain;
-        nvrhi::RefCountPtr<ID3D12DescriptorHeap> m_RtvDescHeap;
-        nvrhi::RefCountPtr<ID3D12DescriptorHeap> m_SrvDescHeap;
+        Microsoft::WRL::ComPtr<IDXGIFactory2> m_DxgiFactory2;
+        Microsoft::WRL::ComPtr<ID3D12Device> m_Device12;
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_GraphicsQueue;
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_ComputeQueue;
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_CopyQueue;
+        Microsoft::WRL::ComPtr<IDXGISwapChain3> m_SwapChain;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_RtvDescHeap;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_SrvDescHeap;
         DescriptorHeapAllocator m_SrvDescHeapAlloc;
         DXGI_SWAP_CHAIN_DESC1 m_SwapChainDesc{};
         DXGI_SWAP_CHAIN_FULLSCREEN_DESC m_FullScreenDesc{};
-        nvrhi::RefCountPtr<IDXGIAdapter> m_DxgiAdapter;
+        Microsoft::WRL::ComPtr<IDXGIAdapter> m_DxgiAdapter;
         HWND m_Hwnd = nullptr;
         bool m_TearingSupported = false;
         const int SRV_HEAP_SIZE = 64;
 
-        std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_SwapChainBuffers;
-        std::vector<Ref<RenderTarget>> m_SwapChainRenderTargets;
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_SwapChainBuffers;
 
-        nvrhi::RefCountPtr<ID3D12Fence> m_FrameFence;
+        // NRI device, interfaces and queues
+        nri::Device *m_Device = nullptr;
+        nri::CoreInterface m_NRI{};
+        nri::HelperInterface m_HelperNRI{};
+        nri::WrapperD3D12Interface m_WrapperD3D12{};
+        nri::Queue *m_NriGraphicsQueue = nullptr;
+
+        // NRI back buffers & depth buffers
+        std::vector<Ref<RenderTarget>> m_BackBufferRenderTargets;
+        std::vector<nri::Texture *> m_BackBufferTextures;
+        std::vector<nri::Descriptor *> m_BackBufferRTVs;
+        std::vector<nri::Texture *> m_DepthBufferTextures;
+        std::vector<nri::Memory *> m_DepthBufferMemories;
+        std::vector<nri::Descriptor *> m_DepthBufferDSVs;
+
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_FrameFence;
         std::vector<HANDLE> m_FrameFenceEvents;
         uint64_t m_FrameCount = 1;
-        nvrhi::DeviceHandle m_NvrhiDevice;
         std::string m_RendererString;
 
     public:
         void ReportLiveObjects() override;
-        bool EnumerateAdapters(std::vector<AdapterInfo>& outAdapters) override;
+        bool EnumerateAdapters(std::vector<AdapterInfo> &outAdapters) override;
 
         static std::string GetAdapterName(DXGI_ADAPTER_DESC const &aDesc)
         {
@@ -79,19 +97,34 @@ namespace ignite
             return name;
         }
 
-        const char* GetRendererString() const override
+        const char *GetRendererString() const override
         {
             return m_RendererString.c_str();
         }
 
-        nvrhi::IDevice* GetDevice() const override
+        nri::Device *GetDevice() const override
         {
-            return m_NvrhiDevice;
+            return m_Device;
         }
 
-        nvrhi::GraphicsAPI GetGraphicsAPI() const override
+        nri::GraphicsAPI GetGraphicsAPI() const override
         {
-            return nvrhi::GraphicsAPI::D3D12;
+            return nri::GraphicsAPI::D3D12;
+        }
+
+        const nri::CoreInterface &GetCoreInterface() const override
+        {
+            return m_NRI;
+        }
+
+        const nri::HelperInterface &GetHelperInterface() const override
+        {
+            return m_HelperNRI;
+        }
+
+        nri::Queue *GetGraphicsQueue() const override
+        {
+            return m_NriGraphicsQueue;
         }
 
         void WaitForIdle() override;
@@ -105,12 +138,18 @@ namespace ignite
         void DestroyDeviceAndSwapChain() override;
         void ResizeSwapChain() override;
 
-        nvrhi::ITexture *GetCurrentBackBuffer() override;
-        nvrhi::ITexture *GetBackBuffer(uint32_t index) override;
-        nvrhi::ITexture *GetBackDepthBuffer(uint32_t index) override;
+        nri::Texture *GetCurrentBackBuffer() override;
+        nri::Texture *GetBackBuffer(uint32_t index) override;
+        nri::Texture *GetBackDepthBuffer(uint32_t index) override;
+        nri::Descriptor *GetCurrentBackBufferRTV() override;
+        nri::Descriptor *GetBackBufferRTV(uint32_t index) override;
+        nri::Descriptor *GetCurrentBackDepthBufferDSV() override;
+        nri::Descriptor *GetBackDepthBufferDSV(uint32_t index) override;
 
         uint32_t GetCurrentBackBufferIndex() override;
         uint32_t GetBackBufferCount() override;
+        RenderTarget *GetCurrentBackBufferRenderTarget() override;
+        RenderTarget *GetBackBufferRenderTarget(uint32_t index) override;
         bool BeginFrame() override;
         bool Present() override;
         void Destroy() override;
