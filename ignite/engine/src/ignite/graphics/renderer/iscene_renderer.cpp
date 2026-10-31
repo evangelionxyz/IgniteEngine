@@ -163,7 +163,7 @@ namespace ignite
                     }
 
                     // Keep retrieve HDR If it is loaded, but still empty
-                    if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
+                    if (isHDRLoaded && (!hdrTexture || !hdrTexture->IsReady()))
                         m_WorldEnvironment->dirtyEnvironment = true;
                     else
                         m_WorldEnvironment->dirtyEnvironment = false;

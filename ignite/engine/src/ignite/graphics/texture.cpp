@@ -214,15 +214,13 @@ namespace ignite
         if (!m_CreateInfo.deferGpuCreate)
         {
             CreateTextureHandle();
-        }
 
-        if (cmd)
-        {
             const uint32_t channels = 4;
             const uint32_t rowPitch = m_CreateInfo.width * channels;
             uint32_t depthPitch = rowPitch * m_CreateInfo.height;
 
             SetData(cmd, rowPitch, depthPitch);
+            m_Ready = true;
         }
     }
 
@@ -259,14 +257,12 @@ namespace ignite
             if (!m_CreateInfo.deferGpuCreate)
             {
                 CreateTextureHandle();
-            }
 
-            if (cmd)
-            {
                 const uint32_t channelCount = 4;
                 const uint32_t rowPitch = m_CreateInfo.width * channelCount;
                 const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
                 SetData(cmd, rowPitch, depthPitch);
+                m_Ready = true;
             }
 
             return;
@@ -316,13 +312,11 @@ namespace ignite
         if (!m_CreateInfo.deferGpuCreate)
         {
             CreateTextureHandle();
-        }
 
-        if (cmd)
-        {
             const uint32_t rowPitch = m_CreateInfo.width * channels;
             const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
             SetData(cmd, rowPitch, depthPitch);
+            m_Ready = true;
         }
     }
 
@@ -601,6 +595,8 @@ namespace ignite
             m_UploadDataPrepared = false;
             m_Buffer.clear();
         }
+
+        m_Ready = true;
     }
 
     void Texture::SetData(nri::CommandBuffer *cmd, uint32_t channelCount)

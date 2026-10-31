@@ -1195,7 +1195,7 @@ namespace ignite
             }
 
             m_SceneGPUData.numPointLights = pointLightCount;
-            frameContext->pointLightBuffer.SetData(&pointLightData, sizeof(PointLight_GPUData));
+            frameContext->pointLightBuffer.SetData(&pointLightData, sizeof(pointLightData));
         }
 
         // Collect spot lights
@@ -1225,7 +1225,7 @@ namespace ignite
             }
 
             m_SceneGPUData.numSpotLights = spotLightCount;
-            frameContext->spotLightBuffer.SetData(&spotLightData, sizeof(SpotLight_GPUData));
+            frameContext->spotLightBuffer.SetData(&spotLightData, sizeof(spotLightData));
         }
 
         glm::vec3 sunDirection =
