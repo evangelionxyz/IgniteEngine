@@ -59,7 +59,7 @@ namespace ignite
 
         bool Render(RenderTarget *renderTarget);
         bool Render(ImDrawData *drawData, RenderTarget *renderTarget);
-        bool Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget);
+        bool Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget, uint32_t slotIndex = 0);
 
         void BackBufferResizing();
 
@@ -74,11 +74,11 @@ namespace ignite
         void RemoveGraphicsPipeline(const FramebufferKey &key) { m_GraphicsPipelines.erase(key); }
 
     private:
-        bool UpdateGeometry(ImDrawData *drawData);
+        bool UpdateGeometry(ImDrawData *drawData, uint32_t slotIndex);
         Ref<GraphicsPipeline> GetPSO(RenderTarget *renderTarget);
         Ref<BindingSet> GetBindingSet(nri::Descriptor *textureSRV);
 
-        nri::CommandBuffer *BeginCommandBuffer();
+        nri::CommandBuffer *BeginCommandBuffer(uint32_t &slotIndex);
         void SubmitCommandBuffer(nri::CommandBuffer *cmd);
 
         nri::Device *m_Device = nullptr;
@@ -98,11 +98,15 @@ namespace ignite
         Ref<Texture> m_FontTexture;
         nri::Descriptor *m_FontSampler = nullptr;
 
-        Ref<VertexBuffer> m_VertexBuffer;
-        Ref<IndexBuffer> m_IndexBuffer;
+        struct GeometryBufferSlot
+        {
+            Ref<VertexBuffer> vertexBuffer;
+            Ref<IndexBuffer> indexBuffer;
+            std::vector<ImGuiVertexData> vertexBufferCPU;
+            std::vector<ImDrawIdx> indexBufferCPU;
+        };
 
-        std::vector<ImGuiVertexData> m_VertexBufferCPU;
-        std::vector<ImDrawIdx> m_IndexBufferCPU;
+        std::array<GeometryBufferSlot, 3> m_GeometryBufferSlots{};
 
         std::optional<BindingLayoutDesc> m_BindingLayoutDesc;
         nri::PipelineLayout *m_PipelineLayout = nullptr;

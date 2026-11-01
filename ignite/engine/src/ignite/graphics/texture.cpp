@@ -1391,7 +1391,72 @@ namespace ignite
         };
         readbackDesc.dstRowPitch = static_cast<uint32_t>(rowPitch);
 
-        dm->WaitForIdle();
+        // NRI's host readback path requires the source image in GENERAL layout
+        // with HOST_READ access. Render-target textures are normally left in
+        // COLOR_ATTACHMENT (or SHADER_RESOURCE), so transition explicitly before
+        // asking NRI to copy the pixel.
+        nri::CommandAllocator *allocator = nullptr;
+        nri::CommandBuffer *commandBuffer = nullptr;
+        nri::Result transitionResult = nri.CreateCommandAllocator(*dm->GetGraphicsQueue(), allocator);
+        if (transitionResult != nri::Result::SUCCESS || !allocator)
+            return false;
+
+        transitionResult = nri.CreateCommandBuffer(*allocator, commandBuffer);
+        if (transitionResult != nri::Result::SUCCESS || !commandBuffer)
+        {
+            nri.DestroyCommandAllocator(allocator);
+            return false;
+        }
+
+        transitionResult = nri.BeginCommandBuffer(*commandBuffer, BindlessSystem::GetDescriptorPool());
+        if (transitionResult == nri::Result::SUCCESS)
+        {
+            nri::TextureBarrierDesc barrier = {};
+            barrier.texture = m_Handle;
+            if (m_CurrentLayout == nri::Layout::UNDEFINED)
+                barrier.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+            else
+                barrier.before = { m_CurrentAccess, m_CurrentLayout, m_CurrentStages };
+            barrier.after = { nri::AccessBits::HOST_READ, nri::Layout::GENERAL, nri::StageBits::HOST };
+            barrier.mipOffset = 0;
+            barrier.mipNum = 1;
+            barrier.layerOffset = 0;
+            barrier.layerNum = 1;
+            barrier.planes = texture_utils::IsDepthFormat(desc.format)
+                ? nri::PlaneBits::DEPTH
+                : nri::PlaneBits::ALL;
+
+            nri::BarrierDesc barrierDesc = {};
+            barrierDesc.textures = &barrier;
+            barrierDesc.textureNum = 1;
+            nri.CmdBarrier(*commandBuffer, barrierDesc);
+            transitionResult = nri.EndCommandBuffer(*commandBuffer);
+        }
+
+        if (transitionResult == nri::Result::SUCCESS)
+        {
+            nri::QueueSubmitDesc submitDesc = {};
+            submitDesc.commandBuffers = &commandBuffer;
+            submitDesc.commandBufferNum = 1;
+            {
+                std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+                transitionResult = nri.QueueSubmit(*dm->GetGraphicsQueue(), submitDesc);
+            }
+        }
+
+        if (transitionResult == nri::Result::SUCCESS)
+        {
+            dm->WaitForIdle();
+            SetCurrentState(nri::Layout::GENERAL, nri::AccessBits::HOST_READ, nri::StageBits::HOST);
+        }
+
+        nri.DestroyCommandBuffer(commandBuffer);
+        nri.DestroyCommandAllocator(allocator);
+        if (transitionResult != nri::Result::SUCCESS)
+        {
+            LOG_ERROR("[Texture] Failed to transition '{}' for host readback (NRI result {})", m_DebugName, static_cast<uint32_t>(transitionResult));
+            return false;
+        }
 
         nri::Result res = nri::Result::FAILURE;
         {
