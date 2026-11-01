@@ -113,8 +113,19 @@ jobs:
           CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
           make -j$(nproc) config=$CONFIG_LOWER Ignite.Editor
 
+      - name: Build ScriptEngine (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
+          make -j$(nproc) config=$CONFIG_LOWER Ignite.ScriptEngine
+
       - name: Build Test Suite (Linux)
         if: runner.os == 'Linux'
         run: |
           CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
           make -j$(nproc) config=$CONFIG_LOWER Ignite.Test
+
+      - name: Run Test Suite (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ./bin/${{ matrix.configuration }}/Ignite.Test
