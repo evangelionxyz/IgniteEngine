@@ -24,7 +24,7 @@ workspace "IGN"
 
 -- Helper functions to copy files / directories only if source is newer
 function copy_file(src, dst)
-    if os.ishost("windows") then
+    if _ACTION and _ACTION:find("vs") then
         local src_win = src:gsub("/", "\\")
         local dst_win = dst:gsub("/", "\\")
         if not dst_win:match("%.%w+$") and not dst_win:sub(-1):find("\\") then
@@ -37,7 +37,7 @@ function copy_file(src, dst)
 end
 
 function copy_dir(src, dst)
-    if os.ishost("windows") then
+    if _ACTION and _ACTION:find("vs") then
         local src_win = src:gsub("/", "\\")
         local dst_win = dst:gsub("/", "\\")
         if not dst_win:sub(-1):find("\\") then

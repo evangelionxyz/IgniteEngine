@@ -1932,7 +1932,7 @@ namespace ignite
                                 for (uint32_t i = 0; i < physSettings.layerCount; ++i)
                                 {
                                     char buf[128];
-                                    strncpy_s(buf, physSettings.layerNames[i].c_str(), sizeof(buf));
+                                    snprintf(buf, sizeof(buf), "%s", physSettings.layerNames[i].c_str());
                                     std::string label = std::format("Layer {}##layer_name_{}", i, i);
                                     if (ImGui::InputText(label.c_str(), buf, sizeof(buf)))
                                     {

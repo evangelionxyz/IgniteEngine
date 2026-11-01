@@ -42,7 +42,6 @@ project "Ignite.Runtime"
         "tracy",
         "MochiSharp.Native",
 
-        "ignite_core.dll.lib", -- rust based
     }
 
     includedirs {
@@ -75,7 +74,6 @@ project "Ignite.Runtime"
         "%{IncludeDir.FILEWATCHER}",
         "%{IncludeDir.ZLIB}",
         "%{IncludeDir.YAMLCPP}",
-        "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.OPENEXR}",
@@ -100,23 +98,34 @@ project "Ignite.Runtime"
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
-        "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2"
+        "JPH_OBJECT_STREAM"
     }
 
     -- build rust
-    filter "configurations:Debug or Debug-Profiling"
+    filter { "configurations:Debug or Debug-Profiling", "system:windows" }
         libdirs { "%{wks.location}/crates/target/debug" }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
             copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
-    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
+    filter { "configurations:Debug or Debug-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/debug" }
+        postbuildcommands {
+            copy_file("%{wks.location}/crates/target/debug/libignite_core.so", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:windows" }
         libdirs { "%{wks.location}/crates/target/release" }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
             copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/release" }
+        postbuildcommands {
+            copy_file("%{wks.location}/crates/target/release/libignite_core.so", "%{cfg.targetdir}")
         }
 
     filter {}
@@ -144,6 +153,7 @@ project "Ignite.Runtime"
             "/usr/lib",
             "/usr/local/lib",
             "%{LibraryDir.FMOD_LINUX}",
+            "%{LibraryDir.VULKAN_SDK}",
             "%{LibraryDir.SDL3_LINUX}"
         }
         includedirs {
@@ -152,8 +162,10 @@ project "Ignite.Runtime"
             "%{IncludeDir.IMATH_LINUX}"
         }
         links {
+            "ignite_core",
             "vulkan",
-            "shaderc",
+            "dxcompiler",
+            "shaderc_shared",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",
@@ -172,7 +184,15 @@ project "Ignite.Runtime"
             "rt",
             "glib-2.0"
         }
-        linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+        linkoptions {
+            "-Wl,-rpath,'$$ORIGIN'",
+            "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'",
+            "-Wl,-rpath-link,'%{cfg.targetdir}'"
+        }
+        postbuildcommands {
+            'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"',
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
+        }
 
     filter { "system:linux", "configurations:Debug" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
@@ -196,6 +216,7 @@ project "Ignite.Runtime"
     filter "system:windows"
         systemversion "latest"
         links {
+            "ignite_core.dll.lib",
             "d3d12.lib",
             "dxgi.lib",
             "d3dcompiler",
@@ -206,7 +227,6 @@ project "Ignite.Runtime"
             "%{Library.bcrypt}",
             "%{Library.vulkan}",
             "%{Library.mono}",
-            "%{Library.ASSIMP}",
             "%{Library.FMOD}",
             "%{Library.Iex}",
             "%{Library.OpenEXR}",

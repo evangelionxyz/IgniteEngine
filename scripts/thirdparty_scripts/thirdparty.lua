@@ -1,24 +1,30 @@
 -- VULKAN SDK
-VULKAN_SDK_PATH = os.getenv("VULKAN_SDK")
-if not VULKAN_SDK_PATH or VULKAN_SDK_PATH == "" then
-    -- Try a default path if not set
-    if os.target() == "linux" then
-        VULKAN_SDK_PATH = "scripts/downloads/vulkansdk/1.4.341.1/x86_64"
+if os.target() == "linux" then
+    local env_vulkan = os.getenv("VULKAN_SDK_LINUX") or os.getenv("VULKAN_SDK")
+    if env_vulkan and os.isdir(env_vulkan) then
+        VULKAN_SDK_PATH = env_vulkan
+    elseif os.isdir("/vulkan/1.4.350.0/x86_64") then
+        VULKAN_SDK_PATH = "/vulkan/1.4.350.0/x86_64"
+    elseif os.isdir(wks_absolute .. "/scripts/downloads/vulkansdk/1.4.341.1/x86_64") then
+        VULKAN_SDK_PATH = wks_absolute .. "/scripts/downloads/vulkansdk/1.4.341.1/x86_64"
     else
-        VULKAN_SDK_PATH = "C:/VulkanSDK/1.4.341.1"
+        local local_vulkan = os.matchdirs(wks_absolute .. "/scripts/downloads/vulkansdk/*/x86_64")
+        if #local_vulkan > 0 then
+            VULKAN_SDK_PATH = local_vulkan[1]
+        else
+            VULKAN_SDK_PATH = "/vulkan/1.4.350.0/x86_64"
+        end
     end
-end
-
--- Convert Windows path (e.g. C:/...) to WSL path (/mnt/c/...) if on Linux
-if os.target() == "linux" and VULKAN_SDK_PATH:match("^%a:") then
-    local drive = VULKAN_SDK_PATH:sub(1, 1):lower()
-    VULKAN_SDK_PATH = "/mnt/" .. drive .. VULKAN_SDK_PATH:sub(3)
+else
+    VULKAN_SDK_PATH = os.getenv("VULKAN_SDK") or "C:/VulkanSDK/1.4.341.1"
 end
 
 -- Detect correct include folder casing
 VULKAN_SDK_INCLUDE_PATH = VULKAN_SDK_PATH .. "/Include"
 if not os.isdir(VULKAN_SDK_INCLUDE_PATH) then
     if os.isdir(VULKAN_SDK_PATH .. "/include") then
+        VULKAN_SDK_INCLUDE_PATH = VULKAN_SDK_PATH .. "/include"
+    else
         VULKAN_SDK_INCLUDE_PATH = VULKAN_SDK_PATH .. "/include"
     end
 end
@@ -28,6 +34,8 @@ VULKAN_SDK_LIB_PATH = VULKAN_SDK_PATH .. "/Lib"
 if not os.isdir(VULKAN_SDK_LIB_PATH) then
     if os.isdir(VULKAN_SDK_PATH .. "/lib") then
         VULKAN_SDK_LIB_PATH = VULKAN_SDK_PATH .. "/lib"
+    else
+        VULKAN_SDK_LIB_PATH = VULKAN_SDK_PATH .. "/lib"
     end
 end
 
@@ -36,6 +44,8 @@ VULKAN_SDK_BIN_PATH = VULKAN_SDK_PATH .. "/Bin"
 if not os.isdir(VULKAN_SDK_BIN_PATH) then
     if os.isdir(VULKAN_SDK_PATH .. "/bin") then
         VULKAN_SDK_BIN_PATH = VULKAN_SDK_PATH .. "/bin"
+    else
+        VULKAN_SDK_BIN_PATH = VULKAN_SDK_PATH .. "/bin"
     end
 end
 
@@ -43,7 +53,20 @@ print("VULKAN_SDK path: " .. tostring(VULKAN_SDK_PATH))
 print("VULKAN_SDK include: " .. tostring(VULKAN_SDK_INCLUDE_PATH))
 
 -- FBX SDK
-FBX_SDK_PATH = os.getenv("FBX_SDK")
+if os.target() == "linux" then
+    local env_fbx = os.getenv("FBX_SDK_LINUX") or os.getenv("FBX_SDK")
+    if env_fbx and os.isdir(env_fbx) then
+        FBX_SDK_PATH = env_fbx
+    elseif os.isdir("/opt/fbxsdk/2020.3.9") then
+        FBX_SDK_PATH = "/opt/fbxsdk/2020.3.9"
+    elseif os.isdir("/opt/fbxsdk") then
+        FBX_SDK_PATH = "/opt/fbxsdk"
+    else
+        FBX_SDK_PATH = "/opt/fbxsdk/2020.3.9"
+    end
+else
+    FBX_SDK_PATH = os.getenv("FBX_SDK")
+end
 if not FBX_SDK_PATH then
     print("Error: FBX_SDK path environment variable is not set!")
 end
@@ -51,11 +74,11 @@ print("FBX_SDK path: " .. tostring(FBX_SDK_PATH))
 
 -- Thirdparty Source Dirs
 SDL3_SOURCE_DIR = wks_absolute .. "/thirdparty/SDL3"
+SDL3_BUILD_DIR = os.ishost("windows") and (SDL3_SOURCE_DIR .. "/build") or (SDL3_SOURCE_DIR .. "/build-linux")
 FASTNOISE2_SOURCE_DIR = wks_absolute .. "/thirdparty/FastNoise2"
 
 --includedirs
 IncludeDir                          = {}
-IncludeDir["ASSIMP"]                = "%{THIRDPARTY_DIR}/ASSIMP/include"
 IncludeDir["GLFW"]                  = "%{THIRDPARTY_DIR}/GLFW/include"
 IncludeDir["BOX2D"]                 = "%{THIRDPARTY_DIR}/BOX2D/include"
 IncludeDir["ENTT"]                  = "%{THIRDPARTY_DIR}/entt/"
@@ -122,7 +145,6 @@ Library["vulkan"]                    = "%{LibraryDir.VULKAN_SDK}/vulkan-1.lib"
 Library["mono"]                      = "%{THIRDPARTY_DIR}/Mono/lib/windows/libmono-static-sgen.lib"
 Library["Hostfxr"]                   = "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.lib"
 
-Library["ASSIMP"]                    = "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.lib"
 Library["FMOD"]                      = "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod_vc.lib"
 Library["SDL3"]                      = "%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.lib"
 
@@ -179,7 +201,7 @@ LibraryDir["FMOD_LINUX"]            = "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64"
 LibraryDir["FBX_SDK_LINUX_DEBUG"]   = "%{FBX_SDK_PATH}/lib/debug"
 LibraryDir["FBX_SDK_LINUX_RELEASE"] = "%{FBX_SDK_PATH}/lib/release"
 
-LibraryDir["SDL3_LINUX"]            = "%{THIRDPARTY_DIR}/SDL3/build"
+LibraryDir["SDL3_LINUX"]            = "%{THIRDPARTY_DIR}/SDL3/build-linux"
 
 -- include lua files
 group "Third Party"

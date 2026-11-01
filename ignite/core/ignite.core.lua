@@ -34,7 +34,6 @@ project "Ignite.Core"
         "%{IncludeDir.IMATH}",
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
-        "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.FMOD}",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.IMGUI}",
@@ -63,7 +62,6 @@ project "Ignite.Core"
 
     links {
         "Lua",
-        "ignite_core.dll.lib", -- rust based
     }
 
     defines {
@@ -74,17 +72,16 @@ project "Ignite.Core"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2",
         "_WIN32_WINNT=0x0A00",
     }
 
     -- build rust and SDL
-    filter "configurations:Debug or Debug-Profiling"
+    filter { "configurations:Debug or Debug-Profiling", "system:windows" }
         libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
             -- Configure and Build SDL
-            'cmake -S "' .. SDL3_SOURCE_DIR .. '" -B "' .. SDL3_SOURCE_DIR .. '/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "' .. SDL3_SOURCE_DIR .. '/build" --config "Debug"',
+            'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "%{wks.location}/thirdparty/SDL3/build" --config "Debug"',
 
             -- Build Rust
             'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
@@ -92,17 +89,41 @@ project "Ignite.Core"
             copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
-    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
+    filter { "configurations:Debug or Debug-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/debug" }
+        prebuildcommands {
+            -- Configure and Build SDL
+            'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build-linux" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "%{wks.location}/thirdparty/SDL3/build-linux" --config "Debug"',
+
+            -- Build Rust
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/debug/libignite_core.so", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:windows" }
         libdirs { "%{wks.location}/crates/target/release" }
         prebuildcommands {
             -- Configure and Build SDL
-            'cmake -S "' .. SDL3_SOURCE_DIR .. '" -B "' .. SDL3_SOURCE_DIR .. '/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
-            'cmake --build "' .. SDL3_SOURCE_DIR .. '/build" --config "Release"',
+            'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "%{wks.location}/thirdparty/SDL3/build" --config "Release"',
 
             -- Build Rust
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
             copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
             copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/release" }
+        prebuildcommands {
+            -- Configure and Build SDL
+            'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build-linux" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "%{wks.location}/thirdparty/SDL3/build-linux" --config "Release"',
+
+            -- Build Rust
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/release/libignite_core.so", "%{cfg.targetdir}")
         }
 
     filter {}
@@ -127,9 +148,9 @@ project "Ignite.Core"
             "%{IncludeDir.IMATH_LINUX}"
         }
         links {
+            "ignite_core",
             "vulkan",
-            "shaderc",
-            "shaderc_util",
+            "shaderc_shared",
             "spirv-cross-core",
             "spirv-cross-glsl",
             "nethost",
@@ -166,6 +187,7 @@ project "Ignite.Core"
     filter "system:windows"
         systemversion "latest"
         links {
+            "ignite_core.dll.lib",
             "d3d12.lib",
             "dxgi.lib",
             "d3dcompiler",
@@ -176,7 +198,6 @@ project "Ignite.Core"
             "%{Library.bcrypt}",
             "%{Library.vulkan}",
             "%{Library.mono}",
-            "%{Library.ASSIMP}",
             "%{Library.FMOD}",
             "%{Library.Iex}",
             "%{Library.OpenEXR}",
@@ -207,7 +228,6 @@ project "Ignite.Core"
             copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/OpenJPH/lib/win32/openjph.0.26.dll", "%{cfg.targetdir}"),
 
-            copy_file("%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll", "%{cfg.targetdir}"),
 

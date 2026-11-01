@@ -6,6 +6,11 @@ project "MochiSharp.Managed"
 
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
+
+    files {
+        "%{prj.location}/Interop/**.cs",
+        "%{prj.location}/Managed/**.cs",
+    }
     
     filter { "action:vs* or system:windows" }
         vsprops {
@@ -17,11 +22,6 @@ project "MochiSharp.Managed"
             EnableDynamicLoading = "true",
             ImplicitUsing = "enable"
         }
-
-    files {
-        "%{prj.location}/Interop/**.cs",
-        "%{prj.location}/Managed/**.cs",
-    }
 
     filter "configurations:Debug or Debug-Profiling"
         symbols "on"

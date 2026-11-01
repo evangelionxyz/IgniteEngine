@@ -12,6 +12,10 @@ project "Ignite.Rust"
         "%{wks.location}/crates/src/include/**.hpp",
     }
 
+    removefiles {
+        "%{wks.location}/crates/target/**",
+    }
+
     filter "configurations:Debug*"
         buildcommands {
             "cargo build --manifest-path \"%{wks.location}/crates/Cargo.toml\""

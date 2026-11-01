@@ -57,7 +57,6 @@ project "Ignite.Engine"
         "%{IncludeDir.NUKLEAR}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}",
-        "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.OPENEXR}",
         "%{IncludeDir.IMATH}",
@@ -93,7 +92,6 @@ project "Ignite.Engine"
         "tracy",
         "MochiSharp.Native",
         "UmbraShaderCompiler",
-        "ignite_core.dll.lib", -- rust based
     }
 
     defines {
@@ -104,35 +102,58 @@ project "Ignite.Engine"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2",
         "_WIN32_WINNT=0x0A00",
     }
 
     -- build rust, SDL, and FastNoise2
-    filter "configurations:Debug or Debug-Profiling"
-        libdirs { wks_absolute .. "/crates/target/debug" }
+    filter { "configurations:Debug or Debug-Profiling", "system:windows" }
+        libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
             -- Configure and Build FastNoise2
-            'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Debug"',
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
 
             -- Build Rust
-            'cargo build --manifest-path "' .. wks_absolute .. '/crates/Cargo.toml"',
-            copy_file(wks_absolute .. "/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file(wks_absolute .. "/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
-    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
-        libdirs { wks_absolute .. "/crates/target/release" }
+    filter { "configurations:Debug or Debug-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
             -- Configure and Build FastNoise2
-            'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
-            'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Release"',
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
 
             -- Build Rust
-            'cargo build --release --manifest-path "' .. wks_absolute .. '/crates/Cargo.toml"',
-            copy_file(wks_absolute .. "/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file(wks_absolute .. "/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/debug/libignite_core.so", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:windows" }
+        libdirs { "%{wks.location}/crates/target/release" }
+        prebuildcommands {
+            -- Configure and Build FastNoise2
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
+
+            -- Build Rust
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/release" }
+        prebuildcommands {
+            -- Configure and Build FastNoise2
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
+
+            -- Build Rust
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/release/libignite_core.so", "%{cfg.targetdir}")
         }
 
     filter {}
@@ -158,9 +179,10 @@ project "Ignite.Engine"
             "%{IncludeDir.IMATH_LINUX}"
         }
         links {
+            "ignite_core",
             "vulkan",
-            "shaderc",
-            "shaderc_util",
+            "dxcompiler",
+            "shaderc_shared",
             "spirv-cross-core",
             "spirv-cross-glsl",
             "nethost",
@@ -179,11 +201,17 @@ project "Ignite.Engine"
             "glib-2.0"
         }
         -- Set rpath to $ORIGIN so the binary finds .so files next to itself
-        linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+        linkoptions {
+            "-Wl,-rpath,'$$ORIGIN'",
+            "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'",
+            "-Wl,-rpath-link,'%{cfg.targetdir}'"
+        }
         postbuildcommands {
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}")
+            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}"),
+            'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"',
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
         }
 
     --windows
@@ -197,6 +225,7 @@ project "Ignite.Engine"
     filter "system:windows"
         systemversion "latest"
         links {
+            "ignite_core.dll.lib",
             "d3d12.lib",
             "dxgi.lib",
             "d3dcompiler",
@@ -207,7 +236,6 @@ project "Ignite.Engine"
             "%{Library.bcrypt}",
             "%{Library.vulkan}",
             "%{Library.mono}",
-            "%{Library.ASSIMP}",
             "%{Library.FMOD}",
             "%{Library.Iex}",
             "%{Library.OpenEXR}",
@@ -238,12 +266,8 @@ project "Ignite.Engine"
             copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/OpenJPH/lib/win32/openjph.0.26.dll", "%{cfg.targetdir}"),
 
-            copy_file("%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll", "%{cfg.targetdir}"),
-
-            -- copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/")
-
 
             -- Copying dotnet libraries
             copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll", "%{cfg.targetdir}")
@@ -303,13 +327,20 @@ project "Ignite.Engine"
 
 
         filter { "system:linux", "configurations:Debug or Debug-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
-            links { "fmodL" }
+            libdirs {
+                "%{LibraryDir.FBX_SDK_LINUX_DEBUG}",
+                "%{THIRDPARTY_DIR}/FastNoise2/build/Debug/lib"
+            }
+            links {
+                "fmodL",
+                "FastNoiseD"
+            }
             linkoptions { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}/libfbxsdk.a" }
             postbuildcommands {
                 copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13", "%{cfg.targetdir}")
+                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Debug/lib/libFastNoiseD.so", "%{cfg.targetdir}")
             }
 
 
@@ -367,9 +398,18 @@ project "Ignite.Engine"
 
 
         filter { "system:linux", "configurations:Release or Release-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-            links { "fmod" }
+            libdirs {
+                "%{LibraryDir.FBX_SDK_LINUX_RELEASE}",
+                "%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib"
+            }
+            links {
+                "fmod",
+                "FastNoise"
+            }
             linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
+            postbuildcommands {
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib/libFastNoise.so", "%{cfg.targetdir}")
+            }
 
         filter "configurations:Shipping"
             runtime "release"
@@ -421,6 +461,15 @@ project "Ignite.Engine"
             }
 
         filter { "system:linux", "configurations:Shipping or Shipping-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-            links { "fmod" }
+            libdirs {
+                "%{LibraryDir.FBX_SDK_LINUX_RELEASE}",
+                "%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib"
+            }
+            links {
+                "fmod",
+                "FastNoise"
+            }
             linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
+            postbuildcommands {
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib/libFastNoise.so", "%{cfg.targetdir}")
+            }

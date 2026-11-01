@@ -26,8 +26,7 @@ project("UmbraShaderCompiler")
         links {
             "vulkan",
             "dxcompiler",
-            "shaderc",
-            "shaderc_util",
+            "shaderc_shared",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",
@@ -39,6 +38,14 @@ project("UmbraShaderCompiler")
             "dl",
             "m",
             "rt",
+        }
+        linkoptions {
+            "-Wl,-rpath,'$$ORIGIN'",
+            "-Wl,-rpath,'%{LibraryDir.VULKAN_SDK}'",
+            "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'"
+        }
+        postbuildcommands {
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
         }
 
     -- Windows Default Linking

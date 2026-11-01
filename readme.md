@@ -2,70 +2,90 @@
 
 Work in progress C++ Game Engine
 
-[![Build Windows](https://github.com/evangelionxyz/IgniteEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/evangelionxyz/IgniteEngine/actions/workflows/ci.yml)
+[![CI-Pipeline](https://github.com/evangelionxyz/IgniteEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/evangelionxyz/IgniteEngine/actions/workflows/ci.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/evangelionxyz/IgniteEngine?style=flat&label=stars)](https://github.com/evangelionxyz/IgniteEngine/stargazers)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/evangelionxyz/badge.svg)](https://hub.xerj.org/contributors/evangelionxyz)
+
+## Prerequisites
+
+- **C++ Compiler**: C++23 compliant (`MSVC v143+` / VS 2022+ on Windows, `GCC 14+` or `Clang 18+` on Linux)
+- **Rust Toolchain**: `cargo` & `rustc` (stable)
+- **.NET SDK**: .NET 10.0 SDK
+- **Python**: Python 3.10+
+- **Vulkan SDK**: Vulkan SDK 1.4+ (automatically downloaded on Linux if not present)
+- **CMake**: 3.28+
 
 ## Installation
 
 ### Clone Repository Recursively
 
-We actively develop on the `dev` branch. You can use `-b dev` when cloning the repository. <br>
+We actively develop on the `dev` branch. Clone with `--recursive` to initialize git submodules:
 ```bash
-git clone --recursively https://github.com/evangelionxyz/IgniteEngine.git -b master
+git clone --recursive https://github.com/evangelionxyz/IgniteEngine.git -b dev
 ```
 
 ## Windows Build
 
-Run bootstrap to download dependencies and generate Visual Studio project files
-```
+1. Run the bootstrap script to download dependencies, build prerequisites, and generate Visual Studio project files:
+```cmd
 gen.bat
 ```
 
-Run premake to generate Visual Studio project files
-```
-premake5 vs2026 --file=scripts/premake5.lua
-```
-
-Restore and Build with MSBuild
-```
+2. Restore and Build with MSBuild (or open `IGN.slnx` in Visual Studio):
+```cmd
 msbuild IGN.slnx /t:Restore /p:Configuration=Debug /p:Platform=x64
 msbuild IGN.slnx /t:Build /p:Configuration=Debug /p:Platform=x64
 ```
 
-## Linux Build
+To build in Release configuration, replace `Debug` with `Release`.
 
-Run bootstrap to download dependencies and generate makefiles
-```
-gen.linux.sh
-```
+## Linux Build (Native & WSL2)
 
-Restore and Build with Make
-```
-make
+1. Run the bootstrap script to install system packages via `apt`, configure SDKs, install .NET tooling symlinks, and generate GNU Makefiles:
+```bash
+chmod +x gen.sh
+./gen.sh
 ```
 
+2. Build the Editor:
+```bash
+make -j$(nproc) config=debug Ignite.Editor
+```
 
-## Docker build
+3. Build the C# Script Engine:
+```bash
+make -j$(nproc) config=debug Ignite.ScriptEngine
+```
+
+4. Build and Run the Test Suite:
+```bash
+make -j$(nproc) config=debug Ignite.Test
+./bin/Debug/Ignite.Test
+```
+
+> **Note**: For Release builds, use `config=release` (binaries are emitted to `bin/Release/`).
+
+## Docker Build
 
 ```bash
-1. Build the image once (downloads FBX SDK, installs everything)
-command: docker build -t ignite-dev .
+# 1. Build the Docker image once
+docker build -t ignite-image:latest .
 
-2. Attach with source mounted
-command: docker run -it --rm -v "${PWD}:/workspace" ignite-dev
+# 2. Run container with source tree mounted
+docker run -it --rm -v "${PWD}:/workspace" ignite-image:latest
 
-3. Inside the container — generate makefiles and build
-command: python3 scripts/setup.py
+# 3. Inside container: generate project files
+python3 scripts/setup.py
 
-4. FBX_SDK already set, premake5 in PATH → instant
-now, lets build.
+# 4. Build C++ Editor
+make -j$(nproc) config=debug Ignite.Editor
 
-5. Build
-5.1. This is C++ Project Build
-command: make -j6 config=debug Ignite.Editor
+# 5. Build C# ScriptEngine
+make -j$(nproc) config=debug Ignite.ScriptEngine
 
-5.2. We also need to build the C# Project
-command: make -j6 config=debug Ignite.ScriptEngine
+# 6. Build and run tests
+make -j$(nproc) config=debug Ignite.Test
+./bin/Debug/Ignite.Test
 ```
 
 ## Preview
