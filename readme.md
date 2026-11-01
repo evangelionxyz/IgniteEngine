@@ -4,6 +4,7 @@ Work in progress C++ Game Engine
 
 [![CI-Pipeline](https://github.com/evangelionxyz/IgniteEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/evangelionxyz/IgniteEngine/actions/workflows/ci.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/evangelionxyz/IgniteEngine?style=flat&label=stars)](https://github.com/evangelionxyz/IgniteEngine/stargazers)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/evangelionxyz/badge.svg)](https://hub.xerj.org/contributors/evangelionxyz)
 
 ## Prerequisites
 
