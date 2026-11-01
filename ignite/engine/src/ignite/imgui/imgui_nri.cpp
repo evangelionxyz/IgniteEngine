@@ -183,14 +183,15 @@ namespace ignite
         return true;
     }
 
-    nri::CommandBuffer *ImGui_NRI::BeginCommandBuffer()
+    nri::CommandBuffer *ImGui_NRI::BeginCommandBuffer(uint32_t &slotIndex)
     {
         auto *deviceManager = DeviceManager::GetInstance();
         if (!deviceManager)
             return nullptr;
 
         const auto &nri = deviceManager->GetCoreInterface();
-        auto &slot = m_CommandSlots[m_CurrentSlotIndex];
+        slotIndex = m_CurrentSlotIndex;
+        auto &slot = m_CommandSlots[slotIndex];
         m_CurrentSlotIndex = (m_CurrentSlotIndex + 1) % static_cast<uint32_t>(m_CommandSlots.size());
 
         if (m_CommandFence && slot.fenceValue > 0 && nri.GetFenceValue(*m_CommandFence) < slot.fenceValue)
@@ -258,17 +259,18 @@ namespace ignite
         if (!drawData || drawData->CmdListsCount <= 0 || !renderTarget)
             return true;
 
-        nri::CommandBuffer *cmd = BeginCommandBuffer();
+        uint32_t slotIndex = 0;
+        nri::CommandBuffer *cmd = BeginCommandBuffer(slotIndex);
         if (!cmd)
             return false;
 
-        const bool result = Render(cmd, drawData, renderTarget);
+        const bool result = Render(cmd, drawData, renderTarget, slotIndex);
 
         SubmitCommandBuffer(cmd);
         return result;
     }
 
-    bool ImGui_NRI::Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget)
+    bool ImGui_NRI::Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget, uint32_t slotIndex)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -280,10 +282,12 @@ namespace ignite
         if (fbWidth <= 0 || fbHeight <= 0)
             return true;
 
-        if (!UpdateGeometry(drawData))
+        if (!UpdateGeometry(drawData, slotIndex))
         {
             return false;
         }
+
+        GeometryBufferSlot &geometry = m_GeometryBufferSlots[slotIndex % m_GeometryBufferSlots.size()];
 
         Ref<GraphicsPipeline> pipeline = GetPSO(renderTarget);
         if (!pipeline || !pipeline->GetHandle())
@@ -317,12 +321,12 @@ namespace ignite
         nri.CmdSetViewports(*cmd, &viewport, 1);
 
         nri::VertexBufferDesc vbDesc = {};
-        vbDesc.buffer = m_VertexBuffer->GetHandle();
+        vbDesc.buffer = geometry.vertexBuffer->GetHandle();
         vbDesc.offset = 0;
         vbDesc.stride = sizeof(ImGuiVertexData);
         nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
 
-        nri.CmdSetIndexBuffer(*cmd, *m_IndexBuffer->GetHandle(), 0,
+        nri.CmdSetIndexBuffer(*cmd, *geometry.indexBuffer->GetHandle(), 0,
             sizeof(ImDrawIdx) == 2 ? nri::IndexType::UINT16 : nri::IndexType::UINT32);
 
         nri::SetRootConstantsDesc rootConstDesc = {};
@@ -532,7 +536,7 @@ namespace ignite
         s_Instance->m_BindingsCache.clear();
     }
 
-    bool ImGui_NRI::UpdateGeometry(ImDrawData *drawData)
+    bool ImGui_NRI::UpdateGeometry(ImDrawData *drawData, uint32_t slotIndex)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -545,25 +549,27 @@ namespace ignite
         const size_t allocVtxBytes = (static_cast<size_t>(drawData->TotalVtxCount) + 5000) * sizeof(ImGuiVertexData);
         const size_t allocIdxBytes = (static_cast<size_t>(drawData->TotalIdxCount) + 5000) * sizeof(ImDrawIdx);
 
-        if (!m_VertexBuffer || m_VertexBuffer->GetByteSize() < actualVtxBytes)
+        GeometryBufferSlot &geometry = m_GeometryBufferSlots[slotIndex % m_GeometryBufferSlots.size()];
+
+        if (!geometry.vertexBuffer || geometry.vertexBuffer->GetByteSize() < actualVtxBytes)
         {
-            m_VertexBuffer = VertexBuffer::Create(allocVtxBytes, "ImGui vertex buffer");
-            if (!m_VertexBuffer)
+            geometry.vertexBuffer = VertexBuffer::Create(allocVtxBytes, "ImGui vertex buffer");
+            if (!geometry.vertexBuffer)
                 return false;
         }
 
-        if (!m_IndexBuffer || m_IndexBuffer->GetByteSize() < actualIdxBytes)
+        if (!geometry.indexBuffer || geometry.indexBuffer->GetByteSize() < actualIdxBytes)
         {
-            m_IndexBuffer = IndexBuffer::Create(allocIdxBytes, "ImGui index buffer");
-            if (!m_IndexBuffer)
+            geometry.indexBuffer = IndexBuffer::Create(allocIdxBytes, "ImGui index buffer");
+            if (!geometry.indexBuffer)
                 return false;
         }
 
-        m_VertexBufferCPU.resize(m_VertexBuffer->GetByteSize() / sizeof(ImGuiVertexData));
-        m_IndexBufferCPU.resize(m_IndexBuffer->GetByteSize() / sizeof(ImDrawIdx));
+        geometry.vertexBufferCPU.resize(geometry.vertexBuffer->GetByteSize() / sizeof(ImGuiVertexData));
+        geometry.indexBufferCPU.resize(geometry.indexBuffer->GetByteSize() / sizeof(ImDrawIdx));
 
-        ImGuiVertexData *vtxDst = m_VertexBufferCPU.data();
-        ImDrawIdx *idxDst = m_IndexBufferCPU.data();
+        ImGuiVertexData *vtxDst = geometry.vertexBufferCPU.data();
+        ImDrawIdx *idxDst = geometry.indexBufferCPU.data();
 
         for (int n = 0; n < drawData->CmdListsCount; ++n)
         {
@@ -589,8 +595,8 @@ namespace ignite
             idxDst += cmdList->IdxBuffer.Size;
         }
 
-        m_VertexBuffer->SetData(m_VertexBufferCPU.data(), actualVtxBytes);
-        m_IndexBuffer->SetData(m_IndexBufferCPU.data(), actualIdxBytes);
+        geometry.vertexBuffer->SetData(geometry.vertexBufferCPU.data(), actualVtxBytes);
+        geometry.indexBuffer->SetData(geometry.indexBufferCPU.data(), actualIdxBytes);
 
         return true;
     }
@@ -649,8 +655,13 @@ namespace ignite
             m_FontSampler = nullptr;
         }
 
-        m_VertexBuffer = nullptr;
-        m_IndexBuffer = nullptr;
+        for (auto &geometry : m_GeometryBufferSlots)
+        {
+            geometry.vertexBuffer = nullptr;
+            geometry.indexBuffer = nullptr;
+            geometry.vertexBufferCPU.clear();
+            geometry.indexBufferCPU.clear();
+        }
 
         if (deviceManager)
         {
