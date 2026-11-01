@@ -79,14 +79,14 @@ namespace ignite
         void BeginFrame();
         void SetActiveScene(const Ref<Scene> &scene);
 
-        void Render(ICamera *camera, FrameContext *frameContext, bool drawDebug, nvrhi::IFramebuffer *targetFramebuffer = nullptr);
+        void Render(ICamera *camera, FrameContext *frameContext, bool drawDebug, RenderTarget *targetFramebuffer = nullptr);
 
         void SetCameraWidgetMousePosition(ICamera *camera, uint32_t mouseX, uint32_t mouseY, bool hovered);
         void SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
         void SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
         virtual void ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height) override;
-        void SetFillMode(nvrhi::RasterFillMode mode);
+        void SetFillMode(nri::FillMode mode);
 
         void SetSelectedEntity(const Entity& entity);
         void UnselectEntity(const Entity& entity);
@@ -107,7 +107,7 @@ namespace ignite
 
         Ref<CameraRenderTarget> GetRenderTarget(ICamera *camera);
 
-        void PreallocateGPUData(nvrhi::ICommandList *cmd, FrameContext *frameContext);
+        void PreallocateGPUData(nri::CommandBuffer *cmd, FrameContext *frameContext);
 
     private:
         RenderPlan BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera);
@@ -116,86 +116,86 @@ namespace ignite
         void EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
         void EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight);
 
-        void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext);
-        void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, nvrhi::IFramebuffer *selectionFramebuffer, bool drawDebug);
-        void UIPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
-        void DebugPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
-        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false, nvrhi::IFramebuffer *targetFramebuffer = nullptr);
-        void FXAAPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> inputTexture);
+        void ShadowPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext);
+        void ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug);
+        void UIPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
+        void DebugPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
+        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false, RenderTarget *targetFramebuffer = nullptr);
+        void FXAAPass(nri::CommandBuffer *cmd, RenderTarget *framebuffer, Ref<Texture> inputTexture);
 
-        void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D);
-        void DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebufferm, FrameContext *frameContext);
-        void DrawDebug3D(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
+        void DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D);
+        void DrawDebug2D(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
+        void DrawDebug3D(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
 
         /// Flush all accumulated opaque static-mesh batches to the command list.
-        void FlushOpaqueBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer);
+        void FlushOpaqueBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer);
 
         /// Flush all accumulated shadow (CSM) static-mesh batches to the command list.
-        void FlushShadowBatches(nvrhi::ICommandList *cmd, FrameContext *frameContext, uint32_t cascadeIndex);
+        void FlushShadowBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, uint32_t cascadeIndex);
 
     private:
         struct TransparentDrawCall
         {
-            nvrhi::BindingSetHandle meshBindingSet;
-            nvrhi::BindingSetHandle materialBindingSet;
-            nvrhi::BufferHandle vertexBuffer;
-            nvrhi::BufferHandle indexBuffer;
-            uint32_t indexCount;
-            uint32_t pushConstants_ObjectIndex;
-            float distanceToCamera;
-            bool isSkeletal;
+            Ref<BindingSet> meshBindingSet;
+            Ref<BindingSet> materialBindingSet;
+            nri::Buffer *vertexBuffer = nullptr;
+            nri::Buffer *indexBuffer = nullptr;
+            uint32_t indexCount = 0;
+            uint32_t pushConstants_ObjectIndex = 0;
+            float distanceToCamera = 0.0f;
+            bool isSkeletal = false;
             Mesh_GPUData gpuData;
             Ref<MeshInstance> meshInstance;
             glm::mat4 bones[MAX_BONES];
-            nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None;
+            nri::CullMode cullMode = nri::CullMode::NONE;
         };
 
         template<typename MeshT>
-        void DrawMesh(nvrhi::ICommandList *cmd, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
+        void DrawMesh(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
             const glm::mat4 &normalMatrix, uint32_t objectID, const std::unordered_map<int, AssetHandle> &overrideMaterials, const std::vector<glm::mat4> &boneTransforms,
             const std::vector<Mesh_GPUData> &cachedInstanceTransforms, ICamera *camera, Ref<GraphicsPipeline> opaquePSO, std::vector<TransparentDrawCall> &transparentDrawCalls,
             std::unordered_set<Material *> &uploadedMaterialsThisPass, entt::entity entity = entt::null, const std::string &socketName = "");
 
         template<typename MeshT>
-        void DrawMeshShadow( nvrhi::ICommandList *cmd, FrameContext *frameContext, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
+        void DrawMeshShadow(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *csmFramebuffer, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
             const glm::mat4 &normalMatrix, uint32_t objectID, const std::vector<glm::mat4> &boneTransforms, const std::vector<Mesh_GPUData> &cachedInstanceTransforms,
-            nvrhi::GraphicsState &csmState, uint32_t cascadeIndex, entt::entity entity = entt::null, const std::string &socketName = "");
+            const Ref<GraphicsPipeline> &csmPSO, uint32_t cascadeIndex, entt::entity entity = entt::null, const std::string &socketName = "");
 
         Ref<GraphicsPipeline> GetOrCreateMeshPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
-            nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode, const char *vertexShaderPath, const char *pixelShaderPath,
+            RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode, const char *vertexShaderPath, const char *pixelShaderPath,
             EBindingLayout meshLayout, bool transparent);
 
         Ref<GraphicsPipeline> GetOrCreateCMSPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
-            nvrhi::IFramebuffer *framebuffer, const char *vertexShaderPath,  const char *pixelShaderPath, EBindingLayout meshLayout);
+            RenderTarget *framebuffer, const char *vertexShaderPath, const char *pixelShaderPath, EBindingLayout meshLayout);
 
-        Ref<GraphicsPipeline> GetDebugGridPSO(nvrhi::IFramebuffer *framebuffer);
-        Ref<GraphicsPipeline> GetAnimatedPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front);
-        Ref<GraphicsPipeline> GetAnimatedTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None);
+        Ref<GraphicsPipeline> GetDebugGridPSO(RenderTarget *framebuffer);
+        Ref<GraphicsPipeline> GetAnimatedPSO(RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode = nri::CullMode::FRONT);
+        Ref<GraphicsPipeline> GetAnimatedTransparentPSO(RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode = nri::CullMode::NONE);
 
-        Ref<GraphicsPipeline> GetStaticPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front);
-        Ref<GraphicsPipeline> GetStaticTransparentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::None);
+        Ref<GraphicsPipeline> GetStaticPSO(RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode = nri::CullMode::FRONT);
+        Ref<GraphicsPipeline> GetStaticTransparentPSO(RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode = nri::CullMode::NONE);
 
         Ref<GraphicsPipeline> GetOrCreateSelectMeshPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
-            nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode, const char *vertexShaderPath, const char *pixelShaderPath,
+            RenderTarget *framebuffer, nri::FillMode fillMode, const char *vertexShaderPath, const char *pixelShaderPath,
             EBindingLayout meshLayout);
-        Ref<GraphicsPipeline> GetStaticSelectPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetAnimatedSelectPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        void RenderSelectedEntitiesIDOverlay(nvrhi::ICommandList *cmd, ICamera *camera, FrameContext *frameContext, nvrhi::IFramebuffer *framebuffer, std::unordered_set<Material *> &uploadedMaterialsThisPass);
+        Ref<GraphicsPipeline> GetStaticSelectPSO(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetAnimatedSelectPSO(RenderTarget *framebuffer, nri::FillMode fillMode);
+        void RenderSelectedEntitiesIDOverlay(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, std::unordered_set<Material *> &uploadedMaterialsThisPass);
 
         Ref<GraphicsPipeline> GetAnimatedCSMPSO();
         Ref<GraphicsPipeline> GetStaticCSMPSO();
 
-        Ref<GraphicsPipeline> GetEnvironmentPSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetCompositePSO(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetFXAAPSO(nvrhi::IFramebuffer *framebuffer);
+        Ref<GraphicsPipeline> GetEnvironmentPSO(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetCompositePSO(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetFXAAPSO(RenderTarget *framebuffer);
 
-        nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &gridBuffer);
-        nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const nvrhi::BufferHandle &postProcessBuffer, nvrhi::ISampler *sampler, bool useResolvedScene = false);
+        Ref<BindingSet> GetOrCreateDebugGridBindingSet(nri::PipelineLayout *pipelineLayout, const ConstantBuffer &cameraBuffer, const ConstantBuffer &gridBuffer);
+        Ref<BindingSet> GetOrCreateCompositeBindingSet(nri::PipelineLayout *pipelineLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
+            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const ConstantBuffer &postProcessBuffer, nri::Descriptor *sampler, bool useResolvedScene = false);
 
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
         std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);
-        std::vector<Ref<SSAO>> GetOrCreateSSAOs(nvrhi::ICommandList *cmd, ICamera *camera);
+        std::vector<Ref<SSAO>> GetOrCreateSSAOs(nri::CommandBuffer *cmd, ICamera *camera);
 
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
@@ -220,9 +220,9 @@ namespace ignite
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_FXAAPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_DebugGridPSOCache;
 
-        std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> m_CompositeBindingSetCache;
-        std::unordered_map<DebugGridBindingKey, nvrhi::BindingSetHandle, DebugGridBindingKeyHash> m_DebugGridBindingSetCache;
-        std::unordered_map<FXAABindingKey, nvrhi::BindingSetHandle, FXAABindingKeyHash> m_FXAABindingSetCache;
+        std::unordered_map<CompositeBindingKey, Ref<BindingSet>, CompositeBindingKeyHash> m_CompositeBindingSetCache;
+        std::unordered_map<DebugGridBindingKey, Ref<BindingSet>, DebugGridBindingKeyHash> m_DebugGridBindingSetCache;
+        std::unordered_map<FXAABindingKey, Ref<BindingSet>, FXAABindingKeyHash> m_FXAABindingSetCache;
 
         std::unordered_map<ICamera *, CameraWidgetInputState> m_CameraInputStates;
 
@@ -239,6 +239,7 @@ namespace ignite
         Ref<Material> m_RuntimeMaterial;
 
         uint64_t m_TAAFrameIndex = 0;
+        bool m_ResizeWaitedThisFrame = false;
 
         std::unordered_map<entt::entity, std::vector<uint32_t>> m_EntityObjectIndexCache;
         std::unordered_map<entt::entity, uint32_t> m_EntityBoneOffsetCache;

@@ -5,6 +5,7 @@
 #define IGN_ENVIRONMENT_HPP
 
 #include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/binding_set.hpp"
 #include "ignite/graphics/buffers/index_buffer.hpp"
 #include "ignite/graphics/buffers/vertex_buffer.hpp"
 
@@ -12,12 +13,12 @@
 
 #include <array>
 #include <string>
-#include <nvrhi/nvrhi.h>
 
 namespace ignite
 {
     class GraphicsPipeline;
     class ConstantBuffer;
+    class RenderTarget;
     class Scene;
     class ICamera;
     class ProceduralSky;
@@ -27,17 +28,19 @@ namespace ignite
     {
     public:
         Environment();
-    	virtual ~Environment() override;
+        virtual ~Environment() override;
 
-        void Draw(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &gp,
-            const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &sceneBuffer);
+        void Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &gp,
+            const ConstantBuffer &cameraBuffer, const ConstantBuffer &sceneBuffer);
+        void Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &gp,
+            const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer);
 
         void LoadTexture(const std::string &filepath);
         void SetTexture(const Ref<Texture> &texture);
-        void WriteBuffer(nvrhi::ICommandList *cmd);
+        void WriteBuffer(nri::CommandBuffer *cmd = nullptr);
 
         static Ref<Environment> Create();
-        static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
+        static BindingLayoutDesc GetBindingLayoutDesc();
 
         Ref<Texture> GetHDRTexture() { return m_HDRTexture; }
 
@@ -55,7 +58,7 @@ namespace ignite
         Ref<Texture> m_HDRTexture;
         Ref<ProceduralSky> m_ProceduralSky;
         SkyType m_SkyType;
-    	nvrhi::SamplerHandle m_Sampler;
+        nri::Descriptor *m_Sampler = nullptr;
 
         std::array<glm::vec3, 24> m_Vertices;
         std::array<uint32_t, 36> m_Indices;

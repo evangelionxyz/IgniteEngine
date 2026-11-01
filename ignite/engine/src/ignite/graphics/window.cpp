@@ -29,42 +29,42 @@ namespace ignite
 {
     static const struct
     {
-        nvrhi::Format format;
-        u32 redBits;
-        u32 greenBits;
-        u32 blueBits;
-        u32 alphaBits;
-        u32 depthBits;
-        u32 stencilBits;
+        nri::Format format;
+        uint32_t redBits;
+        uint32_t greenBits;
+        uint32_t blueBits;
+        uint32_t alphaBits;
+        uint32_t depthBits;
+        uint32_t stencilBits;
     } formatInfo[] =
     {
-        { nvrhi::Format::UNKNOWN,            0,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::R8_UINT,            8,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::RG8_UINT,           8,  8,  0,  0,  0,  0, },
-        { nvrhi::Format::RG8_UNORM,          8,  8,  0,  0,  0,  0, },
-        { nvrhi::Format::R16_UINT,          16,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::R16_UNORM,         16,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::R16_FLOAT,         16,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::RGBA8_UNORM,        8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::RGBA8_SNORM,        8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::BGRA8_UNORM,        8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::SRGBA8_UNORM,       8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::SBGRA8_UNORM,       8,  8,  8,  8,  0,  0, },
-        { nvrhi::Format::R10G10B10A2_UNORM, 10, 10, 10,  2,  0,  0, },
-        { nvrhi::Format::R11G11B10_FLOAT,   11, 11, 10,  0,  0,  0, },
-        { nvrhi::Format::RG16_UINT,         16, 16,  0,  0,  0,  0, },
-        { nvrhi::Format::RG16_FLOAT,        16, 16,  0,  0,  0,  0, },
-        { nvrhi::Format::R32_UINT,          32,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::R32_FLOAT,         32,  0,  0,  0,  0,  0, },
-        { nvrhi::Format::RGBA16_FLOAT,      16, 16, 16, 16,  0,  0, },
-        { nvrhi::Format::RGBA16_UNORM,      16, 16, 16, 16,  0,  0, },
-        { nvrhi::Format::RGBA16_SNORM,      16, 16, 16, 16,  0,  0, },
-        { nvrhi::Format::RG32_UINT,         32, 32,  0,  0,  0,  0, },
-        { nvrhi::Format::RG32_FLOAT,        32, 32,  0,  0,  0,  0, },
-        { nvrhi::Format::RGB32_UINT,        32, 32, 32,  0,  0,  0, },
-        { nvrhi::Format::RGB32_FLOAT,       32, 32, 32,  0,  0,  0, },
-        { nvrhi::Format::RGBA32_UINT,       32, 32, 32, 32,  0,  0, },
-        { nvrhi::Format::RGBA32_FLOAT,      32, 32, 32, 32,  0,  0, }
+        { nri::Format::UNKNOWN,                0,  0,  0,  0,  0,  0, },
+        { nri::Format::R8_UINT,                8,  0,  0,  0,  0,  0, },
+        { nri::Format::RG8_UINT,               8,  8,  0,  0,  0,  0, },
+        { nri::Format::RG8_UNORM,              8,  8,  0,  0,  0,  0, },
+        { nri::Format::R16_UINT,              16,  0,  0,  0,  0,  0, },
+        { nri::Format::R16_UNORM,             16,  0,  0,  0,  0,  0, },
+        { nri::Format::R16_SFLOAT,            16,  0,  0,  0,  0,  0, },
+        { nri::Format::RGBA8_UNORM,            8,  8,  8,  8,  0,  0, },
+        { nri::Format::RGBA8_SNORM,            8,  8,  8,  8,  0,  0, },
+        { nri::Format::BGRA8_UNORM,            8,  8,  8,  8,  0,  0, },
+        { nri::Format::RGBA8_SRGB,             8,  8,  8,  8,  0,  0, },
+        { nri::Format::BGRA8_SRGB,             8,  8,  8,  8,  0,  0, },
+        { nri::Format::R10_G10_B10_A2_UNORM,  10, 10, 10,  2,  0,  0, },
+        { nri::Format::R11_G11_B10_UFLOAT,    11, 11, 10,  0,  0,  0, },
+        { nri::Format::RG16_UINT,             16, 16,  0,  0,  0,  0, },
+        { nri::Format::RG16_SFLOAT,           16, 16,  0,  0,  0,  0, },
+        { nri::Format::R32_UINT,              32,  0,  0,  0,  0,  0, },
+        { nri::Format::R32_SFLOAT,            32,  0,  0,  0,  0,  0, },
+        { nri::Format::RGBA16_SFLOAT,         16, 16, 16, 16,  0,  0, },
+        { nri::Format::RGBA16_UNORM,          16, 16, 16, 16,  0,  0, },
+        { nri::Format::RGBA16_SNORM,          16, 16, 16, 16,  0,  0, },
+        { nri::Format::RG32_UINT,             32, 32,  0,  0,  0,  0, },
+        { nri::Format::RG32_SFLOAT,           32, 32,  0,  0,  0,  0, },
+        { nri::Format::RGB32_UINT,            32, 32, 32,  0,  0,  0, },
+        { nri::Format::RGB32_SFLOAT,          32, 32, 32,  0,  0,  0, },
+        { nri::Format::RGBA32_UINT,           32, 32, 32, 32,  0,  0, },
+        { nri::Format::RGBA32_SFLOAT,         32, 32, 32, 32,  0,  0, }
     };
 
 #ifdef PLATFORM_WINDOWS
@@ -101,12 +101,12 @@ namespace ignite
     }
 #endif
 
-    Window::Window(const char *windowTitle, const DeviceParameters &params, nvrhi::GraphicsAPI graphicsApi)
+    Window::Window(const char *windowTitle, const DeviceParameters &params, nri::GraphicsAPI graphicsApi)
         : m_WindowTitle(windowTitle)
     {
         m_DeviceManager = DeviceManager::Create(this, params, graphicsApi);
 
-		DeviceParameters& deviceParams = m_DeviceManager->GetDeviceParameters();
+        DeviceParameters& deviceParams = m_DeviceManager->GetDeviceParameters();
 
 #ifdef _DEBUG
         deviceParams.enableDebugRuntime = true;
@@ -144,7 +144,7 @@ namespace ignite
             SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, windowTitle);
             SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, params.windowWidth);
             SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, params.windowHeight);
-            if (graphicsApi == nvrhi::GraphicsAPI::VULKAN)
+            if (graphicsApi == nri::GraphicsAPI::VK)
             {
                 SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
             }
@@ -168,7 +168,7 @@ namespace ignite
         else
         {
             SDL_WindowFlags windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
-            if (graphicsApi == nvrhi::GraphicsAPI::VULKAN)
+            if (graphicsApi == nri::GraphicsAPI::VK)
             {
                 windowFlags |= SDL_WINDOW_VULKAN;
             }
@@ -220,11 +220,11 @@ namespace ignite
         if (params.enablePerMonitorDPI)
         {
 #ifdef PLATFORM_WINDOWS
-			HWND hwnd = GetNativeWindow();
+            HWND hwnd = GetNativeWindow();
             HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
             uint32_t dpiX, dpiY;
             GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-			m_DeviceManager->SetDPISacaleFactors(dpiX / 96.f, dpiY / 96.f);
+            m_DeviceManager->SetDPISacaleFactors(dpiX / 96.f, dpiY / 96.f);
 #else
 #endif
         }
@@ -237,7 +237,7 @@ namespace ignite
         if (m_DeviceManager->GetDeviceParameters().headlessDevice)
             return;
 
-		DeviceParameters &deviceParams = m_DeviceManager->GetDeviceParameters();
+        DeviceParameters &deviceParams = m_DeviceManager->GetDeviceParameters();
         const SDL_WindowID mainWindowId = m_Window ? SDL_GetWindowID(m_Window) : 0;
 
         auto getWindowSource = [mainWindowId, this](SDL_WindowID wid) -> std::pair<bool, EventSource> {
@@ -259,9 +259,20 @@ namespace ignite
 
         switch (event.type)
         {
+            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+            {
+                auto [allowed, source] = getWindowSource(event.window.windowID);
+                if (event.window.windowID == mainWindowId)
+                {
+                    m_Looping = false;
+                }
+                WindowCloseEvent e;
+                dispatch(e, source);
+                break;
+            }
             case SDL_EVENT_QUIT:
             {
-			    m_Looping = false;
+                m_Looping = false;
                 break;
             }
             case SDL_EVENT_WINDOW_RESIZED:
@@ -321,7 +332,7 @@ namespace ignite
 
                 WindowMaximizedEvent e(true);
                 dispatch(e, source);
-			    break;
+                break;
             }
             case SDL_EVENT_WINDOW_MINIMIZED:
             {
@@ -342,7 +353,7 @@ namespace ignite
                 WindowMinimizedEvent event(false);
                 dispatch(event, source);
                 break;
-		    }
+            }
             case SDL_EVENT_WINDOW_DESTROYED:
             {
                 auto [allowed, source] = getWindowSource(event.window.windowID);
@@ -356,14 +367,14 @@ namespace ignite
             case SDL_EVENT_JOYSTICK_ADDED:
             {
                 SDL_JoystickID jID = event.jdevice.which;
-			    JoystickManager::ConnectJoystick(jID);
+                JoystickManager::ConnectJoystick(jID);
                 break;
             }
             case SDL_EVENT_JOYSTICK_REMOVED:
             {
-			    SDL_JoystickID jID = event.jdevice.which;
+                SDL_JoystickID jID = event.jdevice.which;
                 JoystickManager::DisconnectJoystick(jID);
-			    break;
+                break;
             }
             case SDL_EVENT_TEXT_INPUT:
             {
@@ -371,8 +382,8 @@ namespace ignite
                 if (!allowed)
                     break;
 
-			    /*KeyTypedEvent e(std::string(event.text.text));
-			    dispatch(e, source);*/
+                /*KeyTypedEvent e(std::string(event.text.text));
+                dispatch(e, source);*/
                 break;
             }
             case SDL_EVENT_KEY_DOWN:
@@ -411,7 +422,7 @@ namespace ignite
 
                 MouseButtonPressedEvent e(event.button.button);
                 dispatch(e, source);
-			    break;
+                break;
             }
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
@@ -432,7 +443,7 @@ namespace ignite
                 MouseScrolledEvent e(event.wheel.x, event.wheel.y);
                 dispatch(e, source);
                 break;
-		    }
+            }
             case SDL_EVENT_MOUSE_MOTION:
             {
                 auto [allowed, source] = getWindowSource(event.motion.windowID);
@@ -442,10 +453,10 @@ namespace ignite
                 MouseMovedEvent e((int)event.motion.x, (int)event.motion.y);
                 dispatch(e, source);
                 break;
-		    }
+            }
             case SDL_EVENT_DROP_FILE:
             {
-			    // TODO: implement multiple file drop
+                // TODO: implement multiple file drop
                 auto [allowed, source] = getWindowSource(event.drop.windowID);
                 if (!allowed)
                     break;
@@ -471,11 +482,11 @@ namespace ignite
                     WindowDPIScaleChangedEvent e(static_cast<float>(event.display.data1), static_cast<float>(event.display.data2));
                     dispatch(e, EventSource::Viewport);
 #ifdef _WIN32
-				    HWND hwnd = GetNativeWindow();
+                    HWND hwnd = GetNativeWindow();
                     HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
                     uint32_t dpiX, dpiY;
                     GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-				    m_DeviceManager->SetDPISacaleFactors(dpiX / 96.f, dpiY / 96.f);
+                    m_DeviceManager->SetDPISacaleFactors(dpiX / 96.f, dpiY / 96.f);
 #else
 #endif
                 }
@@ -503,7 +514,7 @@ namespace ignite
 #endif
         if (m_Window)
         {
-			SDL_DestroyWindow(m_Window);
+            SDL_DestroyWindow(m_Window);
             m_Window = nullptr;
         }
 
@@ -516,7 +527,7 @@ namespace ignite
     void Window::SetTitle(const std::string &title) const
     {
         if (m_Window)
-		    SDL_SetWindowTitle(m_Window, title.c_str());
+            SDL_SetWindowTitle(m_Window, title.c_str());
     }
 
     void Window::SetIcon(const std::string &filepath)
@@ -538,7 +549,7 @@ namespace ignite
     void Window::Minimize() const
     {
         if (m_Window)
-		    SDL_MinimizeWindow(m_Window);
+            SDL_MinimizeWindow(m_Window);
     }
 
     void Window::Maximize() const
@@ -550,12 +561,12 @@ namespace ignite
     void Window::Restore() const
     {
         if (m_Window)
-		    SDL_RestoreWindow(m_Window);
+            SDL_RestoreWindow(m_Window);
     }
 
     void Window::Shutdown()
     {
-		m_Looping = false;
+        m_Looping = false;
     }
 
     void Window::Show()
@@ -564,18 +575,18 @@ namespace ignite
             return;
         if (!m_IsExternalWindow && !m_DeviceManager->GetDeviceParameters().startMaximized)
         {
-			int width, height;
-			SDL_GetWindowSize(m_Window, &width, &height);
+            int width, height;
+            SDL_GetWindowSize(m_Window, &width, &height);
 
             SDL_Rect rect;
-			SDL_GetDisplayBounds(0, &rect);
+            SDL_GetDisplayBounds(0, &rect);
             SDL_SetWindowPosition(m_Window, rect.w / 2 - width / 2, rect.h / 2 - height / 2);
         }
 
-		m_IsVisible = true;
+        m_IsVisible = true;
         if (!m_IsExternalWindow)
         {
-		    SDL_ShowWindow(m_Window);
+            SDL_ShowWindow(m_Window);
         }
     }
 
@@ -583,8 +594,8 @@ namespace ignite
     {
         if (m_Window)
         {
-		    m_IsVisible = false;
-		    SDL_HideWindow(m_Window);
+            m_IsVisible = false;
+            SDL_HideWindow(m_Window);
         }
     }
 
@@ -599,7 +610,7 @@ namespace ignite
 
     glm::ivec2 Window::GetFramebufferSize()
     {
-		const auto &deviceParams = m_DeviceManager->GetDeviceParameters();
+        const auto &deviceParams = m_DeviceManager->GetDeviceParameters();
         return { deviceParams.backBufferWidth, deviceParams.backBufferHeight };
     }
 
@@ -607,8 +618,8 @@ namespace ignite
     {
         if (!m_Window)
             return { 0, 0 };
-		int width, height;
-		SDL_GetWindowSize(m_Window, &width, &height);
+        int width, height;
+        SDL_GetWindowSize(m_Window, &width, &height);
         return { width, height };
     }
 

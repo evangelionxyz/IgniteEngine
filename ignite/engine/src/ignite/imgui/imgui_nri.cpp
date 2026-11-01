@@ -2,7 +2,7 @@
 
 #include "ignite_pch.hpp"
 
-#include "imgui_nvrhi.hpp"
+#include "imgui_nri.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 
@@ -21,6 +21,7 @@
 #ifdef PLATFORM_WINDOWS
 #include "ignite/core/device/device_manager_dx12.hpp"
 #include <dxgi1_5.h>
+#include <wrl/client.h>
 #endif
 
 #ifdef IGNITE_WITH_VULKAN
@@ -32,8 +33,9 @@ namespace
 #ifdef PLATFORM_WINDOWS
     struct ImGuiViewportRendererData_DX12
     {
-        nvrhi::RefCountPtr<IDXGISwapChain3> swapChain;
-        std::vector<nvrhi::RefCountPtr<ID3D12Resource>> backBuffers;
+        Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain;
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> backBuffers;
+        std::vector<nri::Texture *> nriTextures;
         std::vector<std::shared_ptr<ignite::RenderTarget>> renderTargets;
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
         uint32_t pendingWidth = 0;
@@ -48,6 +50,7 @@ namespace
         vk::SurfaceKHR surface;
         vk::SwapchainKHR swapChain;
         std::vector<vk::Image> swapChainImages;
+        std::vector<nri::Texture *> nriTextures;
         std::vector<std::shared_ptr<ignite::RenderTarget>> renderTargets;
         vk::SurfaceFormatKHR surfaceFormat{};
         vk::Extent2D extent{};
@@ -64,77 +67,71 @@ namespace
 
 namespace ignite
 {
-    ImGui_NVRHI *ImGui_NVRHI::s_Instance = nullptr;
+    ImGui_NRI *ImGui_NRI::s_Instance = nullptr;
 
-    struct ImGuiPushConstants
+    ImGui_NRI::~ImGui_NRI()
     {
-        std::array<float, 2> invDisplaySize;
-        std::array<float, 2> displayPos;
-    };
+    }
 
-    bool ImGui_NVRHI::UpdateFontTexture()
+    bool ImGui_NRI::UpdateFontTexture()
     {
         IGN_PROFILE_FUNCTION();
 
         ImGuiIO &io = ImGui::GetIO();
-
-        // If the font texture exists and is bound to ImGui, we're done.
-        // Note: ImGui_Renderer will reset io.Fonts->TexID when new fonts are added.
-        if (fontTexture && io.Fonts->TexRef.GetTexID())
+        if (m_FontTexture && io.Fonts->TexRef.GetTexID())
             return true;
 
-        uint8_t* pixels { nullptr };
-        int width, height;
-
-        // Atlas build is CPU-only — no GPU lock needed here.
+        uint8_t *pixels = nullptr;
+        int width = 0, height = 0;
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-        if (!pixels)
+        if (!pixels || width <= 0 || height <= 0)
             return false;
 
-        nvrhi::TextureDesc textureDesc;
-        textureDesc.width = width;
-        textureDesc.height = height;
-        textureDesc.format = nvrhi::Format::RGBA8_UNORM;
-        textureDesc.debugName = "ImGui font texture";
+        TextureCreateInfo createInfo = {};
+        createInfo.width = static_cast<uint32_t>(width);
+        createInfo.height = static_cast<uint32_t>(height);
+        createInfo.format = nri::Format::RGBA8_UNORM;
+        createInfo.initialAccess = nri::AccessBits::SHADER_RESOURCE;
+        createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
+        createInfo.initialStages = nri::StageBits::ALL;
 
-        fontTexture = m_Device->createTexture(textureDesc);
-        LOG_ASSERT(fontTexture, "Failed to create imgui font texture");
+        std::vector<uint8_t> data(pixels, pixels + static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
+        m_FontTexture = Texture::Create(data, createInfo, nullptr, "ImGui font texture");
+        LOG_ASSERT(m_FontTexture && m_FontTexture->GetHandle(), "[ImGui NRI] Failed to create font texture");
 
-        commandList->open();
-        commandList->beginTrackingTextureState(fontTexture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-        commandList->writeTexture(fontTexture, 0, 0, pixels, width * 4);
-        commandList->setPermanentTextureState(fontTexture, nvrhi::ResourceStates::ShaderResource);
-        commandList->commitBarriers();
-        commandList->close();
-
-        // Narrow the GPU-queue lock to the submit only.
-        {
-            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-            m_Device->executeCommandList(commandList);
-        }
-
-        io.Fonts->TexID = (ImTextureID)fontTexture.Get();
-
+        io.Fonts->TexID = (ImTextureID)m_FontTexture->GetShaderResourceView();
         return true;
     }
 
-    bool ImGui_NVRHI::Init(nvrhi::IDevice *device)
+    bool ImGui_NRI::Init(nri::Device *device)
     {
         m_Device = device;
         s_Instance = this;
-        commandList = device->createCommandList(
-            nvrhi::CommandListParameters()
-                .setEnableImmediateExecution(false)
-                .setQueueType(nvrhi::CommandQueue::Graphics));
         m_IsShuttingDown = false;
+
+        auto *deviceManager = DeviceManager::GetInstance();
+        LOG_ASSERT(deviceManager && m_Device, "[ImGui NRI] Device manager or device is null");
+        const auto &nri = deviceManager->GetCoreInterface();
+        nri::Queue *graphicsQueue = deviceManager->GetGraphicsQueue();
+
+        nri::FenceDesc fenceDesc = {};
+        fenceDesc.initialValue = 0;
+        nri.CreateFence(*m_Device, fenceDesc, m_CommandFence);
+
+        for (auto &slot : m_CommandSlots)
+        {
+            nri.CreateCommandAllocator(*graphicsQueue, slot.allocator);
+            nri.CreateCommandBuffer(*slot.allocator, slot.commandBuffer);
+            slot.fenceValue = 0;
+        }
 
         ImGuiIO &io = ImGui::GetIO();
         io.BackendRendererUserData = this;
-        io.BackendRendererName = "imgui_nvrhi";
+        io.BackendRendererName = "imgui_nri";
         io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 
 #ifdef PLATFORM_WINDOWS
-        if (Renderer::GetGraphicsAPI() == nvrhi::GraphicsAPI::D3D12)
+        if (Renderer::GetGraphicsAPI() == nri::GraphicsAPI::D3D12)
         {
             io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;
 
@@ -148,7 +145,7 @@ namespace ignite
 #endif
 
 #ifdef IGNITE_WITH_VULKAN
-        if (Renderer::GetGraphicsAPI() == nvrhi::GraphicsAPI::VULKAN)
+        if (Renderer::GetGraphicsAPI() == nri::GraphicsAPI::VK)
         {
             io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;
 
@@ -161,34 +158,121 @@ namespace ignite
         }
 #endif
 
-        const auto desc = nvrhi::SamplerDesc()
-            .setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
-            .setAllFilters(true);
+        nri::SamplerDesc samplerDesc = {};
+        samplerDesc.filters.min = nri::Filter::LINEAR;
+        samplerDesc.filters.mag = nri::Filter::LINEAR;
+        samplerDesc.filters.mip = nri::Filter::LINEAR;
+        samplerDesc.addressModes.u = nri::AddressMode::REPEAT;
+        samplerDesc.addressModes.v = nri::AddressMode::REPEAT;
+        samplerDesc.addressModes.w = nri::AddressMode::REPEAT;
+        samplerDesc.mipMax = 1.0f;
 
-        fontSampler = device->createSampler(desc);
+        nri::Result samplerRes = nri.CreateSampler(*m_Device, samplerDesc, m_FontSampler);
+        LOG_ASSERT(samplerRes == nri::Result::SUCCESS && m_FontSampler, "Failed to create ImGui font sampler");
 
-        LOG_ASSERT(fontSampler, "Failed to create ImGui font sampler");
-        if (!fontSampler)
-            return false;
+        m_BindingLayoutDesc = BindingLayoutDesc();
+        m_BindingLayoutDesc->SetRegisterSpace(0);
+        m_BindingLayoutDesc->SetVisibility(nri::StageBits::ALL);
+        m_BindingLayoutDesc->AddItem(BindingLayoutItem::PushConstants(0, sizeof(ImGuiPushConstants)));
+        m_BindingLayoutDesc->AddItem(BindingLayoutItem::Texture_SRV(0));
+        m_BindingLayoutDesc->AddItem(BindingLayoutItem::Sampler(0));
+
+        m_PipelineLayout = m_BindingLayoutDesc->CreatePipelineLayout(nri::StageBits::ALL, m_Device);
+        LOG_ASSERT(m_PipelineLayout, "Failed to create ImGui pipeline layout");
 
         return true;
     }
 
-    bool ImGui_NVRHI::Render(nvrhi::IFramebuffer *framebuffer)
+    nri::CommandBuffer *ImGui_NRI::BeginCommandBuffer()
     {
-        ImDrawData *drawData = ImGui::GetDrawData();
-        return Render(drawData, framebuffer);
+        auto *deviceManager = DeviceManager::GetInstance();
+        if (!deviceManager)
+            return nullptr;
+
+        const auto &nri = deviceManager->GetCoreInterface();
+        auto &slot = m_CommandSlots[m_CurrentSlotIndex];
+        m_CurrentSlotIndex = (m_CurrentSlotIndex + 1) % static_cast<uint32_t>(m_CommandSlots.size());
+
+        if (m_CommandFence && slot.fenceValue > 0 && nri.GetFenceValue(*m_CommandFence) < slot.fenceValue)
+        {
+            nri.Wait(*m_CommandFence, slot.fenceValue);
+        }
+
+        nri.ResetCommandAllocator(*slot.allocator);
+        nri.BeginCommandBuffer(*slot.commandBuffer, BindlessSystem::GetDescriptorPool());
+        return slot.commandBuffer;
     }
 
-    bool ImGui_NVRHI::Render(ImDrawData *drawData, nvrhi::IFramebuffer *framebuffer)
+    void ImGui_NRI::SubmitCommandBuffer(nri::CommandBuffer *cmd)
+    {
+        if (!cmd)
+            return;
+
+        auto *deviceManager = DeviceManager::GetInstance();
+        if (!deviceManager)
+            return;
+
+        const auto &nri = deviceManager->GetCoreInterface();
+        nri.EndCommandBuffer(*cmd);
+
+        const uint64_t signalValue = m_NextFenceValue++;
+        for (auto &slot : m_CommandSlots)
+        {
+            if (slot.commandBuffer == cmd)
+            {
+                slot.fenceValue = signalValue;
+                break;
+            }
+        }
+
+        nri::FenceSubmitDesc signalFence = {};
+        signalFence.fence = m_CommandFence;
+        signalFence.value = signalValue;
+        signalFence.stages = nri::StageBits::ALL;
+
+        nri::QueueSubmitDesc submitDesc = {};
+        submitDesc.commandBuffers = &cmd;
+        submitDesc.commandBufferNum = 1;
+        if (m_CommandFence)
+        {
+            submitDesc.signalFences = &signalFence;
+            submitDesc.signalFenceNum = 1;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+            nri.QueueSubmit(*deviceManager->GetGraphicsQueue(), submitDesc);
+        }
+    }
+
+    bool ImGui_NRI::Render(RenderTarget *renderTarget)
+    {
+        ImDrawData *drawData = ImGui::GetDrawData();
+        return Render(drawData, renderTarget);
+    }
+
+    bool ImGui_NRI::Render(ImDrawData *drawData, RenderTarget *renderTarget)
     {
         IGN_PROFILE_FUNCTION();
 
-        // No top-level queue lock — the main thread contends on this mutex during
-        // BeginFrame and Present, so holding it for the full command-list build
-        // causes WaitForFrameReady to stall. We scope it to the submit only.
+        if (!drawData || drawData->CmdListsCount <= 0 || !renderTarget)
+            return true;
 
-        if (!drawData || drawData->CmdListsCount <= 0)
+        nri::CommandBuffer *cmd = BeginCommandBuffer();
+        if (!cmd)
+            return false;
+
+        const bool result = Render(cmd, drawData, renderTarget);
+
+        SubmitCommandBuffer(cmd);
+        return result;
+    }
+
+    bool ImGui_NRI::Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!cmd || !drawData || drawData->CmdListsCount <= 0 || !renderTarget)
             return true;
 
         int fbWidth = static_cast<int>(drawData->DisplaySize.x * drawData->FramebufferScale.x);
@@ -196,14 +280,17 @@ namespace ignite
         if (fbWidth <= 0 || fbHeight <= 0)
             return true;
 
-        commandList->open();
-        commandList->beginMarker("ImGui");
-
-        if (!UpdateGeometry(commandList, drawData))
+        if (!UpdateGeometry(drawData))
         {
-            commandList->close();
             return false;
         }
+
+        Ref<GraphicsPipeline> pipeline = GetPSO(renderTarget);
+        if (!pipeline || !pipeline->GetHandle())
+            return false;
+
+        if (!m_PipelineLayout)
+            m_PipelineLayout = pipeline->GetPipelineLayout();
 
         ImGuiPushConstants pushConstants = {};
         pushConstants.invDisplaySize[0] = 1.0f / drawData->DisplaySize.x;
@@ -213,43 +300,46 @@ namespace ignite
         ImVec2 clipOff = drawData->DisplayPos;
         ImVec2 clipScale = drawData->FramebufferScale;
 
-        // setup graphics state
-        nvrhi::GraphicsState drawState;
-        drawState.framebuffer = framebuffer;
-        LOG_ASSERT(drawState.framebuffer, "Invalid framebuffer");
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
 
-        Ref<GraphicsPipeline> pipeline = nullptr;
-        {
-            IGN_PROFILE_SCOPE("ImGui_NVRHI::GetPSO");
-            pipeline = GetPSO(drawState.framebuffer);
-        }
-        drawState.pipeline = pipeline->GetHandle();
+        renderTarget->BeginRendering(cmd, false /* clearColor */, false /* clearDepth */);
 
-        drawState.viewport.viewports.push_back(
-            nvrhi::Viewport(
-                drawData->DisplaySize.x * drawData->FramebufferScale.x,
-                drawData->DisplaySize.y * drawData->FramebufferScale.y
-        ));
+        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *pipeline->GetPipelineLayout());
+        nri.CmdSetPipeline(*cmd, *pipeline->GetHandle());
 
-        drawState.viewport.scissorRects.resize(1);
+        nri::Viewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(fbWidth);
+        viewport.height = static_cast<float>(fbHeight);
+        viewport.depthMin = 0.0f;
+        viewport.depthMax = 1.0f;
+        nri.CmdSetViewports(*cmd, &viewport, 1);
 
-        drawState.vertexBuffers = { { vertexBuffer, 0, 0 } };
-        drawState.indexBuffer.buffer = indexBuffer;
-        drawState.indexBuffer.format = sizeof(ImDrawIdx) == 2 ? nvrhi::Format::R16_UINT : nvrhi::Format::R32_UINT;
-        drawState.indexBuffer.offset = 0;
+        nri::VertexBufferDesc vbDesc = {};
+        vbDesc.buffer = m_VertexBuffer->GetHandle();
+        vbDesc.offset = 0;
+        vbDesc.stride = sizeof(ImGuiVertexData);
+        nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
 
-        const nvrhi::BindingLayoutHandle bindingLayout = pipeline->GetBindingLayout(0);
-        drawState.bindings.resize(1);
+        nri.CmdSetIndexBuffer(*cmd, *m_IndexBuffer->GetHandle(), 0,
+            sizeof(ImDrawIdx) == 2 ? nri::IndexType::UINT16 : nri::IndexType::UINT32);
 
-        nvrhi::ITexture *lastTexture = nullptr;
-        nvrhi::IBindingSet *lastBindingSet = nullptr;
+        nri::SetRootConstantsDesc rootConstDesc = {};
+        rootConstDesc.rootConstantIndex = 0;
+        rootConstDesc.data = &pushConstants;
+        rootConstDesc.size = sizeof(pushConstants);
+        rootConstDesc.offset = 0;
+        rootConstDesc.bindPoint = nri::BindPoint::GRAPHICS;
+        nri.CmdSetRootConstants(*cmd, rootConstDesc);
 
-        // render command list
+        nri::Descriptor *lastTexture = nullptr;
+        Ref<BindingSet> lastBindingSet = nullptr;
+
         int vtxOffset = 0;
         int idxOffset = 0;
         for (int n = 0; n < drawData->CmdListsCount; ++n)
         {
-            IGN_PROFILE_SCOPE("ImGui_NVRHI::DrawList");
             const ImDrawList *cmdList = drawData->CmdLists[n];
 
             for (int i = 0; i < cmdList->CmdBuffer.Size; ++i)
@@ -259,22 +349,31 @@ namespace ignite
                 if (pCmd->UserCallback)
                 {
                     pCmd->UserCallback(cmdList, pCmd);
+                    lastTexture = nullptr;
+                    lastBindingSet = nullptr;
                 }
                 else
                 {
-                    auto texture = (nvrhi::ITexture *)pCmd->TexRef.GetTexID();
-					// Please check your ImGui texture somewhere in ImGui::Image stuff
-                    // If it is null, it can binds wrong texture in wrong place
-                    LOG_ASSERT(texture, "[ImGui NVRHI] ImGui::Image should takes a valid texture, not null");
-
-                    if (texture != lastTexture)
+                    nri::Descriptor *textureSRV = (nri::Descriptor *)pCmd->TexRef.GetTexID();
+                    if (!textureSRV && m_FontTexture)
                     {
-                        lastTexture = texture;
-                        lastBindingSet = GetBindingSet(texture, bindingLayout);
+                        textureSRV = m_FontTexture->GetShaderResourceView();
                     }
 
-                    drawState.bindings[0] = lastBindingSet;
-                    LOG_ASSERT(drawState.bindings[0], "Invalid draw state binding");
+                    if (textureSRV != lastTexture)
+                    {
+                        lastTexture = textureSRV;
+                        lastBindingSet = GetBindingSet(textureSRV);
+                    }
+
+                    if (lastBindingSet && lastBindingSet->GetHandle())
+                    {
+                        nri::SetDescriptorSetDesc setDesc = {};
+                        setDesc.setIndex = 0;
+                        setDesc.descriptorSet = lastBindingSet->GetHandle();
+                        setDesc.bindPoint = nri::BindPoint::GRAPHICS;
+                        nri.CmdSetDescriptorSet(*cmd, setDesc);
+                    }
 
                     ImVec2 clipMin((pCmd->ClipRect.x - clipOff.x) * clipScale.x, (pCmd->ClipRect.y - clipOff.y) * clipScale.y);
                     ImVec2 clipMax((pCmd->ClipRect.z - clipOff.x) * clipScale.x, (pCmd->ClipRect.w - clipOff.y) * clipScale.y);
@@ -287,200 +386,197 @@ namespace ignite
                     if (clipMax.x <= clipMin.x || clipMax.y <= clipMin.y)
                         continue;
 
-                    drawState.viewport.scissorRects[0] = nvrhi::Rect(
-                        int(clipMin.x),
-                        int(clipMax.x),
-                        int(clipMin.y),
-                        int(clipMax.y)
-                    );
+                    nri::Rect scissor = {};
+                    scissor.x = static_cast<nri::Dim_t>(clipMin.x);
+                    scissor.y = static_cast<nri::Dim_t>(clipMin.y);
+                    scissor.width = static_cast<nri::Dim_t>(clipMax.x - clipMin.x);
+                    scissor.height = static_cast<nri::Dim_t>(clipMax.y - clipMin.y);
+                    nri.CmdSetScissors(*cmd, &scissor, 1);
 
-                    nvrhi::DrawArguments drawArguments;
-                    drawArguments.vertexCount = pCmd->ElemCount;
-                    drawArguments.startVertexLocation = vtxOffset + pCmd->VtxOffset;
-                    drawArguments.startIndexLocation = idxOffset + pCmd->IdxOffset;
+                    nri::DrawIndexedDesc drawDesc = {};
+                    drawDesc.indexNum = pCmd->ElemCount;
+                    drawDesc.instanceNum = 1;
+                    drawDesc.baseIndex = static_cast<uint32_t>(idxOffset + pCmd->IdxOffset);
+                    drawDesc.baseVertex = static_cast<int32_t>(vtxOffset + pCmd->VtxOffset);
+                    drawDesc.baseInstance = 0;
 
-                    commandList->setGraphicsState(drawState);
-                    commandList->setPushConstants(&pushConstants, sizeof(pushConstants));
-                    commandList->drawIndexed(drawArguments);
-                }
-
-                if (pCmd->UserCallback)
-                {
-                    lastTexture = nullptr;
-                    lastBindingSet = nullptr;
+                    nri.CmdDrawIndexed(*cmd, drawDesc);
                 }
             }
             idxOffset += cmdList->IdxBuffer.Size;
             vtxOffset += cmdList->VtxBuffer.Size;
         }
 
-        commandList->endMarker();
-        commandList->close();
-
-        // Narrow the GPU-queue lock to the submit only.
-        {
-            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-            m_Device->executeCommandList(commandList);
-        }
-
+        renderTarget->EndRendering(cmd);
         return true;
     }
 
-    void ImGui_NVRHI::BackBufferResizing()
+    void ImGui_NRI::BackBufferResizing()
     {
-        graphicsPipelines.clear();
-        bindingsCache.clear();
+        m_GraphicsPipelines.clear();
+        std::scoped_lock lock(m_BindingsCacheMutex);
+        m_BindingsCache.clear();
     }
 
-    bool ImGui_NVRHI::ReallocateBuffer(nvrhi::BufferHandle &buffer, size_t requiredSize, size_t reallocateSize, bool isIndexBuffer)
-    {
-        if (buffer == nullptr || size_t(buffer->getDesc().byteSize) < requiredSize)
-        {
-            nvrhi::BufferDesc desc;
-            desc.byteSize = static_cast<uint32_t>(reallocateSize);
-            desc.debugName = isIndexBuffer ? "ImGui index buffer" : "ImGui vertex buffer";
-            desc.canHaveUAVs = false;
-            desc.isVertexBuffer = !isIndexBuffer;
-            desc.isIndexBuffer = isIndexBuffer;
-            desc.isDrawIndirectArgs = false;
-            desc.isVolatile = false;
-            desc.initialState = isIndexBuffer ? nvrhi::ResourceStates::IndexBuffer : nvrhi::ResourceStates::VertexBuffer;
-            desc.keepInitialState = true;
-
-            buffer = m_Device->createBuffer(desc);
-
-            if (!buffer)
-                return false;
-        }
-
-        return true;
-    }
-
-    Ref<GraphicsPipeline> ImGui_NVRHI::GetPSO(nvrhi::IFramebuffer *framebuffer)
+    Ref<GraphicsPipeline> ImGui_NRI::GetPSO(RenderTarget *renderTarget)
     {
         IGN_PROFILE_FUNCTION();
 
-        auto pipelineIter = graphicsPipelines.find(framebuffer);
-        if (pipelineIter != graphicsPipelines.end())
+        if (!renderTarget)
+            return nullptr;
+
+        FramebufferKey fbKey = MakeFramebufferKey(renderTarget, nri::FillMode::SOLID, nri::CullMode::NONE);
+        auto pipelineIter = m_GraphicsPipelines.find(fbKey);
+        if (pipelineIter != m_GraphicsPipelines.end())
         {
             return pipelineIter->second;
         }
 
-        if (!bindingLayout)
+        if (!m_BindingLayoutDesc.has_value())
         {
-            nvrhi::BindingLayoutDesc layoutDesc;
-            layoutDesc.visibility = nvrhi::ShaderType::All;
-            layoutDesc.bindings =
-            {
-                nvrhi::BindingLayoutItem::PushConstants(0, sizeof(float) * 4),
-                nvrhi::BindingLayoutItem::Texture_SRV(0),
-                nvrhi::BindingLayoutItem::Sampler(0)
-            };
-
-            bindingLayout = m_Device->createBindingLayout(layoutDesc);
+            m_BindingLayoutDesc = BindingLayoutDesc();
+            m_BindingLayoutDesc->SetRegisterSpace(0);
+            m_BindingLayoutDesc->SetVisibility(nri::StageBits::ALL);
+            m_BindingLayoutDesc->AddItem(BindingLayoutItem::PushConstants(0, sizeof(ImGuiPushConstants)));
+            m_BindingLayoutDesc->AddItem(BindingLayoutItem::Texture_SRV(0));
+            m_BindingLayoutDesc->AddItem(BindingLayoutItem::Sampler(0));
         }
 
         auto vertexShader = Shader::Create("resources/shaders/imgui.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX);
         auto pixelShader = Shader::Create("resources/shaders/imgui.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL);
 
         GraphicsPipelineParams params;
-        params.fillMode = nvrhi::RasterFillMode::Solid;
-        params.cullMode = nvrhi::RasterCullMode::None;
+        params.fillMode = nri::FillMode::SOLID;
+        params.cullMode = nri::CullMode::NONE;
+        params.primitiveType = nri::Topology::TRIANGLE_LIST;
 
-        params.enableBlend = true; // Explicitly enable blending for ImGui
-        params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
-        params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
-        params.srcBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
-        params.destBlendAlpha = nvrhi::BlendFactor::Zero;
+        params.enableBlend = true;
+        params.srcBlend = nri::BlendFactor::SRC_ALPHA;
+        params.destBlend = nri::BlendFactor::ONE_MINUS_SRC_ALPHA;
+        params.srcBlendAlpha = nri::BlendFactor::ONE_MINUS_SRC_ALPHA;
+        params.destBlendAlpha = nri::BlendFactor::ZERO;
+        params.blendOp = nri::BlendOp::ADD;
+        params.blendOpAlpha = nri::BlendOp::ADD;
 
         params.enableDepthClip = true;
         params.enableScissor = true;
 
         params.enableDepthTest = false;
-        params.enableDepthWrite = true;
+        params.enableDepthWrite = false;
         params.enableDepthStencil = false;
 
         Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create("ImGui Pipeline");
-        pipeline->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params);
+        pipeline->AddBindingLayout(*m_BindingLayoutDesc);
+        pipeline->SetShaders({ vertexShader, pixelShader });
+        pipeline->Build(fbKey, params);
 
-        graphicsPipelines[framebuffer] = pipeline;
+        m_GraphicsPipelines[fbKey] = pipeline;
+        if (!m_PipelineLayout)
+        {
+            m_PipelineLayout = pipeline->GetPipelineLayout();
+        }
+
         return pipeline;
     }
 
-    nvrhi::IBindingSet *ImGui_NVRHI::GetBindingSet(nvrhi::ITexture *texture, nvrhi::BindingLayoutHandle bindingLayout)
+    Ref<BindingSet> ImGui_NRI::GetBindingSet(nri::Descriptor *textureSRV)
     {
         IGN_PROFILE_FUNCTION();
 
-        auto iter = bindingsCache.find(texture);
-        if (iter != bindingsCache.end())
+        if (!textureSRV && m_FontTexture)
+            textureSRV = m_FontTexture->GetShaderResourceView();
+
+        if (!textureSRV || !m_PipelineLayout)
+            return nullptr;
+
+        std::scoped_lock lock(m_BindingsCacheMutex);
+
+        auto iter = m_BindingsCache.find(textureSRV);
+        if (iter != m_BindingsCache.end())
             return iter->second;
 
-        nvrhi::BindingSetDesc desc;
-        desc.bindings =
-        {
-            nvrhi::BindingSetItem::PushConstants(0, sizeof(float) * 4),
-            nvrhi::BindingSetItem::Texture_SRV(0, texture),
-            nvrhi::BindingSetItem::Sampler(0, fontSampler)
-        };
+        BindingSetDesc desc;
+        desc.AddItem(BindingSetItem::TextureSRV(0, textureSRV));
+        desc.AddItem(BindingSetItem::Sampler(0, m_FontSampler));
 
-        nvrhi::BindingSetHandle binding;
-        binding = m_Device->createBindingSet(desc, bindingLayout);
-        LOG_ASSERT(binding, "Failed to create ImGui binding set");
+        Ref<BindingSet> binding = BindingSet::Create("ImGui Binding Set",
+            BindingSet::AllocateAndUpdate(m_PipelineLayout, 0, desc));
+        LOG_ASSERT(binding && binding->GetHandle(), "Failed to create ImGui binding set");
 
-        bindingsCache[texture] = binding;
+        m_BindingsCache[textureSRV] = binding;
         return binding;
     }
 
-    void ImGui_NVRHI::InvalidateTextureCache(nvrhi::ITexture *texture)
+    void ImGui_NRI::InvalidateTextureCache(void *textureHandle)
     {
-        if (!s_Instance || !texture)
+        if (!s_Instance || !textureHandle)
             return;
-        s_Instance->bindingsCache.erase(texture);
+        std::scoped_lock lock(s_Instance->m_BindingsCacheMutex);
+        s_Instance->m_BindingsCache.erase(static_cast<nri::Descriptor *>(textureHandle));
     }
 
-    bool ImGui_NVRHI::UpdateGeometry(nvrhi::ICommandList *commandList, ImDrawData *drawData)
+    void ImGui_NRI::InvalidateTextureCache(nri::Descriptor *textureSRV)
+    {
+        if (!s_Instance || !textureSRV)
+            return;
+        std::scoped_lock lock(s_Instance->m_BindingsCacheMutex);
+        s_Instance->m_BindingsCache.erase(textureSRV);
+    }
+
+    void ImGui_NRI::ClearTextureCache()
+    {
+        if (!s_Instance)
+            return;
+
+        std::scoped_lock lock(s_Instance->m_BindingsCacheMutex);
+        s_Instance->m_BindingsCache.clear();
+    }
+
+    bool ImGui_NRI::UpdateGeometry(ImDrawData *drawData)
     {
         IGN_PROFILE_FUNCTION();
 
-        // Calculate size needed for expanded vertices
-        size_t expandedVertexSize = drawData->TotalVtxCount * sizeof(ImGuiVertexData);
+        if (drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0)
+            return true;
 
-        if (!ReallocateBuffer(vertexBuffer, expandedVertexSize,
-            (drawData->TotalVtxCount + 5000) * sizeof(ImGuiVertexData),
-            false))
+        const size_t actualVtxBytes = static_cast<size_t>(drawData->TotalVtxCount) * sizeof(ImGuiVertexData);
+        const size_t actualIdxBytes = static_cast<size_t>(drawData->TotalIdxCount) * sizeof(ImDrawIdx);
+
+        const size_t allocVtxBytes = (static_cast<size_t>(drawData->TotalVtxCount) + 5000) * sizeof(ImGuiVertexData);
+        const size_t allocIdxBytes = (static_cast<size_t>(drawData->TotalIdxCount) + 5000) * sizeof(ImDrawIdx);
+
+        if (!m_VertexBuffer || m_VertexBuffer->GetByteSize() < actualVtxBytes)
         {
-            return false;
+            m_VertexBuffer = VertexBuffer::Create(allocVtxBytes, "ImGui vertex buffer");
+            if (!m_VertexBuffer)
+                return false;
         }
 
-        if (!ReallocateBuffer(indexBuffer, drawData->TotalIdxCount * sizeof(ImDrawIdx),
-            (drawData->TotalIdxCount + 5000) * sizeof(ImDrawIdx), true))
+        if (!m_IndexBuffer || m_IndexBuffer->GetByteSize() < actualIdxBytes)
         {
-            return false;
+            m_IndexBuffer = IndexBuffer::Create(allocIdxBytes, "ImGui index buffer");
+            if (!m_IndexBuffer)
+                return false;
         }
 
-        // Resize buffers to match expanded vertex format
-        imguiVertexBuffer.resize(vertexBuffer->getDesc().byteSize / sizeof(ImGuiVertexData));
-        imguiIndexBuffer.resize(indexBuffer->getDesc().byteSize / sizeof(ImDrawIdx));
+        m_VertexBufferCPU.resize(m_VertexBuffer->GetByteSize() / sizeof(ImGuiVertexData));
+        m_IndexBufferCPU.resize(m_IndexBuffer->GetByteSize() / sizeof(ImDrawIdx));
 
-        ImGuiVertexData *vtxDst = imguiVertexBuffer.data();
-        ImDrawIdx *idxDst = imguiIndexBuffer.data();
+        ImGuiVertexData *vtxDst = m_VertexBufferCPU.data();
+        ImDrawIdx *idxDst = m_IndexBufferCPU.data();
 
         for (int n = 0; n < drawData->CmdListsCount; ++n)
         {
             const ImDrawList *cmdList = drawData->CmdLists[n];
 
-            // Convert ImDrawVert to ImGuiVertexData (expand ImU32 color to float4)
             for (int i = 0; i < cmdList->VtxBuffer.Size; ++i)
             {
-                const ImDrawVert& src = cmdList->VtxBuffer[i];
-                ImGuiVertexData& dst = vtxDst[i];
+                const ImDrawVert &src = cmdList->VtxBuffer[i];
+                ImGuiVertexData &dst = vtxDst[i];
 
                 dst.position = glm::vec2(src.pos.x, src.pos.y);
                 dst.texCoord = glm::vec2(src.uv.x, src.uv.y);
 
-                // Convert packed RGBA ImU32 to float4
                 dst.color.r = ((src.col >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
                 dst.color.g = ((src.col >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
                 dst.color.b = ((src.col >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
@@ -493,21 +589,18 @@ namespace ignite
             idxDst += cmdList->IdxBuffer.Size;
         }
 
-        // Upload only the bytes actually written — not the full over-allocated capacity.
-        const size_t actualVtxBytes = static_cast<size_t>(drawData->TotalVtxCount) * sizeof(ImGuiVertexData);
-        const size_t actualIdxBytes = static_cast<size_t>(drawData->TotalIdxCount) * sizeof(ImDrawIdx);
-        commandList->writeBuffer(vertexBuffer, imguiVertexBuffer.data(), actualVtxBytes);
-        commandList->writeBuffer(indexBuffer,  imguiIndexBuffer.data(),  actualIdxBytes);
+        m_VertexBuffer->SetData(m_VertexBufferCPU.data(), actualVtxBytes);
+        m_IndexBuffer->SetData(m_IndexBufferCPU.data(), actualIdxBytes);
 
         return true;
     }
 
-    void ImGui_NVRHI::Shutdown()
+    void ImGui_NRI::Shutdown()
     {
         m_IsShuttingDown = true;
 
 #ifdef PLATFORM_WINDOWS
-        if (Renderer::GetGraphicsAPI() == nvrhi::GraphicsAPI::D3D12)
+        if (Renderer::GetGraphicsAPI() == nri::GraphicsAPI::D3D12)
         {
             ImGuiPlatformIO &platformIO = ImGui::GetPlatformIO();
 
@@ -522,7 +615,7 @@ namespace ignite
 #endif
 
 #ifdef IGNITE_WITH_VULKAN
-        if (Renderer::GetGraphicsAPI() == nvrhi::GraphicsAPI::VULKAN)
+        if (Renderer::GetGraphicsAPI() == nri::GraphicsAPI::VK)
         {
             ImGuiPlatformIO &platformIO = ImGui::GetPlatformIO();
 
@@ -540,17 +633,48 @@ namespace ignite
         io.BackendRendererUserData = nullptr;
         io.BackendRendererName = nullptr;
 
-        bindingsCache.clear();
-        graphicsPipelines.clear();
-        bindingLayout = nullptr;
+        {
+            std::scoped_lock lock(m_BindingsCacheMutex);
+            m_BindingsCache.clear();
+        }
+        m_GraphicsPipelines.clear();
+        m_BindingLayoutDesc.reset();
+        m_PipelineLayout = nullptr;
 
-        fontTexture = nullptr;
-        fontSampler = nullptr;
+        m_FontTexture = nullptr;
+        auto *deviceManager = DeviceManager::GetInstance();
+        if (deviceManager && m_FontSampler)
+        {
+            deviceManager->GetCoreInterface().DestroyDescriptor(m_FontSampler);
+            m_FontSampler = nullptr;
+        }
 
-        vertexBuffer = nullptr;
-        indexBuffer = nullptr;
+        m_VertexBuffer = nullptr;
+        m_IndexBuffer = nullptr;
 
-        commandList = nullptr;
+        if (deviceManager)
+        {
+            const auto &nri = deviceManager->GetCoreInterface();
+            for (auto &slot : m_CommandSlots)
+            {
+                if (slot.commandBuffer)
+                {
+                    nri.DestroyCommandBuffer(slot.commandBuffer);
+                    slot.commandBuffer = nullptr;
+                }
+                if (slot.allocator)
+                {
+                    nri.DestroyCommandAllocator(slot.allocator);
+                    slot.allocator = nullptr;
+                }
+            }
+            if (m_CommandFence)
+            {
+                nri.DestroyFence(m_CommandFence);
+                m_CommandFence = nullptr;
+            }
+        }
+
         s_Instance = nullptr;
     }
 
@@ -560,15 +684,15 @@ namespace ignite
         return static_cast<ImGuiViewportRendererData_VK *>(viewport->RendererUserData);
     }
 
-    static nvrhi::Format GetNvrhiFormatFromVkFormat(vk::Format format)
+    static nri::Format GetNRIFormatFromVkFormat(vk::Format format)
     {
         switch (format)
         {
-            case vk::Format::eR8G8B8A8Unorm: return nvrhi::Format::RGBA8_UNORM;
-            case vk::Format::eR8G8B8A8Srgb: return nvrhi::Format::SRGBA8_UNORM;
-            case vk::Format::eB8G8R8A8Unorm: return nvrhi::Format::BGRA8_UNORM;
-            case vk::Format::eB8G8R8A8Srgb: return nvrhi::Format::SBGRA8_UNORM;
-            default: return nvrhi::Format::UNKNOWN;
+            case vk::Format::eR8G8B8A8Unorm: return nri::Format::RGBA8_UNORM;
+            case vk::Format::eR8G8B8A8Srgb: return nri::Format::RGBA8_SRGB;
+            case vk::Format::eB8G8R8A8Unorm: return nri::Format::BGRA8_UNORM;
+            case vk::Format::eB8G8R8A8Srgb: return nri::Format::BGRA8_SRGB;
+            default: return nri::Format::UNKNOWN;
         }
     }
 
@@ -586,7 +710,8 @@ namespace ignite
         return vk::PresentModeKHR::eFifo;
     }
 
-    static void RemoveViewportPipelines(ImGui_NVRHI *renderer, ImGuiViewportRendererData_VK *viewportData)
+    template <typename T>
+    static void RemoveViewportPipelines(ImGui_NRI *renderer, T *viewportData)
     {
         if (!renderer || !viewportData)
             return;
@@ -596,10 +721,8 @@ namespace ignite
             if (!rt)
                 continue;
 
-            nvrhi::IFramebuffer *fb = rt->GetFramebuffer().Get();
-            auto pipelineIter = renderer->graphicsPipelines.find(fb);
-            if (pipelineIter != renderer->graphicsPipelines.end())
-                renderer->graphicsPipelines.erase(pipelineIter);
+            FramebufferKey key = MakeFramebufferKey(rt.get(), nri::FillMode::SOLID, nri::CullMode::NONE);
+            renderer->RemoveGraphicsPipeline(key);
         }
     }
 
@@ -627,10 +750,9 @@ namespace ignite
         }
 
         viewportData->surfaceFormat = surfaceFormats.front();
-        const vk::Format preferredFormat = vk::Format(nvrhi::vulkan::convertFormat(deviceManager.GetDeviceParameters().swapChainFormat));
         for (const vk::SurfaceFormatKHR &surfaceFormat : surfaceFormats)
         {
-            if (surfaceFormat.format == preferredFormat)
+            if (surfaceFormat.format == vk::Format::eB8G8R8A8Unorm || surfaceFormat.format == vk::Format::eR8G8B8A8Unorm)
             {
                 viewportData->surfaceFormat = surfaceFormat;
                 break;
@@ -653,6 +775,13 @@ namespace ignite
 
         if (viewportData->swapChain)
         {
+            const auto &nri = deviceManager.GetCoreInterface();
+            for (auto *tex : viewportData->nriTextures)
+            {
+                if (tex)
+                    nri.DestroyTexture(tex);
+            }
+            viewportData->nriTextures.clear();
             viewportData->renderTargets.clear();
             viewportData->swapChainImages.clear();
             deviceManager.m_VulkanDevice.destroySwapchainKHR(viewportData->swapChain);
@@ -682,14 +811,32 @@ namespace ignite
 
         viewportData->extent = extent;
         viewportData->swapChainImages = deviceManager.m_VulkanDevice.getSwapchainImagesKHR(viewportData->swapChain);
+        viewportData->nriTextures.resize(viewportData->swapChainImages.size(), nullptr);
         viewportData->renderTargets.reserve(viewportData->swapChainImages.size());
 
-        nvrhi::Format colorFormat = GetNvrhiFormatFromVkFormat(viewportData->surfaceFormat.format);
-        if (colorFormat == nvrhi::Format::UNKNOWN)
+        nri::Format colorFormat = GetNRIFormatFromVkFormat(viewportData->surfaceFormat.format);
+        if (colorFormat == nri::Format::UNKNOWN)
             colorFormat = deviceManager.GetDeviceParameters().swapChainFormat;
 
-        for (const vk::Image &image : viewportData->swapChainImages)
+        for (size_t n = 0; n < viewportData->swapChainImages.size(); ++n)
         {
+            nri::TextureVKDesc texVKDesc = {};
+            texVKDesc.vkImage = (uint64_t)(VkImage)viewportData->swapChainImages[n];
+            texVKDesc.vkFormat = (uint32_t)(VkFormat)viewportData->surfaceFormat.format;
+            texVKDesc.vkImageType = (uint32_t)VK_IMAGE_TYPE_2D;
+            texVKDesc.vkImageUsageFlags = (uint32_t)(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+            texVKDesc.width = static_cast<nri::Dim_t>(extent.width);
+            texVKDesc.height = static_cast<nri::Dim_t>(extent.height);
+            texVKDesc.depth = 1;
+            texVKDesc.mipNum = 1;
+            texVKDesc.layerNum = 1;
+            texVKDesc.sampleNum = 1;
+
+            if (deviceManager.m_WrapperVK.CreateTextureVK(*deviceManager.GetDevice(), texVKDesc, viewportData->nriTextures[n]) != nri::Result::SUCCESS)
+            {
+                return false;
+            }
+
             RenderTargetCreateInfo createInfo;
             createInfo.width = extent.width;
             createInfo.height = extent.height;
@@ -698,10 +845,10 @@ namespace ignite
                 FramebufferAttachments {
                     .name = "ImGui viewport",
                     .format = colorFormat,
-                    .state = nvrhi::ResourceStates::Present,
-                    .nativeObjectPtr = reinterpret_cast<void *>(static_cast<VkImage>(image)),
+                    .state = nri::Layout::PRESENT,
+                    .nativeObjectPtr = viewportData->nriTextures[n],
                     .isNativeObject = true,
-                    .nativeObjectType = nvrhi::ObjectTypes::VK_Image
+                    .nativeObjectType = 2
                 }
             };
 
@@ -710,19 +857,12 @@ namespace ignite
 
         viewportData->currentImageIndex = 0;
         viewportData->hasAcquiredImage = false;
-        if (viewportData->renderTargets.empty())
-        {
-            deviceManager.m_VulkanDevice.destroySwapchainKHR(viewportData->swapChain);
-            viewportData->swapChain = nullptr;
-            return false;
-        }
-
         return true;
     }
 
-    void ImGui_NVRHI::RendererCreateWindowVK(ImGuiViewport *viewport)
+    void ImGui_NRI::RendererCreateWindowVK(ImGuiViewport *viewport)
     {
-        if (Renderer::GetGraphicsAPI() != nvrhi::GraphicsAPI::VULKAN)
+        if (Renderer::GetGraphicsAPI() != nri::GraphicsAPI::VK)
             return;
 
         DeviceManager_VK *deviceManager = DeviceManager_VK::GetInstance();
@@ -766,13 +906,13 @@ namespace ignite
         viewport->RendererUserData = viewportData.get();
     }
 
-    void ImGui_NVRHI::RendererDestroyWindowVK(ImGuiViewport *viewport)
+    void ImGui_NRI::RendererDestroyWindowVK(ImGuiViewport *viewport)
     {
         auto *viewportData = GetViewportDataVK(viewport);
         if (!viewportData)
             return;
 
-        auto *renderer = static_cast<ImGui_NVRHI *>(ImGui::GetIO().BackendRendererUserData);
+        auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         DeviceManager_VK *deviceManager = DeviceManager_VK::GetInstance();
 
         if (deviceManager && deviceManager->m_VulkanDevice)
@@ -782,6 +922,13 @@ namespace ignite
             if (renderer)
                 RemoveViewportPipelines(renderer, viewportData);
 
+            const auto &nri = deviceManager->GetCoreInterface();
+            for (auto *tex : viewportData->nriTextures)
+            {
+                if (tex)
+                    nri.DestroyTexture(tex);
+            }
+            viewportData->nriTextures.clear();
             viewportData->renderTargets.clear();
             viewportData->swapChainImages.clear();
 
@@ -820,10 +967,10 @@ namespace ignite
         viewport->RendererUserData = nullptr;
     }
 
-    void ImGui_NVRHI::RendererSetWindowSizeVK(ImGuiViewport *viewport, ImVec2 size)
+    void ImGui_NRI::RendererSetWindowSizeVK(ImGuiViewport *viewport, ImVec2 size)
     {
         auto *viewportData = GetViewportDataVK(viewport);
-        auto *renderer = static_cast<ImGui_NVRHI *>(ImGui::GetIO().BackendRendererUserData);
+        auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         if (!viewportData || !viewportData->swapChain || !renderer || !renderer->m_Device)
             return;
 
@@ -839,25 +986,21 @@ namespace ignite
         if (viewportData->hasPendingResize
             && viewportData->pendingWidth == requestedWidth
             && viewportData->pendingHeight == requestedHeight)
-        {
             return;
-        }
 
         if (!viewportData->hasPendingResize
             && viewportData->extent.width == requestedWidth
             && viewportData->extent.height == requestedHeight)
-        {
             return;
-        }
 
         viewportData->pendingWidth = requestedWidth;
         viewportData->pendingHeight = requestedHeight;
         viewportData->hasPendingResize = true;
     }
 
-    void ImGui_NVRHI::RendererRenderWindowVK(ImGuiViewport *viewport, void *)
+    void ImGui_NRI::RendererRenderWindowVK(ImGuiViewport *viewport, void *)
     {
-        auto *renderer = static_cast<ImGui_NVRHI *>(ImGui::GetIO().BackendRendererUserData);
+        auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         auto *viewportData = GetViewportDataVK(viewport);
         DeviceManager_VK *deviceManager = DeviceManager_VK::GetInstance();
         if (!renderer || !viewportData || !viewportData->swapChain || !deviceManager)
@@ -916,12 +1059,12 @@ namespace ignite
         if (viewportData->currentImageIndex >= viewportData->renderTargets.size())
             return;
 
-        renderer->Render(viewport->DrawData, viewportData->renderTargets[viewportData->currentImageIndex]->GetFramebuffer().Get());
+        renderer->Render(viewport->DrawData, viewportData->renderTargets[viewportData->currentImageIndex].get());
     }
 
-    void ImGui_NVRHI::RendererSwapBuffersVK(ImGuiViewport *viewport, void *)
+    void ImGui_NRI::RendererSwapBuffersVK(ImGuiViewport *viewport, void *)
     {
-        auto *renderer = static_cast<ImGui_NVRHI *>(ImGui::GetIO().BackendRendererUserData);
+        auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         auto *viewportData = GetViewportDataVK(viewport);
         DeviceManager_VK *deviceManager = DeviceManager_VK::GetInstance();
         if (!renderer || !viewportData || !viewportData->swapChain || !deviceManager)
@@ -933,8 +1076,13 @@ namespace ignite
         if (!viewportData->hasAcquiredImage)
             return;
 
-        deviceManager->m_NvrhiDevice->queueSignalSemaphore(nvrhi::CommandQueue::Graphics, viewportData->presentSemaphore, 0);
-        deviceManager->m_NvrhiDevice->executeCommandLists(nullptr, 0);
+        vk::SubmitInfo submitInfo{};
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = &viewportData->presentSemaphore;
+        {
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+            deviceManager->m_GraphicsQueue.submit(1, &submitInfo, nullptr);
+        }
 
         const vk::PresentInfoKHR presentInfo = vk::PresentInfoKHR()
             .setWaitSemaphoreCount(1)
@@ -971,16 +1119,34 @@ namespace ignite
         if (!viewportData || !viewportData->swapChain)
             return false;
 
-        viewportData->backBuffers.resize(viewportData->swapChainDesc.BufferCount);
+        DeviceManager_DX12 &deviceManager = DeviceManager_DX12::GetInstance();
+        const auto &nri = deviceManager.GetCoreInterface();
+
+        for (auto *tex : viewportData->nriTextures)
+        {
+            if (tex)
+                nri.DestroyTexture(tex);
+        }
+        viewportData->nriTextures.clear();
         viewportData->renderTargets.clear();
+        viewportData->backBuffers.clear();
+
+        viewportData->backBuffers.resize(viewportData->swapChainDesc.BufferCount);
+        viewportData->nriTextures.resize(viewportData->swapChainDesc.BufferCount, nullptr);
         viewportData->renderTargets.reserve(viewportData->swapChainDesc.BufferCount);
 
-        DeviceManager_DX12 &deviceManager = DeviceManager_DX12::GetInstance();
         for (uint32_t i = 0; i < viewportData->swapChainDesc.BufferCount; ++i)
         {
             HRESULT hr = viewportData->swapChain->GetBuffer(i, IID_PPV_ARGS(&viewportData->backBuffers[i]));
             if (FAILED(hr))
                 return false;
+
+            nri::TextureD3D12Desc texDesc{};
+            texDesc.d3d12Resource = viewportData->backBuffers[i].Get();
+            if (deviceManager.m_WrapperD3D12.CreateTextureD3D12(*deviceManager.GetDevice(), texDesc, viewportData->nriTextures[i]) != nri::Result::SUCCESS)
+            {
+                return false;
+            }
 
             RenderTargetCreateInfo createInfo;
             createInfo.width = width;
@@ -990,10 +1156,10 @@ namespace ignite
                 FramebufferAttachments {
                     .name = "ImGui viewport",
                     .format = deviceManager.GetDeviceParameters().swapChainFormat,
-                    .state = nvrhi::ResourceStates::Present,
-                    .nativeObjectPtr = viewportData->backBuffers[i],
+                    .state = nri::Layout::PRESENT,
+                    .nativeObjectPtr = viewportData->nriTextures[i],
                     .isNativeObject = true,
-                    .nativeObjectType = nvrhi::ObjectTypes::D3D12_Resource
+                    .nativeObjectType = 1
                 }
             };
 
@@ -1003,9 +1169,9 @@ namespace ignite
         return true;
     }
 
-    void ImGui_NVRHI::RendererCreateWindow(ImGuiViewport *viewport)
+    void ImGui_NRI::RendererCreateWindow(ImGuiViewport *viewport)
     {
-        if (Renderer::GetGraphicsAPI() != nvrhi::GraphicsAPI::D3D12)
+        if (Renderer::GetGraphicsAPI() != nri::GraphicsAPI::D3D12)
             return;
 
         DeviceManager_DX12 &deviceManager = DeviceManager_DX12::GetInstance();
@@ -1018,9 +1184,9 @@ namespace ignite
         viewportData->swapChainDesc.Width = static_cast<uint32_t>(std::max(viewport->Size.x, 1.0f));
         viewportData->swapChainDesc.Height = static_cast<uint32_t>(std::max(viewport->Size.y, 1.0f));
 
-        nvrhi::RefCountPtr<IDXGISwapChain1> swapChain1;
+        Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
         HRESULT hr = deviceManager.m_DxgiFactory2->CreateSwapChainForHwnd(
-            deviceManager.m_GraphicsQueue,
+            deviceManager.m_GraphicsQueue.Get(),
             hwnd,
             &viewportData->swapChainDesc,
             nullptr,
@@ -1029,31 +1195,34 @@ namespace ignite
 
         LOG_ASSERT(SUCCEEDED(hr), "Failed to create ImGui viewport swap chain");
         if (FAILED(hr))
-        {
             return;
-        }
 
-        hr = swapChain1->QueryInterface(IID_PPV_ARGS(&viewportData->swapChain));
+        hr = swapChain1.As(&viewportData->swapChain);
         LOG_ASSERT(SUCCEEDED(hr), "Failed to query IDXGISwapChain3 for ImGui viewport");
         if (FAILED(hr))
-        {
             return;
-        }
 
         if (!CreateViewportRenderTargets(viewportData.get(), static_cast<uint32_t>(std::max(viewport->Size.x, 1.0f)), static_cast<uint32_t>(std::max(viewport->Size.y, 1.0f))))
-        {
             return;
-        }
 
         viewport->RendererUserData = viewportData.get();
     }
 
-    void ImGui_NVRHI::RendererDestroyWindow(ImGuiViewport *viewport)
+    void ImGui_NRI::RendererDestroyWindow(ImGuiViewport *viewport)
     {
         auto *viewportData = GetViewportData(viewport);
         if (!viewportData)
             return;
 
+        DeviceManager_DX12 &deviceManager = DeviceManager_DX12::GetInstance();
+        const auto &nri = deviceManager.GetCoreInterface();
+
+        for (auto *tex : viewportData->nriTextures)
+        {
+            if (tex)
+                nri.DestroyTexture(tex);
+        }
+        viewportData->nriTextures.clear();
         viewportData->renderTargets.clear();
         viewportData->backBuffers.clear();
         viewportData->swapChain = nullptr;
@@ -1062,10 +1231,10 @@ namespace ignite
         viewport->RendererUserData = nullptr;
     }
 
-    void ImGui_NVRHI::RendererSetWindowSize(ImGuiViewport *viewport, ImVec2 size)
+    void ImGui_NRI::RendererSetWindowSize(ImGuiViewport *viewport, ImVec2 size)
     {
         auto *viewportData = GetViewportData(viewport);
-        auto *renderer = static_cast<ImGui_NVRHI *>(ImGui::GetIO().BackendRendererUserData);
+        auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         if (!viewportData || !viewportData->swapChain || !renderer || !renderer->m_Device)
             return;
 
@@ -1081,25 +1250,21 @@ namespace ignite
         if (viewportData->hasPendingResize
             && viewportData->pendingWidth == requestedWidth
             && viewportData->pendingHeight == requestedHeight)
-        {
             return;
-        }
 
         if (!viewportData->hasPendingResize
             && viewportData->swapChainDesc.Width == requestedWidth
             && viewportData->swapChainDesc.Height == requestedHeight)
-        {
             return;
-        }
 
         viewportData->pendingWidth = requestedWidth;
         viewportData->pendingHeight = requestedHeight;
         viewportData->hasPendingResize = true;
     }
 
-    void ImGui_NVRHI::RendererRenderWindow(ImGuiViewport *viewport, void *)
+    void ImGui_NRI::RendererRenderWindow(ImGuiViewport *viewport, void *)
     {
-        auto *renderer = static_cast<ImGui_NVRHI *>(ImGui::GetIO().BackendRendererUserData);
+        auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         auto *viewportData = GetViewportData(viewport);
         if (!renderer || !viewportData || !viewportData->swapChain)
             return;
@@ -1118,19 +1283,15 @@ namespace ignite
                 {
                     std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
 
-                    for (const auto &rt : viewportData->renderTargets)
+                    RemoveViewportPipelines(renderer, viewportData);
+
+                    DeviceManager_DX12 &deviceManager = DeviceManager_DX12::GetInstance();
+                    for (auto *tex : viewportData->nriTextures)
                     {
-                        if (!rt)
-                            continue;
-
-                        nvrhi::IFramebuffer *fb = rt->GetFramebuffer().Get();
-                        auto pipelineIter = renderer->graphicsPipelines.find(fb);
-                        if (pipelineIter != renderer->graphicsPipelines.end())
-                        {
-                            renderer->graphicsPipelines.erase(pipelineIter);
-                        }
+                        if (tex)
+                            deviceManager.GetCoreInterface().DestroyTexture(tex);
                     }
-
+                    viewportData->nriTextures.clear();
                     viewportData->renderTargets.clear();
                     viewportData->backBuffers.clear();
 
@@ -1143,9 +1304,6 @@ namespace ignite
 
                     if (hr == DXGI_ERROR_INVALID_CALL)
                     {
-                        renderer->m_Device->waitForIdle();
-                        renderer->m_Device->runGarbageCollection();
-
                         hr = viewportData->swapChain->ResizeBuffers(
                             0,
                             width,
@@ -1183,12 +1341,12 @@ namespace ignite
         if (backBufferIndex >= viewportData->renderTargets.size())
             return;
 
-        renderer->Render(viewport->DrawData, viewportData->renderTargets[backBufferIndex]->GetFramebuffer().Get());
+        renderer->Render(viewport->DrawData, viewportData->renderTargets[backBufferIndex].get());
     }
 
-    void ImGui_NVRHI::RendererSwapBuffers(ImGuiViewport *viewport, void *)
+    void ImGui_NRI::RendererSwapBuffers(ImGuiViewport *viewport, void *)
     {
-        auto *renderer = static_cast<ImGui_NVRHI *>(ImGui::GetIO().BackendRendererUserData);
+        auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         auto *viewportData = GetViewportData(viewport);
         if (!renderer || !viewportData || !viewportData->swapChain)
             return;
@@ -1198,8 +1356,6 @@ namespace ignite
 
         std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
 
-        // Keep platform viewport presents non-blocking to avoid stalling the main loop
-        // (which also drives FMOD updates).
         const HRESULT hr = viewportData->swapChain->Present(0, DXGI_PRESENT_DO_NOT_WAIT);
 
         if (hr == DXGI_ERROR_WAS_STILL_DRAWING || hr == DXGI_STATUS_OCCLUDED)

@@ -232,23 +232,23 @@ namespace ignite
 
         switch (Renderer::GetGraphicsAPI())
         {
-            case nvrhi::GraphicsAPI::VULKAN:
+            case nri::GraphicsAPI::VK:
             {
                 ImGui_ImplSDL3_InitForVulkan(Application::GetInstance()->GetWindow()->GetWindowHandle());
 
                 break;
             }
-            case nvrhi::GraphicsAPI::D3D12:
+            case nri::GraphicsAPI::D3D12:
             {
 #ifdef PLATFORM_WINDOWS
                 DeviceManager_DX12 &d3d12 = DeviceManager_DX12::GetInstance();
                 ImGui_ImplDX12_InitInfo initInfo = {};
-                initInfo.Device = d3d12.m_Device12;
-                initInfo.CommandQueue = d3d12.m_GraphicsQueue;
+                initInfo.Device = d3d12.m_Device12.Get();
+                initInfo.CommandQueue = d3d12.m_GraphicsQueue.Get();
                 initInfo.NumFramesInFlight = (int)m_DeviceManager->GetDeviceParameters().maxFramesInFlight;
                 initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
                 initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
-                initInfo.SrvDescriptorHeap = d3d12.m_SrvDescHeap;
+                initInfo.SrvDescriptorHeap = d3d12.m_SrvDescHeap.Get();
                 initInfo.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo *, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle)
                 {
                     return DeviceManager_DX12::GetInstance().m_SrvDescHeapAlloc.Alloc(out_cpu_handle, out_gpu_handle);
@@ -267,8 +267,8 @@ namespace ignite
 
     void ImGuiLayer::OnAttach()
     {
-        imguiNVRHI = CreateScope<ImGui_NVRHI>();
-        imguiNVRHI->Init(m_DeviceManager->GetDevice());
+        imguiNRI = CreateScope<ImGui_NRI>();
+        imguiNRI->Init(m_DeviceManager->GetDevice());
     }
 
     bool ImGuiLayer::WantCaptureMouse() const
@@ -343,8 +343,8 @@ namespace ignite
 
     bool ImGuiLayer::OnFramebufferResize(FramebufferResizeEvent &event) const
     {
-        if (imguiNVRHI)
-            imguiNVRHI->BackBufferResizing();
+        if (imguiNRI)
+            imguiNRI->BackBufferResizing();
 
         if (!m_SupportExplicitDisplayScaling)
             return false;
@@ -387,7 +387,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!imguiNVRHI || m_BeginFrameCalled)
+        if (!imguiNRI || m_BeginFrameCalled)
             return;
 
         float scaleX, scaleY;
@@ -427,7 +427,7 @@ namespace ignite
             }
         }
 
-        imguiNVRHI->UpdateFontTexture();
+        imguiNRI->UpdateFontTexture();
 
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
@@ -436,7 +436,7 @@ namespace ignite
         m_BeginFrameCalled = true;
     }
 
-    void ImGuiLayer::EndFrame(nvrhi::IFramebuffer* framebuffer)
+    void ImGuiLayer::EndFrame(RenderTarget* framebuffer)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -446,8 +446,8 @@ namespace ignite
         }
 
         {
-            IGN_PROFILE_SCOPE("ImGuiLayer::NVRHIRender");
-            imguiNVRHI->Render(framebuffer);
+            IGN_PROFILE_SCOPE("ImGuiLayer::NRIRender");
+            imguiNRI->Render(framebuffer);
         }
 
         m_BeginFrameCalled = false;
@@ -499,9 +499,6 @@ namespace ignite
             }
         }
 
-        // When the scene is focused (play/simulate with locked cursor), block mouse and keyboard
-        // events from reaching ImGui so windows cannot be dragged or interacted with.
-        // Window-management events (resize, focus, DPI) still pass through.
         if (m_BlockEvents)
         {
             const bool isMouseEvent = (patchedEvent.type == SDL_EVENT_MOUSE_MOTION
@@ -521,7 +518,7 @@ namespace ignite
 
     void ImGuiLayer::OnDetach()
     {
-        imguiNVRHI->Shutdown();
+        imguiNRI->Shutdown();
 
         ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();

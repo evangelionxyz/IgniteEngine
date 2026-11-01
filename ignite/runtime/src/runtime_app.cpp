@@ -33,7 +33,7 @@ namespace ignite
         createInfo.maximized = true;
 
         // vulkan by default
-        createInfo.graphicsApi = nvrhi::GraphicsAPI::VULKAN;
+        createInfo.graphicsApi = nri::GraphicsAPI::VK;
         return new RuntimeApp(createInfo);
     }
 }

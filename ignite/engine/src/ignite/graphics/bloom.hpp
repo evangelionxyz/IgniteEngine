@@ -4,8 +4,10 @@
 #define IGN_BLOOM_HPP
 
 #include "render_target.hpp"
+#include "graphics_pipeline.hpp"
 #include "buffers/constant_buffer.hpp"
 
+#include <NRI.h>
 #include <vector>
 
 namespace ignite
@@ -29,7 +31,7 @@ namespace ignite
         Bloom(int width, int height);
         ~Bloom();
 
-        void Build(nvrhi::ICommandList *cmd, const Ref<Texture> &sourceTexture, const Ref<VertexBuffer> &fullscreenVertexBuffer);
+        void Build(nri::CommandBuffer *cmd, const Ref<Texture> &sourceTexture, const Ref<VertexBuffer> &fullscreenVertexBuffer);
         void Resize(uint32_t width, uint32_t height);
         Ref<Texture> GetBloomTexture() const;
 
@@ -41,11 +43,14 @@ namespace ignite
             int width = 0;
             int height = 0;
 
-            // Three framebuffers for high quality bloom
-            Ref<RenderTarget> downsampledRT; // Downsampled result
-			Ref<RenderTarget> upsampledRT; // Upsampled result
-            Ref<RenderTarget> blurHorizontalRT; // Horizonal blur result
-            Ref<RenderTarget> blurVerticalRT; // Final vertial blur result
+            // Four render targets for high quality bloom
+            Ref<RenderTarget> downsampledRT;    // Downsampled result
+            Ref<RenderTarget> upsampledRT;      // Upsampled result
+            Ref<RenderTarget> blurHorizontalRT; // Horizontal blur result
+            Ref<RenderTarget> blurVerticalRT;   // Final vertical blur result
+
+            Ref<ConstantBuffer> downsampleParamsBuffer;
+            Ref<ConstantBuffer> upsampleParamsBuffer;
         };
 
         struct DownsampleParams
@@ -72,8 +77,8 @@ namespace ignite
         void CreateRenderTargets(uint32_t width, uint32_t height);
         void InvalidatePipelines();
         void EnsurePipelines();
-        void DrawFullscreen(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer,
-            nvrhi::GraphicsPipelineHandle pipeline, nvrhi::BindingSetHandle bindingSet,
+        void DrawFullscreen(nri::CommandBuffer *cmd, RenderTarget *renderTarget,
+            const Ref<GraphicsPipeline> &pipeline, nri::DescriptorSet *bindingSet,
             const Ref<VertexBuffer> &fullscreenVertexBuffer) const;
 
         std::vector<Level> m_Levels;
@@ -81,19 +86,18 @@ namespace ignite
         uint32_t m_Width = 0;
         uint32_t m_Height = 0;
 
-        nvrhi::BindingLayoutHandle m_DownsampleLayout;
-        nvrhi::BindingLayoutHandle m_BlurLayout;
-        nvrhi::BindingLayoutHandle m_UpsampleLayout;
+        BindingLayoutDesc m_DownsampleLayout;
+        BindingLayoutDesc m_BlurLayout;
+        BindingLayoutDesc m_UpsampleLayout;
 
-        nvrhi::GraphicsPipelineHandle m_DownsamplePipeline;
-        nvrhi::GraphicsPipelineHandle m_BlurPipeline;
-        nvrhi::GraphicsPipelineHandle m_UpsamplePipeline;
-        nvrhi::InputLayoutHandle m_InputLayout;
-        nvrhi::SamplerHandle m_Sampler;
+        Ref<GraphicsPipeline> m_DownsamplePipeline;
+        Ref<GraphicsPipeline> m_BlurPipeline;
+        Ref<GraphicsPipeline> m_UpsamplePipeline;
+        nri::Descriptor *m_Sampler = nullptr;
 
-        Ref<ConstantBuffer> m_DownsampleParamsBuffer;
-        Ref<ConstantBuffer> m_BlurParamsBuffer;
-        Ref<ConstantBuffer> m_UpsampleParamsBuffer;
+        Ref<ConstantBuffer> m_BlurHorizontalParamsBuffer;
+        Ref<ConstantBuffer> m_BlurVerticalParamsBuffer;
+        Ref<ConstantBuffer> m_SingleLevelUpsampleParamsBuffer;
 
         Ref<Shader> m_FullscreenVertexShader;
         Ref<Shader> m_DownsamplePixelShader;

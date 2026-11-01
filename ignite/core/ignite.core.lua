@@ -27,6 +27,8 @@ project "Ignite.Core"
         "%{IncludeDir.SPDLOG}",
         "%{IncludeDir.ENTT}",
         "%{IncludeDir.NVRHI}",
+        "%{IncludeDir.NRI}/Include",
+        "%{IncludeDir.NRI}/Source",
         "%{IncludeDir.FILEWATCHER}",
         "%{IncludeDir.OPENEXR}",
         "%{IncludeDir.IMATH}",

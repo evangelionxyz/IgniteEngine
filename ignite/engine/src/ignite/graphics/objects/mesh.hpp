@@ -16,7 +16,6 @@
 #include "material.hpp"
 
 #include <tinygltf.h>
-#include <nvrhi/nvrhi.h>
 #include <unordered_map>
 
 namespace fbxsdk
@@ -133,8 +132,9 @@ namespace ignite
             return CreateRef<MeshPrimitive>(vertices, indices);
         }
 
-        void WriteBuffer(nvrhi::ICommandList *cmd)
+        void WriteBuffer(nri::CommandBuffer *cmd = nullptr)
         {
+            (void)cmd;
             if (vertices.empty() || indices.empty())
             {
                 LOG_ASSERT(false, "[MeshPrimitive] Please validate buffers data");
@@ -147,8 +147,8 @@ namespace ignite
             if (!indexBuffer)
                 indexBuffer = IndexBuffer::Create(sizeof(uint32_t) * indices.size());
 
-            vertexBuffer->SetData(cmd, vertices.data(), sizeof(VertexType_T) * vertices.size());
-            indexBuffer->SetData(cmd, indices.data(), sizeof(uint32_t) * indices.size());
+            vertexBuffer->SetData(Buffer(vertices.data(), sizeof(VertexType_T) * vertices.size()));
+            indexBuffer->SetData(Buffer(indices.data(), sizeof(uint32_t) * indices.size()));
         }
 
         void ClearPrimitivesData()
@@ -291,7 +291,7 @@ namespace ignite
     public:
         static Ref<Material> LoadMaterial(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
             const std::vector<std::pair<std::string, Ref<Texture>>> &loadedTextures, std::array<MeshMaterialTextureMap, 5> &textureMap,
-            const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex);
+            const std::vector<nri::SamplerDesc> &loadedSamplers, int *materialIndex);
 
         template<MeshVertex VertexType_T>
         static void LoadVertexData(std::vector<VertexType_T>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
@@ -304,7 +304,7 @@ namespace ignite
 
     private:
         static std::vector<std::pair<std::string, Ref<Texture>>> LoadTextures(const tinygltf::Model& model);
-        static std::vector<nvrhi::SamplerDesc> GetSamplers(const tinygltf::Model& model);
+        static std::vector<nri::SamplerDesc> GetSamplers(const tinygltf::Model& model);
         static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
     };
 

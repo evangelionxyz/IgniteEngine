@@ -155,7 +155,7 @@ namespace ignite
         }
     }
 
-    void AvaloniaLayer::OnRender(nvrhi::IFramebuffer *mainFramebuffer)
+    void AvaloniaLayer::OnRender(RenderTarget *mainFramebuffer)
     {
         Ref<Scene> activeScene = GetActiveScene();
         if (!m_SceneRenderer || !activeScene)
@@ -741,34 +741,27 @@ namespace ignite
         const int pixelX = std::clamp(static_cast<int>((mouseX / static_cast<float>(viewportWidth)) * static_cast<float>(texWidth)), 0, texWidth - 1);
         const int pixelY = std::clamp(static_cast<int>((mouseY / static_cast<float>(viewportHeight)) * static_cast<float>(texHeight)), 0, texHeight - 1);
 
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        if (!device)
+        auto *dm = DeviceManager::GetInstance();
+        nri::Device *device = dm ? dm->GetDevice() : nullptr;
+        if (!device || !dm)
             return UUID(0);
 
-        nvrhi::TextureDesc stagingDesc = objectIdTexture->GetHandle()->getDesc();
-        stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-        nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-        if (!stagingTexture)
+        nri::Queue *graphicsQueue = dm->GetGraphicsQueue();
+        if (!graphicsQueue)
             return UUID(0);
 
-        nvrhi::CommandListHandle copyCmd = device->createCommandList();
-        copyCmd->open();
-        copyCmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), objectIdTexture->GetHandle(), nvrhi::TextureSlice());
-        copyCmd->close();
+        uint32_t pickedObjectId = 0xFFFFFFFFu;
+        nri::ReadbackTextureToHostMemoryDesc readbackDesc{};
+        readbackDesc.srcTexture = objectIdTexture->GetHandle();
+        readbackDesc.dstData = &pickedObjectId;
+        readbackDesc.srcRegion = { (nri::Dim_t)pixelX, (nri::Dim_t)pixelY, 0, 1, 1, 1, 0, 0 };
+        readbackDesc.dstRowPitch = sizeof(uint32_t);
 
+        dm->WaitForIdle();
         {
             auto &queueMutex = GPUUploadSync::GetQueueMutex();
             std::lock_guard<std::mutex> lock(queueMutex);
-            device->executeCommandList(copyCmd);
-        }
-
-        size_t rowPitch = 0;
-        uint32_t pickedObjectId = 0xFFFFFFFFu;
-        if (void *mapped = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
-        {
-            const auto pixelData = static_cast<const uint32_t *>(mapped);
-            pickedObjectId = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
-            device->unmapStagingTexture(stagingTexture);
+            dm->GetCoreInterface().ReadbackTextureToHostMemory(*graphicsQueue, &readbackDesc, 1);
         }
 
         if (pickedObjectId == 0xFFFFFFFFu)

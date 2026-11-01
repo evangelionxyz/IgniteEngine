@@ -5,8 +5,9 @@
 #define IGN_BINDLESS_SYSTEM_HPP
 
 #include "ignite/core/base.hpp"
+#include "binding_set.hpp"
 
-#include <nvrhi/nvrhi.h>
+#include <NRI.h>
 #include <vector>
 #include <mutex>
 
@@ -15,36 +16,41 @@ namespace ignite
     class IGN_API BindlessSystem
     {
     public:
-        static void Initialize(nvrhi::IDevice* device);
+        static void Initialize(nri::Device* device = nullptr);
         static void Shutdown();
 
-        static uint32_t RegisterTexture(nvrhi::ITexture* texture);
+        static uint32_t RegisterTexture(nri::Descriptor* textureDescriptor);
         static void UnregisterTexture(uint32_t index);
 
-        static nvrhi::BindingLayoutHandle GetBindingLayout();
-        static nvrhi::DescriptorTableHandle GetDescriptorTable();
-        static nvrhi::BindingLayoutHandle GetDummyLayout();
-        static nvrhi::BindingSetHandle GetDummyBindingSet();
+        // NRI accessors
+        static nri::DescriptorPool* GetDescriptorPool();
+        static nri::DescriptorSet* GetDescriptorSet();
+        static nri::PipelineLayout* GetPipelineLayout();
+        static const nri::DescriptorSetDesc& GetDescriptorSetDesc();
+        static BindingLayoutDesc GetBindingLayout();
+
         static void FlushPendingWrites();
         static bool HasPendingWrites();
 
     private:
         struct PendingWrite
         {
-            uint32_t index;
-            nvrhi::TextureHandle texture;
+            uint32_t index = 0;
+            nri::Descriptor* descriptor = nullptr;
         };
         struct DeferredFree
         {
-            uint32_t index;
-            uint32_t frame;
+            uint32_t index = 0;
+            uint32_t frame = 0;
         };
 
-        static nvrhi::IDevice* s_Device;
-        static nvrhi::BindingLayoutHandle s_BindlessLayout;
-        static nvrhi::DescriptorTableHandle s_DescriptorTable;
-        static nvrhi::BindingLayoutHandle s_DummyLayout;
-        static nvrhi::BindingSetHandle s_DummyBindingSet;
+        static nri::Device* s_Device;
+        static nri::DescriptorPool* s_DescriptorPool;
+        static nri::DescriptorSet* s_DescriptorSet;
+        static nri::PipelineLayout* s_PipelineLayout;
+        static nri::DescriptorRangeDesc s_BindlessRange;
+        static nri::DescriptorSetDesc s_BindlessSetDesc;
+
         static std::vector<uint32_t> s_FreeIndices;
         static std::vector<PendingWrite> s_PendingWrites;
         static std::vector<DeferredFree> s_DeferredFrees;

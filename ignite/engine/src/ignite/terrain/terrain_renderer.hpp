@@ -4,8 +4,8 @@
 #define IGN_TERRAIN_RENDERER_HPP
 
 #include "ignite/core/base.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/terrain/terrain.hpp"
-#include <nvrhi/nvrhi.h>
 
 namespace ignite
 {
@@ -18,7 +18,7 @@ namespace ignite
         ~TerrainRenderer() = default;
 
         void Init();
-        void RebuildMesh(nvrhi::ICommandList *cmd, TerrainComponent &comp, const glm::mat4 &worldTransform);
+        void RebuildMesh(nri::CommandBuffer *cmd, TerrainComponent &comp, const glm::mat4 &worldTransform);
     };
 }
 

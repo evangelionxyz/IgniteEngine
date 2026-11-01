@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "pch.hpp"
 
@@ -232,23 +232,23 @@ namespace ignite
             return true;
         }
 
-        static const char *TextureFormatToString(nvrhi::Format format)
+        static const char *TextureFormatToString(nri::Format format)
         {
             switch (format)
             {
-                case nvrhi::Format::RGBA8_UNORM: return "RGBA8_UNORM";
-                case nvrhi::Format::RGBA32_FLOAT: return "RGBA32_FLOAT";
+                case nri::Format::RGBA8_UNORM: return "RGBA8_UNORM";
+                case nri::Format::RGBA32_SFLOAT: return "RGBA32_SFLOAT";
                 default: return "UNKNOWN";
             }
         }
 
-        static const char *SamplerAddressModeToString(nvrhi::SamplerAddressMode mode)
+        static const char *SamplerAddressModeToString(nri::AddressMode mode)
         {
             switch (mode)
             {
-                case nvrhi::SamplerAddressMode::Repeat: return "Repeat";
-                case nvrhi::SamplerAddressMode::ClampToEdge: return "ClampToEdge";
-                case nvrhi::SamplerAddressMode::ClampToBorder: return "ClampToBorder";
+                case nri::AddressMode::REPEAT: return "Repeat";
+                case nri::AddressMode::CLAMP_TO_EDGE: return "ClampToEdge";
+                case nri::AddressMode::CLAMP_TO_BORDER: return "ClampToBorder";
                 default: return "Other";
             }
         }
@@ -748,7 +748,7 @@ namespace ignite
     }
 
     // UI
-    void AssetEditorPanel::OnRender(nvrhi::IFramebuffer *framebuffer)
+    void AssetEditorPanel::OnRender(RenderTarget *framebuffer)
     {
         if (!m_EditorLayer || !m_EditorLayer->GetActiveProject())
         {
@@ -1475,7 +1475,7 @@ namespace ignite
                                 state.pan += glm::vec2(ImGui::GetIO().MouseDelta.x, ImGui::GetIO().MouseDelta.y);
                             }
 
-                            if (texture && texture->GetHandle())
+                            if (texture && texture->GetShaderResourceView())
                             {
                                 const float texW = static_cast<float>(texture->GetWidth());
                                 const float texH = static_cast<float>(texture->GetHeight());
@@ -1529,7 +1529,7 @@ namespace ignite
                                 }
 
                                 ImDrawList *drawList = ImGui::GetWindowDrawList();
-                                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
+                                drawList->AddImage(UI::GetTextureID(texture), imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
 
                                 auto toUV = [&](const ImVec2 &mouse)
                                 {
@@ -1832,7 +1832,7 @@ namespace ignite
 
                         ImGui::Text("Extracted Sprites");
                         ImGui::BeginChild("##sprite_sheet_extracted_preview", ImVec2(0.0f, state.extractedPanelHeight), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
-                        if (texture && texture->GetHandle())
+                        if (texture && texture->GetShaderResourceView())
                         {
                             const float previewSize = 56.0f;
                             const float spacing = ImGui::GetStyle().ItemSpacing.x;
@@ -1844,7 +1844,7 @@ namespace ignite
                                 const auto &sprite = sprites[i];
                                 ImGui::PushID(static_cast<int>(i));
 
-                                ImTextureID texId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+                                ImTextureID texId = UI::GetTextureID(texture);
                                 ImGui::ImageButton("##sprite_preview", texId, ImVec2(previewSize, previewSize), ImVec2(sprite.uv0.x, sprite.uv0.y), ImVec2(sprite.uv1.x, sprite.uv1.y));
 
                                 if (ImGui::BeginDragDropSource())
@@ -2355,7 +2355,7 @@ namespace ignite
                                     }
                                 }
 
-                                if (texture && texture->GetHandle() && frameCount > 0)
+                                if (texture && texture->GetShaderResourceView() && frameCount > 0)
                                 {
                                     const int fi = std::clamp(st.previewFrame, 0, frameCount - 1);
                                     const auto &fr = anim->frames[static_cast<size_t>(fi)];
@@ -2376,7 +2376,7 @@ namespace ignite
                                         vpPos.y + (vpSize.y - imgH) * 0.5f
                                     };
 
-                                    dl->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
+                                    dl->AddImage(UI::GetTextureID(texture),
                                         imgPos, ImVec2(imgPos.x + imgW, imgPos.y + imgH), ImVec2(fr.uv0.x, fr.uv1.y), ImVec2(fr.uv1.x, fr.uv0.y));
 
                                     // Frame label
@@ -3000,9 +3000,9 @@ namespace ignite
                             assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
 
                             Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-                            if (previewTexture && previewTexture->GetHandle())
+                            if (previewTexture && previewTexture->GetShaderResourceView())
                             {
-                                ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+                                ImGui::Image(UI::GetTextureID(previewTexture), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                                 assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
                             }
                             else
@@ -3152,9 +3152,9 @@ namespace ignite
 								{
 									const char *cullModeNames[] = { "Front (Standard)", "None (Double-Sided)", "Back (Inverted)" };
 									int currentCull = 0;
-									if (material->GetCullMode() == nvrhi::RasterCullMode::None)
+									if (material->GetCullMode() == nri::CullMode::NONE)
 										currentCull = 1;
-									else if (material->GetCullMode() == nvrhi::RasterCullMode::Back)
+									else if (material->GetCullMode() == nri::CullMode::BACK)
 										currentCull = 2;
 									else
 										currentCull = 0;
@@ -3162,11 +3162,11 @@ namespace ignite
 									if (ImGui::Combo("Cull Mode", &currentCull, cullModeNames, IM_ARRAYSIZE(cullModeNames)))
 									{
 										if (currentCull == 1)
-											material->SetCullMode(nvrhi::RasterCullMode::None);
+											material->SetCullMode(nri::CullMode::NONE);
 										else if (currentCull == 2)
-											material->SetCullMode(nvrhi::RasterCullMode::Back);
+											material->SetCullMode(nri::CullMode::BACK);
 										else
-											material->SetCullMode(nvrhi::RasterCullMode::Front);
+											material->SetCullMode(nri::CullMode::FRONT);
 
 										material->SetDirtyFlag(true);
 									}
@@ -3344,7 +3344,7 @@ namespace ignite
                                 previewSize.x = previewMaxWidth * aspectRatio;
 
                             ImGui::Text("Preview");
-                            ImTextureID textureId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+                            ImTextureID textureId = UI::GetTextureID(texture);
                             ImGui::Image(textureId, previewSize);
                         }
 
@@ -3374,7 +3374,7 @@ namespace ignite
                             state.createInfo.sampleQuality = static_cast<uint32_t>(std::max(sampleQuality, 0));
                         }
 
-                        const nvrhi::Format formatOptions[] = { nvrhi::Format::RGBA8_UNORM, nvrhi::Format::RGBA32_FLOAT };
+                        const nri::Format formatOptions[] = { nri::Format::RGBA8_UNORM, nri::Format::RGBA32_SFLOAT };
 
                         int currentFormatIndex = 0;
                         for (int i = 0; i < static_cast<int>(std::size(formatOptions)); ++i)
@@ -3397,24 +3397,24 @@ namespace ignite
                             state.createInfo.format = formatOptions[currentFormatIndex];
                         }
 
-                        const std::array<nvrhi::SamplerAddressMode, 3> addressModeOptions =
+                        const std::array<nri::AddressMode, 3> addressModeOptions =
                         {
-                            nvrhi::SamplerAddressMode::Repeat,
-                            nvrhi::SamplerAddressMode::ClampToEdge,
-                            nvrhi::SamplerAddressMode::ClampToBorder
+                            nri::AddressMode::REPEAT,
+                            nri::AddressMode::CLAMP_TO_EDGE,
+                            nri::AddressMode::CLAMP_TO_BORDER
                         };
 
                         std::array<const char *, 3> addressModeOptionsStr = { "Repeat", "Clamp To Edge" , "Clamp To Border" };
 
                         // Wrap U
-                        auto drawAddressModeCombo = [&addressModeOptions, &addressModeOptionsStr](const char *label, nvrhi::SamplerAddressMode &mode)
+                        auto drawAddressModeCombo = [&addressModeOptions, &addressModeOptionsStr](const char *label, nri::AddressMode &mode)
                         {
                             int currentIdx = 0;
                             switch (mode)
                             {
-                                case nvrhi::SamplerAddressMode::Repeat: currentIdx = 0; break;
-                                case nvrhi::SamplerAddressMode::ClampToEdge: currentIdx = 1; break;
-                                case nvrhi::SamplerAddressMode::ClampToBorder: currentIdx = 2; break;
+                                case nri::AddressMode::REPEAT: currentIdx = 0; break;
+                                case nri::AddressMode::CLAMP_TO_EDGE: currentIdx = 1; break;
+                                case nri::AddressMode::CLAMP_TO_BORDER: currentIdx = 2; break;
                             }
 
                             if (UI::DrawComboBox(label, addressModeOptionsStr.data(), static_cast<int>(addressModeOptions.size()), &currentIdx))
@@ -3679,9 +3679,9 @@ namespace ignite
 							assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
 							assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
 							Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-							if (previewTexture && previewTexture->GetHandle())
+							if (previewTexture && previewTexture->GetShaderResourceView())
 							{
-								ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+								ImGui::Image(UI::GetTextureID(previewTexture), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
 								assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
 							}
 							else
@@ -3893,10 +3893,10 @@ namespace ignite
                                 assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
 
                                 Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-                                if (previewTexture && previewTexture->GetHandle())
+                                if (previewTexture && previewTexture->GetShaderResourceView())
                                 {
                                     const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-                                    ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+                                    ImGui::Image(UI::GetTextureID(previewTexture), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                                     assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
 
                                     const glm::mat4 viewProjection = assetData.sceneData.camera.GetProjection() * assetData.sceneData.camera.GetView();
@@ -5238,9 +5238,9 @@ namespace ignite
             rtCreateInfo.height = height;
             rtCreateInfo.attachments =
             {
-                FramebufferAttachments{ "[Asset Preview DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite},
-                FramebufferAttachments{ "[Asset Preview ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget},
-                FramebufferAttachments{ "[Asset Preview ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget}
+                FramebufferAttachments{ "[Asset Preview DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT},
+                FramebufferAttachments{ "[Asset Preview ColorAttachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT},
+                FramebufferAttachments{ "[Asset Preview ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT}
             };
 
             auto sceneRT = RenderTarget::Create(rtCreateInfo, "[Asset Preview Scene RT]");
@@ -5251,7 +5251,7 @@ namespace ignite
             compositeInfo.height = height;
             compositeInfo.attachments =
             {
-                FramebufferAttachments{ "[Asset Preview Composite ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}
+                FramebufferAttachments{ "[Asset Preview Composite ColorAttachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT}
             };
             auto compositeRT = RenderTarget::Create(compositeInfo, "[Asset Preview Composite RT]");
 

@@ -4,6 +4,7 @@
 
 #include "particle_system.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
+#include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/shader.hpp"
@@ -24,17 +25,44 @@ namespace ignite
 
     ParticleSystem::~ParticleSystem()
     {
-        m_ParticleBuffer = nullptr;
+        DestroyPipelines();
+        DestroyBuffers();
+    }
+
+    void ParticleSystem::DestroyBuffers()
+    {
+        auto *dm = DeviceManager::GetInstance();
+        if (!dm || !dm->GetDevice())
+            return;
+
+        auto &nri = dm->GetNRI();
+        if (m_LinearSampler) { nri.DestroyDescriptor(m_LinearSampler); m_LinearSampler = nullptr; }
+        if (m_ParticleSRV) { nri.DestroyDescriptor(m_ParticleSRV); m_ParticleSRV = nullptr; }
+        if (m_ParticleUAV) { nri.DestroyDescriptor(m_ParticleUAV); m_ParticleUAV = nullptr; }
+        if (m_ParticleBuffer) { nri.DestroyBuffer(m_ParticleBuffer); m_ParticleBuffer = nullptr; }
+        if (m_ParticleMemory) { nri.FreeMemory(m_ParticleMemory); m_ParticleMemory = nullptr; }
+        if (m_ResetStagingBuffer) { nri.DestroyBuffer(m_ResetStagingBuffer); m_ResetStagingBuffer = nullptr; }
+        if (m_ResetStagingMemory) { nri.FreeMemory(m_ResetStagingMemory); m_ResetStagingMemory = nullptr; }
+
         m_SimulateCB = nullptr;
         m_RenderCB = nullptr;
-        m_ComputePipeline = nullptr;
+    }
+
+    void ParticleSystem::DestroyPipelines()
+    {
+        auto *dm = DeviceManager::GetInstance();
+        if (dm && dm->GetDevice())
+        {
+            auto &nri = dm->GetNRI();
+            if (m_ComputePipeline) { nri.DestroyPipeline(m_ComputePipeline); m_ComputePipeline = nullptr; }
+            if (m_ComputePipelineLayout) { nri.DestroyPipelineLayout(m_ComputePipelineLayout); m_ComputePipelineLayout = nullptr; }
+        }
         m_ComputeBindingSet = nullptr;
-        m_ComputeBindingLayout = nullptr;
         m_RenderBindingSet = nullptr;
-        m_RenderBindingLayout = nullptr;
+        m_RenderPipelineAlphaCache.clear();
+        m_RenderPipelineAdditiveCache.clear();
         m_RenderPipelineAlpha = nullptr;
         m_RenderPipelineAdditive = nullptr;
-        m_LinearSampler = nullptr;
     }
 
     Ref<ParticleSystem> ParticleSystem::Create(uint32_t maxParticles)
@@ -44,6 +72,9 @@ namespace ignite
 
     void ParticleSystem::Init(uint32_t maxParticles)
     {
+        DestroyPipelines();
+        DestroyBuffers();
+
         m_MaxParticles = maxParticles;
         CreateBuffers(maxParticles);
         CreatePipelines();
@@ -51,33 +82,84 @@ namespace ignite
 
     void ParticleSystem::CreateBuffers(uint32_t maxParticles)
     {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto &nri = DeviceManager::GetInstance()->GetNRI();
+        nri::Device *device = DeviceManager::GetInstance()->GetDevice();
+
+        const uint64_t byteSize = static_cast<uint64_t>(maxParticles) * sizeof(GPUParticle);
 
         // 1. GPU StructuredBuffer for Particles (UAV for compute, SRV for vertex shader)
-        nvrhi::BufferDesc bufferDesc;
-        bufferDesc.byteSize = static_cast<uint64_t>(maxParticles) * sizeof(GPUParticle);
-        bufferDesc.structStride = sizeof(GPUParticle);
-        bufferDesc.canHaveUAVs = true;
-        bufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
-        bufferDesc.keepInitialState = true;
-        bufferDesc.debugName = "GPU Particle StructuredBuffer";
-        m_ParticleBuffer = device->createBuffer(bufferDesc);
-        LOG_ASSERT(m_ParticleBuffer, "[ParticleSystem] Failed to create particle structured buffer");
+        nri::BufferDesc bufferDesc = {};
+        bufferDesc.size = byteSize;
+        bufferDesc.structureStride = sizeof(GPUParticle);
+        bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE | nri::BufferUsageBits::SHADER_RESOURCE_STORAGE;
+        nri.CreateCommittedBuffer(*device, nri::MemoryLocation::DEVICE, 1.0f, bufferDesc, m_ParticleBuffer);
+        nri.SetDebugName((nri::Object*)m_ParticleBuffer, "GPU Particle StructuredBuffer");
+
+        nri::BufferViewDesc srvDesc = {};
+        srvDesc.buffer = m_ParticleBuffer;
+        srvDesc.type = nri::BufferView::STRUCTURED_BUFFER;
+        srvDesc.offset = 0;
+        srvDesc.size = byteSize;
+        srvDesc.structureStride = sizeof(GPUParticle);
+        nri.CreateBufferView(srvDesc, m_ParticleSRV);
+
+        nri::BufferViewDesc uavDesc = {};
+        uavDesc.buffer = m_ParticleBuffer;
+        uavDesc.type = nri::BufferView::STORAGE_STRUCTURED_BUFFER;
+        uavDesc.offset = 0;
+        uavDesc.size = byteSize;
+        uavDesc.structureStride = sizeof(GPUParticle);
+        nri.CreateBufferView(uavDesc, m_ParticleUAV);
+
+        // Reset staging buffer pre-populated with dead particles
+        nri::BufferDesc stagingDesc = {};
+        stagingDesc.size = byteSize;
+        stagingDesc.usage = nri::BufferUsageBits::NONE;
+        nri.CreateCommittedBuffer(*device, nri::MemoryLocation::HOST_UPLOAD, 1.0f, stagingDesc, m_ResetStagingBuffer);
+
+        std::vector<GPUParticle> initial(maxParticles);
+        for (auto &p : initial)
+        {
+            p.lifetime = 999999.0f;
+            p.maxLifetime = 0.0f;
+            p.size = glm::vec2(0.0f);
+        }
+
+        void *mapped = nri.MapBuffer(*m_ResetStagingBuffer, 0, byteSize);
+        if (mapped)
+        {
+            std::memcpy(mapped, initial.data(), byteSize);
+            nri.UnmapBuffer(*m_ResetStagingBuffer);
+        }
+
+        // Upload initial state synchronously
+        {
+            nri::Queue *graphicsQueue = nullptr;
+            nri.GetQueue(*device, nri::QueueType::GRAPHICS, 0, graphicsQueue);
+            nri::BufferUploadDesc uploadDesc = {};
+            uploadDesc.buffer = m_ParticleBuffer;
+            uploadDesc.data = initial.data();
+            uploadDesc.after = { nri::AccessBits::SHADER_RESOURCE, nri::StageBits::VERTEX_SHADER };
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+            DeviceManager::GetInstance()->GetHelperInterface().UploadData(*graphicsQueue, nullptr, 0, &uploadDesc, 1);
+        }
 
         // 2. Constant Buffers
         m_SimulateCB = ConstantBuffer::Create(sizeof(ParticleSimCB), true, 16, "[Particle System] Sim CB");
         m_RenderCB = ConstantBuffer::Create(sizeof(ParticleRenderCB), true, 16, "[Particle System] Render CB");
 
         // 3. Bilinear Clamp Sampler for textures
-        nvrhi::SamplerDesc samplerDesc;
-        samplerDesc.setAllFilters(true);
-        samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
-        m_LinearSampler = device->createSampler(samplerDesc);
+        nri::SamplerDesc samplerDesc = {};
+        samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR, nri::Filter::LINEAR };
+        samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
+        samplerDesc.mipMax = 16.0f;
+        nri.CreateSampler(*device, samplerDesc, m_LinearSampler);
     }
 
     void ParticleSystem::CreatePipelines()
     {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto &nri = DeviceManager::GetInstance()->GetNRI();
+        nri::Device *device = DeviceManager::GetInstance()->GetDevice();
 
         // Load / Compile Shaders
         m_ComputeShader = Shader::Create("resources/shaders/particle.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
@@ -86,47 +168,44 @@ namespace ignite
 
         // Compute Pipeline
         {
-            nvrhi::BindingLayoutDesc computeLayoutDesc;
-            computeLayoutDesc.visibility = nvrhi::ShaderType::Compute;
-            computeLayoutDesc.bindings =
+            m_ComputeBindingLayout.SetVisibility(nri::StageBits::COMPUTE_SHADER);
+            m_ComputeBindingLayout.bindings =
             {
-                nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
-                nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0)
+                BindingLayoutItem::VolatileConstantBuffer(0),
+                BindingLayoutItem::StructuredBuffer_UAV(0)
             };
-            m_ComputeBindingLayout = device->createBindingLayout(computeLayoutDesc);
+            m_ComputePipelineLayout = m_ComputeBindingLayout.CreatePipelineLayout(nri::StageBits::COMPUTE_SHADER);
 
-            nvrhi::BindingSetDesc computeSetDesc;
+            BindingSetDesc computeSetDesc;
             computeSetDesc.bindings =
             {
-                nvrhi::BindingSetItem::ConstantBuffer(0, m_SimulateCB->GetHandle()),
-                nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_ParticleBuffer)
+                BindingSetItem::ConstantBuffer(0, m_SimulateCB->GetDescriptor()),
+                BindingSetItem::StructuredBuffer_UAV(0, m_ParticleUAV)
             };
-            m_ComputeBindingSet = device->createBindingSet(computeSetDesc, m_ComputeBindingLayout);
+            m_ComputeBindingSet = BindingSet::Create("[Particle System] Compute", m_ComputePipelineLayout, 0, computeSetDesc);
 
-            nvrhi::ComputePipelineDesc computePipeDesc;
-            computePipeDesc.CS = m_ComputeShader->GetHandle();
-            computePipeDesc.bindingLayouts = { m_ComputeBindingLayout };
-            m_ComputePipeline = device->createComputePipeline(computePipeDesc);
+            nri::ComputePipelineDesc computePipeDesc = {};
+            computePipeDesc.pipelineLayout = m_ComputePipelineLayout;
+            computePipeDesc.shader = m_ComputeShader->GetShaderDesc();
+            nri.CreateComputePipeline(*device, computePipeDesc, m_ComputePipeline);
             LOG_ASSERT(m_ComputePipeline, "[ParticleSystem] Failed to create compute pipeline");
         }
 
         // Render Binding Layout
         {
-            nvrhi::BindingLayoutDesc renderLayoutDesc;
-            renderLayoutDesc.visibility = nvrhi::ShaderType::All;
-            renderLayoutDesc.bindings =
+            m_RenderBindingLayout.SetVisibility(nri::StageBits::ALL);
+            m_RenderBindingLayout.bindings =
             {
-                nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), // Camera buffer (b0)
-                nvrhi::BindingLayoutItem::VolatileConstantBuffer(1), // Particle render params (b1)
-                nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),    // Particles (t0)
-                nvrhi::BindingLayoutItem::Texture_SRV(1),             // Texture (t1)
-                nvrhi::BindingLayoutItem::Sampler(0)                  // Sampler (s0)
+                BindingLayoutItem::VolatileConstantBuffer(0), // Camera buffer (b0)
+                BindingLayoutItem::VolatileConstantBuffer(1), // Particle render params (b1)
+                BindingLayoutItem::StructuredBufferSRV(0),   // Particles (t0)
+                BindingLayoutItem::TextureSRV(1),            // Texture (t1)
+                BindingLayoutItem::Sampler(0)                 // Sampler (s0)
             };
-            m_RenderBindingLayout = device->createBindingLayout(renderLayoutDesc);
         }
     }
 
-    Ref<GraphicsPipeline> ParticleSystem::GetOrCreateRenderPipeline(nvrhi::IFramebuffer *framebuffer, ParticleBlendMode blendMode)
+    Ref<GraphicsPipeline> ParticleSystem::GetOrCreateRenderPipeline(RenderTarget *framebuffer, ParticleBlendMode blendMode)
     {
         if (!framebuffer)
             return nullptr;
@@ -137,30 +216,29 @@ namespace ignite
         if (it != cache.end())
             return it->second;
 
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+        bool hasDepthAttachment = framebuffer->HasDepthAttachment();
 
         GraphicsPipelineParams params;
         params.enableDepthTest = hasDepthAttachment;
         params.enableDepthWrite = false; // Transparent particles don't write to depth buffer
-        params.depthFunc = hasDepthAttachment ? nvrhi::ComparisonFunc::LessOrEqual : nvrhi::ComparisonFunc::Always;
-        params.cullMode = nvrhi::RasterCullMode::None;
-        params.fillMode = nvrhi::RasterFillMode::Solid;
+        params.depthFunc = hasDepthAttachment ? nri::CompareOp::LESS_EQUAL : nri::CompareOp::ALWAYS;
+        params.cullMode = nri::CullMode::NONE;
+        params.fillMode = nri::FillMode::SOLID;
         params.enableBlend = true;
 
         if (blendMode == ParticleBlendMode::Alpha)
         {
-            params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
-            params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
-            params.srcBlendAlpha = nvrhi::BlendFactor::One;
-            params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+            params.srcBlend = nri::BlendFactor::SRC_ALPHA;
+            params.destBlend = nri::BlendFactor::ONE_MINUS_SRC_ALPHA;
+            params.srcBlendAlpha = nri::BlendFactor::ONE;
+            params.destBlendAlpha = nri::BlendFactor::ONE_MINUS_SRC_ALPHA;
         }
         else // Additive
         {
-            params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
-            params.destBlend = nvrhi::BlendFactor::One;
-            params.srcBlendAlpha = nvrhi::BlendFactor::One;
-            params.destBlendAlpha = nvrhi::BlendFactor::One;
+            params.srcBlend = nri::BlendFactor::SRC_ALPHA;
+            params.destBlend = nri::BlendFactor::ONE;
+            params.srcBlendAlpha = nri::BlendFactor::ONE;
+            params.destBlendAlpha = nri::BlendFactor::ONE;
         }
 
         std::string name = (blendMode == ParticleBlendMode::Alpha) ? "Particle Pipeline (Alpha)" : "Particle Pipeline (Additive)";
@@ -173,37 +251,38 @@ namespace ignite
         return pipeline;
     }
 
-    void ParticleSystem::UpdateRenderBindingSet(const nvrhi::BufferHandle &cameraBuffer, Ref<Texture> texture)
+    void ParticleSystem::UpdateRenderBindingSet(nri::Descriptor *cameraBufferDescriptor, Ref<Texture> texture, nri::PipelineLayout *pipelineLayout)
     {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        Ref<Texture> resolvedTex = (texture && texture->IsReady()) ? texture : Renderer::GetWhiteTexture();
+        nri::Texture *texHandle = resolvedTex ? resolvedTex->GetHandle() : nullptr;
 
-        nvrhi::TextureHandle texHandle = (texture && texture->IsReady()) ? texture->GetHandle() : Renderer::GetWhiteTexture()->GetHandle();
-
-        if (m_RenderBindingSet && m_LastCameraBuffer == cameraBuffer.Get() && m_LastBoundTexture == texHandle.Get())
+        if (m_RenderBindingSet && m_LastCameraBufferDescriptor == cameraBufferDescriptor && m_LastBoundTexture == texHandle)
             return;
 
-        m_LastCameraBuffer = cameraBuffer.Get();
-        m_LastBoundTexture = texHandle.Get();
+        m_LastCameraBufferDescriptor = cameraBufferDescriptor;
+        m_LastBoundTexture = texHandle;
 
-        nvrhi::BindingSetDesc setDesc;
+        BindingSetDesc setDesc;
         setDesc.bindings =
         {
-            nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer),
-            nvrhi::BindingSetItem::ConstantBuffer(1, m_RenderCB->GetHandle()),
-            nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_ParticleBuffer),
-            nvrhi::BindingSetItem::Texture_SRV(1, texHandle),
-            nvrhi::BindingSetItem::Sampler(0, m_LinearSampler)
+            BindingSetItem::ConstantBuffer(0, cameraBufferDescriptor),
+            BindingSetItem::ConstantBuffer(1, m_RenderCB->GetDescriptor()),
+            BindingSetItem::StructuredBuffer_SRV(0, m_ParticleSRV),
+            BindingSetItem::TextureSRV(1, resolvedTex->GetShaderResourceView()),
+            BindingSetItem::Sampler(0, m_LinearSampler)
         };
-        m_RenderBindingSet = device->createBindingSet(setDesc, m_RenderBindingLayout);
+        BindingSet::CreateOrUpdate(m_RenderBindingSet, "[ParticleSystem] RenderBindingSet", pipelineLayout, 0, setDesc);
         LOG_ASSERT(m_RenderBindingSet, "[ParticleSystem] Failed to create render binding set");
     }
 
-    void ParticleSystem::Simulate(nvrhi::ICommandList *cmd, float dt, const glm::vec3 &emitterPos, const ParticleEmitterSettings &settings)
+    void ParticleSystem::Simulate(nri::CommandBuffer *cmd, float dt, const glm::vec3 &emitterPos, const ParticleEmitterSettings &settings)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (dt <= 0.0f || m_MaxParticles == 0)
+        if (!cmd || dt <= 0.0f || m_MaxParticles == 0)
             return;
+
+        auto &nri = DeviceManager::GetInstance()->GetNRI();
 
         m_TotalTime += dt;
 
@@ -243,32 +322,55 @@ namespace ignite
 
         m_CurrentSpawnIndex = (m_CurrentSpawnIndex + spawnCount) % m_MaxParticles;
 
-        m_SimulateCB->SetData(cmd, &simCB, sizeof(simCB));
+        m_SimulateCB->SetData(Buffer(&simCB, sizeof(simCB)));
 
         // Barrier: Transition particle buffer to UAV for compute write
-        cmd->setBufferState(m_ParticleBuffer, nvrhi::ResourceStates::UnorderedAccess);
-        cmd->commitBarriers();
+        {
+            nri::BufferBarrierDesc bufBarrier = {};
+            bufBarrier.buffer = m_ParticleBuffer;
+            bufBarrier.before = { nri::AccessBits::SHADER_RESOURCE, nri::StageBits::VERTEX_SHADER };
+            bufBarrier.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
 
-        nvrhi::ComputeState compState;
-        compState.pipeline = m_ComputePipeline;
-        compState.bindings = { m_ComputeBindingSet };
-        cmd->setComputeState(compState);
+            nri::BarrierDesc barrierDesc = {};
+            barrierDesc.buffers = &bufBarrier;
+            barrierDesc.bufferNum = 1;
+            nri.CmdBarrier(*cmd, barrierDesc);
+        }
+
+        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_ComputePipelineLayout);
+        nri.CmdSetPipeline(*cmd, *m_ComputePipeline);
+
+        nri::SetDescriptorSetDesc setDesc = {};
+        setDesc.setIndex = 0;
+        setDesc.descriptorSet = m_ComputeBindingSet->GetHandle();
+        setDesc.bindPoint = nri::BindPoint::COMPUTE;
+        nri.CmdSetDescriptorSet(*cmd, setDesc);
 
         const uint32_t groupsX = (m_MaxParticles + 63) / 64;
-        cmd->dispatch(groupsX, 1, 1);
+        nri.CmdDispatch(*cmd, { groupsX, 1, 1 });
 
+        // Transition particle buffer back to ShaderResource for vertex shader read
+        {
+            nri::BufferBarrierDesc bufBarrier = {};
+            bufBarrier.buffer = m_ParticleBuffer;
+            bufBarrier.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
+            bufBarrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::StageBits::VERTEX_SHADER };
+
+            nri::BarrierDesc barrierDesc = {};
+            barrierDesc.buffers = &bufBarrier;
+            barrierDesc.bufferNum = 1;
+            nri.CmdBarrier(*cmd, barrierDesc);
+        }
     }
 
-    void ParticleSystem::Render(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const ParticleEmitterSettings &settings, uint32_t objectID)
+    void ParticleSystem::Render(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, const ParticleEmitterSettings &settings, uint32_t objectID)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!camera || !framebuffer || m_MaxParticles == 0)
+        if (!cmd || !camera || !framebuffer || m_MaxParticles == 0)
             return;
 
-        // Transition particle buffer to ShaderResource for vertex shader read
-        cmd->setBufferState(m_ParticleBuffer, nvrhi::ResourceStates::ShaderResource);
-        cmd->commitBarriers();
+        auto &nri = DeviceManager::GetInstance()->GetNRI();
 
         Ref<GraphicsPipeline> pipeline = GetOrCreateRenderPipeline(framebuffer, settings.blendMode);
         if (!pipeline || pipeline->GetHandle() == nullptr)
@@ -284,39 +386,62 @@ namespace ignite
         // Upload render params
         ParticleRenderCB renderCB;
         renderCB.invView = glm::inverse(camera->GetView());
-        renderCB.viewportSize = glm::vec2(static_cast<float>(framebuffer->getFramebufferInfo().width),static_cast<float>(framebuffer->getFramebufferInfo().height));
+        renderCB.viewportSize = glm::vec2(static_cast<float>(framebuffer->GetWidth()), static_cast<float>(framebuffer->GetHeight()));
         renderCB.useTexture = (texture && texture->IsReady()) ? 1 : 0;
         renderCB.objectID = objectID;
-        m_RenderCB->SetData(cmd, &renderCB, sizeof(renderCB));
+        m_RenderCB->SetData(Buffer(&renderCB, sizeof(renderCB)));
 
         FrameContext *frameContext = Renderer::GetCurrentFrameContext();
-        UpdateRenderBindingSet(frameContext->cameraBuffer.GetHandle(), texture);
+        UpdateRenderBindingSet(frameContext->cameraBuffer.GetDescriptor(), texture, pipeline->GetPipelineLayout());
 
-        nvrhi::GraphicsState state;
-        state.pipeline = *pipeline;
-        state.framebuffer = framebuffer;
-        state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-        state.bindings = { m_RenderBindingSet };
+        const bool startedRendering = !framebuffer->IsRendering();
+        if (startedRendering)
+            framebuffer->BeginRendering(cmd, false, false);
 
-        cmd->setGraphicsState(state);
+        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *pipeline->GetPipelineLayout());
+        nri.CmdSetPipeline(*cmd, *pipeline->GetHandle());
 
-        nvrhi::DrawArguments args;
-        args.vertexCount = 6;
-        args.instanceCount = m_MaxParticles;
-        cmd->draw(args);
+        nri::SetDescriptorSetDesc setDesc = {};
+        setDesc.setIndex = 0;
+        setDesc.descriptorSet = m_RenderBindingSet->GetHandle();
+        setDesc.bindPoint = nri::BindPoint::GRAPHICS;
+        nri.CmdSetDescriptorSet(*cmd, setDesc);
+
+        nri::DrawDesc drawDesc = {};
+        drawDesc.vertexNum = 6;
+        drawDesc.instanceNum = m_MaxParticles;
+        nri.CmdDraw(*cmd, drawDesc);
+
+        if (startedRendering)
+            framebuffer->EndRendering(cmd);
     }
 
-    void ParticleSystem::Reset(nvrhi::ICommandList *cmd)
+    void ParticleSystem::Reset(nri::CommandBuffer *cmd)
     {
-        std::vector<GPUParticle> initial(m_MaxParticles);
-        for (auto &p : initial)
-        {
-            p.lifetime = 999999.0f;
-            p.maxLifetime = 0.0f;
-            p.size = glm::vec2(0.0f);
-        }
+        if (!cmd || !m_ParticleBuffer || !m_ResetStagingBuffer)
+            return;
 
-        cmd->writeBuffer(m_ParticleBuffer, initial.data(), initial.size() * sizeof(GPUParticle));
+        auto &nri = DeviceManager::GetInstance()->GetNRI();
+        const uint64_t byteSize = static_cast<uint64_t>(m_MaxParticles) * sizeof(GPUParticle);
+
+        nri::BufferBarrierDesc beforeBarrier = {};
+        beforeBarrier.buffer = m_ParticleBuffer;
+        beforeBarrier.before = { nri::AccessBits::SHADER_RESOURCE, nri::StageBits::VERTEX_SHADER };
+        beforeBarrier.after = { nri::AccessBits::COPY_DESTINATION, nri::StageBits::COPY };
+        nri::BarrierDesc barrierDesc = {};
+        barrierDesc.buffers = &beforeBarrier;
+        barrierDesc.bufferNum = 1;
+        nri.CmdBarrier(*cmd, barrierDesc);
+
+        nri.CmdCopyBuffer(*cmd, *m_ParticleBuffer, 0, *m_ResetStagingBuffer, 0, byteSize);
+
+        nri::BufferBarrierDesc afterBarrier = {};
+        afterBarrier.buffer = m_ParticleBuffer;
+        afterBarrier.before = { nri::AccessBits::COPY_DESTINATION, nri::StageBits::COPY };
+        afterBarrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::StageBits::VERTEX_SHADER };
+        barrierDesc.buffers = &afterBarrier;
+        nri.CmdBarrier(*cmd, barrierDesc);
+
         m_CurrentSpawnIndex = 0;
         m_SpawnAccumulator = 0.0f;
         m_TotalTime = 0.0f;

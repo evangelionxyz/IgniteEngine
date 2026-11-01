@@ -85,8 +85,8 @@ namespace ignite
         createInfo.width = width;
         createInfo.height = height;
         createInfo.mipLevels = 1;
-        createInfo.format = nvrhi::Format::RGBA8_UNORM;
-        createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        createInfo.format = nri::Format::RGBA8_UNORM;
+        createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
         createInfo.samplerLinearFiltering = false;
         createInfo.keepInitialState = true;
         createInfo.keepCpuData = true;

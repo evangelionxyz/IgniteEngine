@@ -10,7 +10,7 @@ namespace ignite
     {
     }
 
-    void TerrainRenderer::RebuildMesh(nvrhi::ICommandList *cmd, TerrainComponent &comp, const glm::mat4 &worldTransform)
+    void TerrainRenderer::RebuildMesh(nri::CommandBuffer *cmd, TerrainComponent &comp, const glm::mat4 &worldTransform)
     {
         uint32_t res = std::max(2u, comp.resolution);
         uint32_t chunkCount = std::max(1u, comp.chunkCount);

@@ -241,8 +241,8 @@ namespace ignite
 
                     TextureCreateInfo createInfo;
                     createInfo.flip = true;
-                    createInfo.format = ToLowerCopy(texturePath.extension().string()) == ".exr" ? nvrhi::Format::RGBA32_FLOAT : nvrhi::Format::RGBA8_UNORM;
-                    createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+                    createInfo.format = ToLowerCopy(texturePath.extension().string()) == ".exr" ? nri::Format::RGBA32_SFLOAT : nri::Format::RGBA8_UNORM;
+                    createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
                     createInfo.keepInitialState = true;
                     createInfo.keepCpuData = true;
                     createInfo.deferGpuCreate = true;
@@ -751,7 +751,7 @@ namespace ignite
     // ===================================
     Ref<Material> GLTFMeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials,
         const std::vector<std::pair<std::string, Ref<Texture>>> &loadedTextures,std::array<MeshMaterialTextureMap, 5> &textureMap,
-        const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex)
+        const std::vector<nri::SamplerDesc> &loadedSamplers, int *materialIndex)
     {
         Ref<Material> material;
         *materialIndex = -1;
@@ -795,7 +795,7 @@ namespace ignite
 
             if (gltfMaterial.doubleSided)
             {
-                material->SetCullMode(nvrhi::RasterCullMode::None);
+                material->SetCullMode(nri::CullMode::NONE);
             }
 
             material->gpuData.emissiveFactor =
@@ -1547,8 +1547,8 @@ namespace ignite
                     createInfo.width = image.width;
                     createInfo.height = image.height;
                     createInfo.flip = false;
-                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                    createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+                    createInfo.format = nri::Format::RGBA8_UNORM;
+                    createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
                     createInfo.keepInitialState = true;
                     createInfo.keepCpuData = true;
                     createInfo.deferGpuCreate = true;
@@ -1613,9 +1613,9 @@ namespace ignite
         return gltfTextures;
     }
 
-    std::vector<nvrhi::SamplerDesc> GLTFMeshLoader::GetSamplers(const tinygltf::Model &model)
+    std::vector<nri::SamplerDesc> GLTFMeshLoader::GetSamplers(const tinygltf::Model &model)
     {
-        std::vector<nvrhi::SamplerDesc> samplers;
+        std::vector<nri::SamplerDesc> samplers;
         for (size_t i = 0; i < model.textures.size(); ++i)
         {
             const tinygltf::Texture &gltfTexture = model.textures[i];
@@ -1624,25 +1624,25 @@ namespace ignite
                 tinygltf::Sampler gltfSampler = model.samplers[gltfTexture.sampler];
 
                 gltfSampler.minFilter = TINYGLTF_TEXTURE_FILTER_LINEAR;
-                nvrhi::SamplerDesc desc;
-                desc.borderColor = nvrhi::Color(1.0f);
+                nri::SamplerDesc desc = {};
+                desc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR, nri::Filter::LINEAR }; desc.mipMax = 16.0f;
 
                 switch (gltfSampler.wrapS)
                 {
                 case TINYGLTF_TEXTURE_WRAP_REPEAT:
-                    desc.addressU = nvrhi::SamplerAddressMode::Repeat;
-                    desc.addressV = nvrhi::SamplerAddressMode::Repeat;
-                    desc.addressW = nvrhi::SamplerAddressMode::Repeat;
+                    desc.addressModes.u = nri::AddressMode::REPEAT;
+                    desc.addressModes.v = nri::AddressMode::REPEAT;
+                    desc.addressModes.w = nri::AddressMode::REPEAT;
                     break;
                 case TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE:
-                    desc.addressU = nvrhi::SamplerAddressMode::ClampToEdge;
-                    desc.addressV = nvrhi::SamplerAddressMode::ClampToEdge;
-                    desc.addressW = nvrhi::SamplerAddressMode::ClampToEdge;
+                    desc.addressModes.u = nri::AddressMode::CLAMP_TO_EDGE;
+                    desc.addressModes.v = nri::AddressMode::CLAMP_TO_EDGE;
+                    desc.addressModes.w = nri::AddressMode::CLAMP_TO_EDGE;
                     break;
                 case TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT:
-                    desc.addressU = nvrhi::SamplerAddressMode::MirroredRepeat;
-                    desc.addressV = nvrhi::SamplerAddressMode::MirroredRepeat;
-                    desc.addressW = nvrhi::SamplerAddressMode::MirroredRepeat;
+                    desc.addressModes.u = nri::AddressMode::MIRRORED_REPEAT;
+                    desc.addressModes.v = nri::AddressMode::MIRRORED_REPEAT;
+                    desc.addressModes.w = nri::AddressMode::MIRRORED_REPEAT;
                     break;
                 }
 

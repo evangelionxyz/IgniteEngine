@@ -9,25 +9,29 @@
 #include <unordered_map>
 #include <functional>
 
-#include <nvrhi/nvrhi.h>
+#include "ignite/core/types.hpp"
+#include "ignite/core/device/device_manager.hpp"
+#include "ignite/graphics/binding_set.hpp"
+#include "ignite/graphics/graphics_pipeline.hpp"
+#include "ignite/graphics/vertex_data.hpp"
 
 namespace ignite
 {
     struct BatchKey
     {
-        nvrhi::IBuffer *vertexBuffer;
-        nvrhi::IBuffer *indexBuffer;
-        nvrhi::IBindingSet *meshBindingSet;   // camera / object / scene bindings
-        nvrhi::IBindingSet *materialBindingSet;
-        nvrhi::IGraphicsPipeline *pipeline;
+        nri::Buffer *vertexBuffer = nullptr;
+        nri::Buffer *indexBuffer = nullptr;
+        nri::DescriptorSet *meshBindingSet = nullptr;   // camera / object / scene bindings
+        nri::DescriptorSet *materialBindingSet = nullptr;
+        nri::Pipeline *pipeline = nullptr;
 
         bool operator==(const BatchKey &o) const noexcept
         {
-            return vertexBuffer      == o.vertexBuffer
-                && indexBuffer       == o.indexBuffer
-                && meshBindingSet    == o.meshBindingSet
+            return vertexBuffer       == o.vertexBuffer
+                && indexBuffer        == o.indexBuffer
+                && meshBindingSet     == o.meshBindingSet
                 && materialBindingSet == o.materialBindingSet
-                && pipeline          == o.pipeline;
+                && pipeline           == o.pipeline;
         }
     };
 
@@ -55,12 +59,13 @@ namespace ignite
     // -----------------------------------------------------------------------
     struct DrawBatch
     {
-        nvrhi::BufferHandle vertexBuffer;
-        nvrhi::BufferHandle indexBuffer;
-        nvrhi::BindingSetHandle meshBindingSet;
-        nvrhi::BindingSetHandle materialBindingSet;
-        nvrhi::GraphicsPipelineHandle pipeline;
+        nri::Buffer *vertexBuffer = nullptr;
+        nri::Buffer *indexBuffer = nullptr;
+        Ref<BindingSet> meshBindingSet;
+        Ref<BindingSet> materialBindingSet;
+        Ref<GraphicsPipeline> pipeline;
 
+        uint32_t vertexStride = sizeof(VertexMeshStatic);
         uint32_t indexCount = 0;
 
         // Per-instance object indices (indices into the global Mesh_GPUData StructuredBuffer)
@@ -72,12 +77,6 @@ namespace ignite
     // -----------------------------------------------------------------------
     // BatchBuilder — accumulates render submissions and produces a flat list
     // of DrawBatch objects ready for GPU dispatch.
-    //
-    // Usage per frame:
-    //   builder.Clear();
-    //   for (each entity) builder.Submit(key, handles, objectIndex);
-    //   builder.Finalize();
-    //   for (auto& batch : builder.GetBatches()) { ... drawIndexed(instanceCount) ... }
     // -----------------------------------------------------------------------
     class BatchBuilder
     {
@@ -85,9 +84,9 @@ namespace ignite
         void Clear();
 
         /// Submit one instance to a batch identified by key.
-        void Submit(const BatchKey &key, nvrhi::BufferHandle vertexBuffer, nvrhi::BufferHandle indexBuffer,
-            nvrhi::BindingSetHandle meshBindingSet, nvrhi::BindingSetHandle materialBindingSet, nvrhi::GraphicsPipelineHandle pipeline,
-            uint32_t indexCount, uint32_t objectIndex);
+        void Submit(const BatchKey &key, nri::Buffer *vertexBuffer, nri::Buffer *indexBuffer,
+            const Ref<BindingSet> &meshBindingSet, const Ref<BindingSet> &materialBindingSet, const Ref<GraphicsPipeline> &pipeline,
+            uint32_t indexCount, uint32_t objectIndex, uint32_t vertexStride = sizeof(VertexMeshStatic));
 
         /// Sorts and flattens the internal map into the final batch vector.
         void Finalize();

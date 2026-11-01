@@ -8,9 +8,9 @@
 #include <mutex>
 #include <atomic>
 
-namespace nvrhi
+namespace nri
 {
-    class IDevice;
+    struct Device;
 }
 
 namespace ignite
@@ -27,8 +27,8 @@ namespace ignite
         // Mutex specifically for waitForIdle() calls - Vulkan's waitForIdle is NOT thread-safe!
         static std::mutex &GetWaitIdleMutex();
 
-        // Thread-safe wrapper for device->waitForIdle()
-        static void DeviceWaitIdle(nvrhi::IDevice *device);
+        // Thread-safe wrapper for device idle wait
+        static void DeviceWaitIdle(nri::Device *device = nullptr);
 
         // Helper to wait for any in-progress upload to complete
         static void WaitForCompletion();

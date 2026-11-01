@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "graphics_pipeline.hpp"
+#include "render_target.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
@@ -13,14 +14,49 @@
 
 namespace ignite
 {
-    GraphicsPipeline& GraphicsPipeline::AddBindingLayout(const nvrhi::BindingLayoutHandle& layout)
+    namespace
+    {
+        bool IsIntegerFormat(nri::Format format)
+        {
+            switch (format)
+            {
+                case nri::Format::R8_UINT:
+                case nri::Format::R8_SINT:
+                case nri::Format::RG8_UINT:
+                case nri::Format::RG8_SINT:
+                case nri::Format::RGBA8_UINT:
+                case nri::Format::RGBA8_SINT:
+                case nri::Format::R16_UINT:
+                case nri::Format::R16_SINT:
+                case nri::Format::RG16_UINT:
+                case nri::Format::RG16_SINT:
+                case nri::Format::RGBA16_UINT:
+                case nri::Format::RGBA16_SINT:
+                case nri::Format::R32_UINT:
+                case nri::Format::R32_SINT:
+                case nri::Format::RG32_UINT:
+                case nri::Format::RG32_SINT:
+                case nri::Format::RGB32_UINT:
+                case nri::Format::RGB32_SINT:
+                case nri::Format::RGBA32_UINT:
+                case nri::Format::RGBA32_SINT:
+                case nri::Format::R10_G10_B10_A2_UINT:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
+
+    GraphicsPipeline &GraphicsPipeline::AddBindingLayout(const BindingLayoutDesc &layout)
     {
         m_BindingLayouts.emplace_back(layout);
         return *this;
     }
 
-    GraphicsPipeline& GraphicsPipeline::SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile)
+    GraphicsPipeline &GraphicsPipeline::SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile)
     {
+        (void)recompile;
         UnsubscribeShaders();
         m_Shaders = shaders;
 
@@ -37,96 +73,131 @@ namespace ignite
         return *this;
     }
 
-    nvrhi::BindingLayoutHandle GraphicsPipeline::GetBindingLayout(uint32_t index)
+    const BindingLayoutDesc &GraphicsPipeline::GetBindingLayout(uint32_t index) const
     {
+        static const BindingLayoutDesc s_EmptyLayout = {};
         if (index < m_BindingLayouts.size())
             return m_BindingLayouts[index];
-        return nullptr;
+        return s_EmptyLayout;
     }
 
-    void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params)
+    void GraphicsPipeline::Build(RenderTarget *framebuffer, const GraphicsPipelineParams &params)
     {
         LOG_ASSERT(framebuffer, "[GraphicsPipeline] Framebuffer is null");
-        Build(framebuffer->getFramebufferInfo(), params);
+        Build(MakeFramebufferKey(framebuffer, params.fillMode, params.cullMode), params);
     }
 
-    void GraphicsPipeline::Build(const nvrhi::FramebufferInfoEx &framebufferInfo, const GraphicsPipelineParams &params)
+    void GraphicsPipeline::Build(const FramebufferKey &framebufferInfo, const GraphicsPipelineParams &params)
     {
         m_FramebufferInfo = framebufferInfo;
         m_HasFramebufferInfo = true;
-
-        nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
-
-        LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline");
-
         m_Params = params;
 
-        // create graphics pipeline
-        nvrhi::RenderState renderState;
-        for (int ti = 0; ti < 8; ++ti)
-        {
-            renderState.blendState.targets[ti].colorWriteMask = m_Params.colorWriteMask[ti];
-        }
-        renderState.blendState.targets[0].blendEnable = m_Params.enableBlend;
-        renderState.blendState.targets[0].srcBlend = m_Params.srcBlend;
-        renderState.blendState.targets[0].destBlend = m_Params.destBlend;
-        renderState.blendState.targets[0].srcBlendAlpha = m_Params.srcBlendAlpha;
-        renderState.blendState.targets[0].destBlendAlpha = m_Params.destBlendAlpha;
+        auto *dm = DeviceManager::GetInstance();
+        nri::Device *device = dm ? dm->GetDevice() : nullptr;
+        LOG_ASSERT(device, "[GraphicsPipeline] Device is null");
 
-        renderState.depthStencilState.depthWriteEnable = m_Params.enableDepthWrite;
-        renderState.depthStencilState.depthTestEnable = m_Params.enableDepthTest;
-        renderState.depthStencilState.depthFunc = m_Params.depthFunc;
-        renderState.depthStencilState.stencilEnable = m_Params.enableDepthStencil;
-        renderState.depthStencilState.frontFaceStencil = m_Params.frontFaceStencilDesc;
-        renderState.depthStencilState.backFaceStencil = m_Params.backFaceStencilDesc;
-        renderState.depthStencilState.stencilWriteMask = m_Params.stencilWriteMask;
-        renderState.depthStencilState.stencilReadMask = m_Params.stencilReadMask;
-        renderState.depthStencilState.stencilRefValue = m_Params.stencilRefValue;
+        ReleasePipelineResources();
 
-        renderState.rasterState.cullMode = m_Params.cullMode;
-        renderState.rasterState.fillMode = m_Params.fillMode;
-        renderState.rasterState.scissorEnable = m_Params.enableScissor;
-        renderState.rasterState.depthClipEnable = m_Params.enableDepthClip;
-        renderState.rasterState.frontCounterClockwise = false;
-        renderState.rasterState.multisampleEnable = m_FramebufferInfo.sampleCount > 1;
+        m_PipelineLayout = BindingLayoutDesc::CreatePipelineLayout(m_BindingLayouts, nri::StageBits::ALL, device);
+        LOG_ASSERT(m_PipelineLayout, "[GraphicsPipeline] Failed to create pipeline layout for '{}'", m_Name);
 
-        nvrhi::GraphicsPipelineDesc pipelineDesc;
+        nri::GraphicsPipelineDesc pipelineDesc = {};
+        pipelineDesc.pipelineLayout = m_PipelineLayout;
+
+        nri::VertexInputDesc vertexInputDesc = {};
+        std::vector<nri::ShaderDesc> shaderDescs;
+        shaderDescs.reserve(m_Shaders.size());
 
         for (const Ref<Shader> &shader : m_Shaders)
         {
+            if (!shader)
+                continue;
+
+            shaderDescs.push_back(shader->GetShaderDesc());
+
             if (shader->GetType() == UMBRA_SHADER_TYPE_VERTEX)
             {
-                pipelineDesc.setVertexShader(shader->GetHandle());
-
-				const auto &vertexAttributes = shader->GetVertexAttributes();
-                m_InputLayout = device->createInputLayout(vertexAttributes.data(), static_cast<uint32_t>(vertexAttributes.size()), nullptr);
-                LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
+                const auto &vertexAttributes = shader->GetVertexAttributes();
+                const auto &vertexStreams = shader->GetVertexStreams();
+                if (!vertexAttributes.empty())
+                {
+                    vertexInputDesc.attributes = vertexAttributes.data();
+                    vertexInputDesc.attributeNum = static_cast<uint8_t>(vertexAttributes.size());
+                    vertexInputDesc.streams = vertexStreams.data();
+                    vertexInputDesc.streamNum = static_cast<uint8_t>(vertexStreams.size());
+                    pipelineDesc.vertexInput = &vertexInputDesc;
+                }
             }
-            else if (shader->GetType() == UMBRA_SHADER_TYPE_PIXEL)
+        }
+
+        pipelineDesc.shaders = shaderDescs.data();
+        pipelineDesc.shaderNum = static_cast<uint32_t>(shaderDescs.size());
+
+        pipelineDesc.inputAssembly.topology = m_Params.primitiveType;
+
+        pipelineDesc.rasterization.fillMode = m_Params.fillMode;
+        pipelineDesc.rasterization.cullMode = m_Params.cullMode;
+        pipelineDesc.rasterization.frontCounterClockwise = false;
+        pipelineDesc.rasterization.depthClamp = !m_Params.enableDepthClip;
+        pipelineDesc.rasterization.depthBias = m_Params.depthBias;
+
+        nri::MultisampleDesc multisampleDesc = {};
+        multisampleDesc.sampleNum = static_cast<nri::Sample_t>(std::max<uint32_t>(1u, m_FramebufferInfo.sampleCount));
+        multisampleDesc.sampleMask = nri::ALL;
+        if (m_FramebufferInfo.sampleCount > 1)
+        {
+            pipelineDesc.multisample = &multisampleDesc;
+        }
+
+        std::vector<nri::ColorAttachmentDesc> colorAttachments(m_FramebufferInfo.colorFormats.size());
+        for (size_t ti = 0; ti < colorAttachments.size(); ++ti)
+        {
+            colorAttachments[ti].format = m_FramebufferInfo.colorFormats[ti];
+            colorAttachments[ti].colorWriteMask = (ti < 8) ? m_Params.colorWriteMask[ti] : nri::ColorWriteBits::RGBA;
+
+            if (ti == 0 && !IsIntegerFormat(m_FramebufferInfo.colorFormats[0]))
             {
-                pipelineDesc.setPixelShader(shader->GetHandle());
+                colorAttachments[ti].blendEnabled = m_Params.enableBlend;
+                colorAttachments[ti].colorBlend = { m_Params.srcBlend, m_Params.destBlend, m_Params.blendOp };
+                colorAttachments[ti].alphaBlend = { m_Params.srcBlendAlpha, m_Params.destBlendAlpha, m_Params.blendOpAlpha };
+            }
+            else
+            {
+                colorAttachments[ti].blendEnabled = false;
             }
         }
 
-        if (m_InputLayout)
+        pipelineDesc.outputMerger.colors = colorAttachments.empty() ? nullptr : colorAttachments.data();
+        pipelineDesc.outputMerger.colorNum = static_cast<uint32_t>(colorAttachments.size());
+        pipelineDesc.outputMerger.depthStencilFormat = m_FramebufferInfo.depthFormat;
+
+        if (m_FramebufferInfo.depthFormat != nri::Format::UNKNOWN)
         {
-            pipelineDesc.setInputLayout(m_InputLayout);
+            pipelineDesc.outputMerger.depth.write = m_Params.enableDepthWrite;
+            pipelineDesc.outputMerger.depth.compareOp = m_Params.enableDepthTest ? m_Params.depthFunc : nri::CompareOp::NONE;
+
+            if (m_Params.enableDepthStencil)
+            {
+                pipelineDesc.outputMerger.stencil.front = m_Params.frontFaceStencilDesc;
+                pipelineDesc.outputMerger.stencil.back = m_Params.backFaceStencilDesc;
+                pipelineDesc.outputMerger.stencil.front.compareMask = m_Params.stencilReadMask;
+                pipelineDesc.outputMerger.stencil.front.writeMask = m_Params.stencilWriteMask;
+                pipelineDesc.outputMerger.stencil.back.compareMask = m_Params.stencilReadMask;
+                pipelineDesc.outputMerger.stencil.back.writeMask = m_Params.stencilWriteMask;
+            }
         }
 
-        pipelineDesc.setRenderState(renderState);
-        pipelineDesc.primType = m_Params.primitiveType;
-
-        for (auto& layout : m_BindingLayouts)
+        const auto &nri = dm->GetCoreInterface();
+        nri::Result res = nri.CreateGraphicsPipeline(*device, pipelineDesc, m_Handle);
+        LOG_ASSERT(res == nri::Result::SUCCESS && m_Handle, "[GraphicsPipeline] Failed to create graphics pipeline '{}'", m_Name);
+        if (m_Handle)
         {
-            pipelineDesc.addBindingLayout(layout);
+            nri.SetDebugName(m_Handle, m_Name.c_str());
         }
-
-        // create with the same framebuffer to be rendered
-        m_Handle = device->createGraphicsPipeline(pipelineDesc, m_FramebufferInfo);
-        LOG_ASSERT(m_Handle, "Failed to create graphics pipeline");
     }
 
-    GraphicsPipeline::GraphicsPipeline(const std::string& name)
+    GraphicsPipeline::GraphicsPipeline(const std::string &name)
         : m_Name(name)
     {
         Renderer::IncrementPipelineCount(m_Name);
@@ -135,10 +206,30 @@ namespace ignite
     GraphicsPipeline::~GraphicsPipeline()
     {
         UnsubscribeShaders();
+        ReleasePipelineResources();
         Renderer::DecrementPipelineCount(m_Name);
     }
 
-    Ref<GraphicsPipeline> GraphicsPipeline::Create(const std::string& name)
+    void GraphicsPipeline::ReleasePipelineResources()
+    {
+        auto *dm = DeviceManager::GetInstance();
+        if (!dm || !dm->GetDevice())
+            return;
+
+        const auto &nri = dm->GetCoreInterface();
+        if (m_Handle)
+        {
+            nri.DestroyPipeline(m_Handle);
+            m_Handle = nullptr;
+        }
+        if (m_PipelineLayout)
+        {
+            nri.DestroyPipelineLayout(m_PipelineLayout);
+            m_PipelineLayout = nullptr;
+        }
+    }
+
+    Ref<GraphicsPipeline> GraphicsPipeline::Create(const std::string &name)
     {
         return CreateRef<GraphicsPipeline>(name);
     }
@@ -168,9 +259,9 @@ namespace ignite
 
             LOG_INFO("[GraphicsPipeline] Rebuilding '{}' after shader reload", m_Name);
 
-            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+            nri::Device *device = DeviceManager::GetInstance()->GetDevice();
             GPUUploadSync::DeviceWaitIdle(device);
-            m_Handle = nullptr;
+            ReleasePipelineResources();
 
             // Rebuild with the same framebuffer and params
             Build(m_FramebufferInfo, m_Params);

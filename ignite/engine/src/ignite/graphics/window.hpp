@@ -16,7 +16,7 @@ namespace ignite
     class IGN_API Window
     {
     public:
-        explicit Window(const char *windowTitle, const DeviceParameters &params, nvrhi::GraphicsAPI graphicsApi);
+        explicit Window(const char *windowTitle, const DeviceParameters &params, nri::GraphicsAPI graphicsApi);
 
         void PollEvents(const SDL_Event &event);
         void Destroy();

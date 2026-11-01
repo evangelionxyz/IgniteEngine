@@ -40,17 +40,17 @@ namespace ignite
     private:
         void SyncRuntimeMaterialFromSource();
 
-        void DrawEnvironment(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
-        void DrawPreviewStaticMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
-        void DrawPreviewSkeletalMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, FrameContext *frameContext);
+        void DrawEnvironment(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, FrameContext *frameContext);
+        void DrawPreviewStaticMesh(nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext);
+        void DrawPreviewSkeletalMesh(nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext);
 
         template<typename MeshT>
-        void DrawPreviewMeshImpl(const Ref<MeshT> &mesh, nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer,
+        void DrawPreviewMeshImpl(const Ref<MeshT> &mesh, nri::CommandBuffer *cmd, RenderTarget *rt,
             FrameContext *frameContext, const char *vertexShaderPath, const char *pixelShaderPath, EBindingLayout meshBindingLayout,
-            std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> &opaqueCache,
-            std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> &transparentCache);
+            std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> &opaqueCache,
+            std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> &transparentCache);
 
-        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
+        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
 
     private:
         Ref<SkeletalMesh> m_PreviewSkeletalMesh;
@@ -65,16 +65,16 @@ namespace ignite
         static Ref<Texture> m_DefaultEnvTexture;
         AssetHandle         m_EnvTexHandle = AssetHandle(0);
 
-        nvrhi::BindingLayoutHandle m_CompositeBindingLayout;
+        BindingLayoutDesc m_CompositeBindingLayout;
 
         // Separate pipeline caches for static and skeletal meshes to avoid shader collision
         // (static uses mesh_static.hlsl; skeletal uses mesh_anim.hlsl).
-        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_StaticGeometryPipelineCache;
-        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_StaticTransparentPipelineCache;
-        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_SkeletalGeometryPipelineCache;
-        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_SkeletalTransparentPipelineCache;
-        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_EnvironmentPipelineCache;
-        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_CompositePipelineCache;
+        std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> m_StaticGeometryPipelineCache;
+        std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> m_StaticTransparentPipelineCache;
+        std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> m_SkeletalGeometryPipelineCache;
+        std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> m_SkeletalTransparentPipelineCache;
+        std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> m_EnvironmentPipelineCache;
+        std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> m_CompositePipelineCache;
 
         std::vector<glm::mat4> m_BoneTransforms;
         uint32_t m_PreviewMouseX       = 0;
@@ -87,8 +87,8 @@ namespace ignite
 
         void EnsureBindingSets(FrameContext *frameContext);
 
-        std::unordered_map<FrameContext *, nvrhi::BindingSetHandle> m_StaticMeshBindingSets;
-        std::unordered_map<FrameContext *, nvrhi::BindingSetHandle> m_AnimatedBindingSets;
+        std::unordered_map<FrameContext *, Ref<BindingSet>> m_StaticMeshBindingSets;
+        std::unordered_map<FrameContext *, Ref<BindingSet>> m_AnimatedBindingSets;
     };
 }
 #endif

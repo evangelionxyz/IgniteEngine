@@ -63,6 +63,8 @@ project "Ignite.Test"
         "%{IncludeDir.MONO}",
         "%{IncludeDir.SPDLOG}",
         "%{IncludeDir.NVRHI}",
+        "%{IncludeDir.NRI}/Include",
+        "%{IncludeDir.NRI}/Source",
         "%{IncludeDir.STB}",
         "%{IncludeDir.VULKAN_HEADERS}",
         "%{IncludeDir.DIRECTX_HEADERS}",

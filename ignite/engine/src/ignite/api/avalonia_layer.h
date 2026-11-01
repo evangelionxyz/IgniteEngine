@@ -24,7 +24,7 @@ namespace ignite
         void OnDetach() override;
         void Resize(uint32_t width, uint32_t height);
         void OnUpdate(float deltaTime) override;
-        void OnRender(nvrhi::IFramebuffer *mainFramebuffer) override;
+        void OnRender(RenderTarget *mainFramebuffer) override;
         void OnGuiRender() override;
 
         // Scene Management

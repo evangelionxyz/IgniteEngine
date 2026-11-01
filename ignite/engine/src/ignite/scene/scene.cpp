@@ -222,6 +222,9 @@ namespace ignite
 
         // Clear entity map
         entities.clear();
+        m_LoadedAssets.clear();
+        m_SharedAnimatorCache.clear();
+        m_SharedAnimatorRuntime.clear();
         m_AssetManager = nullptr;
         m_Project = nullptr;
     }

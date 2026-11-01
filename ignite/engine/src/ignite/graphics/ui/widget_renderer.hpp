@@ -5,10 +5,10 @@
 #define IGN_WIDGET_RENDERER_HPP
 
 #include "ignite/core/types.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/renderer/batch_data.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/vertex_data.hpp"
-#include <nvrhi/nvrhi.h>
 #include <glm/glm.hpp>
 #include <vector>
 
@@ -28,8 +28,8 @@ namespace ignite
         WidgetRenderer(uint32_t width, uint32_t height);
         ~WidgetRenderer();
 
-        void Begin(nvrhi::ICommandList *cmd);
-        void Flush(nvrhi::IFramebuffer *framebuffer);
+        void Begin(nri::CommandBuffer *cmd);
+        void Flush(RenderTarget *framebuffer);
 
         void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1);
         void DrawRoundedQuad(const Rect &rect, float cornerRadius, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1);
@@ -40,7 +40,7 @@ namespace ignite
         void SetMousePosition(uint32_t mouseX, uint32_t mouseY);
 
         void Update(float deltaTime);
-        void Render(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb);
+        void Render(nri::CommandBuffer *cmd, RenderTarget *fb);
         void Resize(uint32_t width, uint32_t height);
 
         uint32_t GetOrInsertQuadTexture(const Ref<Texture> &texture);
@@ -71,7 +71,7 @@ namespace ignite
         uint32_t m_MouseX;
         uint32_t m_MouseY;
 
-        nvrhi::ICommandList *m_Cmd;
+        nri::CommandBuffer *m_Cmd = nullptr;
         Ref<ConstantBuffer> m_CameraBuffer;
 
         BatchRender<VertexWidgetQuad> m_QuadBatch;

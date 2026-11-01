@@ -16,19 +16,20 @@ namespace ignite
         m_Count = static_cast<uint32_t>(size) / sizeof(uint32_t);
         m_ByteSize = size;
 
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        nvrhi::BufferDesc desc;
-        desc.byteSize = size;
-        desc.isIndexBuffer = true;
-        desc.keepInitialState = true;
-        desc.initialState = nvrhi::ResourceStates::IndexBuffer;
-        desc.debugName = debugName;
+        auto *deviceManager = DeviceManager::GetInstance();
+        nri::Device *device = deviceManager->GetDevice();
+        const auto &nri = deviceManager->GetCoreInterface();
 
-        m_Handle = device->createBuffer(desc);
-        LOG_ASSERT(m_Handle, "[Index Buffer] Failed to create handle!");
+        nri::BufferDesc desc = {};
+        desc.size = size;
+        desc.usage = nri::BufferUsageBits::INDEX;
+
+        nri::Result result = nri.CreateCommittedBuffer(*device, nri::MemoryLocation::HOST_UPLOAD, 1.0f, desc, m_Handle);
+        LOG_ASSERT(result == nri::Result::SUCCESS && m_Handle, "[Index Buffer] Failed to create handle!");
         if (m_Handle)
         {
-            IGN_PROFILE_ALLOC_N(m_Handle.Get(), size, "GPU Index Buffer");
+            nri.SetDebugName((nri::Object*)m_Handle, debugName.c_str());
+            IGN_PROFILE_ALLOC_N(m_Handle, size, "GPU Index Buffer");
             Renderer::Stats.gpuIndexBufferBytes += size;
         }
     }
@@ -37,15 +38,29 @@ namespace ignite
     {
         if (m_Handle)
         {
-            IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Index Buffer");
+            IGN_PROFILE_FREE_N(m_Handle, "GPU Index Buffer");
             Renderer::Stats.gpuIndexBufferBytes -= m_ByteSize;
+            auto *deviceManager = DeviceManager::GetInstance();
+            if (deviceManager)
+            {
+                deviceManager->GetCoreInterface().DestroyBuffer(m_Handle);
+            }
             m_Handle = nullptr;
         }
     }
 
-    void IndexBuffer::SetData(nvrhi::ICommandList *cmd, void *data, size_t dataSize, size_t offset) const
+    void IndexBuffer::SetData(const void *data, size_t dataSize, size_t offset) const
     {
-        cmd->writeBuffer(m_Handle, data, dataSize, offset);
+        if (!m_Handle || !data || dataSize == 0) return;
+
+        auto *deviceManager = DeviceManager::GetInstance();
+        const auto &nri = deviceManager->GetCoreInterface();
+        void *mapped = nri.MapBuffer(*m_Handle, offset, dataSize);
+        if (mapped)
+        {
+            memcpy(mapped, data, dataSize);
+            nri.UnmapBuffer(*m_Handle);
+        }
     }
 
     Ref<IndexBuffer> IndexBuffer::Create(size_t size, const std::string &debugName)

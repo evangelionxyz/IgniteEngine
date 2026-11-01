@@ -54,18 +54,24 @@ namespace ignite
         m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
     }
 
-    void RuntimeLayer::OnRender(nvrhi::IFramebuffer *framebuffer)
+    void RuntimeLayer::OnRender(RenderTarget *framebuffer)
     {
         if (!m_ActiveScene || !m_ActiveProject)
             return;
 
-        FrameContext *frameContext = Renderer::GetCurrentFrameContext();
         Entity primaryCam = m_ActiveScene->GetPrimaryCamera();
+        if (!primaryCam || !primaryCam.HasComponent<CameraComponent>())
+            return;
+
         auto &cc = primaryCam.GetComponent<CameraComponent>();
 
         const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), m_FramebufferSize);
+        if (desiredSize.x == 0 || desiredSize.y == 0)
+            return;
+
         ProcessCameraViewportResize((ICamera *)&cc.camera, desiredSize);
 
+        FrameContext *frameContext = Renderer::GetCurrentFrameContext();
         m_SceneRenderer->Render((ICamera *)&cc.camera, frameContext, false, framebuffer);
     }
 
@@ -91,10 +97,13 @@ namespace ignite
         {
             if (Entity primaryCamera = m_ActiveScene->GetPrimaryCamera())
             {
-                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                if (camera == &cc.camera)
+                if (primaryCamera.HasComponent<CameraComponent>())
                 {
-                    postProcessing = cc.camera.postProcessing;
+                    const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                    if (camera == &cc.camera)
+                    {
+                        postProcessing = cc.camera.postProcessing;
+                    }
                 }
             }
         }
@@ -118,15 +127,7 @@ namespace ignite
 
             if (m_SceneRenderer)
             {
-                if (!target || targetSize.x == 0 || targetSize.y == 0 || sceneRTSize.x == 0 || sceneRTSize.y == 0)
-                {
-                    m_SceneRenderer->ResizeFramebuffer(camera, desiredSize.x, desiredSize.y);
-                }
-                else if (m_ResizingFrame++ >= 12)
-                {
-                    m_SceneRenderer->ResizeFramebuffer(camera, desiredSize.x, desiredSize.y);
-                    m_ResizingFrame = 0;
-                }
+                m_SceneRenderer->ResizeFramebuffer(camera, desiredSize.x, desiredSize.y);
             }
         }
     }
@@ -171,13 +172,27 @@ namespace ignite
         if (!m_ActiveProject)
             return;
 
+        GameUISystem::SetSceneContext(nullptr);
+
         if (m_ActiveScene)
             m_ActiveScene->OnStop();
 
-        AssetManager::GetInstance()->Reset();
+        if (m_SceneRenderer)
+            m_SceneRenderer->SetActiveScene(nullptr);
 
-        m_ActiveProject.reset();
+        if (m_ActiveProject)
+            m_ActiveProject->SetActiveScene(nullptr);
+
+        m_ActiveScene.reset();
+        m_SceneRenderer.reset();
+
         Project::CloseActive();
+        m_ActiveProject.reset();
+
+        if (auto *am = AssetManager::GetInstance())
+        {
+            am->Reset();
+        }
     }
 
     void RuntimeLayer::OnEvent(Event &e)

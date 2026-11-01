@@ -13,9 +13,9 @@ namespace ignite
         m_Batches.clear();
     }
 
-    void BatchBuilder::Submit(const BatchKey &key, nvrhi::BufferHandle vertexBuffer, nvrhi::BufferHandle indexBuffer,
-        nvrhi::BindingSetHandle meshBindingSet, nvrhi::BindingSetHandle materialBindingSet, nvrhi::GraphicsPipelineHandle pipeline,
-        uint32_t indexCount, uint32_t objectIndex)
+    void BatchBuilder::Submit(const BatchKey &key, nri::Buffer *vertexBuffer, nri::Buffer *indexBuffer,
+        const Ref<BindingSet> &meshBindingSet, const Ref<BindingSet> &materialBindingSet, const Ref<GraphicsPipeline> &pipeline,
+        uint32_t indexCount, uint32_t objectIndex, uint32_t vertexStride)
     {
         auto it = m_Map.find(key);
         if (it == m_Map.end())
@@ -26,6 +26,7 @@ namespace ignite
             batch.meshBindingSet = meshBindingSet;
             batch.materialBindingSet = materialBindingSet;
             batch.pipeline = pipeline;
+            batch.vertexStride = vertexStride;
             batch.indexCount = indexCount;
             batch.objectIndices.push_back(objectIndex);
             m_Map.emplace(key, std::move(batch));
@@ -49,7 +50,9 @@ namespace ignite
         // Optional: sort by pipeline to minimize state changes
         std::sort(m_Batches.begin(), m_Batches.end(), [](const DrawBatch &a, const DrawBatch &b)
         {
-            return a.pipeline.Get() < b.pipeline.Get();
+            const nri::Pipeline *pa = a.pipeline ? a.pipeline->GetHandle() : nullptr;
+            const nri::Pipeline *pb = b.pipeline ? b.pipeline->GetHandle() : nullptr;
+            return pa < pb;
         });
     }
 

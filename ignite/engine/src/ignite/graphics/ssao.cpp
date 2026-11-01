@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 
 #include "ssao.hpp"
+#include "binding_cache.hpp"
 
 #include "ignite/graphics/buffers/vertex_buffer.hpp"
 #include "ignite/graphics/shader.hpp"
@@ -14,44 +15,90 @@
 
 namespace ignite
 {
-    SSAO::SSAO(nvrhi::ICommandList *cmd, uint32_t width, uint32_t height)
+    namespace
+    {
+        void TransitionTexture(nri::CommandBuffer *cmd, nri::Texture *texture, nri::Layout beforeLayout, nri::Layout afterLayout)
+        {
+            if (!cmd || !texture || beforeLayout == afterLayout)
+                return;
+
+            nri::AccessBits beforeAccess = nri::AccessBits::NONE;
+            nri::StageBits beforeStages = nri::StageBits::ALL;
+            if (beforeLayout == nri::Layout::SHADER_RESOURCE)
+            {
+                beforeAccess = nri::AccessBits::SHADER_RESOURCE;
+                beforeStages = nri::StageBits::COMPUTE_SHADER | nri::StageBits::FRAGMENT_SHADER;
+            }
+            else if (beforeLayout == nri::Layout::SHADER_RESOURCE_STORAGE)
+            {
+                beforeAccess = nri::AccessBits::SHADER_RESOURCE_STORAGE;
+                beforeStages = nri::StageBits::COMPUTE_SHADER;
+            }
+
+            nri::AccessBits afterAccess = nri::AccessBits::NONE;
+            nri::StageBits afterStages = nri::StageBits::ALL;
+            if (afterLayout == nri::Layout::SHADER_RESOURCE)
+            {
+                afterAccess = nri::AccessBits::SHADER_RESOURCE;
+                afterStages = nri::StageBits::COMPUTE_SHADER | nri::StageBits::FRAGMENT_SHADER;
+            }
+            else if (afterLayout == nri::Layout::SHADER_RESOURCE_STORAGE)
+            {
+                afterAccess = nri::AccessBits::SHADER_RESOURCE_STORAGE;
+                afterStages = nri::StageBits::COMPUTE_SHADER;
+            }
+
+            nri::TextureBarrierDesc barrier = {};
+            barrier.texture = texture;
+            barrier.before = { beforeAccess, beforeLayout, beforeStages };
+            barrier.after = { afterAccess, afterLayout, afterStages };
+            barrier.layerNum = 1;
+            barrier.mipNum = 1;
+
+            nri::BarrierDesc barrierGroup = {};
+            barrierGroup.textures = &barrier;
+            barrierGroup.textureNum = 1;
+            DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, barrierGroup);
+        }
+    }
+
+    SSAO::SSAO(nri::CommandBuffer *cmd, uint32_t width, uint32_t height)
         : m_Width(std::max(width, 1u)), m_Height(std::max(height, 1u))
     {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto *dm = DeviceManager::GetInstance();
+        nri::Device *device = dm->GetDevice();
+        const auto &nri = dm->GetCoreInterface();
 
-        nvrhi::BindingLayoutDesc aoLayout;
-        aoLayout.visibility = nvrhi::ShaderType::Compute;
-        aoLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // depth
-        aoLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // noise
-        aoLayout.addItem(nvrhi::BindingLayoutItem::Texture_UAV(0)); // Target UAV
-        aoLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // clamp sampler
-        aoLayout.addItem(nvrhi::BindingLayoutItem::Sampler(1)); // repeat sampler
-        aoLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // params
-        m_AOLayout = device->createBindingLayout(aoLayout);
+        m_AOLayout.SetVisibility(nri::StageBits::COMPUTE_SHADER)
+            .AddItem(BindingLayoutItem::TextureSRV(0))            // depth
+            .AddItem(BindingLayoutItem::TextureSRV(1))            // noise
+            .AddItem(BindingLayoutItem::Texture_UAV(0))            // Target UAV
+            .AddItem(BindingLayoutItem::Sampler(0))                // clamp sampler
+            .AddItem(BindingLayoutItem::Sampler(1))                // repeat sampler
+            .AddItem(BindingLayoutItem::VolatileConstantBuffer(0));// params
 
-        // Blur layout now includes the depth texture for bilateral filtering.
-        nvrhi::BindingLayoutDesc blurLayout;
-        blurLayout.visibility = nvrhi::ShaderType::Compute;
-        blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // raw AO (or previous pass)
-        blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // depth texture for bilateral
-        blurLayout.addItem(nvrhi::BindingLayoutItem::Texture_UAV(0)); // Target UAV
-        blurLayout.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // clamp sampler
-        blurLayout.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // blur params
-        m_BlurLayout = device->createBindingLayout(blurLayout);
+        // Blur layout includes the depth texture for bilateral filtering.
+        m_BlurLayout.SetVisibility(nri::StageBits::COMPUTE_SHADER)
+            .AddItem(BindingLayoutItem::TextureSRV(0))            // raw AO (or previous pass)
+            .AddItem(BindingLayoutItem::TextureSRV(1))            // depth texture for bilateral
+            .AddItem(BindingLayoutItem::Texture_UAV(0))            // Target UAV
+            .AddItem(BindingLayoutItem::Sampler(0))                // clamp sampler
+            .AddItem(BindingLayoutItem::VolatileConstantBuffer(0));// blur params
 
-        auto clampSamplerDesc = nvrhi::SamplerDesc();
-        clampSamplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::ClampToEdge);
-        clampSamplerDesc.setAllFilters(false);
-        m_ClampSampler = device->createSampler(clampSamplerDesc);
+        nri::SamplerDesc clampSamplerDesc = {};
+        clampSamplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST, nri::Filter::NEAREST };
+        clampSamplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
+        nri.CreateSampler(*device, clampSamplerDesc, m_ClampSampler);
 
-        auto repeatSamplerDesc = nvrhi::SamplerDesc();
-        repeatSamplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat);
-        repeatSamplerDesc.setAllFilters(false);
-        m_RepeatSampler = device->createSampler(repeatSamplerDesc);
+        nri::SamplerDesc repeatSamplerDesc = {};
+        repeatSamplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST, nri::Filter::NEAREST };
+        repeatSamplerDesc.addressModes = { nri::AddressMode::REPEAT, nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
+        nri.CreateSampler(*device, repeatSamplerDesc, m_RepeatSampler);
 
-        constexpr uint32_t kSSAOCBVersions = 512;
+        constexpr uint32_t kSSAOCBVersions = 1;
         m_SSAOParamsBuffer = ConstantBuffer::Create(sizeof(SSAOParams), true, kSSAOCBVersions, "HBAO Params");
-        m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kSSAOCBVersions, "HBAO Blur Params");
+        m_BlurHorizontalParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kSSAOCBVersions, "HBAO Blur H Params");
+        m_BlurVerticalParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kSSAOCBVersions, "HBAO Blur V Params");
 
         m_AOComputeShader = Shader::Create("resources/shaders/ssao.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
         m_BlurComputeShader = Shader::Create("resources/shaders/ssao_blur.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
@@ -63,10 +110,22 @@ namespace ignite
 
     SSAO::~SSAO()
     {
-        m_AOComputePipeline = nullptr;
-        m_BlurComputePipeline = nullptr;
-        m_ClampSampler = nullptr;
-        m_RepeatSampler = nullptr;
+        InvalidatePipelines();
+        auto *dm = DeviceManager::GetInstance();
+        if (dm && dm->GetDevice())
+        {
+            const auto &nri = dm->GetCoreInterface();
+            if (m_ClampSampler)
+            {
+                nri.DestroyDescriptor(m_ClampSampler);
+                m_ClampSampler = nullptr;
+            }
+            if (m_RepeatSampler)
+            {
+                nri.DestroyDescriptor(m_RepeatSampler);
+                m_RepeatSampler = nullptr;
+            }
+        }
     }
 
     void SSAO::BuildKernel()
@@ -91,7 +150,7 @@ namespace ignite
         }
     }
 
-    void SSAO::BuildNoise(nvrhi::ICommandList *cmd)
+    void SSAO::BuildNoise(nri::CommandBuffer *cmd)
     {
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
         std::default_random_engine rng;
@@ -115,13 +174,12 @@ namespace ignite
         TextureCreateInfo info;
         info.width = 4;
         info.height = 4;
-        info.format = nvrhi::Format::RGBA32_FLOAT;
-        info.dimension = nvrhi::TextureDimension::Texture2D;
-        info.initialState = nvrhi::ResourceStates::ShaderResource;
-        info.samplerAddressU = nvrhi::SamplerAddressMode::Repeat;
-        info.samplerAddressV = nvrhi::SamplerAddressMode::Repeat;
+        info.format = nri::Format::RGBA32_SFLOAT;
+        info.dimension = nri::TextureType::TEXTURE_2D;
+        info.initialLayout = nri::Layout::SHADER_RESOURCE;
+        info.samplerAddressU = nri::AddressMode::REPEAT;
+        info.samplerAddressV = nri::AddressMode::REPEAT;
         info.samplerLinearFiltering = false;
-        info.keepInitialState = true;
         info.bindless = false;
 
         m_NoiseTexture = Texture::Create(pixelData, info, cmd, "HBAO Noise");
@@ -136,11 +194,10 @@ namespace ignite
         TextureCreateInfo info;
         info.width = m_Width;
         info.height = m_Height;
-        info.format = nvrhi::Format::R8_UNORM;
+        info.format = nri::Format::R8_UNORM;
         info.isUAV = true;
         info.isRenderTarget = false;
-        info.initialState = nvrhi::ResourceStates::UnorderedAccess;
-        info.keepInitialState = true;
+        info.initialLayout = nri::Layout::SHADER_RESOURCE;
         info.bindless = false;
 
         m_AOTex = Texture::Create(info, "[SSAO Raw UAV]");
@@ -151,8 +208,31 @@ namespace ignite
 
     void SSAO::InvalidatePipelines()
     {
-        m_AOComputePipeline = nullptr;
-        m_BlurComputePipeline = nullptr;
+        auto *dm = DeviceManager::GetInstance();
+        if (dm && dm->GetDevice())
+        {
+            const auto &nri = dm->GetCoreInterface();
+            if (m_AOComputePipeline)
+            {
+                nri.DestroyPipeline(m_AOComputePipeline);
+                m_AOComputePipeline = nullptr;
+            }
+            if (m_BlurComputePipeline)
+            {
+                nri.DestroyPipeline(m_BlurComputePipeline);
+                m_BlurComputePipeline = nullptr;
+            }
+            if (m_AOPipelineLayout)
+            {
+                nri.DestroyPipelineLayout(m_AOPipelineLayout);
+                m_AOPipelineLayout = nullptr;
+            }
+            if (m_BlurPipelineLayout)
+            {
+                nri.DestroyPipelineLayout(m_BlurPipelineLayout);
+                m_BlurPipelineLayout = nullptr;
+            }
+        }
     }
 
     void SSAO::EnsurePipelines()
@@ -163,30 +243,36 @@ namespace ignite
         }
 
         IGN_PROFILE_SCOPE_COLOR("HBAO::EnsurePipelines", 0x404040FF);
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto *dm = DeviceManager::GetInstance();
+        nri::Device *device = dm->GetDevice();
+        const auto &nri = dm->GetCoreInterface();
 
-        auto buildComputePipeline = [&](Ref<Shader> computeShader, nvrhi::BindingLayoutHandle bindingLayout) -> nvrhi::ComputePipelineHandle
-        {
-            nvrhi::ComputePipelineDesc desc;
-            desc.setComputeShader(computeShader->GetHandle());
-            desc.addBindingLayout(bindingLayout);
-            return device->createComputePipeline(desc);
-        };
+        m_AOPipelineLayout = m_AOLayout.CreatePipelineLayout(nri::StageBits::COMPUTE_SHADER, device);
+        nri::ComputePipelineDesc aoDesc = {};
+        aoDesc.pipelineLayout = m_AOPipelineLayout;
+        aoDesc.shader = m_AOComputeShader->GetShaderDesc();
+        nri.CreateComputePipeline(*device, aoDesc, m_AOComputePipeline);
 
-        m_AOComputePipeline = buildComputePipeline(m_AOComputeShader, m_AOLayout);
-        m_BlurComputePipeline = buildComputePipeline(m_BlurComputeShader, m_BlurLayout);
+        m_BlurPipelineLayout = m_BlurLayout.CreatePipelineLayout(nri::StageBits::COMPUTE_SHADER, device);
+        nri::ComputePipelineDesc blurDesc = {};
+        blurDesc.pipelineLayout = m_BlurPipelineLayout;
+        blurDesc.shader = m_BlurComputeShader->GetShaderDesc();
+        nri.CreateComputePipeline(*device, blurDesc, m_BlurComputePipeline);
     }
 
-    void SSAO::Build(nvrhi::ICommandList *cmd, const Ref<Texture> &depthTexture, ICamera *camera,
+    void SSAO::Build(nri::CommandBuffer *cmd, const Ref<Texture> &depthTexture, ICamera *camera,
         const PostProcessing &settings, const Ref<VertexBuffer> &fullscreenVertexBuffer)
     {
-        if (!cmd || !depthTexture) return;
+        (void)fullscreenVertexBuffer;
+        if (!cmd || !depthTexture)
+            return;
 
         EnsurePipelines();
-        if (!m_AOComputePipeline || !m_BlurComputePipeline) return;
+        if (!m_AOComputePipeline || !m_BlurComputePipeline)
+            return;
 
         IGN_PROFILE_SCOPE_COLOR("HBAO::Build", 0x404040FF);
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
 
         // ===================================================================
         // Pass 1: Raw SSAO Compute
@@ -194,30 +280,36 @@ namespace ignite
         SSAOParams params;
         params.projection = camera->GetProjection();
         params.projectionInv = glm::inverse(camera->GetProjection());
-        for (int i = 0; i < 32; ++i) params.samples[i] = m_Kernel[i];
+        for (int i = 0; i < 32; ++i)
+            params.samples[i] = m_Kernel[i];
         params.params = glm::vec4(settings.aoRadius, settings.aoBias, settings.aoPower, 0.0f);
         params.noiseScale = glm::vec4(static_cast<float>(m_Width) / 4.0f, static_cast<float>(m_Height) / 4.0f, 0.0f, 0.0f);
 
         m_SSAOParamsBuffer->SetData(cmd, &params, sizeof(params));
 
-        cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
-        cmd->commitBarriers();
+        TransitionTexture(cmd, m_AOTex->GetHandle(), nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
 
-        auto aoDesc = nvrhi::BindingSetDesc();
-        aoDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, depthTexture->GetHandle()));
-        aoDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, m_NoiseTexture->GetHandle()));
-        aoDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(0, m_AOTex->GetHandle()));
-        aoDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_ClampSampler));
-        aoDesc.addItem(nvrhi::BindingSetItem::Sampler(1, m_RepeatSampler));
-        aoDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_SSAOParamsBuffer->GetHandle()));
-        nvrhi::BindingSetHandle aoBindingSet = device->createBindingSet(aoDesc, m_AOLayout);
+        BindingSetDesc aoDesc;
+        aoDesc.AddItem(BindingSetItem::TextureSRV(0, depthTexture->GetShaderResourceView()));
+        aoDesc.AddItem(BindingSetItem::TextureSRV(1, m_NoiseTexture->GetShaderResourceView()));
+        aoDesc.AddItem(BindingSetItem::TextureUAV(0, m_AOTex->GetStorageView(0)));
+        aoDesc.AddItem(BindingSetItem::Sampler(0, m_ClampSampler));
+        aoDesc.AddItem(BindingSetItem::Sampler(1, m_RepeatSampler));
+        aoDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_SSAOParamsBuffer->GetDescriptor()));
+        Ref<BindingSet> aoBindingSet = BindingCache::GetOrCreateBindingSet(aoDesc, m_AOPipelineLayout, 0, "SSAO Compute");
 
         {
-            nvrhi::ComputeState state;
-            state.pipeline = m_AOComputePipeline;
-            state.bindings = { aoBindingSet };
-            cmd->setComputeState(state);
-            cmd->dispatch((m_Width + 7) / 8, (m_Height + 7) / 8, 1);
+            nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_AOPipelineLayout);
+            nri.CmdSetPipeline(*cmd, *m_AOComputePipeline);
+
+            nri::SetDescriptorSetDesc setDesc = {};
+            setDesc.setIndex = 0;
+            setDesc.descriptorSet = aoBindingSet->GetHandle();
+            setDesc.bindPoint = nri::BindPoint::COMPUTE;
+            nri.CmdSetDescriptorSet(*cmd, setDesc);
+
+            nri::DispatchDesc dispatchDesc = { (m_Width + 7) / 8, (m_Height + 7) / 8, 1 };
+            nri.CmdDispatch(*cmd, dispatchDesc);
         }
 
         // ===================================================================
@@ -228,31 +320,35 @@ namespace ignite
             blurParams.horizontal = 1.0f;
             blurParams.nearPlane = camera->nearPlane;
             blurParams.farPlane = camera->farPlane;
-            blurParams.depthSharpness = 10.0f; // bilateral edge sharpness
-            m_BlurParamsBuffer->SetData(cmd, &blurParams, sizeof(blurParams));
+            blurParams.depthSharpness = 10.0f;
+            m_BlurHorizontalParamsBuffer->SetData(cmd, &blurParams, sizeof(blurParams));
 
-            cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
-            cmd->setTextureState(m_BlurTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
-            cmd->commitBarriers();
+            TransitionTexture(cmd, m_AOTex->GetHandle(), nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
+            TransitionTexture(cmd, m_BlurTex->GetHandle(), nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
 
-            auto blurDesc = nvrhi::BindingSetDesc();
-            blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_AOTex->GetHandle()));
-            blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, depthTexture->GetHandle()));
-            blurDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(0, m_BlurTex->GetHandle()));
-            blurDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_ClampSampler));
-            blurDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_BlurParamsBuffer->GetHandle()));
-            nvrhi::BindingSetHandle blurBindingSetH = device->createBindingSet(blurDesc, m_BlurLayout);
+            BindingSetDesc blurDesc;
+            blurDesc.AddItem(BindingSetItem::TextureSRV(0, m_AOTex->GetShaderResourceView()));
+            blurDesc.AddItem(BindingSetItem::TextureSRV(1, depthTexture->GetShaderResourceView()));
+            blurDesc.AddItem(BindingSetItem::TextureUAV(0, m_BlurTex->GetStorageView(0)));
+            blurDesc.AddItem(BindingSetItem::Sampler(0, m_ClampSampler));
+            blurDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_BlurHorizontalParamsBuffer->GetDescriptor()));
+            Ref<BindingSet> blurBindingSetH = BindingCache::GetOrCreateBindingSet(blurDesc, m_BlurPipelineLayout, 0, "SSAO Blur H");
 
-            nvrhi::ComputeState state;
-            state.pipeline = m_BlurComputePipeline;
-            state.bindings = { blurBindingSetH };
-            cmd->setComputeState(state);
-            cmd->dispatch((m_Width + 7) / 8, (m_Height + 7) / 8, 1);
+            nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_BlurPipelineLayout);
+            nri.CmdSetPipeline(*cmd, *m_BlurComputePipeline);
+
+            nri::SetDescriptorSetDesc setDesc = {};
+            setDesc.setIndex = 0;
+            setDesc.descriptorSet = blurBindingSetH->GetHandle();
+            setDesc.bindPoint = nri::BindPoint::COMPUTE;
+            nri.CmdSetDescriptorSet(*cmd, setDesc);
+
+            nri::DispatchDesc dispatchDesc = { (m_Width + 7) / 8, (m_Height + 7) / 8, 1 };
+            nri.CmdDispatch(*cmd, dispatchDesc);
         }
 
         // ===================================================================
         // Pass 3: Bilateral Blur — Vertical (m_BlurTex → m_AOTex)
-        // The final blurred AO result ends up in m_AOTex.
         // ===================================================================
         {
             BlurParams blurParams;
@@ -260,43 +356,47 @@ namespace ignite
             blurParams.nearPlane = camera->nearPlane;
             blurParams.farPlane = camera->farPlane;
             blurParams.depthSharpness = 10.0f;
-            m_BlurParamsBuffer->SetData(cmd, &blurParams, sizeof(blurParams));
+            m_BlurVerticalParamsBuffer->SetData(cmd, &blurParams, sizeof(blurParams));
 
-            cmd->setTextureState(m_BlurTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
-            cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
-            cmd->commitBarriers();
+            TransitionTexture(cmd, m_BlurTex->GetHandle(), nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
+            TransitionTexture(cmd, m_AOTex->GetHandle(), nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
 
-            auto blurDesc = nvrhi::BindingSetDesc();
-            blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_BlurTex->GetHandle()));
-            blurDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, depthTexture->GetHandle()));
-            blurDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(0, m_AOTex->GetHandle()));
-            blurDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_ClampSampler));
-            blurDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_BlurParamsBuffer->GetHandle()));
-            nvrhi::BindingSetHandle blurBindingSetV = device->createBindingSet(blurDesc, m_BlurLayout);
+            BindingSetDesc blurDesc;
+            blurDesc.AddItem(BindingSetItem::TextureSRV(0, m_BlurTex->GetShaderResourceView()));
+            blurDesc.AddItem(BindingSetItem::TextureSRV(1, depthTexture->GetShaderResourceView()));
+            blurDesc.AddItem(BindingSetItem::TextureUAV(0, m_AOTex->GetStorageView(0)));
+            blurDesc.AddItem(BindingSetItem::Sampler(0, m_ClampSampler));
+            blurDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_BlurVerticalParamsBuffer->GetDescriptor()));
+            Ref<BindingSet> blurBindingSetV = BindingCache::GetOrCreateBindingSet(blurDesc, m_BlurPipelineLayout, 0, "SSAO Blur V");
 
-            nvrhi::ComputeState state;
-            state.pipeline = m_BlurComputePipeline;
-            state.bindings = { blurBindingSetV };
-            cmd->setComputeState(state);
-            cmd->dispatch((m_Width + 7) / 8, (m_Height + 7) / 8, 1);
+            nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_BlurPipelineLayout);
+            nri.CmdSetPipeline(*cmd, *m_BlurComputePipeline);
+
+            nri::SetDescriptorSetDesc setDesc = {};
+            setDesc.setIndex = 0;
+            setDesc.descriptorSet = blurBindingSetV->GetHandle();
+            setDesc.bindPoint = nri::BindPoint::COMPUTE;
+            nri.CmdSetDescriptorSet(*cmd, setDesc);
+
+            nri::DispatchDesc dispatchDesc = { (m_Width + 7) / 8, (m_Height + 7) / 8, 1 };
+            nri.CmdDispatch(*cmd, dispatchDesc);
         }
 
         // Final result is in m_AOTex — transition to SRV for composite pass
-        cmd->setTextureState(m_AOTex->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
-        cmd->commitBarriers();
+        TransitionTexture(cmd, m_AOTex->GetHandle(), nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
     }
 
     void SSAO::Resize(uint32_t width, uint32_t height)
     {
-        if (width == 0 || height == 0) return;
-        if (m_Width == std::max(width / 2, 1u) && m_Height == std::max(height / 2, 1u)) return;
+        if (width == 0 || height == 0)
+            return;
+        if (m_Width == std::max(width / 2, 1u) && m_Height == std::max(height / 2, 1u))
+            return;
         CreateTextures(width, height);
     }
 
     Ref<Texture> SSAO::GetAOTexture() const
     {
-        // After the two-pass blur (H→m_BlurTex, V→m_AOTex), the final
-        // blurred AO result lives in m_AOTex.
         return m_AOTex;
     }
 }

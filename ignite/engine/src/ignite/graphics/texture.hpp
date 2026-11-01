@@ -7,6 +7,7 @@
 #include "ignite/asset/asset.hpp"
 #include "mip_generator.hpp"
 
+#include <NRI.h>
 #include <openexr.h>
 #include <openexr_errors.h>
 
@@ -34,23 +35,26 @@ namespace ignite
         bool isTypeless = false;
         bool isUAV = false;
         bool isShadingRateSurface = false;
+        bool isCubeMap = false;
         bool keepCpuData = false;
         bool deferGpuCreate = false;
-		bool bindless = true;
+        bool bindless = true;
 
         bool keepInitialState = false;
         bool isNativeObject = false;
 
         void *nativeObjectPtr = nullptr;
-        nvrhi::ObjectType nativeObjectType = 0;
+        uint32_t nativeObjectType = 0;
 
-        nvrhi::Format format = nvrhi::Format::UNKNOWN;
-        nvrhi::ResourceStates initialState = nvrhi::ResourceStates::Unknown;
-        nvrhi::TextureDimension dimension = nvrhi::TextureDimension::Texture2D;
+        nri::Format format = nri::Format::UNKNOWN;
+        nri::AccessBits initialAccess = nri::AccessBits::SHADER_RESOURCE;
+        nri::Layout initialLayout = nri::Layout::SHADER_RESOURCE;
+        nri::StageBits initialStages = nri::StageBits::ALL;
+        nri::TextureType dimension = nri::TextureType::TEXTURE_2D;
 
-        nvrhi::SamplerAddressMode samplerAddressU = nvrhi::SamplerAddressMode::ClampToEdge;
-        nvrhi::SamplerAddressMode samplerAddressV = nvrhi::SamplerAddressMode::ClampToEdge;
-        nvrhi::SamplerAddressMode samplerAddressW = nvrhi::SamplerAddressMode::ClampToEdge;
+        nri::AddressMode samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
+        nri::AddressMode samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
+        nri::AddressMode samplerAddressW = nri::AddressMode::CLAMP_TO_EDGE;
         bool samplerLinearFiltering = true;
     };
 
@@ -151,7 +155,7 @@ namespace ignite
             }
         }
 
-        IGN_API bool LoadEXRTexture(const std::filesystem::path &filepath, int &outWidth, int &outHeight, nvrhi::Format &outFormat, std::vector<uint8_t> &data);
+        IGN_API bool LoadEXRTexture(const std::filesystem::path &filepath, int &outWidth, int &outHeight, nri::Format &outFormat, std::vector<uint8_t> &data);
 
         // Utility function to flip image buffer vertically
         void FlipImageBuffer(std::vector<uint8_t> &data, int width, int height, int rowPitch);
@@ -162,15 +166,15 @@ namespace ignite
     public:
         Texture() = default;
         Texture(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
-        Texture(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
-        Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        Texture(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nri::CommandBuffer *cmd, const std::string &debugName = "Texture Class");
+        Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nri::CommandBuffer *cmd, const std::string &debugName = "Texture Class");
 
         ~Texture() override;
 
         static Ref<Texture> Create();
         static Ref<Texture> Create(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
-        static Ref<Texture> Create(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
-        static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nri::CommandBuffer *cmd, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nri::CommandBuffer *cmd, const std::string &debugName = "Texture Class");
 
         static TextureCreateInfo GetDefaultCreateInfo(const AssetMetaData &metadata);
         static std::filesystem::path GetMetaPath(Project *project, const AssetMetaData &metadata);
@@ -178,8 +182,8 @@ namespace ignite
         static bool LoadCreateInfoFile(const std::filesystem::path &filepath, TextureCreateInfo &outCreateInfo);
         static bool SerializeMetaFile(const std::filesystem::path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo);
 
-        void SetData(nvrhi::ICommandList *cmd, uint32_t channelCount);
-        void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);
+        void SetData(nri::CommandBuffer *cmd, uint32_t channelCount);
+        void SetData(nri::CommandBuffer *cmd, uint32_t rowPitch, uint32_t depthPitch);
         void PrepareUploadData(uint32_t channelCount);
         void PrepareUploadData(uint32_t rowPitch, uint32_t depthPitch);
 
@@ -187,20 +191,36 @@ namespace ignite
         static void SubmitAsyncUpload(Ref<Texture> texture, std::function<void()> onComplete = nullptr);
         static void ProcessAsyncUploads(uint32_t maxUploadsPerFrame = 4, uint64_t maxBytesPerFrame = 16 * 1024 * 1024);
         static bool HasPendingUploads();
+        static void ClearPendingUploads();
 
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
-        nvrhi::TextureHandle GetHandle() { return m_Handle; }
-        nvrhi::SamplerHandle GetSampler() const { return m_Sampler; }
+        nri::Texture *GetHandle() const { return m_Handle; }
+        nri::Descriptor *GetShaderResourceView() const { return m_ShaderResourceView; }
+        nri::Descriptor *GetMipShaderResourceView(uint32_t mipLevel);
+        nri::Descriptor *GetStorageView(uint32_t mipLevel = 0);
+        nri::Descriptor *GetSampler() const { return m_Sampler; }
         uint32_t GetBindlessIndex() const;
 
-        static void *GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device);
         static uint32_t CalculateMaxMipLevels(uint32_t width, uint32_t height, uint32_t depth = 1);
+
+        bool ReadPixelData(void *outPixels, size_t bufferSize, uint32_t x = 0, uint32_t y = 0, uint32_t width = 0, uint32_t height = 0);
+        uint32_t ReadPixel(uint32_t x, uint32_t y);
 
         int GetWidth() const { return m_CreateInfo.width; }
         int GetHeight() const { return m_CreateInfo.height; }
         int GetChannels() const { return 4; }
         int GetMipLevel() const { return m_CreateInfo.mipLevels; }
-        nvrhi::Format GetFormat() const { return m_CreateInfo.format; }
+        nri::Format GetFormat() const { return m_CreateInfo.format; }
+        nri::Layout GetCurrentLayout() const { return m_CurrentLayout; }
+        nri::AccessBits GetCurrentAccess() const { return m_CurrentAccess; }
+        nri::StageBits GetCurrentStages() const { return m_CurrentStages; }
+
+        void SetCurrentState(nri::Layout layout, nri::AccessBits access = nri::AccessBits::NONE, nri::StageBits stages = nri::StageBits::ALL)
+        {
+            m_CurrentLayout = layout;
+            m_CurrentAccess = access;
+            m_CurrentStages = stages;
+        }
 
         const std::string &GetDebugName() const { return m_DebugName; }
         const std::filesystem::path &GetFilepath() { return m_Filepath; }
@@ -209,10 +229,9 @@ namespace ignite
         static AssetType GetStaticType() { return AssetType::Texture; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
-        bool operator ==(const Texture &other) const  { return m_Handle.Get() == other.m_Handle.Get(); }
+        bool operator ==(const Texture &other) const { return m_Handle == other.m_Handle; }
 
-        operator nvrhi::TextureHandle() const { return m_Handle; }
-        operator nvrhi::ITexture *() const { return m_Handle; }
+        operator nri::Texture *() const { return m_Handle; }
 
     private:
         void CreateTextureHandle();
@@ -222,15 +241,22 @@ namespace ignite
         std::vector<uint8_t> m_Buffer;
         TextureCreateInfo m_CreateInfo;
         std::filesystem::path m_Filepath;
-        nvrhi::TextureHandle m_Handle;
-        nvrhi::SamplerHandle m_Sampler;
+        nri::Texture *m_Handle = nullptr;
+        nri::Descriptor *m_ShaderResourceView = nullptr;
+        std::vector<nri::Descriptor *> m_MipSRVs;
+        std::vector<nri::Descriptor *> m_StorageViews;
+        nri::Descriptor *m_Sampler = nullptr;
+        nri::Buffer *m_StagingBuffer = nullptr;
         std::string m_DebugName;
         uint32_t m_BindlessIndex = 0xFFFFFFFF;
         bool m_TracyAllocationTracked = false;
         bool m_UploadDataPrepared = false;
         std::vector<MipLevelData> m_PreparedMipChain;
-    };
 
+        nri::AccessBits m_CurrentAccess = nri::AccessBits::SHADER_RESOURCE;
+        nri::Layout m_CurrentLayout = nri::Layout::SHADER_RESOURCE;
+        nri::StageBits m_CurrentStages = nri::StageBits::ALL;
+    };
 }
 
 #endif

@@ -4,8 +4,10 @@
 
 #include "environment.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
+#include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/binding_cache.hpp"
+#include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
@@ -20,27 +22,34 @@ namespace ignite
 {
     Environment::Environment()
     {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto &nri = DeviceManager::GetInstance()->GetNRI();
+        nri::Device *device = DeviceManager::GetInstance()->GetDevice();
 
         CreateVerticesIndices();
 
         // create vertex buffer
-        m_VertexBuffer = VertexBuffer::Create(sizeof(m_Vertices), "Environment Vertex Buffer");
+        m_VertexBuffer = VertexBuffer::Create(sizeof(glm::vec3) * m_Vertices.size(), "Environment Vertex Buffer");
         m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * m_Indices.size(), "Environment Index Buffer");
 
         m_HDRTexture = Renderer::GetBlackTexture();
         m_ProceduralSky = CreateRef<ProceduralSky>();
         m_SkyType = SkyType::HDRI;
 
-        auto samplerDesc = nvrhi::SamplerDesc();
-        samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
-        m_Sampler = DeviceManager::GetInstance()->GetDevice()->createSampler(samplerDesc);
+        nri::SamplerDesc samplerDesc = {};
+        samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR, nri::Filter::LINEAR };
+        samplerDesc.addressModes = { nri::AddressMode::REPEAT, nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
+        samplerDesc.mipMax = 16.0f;
+        nri.CreateSampler(*device, samplerDesc, m_Sampler);
         LOG_ASSERT(m_Sampler, "Failed to create sampler");
     }
 
     Environment::~Environment()
     {
-        m_Sampler.Reset();
+        if (m_Sampler)
+        {
+            DeviceManager::GetInstance()->GetNRI().DestroyDescriptor(m_Sampler);
+            m_Sampler = nullptr;
+        }
 
         m_HDRTexture.reset();
         m_ProceduralSky.reset();
@@ -48,9 +57,14 @@ namespace ignite
         m_IndexBuffer.reset();
     }
 
-    void Environment::Draw(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &pipeline,
-        const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &sceneBuffer)
+    void Environment::Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &pipeline,
+        const ConstantBuffer &cameraBuffer, const ConstantBuffer &sceneBuffer)
     {
+        if (!cmd || !pipeline || !pipeline->GetHandle())
+            return;
+
+        auto &nri = DeviceManager::GetInstance()->GetNRI();
+
         Ref<Texture> tex = nullptr;
         if (m_SkyType == SkyType::ProceduralSky && m_ProceduralSky && m_ProceduralSky->GetSkyViewLUT())
         {
@@ -61,41 +75,61 @@ namespace ignite
             tex = m_HDRTexture ? m_HDRTexture : Renderer::GetBlackTexture();
         }
 
-        nvrhi::BindingSetDesc bsDesc;
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer));
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, sceneBuffer));
-        bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, tex->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_Sampler));
+        BindingSetDesc bsDesc;
+        bsDesc.AddItem(BindingSetItem::ConstantBuffer(0, cameraBuffer.GetDescriptor()));
+        bsDesc.AddItem(BindingSetItem::ConstantBuffer(1, sceneBuffer.GetDescriptor()));
+        bsDesc.AddItem(BindingSetItem::TextureSRV(0, tex->GetShaderResourceView()));
+        bsDesc.AddItem(BindingSetItem::Sampler(0, m_Sampler));
 
-        nvrhi::BindingSetHandle bindingSet = BindingCache::GetOrCreateBindingSet(bsDesc, Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT));
+        Ref<BindingSet> bindingSet = BindingCache::GetOrCreateBindingSet(bsDesc, pipeline->GetPipelineLayout(), 0, "Environment");
         LOG_ASSERT(bindingSet, "[Environment] Failed to get or create binding set");
 
-        // render
-        auto state = nvrhi::GraphicsState();
-        state.pipeline = pipeline->GetHandle();
-        state.framebuffer = fb;
-        state.bindings = { bindingSet };
-        state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(fb->getFramebufferInfo().getViewport());
-        state.addVertexBuffer({ m_VertexBuffer->GetHandle(), 0, 0 });
-        state.indexBuffer = { m_IndexBuffer->GetHandle(), nvrhi::Format::R32_UINT };
+        const bool startedRendering = rt && !rt->IsRendering();
+        if (startedRendering)
+            rt->BeginRendering(cmd, false, false);
 
-        cmd->setGraphicsState(state);
+        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *pipeline->GetPipelineLayout());
+        nri.CmdSetPipeline(*cmd, *pipeline->GetHandle());
 
-        nvrhi::DrawArguments args;
-        args.setVertexCount(36);
-        args.instanceCount = 1;
+        nri::SetDescriptorSetDesc setDesc = {};
+        setDesc.setIndex = 0;
+        setDesc.descriptorSet = bindingSet->GetHandle();
+        setDesc.bindPoint = nri::BindPoint::GRAPHICS;
+        nri.CmdSetDescriptorSet(*cmd, setDesc);
 
-        cmd->drawIndexed(args);
+        nri::VertexBufferDesc vbDesc = {};
+        vbDesc.buffer = m_VertexBuffer->GetHandle();
+        vbDesc.offset = 0;
+        vbDesc.stride = sizeof(glm::vec3);
+        nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+        nri.CmdSetIndexBuffer(*cmd, *m_IndexBuffer->GetHandle(), 0, nri::IndexType::UINT32);
+
+        nri::DrawIndexedDesc drawDesc = {};
+        drawDesc.indexNum = 36;
+        drawDesc.instanceNum = 1;
+        nri.CmdDrawIndexed(*cmd, drawDesc);
+
+        if (startedRendering)
+            rt->EndRendering(cmd);
+    }
+
+    void Environment::Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &pipeline,
+        const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer)
+    {
+        if (!cameraBuffer || !sceneBuffer)
+            return;
+        Draw(cmd, rt, pipeline, *cameraBuffer, *sceneBuffer);
     }
 
     void Environment::LoadTexture(const std::string& filepath)
     {
         TextureCreateInfo textureCI;
-        textureCI.dimension = nvrhi::TextureDimension::Texture2D;
-        textureCI.format = nvrhi::Format::RGBA32_FLOAT;
+        textureCI.dimension = nri::TextureType::TEXTURE_2D;
+        textureCI.format = nri::Format::RGBA32_SFLOAT;
         textureCI.flip = true;
-    	textureCI.keepInitialState = true;
-    	textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
+        textureCI.keepInitialState = true;
+        textureCI.initialLayout = nri::Layout::SHADER_RESOURCE;
+        textureCI.initialAccess = nri::AccessBits::SHADER_RESOURCE;
         m_HDRTexture = Texture::Create(filepath, textureCI, nullptr, "Environment HDR");
     }
 
@@ -104,11 +138,19 @@ namespace ignite
         m_HDRTexture = texture ? texture : Renderer::GetBlackTexture();
     }
 
-	void Environment::WriteBuffer(nvrhi::ICommandList *cmd)
+    void Environment::WriteBuffer(nri::CommandBuffer *cmd)
     {
         // write buffers
-        m_VertexBuffer->SetData(cmd, m_Vertices.data(), sizeof(m_Vertices));
-        m_IndexBuffer->SetData(cmd, m_Indices.data(), sizeof(uint32_t) * m_Indices.size());
+        if (cmd)
+        {
+            m_VertexBuffer->SetData(cmd, m_Vertices.data(), sizeof(glm::vec3) * m_Vertices.size());
+            m_IndexBuffer->SetData(cmd, m_Indices.data(), sizeof(uint32_t) * m_Indices.size());
+        }
+        else
+        {
+            m_VertexBuffer->SetData(m_Vertices.data(), sizeof(glm::vec3) * m_Vertices.size());
+            m_IndexBuffer->SetData(m_Indices.data(), sizeof(uint32_t) * m_Indices.size());
+        }
     }
 
     Ref<Environment> Environment::Create()
@@ -116,64 +158,64 @@ namespace ignite
         return CreateRef<Environment>();
     }
 
-    nvrhi::BindingLayoutDesc Environment::GetBindingLayoutDesc()
+    BindingLayoutDesc Environment::GetBindingLayoutDesc()
     {
-        return nvrhi::BindingLayoutDesc()
-            .setVisibility(nvrhi::ShaderType::All)
-            .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // camera
-            .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // scene
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // texture
-            .addItem(nvrhi::BindingLayoutItem::Sampler(0));
+        return BindingLayoutDesc()
+            .SetVisibility(nri::StageBits::ALL)
+            .AddItem(BindingLayoutItem::VolatileConstantBuffer(0)) // camera
+            .AddItem(BindingLayoutItem::VolatileConstantBuffer(1)) // scene
+            .AddItem(BindingLayoutItem::TextureSRV(0)) // texture
+            .AddItem(BindingLayoutItem::Sampler(0));
     }
 
-	void Environment::CreateVerticesIndices()
-	{
-		// clock wise Vertices
-		m_Vertices =
-		{
-			glm::vec3(1.0f,  1.0f,  1.0f), // top right    front
-			glm::vec3(1.0f,  1.0f, -1.0f), // top right    back
-			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
-			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
+    void Environment::CreateVerticesIndices()
+    {
+        // clock wise Vertices
+        m_Vertices =
+        {
+            glm::vec3(1.0f,  1.0f,  1.0f), // top right    front
+            glm::vec3(1.0f,  1.0f, -1.0f), // top right    back
+            glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+            glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
 
-			glm::vec3(-1.0f,  1.0f, -1.0f), // top    left back
-			glm::vec3(-1.0f,  1.0f,  1.0f), // top    left front
-			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left front
-			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left back
+            glm::vec3(-1.0f,  1.0f, -1.0f), // top    left back
+            glm::vec3(-1.0f,  1.0f,  1.0f), // top    left front
+            glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left front
+            glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left back
 
-			glm::vec3(-1.0f,  1.0f,  1.0f), // top left  front
-			glm::vec3(-1.0f,  1.0f, -1.0f), // top left  back
-			glm::vec3(1.0f,  1.0f, -1.0f), // top right back
-			glm::vec3(1.0f,  1.0f,  1.0f), // top right front
+            glm::vec3(-1.0f,  1.0f,  1.0f), // top left  front
+            glm::vec3(-1.0f,  1.0f, -1.0f), // top left  back
+            glm::vec3(1.0f,  1.0f, -1.0f), // top right back
+            glm::vec3(1.0f,  1.0f,  1.0f), // top right front
 
-			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
-			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
-			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
-			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
+            glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
+            glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
+            glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+            glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
 
-			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
-			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
-			glm::vec3(1.0f,  1.0f, -1.0f), // top    right back
-			glm::vec3(-1.0f,  1.0f, -1.0f), // top    left  back
+            glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
+            glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+            glm::vec3(1.0f,  1.0f, -1.0f), // top    right back
+            glm::vec3(-1.0f,  1.0f, -1.0f), // top    left  back
 
-			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
-			glm::vec3(-1.0f,  1.0f,  1.0f), // top    left  front
-			glm::vec3(1.0f,  1.0f,  1.0f), // top    right front
-			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
-		};
+            glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
+            glm::vec3(-1.0f,  1.0f,  1.0f), // top    left  front
+            glm::vec3(1.0f,  1.0f,  1.0f), // top    right front
+            glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
+        };
 
 
         // Indices
-		size_t offset = 0;
-		for (size_t i = 0; i < m_Indices.size(); i += 6)
-		{
-			m_Indices[i + 0] = static_cast<uint32_t>(offset + 0zu);
-			m_Indices[i + 1] = static_cast<uint32_t>(offset + 1zu);
-			m_Indices[i + 2] = static_cast<uint32_t>(offset + 2zu);
-			m_Indices[i + 3] = static_cast<uint32_t>(offset + 2zu);
-			m_Indices[i + 4] = static_cast<uint32_t>(offset + 3zu);
-			m_Indices[i + 5] = static_cast<uint32_t>(offset + 0zu);
-			offset += 4;
-		}
-	}
+        size_t offset = 0;
+        for (size_t i = 0; i < m_Indices.size(); i += 6)
+        {
+            m_Indices[i + 0] = static_cast<uint32_t>(offset + 0zu);
+            m_Indices[i + 1] = static_cast<uint32_t>(offset + 1zu);
+            m_Indices[i + 2] = static_cast<uint32_t>(offset + 2zu);
+            m_Indices[i + 3] = static_cast<uint32_t>(offset + 2zu);
+            m_Indices[i + 4] = static_cast<uint32_t>(offset + 3zu);
+            m_Indices[i + 5] = static_cast<uint32_t>(offset + 0zu);
+            offset += 4;
+        }
+    }
 }

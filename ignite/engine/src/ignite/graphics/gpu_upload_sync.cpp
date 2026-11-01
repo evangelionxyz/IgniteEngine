@@ -4,6 +4,7 @@
 
 #include "gpu_upload_sync.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 
 #include <condition_variable>
 
@@ -23,6 +24,7 @@ namespace ignite
             return s_CompletionCV;
         }
     }
+
     std::mutex &GPUUploadSync::GetMutex()
     {
         static std::mutex s_Mutex;
@@ -47,8 +49,19 @@ namespace ignite
         return s_WaitIdleMutex;
     }
 
-    void GPUUploadSync::DeviceWaitIdle(nvrhi::IDevice *device)
+    void GPUUploadSync::DeviceWaitIdle(nri::Device *device)
     {
+        auto doWaitIdle = [&]()
+        {
+            std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
+            auto *deviceManager = DeviceManager::GetInstance();
+            nri::Device *dev = device ? device : (deviceManager ? deviceManager->GetDevice() : nullptr);
+            if (dev && deviceManager)
+            {
+                deviceManager->GetCoreInterface().DeviceWaitIdle(dev);
+            }
+        };
+
         auto *app = Application::GetInstance();
         const std::thread *renderThread = app ? app->GetRenderThread() : nullptr;
         if (renderThread && Application::IsRenderThreadRunning() && std::this_thread::get_id() != renderThread->get_id())
@@ -59,10 +72,7 @@ namespace ignite
 
             Application::SubmitToRenderThread([&]()
                 {
-                    {
-                        std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
-                        device->waitForIdle();
-                    }
+                    doWaitIdle();
                     {
                         std::lock_guard<std::mutex> guard(waitMutex);
                         done = true;
@@ -84,10 +94,7 @@ namespace ignite
 
             Application::SubmitToMainThread([&]()
             {
-                {
-                    std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
-                    device->waitForIdle();
-                }
+                doWaitIdle();
                 {
                     std::lock_guard<std::mutex> guard(waitMutex);
                     done = true;
@@ -100,8 +107,7 @@ namespace ignite
             return;
         }
 
-        std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
-        device->waitForIdle();
+        doWaitIdle();
     }
 
     void GPUUploadSync::WaitForCompletion()

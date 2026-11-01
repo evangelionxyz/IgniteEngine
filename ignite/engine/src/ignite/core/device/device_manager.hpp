@@ -7,6 +7,7 @@
 #include "ignite/core/base.hpp"
 
 #ifdef PLATFORM_WINDOWS
+    #include <wrl/client.h>
     #include <dxgi.h>
 #endif
 
@@ -20,10 +21,24 @@
     #include <vulkan/vulkan.hpp>
 #endif
 
-#include <nvrhi/nvrhi.h>
+#ifdef ERROR
+    #undef ERROR
+#endif
+#ifdef RGB
+    #undef RGB
+#endif
+
+#include <NRI.h>
+#include <NRIDescs.h>
+#include <Extensions/NRIHelper.h>
+#include <Extensions/NRISwapChain.h>
+#include <Extensions/NRIDeviceCreation.h>
+
 #include <optional>
 #include <array>
 #include <functional>
+#include <vector>
+#include <string>
 
 #include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
@@ -31,11 +46,13 @@
 namespace ignite
 {
     class Window;
+    class RenderTarget;
 
-    struct DefaultMessageCallback final : public nvrhi::IMessageCallback
+    struct IGN_API DefaultMessageCallback
     {
-        static DefaultMessageCallback &GetInstance();
-        void message(nvrhi::MessageSeverity severity, const char *messageText) override;
+        static void NRI_CALL MessageCallback(nri::Message messageType, const char *file, uint32_t line, const char *message, void *userArg);
+        static void NRI_CALL AbortExecution(void *userArg);
+        static nri::CallbackInterface GetInterface();
     };
 
     struct InstanceParameters
@@ -55,7 +72,6 @@ namespace ignite
         std::vector<std::string> optionalVulkanInstanceExtensions;
         std::vector<std::string> optionalVulkanLayers;
 #endif
-
     };
 
     struct DeviceParameters : public InstanceParameters
@@ -69,8 +85,8 @@ namespace ignite
 
         int windowPosX = -1; // -1 means use default placement
         int windowPosY = -1;
-		int windowWidth = 1080;
-		int windowHeight = 640;
+        int windowWidth = 1080;
+        int windowHeight = 640;
 
         uint32_t backBufferWidth = 1080;
         uint32_t backBufferHeight = 640;
@@ -81,9 +97,10 @@ namespace ignite
         uint32_t swapChainSampleQuality = 0;
         uint32_t maxFramesInFlight = 3;
 
-        nvrhi::Format swapChainFormat = nvrhi::Format::RGBA8_UNORM;
+        nri::Format swapChainFormat = nri::Format::RGBA8_UNORM;
 
-        bool enableNvrhiValidationLayer = false;
+        bool enableNRIValidation = false;
+        bool enableNvrhiValidationLayer = false; // Backward compatibility alias
         bool vsyncEnable = false;
         bool enableRayTracingExtensions = false; // for vulkan
         bool enableComputeQueue = false;
@@ -92,7 +109,7 @@ namespace ignite
         bool supportExplicitDisplayScaling = false;
         bool resizeWindowWithDisplayScale = false;
 
-        nvrhi::IMessageCallback *messageCallback = nullptr;
+        nri::CallbackInterface callbackInterface{};
 
 #ifdef PLATFORM_WINDOWS
         DXGI_USAGE swapChainUsage = DXGI_USAGE_SHADER_INPUT | DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -118,9 +135,8 @@ namespace ignite
         std::optional<std::array<uint8_t, 16>> uuid;
         std::optional<std::array<uint8_t, 8>> luid;
 
-
-#ifdef IGNITE_WITH_DX12
-        nvrhi::RefCountPtr<IDXGIAdapter> dxgiAdapter;
+#ifdef PLATFORM_WINDOWS
+        Microsoft::WRL::ComPtr<IDXGIAdapter> dxgiAdapter;
 #endif
 
 #ifdef IGNITE_WITH_VULKAN
@@ -131,8 +147,7 @@ namespace ignite
     class IGN_API DeviceManager
     {
     public:
-        static DeviceManager *Create(Window *window, const DeviceParameters &params, nvrhi::GraphicsAPI api);
-
+        static DeviceManager *Create(Window *window, const DeviceParameters &params, nri::GraphicsAPI api);
         static DeviceManager *GetInstance();
 
         bool CreateInstance(const InstanceParameters &params);
@@ -152,9 +167,15 @@ namespace ignite
         virtual bool BeginFrame() = 0;
         virtual bool Present() = 0;
 
-        virtual nvrhi::IDevice *GetDevice() const = 0;
+        virtual nri::Device *GetDevice() const = 0;
         virtual const char *GetRendererString() const = 0;
-        virtual nvrhi::GraphicsAPI GetGraphicsAPI() const = 0;
+        virtual nri::GraphicsAPI GetGraphicsAPI() const = 0;
+
+        virtual const nri::CoreInterface &GetCoreInterface() const = 0;
+        virtual const nri::HelperInterface &GetHelperInterface() const = 0;
+        const nri::CoreInterface &GetNRI() const { return GetCoreInterface(); }
+        const nri::HelperInterface &GetHelperNRI() const { return GetHelperInterface(); }
+        virtual nri::Queue *GetGraphicsQueue() const = 0;
 
         DeviceParameters &GetDeviceParameters() { return m_DeviceParameters; }
         double GetAverageFrameTimeSeconds() const { return m_AverageFrameTime; }
@@ -163,7 +184,7 @@ namespace ignite
         void SetFrameTimeUpdateInterval(double seconds) { m_AverageTimeUpdateInterval = seconds; }
         void SetEnableRenderDuringWindowMovement(bool val) { m_EnableRenderDuringWindowMovement = val; }
         void SetDPISacaleFactors(float x, float y);
-		void SetHeadLessDevice(bool headless) { m_DeviceParameters.headlessDevice = headless; }
+        void SetHeadLessDevice(bool headless) { m_DeviceParameters.headlessDevice = headless; }
 
         inline bool IsVsyncEnabled() const { return m_DeviceParameters.vsyncEnable; }
         void EnableVsync();
@@ -174,13 +195,17 @@ namespace ignite
         Window *GetWindow() const { return m_Window; }
         uint32_t GetFrameIndex() const { return m_FrameIndex; }
 
-        virtual nvrhi::ITexture *GetCurrentBackBuffer() = 0;
-        virtual nvrhi::ITexture *GetBackBuffer(uint32_t index) = 0;
-        virtual nvrhi::ITexture *GetBackDepthBuffer(uint32_t index) = 0;
+        virtual nri::Texture *GetCurrentBackBuffer() = 0;
+        virtual nri::Texture *GetBackBuffer(uint32_t index) = 0;
+        virtual nri::Texture *GetBackDepthBuffer(uint32_t index) = 0;
+        virtual nri::Descriptor *GetCurrentBackBufferRTV() = 0;
+        virtual nri::Descriptor *GetBackBufferRTV(uint32_t index) = 0;
+        virtual nri::Descriptor *GetCurrentBackDepthBufferDSV() = 0;
+        virtual nri::Descriptor *GetBackDepthBufferDSV(uint32_t index) = 0;
         virtual uint32_t GetCurrentBackBufferIndex() = 0;
         virtual uint32_t GetBackBufferCount() = 0;
-        nvrhi::IFramebuffer *GetCurrentFramebuffer();
-        nvrhi::IFramebuffer *GetFramebuffer(uint32_t index);
+        virtual RenderTarget *GetCurrentBackBufferRenderTarget() = 0;
+        virtual RenderTarget *GetBackBufferRenderTarget(uint32_t index) = 0;
 
         bool IsOffscreen() const { return m_DeviceParameters.offscreen; }
         virtual void *GetSharedBackBufferHandle() { return nullptr; }
@@ -226,11 +251,9 @@ namespace ignite
 
         uint32_t m_FrameIndex = 0;
 
-        std::vector<nvrhi::FramebufferHandle> m_SwapChainFramebuffers;
-
     private:
         static DeviceManager *CreateD3D12(Window *window, const DeviceParameters &params);
-        static DeviceManager *CreateVK(Window *window, const DeviceParameters& params);
+        static DeviceManager *CreateVK(Window *window, const DeviceParameters &params);
 
         std::string m_WindowTitle;
     };

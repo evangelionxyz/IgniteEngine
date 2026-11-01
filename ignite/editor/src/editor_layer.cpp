@@ -19,6 +19,7 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/imgui/imgui_layer.hpp"
+#include "ignite/imgui/imgui_nri.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/shader.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
@@ -86,11 +87,6 @@ namespace ignite
 
     EditorLayer::~EditorLayer()
     {
-        if (auto *cm = CommandManager::GetInstance())
-        {
-            cm->Clear();
-        }
-
         EditorContext::Shutdown();
     }
 
@@ -98,8 +94,6 @@ namespace ignite
     {
         Layer::OnAttach();
         BindSharedImGuiContext();
-
-        m_Device = DeviceManager::GetInstance()->GetDevice();
 
         auto *app = Application::GetInstance();
 
@@ -134,8 +128,6 @@ namespace ignite
 
         // create render target framebuffer
         m_SceneRenderer = CreateRef<SceneRenderer>();
-
-        m_Cmd = m_Device->createCommandList();
 
         const auto &cmdArgs = Application::GetInstance()->GetCreateInfo().cmdLineArgs;
         for (int i = 0; i < cmdArgs.count; ++i)
@@ -504,7 +496,7 @@ namespace ignite
         return false;
     }
 
-    void EditorLayer::OnRender(nvrhi::IFramebuffer *mainFramebuffer)
+    void EditorLayer::OnRender(RenderTarget *mainFramebuffer)
     {
         IGN_PROFILE_FUNCTION();
         Layer::OnRender(mainFramebuffer);
@@ -609,45 +601,18 @@ namespace ignite
             auto target = m_SceneRenderer->GetRenderTarget(editCamera);
             if (target)
             {
-                auto sceneTexture = target->compositeRT->GetColorAttachment(0)->GetHandle();
-                nvrhi::TextureDesc stagingDesc = sceneTexture->getDesc();
-                stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-                auto screenShotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-
-                nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-                cmd->open();
-                cmd->copyTexture(screenShotStagingTexture, nvrhi::TextureSlice(), sceneTexture, nvrhi::TextureSlice());
-                cmd->close();
-
-                m_Device->executeCommandList(cmd);
-
-                if (!screenShotStagingTexture)
+                auto sceneTexture = target->compositeRT->GetColorAttachment(0);
+                if (sceneTexture)
                 {
-                    m_State.takeScreenshot = false;
-                }
-                else
-                {
-                    // Map and read the pixel data
-                    size_t rowPitch = 0;
-                    if (void *mappedData = m_Device->mapStagingTexture(screenShotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
+                    static ImageData image;
+                    image.width = sceneTexture->GetWidth();
+                    image.height = sceneTexture->GetHeight();
+
+                    const uint32_t packedStride = image.width * 4u;
+                    image.pixels.resize(image.height * packedStride);
+
+                    if (sceneTexture->ReadPixelData(image.pixels.data(), image.pixels.size()))
                     {
-                        static ImageData image;
-                        image.width = screenShotStagingTexture->getDesc().width;
-                        image.height = screenShotStagingTexture->getDesc().height;
-
-                        const uint32_t packedStride = image.width * 4u;
-
-                        image.pixels.resize(image.height * packedStride);
-                        const auto src = static_cast<const uint8_t *>(mappedData);
-                        uint8_t *dst = image.pixels.data();
-
-                        for (uint32_t y = 0u; y < image.height; ++y)
-                        {
-                            memcpy(dst + y * packedStride, src + y * rowPitch, packedStride);
-                        }
-
-                        m_Device->unmapStagingTexture(screenShotStagingTexture);
-
                         const std::tm local_tm = Timestep::GetLocalTime();
 
                         std::ostringstream oss;
@@ -660,10 +625,9 @@ namespace ignite
                             kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
                             filename.c_str());
                     }
-
-                    m_State.takeScreenshot = false;
                 }
             }
+            m_State.takeScreenshot = false;
         }
     }
 
@@ -1217,6 +1181,7 @@ namespace ignite
         if (m_ActiveProject)
         {
             AssetManager::GetInstance()->UnloadUnusedAssets();
+            ImGui_NRI::ClearTextureCache();
 
             // Create new editor scene
             m_EditorScene = Scene::Create(m_ActiveProject.get());
@@ -2556,7 +2521,7 @@ namespace ignite
                     int fillMode = static_cast<int>(renderSettings.fillMode);
                     if (UI::DrawComboBox("Fill Mode", fillModeLabels, IM_ARRAYSIZE(fillModeLabels), &fillMode))
                     {
-                        m_SceneRenderer->SetFillMode(static_cast<nvrhi::RasterFillMode>(fillMode));
+                        m_SceneRenderer->SetFillMode(static_cast<nri::FillMode>(fillMode));
                     }
 
                     int renderMode = m_SceneRenderer->GetRenderMode();
@@ -2622,6 +2587,13 @@ namespace ignite
 
         if (needsResize)
         {
+            // A new viewport size restarts the debounce. Without this, a long
+            // interactive drag crosses STABLE_RESIZE_FRAME and reallocates every
+            // subsequent frame while the user is still resizing.
+            if (cameraNeedsResize || requestToResize)
+            {
+                resizingFrame = 0;
+            }
             camera->UpdateProjection(desiredSize.x, desiredSize.y);
             isResizing = true;
             requestToResize = false;

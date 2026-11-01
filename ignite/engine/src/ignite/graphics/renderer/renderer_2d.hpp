@@ -8,6 +8,7 @@
 #include "ignite/core/types.hpp"
 #include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
+#include "ignite/graphics/binding_set.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/math/aabb.hpp"
@@ -21,14 +22,14 @@ namespace ignite
 {
     constexpr uint32_t MAX_POINT_LIGHTS_2D = 32;
 
-	class GraphicsPipeline;
-	class DeviceManager;
-	class ConstantBuffer;
-	class Texture;
-	class RenderTarget;
-	class Font;
-	class Project;
-	class Sprite2DComponent;
+    class GraphicsPipeline;
+    class DeviceManager;
+    class ConstantBuffer;
+    class Texture;
+    class RenderTarget;
+    class Font;
+    class Project;
+    class Sprite2DComponent;
 
     struct PointLight2D_GPUData
     {
@@ -52,12 +53,18 @@ namespace ignite
         Renderer2D();
         ~Renderer2D();
 
-        void Begin(nvrhi::ICommandList *cmd);
-        void Flush(nvrhi::IFramebuffer *framebuffer, const nvrhi::BufferHandle &cameraBuffer);
-        void FlushSelect(nvrhi::IFramebuffer *framebuffer, const nvrhi::BufferHandle &cameraBuffer);
+        void Begin(nri::CommandBuffer *cmd);
+        void Flush(RenderTarget *framebuffer, nri::Descriptor *cameraBuffer);
+        void Flush(RenderTarget *framebuffer, const ConstantBuffer &cameraBuffer) { Flush(framebuffer, cameraBuffer.GetDescriptor()); }
+        void Flush(RenderTarget *framebuffer, const Ref<ConstantBuffer> &cameraBuffer) { Flush(framebuffer, cameraBuffer ? cameraBuffer->GetDescriptor() : nullptr); }
+
+        void FlushSelect(RenderTarget *framebuffer, nri::Descriptor *cameraBuffer);
+        void FlushSelect(RenderTarget *framebuffer, const ConstantBuffer &cameraBuffer) { FlushSelect(framebuffer, cameraBuffer.GetDescriptor()); }
+        void FlushSelect(RenderTarget *framebuffer, const Ref<ConstantBuffer> &cameraBuffer) { FlushSelect(framebuffer, cameraBuffer ? cameraBuffer->GetDescriptor() : nullptr); }
+
         void End();
 
-        void SetFillMode(nvrhi::RasterFillMode mode) { m_FillMode = mode; ClearPipelineCache(); }
+        void SetFillMode(nri::FillMode mode) { m_FillMode = mode; ClearPipelineCache(); }
 
         void DrawBox(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
         void DrawRect(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
@@ -81,7 +88,15 @@ namespace ignite
         void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID = 0xFFFFFFFFu);
 
         void BuildPreRenderCache();
-        bool ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const nvrhi::BufferHandle &cameraBuffer);
+        bool ReplayPreRenderCache(nri::CommandBuffer *cmd, RenderTarget *framebuffer, nri::Descriptor *cameraBuffer);
+        bool ReplayPreRenderCache(nri::CommandBuffer *cmd, RenderTarget *framebuffer, const ConstantBuffer &cameraBuffer)
+        {
+            return ReplayPreRenderCache(cmd, framebuffer, cameraBuffer.GetDescriptor());
+        }
+        bool ReplayPreRenderCache(nri::CommandBuffer *cmd, RenderTarget *framebuffer, const Ref<ConstantBuffer> &cameraBuffer)
+        {
+            return ReplayPreRenderCache(cmd, framebuffer, cameraBuffer ? cameraBuffer->GetDescriptor() : nullptr);
+        }
         void InvalidatePreRenderCache();
 
         void InitQuadData();
@@ -97,22 +112,22 @@ namespace ignite
         static Ref<Renderer2D> Create();
 
     private:
-        Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetTextPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer);
+        Ref<GraphicsPipeline> GetQuadPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetTextPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetCirclePipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetLinePipelineForFB(RenderTarget *framebuffer);
 
-        Ref<GraphicsPipeline> GetQuadSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetTextSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
-        Ref<GraphicsPipeline> GetCircleSelectPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetQuadSelectPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetTextSelectPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetCircleSelectPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
 
-        nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &lightingBuffer);
-        nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const nvrhi::BufferHandle &cameraBuffer, const nvrhi::BufferHandle &lightingBuffer);
-		nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer);
-        nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout, const nvrhi::BufferHandle &cameraBuffer);
+        Ref<BindingSet> GetQuadBindingSet(nri::PipelineLayout *pipelineLayout, const std::vector<Ref<Texture>> &textures, nri::Descriptor *cameraBuffer, nri::Descriptor *lightingBuffer);
+        Ref<BindingSet> GetTextBindingSet(nri::PipelineLayout *pipelineLayout, const std::vector<Ref<Texture>> &textures, nri::Descriptor *cameraBuffer, nri::Descriptor *lightingBuffer);
+        Ref<BindingSet> GetLineBindingSet(nri::PipelineLayout *pipelineLayout, nri::Descriptor *cameraBuffer);
+        Ref<BindingSet> GetCircleBindingSet(nri::PipelineLayout *pipelineLayout, nri::Descriptor *cameraBuffer);
 
     private:
-        nvrhi::ICommandList *m_Cmd;
+        nri::CommandBuffer *m_Cmd = nullptr;
         BatchRender<Vertex2DQuad> m_QuadBatch;
         BatchRender<Vertex2DLine> m_LineBatch;
         BatchRender<Vertex2DCircle> m_CircleBatch;
@@ -121,19 +136,19 @@ namespace ignite
         ConstantBuffer m_Material2DLightingBuffer;
         Material2DLighting_GPUData m_Material2DLightingData;
 
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_LinePSOCache;
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadPSOCache;
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CirclePSOCache;
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_LinePSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CirclePSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextPSOCache;
 
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadSelectPSOCache;
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CircleSelectPSOCache;
-		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextSelectPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadSelectPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CircleSelectPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextSelectPSOCache;
 
-		std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> m_QuadBindingSetCache;
-		std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> m_TextBindingSetCache;
-		std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> m_LineBindingSetCache;
-		std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> m_CircleBindingSetCache;
+        std::unordered_map<CameraLightingBindingKey, Ref<BindingSet>, CameraLightingBindingKeyHash> m_QuadBindingSetCache;
+        std::unordered_map<CameraLightingBindingKey, Ref<BindingSet>, CameraLightingBindingKeyHash> m_TextBindingSetCache;
+        std::unordered_map<CameraBindingKey, Ref<BindingSet>, CameraBindingKeyHash> m_LineBindingSetCache;
+        std::unordered_map<CameraBindingKey, Ref<BindingSet>, CameraBindingKeyHash> m_CircleBindingSetCache;
 
         struct PreRenderCacheData
         {
@@ -150,13 +165,13 @@ namespace ignite
             uint32_t textIndexCount = 0;
             std::vector<Ref<Texture>> textTextureSlots;
 
-			bool valid = false;
+            bool valid = false;
         };
 
         Ref<PreRenderCacheData> m_PreRenderCache;
 
-		nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
-		bool m_Material2DLightingDirty = true;
+        nri::FillMode m_FillMode = nri::FillMode::SOLID;
+        bool m_Material2DLightingDirty = true;
     };
 }
 

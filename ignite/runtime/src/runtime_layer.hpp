@@ -27,7 +27,7 @@ namespace ignite
         virtual void OnUpdate(float deltaTime) override;
         virtual void OnEvent(Event &e) override;
 
-        virtual void OnRender(nvrhi::IFramebuffer *framebuffer) override;
+        virtual void OnRender(RenderTarget *framebuffer) override;
 
     private:
         bool OnFramebufferResize(const FramebufferResizeEvent &event);
