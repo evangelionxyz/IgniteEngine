@@ -39,6 +39,14 @@ project("UmbraShaderCompiler")
             "m",
             "rt",
         }
+        linkoptions {
+            "-Wl,-rpath,'$$ORIGIN'",
+            "-Wl,-rpath,'%{LibraryDir.VULKAN_SDK}'",
+            "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'"
+        }
+        postbuildcommands {
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
+        }
 
     -- Windows Default Linking
     filter "system:windows"

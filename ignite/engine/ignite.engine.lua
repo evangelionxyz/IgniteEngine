@@ -181,6 +181,7 @@ project "Ignite.Engine"
         links {
             "ignite_core",
             "vulkan",
+            "dxcompiler",
             "shaderc_shared",
             "spirv-cross-core",
             "spirv-cross-glsl",
@@ -200,12 +201,17 @@ project "Ignite.Engine"
             "glib-2.0"
         }
         -- Set rpath to $ORIGIN so the binary finds .so files next to itself
-        linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+        linkoptions {
+            "-Wl,-rpath,'$$ORIGIN'",
+            "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'",
+            "-Wl,-rpath-link,'%{cfg.targetdir}'"
+        }
         postbuildcommands {
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}"),
-            'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"'
+            'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"',
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
         }
 
     --windows

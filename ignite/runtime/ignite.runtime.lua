@@ -153,6 +153,7 @@ project "Ignite.Runtime"
             "/usr/lib",
             "/usr/local/lib",
             "%{LibraryDir.FMOD_LINUX}",
+            "%{LibraryDir.VULKAN_SDK}",
             "%{LibraryDir.SDL3_LINUX}"
         }
         includedirs {
@@ -163,6 +164,7 @@ project "Ignite.Runtime"
         links {
             "ignite_core",
             "vulkan",
+            "dxcompiler",
             "shaderc_shared",
             "spirv-cross-c",
             "spirv-cross-core",
@@ -182,7 +184,15 @@ project "Ignite.Runtime"
             "rt",
             "glib-2.0"
         }
-        linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+        linkoptions {
+            "-Wl,-rpath,'$$ORIGIN'",
+            "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'",
+            "-Wl,-rpath-link,'%{cfg.targetdir}'"
+        }
+        postbuildcommands {
+            'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"',
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
+        }
 
     filter { "system:linux", "configurations:Debug" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }

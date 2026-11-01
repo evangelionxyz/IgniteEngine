@@ -97,26 +97,40 @@ if [ -d /opt/fbxsdk ] && [ ! -d /opt/fbxsdk/2020.3.9 ]; then
 fi
 export FBX_SDK="${FBX_SDK:-/opt/fbxsdk}"
 
-# Ensure VULKAN_SDK environment variable is configured
-if [ -z "$VULKAN_SDK" ]; then
-    if [ -d "/vulkan/1.4.350.0/x86_64" ]; then
-        export VULKAN_SDK="/vulkan/1.4.350.0/x86_64"
-    elif [ -d "$PWD/scripts/downloads/vulkansdk/1.4.341.1/x86_64" ]; then
-        export VULKAN_SDK="$PWD/scripts/downloads/vulkansdk/1.4.341.1/x86_64"
+# Configure Vulkan SDK runtime libraries and environment
+configure_vulkan_sdk() {
+    if [ -z "$VULKAN_SDK" ] || [ ! -d "$VULKAN_SDK" ]; then
+        if [ -d "/vulkan/1.4.350.0/x86_64" ]; then
+            export VULKAN_SDK="/vulkan/1.4.350.0/x86_64"
+        elif [ -d "$PWD/scripts/downloads/vulkansdk/1.4.341.1/x86_64" ]; then
+            export VULKAN_SDK="$PWD/scripts/downloads/vulkansdk/1.4.341.1/x86_64"
+        else
+            local found_sdk=$(find "$PWD/scripts/downloads/vulkansdk" -maxdepth 2 -type d -name "x86_64" 2>/dev/null | head -1)
+            if [ -n "$found_sdk" ] && [ -d "$found_sdk" ]; then
+                export VULKAN_SDK="$found_sdk"
+            fi
+        fi
     fi
-fi
 
-# Ensure Vulkan SDK runtime libraries are accessible
-if [ -n "$VULKAN_SDK" ]; then
-    if [ -f "$VULKAN_SDK/lib/libdxcompiler.so" ]; then
-        sudo ln -sf "$VULKAN_SDK/lib/libdxcompiler.so" /usr/local/lib/libdxcompiler.so
+    if [ -n "$VULKAN_SDK" ] && [ -d "$VULKAN_SDK" ]; then
+        echo "Configuring Vulkan SDK runtime libraries from $VULKAN_SDK..."
+        if [ -f "$VULKAN_SDK/lib/libdxcompiler.so" ]; then
+            sudo ln -sf "$VULKAN_SDK/lib/libdxcompiler.so" /usr/local/lib/libdxcompiler.so
+        fi
+        if [ -f "$VULKAN_SDK/lib/libshaderc_shared.so" ]; then
+            sudo ln -sf "$VULKAN_SDK/lib/libshaderc_shared.so" /usr/local/lib/libshaderc_shared.so
+        fi
+        echo "$VULKAN_SDK/lib" | sudo tee /etc/ld.so.conf.d/vulkansdk.conf > /dev/null
+        sudo ldconfig
+
+        if [ -n "$GITHUB_ENV" ]; then
+            echo "VULKAN_SDK=$VULKAN_SDK" >> "$GITHUB_ENV"
+            echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+        fi
     fi
-    if [ -f "$VULKAN_SDK/lib/libshaderc_shared.so" ]; then
-        sudo ln -sf "$VULKAN_SDK/lib/libshaderc_shared.so" /usr/local/lib/libshaderc_shared.so
-    fi
-    echo "$VULKAN_SDK/lib" | sudo tee /etc/ld.so.conf.d/vulkansdk.conf > /dev/null
-    sudo ldconfig
-fi
+}
+
+configure_vulkan_sdk
 
 # Ensure C# csc wrapper exists for Premake gmake builds
 if [ ! -f /usr/local/bin/csc ]; then
@@ -171,3 +185,6 @@ sudo chown -R $(id -u):$(id -g) .
 # Run the python setup script to download dependencies & generate project makefiles
 echo "Running project setup script..."
 python3 scripts/setup.py
+
+# Re-run Vulkan SDK configuration in case SDK was just downloaded by setup.py
+configure_vulkan_sdk
