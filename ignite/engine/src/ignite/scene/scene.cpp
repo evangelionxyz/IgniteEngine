@@ -246,6 +246,9 @@ namespace ignite
         // reset time
         timeInSeconds = 0.0f;
 
+        // Ensure world transforms are computed from local transforms before creating physics bodies
+        UpdateTransforms(0.0f);
+
         // play on start audio
         auto audioView = registry->view<AudioSourceComponent>();
         for (entt::entity e : audioView)

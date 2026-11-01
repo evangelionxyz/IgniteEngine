@@ -639,6 +639,24 @@ namespace ignite
         HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
         return hwnd;
     }
+#else
+    void *Window::GetNativeWindow() const
+    {
+        if (m_DeviceManager && m_DeviceManager->GetDeviceParameters().nativeWindowHandle)
+        {
+            return m_DeviceManager->GetDeviceParameters().nativeWindowHandle;
+        }
+
+        if (!m_Window)
+            return nullptr;
+
+        SDL_PropertiesID props = SDL_GetWindowProperties(m_Window);
+        void *x11_window = (void *)(uintptr_t)SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
+        if (x11_window)
+            return x11_window;
+
+        return SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, nullptr);
+    }
 #endif
 
     void Window::SetEventCallback(const std::function<void(Event &)> &callback)

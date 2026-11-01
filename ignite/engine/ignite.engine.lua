@@ -103,7 +103,6 @@ project "Ignite.Engine"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2",
         "_WIN32_WINNT=0x0A00",
     }
 
@@ -124,6 +123,10 @@ project "Ignite.Engine"
     filter { "configurations:Debug or Debug-Profiling", "system:linux" }
         libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
+            -- Configure and Build FastNoise2
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
+
             -- Build Rust
             'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
             copy_file("%{wks.location}/crates/target/debug/libignite_core.so", "%{cfg.targetdir}")
@@ -145,6 +148,10 @@ project "Ignite.Engine"
     filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:linux" }
         libdirs { "%{wks.location}/crates/target/release" }
         prebuildcommands {
+            -- Configure and Build FastNoise2
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
+
             -- Build Rust
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
             copy_file("%{wks.location}/crates/target/release/libignite_core.so", "%{cfg.targetdir}")
@@ -175,8 +182,7 @@ project "Ignite.Engine"
         links {
             "ignite_core",
             "vulkan",
-            "shaderc",
-            "shaderc_util",
+            "shaderc_shared",
             "spirv-cross-core",
             "spirv-cross-glsl",
             "nethost",
@@ -199,7 +205,8 @@ project "Ignite.Engine"
         postbuildcommands {
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}")
+            copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}"),
+            'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"'
         }
 
     --windows
@@ -320,13 +327,20 @@ project "Ignite.Engine"
 
 
         filter { "system:linux", "configurations:Debug or Debug-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
-            links { "fmodL" }
+            libdirs {
+                "%{LibraryDir.FBX_SDK_LINUX_DEBUG}",
+                "%{THIRDPARTY_DIR}/FastNoise2/build/Debug/lib"
+            }
+            links {
+                "fmodL",
+                "FastNoiseD"
+            }
             linkoptions { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}/libfbxsdk.a" }
             postbuildcommands {
                 copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so", "%{cfg.targetdir}"),
                 copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14", "%{cfg.targetdir}"),
-                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13", "%{cfg.targetdir}")
+                copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13", "%{cfg.targetdir}"),
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Debug/lib/libFastNoiseD.so", "%{cfg.targetdir}")
             }
 
 
@@ -384,9 +398,18 @@ project "Ignite.Engine"
 
 
         filter { "system:linux", "configurations:Release or Release-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-            links { "fmod" }
+            libdirs {
+                "%{LibraryDir.FBX_SDK_LINUX_RELEASE}",
+                "%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib"
+            }
+            links {
+                "fmod",
+                "FastNoise"
+            }
             linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
+            postbuildcommands {
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib/libFastNoise.so", "%{cfg.targetdir}")
+            }
 
         filter "configurations:Shipping"
             runtime "release"
@@ -438,6 +461,15 @@ project "Ignite.Engine"
             }
 
         filter { "system:linux", "configurations:Shipping or Shipping-Profiling" }
-            libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
-            links { "fmod" }
+            libdirs {
+                "%{LibraryDir.FBX_SDK_LINUX_RELEASE}",
+                "%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib"
+            }
+            links {
+                "fmod",
+                "FastNoise"
+            }
             linkoptions { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}/libfbxsdk.a" }
+            postbuildcommands {
+                copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/lib/libFastNoise.so", "%{cfg.targetdir}")
+            }

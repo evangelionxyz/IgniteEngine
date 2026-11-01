@@ -23,7 +23,7 @@ namespace ignite
         [[nodiscard]] float Seconds() const { return m_Time; }
         [[nodiscard]] float MilliSeconds() const { return m_Time * 1000.0f; }
 
-        [[nodiscard]] static constexpr std::tm GetLocalTime()
+        [[nodiscard]] static std::tm GetLocalTime()
         {
 			const auto now = std::chrono::system_clock::now();
 			const auto time_t_now = std::chrono::system_clock::to_time_t(now);

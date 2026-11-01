@@ -115,7 +115,14 @@ project "NRI"
             "dl",
             "pthread",
         }
+        buildoptions {
+            "-include vulkan/vulkan.h",
+        }
+        disablewarnings {
+            "nullability-completeness",
+        }
         defines {
             "VK_USE_PLATFORM_XLIB_KHR",
+            "NRI_ENABLE_XLIB_SUPPORT",
             'NRI_API=extern "C" __attribute__((visibility("default")))',
         }

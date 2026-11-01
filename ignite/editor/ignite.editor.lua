@@ -96,8 +96,7 @@ project "Ignite.Editor"
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
-        "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2"
+        "JPH_OBJECT_STREAM"
     }
 
     -- build rust
@@ -154,6 +153,7 @@ project "Ignite.Editor"
             "/usr/lib",
             "/usr/local/lib",
             "%{LibraryDir.FMOD_LINUX}",
+            "%{LibraryDir.VULKAN_SDK}",
             "%{LibraryDir.SDL3_LINUX}"
         }
         includedirs {
@@ -164,7 +164,7 @@ project "Ignite.Editor"
         links {
             "ignite_core",
             "vulkan",
-            "shaderc",
+            "shaderc_shared",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",
@@ -184,6 +184,9 @@ project "Ignite.Editor"
             "glib-2.0"
         }
         linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+        postbuildcommands {
+            'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"'
+        }
 
     filter { "system:linux", "configurations:Debug" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }

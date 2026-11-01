@@ -99,8 +99,7 @@ project "Ignite.Runtime"
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
-        "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2"
+        "JPH_OBJECT_STREAM"
     }
 
     -- build rust
@@ -165,7 +164,7 @@ project "Ignite.Runtime"
         links {
             "ignite_core",
             "vulkan",
-            "shaderc",
+            "shaderc_shared",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",

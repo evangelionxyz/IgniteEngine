@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <cstring>
 #include <NRI.h>
 
 namespace ignite

@@ -73,7 +73,6 @@ project "Ignite.Core"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2",
         "_WIN32_WINNT=0x0A00",
     }
 
@@ -152,8 +151,7 @@ project "Ignite.Core"
         links {
             "ignite_core",
             "vulkan",
-            "shaderc",
-            "shaderc_util",
+            "shaderc_shared",
             "spirv-cross-core",
             "spirv-cross-glsl",
             "nethost",

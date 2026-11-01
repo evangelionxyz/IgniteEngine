@@ -182,7 +182,7 @@ namespace ignite
 
     void ScenePanel::SortHierarchy(std::vector<Entity>& entities)
     {
-        std::sort(entities.begin(), entities.end(), [](auto a, auto b)
+        std::sort(entities.begin(), entities.end(), [](Entity a, Entity b)
         {
             return a.GetComponent<IDComponent>().name < b.GetComponent<IDComponent>().name;
         });

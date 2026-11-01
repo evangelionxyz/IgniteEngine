@@ -33,6 +33,7 @@ project "Ignite.Test"
         "SPDLOG",
         "TINYGLTF",
         "NVRHI",
+        "NRI",
         "msdf-atlas-gen",
         "msdfgen",
         "freetype",
@@ -96,7 +97,6 @@ project "Ignite.Test"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-        "GLM_FORCE_SSE2",
         "_WIN32_WINNT=0x0A00",
     }
 
@@ -152,6 +152,7 @@ project "Ignite.Test"
             "/usr/lib",
             "/usr/local/lib",
             "%{LibraryDir.FMOD_LINUX}",
+            "%{LibraryDir.VULKAN_SDK}",
             "%{LibraryDir.SDL3_LINUX}"
         }
         includedirs {
@@ -162,7 +163,7 @@ project "Ignite.Test"
         links {
             "ignite_core",
             "vulkan",
-            "shaderc",
+            "shaderc_shared",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",
@@ -182,6 +183,9 @@ project "Ignite.Test"
             "glib-2.0"
         }
         linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+        postbuildcommands {
+            'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"'
+        }
 
     filter { "system:linux", "configurations:Debug or Debug-Profiling" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }

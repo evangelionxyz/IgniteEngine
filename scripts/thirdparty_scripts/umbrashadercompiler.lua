@@ -26,8 +26,7 @@ project("UmbraShaderCompiler")
         links {
             "vulkan",
             "dxcompiler",
-            "shaderc",
-            "shaderc_util",
+            "shaderc_shared",
             "spirv-cross-c",
             "spirv-cross-core",
             "spirv-cross-glsl",

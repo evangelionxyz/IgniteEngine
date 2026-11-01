@@ -1,9 +1,19 @@
 -- VULKAN SDK
 if os.target() == "linux" then
-    if os.ishost("windows") then
-        VULKAN_SDK_PATH = os.getenv("VULKAN_SDK_LINUX") or "/vulkan/1.4.350.0/x86_64"
+    local env_vulkan = os.getenv("VULKAN_SDK_LINUX") or os.getenv("VULKAN_SDK")
+    if env_vulkan and os.isdir(env_vulkan) then
+        VULKAN_SDK_PATH = env_vulkan
+    elseif os.isdir("/vulkan/1.4.350.0/x86_64") then
+        VULKAN_SDK_PATH = "/vulkan/1.4.350.0/x86_64"
+    elseif os.isdir(wks_absolute .. "/scripts/downloads/vulkansdk/1.4.341.1/x86_64") then
+        VULKAN_SDK_PATH = wks_absolute .. "/scripts/downloads/vulkansdk/1.4.341.1/x86_64"
     else
-        VULKAN_SDK_PATH = os.getenv("VULKAN_SDK") or "/vulkan/1.4.350.0/x86_64"
+        local local_vulkan = os.matchdirs(wks_absolute .. "/scripts/downloads/vulkansdk/*/x86_64")
+        if #local_vulkan > 0 then
+            VULKAN_SDK_PATH = local_vulkan[1]
+        else
+            VULKAN_SDK_PATH = "/vulkan/1.4.350.0/x86_64"
+        end
     end
 else
     VULKAN_SDK_PATH = os.getenv("VULKAN_SDK") or "C:/VulkanSDK/1.4.341.1"
@@ -44,10 +54,15 @@ print("VULKAN_SDK include: " .. tostring(VULKAN_SDK_INCLUDE_PATH))
 
 -- FBX SDK
 if os.target() == "linux" then
-    if os.ishost("windows") then
-        FBX_SDK_PATH = os.getenv("FBX_SDK_LINUX") or "/opt/fbxsdk/2020.3.9"
+    local env_fbx = os.getenv("FBX_SDK_LINUX") or os.getenv("FBX_SDK")
+    if env_fbx and os.isdir(env_fbx) then
+        FBX_SDK_PATH = env_fbx
+    elseif os.isdir("/opt/fbxsdk/2020.3.9") then
+        FBX_SDK_PATH = "/opt/fbxsdk/2020.3.9"
+    elseif os.isdir("/opt/fbxsdk") then
+        FBX_SDK_PATH = "/opt/fbxsdk"
     else
-        FBX_SDK_PATH = os.getenv("FBX_SDK") or "/opt/fbxsdk/2020.3.9"
+        FBX_SDK_PATH = "/opt/fbxsdk/2020.3.9"
     end
 else
     FBX_SDK_PATH = os.getenv("FBX_SDK")

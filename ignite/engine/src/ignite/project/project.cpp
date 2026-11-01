@@ -722,15 +722,19 @@ R"(<Project>
 
         if (!buildSuccess || forceRebuild)
         {
+            std::string_view msbuildCmd = "msbuild";
+#if defined(PLATFORM_LINUX)
+            msbuildCmd = "dotnet msbuild";
+#endif
             // restore NuGet
             AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
-            std::string restoreCommand = std::format("msbuild \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
+            std::string restoreCommand = std::format("{} \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                msbuildCmd, GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
             std::system(restoreCommand.c_str());
 
             AssetWorker::ReportStatus("Building Solution...", 0.8f);
-            std::string buildCommand = std::format("msbuild \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
+            std::string buildCommand = std::format("{} \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                msbuildCmd, GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
             std::system(buildCommand.c_str());
         }
 
@@ -819,7 +823,9 @@ R"(<Project>
                 {
                     std::filesystem::path rel = std::filesystem::relative(p.path().string(), GetDirectory());
                     std::string includepath = rel.generic_string();
+#if defined(PLATFORM_WINDOWS)
                     std::replace(includepath.begin(), includepath.end(), '/', '\\');
+#endif
                     compileItems += "    <Compile Include=\"" + includepath + "\" />\n";
                 }
             }
@@ -842,6 +848,10 @@ R"(<Project>
         out = std::ofstream(GetDirectory() / "Directory.Build.props", std::ios::out);
         out << s_BuildProps;
         out.close();
+
+        // Invalidate compiled DLL so BuildSolution triggers a rebuild
+        std::error_code ec;
+        std::filesystem::remove(GetScriptModulePath(), ec);
     }
 
     void Project::CreateDirectories() const

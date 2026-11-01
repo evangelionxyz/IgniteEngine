@@ -55,6 +55,8 @@ namespace ignite
 #ifdef PLATFORM_WINDOWS
 		// void SetWindowsIcon(HICON icon) const;
 		HWND GetNativeWindow() const;
+#else
+		void *GetNativeWindow() const;
 #endif
 
     private:

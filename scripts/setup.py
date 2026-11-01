@@ -30,19 +30,27 @@ def generate_project_files(premake_binary):
     # Generate project files using premake5 for the current platform.
     if platform.system() == "Windows":
         premake_scripts = ["premake5.lua", "premake5-managed.lua"]
+        for script in premake_scripts:
+            premake_args = [str(premake_binary), f"--file=scripts/{script}", "vs2026"]
+            subprocess.call(premake_args, cwd=ROOT_DIR)
     else:
-        premake_scripts = ["premake5.lua"]
-
-    for script in premake_scripts:
-        premake_args = [str(premake_binary), f"--file=scripts/{script}"]
-        if platform.system() == "Windows":
-            premake_args.append("vs2026")
-        else:
-            # gmake is the modern GNU Makefile generator in premake5
-            premake_args.append("gmake")
-            premake_args.append("--cc=clang")
-            premake_args.append("--os=linux")
+        # gmake is the modern GNU Makefile generator in premake5
+        premake_args = [
+            str(premake_binary),
+            "--file=scripts/premake5.lua",
+            "gmake",
+            "--cc=clang",
+            "--os=linux"
+        ]
         subprocess.call(premake_args, cwd=ROOT_DIR)
+
+        # vs2022 generates C# .csproj files for dotnet build and csc wrapper
+        premake_managed_args = [
+            str(premake_binary),
+            "--file=scripts/premake5-managed.lua",
+            "vs2022"
+        ]
+        subprocess.call(premake_managed_args, cwd=ROOT_DIR)
 
 
 def run():
@@ -53,10 +61,16 @@ def run():
     # Install Vulkan SDK (on Linux we download and extract it to get the DXC compiler)
     dp.install_vulkan_sdk(DOWNLOADS_DIR)
 
-    # On Linux inside the dev container the FBX SDK is pre-installed by the
-    # Dockerfile and FBX_SDK env var is already set correctly.  Skip the
-    # download/install if the env var already points to a valid SDK root.
+    # On Linux inside the dev container or WSL the FBX SDK might be pre-installed.
+    # Skip the download/install if the env var already points to a valid SDK root.
     fbx_sdk_env = os.environ.get("FBX_SDK", "")
+    if not fbx_sdk_env and platform.system() == "Linux":
+        if (Path("/opt/fbxsdk/2020.3.9") / "include" / "fbxsdk.h").exists():
+            fbx_sdk_env = "/opt/fbxsdk/2020.3.9"
+        elif (Path("/opt/fbxsdk") / "include" / "fbxsdk.h").exists():
+            fbx_sdk_env = "/opt/fbxsdk"
+        if fbx_sdk_env:
+            os.environ["FBX_SDK"] = fbx_sdk_env
     fbx_sdk_preinstalled = (
         platform.system() == "Linux"
         and fbx_sdk_env

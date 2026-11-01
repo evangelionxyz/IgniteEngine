@@ -77,6 +77,47 @@ elif [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so ] && [ -f /usr/lib/x86_64-linux
     sudo ln -sf /usr/lib/x86_64-linux-gnu/libxml2.so.2 /usr/lib/x86_64-linux-gnu/libxml2.so
 fi
 
+# Ensure libnethost is symlinked into /usr/local/lib for C++ linking (-lnethost)
+NETHOST_SO=$(find /usr/lib/dotnet /usr/share/dotnet -name 'libnethost.so' 2>/dev/null | head -1)
+if [ -n "$NETHOST_SO" ]; then
+    echo "Creating symlink for libnethost.so..."
+    sudo ln -sf "$NETHOST_SO" /usr/local/lib/libnethost.so
+fi
+NETHOST_A=$(find /usr/lib/dotnet /usr/share/dotnet -name 'libnethost.a' 2>/dev/null | head -1)
+if [ -n "$NETHOST_A" ]; then
+    echo "Creating symlink for libnethost.a..."
+    sudo ln -sf "$NETHOST_A" /usr/local/lib/libnethost.a
+fi
+sudo ldconfig
+
+# Ensure FBX SDK directory structure is compatible
+if [ -d /opt/fbxsdk ] && [ ! -d /opt/fbxsdk/2020.3.9 ]; then
+    echo "Creating symlink for /opt/fbxsdk/2020.3.9..."
+    sudo ln -sf /opt/fbxsdk /opt/fbxsdk/2020.3.9
+fi
+export FBX_SDK="${FBX_SDK:-/opt/fbxsdk}"
+
+# Ensure VULKAN_SDK environment variable is configured
+if [ -z "$VULKAN_SDK" ]; then
+    if [ -d "/vulkan/1.4.350.0/x86_64" ]; then
+        export VULKAN_SDK="/vulkan/1.4.350.0/x86_64"
+    elif [ -d "$PWD/scripts/downloads/vulkansdk/1.4.341.1/x86_64" ]; then
+        export VULKAN_SDK="$PWD/scripts/downloads/vulkansdk/1.4.341.1/x86_64"
+    fi
+fi
+
+# Ensure Vulkan SDK runtime libraries are accessible
+if [ -n "$VULKAN_SDK" ]; then
+    if [ -f "$VULKAN_SDK/lib/libdxcompiler.so" ]; then
+        sudo ln -sf "$VULKAN_SDK/lib/libdxcompiler.so" /usr/local/lib/libdxcompiler.so
+    fi
+    if [ -f "$VULKAN_SDK/lib/libshaderc_shared.so" ]; then
+        sudo ln -sf "$VULKAN_SDK/lib/libshaderc_shared.so" /usr/local/lib/libshaderc_shared.so
+    fi
+    echo "$VULKAN_SDK/lib" | sudo tee /etc/ld.so.conf.d/vulkansdk.conf > /dev/null
+    sudo ldconfig
+fi
+
 # Ensure C# csc wrapper exists for Premake gmake builds
 if [ ! -f /usr/local/bin/csc ]; then
     echo "Creating /usr/local/bin/csc wrapper for Premake C# builds..."
@@ -109,10 +150,24 @@ CSCEOF
     sudo chmod +x /usr/local/bin/csc
 fi
 
+# Ensure C# msbuild wrapper exists on Linux
+if [ ! -f /usr/local/bin/msbuild ]; then
+    echo "Creating /usr/local/bin/msbuild wrapper for .NET builds..."
+    sudo tee /usr/local/bin/msbuild > /dev/null << 'MSBEOF'
+#!/bin/bash
+exec dotnet msbuild "$@"
+MSBEOF
+    sudo chmod +x /usr/local/bin/msbuild
+fi
+
 # Ensure git submodules are updated recursively
 echo "Updating git submodules..."
 git submodule update --init --recursive
 
+# Fix workspace file ownership if previous runs used sudo
+echo "Fixing file ownership in workspace..."
+sudo chown -R $(id -u):$(id -g) .
+
 # Run the python setup script to download dependencies & generate project makefiles
 echo "Running project setup script..."
-PAGER=cat python3 scripts/setup.py
+python3 scripts/setup.py
