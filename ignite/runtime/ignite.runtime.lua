@@ -42,7 +42,6 @@ project "Ignite.Runtime"
         "tracy",
         "MochiSharp.Native",
 
-        "ignite_core.dll.lib", -- rust based
     }
 
     includedirs {
@@ -105,18 +104,30 @@ project "Ignite.Runtime"
     }
 
     -- build rust
-    filter "configurations:Debug or Debug-Profiling"
+    filter { "configurations:Debug or Debug-Profiling", "system:windows" }
         libdirs { "%{wks.location}/crates/target/debug" }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
             copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
-    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
+    filter { "configurations:Debug or Debug-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/debug" }
+        postbuildcommands {
+            copy_file("%{wks.location}/crates/target/debug/libignite_core.so", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:windows" }
         libdirs { "%{wks.location}/crates/target/release" }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
             copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/release" }
+        postbuildcommands {
+            copy_file("%{wks.location}/crates/target/release/libignite_core.so", "%{cfg.targetdir}")
         }
 
     filter {}
@@ -152,6 +163,7 @@ project "Ignite.Runtime"
             "%{IncludeDir.IMATH_LINUX}"
         }
         links {
+            "ignite_core",
             "vulkan",
             "shaderc",
             "spirv-cross-c",
@@ -196,6 +208,7 @@ project "Ignite.Runtime"
     filter "system:windows"
         systemversion "latest"
         links {
+            "ignite_core.dll.lib",
             "d3d12.lib",
             "dxgi.lib",
             "d3dcompiler",

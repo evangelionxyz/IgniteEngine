@@ -93,7 +93,6 @@ project "Ignite.Engine"
         "tracy",
         "MochiSharp.Native",
         "UmbraShaderCompiler",
-        "ignite_core.dll.lib", -- rust based
     }
 
     defines {
@@ -109,30 +108,46 @@ project "Ignite.Engine"
     }
 
     -- build rust, SDL, and FastNoise2
-    filter "configurations:Debug or Debug-Profiling"
-        libdirs { wks_absolute .. "/crates/target/debug" }
+    filter { "configurations:Debug or Debug-Profiling", "system:windows" }
+        libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
             -- Configure and Build FastNoise2
-            'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Debug"',
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
 
             -- Build Rust
-            'cargo build --manifest-path "' .. wks_absolute .. '/crates/Cargo.toml"',
-            copy_file(wks_absolute .. "/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file(wks_absolute .. "/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
         }
 
-    filter "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling"
-        libdirs { wks_absolute .. "/crates/target/release" }
+    filter { "configurations:Debug or Debug-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/debug" }
+        prebuildcommands {
+            -- Build Rust
+            'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/debug/libignite_core.so", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:windows" }
+        libdirs { "%{wks.location}/crates/target/release" }
         prebuildcommands {
             -- Configure and Build FastNoise2
-            'cmake -S "' .. FASTNOISE2_SOURCE_DIR .. '" -B "' .. FASTNOISE2_SOURCE_DIR .. '/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
-            'cmake --build "' .. FASTNOISE2_SOURCE_DIR .. '/build" --config "Release"',
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
 
             -- Build Rust
-            'cargo build --release --manifest-path "' .. wks_absolute .. '/crates/Cargo.toml"',
-            copy_file(wks_absolute .. "/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file(wks_absolute .. "/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
+            copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+        }
+
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:linux" }
+        libdirs { "%{wks.location}/crates/target/release" }
+        prebuildcommands {
+            -- Build Rust
+            'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
+            copy_file("%{wks.location}/crates/target/release/libignite_core.so", "%{cfg.targetdir}")
         }
 
     filter {}
@@ -158,6 +173,7 @@ project "Ignite.Engine"
             "%{IncludeDir.IMATH_LINUX}"
         }
         links {
+            "ignite_core",
             "vulkan",
             "shaderc",
             "shaderc_util",
@@ -197,6 +213,7 @@ project "Ignite.Engine"
     filter "system:windows"
         systemversion "latest"
         links {
+            "ignite_core.dll.lib",
             "d3d12.lib",
             "dxgi.lib",
             "d3dcompiler",

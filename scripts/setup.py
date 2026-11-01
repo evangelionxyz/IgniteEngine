@@ -41,6 +41,7 @@ def generate_project_files(premake_binary):
             # gmake is the modern GNU Makefile generator in premake5
             premake_args.append("gmake")
             premake_args.append("--cc=clang")
+            premake_args.append("--os=linux")
         subprocess.call(premake_args, cwd=ROOT_DIR)
 
 

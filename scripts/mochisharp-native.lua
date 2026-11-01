@@ -25,11 +25,10 @@ project "MochiSharp.Native"
         "%{IncludeDir.Hostfxr}"
     }
 
-    links {
-        "%{Library.Hostfxr}"
-    }
-
     filter "system:windows"
+        links {
+            "%{Library.Hostfxr}"
+        }
         systemversion "latest"
         buildoptions { "/utf-8" }
         defines {

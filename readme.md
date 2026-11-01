@@ -49,10 +49,10 @@ make
 
 ```bash
 1. Build the image once (downloads FBX SDK, installs everything)
-command: docker build -t ignite-dev .
+command: docker build -t ignite-image:latest .
 
 2. Attach with source mounted
-command: docker run -it --rm -v "${PWD}:/workspace" ignite-dev
+command: docker run -it --rm -v "${PWD}:/workspace" ignite-image:latest
 
 3. Inside the container — generate makefiles and build
 command: python3 scripts/setup.py

@@ -72,7 +72,43 @@ sudo apt-get install -y \
 if [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so ]; then
     echo "Creating symlink for libxml2.so.2 (needed by Autodesk FBX SDK)..."
     sudo ln -sf /usr/lib/x86_64-linux-gnu/libxml2.so /usr/lib/x86_64-linux-gnu/libxml2.so.2
+elif [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ]; then
+    echo "Creating symlink for libxml2.so (needed by Autodesk FBX SDK)..."
+    sudo ln -sf /usr/lib/x86_64-linux-gnu/libxml2.so.2 /usr/lib/x86_64-linux-gnu/libxml2.so
 fi
+
+# Ensure C# csc wrapper exists for Premake gmake builds
+if [ ! -f /usr/local/bin/csc ]; then
+    echo "Creating /usr/local/bin/csc wrapper for Premake C# builds..."
+    sudo tee /usr/local/bin/csc > /dev/null << 'CSCEOF'
+#!/bin/bash
+CSPROJ=$(ls *.csproj 2>/dev/null | head -n 1)
+if [ -n "$CSPROJ" ]; then
+    CONFIG="Debug"
+    for arg in "$@"; do
+        case "$arg" in
+            *Shipping-Profiling*|*shipping-profiling*) CONFIG="Release" ;;
+            *Release-Profiling*|*release-profiling*) CONFIG="Release" ;;
+            *Shipping*|*shipping*) CONFIG="Release" ;;
+            *Release*|*release*) CONFIG="Release" ;;
+            *Debug-Profiling*|*debug-profiling*) CONFIG="Debug" ;;
+            *Debug*|*debug*) CONFIG="Debug" ;;
+        esac
+    done
+    exec dotnet build "$CSPROJ" -c "$CONFIG" --nologo -v q
+else
+    CSC_DLL=$(find /usr/share/dotnet /usr/lib/dotnet -name "csc.dll" 2>/dev/null | head -1)
+    if [ -n "$CSC_DLL" ]; then
+        exec dotnet "$CSC_DLL" "$@"
+    else
+        echo "Error: csc compiler not found" >&2
+        exit 1
+    fi
+fi
+CSCEOF
+    sudo chmod +x /usr/local/bin/csc
+fi
+
 # Ensure git submodules are updated recursively
 echo "Updating git submodules..."
 git submodule update --init --recursive

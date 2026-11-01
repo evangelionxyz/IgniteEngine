@@ -35,14 +35,27 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        build-essential clang lld cmake ninja-build pkg-config \
        git tar \
-       vulkan-tools mesa-vulkan-drivers \
+       libvulkan-dev vulkan-tools mesa-vulkan-drivers \
+       libshaderc-dev spirv-tools spirv-cross \
+       libspirv-cross-c-shared-dev libspirv-cross-c-shared0 \
        libwayland-dev libxkbcommon-dev xorg-dev \
-       libasound2-dev libudev-dev zlib1g-dev \
-       libfmt-dev libxml2-dev \
+       libasound2-dev libpulse-dev libaudio-dev libfribidi-dev libjack-dev libsndio-dev \
+       libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+       libxi-dev libxss-dev libxtst-dev \
+       libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+       libdbus-1-dev libibus-1.0-dev libudev-dev libthai-dev libusb-1.0-0-dev \
+       zlib1g-dev libfmt-dev libxml2-dev \
        libopenexr-dev libimath-dev \
        libglib2.0-dev \
        gdb libgmock-dev zenity expect \
     && rm -rf /var/lib/apt/lists/*
+
+# Symlink libxml2.so.2 for FBX SDK compatibility if needed
+RUN if [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so ]; then \
+        ln -sf /usr/lib/x86_64-linux-gnu/libxml2.so /usr/lib/x86_64-linux-gnu/libxml2.so.2; \
+    elif [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ]; then \
+        ln -sf /usr/lib/x86_64-linux-gnu/libxml2.so.2 /usr/lib/x86_64-linux-gnu/libxml2.so; \
+    fi
 
 # ---------------------------------------------------------------------------
 # VULKAN Linux docs ref https://vulkan.lunarg.com/doc/sdk/latest/linux/getting_started.html
@@ -58,6 +71,26 @@ RUN wget -qO /tmp/vulkan_sdk.tar.xz \
 
 ENV VULKAN_SDK=/vulkan/1.4.350.0/x86_64
 ENV PATH="$VULKAN_SDK/bin:$PATH"
+
+# Configure Vulkan SDK library paths and symlink libvulkan loader
+RUN if [ -d "$VULKAN_SDK/lib/VulkanLoader/lib" ]; then \
+        ln -sf "$VULKAN_SDK/lib/VulkanLoader/lib/"libvulkan.so* "$VULKAN_SDK/lib/"; \
+    fi \
+    && ln -sf "$VULKAN_SDK/lib/"libvulkan.so* /usr/local/lib/ 2>/dev/null || true \
+    && echo "$VULKAN_SDK/lib" > /etc/ld.so.conf.d/vulkan.conf \
+    && ldconfig
+
+ENV LD_LIBRARY_PATH="$VULKAN_SDK/lib:/usr/local/lib:$LD_LIBRARY_PATH"
+
+# ---------------------------------------------------------------------------
+# Install Rust toolchain (stable) via rustup
+# ---------------------------------------------------------------------------
+ENV RUSTUP_HOME=/opt/rustup \
+    CARGO_HOME=/opt/cargo \
+    PATH="/opt/cargo/bin:$PATH"
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --no-modify-path \
+    && chmod -R a+w /opt/rustup /opt/cargo
 
 # ---------------------------------------------------------------------------
 # Install Microsoft DirectX Compiler
@@ -95,6 +128,37 @@ RUN wget -qO /tmp/premake.tar.gz \
     && tar -xzf /tmp/premake.tar.gz -C /usr/local/bin premake5 \
     && chmod +x /usr/local/bin/premake5 \
     && rm /tmp/premake.tar.gz
+
+# ---------------------------------------------------------------------------
+# C# csc wrapper for Premake gmake Makefile builds
+# ---------------------------------------------------------------------------
+RUN cat <<'EOF' > /usr/local/bin/csc
+#!/bin/bash
+CSPROJ=$(ls *.csproj 2>/dev/null | head -n 1)
+if [ -n "$CSPROJ" ]; then
+    CONFIG="Debug"
+    for arg in "$@"; do
+        case "$arg" in
+            *Shipping-Profiling*|*shipping-profiling*) CONFIG="Release" ;;
+            *Release-Profiling*|*release-profiling*) CONFIG="Release" ;;
+            *Shipping*|*shipping*) CONFIG="Release" ;;
+            *Release*|*release*) CONFIG="Release" ;;
+            *Debug-Profiling*|*debug-profiling*) CONFIG="Debug" ;;
+            *Debug*|*debug*) CONFIG="Debug" ;;
+        esac
+    done
+    exec dotnet build "$CSPROJ" -c "$CONFIG" --nologo -v q
+else
+    CSC_DLL=$(find /usr/share/dotnet /usr/lib/dotnet -name "csc.dll" 2>/dev/null | head -1)
+    if [ -n "$CSC_DLL" ]; then
+        exec dotnet "$CSC_DLL" "$@"
+    else
+        echo "Error: csc compiler not found" >&2
+        exit 1
+    fi
+fi
+EOF
+RUN chmod +x /usr/local/bin/csc
 
 # ---------------------------------------------------------------------------
 # FBX SDK — GCC/Linux (installed at image-build time for layer caching)

@@ -15,8 +15,9 @@ jobs:
    build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-2025-vs2026]
+        os: [windows-2025-vs2026, ubuntu-24.04]
         configuration: [Release]
     env:
       VS_VERSION: "2026"
@@ -108,8 +109,12 @@ jobs:
 
       - name: Build Editor (Linux)
         if: runner.os == 'Linux'
-        run: make -j$(nproc) Ignite.Editor
+        run: |
+          CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
+          make -j$(nproc) config=$CONFIG_LOWER Ignite.Editor
 
       - name: Build Test Suite (Linux)
         if: runner.os == 'Linux'
-        run: make -j$(nproc) Ignite.Test
+        run: |
+          CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
+          make -j$(nproc) config=$CONFIG_LOWER Ignite.Test
