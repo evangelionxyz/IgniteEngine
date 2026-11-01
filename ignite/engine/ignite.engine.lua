@@ -57,7 +57,6 @@ project "Ignite.Engine"
         "%{IncludeDir.NUKLEAR}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}",
-        "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.OPENEXR}",
         "%{IncludeDir.IMATH}",
@@ -231,7 +230,6 @@ project "Ignite.Engine"
             "%{Library.bcrypt}",
             "%{Library.vulkan}",
             "%{Library.mono}",
-            "%{Library.ASSIMP}",
             "%{Library.FMOD}",
             "%{Library.Iex}",
             "%{Library.OpenEXR}",
@@ -262,12 +260,8 @@ project "Ignite.Engine"
             copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/OpenJPH/lib/win32/openjph.0.26.dll", "%{cfg.targetdir}"),
 
-            copy_file("%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll", "%{cfg.targetdir}"),
-
-            -- copy_file("%{THIRDPARTY_DIR}/FastNoise2/build/Release/")
-
 
             -- Copying dotnet libraries
             copy_file("%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll", "%{cfg.targetdir}")

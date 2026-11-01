@@ -34,7 +34,6 @@ project "Ignite.Core"
         "%{IncludeDir.IMATH}",
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
-        "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.FMOD}",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.IMGUI}",
@@ -199,7 +198,6 @@ project "Ignite.Core"
             "%{Library.bcrypt}",
             "%{Library.vulkan}",
             "%{Library.mono}",
-            "%{Library.ASSIMP}",
             "%{Library.FMOD}",
             "%{Library.Iex}",
             "%{Library.OpenEXR}",
@@ -230,7 +228,6 @@ project "Ignite.Core"
             copy_file("%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/OpenJPH/lib/win32/openjph.0.26.dll", "%{cfg.targetdir}"),
 
-            copy_file("%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/SDL3/build/Release/SDL3.dll", "%{cfg.targetdir}"),
 
