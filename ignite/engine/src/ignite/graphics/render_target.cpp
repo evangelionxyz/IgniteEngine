@@ -228,16 +228,19 @@ namespace ignite
         }
     }
 
-    void RenderTarget::Resize(const uint32_t width, const uint32_t height)
+    void RenderTarget::Resize(const uint32_t width, const uint32_t height, bool waitForIdle)
     {
         if (width == 0 || height == 0 || (m_CreateInfo.width == width && m_CreateInfo.height == height))
             return;
 
-        if (auto *dm = DeviceManager::GetInstance())
+        if (waitForIdle)
         {
-            if (dm->GetDevice())
+            if (auto *dm = DeviceManager::GetInstance())
             {
-                GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+                if (dm->GetDevice())
+                {
+                    GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+                }
             }
         }
 
@@ -832,6 +835,11 @@ namespace ignite
         nri.CmdEndRendering(*commandBuffer);
 
         barrier.before = barrier.after;
+        const auto &depthDesc = nri.GetTextureDesc(*m_DepthAttachment->GetHandle());
+        if ((depthDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
+        {
+            barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+        }
         nri.CmdBarrier(*commandBuffer, barrierDesc);
         m_DepthAttachment->SetCurrentState(barrier.after.layout, barrier.after.access, barrier.after.stages);
         m_AttachmentsInitialized = true;

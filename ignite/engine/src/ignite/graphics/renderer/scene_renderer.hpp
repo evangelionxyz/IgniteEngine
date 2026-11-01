@@ -239,6 +239,7 @@ namespace ignite
         Ref<Material> m_RuntimeMaterial;
 
         uint64_t m_TAAFrameIndex = 0;
+        bool m_ResizeWaitedThisFrame = false;
 
         std::unordered_map<entt::entity, std::vector<uint32_t>> m_EntityObjectIndexCache;
         std::unordered_map<entt::entity, uint32_t> m_EntityBoneOffsetCache;

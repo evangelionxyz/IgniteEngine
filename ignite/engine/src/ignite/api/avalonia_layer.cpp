@@ -757,10 +757,10 @@ namespace ignite
         readbackDesc.srcRegion = { (nri::Dim_t)pixelX, (nri::Dim_t)pixelY, 0, 1, 1, 1, 0, 0 };
         readbackDesc.dstRowPitch = sizeof(uint32_t);
 
+        dm->WaitForIdle();
         {
             auto &queueMutex = GPUUploadSync::GetQueueMutex();
             std::lock_guard<std::mutex> lock(queueMutex);
-            dm->WaitForIdle();
             dm->GetCoreInterface().ReadbackTextureToHostMemory(*graphicsQueue, &readbackDesc, 1);
         }
 

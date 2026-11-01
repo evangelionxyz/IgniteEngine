@@ -33,6 +33,7 @@
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/objects/procedural_sky.hpp"
+#include "ignite/imgui/imgui_nri.hpp"
 
 namespace ignite
 {
@@ -114,6 +115,7 @@ namespace ignite
         m_DebugGridBindingSetCache.clear();
         m_FXAABindingSetCache.clear();
         m_RenderTargets.clear();
+        ImGui_NRI::ClearTextureCache();
         m_Blooms.clear();
         m_SSAOs.clear();
 
@@ -133,6 +135,14 @@ namespace ignite
         if (m_Scene == scene)
         {
             return;
+        }
+
+        // The current frame may still reference scene textures, cached descriptor
+        // sets, environment maps, and pipelines. Retire that work before releasing
+        // any of those objects during a scene transition.
+        if (m_Scene)
+        {
+            GPUUploadSync::DeviceWaitIdle(m_Device);
         }
 
         if (m_Scene)
@@ -171,12 +181,8 @@ namespace ignite
         m_DebugGridBindingSetCache.clear();
         m_FXAABindingSetCache.clear();
 
-        if (auto *device = DeviceManager::GetInstance()->GetDevice())
-        {
-            GPUUploadSync::DeviceWaitIdle(device);
-        }
-
         m_RenderTargets.clear();
+        ImGui_NRI::ClearTextureCache();
         m_EntityObjectIndexCache.clear();
         m_EntityBoneOffsetCache.clear();
         m_SocketObjectIndexCache.clear();
@@ -205,6 +211,7 @@ namespace ignite
 
     void SceneRenderer::BeginFrame()
     {
+        m_ResizeWaitedThisFrame = false;
         m_Has2DPreRenderCache = false;
         if (m_Renderer2D)
         {
@@ -1050,6 +1057,18 @@ namespace ignite
     void SceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
     {
         IGN_PROFILE_FUNCTION();
+        if (!camera || width == 0 || height == 0)
+            return;
+
+        // Descriptor sets cached for the old attachment views must not be reused
+        // after those views are destroyed. Wait once for this camera resize, then
+        // recreate all of its render targets without one device-wide stall per RT.
+        if (!m_ResizeWaitedThisFrame)
+        {
+            GPUUploadSync::DeviceWaitIdle(m_Device);
+            BindingCache::Clear();
+            m_ResizeWaitedThisFrame = true;
+        }
 
         ISceneRenderer::ResizeFramebuffer(camera, width, height);
 
@@ -1124,28 +1143,28 @@ namespace ignite
                 auto &target = it->second;
 
                 if (target->sceneRT)
-                    target->sceneRT->Resize(renderWidth, renderHeight);
+                    target->sceneRT->Resize(renderWidth, renderHeight, false);
                 if (target->selectionRT)
-                    target->selectionRT->Resize(renderWidth, renderHeight);
+                    target->selectionRT->Resize(renderWidth, renderHeight, false);
                 if (target->sceneResolvedRT)
-                    target->sceneResolvedRT->Resize(renderWidth, renderHeight);
+                    target->sceneResolvedRT->Resize(renderWidth, renderHeight, false);
                 if (target->widgetRT)
-                    target->widgetRT->Resize(width, height);
+                    target->widgetRT->Resize(width, height, false);
                 if (target->compositeRT)
-                    target->compositeRT->Resize(width, height);
+                    target->compositeRT->Resize(width, height, false);
                 if (target->postProcessRT)
-                    target->postProcessRT->Resize(width, height);
+                    target->postProcessRT->Resize(width, height, false);
                 for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
                 {
                     if (historyRT)
-                        historyRT->Resize(width, height);
+                        historyRT->Resize(width, height, false);
                 }
                 target->taaHistoryValid = false;
 
                 if (target->debugRT)
                 {
                     target->debugRT->GetCreateInfo().depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
-                    target->debugRT->Resize(renderWidth, renderHeight);
+                    target->debugRT->Resize(renderWidth, renderHeight, false);
                 }
             }
         }
@@ -2797,6 +2816,60 @@ namespace ignite
         if (!bindingSet || !bindingSet->GetHandle())
             return;
 
+        auto isDepthFormat = [](nri::Format format) -> bool
+        {
+            return format == nri::Format::D16_UNORM || format == nri::Format::D32_SFLOAT ||
+                   format == nri::Format::D24_UNORM_S8_UINT || format == nri::Format::D32_SFLOAT_S8_UINT;
+        };
+
+        auto hasStencil = [](nri::Format format) -> bool
+        {
+            return format == nri::Format::D24_UNORM_S8_UINT || format == nri::Format::D32_SFLOAT_S8_UINT;
+        };
+
+        auto transitionToSRV = [&](Ref<Texture> &tex)
+        {
+            if (tex && tex->GetHandle() && tex->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
+            {
+                nri::TextureBarrierDesc b = {};
+                b.texture = tex->GetHandle();
+                b.before = { tex->GetCurrentAccess(), tex->GetCurrentLayout(), tex->GetCurrentStages() };
+                b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                b.mipOffset = 0;
+                b.mipNum = nri::REMAINING;
+                b.layerOffset = 0;
+                b.layerNum = nri::REMAINING;
+                b.planes = isDepthFormat(tex->GetFormat())
+                    ? (hasStencil(tex->GetFormat()) ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL) : nri::PlaneBits::DEPTH)
+                    : nri::PlaneBits::ALL;
+
+                nri::BarrierDesc bd = {};
+                bd.textures = &b;
+                bd.textureNum = 1;
+                DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, bd);
+                tex->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
+            }
+        };
+
+        const bool hasResolved = msaaResolved && target->sceneResolvedRT;
+        Ref<Texture> compositeDepth = (target->sceneRT && target->sceneRT->GetDepthAttachment() && !hasResolved) ? target->sceneRT->GetDepthAttachment() : nullptr;
+        Ref<Texture> compositeColor = hasResolved ? (target->sceneResolvedRT ? target->sceneResolvedRT->GetColorAttachment(0) : nullptr) : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : nullptr);
+        Ref<Texture> compositeObjectID = hasResolved
+            ? (target->sceneResolvedRT ? target->sceneResolvedRT->GetColorAttachment(1) : nullptr)
+            : (target->sceneRT ? target->sceneRT->GetColorAttachment(1) : nullptr);
+        Ref<Texture> compositeDebug = (target->debugRT ? target->debugRT->GetColorAttachment(0) : nullptr);
+        Ref<Texture> compositeWidget = (target->widgetRT ? target->widgetRT->GetColorAttachment(0) : nullptr);
+
+        transitionToSRV(compositeColor);
+        transitionToSRV(compositeWidget);
+        transitionToSRV(edgeTexture);
+        transitionToSRV(bloomTexture);
+        transitionToSRV(ssaoTexture);
+        transitionToSRV(compositeDepth);
+        transitionToSRV(compositeDebug);
+        transitionToSRV(compositeObjectID);
+        transitionToSRV(taaHistoryTexture);
+
         const bool startedRendering = compositeFramebuffer && !compositeFramebuffer->IsRendering();
         if (startedRendering)
             compositeFramebuffer->BeginRendering(cmd, false, false);
@@ -3955,8 +4028,6 @@ namespace ignite
 
         if (!sampleCountChanged && !resolveRTMissing)
             return;
-
-        GPUUploadSync::DeviceWaitIdle(m_Device);
 
         target->msaaSampleCount = desiredSampleCount;
 

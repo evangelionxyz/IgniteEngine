@@ -22,7 +22,6 @@
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/graphics/renderer/asset_scene_renderer.hpp"
 
-#include <nvrhi/nvrhi.h>
 
 #include <future>
 #include <optional>
@@ -57,7 +56,7 @@ namespace ignite
             bool gameplayViewportWindow = false;
             bool consoleWindow = true;
 
-            const int STABLE_RESIZE_FRAME = 12;
+            const int STABLE_RESIZE_FRAME = 6;
 
             int editorResizingFrame = 0;
             int gameplayResizingFrame = 0;
@@ -73,8 +72,8 @@ namespace ignite
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
             ProjectInfo projectCreateInfo;
 
-            nvrhi::RasterFillMode rasterFillMode = nvrhi::RasterFillMode::Solid;
-            nvrhi::RasterCullMode rasterCullMode = nvrhi::RasterCullMode::Front;
+            nri::FillMode rasterFillMode = nri::FillMode::SOLID;
+            nri::CullMode rasterCullMode = nri::CullMode::FRONT;
         };
 
     public:
@@ -177,12 +176,7 @@ namespace ignite
         std::filesystem::path m_CurrentSceneFilePath;
     	std::filesystem::path m_CurrentProjectFilepath;
 
-        nvrhi::BufferHandle m_DebugRenderBuffer;
-        nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
-        nvrhi::CommandListHandle m_Cmd;
         glm::vec2 m_CurrentFramebufferSize;
-
-        nvrhi::IDevice *m_Device = nullptr;
 
         AssetHandle m_CurrentSceneHandle = AssetHandle(0);
 

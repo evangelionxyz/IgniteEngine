@@ -499,9 +499,6 @@ namespace ignite
             }
         }
 
-        // When the scene is focused (play/simulate with locked cursor), block mouse and keyboard
-        // events from reaching ImGui so windows cannot be dragged or interacted with.
-        // Window-management events (resize, focus, DPI) still pass through.
         if (m_BlockEvents)
         {
             const bool isMouseEvent = (patchedEvent.type == SDL_EVENT_MOUSE_MOTION

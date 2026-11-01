@@ -20,6 +20,20 @@
 
 namespace ignite::UI
 {
+    inline ImTextureID GetTextureID(const Ref<Texture> &texture)
+    {
+        return (texture && texture->GetShaderResourceView())
+            ? reinterpret_cast<ImTextureID>(texture->GetShaderResourceView())
+            : 0;
+    }
+
+    inline ImTextureID GetTextureID(Texture *texture)
+    {
+        return (texture && texture->GetShaderResourceView())
+            ? reinterpret_cast<ImTextureID>(texture->GetShaderResourceView())
+            : 0;
+    }
+
     struct State
     {
         bool isItemActivated = false;
@@ -927,14 +941,10 @@ namespace ignite::UI
                 texture = assetManager->GetAsset<Texture>(textureHandle);
             }
 
-            if (texture && texture->GetHandle())
+            if (texture && texture->GetShaderResourceView())
             {
-                drawList->AddImage(
-                    reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
-                    previewMin,
-                    previewMax,
-                    ImVec2(0.0f, 1.0f),
-                    ImVec2(1.0f, 0.0f));
+                drawList->AddImage(GetTextureID(texture),
+                    previewMin, previewMax, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
             }
 
             drawList->AddRect(previewMin, previewMax, IM_COL32(20, 20, 20, 255), 0.0f, 0, 1.5f);

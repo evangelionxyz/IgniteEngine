@@ -1273,7 +1273,7 @@ namespace ignite
                     const ImVec2 clipMax = { previewRegionPos.x + previewRegionSize.x, previewRegionPos.y + previewRegionSize.y };
                     drawList->PushClipRect(previewRegionPos, clipMax, true);
 
-                    drawList->AddImage(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), imagePos, { imagePos.x + scaledImageSize.x, imagePos.y + scaledImageSize.y }, { 0.0f, 0.0f }, { 1.0f, 1.0f });
+                    drawList->AddImage(UI::GetTextureID(previewTexture), imagePos, { imagePos.x + scaledImageSize.x, imagePos.y + scaledImageSize.y }, { 0.0f, 0.0f }, { 1.0f, 1.0f });
                     WidgetEditor::DrawPreviewOverlay(drawList, widget, selectedItemId, imagePos, scaledImageSize, canvasW, canvasH);
 
                     if (selectedItem && widget->GetRoot() && selectedItem->id != widget->GetRoot()->id)

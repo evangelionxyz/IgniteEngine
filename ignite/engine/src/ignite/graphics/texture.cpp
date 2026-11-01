@@ -8,6 +8,7 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/imgui/imgui_nri.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/serializer/serializer.hpp"
 
@@ -41,6 +42,50 @@ namespace ignite
                 return true;
             default:
                 return false;
+            }
+        }
+
+        static size_t GetBytesPerPixel(nri::Format format)
+        {
+            const auto *props = nri::nriGetFormatProps(format);
+            if (props && props->stride > 0)
+            {
+                return props->stride;
+            }
+
+            switch (format)
+            {
+            case nri::Format::RGBA32_SFLOAT:
+            case nri::Format::RGBA32_UINT:
+            case nri::Format::RGBA32_SINT:
+                return 16;
+            case nri::Format::RGB32_SFLOAT:
+                return 12;
+            case nri::Format::RGBA16_SFLOAT:
+            case nri::Format::RGBA16_UNORM:
+            case nri::Format::RGBA16_UINT:
+            case nri::Format::RG32_SFLOAT:
+            case nri::Format::RG32_UINT:
+                return 8;
+            case nri::Format::RGBA8_UNORM:
+            case nri::Format::RGBA8_SRGB:
+            case nri::Format::BGRA8_UNORM:
+            case nri::Format::BGRA8_SRGB:
+            case nri::Format::R32_UINT:
+            case nri::Format::R32_SFLOAT:
+            case nri::Format::R32_SINT:
+            case nri::Format::RG16_SFLOAT:
+            case nri::Format::RG16_UNORM:
+                return 4;
+            case nri::Format::RG8_UNORM:
+            case nri::Format::R16_UNORM:
+            case nri::Format::R16_SFLOAT:
+                return 2;
+            case nri::Format::R8_UNORM:
+            case nri::Format::R8_UINT:
+                return 1;
+            default:
+                return 4;
             }
         }
     }
@@ -342,7 +387,11 @@ namespace ignite
             const auto &nri = deviceManager->GetCoreInterface();
             for (nri::Descriptor *mipSrv : m_MipSRVs)
             {
-                if (mipSrv) nri.DestroyDescriptor(mipSrv);
+                if (mipSrv)
+                {
+                    ImGui_NRI::InvalidateTextureCache(mipSrv);
+                    nri.DestroyDescriptor(mipSrv);
+                }
             }
             for (nri::Descriptor *uav : m_StorageViews)
             {
@@ -350,6 +399,7 @@ namespace ignite
             }
             if (m_ShaderResourceView)
             {
+                ImGui_NRI::InvalidateTextureCache(m_ShaderResourceView);
                 nri.DestroyDescriptor(m_ShaderResourceView);
             }
             if (m_Sampler)
@@ -655,6 +705,14 @@ namespace ignite
             usage |= nri::TextureUsageBits::SHADING_RATE_ATTACHMENT;
         }
 
+        if (m_CreateInfo.sampleCount <= 1 && !isDepth)
+        {
+            if (device && (nri.GetFormatSupport(*device, m_CreateInfo.format) & nri::FormatSupportBits::HOST_COPY) != 0)
+            {
+                usage |= nri::TextureUsageBits::HOST_TRANSFER;
+            }
+        }
+
         nri::TextureDesc textureDesc = {};
         textureDesc.type = m_CreateInfo.dimension;
         textureDesc.usage = usage;
@@ -678,9 +736,18 @@ namespace ignite
 
         if (m_Handle)
         {
-            m_CurrentAccess = m_CreateInfo.initialAccess;
-            m_CurrentLayout = m_CreateInfo.initialLayout;
-            m_CurrentStages = m_CreateInfo.initialStages;
+            if (m_CreateInfo.isNativeObject)
+            {
+                m_CurrentAccess = m_CreateInfo.initialAccess;
+                m_CurrentLayout = m_CreateInfo.initialLayout;
+                m_CurrentStages = m_CreateInfo.initialStages;
+            }
+            else
+            {
+                m_CurrentAccess = nri::AccessBits::NONE;
+                m_CurrentLayout = nri::Layout::UNDEFINED;
+                m_CurrentStages = nri::StageBits::NONE;
+            }
 
             if (!m_CreateInfo.isNativeObject)
             {
@@ -1279,5 +1346,66 @@ namespace ignite
         {
             BindlessSystem::FlushPendingWrites();
         }
+    }
+
+    bool Texture::ReadPixelData(void *outPixels, size_t bufferSize, uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+    {
+        if (!outPixels || !m_Handle)
+            return false;
+
+        auto *dm = DeviceManager::GetInstance();
+        if (!dm || !dm->GetDevice() || !dm->GetGraphicsQueue())
+            return false;
+
+        const uint32_t texWidth = (width == 0) ? m_CreateInfo.width : width;
+        const uint32_t texHeight = (height == 0) ? m_CreateInfo.height : height;
+        if (texWidth == 0 || texHeight == 0)
+            return false;
+
+        const auto &nri = dm->GetCoreInterface();
+        const auto &desc = nri.GetTextureDesc(*m_Handle);
+        if ((desc.usage & nri::TextureUsageBits::HOST_TRANSFER) == 0)
+        {
+            LOG_WARN("[Texture] ReadPixelData failed: texture '{}' was not created with TextureUsageBits::HOST_TRANSFER", m_DebugName);
+            return false;
+        }
+
+        const size_t bytesPerPixel = texture_utils::GetBytesPerPixel(desc.format);
+        const size_t rowPitch = texWidth * bytesPerPixel;
+        const size_t requiredSize = rowPitch * texHeight;
+        if (bufferSize < requiredSize)
+            return false;
+
+        nri::ReadbackTextureToHostMemoryDesc readbackDesc{};
+        readbackDesc.srcTexture = m_Handle;
+        readbackDesc.dstData = outPixels;
+        readbackDesc.srcRegion = {
+            static_cast<nri::Dim_t>(x),
+            static_cast<nri::Dim_t>(y),
+            0,
+            static_cast<nri::Dim_t>(texWidth),
+            static_cast<nri::Dim_t>(texHeight),
+            1,
+            0,
+            0
+        };
+        readbackDesc.dstRowPitch = static_cast<uint32_t>(rowPitch);
+
+        dm->WaitForIdle();
+
+        nri::Result res = nri::Result::FAILURE;
+        {
+            auto &queueMutex = GPUUploadSync::GetQueueMutex();
+            std::lock_guard<std::mutex> lock(queueMutex);
+            res = nri.ReadbackTextureToHostMemory(*dm->GetGraphicsQueue(), &readbackDesc, 1);
+        }
+        return (res == nri::Result::SUCCESS);
+    }
+
+    uint32_t Texture::ReadPixel(uint32_t x, uint32_t y)
+    {
+        uint32_t pixelValue = 0xFFFFFFFFu;
+        ReadPixelData(&pixelValue, sizeof(uint32_t), x, y, 1, 1);
+        return pixelValue;
     }
 }

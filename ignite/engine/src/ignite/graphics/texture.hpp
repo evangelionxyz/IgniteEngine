@@ -203,6 +203,9 @@ namespace ignite
 
         static uint32_t CalculateMaxMipLevels(uint32_t width, uint32_t height, uint32_t depth = 1);
 
+        bool ReadPixelData(void *outPixels, size_t bufferSize, uint32_t x = 0, uint32_t y = 0, uint32_t width = 0, uint32_t height = 0);
+        uint32_t ReadPixel(uint32_t x, uint32_t y);
+
         int GetWidth() const { return m_CreateInfo.width; }
         int GetHeight() const { return m_CreateInfo.height; }
         int GetChannels() const { return 4; }

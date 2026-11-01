@@ -19,6 +19,7 @@
 #include <array>
 #include <optional>
 #include <cstdint>
+#include <mutex>
 #include <glm/glm.hpp>
 
 #include <NRI.h>
@@ -64,6 +65,7 @@ namespace ignite
 
         static void InvalidateTextureCache(void *textureHandle);
         static void InvalidateTextureCache(nri::Descriptor *textureSRV);
+        static void ClearTextureCache();
 
         static ImGui_NRI *s_Instance;
 
@@ -106,6 +108,7 @@ namespace ignite
         nri::PipelineLayout *m_PipelineLayout = nullptr;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_GraphicsPipelines;
+        std::mutex m_BindingsCacheMutex;
         std::unordered_map<nri::Descriptor *, Ref<BindingSet>> m_BindingsCache;
 
         bool m_IsShuttingDown = false;

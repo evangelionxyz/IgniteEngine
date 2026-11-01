@@ -21,6 +21,13 @@
     #include <vulkan/vulkan.hpp>
 #endif
 
+#ifdef ERROR
+    #undef ERROR
+#endif
+#ifdef RGB
+    #undef RGB
+#endif
+
 #include <NRI.h>
 #include <NRIDescs.h>
 #include <Extensions/NRIHelper.h>

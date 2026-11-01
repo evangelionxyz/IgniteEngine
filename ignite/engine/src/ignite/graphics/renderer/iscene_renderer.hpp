@@ -202,7 +202,7 @@ namespace ignite
         };
 
         nri::CommandBuffer *BeginCommandBuffer();
-        void SubmitCommandBuffer(nri::CommandBuffer *cmd, bool waitIdle = false);
+        void SubmitCommandBuffer(nri::CommandBuffer *cmd);
 
         static void FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms);
         Ref<Material> ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle);

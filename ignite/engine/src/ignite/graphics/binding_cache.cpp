@@ -6,8 +6,10 @@
 #include "ignite/core/hashing.hpp"
 #include "ignite/core/logger.hpp"
 
-#include <unordered_map>
+#include <algorithm>
+#include <mutex>
 #include <shared_mutex>
+#include <unordered_map>
 
 namespace ignite
 {
@@ -20,98 +22,106 @@ namespace ignite
             {
                 Hashing::HashCombine(seed, item.rangeIndex);
                 Hashing::HashCombine(seed, item.baseDescriptor);
-                Hashing::HashCombine(seed, (size_t)item.descriptor);
+                Hashing::HashCombine(seed, reinterpret_cast<size_t>(item.descriptor));
+                Hashing::HashCombine(seed, item.isPushConstants);
             }
             return seed;
         }
     }
 
+    struct BindingCacheEntry
+    {
+        nri::PipelineLayout *pipelineLayout = nullptr;
+        uint32_t setIndex = 0;
+        BindingSetDesc desc;
+        Ref<BindingSet> bindingSet;
+    };
+
     struct BindingCacheData
     {
         nri::Device *device = nullptr;
-        std::unordered_map<size_t, Ref<BindingSet>> bindingSets;
+        std::unordered_map<size_t, std::vector<BindingCacheEntry>> bindingSets;
         std::shared_mutex mutex;
     };
 
     static BindingCacheData g_BindingCacheData;
 
+    namespace
+    {
+        BindingCacheEntry *FindEntry(BindingCacheData &cache, size_t hash, const BindingSetDesc &desc,
+            nri::PipelineLayout *pipelineLayout, uint32_t setIndex)
+        {
+            auto it = cache.bindingSets.find(hash);
+            if (it == cache.bindingSets.end())
+                return nullptr;
+
+            for (auto &entry : it->second)
+            {
+                if (entry.pipelineLayout == pipelineLayout && entry.setIndex == setIndex && entry.desc == desc)
+                    return &entry;
+            }
+            return nullptr;
+        }
+    }
+
     void BindingCache::Init(nri::Device *device)
     {
+        std::unique_lock lock(g_BindingCacheData.mutex);
         g_BindingCacheData.device = device;
     }
 
     void BindingCache::Shutdown()
     {
-        g_BindingCacheData.mutex.lock();
+        std::unique_lock lock(g_BindingCacheData.mutex);
         g_BindingCacheData.bindingSets.clear();
-        g_BindingCacheData.mutex.unlock();
-
         g_BindingCacheData.device = nullptr;
     }
 
     void BindingCache::Clear()
     {
-        g_BindingCacheData.mutex.lock();
+        std::unique_lock lock(g_BindingCacheData.mutex);
         g_BindingCacheData.bindingSets.clear();
-        g_BindingCacheData.mutex.unlock();
     }
 
     Ref<BindingSet> BindingCache::GetCachedBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex)
     {
         const size_t hash = ComputeBindingCacheHash(desc, pipelineLayout, setIndex);
-
-        g_BindingCacheData.mutex.lock_shared();
-        Ref<BindingSet> result = nullptr;
-        auto it = g_BindingCacheData.bindingSets.find(hash);
-        if (it != g_BindingCacheData.bindingSets.end())
-            result = it->second;
-        g_BindingCacheData.mutex.unlock_shared();
-
-        return result;
+        std::shared_lock lock(g_BindingCacheData.mutex);
+        BindingCacheEntry *entry = FindEntry(g_BindingCacheData, hash, desc, pipelineLayout, setIndex);
+        return entry ? entry->bindingSet : nullptr;
     }
 
     Ref<BindingSet> BindingCache::GetOrCreateBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex, const std::string &debugName)
     {
         const size_t hash = ComputeBindingCacheHash(desc, pipelineLayout, setIndex);
+        std::unique_lock lock(g_BindingCacheData.mutex);
 
-        g_BindingCacheData.mutex.lock_shared();
-        Ref<BindingSet> result = nullptr;
-        auto it = g_BindingCacheData.bindingSets.find(hash);
-        if (it != g_BindingCacheData.bindingSets.end())
-            result = it->second;
-        g_BindingCacheData.mutex.unlock_shared();
+        if (BindingCacheEntry *entry = FindEntry(g_BindingCacheData, hash, desc, pipelineLayout, setIndex))
+            return entry->bindingSet;
 
-        if (!result)
-        {
-            g_BindingCacheData.mutex.lock();
-            Ref<BindingSet> &entry = g_BindingCacheData.bindingSets[hash];
-            if (!entry)
-            {
-                nri::DescriptorSet *descriptorSet = BindingSet::AllocateAndUpdate(pipelineLayout, setIndex, desc);
-                if (descriptorSet)
-                {
-                    result = BindingSet::Create(debugName.empty() ? "[Cached BindingSet]" : debugName, descriptorSet);
-                    entry = result;
-                }
-            }
-            else
-            {
-                result = entry;
-            }
-            g_BindingCacheData.mutex.unlock();
-        }
+        nri::DescriptorSet *descriptorSet = BindingSet::AllocateAndUpdate(pipelineLayout, setIndex, desc);
+        if (!descriptorSet)
+            return nullptr;
 
-        return result;
+        Ref<BindingSet> bindingSet = BindingSet::Create(debugName.empty() ? "[Cached BindingSet]" : debugName, descriptorSet);
+        g_BindingCacheData.bindingSets[hash].push_back({ pipelineLayout, setIndex, desc, bindingSet });
+        return bindingSet;
     }
 
     void BindingCache::RemoveBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex)
     {
         const size_t hash = ComputeBindingCacheHash(desc, pipelineLayout, setIndex);
-
-        g_BindingCacheData.mutex.lock();
+        std::unique_lock lock(g_BindingCacheData.mutex);
         auto it = g_BindingCacheData.bindingSets.find(hash);
-        if (it != g_BindingCacheData.bindingSets.end())
+        if (it == g_BindingCacheData.bindingSets.end())
+            return;
+
+        auto &entries = it->second;
+        entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const BindingCacheEntry &entry)
+        {
+            return entry.pipelineLayout == pipelineLayout && entry.setIndex == setIndex && entry.desc == desc;
+        }), entries.end());
+        if (entries.empty())
             g_BindingCacheData.bindingSets.erase(it);
-        g_BindingCacheData.mutex.unlock();
     }
 }

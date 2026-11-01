@@ -2,6 +2,7 @@
 
 #include "pch.hpp"
 #include "animation_editor_shared.hpp"
+#include "ext/editor_ui.hpp" 
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/imgui/gizmo.hpp"
@@ -22,9 +23,9 @@ namespace ignite::UI
 
 		// Draw the preview texture if available, otherwise draw a dummy rectangle
 		Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-		if (previewTexture && previewTexture->GetHandle())
+		if (previewTexture && previewTexture->GetShaderResourceView())
 		{
-			ImGui::Image((ImTextureID)(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+			ImGui::Image(UI::GetTextureID(previewTexture), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
 			sceneData.viewportHovered = ImGui::IsItemHovered();
 		}
 		else

@@ -48,7 +48,7 @@ namespace ignite
         ~RenderTarget();
 
         void CreateFramebuffer();
-        void Resize(const uint32_t width, const uint32_t height);
+        void Resize(const uint32_t width, const uint32_t height, bool waitForIdle = true);
 
         glm::uvec2 GetSize() const { return { m_CreateInfo.width, m_CreateInfo.height }; }
 

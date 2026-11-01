@@ -79,7 +79,7 @@ namespace ignite
         return slot.commandBuffer;
     }
 
-    void ISceneRenderer::SubmitCommandBuffer(nri::CommandBuffer *cmd, bool waitIdle)
+    void ISceneRenderer::SubmitCommandBuffer(nri::CommandBuffer *cmd)
     {
         if (!cmd)
             return;
@@ -88,15 +88,7 @@ namespace ignite
         const auto &nri = deviceManager->GetCoreInterface();
         nri.EndCommandBuffer(*cmd);
 
-        const uint64_t signalValue = m_NextFenceValue++;
-        for (auto &slot : m_CommandBufferSlots)
-        {
-            if (slot.commandBuffer == cmd)
-            {
-                slot.fenceValue = signalValue;
-                break;
-            }
-        }
+        const uint64_t signalValue = m_NextFenceValue;
 
         nri::FenceSubmitDesc signalFence = {};
         signalFence.fence = m_CommandFence;
@@ -113,13 +105,23 @@ namespace ignite
         }
 
         {
-            std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
-            nri.QueueSubmit(*deviceManager->GetGraphicsQueue(), submitDesc);
+            // std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+            const nri::Result result = nri.QueueSubmit(*deviceManager->GetGraphicsQueue(), submitDesc);
+            if (result != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("[SceneRenderer] QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
+                return;
+            }
         }
 
-        if (waitIdle && m_CommandFence)
+        ++m_NextFenceValue;
+        for (auto &slot : m_CommandBufferSlots)
         {
-            nri.Wait(*m_CommandFence, signalValue);
+            if (slot.commandBuffer == cmd)
+            {
+                slot.fenceValue = signalValue;
+                break;
+            }
         }
     }
 

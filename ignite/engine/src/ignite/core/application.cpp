@@ -98,6 +98,7 @@ namespace ignite
             (*it)->Shutdown();
             delete *it;
         }
+
         m_Subsystems.clear();
 
         // 8. Clear any texture uploads or callbacks that might have been queued during layer/subsystem teardown

@@ -180,43 +180,35 @@ namespace ignite
             return;
         }
 
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        auto app = Application::GetInstance();
-
-        nvrhi::CommandListHandle cmd = device->createCommandList();
-        cmd->open();
         TextureCreateInfo createInfo;
-        createInfo.format = nvrhi::Format::RGBA8_UNORM;
-        createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        createInfo.format = nri::Format::RGBA8_UNORM;
+        createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
+        createInfo.initialAccess = nri::AccessBits::SHADER_RESOURCE;
         createInfo.keepInitialState = true;
         createInfo.bindless = false;
 
-        s_SharedIcons["scene"] = Texture::Create("resources/ui/editor/ic_editor_scene.png", createInfo, cmd);
-        s_SharedIcons["shader"] = Texture::Create("resources/ui/editor/ic_editor_shader.png", createInfo, cmd);
-        s_SharedIcons["sprite_sheet"] = Texture::Create("resources/ui/editor/ic_editor_sprite_sheet.png", createInfo, cmd);
-        s_SharedIcons["material"] = Texture::Create("resources/ui/editor/ic_editor_material.png", createInfo, cmd);
-        s_SharedIcons["material_2d"] = Texture::Create("resources/ui/editor/ic_editor_material_2d.png", createInfo, cmd);
-        s_SharedIcons["anim"] = Texture::Create("resources/ui/editor/ic_editor_anim.png", createInfo, cmd);
-        s_SharedIcons["font"] = Texture::Create("resources/ui/editor/ic_editor_font.png", createInfo, cmd);
-        s_SharedIcons["roll"] = Texture::Create("resources/ui/editor/ic_editor_roll.png", createInfo, cmd);
-        s_SharedIcons["arrow"] = Texture::Create("resources/ui/editor/ic_editor_arrow.png", createInfo, cmd);
-        s_SharedIcons["add"] = Texture::Create("resources/ui/editor/ic_editor_add.png", createInfo, cmd);
-        s_SharedIcons["audio"] = Texture::Create("resources/ui/editor/ic_editor_audio.png", createInfo, cmd);
+        s_SharedIcons["scene"] = Texture::Create("resources/ui/editor/ic_editor_scene.png", createInfo, nullptr);
+        s_SharedIcons["shader"] = Texture::Create("resources/ui/editor/ic_editor_shader.png", createInfo, nullptr);
+        s_SharedIcons["sprite_sheet"] = Texture::Create("resources/ui/editor/ic_editor_sprite_sheet.png", createInfo, nullptr);
+        s_SharedIcons["material"] = Texture::Create("resources/ui/editor/ic_editor_material.png", createInfo, nullptr);
+        s_SharedIcons["material_2d"] = Texture::Create("resources/ui/editor/ic_editor_material_2d.png", createInfo, nullptr);
+        s_SharedIcons["anim"] = Texture::Create("resources/ui/editor/ic_editor_anim.png", createInfo, nullptr);
+        s_SharedIcons["font"] = Texture::Create("resources/ui/editor/ic_editor_font.png", createInfo, nullptr);
+        s_SharedIcons["roll"] = Texture::Create("resources/ui/editor/ic_editor_roll.png", createInfo, nullptr);
+        s_SharedIcons["arrow"] = Texture::Create("resources/ui/editor/ic_editor_arrow.png", createInfo, nullptr);
+        s_SharedIcons["add"] = Texture::Create("resources/ui/editor/ic_editor_add.png", createInfo, nullptr);
+        s_SharedIcons["audio"] = Texture::Create("resources/ui/editor/ic_editor_audio.png", createInfo, nullptr);
 
-        s_SharedIcons["skeleton"] = Texture::Create("resources/ui/editor/ic_editor_skeleton.png", createInfo, cmd);
-        s_SharedIcons["mesh"] = Texture::Create("resources/ui/editor/ic_editor_sk_mesh.png", createInfo, cmd);
-        s_SharedIcons["st_mesh"] = Texture::Create("resources/ui/editor/ic_editor_st_mesh.png", createInfo, cmd);
+        s_SharedIcons["skeleton"] = Texture::Create("resources/ui/editor/ic_editor_skeleton.png", createInfo, nullptr);
+        s_SharedIcons["mesh"] = Texture::Create("resources/ui/editor/ic_editor_sk_mesh.png", createInfo, nullptr);
+        s_SharedIcons["st_mesh"] = Texture::Create("resources/ui/editor/ic_editor_st_mesh.png", createInfo, nullptr);
 
-        s_SharedIcons["anim_ctrl"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl.png", createInfo, cmd);
-        s_SharedIcons["anim_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_2d.png", createInfo, cmd);
-        s_SharedIcons["anim_ctrl_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl_2d.png", createInfo, cmd);
+        s_SharedIcons["anim_ctrl"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl.png", createInfo, nullptr);
+        s_SharedIcons["anim_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_2d.png", createInfo, nullptr);
+        s_SharedIcons["anim_ctrl_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl_2d.png", createInfo, nullptr);
 
-        s_SharedIcons["folder"] = Texture::Create("resources/ui/editor/ic_editor_folder.png", createInfo, cmd);
-        s_SharedIcons["unknown"] = Texture::Create("resources/ui/editor/ic_editor_unknown.png", createInfo, cmd);
-
-        cmd->close();
-        app->SubmitWorkerCommandList(cmd);
+        s_SharedIcons["folder"] = Texture::Create("resources/ui/editor/ic_editor_folder.png", createInfo, nullptr);
+        s_SharedIcons["unknown"] = Texture::Create("resources/ui/editor/ic_editor_unknown.png", createInfo, nullptr);
     }
 
     ContentBrowserPanel::~ContentBrowserPanel()
@@ -437,7 +429,7 @@ namespace ignite
             // const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
             if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarBtSize.y), ImGuiChildFlags_Borders))
             {
-                ImTextureID arrow = (ImTextureID)s_SharedIcons["arrow"]->GetHandle().Get();
+                ImTextureID arrow = UI::GetTextureID(s_SharedIcons["arrow"]);
                 if (UI::DrawImageButton("##bw_arrow", arrow, navbarBtSize))
                 {
                     if (!m_BackwardPathStack.empty())
@@ -476,7 +468,7 @@ namespace ignite
                 }
 
                 ImGui::SameLine(0.0f, 4.0f);
-                ImTextureID refreshBt = (ImTextureID)s_SharedIcons["roll"]->GetHandle().Get();
+                ImTextureID refreshBt = UI::GetTextureID(s_SharedIcons["roll"]);
                 if (UI::DrawImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
                 {
                     m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
@@ -1640,7 +1632,7 @@ namespace ignite
 
         const ImVec2 imageMax(imageMin.x + displaySize.x, imageMin.y + displaySize.y);
 
-        ImTextureID iconId = reinterpret_cast<ImTextureID>(icon->GetHandle().Get());
+        ImTextureID iconId = UI::GetTextureID(icon);
         drawList->AddImage(iconId, imageMin, imageMax);
 
         if (isSelected)
@@ -1928,9 +1920,9 @@ namespace ignite
                                 const auto &sprite = sprites[spriteIndex];
                                 ImGui::PushID(static_cast<int>(spriteIndex));
 
-                                if (texture && texture->GetHandle())
+                                if (texture && texture->GetShaderResourceView())
                                 {
-                                    ImTextureID texId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+                                    ImTextureID texId = UI::GetTextureID(texture);
                                     ImGui::ImageButton("##sprite_item", texId, ImVec2(spritePreviewSize, spritePreviewSize), ImVec2(sprite.uv0.x, sprite.uv0.y), ImVec2(sprite.uv1.x, sprite.uv1.y));
                                 }
                                 else
@@ -2562,9 +2554,9 @@ namespace ignite
                 dragIcon = s_SharedIcons["unknown"];
             }
 
-            if (dragIcon && dragIcon->GetHandle())
+            if (dragIcon && dragIcon->GetShaderResourceView())
             {
-                ImTextureID iconId = reinterpret_cast<ImTextureID>(dragIcon->GetHandle().Get());
+                ImTextureID iconId = UI::GetTextureID(dragIcon);
                 ImGui::Image(iconId, ImVec2(32.0f, 32.0f));
             }
 
@@ -2796,7 +2788,7 @@ namespace ignite
             const int destHeight = thumbnailSize;
             if (texture_utils::IsExrFile(capturedPath))
             {
-                nvrhi::Format format = nvrhi::Format::RGBA8_UNORM;
+                nri::Format format = nri::Format::RGBA8_UNORM;
                 texture_utils::LoadEXRTexture(capturedPath, srcWidth, srcHeight, format, srcPixels);
 
                 const uint64_t resizedSize = static_cast<uint64_t>(destWidth) * destHeight * kChannels;
@@ -2828,7 +2820,7 @@ namespace ignite
                 // which ignores createInfo.width/height and loads the full resolution image
                 // (e.g. an 8K x 4K HDR = 128MB GPU allocation just for a 96px thumbnail).
                 // With many HDR files, this easily causes ~300-600 MB growth per reload cycle
-                // and the unload only freed the Ref but nvrhi deferred deletion kept them
+                // and the unload only freed the Ref but deferred deletion kept them
                 // alive long enough for the next reload to stack on top.
                 // -----------------------------------------------------------------------
                 const uint64_t resizedSize = static_cast<uint64_t>(destWidth) * destHeight * kChannels;
@@ -2863,24 +2855,20 @@ namespace ignite
                 }
 
                 TextureCreateInfo createInfo;
-                createInfo.format = nvrhi::Format::RGBA8_UNORM;
+                createInfo.format = nri::Format::RGBA8_UNORM;
                 createInfo.keepInitialState = true;
                 createInfo.keepCpuData = false;
-                createInfo.deferGpuCreate = true;
+                createInfo.deferGpuCreate = false;
                 createInfo.bindless = false;
-                createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+                createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
+                createInfo.initialAccess = nri::AccessBits::SHADER_RESOURCE;
                 createInfo.width = static_cast<uint32_t>(destWidth);
                 createInfo.height = static_cast<uint32_t>(destHeight);
-                createInfo.samplerAddressU = nvrhi::SamplerAddressMode::ClampToEdge;
-                createInfo.samplerAddressV = nvrhi::SamplerAddressMode::ClampToEdge;
-                createInfo.samplerAddressW = nvrhi::SamplerAddressMode::ClampToEdge;
+                createInfo.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
+                createInfo.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
+                createInfo.samplerAddressW = nri::AddressMode::CLAMP_TO_EDGE;
                 createInfo.samplerLinearFiltering = true;
 
-                nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-                nvrhi::CommandListHandle cmd = device->createCommandList();
-
-                // Build the texture from the pre-resized buffer (Buffer overload).
-                // createInfo.width/height ARE honoured by this constructor.
                 Ref<Texture> loadedTexture = Texture::Create(destPixels, createInfo, nullptr);
 
                 if (!loadedTexture)
@@ -2890,45 +2878,30 @@ namespace ignite
                     return;
                 }
 
+                if (requestGeneration != s_SharedThumbnailLoadGeneration)
                 {
-                    std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-                    cmd->open();
-                    cmd->beginMarker("Content browser thumbnails creation");
-                    loadedTexture->SetData(cmd, kChannels);
-                    cmd->endMarker();
-                    cmd->close();
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    return;
                 }
 
-                Application::SubmitWorkerCommandList(cmd, [this, loadedTexture, capturedPath, requestGeneration]()
+                thumbnailIt = s_SharedThumbnails.find(capturedPath);
+                if (thumbnailIt == s_SharedThumbnails.end())
                 {
-                    // Drop the texture if the generation changed or the entry was evicted
-                    // while the command list was queued — do NOT re-insert it.
-                    if (requestGeneration != s_SharedThumbnailLoadGeneration)
-                    {
-                        s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                        return;
-                    }
-
-                    auto thumbnailIt = s_SharedThumbnails.find(capturedPath);
-                    if (thumbnailIt == s_SharedThumbnails.end())
-                    {
-                        s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                        return;
-                    }
-
-                    loadedTexture->SetReadyFlag(true);
-
-                    FileThumbnail ft;
-                    ft.thumbnail = loadedTexture;
-                    ft.lastFrameUsed = s_SharedCurrentFrame;
-                    ft.timestamp = std::filesystem::exists(capturedPath)
-                        ? std::filesystem::last_write_time(capturedPath.string()).time_since_epoch().count()
-                        : 0;
-
-                    // Overwrite the placeholder that was inserted before the load started.
-                    thumbnailIt->second = ft;
                     s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                });
+                    return;
+                }
+
+                loadedTexture->SetReadyFlag(true);
+
+                FileThumbnail ft;
+                ft.thumbnail = loadedTexture;
+                ft.lastFrameUsed = s_SharedCurrentFrame;
+                ft.timestamp = std::filesystem::exists(capturedPath)
+                    ? std::filesystem::last_write_time(capturedPath.string()).time_since_epoch().count()
+                    : 0;
+
+                thumbnailIt->second = ft;
+                s_SharedThumbnailLoadsInFlight.erase(capturedPath);
             }, "ContentBrowserPanel::StartThumbnailLoad - Create texture");
         });
     }

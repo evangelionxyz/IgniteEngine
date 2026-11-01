@@ -190,7 +190,7 @@ namespace ignite
         CHECK(PickPhysicalDevice())
         CHECK(FindQueueFamilies(m_VulkanPhysicalDevice))
         CHECK(CreateVkDevice())
-        
+
         CreateDescriptorPool();
 
         auto vecInstanceExt = StringSetToVector(enabledExtensions.instance);
@@ -1114,7 +1114,7 @@ namespace ignite
 
         if (!m_DeviceParameters.headlessDevice && !m_DeviceParameters.offscreen)
             uniqueQueueFamilies.insert(m_PresentQueueFamily);
-        
+
         if (m_DeviceParameters.enableComputeQueue)
             uniqueQueueFamilies.insert(m_ComputeQueueFamily);
 
@@ -1258,8 +1258,6 @@ namespace ignite
             vk::ColorSpaceKHR::eSrgbNonlinear
         };
 
-        vk::Extent2D extent = vk::Extent2D(m_DeviceParameters.backBufferWidth, m_DeviceParameters.backBufferHeight);
-
         std::unordered_set<uint32_t> uniqueQueues = {
             uint32_t(m_GraphicsQueueFamily),
             uint32_t(m_PresentQueueFamily)
@@ -1270,6 +1268,25 @@ namespace ignite
         const bool enableSwapChainSharing = queues.size() > 1;
 
         vk::SurfaceCapabilitiesKHR capabilities = m_VulkanPhysicalDevice.getSurfaceCapabilitiesKHR(m_WindowSurface);
+
+        vk::Extent2D extent;
+        if (capabilities.currentExtent.width != 0xFFFFFFFF)
+        {
+            extent = capabilities.currentExtent;
+        }
+        else
+        {
+            extent.width = std::clamp(m_DeviceParameters.backBufferWidth, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+            extent.height = std::clamp(m_DeviceParameters.backBufferHeight, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+        }
+
+        if (extent.width == 0 || extent.height == 0)
+        {
+            return false;
+        }
+
+        m_DeviceParameters.backBufferWidth = extent.width;
+        m_DeviceParameters.backBufferHeight = extent.height;
 
         auto desc = vk::SwapchainCreateInfoKHR()
             .setSurface(m_WindowSurface)
@@ -1316,8 +1333,11 @@ namespace ignite
 
         const vk::Result res = m_VulkanDevice.createSwapchainKHR(&desc, nullptr, &m_SwapChain);
 
-        LOG_ASSERT(res == vk::Result::eSuccess, "Failed to create a Vulkan swap chain, error code = %s", vk::to_string(res));
-
+        if (res != vk::Result::eSuccess)
+        {
+            LOG_ERROR("Failed to create a Vulkan swap chain, error code = {}", vk::to_string(res));
+            return false;
+        }
 
         // retrieve swap chain images
         m_SwapchainImages = m_VulkanDevice.getSwapchainImagesKHR(m_SwapChain);
@@ -1562,6 +1582,10 @@ namespace ignite
             nri::TextureDesc colorDesc{};
             colorDesc.type = nri::TextureType::TEXTURE_2D;
             colorDesc.usage = nri::TextureUsageBits::COLOR_ATTACHMENT;
+            if ((m_NRI.GetFormatSupport(*m_Device, m_DeviceParameters.swapChainFormat) & nri::FormatSupportBits::HOST_COPY) != 0)
+            {
+                colorDesc.usage |= nri::TextureUsageBits::HOST_TRANSFER;
+            }
             colorDesc.format = m_DeviceParameters.swapChainFormat;
             colorDesc.width = static_cast<nri::Dim_t>(width);
             colorDesc.height = static_cast<nri::Dim_t>(height);

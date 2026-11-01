@@ -108,38 +108,32 @@ namespace ignite
         m_EditorCamera2D->SetNavigationMode(EditorCamera::NavigationMode::Mode2D);
         m_EditorCamera3D->SetNavigationMode(EditorCamera::NavigationMode::Orbit);
 
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        nvrhi::CommandListHandle cmd = device->createCommandList();
-        cmd->open();
-
         // Load icons
         TextureCreateInfo createInfo;
         createInfo.mipLevels = 1;
-        createInfo.format = nvrhi::Format::RGBA8_UNORM;
-        createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        createInfo.format = nri::Format::RGBA8_UNORM;
+        createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
+        createInfo.initialAccess = nri::AccessBits::SHADER_RESOURCE;
         createInfo.keepInitialState = true;
         createInfo.bindless = false;
 
-        m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo, cmd);
+        m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo, nullptr);
 
-        m_Icons["transform_world"] = Texture::Create("resources/ui/editor/ic_editor_world_transform.png", createInfo, cmd);
-        m_Icons["transform_local"] = Texture::Create("resources/ui/editor/ic_editor_local_transform.png", createInfo, cmd);
-        m_Icons["picking"] = Texture::Create("resources/ui/editor/ic_editor_picking.png", createInfo, cmd);
-        m_Icons["translate"] = Texture::Create("resources/ui/editor/ic_editor_translate.png", createInfo, cmd);
-        m_Icons["scale"] = Texture::Create("resources/ui/editor/ic_editor_scale.png", createInfo, cmd);
-        m_Icons["rotate"] = Texture::Create("resources/ui/editor/ic_editor_rotate.png", createInfo, cmd);
+        m_Icons["transform_world"] = Texture::Create("resources/ui/editor/ic_editor_world_transform.png", createInfo, nullptr);
+        m_Icons["transform_local"] = Texture::Create("resources/ui/editor/ic_editor_local_transform.png", createInfo, nullptr);
+        m_Icons["picking"] = Texture::Create("resources/ui/editor/ic_editor_picking.png", createInfo, nullptr);
+        m_Icons["translate"] = Texture::Create("resources/ui/editor/ic_editor_translate.png", createInfo, nullptr);
+        m_Icons["scale"] = Texture::Create("resources/ui/editor/ic_editor_scale.png", createInfo, nullptr);
+        m_Icons["rotate"] = Texture::Create("resources/ui/editor/ic_editor_rotate.png", createInfo, nullptr);
 
-        m_Icons["play"] = Texture::Create("resources/ui/editor/ic_editor_play.png", createInfo, cmd);
-        m_Icons["stop"] = Texture::Create("resources/ui/editor/ic_editor_stop.png", createInfo, cmd);
-        m_Icons["pause"] = Texture::Create("resources/ui/editor/ic_editor_pause.png", createInfo, cmd);
-        m_Icons["simulate"] = Texture::Create("resources/ui/editor/ic_editor_simulate.png", createInfo, cmd);
-        m_Icons["stepping"] = Texture::Create("resources/ui/editor/ic_editor_stepping.png", createInfo, cmd);
+        m_Icons["play"] = Texture::Create("resources/ui/editor/ic_editor_play.png", createInfo, nullptr);
+        m_Icons["stop"] = Texture::Create("resources/ui/editor/ic_editor_stop.png", createInfo, nullptr);
+        m_Icons["pause"] = Texture::Create("resources/ui/editor/ic_editor_pause.png", createInfo, nullptr);
+        m_Icons["simulate"] = Texture::Create("resources/ui/editor/ic_editor_simulate.png", createInfo, nullptr);
+        m_Icons["stepping"] = Texture::Create("resources/ui/editor/ic_editor_stepping.png", createInfo, nullptr);
 
-        m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, cmd);
-        m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, cmd);
-
-        cmd->close();
-        device->executeCommandList(cmd);
+        m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, nullptr);
+        m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, nullptr);
     }
 
     ScenePanel::~ScenePanel()
@@ -157,7 +151,21 @@ namespace ignite
 
         m_Scene = scene;
         m_SelectedEntities.clear();
+        m_RootEntities.clear();
+        m_LastEntityCount = 0;
         m_HierarchyDirty = true;
+
+        // A scene swap can happen while a gizmo or 2D bounds resize is active.
+        // Drop those entity-specific interaction handles before the next panel
+        // frame can resolve them against the new scene.
+        m_Data.isGizmoManipulating = false;
+        m_Data.isGizmoBeingUse = false;
+        m_Data.is2DBoundsSizing = false;
+        m_Data.is2DBoundsHovered = false;
+        m_Data.active2DCorner = -1;
+        m_Data.active2DEntity = UUID(0);
+        m_ViewportData.wantMouseDragging = false;
+        m_SceneFocused = false;
     }
 
     int ScenePanel::GetMaxParentDepth(Entity entity)
@@ -1065,7 +1073,7 @@ namespace ignite
                     //     auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
                     //     if (shadowMap)
                     //     {
-                    //         ImTextureID texId = (ImTextureID)shadowMap->GetHandle().Get();
+                    //         ImTextureID texId = UI::GetTextureID(shadowMap);
                     //         ImGui::Image(texId, { 256, 256 });
                     //     }
                     // }
@@ -3796,7 +3804,7 @@ namespace ignite
                 if (target)
                 {
                     // Render scene texture to imgui
-                    ImTextureID editorViewImage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
+                    ImTextureID editorViewImage = UI::GetTextureID(target->compositeRT->GetColorAttachment(0));
                     ImGui::Image(editorViewImage, canvasSize);
                 }
 
@@ -3857,7 +3865,7 @@ namespace ignite
                                 const float size = 36.0f;
                                 ImVec2 iconMin = { screenPos.x - size * 0.5f, screenPos.y - size * 0.5f };
                                 ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
-                                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax);
+                                drawList->AddImage(UI::GetTextureID(texture), iconMin, iconMax);
 
                                 if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
                                 {
@@ -3916,7 +3924,7 @@ namespace ignite
                                     static_cast<int>(lc.color.b * 255.0f),
                                     static_cast<int>(lc.color.a * 255.0f)
                                 );
-                                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), iconMin, iconMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
+                                drawList->AddImage(UI::GetTextureID(texture), iconMin, iconMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
 
                                 if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
                                 {
@@ -4014,23 +4022,8 @@ namespace ignite
                                     const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / canvasSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
                                     const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / canvasSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
 
-                                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-                                    nvrhi::TextureDesc stagingDesc = objectIdTexture->GetHandle()->getDesc();
-                                    stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-                                    nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-
-                                    nvrhi::CommandListHandle copyCmd = device->createCommandList();
-                                    copyCmd->open();
-                                    copyCmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), objectIdTexture->GetHandle(), nvrhi::TextureSlice());
-                                    copyCmd->close();
-                                    device->executeCommandList(copyCmd);
-
-                                    size_t rowPitch = 0;
-                                    if (void *mapped = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
+                                    const uint32_t pickedObjectId = objectIdTexture->ReadPixel(pixelX, pixelY);
                                     {
-                                        const auto pixelData = static_cast<const uint32_t *>(mapped);
-                                        const uint32_t pickedObjectId = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
-                                        device->unmapStagingTexture(stagingTexture);
 
                                         Entity pickedEntity = {};
                                         if (pickedObjectId != 0xFFFFFFFFu)
@@ -4614,7 +4607,7 @@ namespace ignite
                             globals::GEditor::GameViewport.min = { baseImagePos.x, baseImagePos.y };
                             globals::GEditor::GameViewport.max = { baseImageSize.x, baseImageSize.y };
 
-                            ImTextureID gameplayViewImaage = (ImTextureID)target->compositeRT->GetColorAttachment(0)->GetHandle().Get();
+                            ImTextureID gameplayViewImaage = UI::GetTextureID(target->compositeRT->GetColorAttachment(0));
                             drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
                             drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
                             drawList->PopClipRect();
@@ -4720,7 +4713,7 @@ namespace ignite
 
         auto drawGizmoBtn = [&](const std::string &iconName, const ImVec2 &buttonSize, bool active)
         {
-            const auto texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
+            const auto texID = UI::GetTextureID(m_Icons[iconName]);
             return UI::DrawSelectImageButton(iconName.c_str(), texID, buttonSize, active);;
         };
 
@@ -4775,7 +4768,7 @@ namespace ignite
 
         const bool isScenePlaying = m_Scene && m_Scene->IsPlaying();
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-        const auto scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
+        const auto scenePlayStopID = UI::GetTextureID(scenePlayStopTex);
 
         ImGui::SameLine();
         if (UI::DrawImageButton("##PlayButton", scenePlayStopID, buttonSize))
@@ -4810,7 +4803,7 @@ namespace ignite
 
         const bool isSceneSimulate = m_Scene && m_Scene->IsSimulating();
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-        const auto sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
+        const auto sceneSimulateID = UI::GetTextureID(sceneSimulateTex);
 
         ImGui::SameLine();
         if (UI::DrawImageButton("##SimulateButton", sceneSimulateID, buttonSize))

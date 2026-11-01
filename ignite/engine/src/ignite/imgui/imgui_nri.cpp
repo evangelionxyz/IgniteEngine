@@ -71,7 +71,6 @@ namespace ignite
 
     ImGui_NRI::~ImGui_NRI()
     {
-        Shutdown();
     }
 
     bool ImGui_NRI::UpdateFontTexture()
@@ -415,6 +414,7 @@ namespace ignite
     void ImGui_NRI::BackBufferResizing()
     {
         m_GraphicsPipelines.clear();
+        std::scoped_lock lock(m_BindingsCacheMutex);
         m_BindingsCache.clear();
     }
 
@@ -489,6 +489,8 @@ namespace ignite
         if (!textureSRV || !m_PipelineLayout)
             return nullptr;
 
+        std::scoped_lock lock(m_BindingsCacheMutex);
+
         auto iter = m_BindingsCache.find(textureSRV);
         if (iter != m_BindingsCache.end())
             return iter->second;
@@ -509,6 +511,7 @@ namespace ignite
     {
         if (!s_Instance || !textureHandle)
             return;
+        std::scoped_lock lock(s_Instance->m_BindingsCacheMutex);
         s_Instance->m_BindingsCache.erase(static_cast<nri::Descriptor *>(textureHandle));
     }
 
@@ -516,7 +519,17 @@ namespace ignite
     {
         if (!s_Instance || !textureSRV)
             return;
+        std::scoped_lock lock(s_Instance->m_BindingsCacheMutex);
         s_Instance->m_BindingsCache.erase(textureSRV);
+    }
+
+    void ImGui_NRI::ClearTextureCache()
+    {
+        if (!s_Instance)
+            return;
+
+        std::scoped_lock lock(s_Instance->m_BindingsCacheMutex);
+        s_Instance->m_BindingsCache.clear();
     }
 
     bool ImGui_NRI::UpdateGeometry(ImDrawData *drawData)
@@ -620,7 +633,10 @@ namespace ignite
         io.BackendRendererUserData = nullptr;
         io.BackendRendererName = nullptr;
 
-        m_BindingsCache.clear();
+        {
+            std::scoped_lock lock(m_BindingsCacheMutex);
+            m_BindingsCache.clear();
+        }
         m_GraphicsPipelines.clear();
         m_BindingLayoutDesc.reset();
         m_PipelineLayout = nullptr;
@@ -1288,8 +1304,6 @@ namespace ignite
 
                     if (hr == DXGI_ERROR_INVALID_CALL)
                     {
-                        GPUUploadSync::DeviceWaitIdle(renderer->m_Device);
-
                         hr = viewportData->swapChain->ResizeBuffers(
                             0,
                             width,
