@@ -5,7 +5,7 @@
 
 #include "ignite/core/base.hpp"
 
-#include "ignite_rs/core_utils.h"
+#include "ignite/core/core_utils.hpp"
 
 #include <vector>
 #include <cstdint>
@@ -19,7 +19,7 @@ namespace ignite
 		// Hashing functions for various types
 		static inline void HashCombine(std::size_t &seed, std::size_t hash)
 		{
-			seed = static_cast<std::size_t>(ignite_rs_hash_combine(static_cast<uint64_t>(seed), static_cast<uint64_t>(hash)));
+			seed = static_cast<std::size_t>(ignite_hash_combine(static_cast<uint64_t>(seed), static_cast<uint64_t>(hash)));
 		}
 
 		template<typename... Args>

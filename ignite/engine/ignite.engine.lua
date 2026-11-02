@@ -28,8 +28,6 @@ project "Ignite.Engine"
         "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/physics/src",
 
-        "%{wks.location}/crates/src/include",
-
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -41,6 +39,8 @@ project "Ignite.Engine"
         "%{IncludeDir.IMGUIZMO}",
         "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.SPDLOG}",
+        "%{IncludeDir.IGNITE_SERVER}",
+        "%{IncludeDir.GAME_NETWORKING_SOCKETS}",
         "%{IncludeDir.MONO}",
         "%{IncludeDir.NVRHI}",
         "%{IncludeDir.NRI}/Include",
@@ -73,6 +73,7 @@ project "Ignite.Engine"
     libdirs { "%{cfg.targetdir}" }
 
     links {
+        "Ignite.Server",
         "Ignite.Physics",
         "Ignite.Core",
         "IMGUI",
@@ -124,7 +125,7 @@ project "Ignite.Engine"
         prebuildcommands {
             -- Configure and Build FastNoise2
             'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
-            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
+            '+cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
 
             -- Build Rust
             'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
@@ -149,7 +150,7 @@ project "Ignite.Engine"
         prebuildcommands {
             -- Configure and Build FastNoise2
             'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
-            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
+            '+cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
 
             -- Build Rust
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
@@ -171,7 +172,8 @@ project "Ignite.Engine"
             "%{LibraryDir.FBX_SDK}/release",
             "%{LibraryDir.FMOD_LINUX}",
             "%{LibraryDir.VULKAN_SDK}",
-            "%{LibraryDir.SDL3_LINUX}"
+            "%{LibraryDir.SDL3_LINUX}",
+            "%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}"
         }
         includedirs {
             "/usr/include",
@@ -198,7 +200,8 @@ project "Ignite.Engine"
             "dl",
             "m",
             "rt",
-            "glib-2.0"
+            "glib-2.0",
+            "GameNetworkingSockets"
         }
         -- Set rpath to $ORIGIN so the binary finds .so files next to itself
         linkoptions {
@@ -211,7 +214,9 @@ project "Ignite.Engine"
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}"),
             'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"',
-            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true',
+            copy_file("%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}/libGameNetworkingSockets.so", "%{cfg.targetdir}"),
+            copy_file("%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}/libprotobuf.so.23", "%{cfg.targetdir}")
         }
 
     --windows

@@ -13,7 +13,7 @@ use crate::ffi::result_ffi::IgniteResult;
 // -------------------------------------------------
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_string_ends_with(str_ptr: *const c_char, ending_ptr: *const c_char) -> bool {
+pub extern "C" fn ignite_string_ends_with(str_ptr: *const c_char, ending_ptr: *const c_char) -> bool {
     if str_ptr.is_null() || ending_ptr.is_null() {
         return false;
     }
@@ -31,7 +31,7 @@ pub extern "C" fn ignite_rs_string_ends_with(str_ptr: *const c_char, ending_ptr:
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_string_to_lower(
+pub extern "C" fn ignite_string_to_lower(
     str_ptr: *const c_char,
     out_buf: *mut c_char,
     max_len: usize,
@@ -54,7 +54,7 @@ pub extern "C" fn ignite_rs_string_to_lower(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_string_trim(
+pub extern "C" fn ignite_string_trim(
     str_ptr: *const c_char,
     out_buf: *mut c_char,
     max_len: usize,
@@ -81,14 +81,14 @@ pub extern "C" fn ignite_rs_string_trim(
 // -------------------------------------------------
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_hash_combine(seed: u64, hash_val: u64) -> u64 {
+pub extern "C" fn ignite_hash_combine(seed: u64, hash_val: u64) -> u64 {
     let mut s = seed;
     hash_mod::hash_combine(&mut s, hash_val);
     s
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_hash_string(str_ptr: *const c_char) -> u64 {
+pub extern "C" fn ignite_hash_string(str_ptr: *const c_char) -> u64 {
     if str_ptr.is_null() {
         return 0;
     }
@@ -106,22 +106,22 @@ pub extern "C" fn ignite_rs_hash_string(str_ptr: *const c_char) -> u64 {
 // -------------------------------------------------
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_timer_create() -> u64 {
+pub extern "C" fn ignite_timer_create() -> u64 {
     time_mod::create_timer()
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_timer_reset(id: u64) -> bool {
+pub extern "C" fn ignite_timer_reset(id: u64) -> bool {
     time_mod::reset_timer(id)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_timer_elapsed_seconds(id: u64) -> f32 {
+pub extern "C" fn ignite_timer_elapsed_seconds(id: u64) -> f32 {
     time_mod::elapsed_timer_seconds(id)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_timer_destroy(id: u64) -> bool {
+pub extern "C" fn ignite_timer_destroy(id: u64) -> bool {
     time_mod::destroy_timer(id)
 }
 
@@ -130,7 +130,7 @@ pub extern "C" fn ignite_rs_timer_destroy(id: u64) -> bool {
 // -------------------------------------------------
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_signal_publish(
+pub extern "C" fn ignite_signal_publish(
     signal_name: *const c_char,
     payload_ptr: *const u8,
     payload_len: usize,

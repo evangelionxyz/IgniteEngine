@@ -11,7 +11,7 @@ static SCENES: Mutex<Option<HashMap<u64, Scene>>> = Mutex::new(None);
 static NEXT_SCENE_ID: Mutex<u64> = Mutex::new(1);
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_scene_create(name_ptr: *const c_char) -> u64 {
+pub extern "C" fn ignite_scene_create(name_ptr: *const c_char) -> u64 {
     let name_str = if !name_ptr.is_null() {
         unsafe { CStr::from_ptr(name_ptr).to_str().unwrap_or("Untitled Scene") }
     } else {
@@ -35,7 +35,7 @@ pub extern "C" fn ignite_rs_scene_create(name_ptr: *const c_char) -> u64 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_scene_destroy(scene_handle: u64) -> IgniteResult {
+pub extern "C" fn ignite_scene_destroy(scene_handle: u64) -> IgniteResult {
     if scene_handle == 0 {
         return IgniteResult::ErrInvalidHandle;
     }
@@ -52,7 +52,7 @@ pub extern "C" fn ignite_rs_scene_destroy(scene_handle: u64) -> IgniteResult {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_scene_create_entity(scene_handle: u64, name_ptr: *const c_char) -> u64 {
+pub extern "C" fn ignite_scene_create_entity(scene_handle: u64, name_ptr: *const c_char) -> u64 {
     if scene_handle == 0 {
         return 0;
     }
@@ -76,7 +76,7 @@ pub extern "C" fn ignite_rs_scene_create_entity(scene_handle: u64, name_ptr: *co
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_scene_destroy_entity(scene_handle: u64, entity_id: u64) -> IgniteResult {
+pub extern "C" fn ignite_scene_destroy_entity(scene_handle: u64, entity_id: u64) -> IgniteResult {
     if scene_handle == 0 || entity_id == 0 {
         return IgniteResult::ErrInvalidHandle;
     }
@@ -95,7 +95,7 @@ pub extern "C" fn ignite_rs_scene_destroy_entity(scene_handle: u64, entity_id: u
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_entity_get_name(
+pub extern "C" fn ignite_entity_get_name(
     scene_handle: u64,
     entity_id: u64,
     out_buf: *mut c_char,
@@ -125,7 +125,7 @@ pub extern "C" fn ignite_rs_entity_get_name(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_entity_set_transform(
+pub extern "C" fn ignite_entity_set_transform(
     scene_handle: u64,
     entity_id: u64,
     pos: *const f32,
@@ -157,7 +157,7 @@ pub extern "C" fn ignite_rs_entity_set_transform(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_entity_get_transform(
+pub extern "C" fn ignite_entity_get_transform(
     scene_handle: u64,
     entity_id: u64,
     out_pos: *mut f32,

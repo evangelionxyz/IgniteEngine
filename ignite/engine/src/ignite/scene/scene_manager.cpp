@@ -417,6 +417,12 @@ namespace ignite
             DestroyEntity(scene, GetEntity(scene, childId));
         }
 
+        if (entity.HasComponent<NetworkIdentityComponent>())
+        {
+            const auto &netComp = entity.GetComponent<NetworkIdentityComponent>();
+            scene->UnregisterNetEntity(netComp.netId);
+        }
+
         scene->registry->destroy(entity);
         scene->entities.erase(idComp.uuid);
 
@@ -444,6 +450,12 @@ namespace ignite
 
         // copy current entity's components to new entity
         SceneManager::CopyComponentIfExists(AllComponents{}, newEntity, entity);
+
+        if (newEntity.HasComponent<NetworkIdentityComponent>())
+        {
+            auto &netComp = newEntity.GetComponent<NetworkIdentityComponent>();
+            netComp.netId = 0; // Avoid duplicate netId in the same scene
+        }
 
         // get new entity's ID Component
         IDComponent &newEntityIDComp = newEntity.GetComponent<IDComponent>();
@@ -761,6 +773,17 @@ namespace ignite
         }
 
         SceneManager::CopyComponent(AllComponents{}, destRegistry, srcRegistry, entityMap);
+
+        // Re-register network entities in the copied scene
+        auto netView = destRegistry->view<NetworkIdentityComponent>();
+        for (entt::entity e : netView)
+        {
+            auto &netComp = netView.get<NetworkIdentityComponent>(e);
+            if (netComp.netId != 0)
+            {
+                newScene->RegisterNetEntity(netComp.netId, Entity{ e, newScene.get() });
+            }
+        }
 
         // copy scene extra data
         newScene->handle = other->handle;

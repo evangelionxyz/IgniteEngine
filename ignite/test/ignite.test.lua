@@ -39,7 +39,6 @@ project "Ignite.Test"
         "freetype",
         "tracy",
         "MochiSharp.Native",
-
     }
 
     includedirs {
@@ -48,7 +47,7 @@ project "Ignite.Test"
         "%{wks.location}/ignite/engine/src",
         "%{wks.location}/ignite/physics/src",
         "%{wks.location}/ignite/physics/src/ignite",
-        "%{wks.location}/crates/src/include",
+
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",

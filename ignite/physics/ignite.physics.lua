@@ -20,7 +20,7 @@ project "Ignite.Physics"
         "src",
         "src/ignite",
         "%{wks.location}/ignite/core/src",
-        "%{wks.location}/crates/src/include",
+
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.BOX2D}",

@@ -12,6 +12,7 @@
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/audio/fmod_audio.hpp"
+#include "ignite/net/network_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
@@ -20,9 +21,9 @@
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/graphics/texture.hpp"
 
-#include "ignite_rs/core.h"
-#include "ignite_rs/log.h"
-#include "ignite_rs/frame.h"
+#include "ignite/core/core.hpp"
+#include "ignite/core/log.hpp"
+#include "ignite/core/frame.hpp"
 
 #include "command.hpp"
 #include "ignite/graphics/render_target.hpp"
@@ -105,7 +106,7 @@ namespace ignite
         Texture::ClearPendingUploads();
 
         // 9. Shutdown Rust engine
-        ignite_rs_engine_shutdown();
+        ignite_engine_shutdown();
 
         // 10. Final GPU wait-idle before destroying the graphics device
         if (auto *dm = DeviceManager::GetInstance())
@@ -120,7 +121,7 @@ namespace ignite
         DeviceManager::GetInstance()->Destroy();
         m_Window->Destroy();
 
-        ignite_rs_log_unregister_callback();
+        ignite_log_unregister_callback();
     }
 
     Application::Application(const ApplicationCreateInfo &createInfo)
@@ -185,11 +186,11 @@ namespace ignite
 
         {
             // Initialize Rust back-end
-            const int testConnResult = ignite_rs_test_connection();
-            const IgniteResult res = ignite_rs_log_register_callback(IgniteRustLogCallback);
+            const int testConnResult = ignite_test_connection();
+            const IgniteResult res = ignite_log_register_callback(IgniteRustLogCallback);
             LOG_ASSERT(res == IgniteResult_Ok, "[Application] Failed to initalize Rust Log Callback");
 
-            const bool initialized = ignite_rs_engine_init();
+            const bool initialized = ignite_engine_init();
             LOG_ASSERT(initialized, "[Application] Rust backend Failed to initialized");
         }
 
@@ -214,6 +215,8 @@ namespace ignite
         {
             AddSubsystem(new FmodAudio());
         }
+
+        AddSubsystem(new NetworkManager());
 
         if (!m_CreateInfo.headless)
         {
@@ -617,13 +620,18 @@ namespace ignite
         }
 
         // Notify Rust engine of frame start (updates Rust-side timing and frame counter)
-        ignite_rs_engine_begin_frame(m_DeltaTime);
+        ignite_engine_begin_frame(m_DeltaTime);
 
         ProcessMainThreadSubmissions();
 
         if (m_CreateInfo.useAudio)
         {
             FmodAudio::Update();
+        }
+
+        if (auto *netManager = NetworkManager::GetInstance())
+        {
+            netManager->Update(m_DeltaTime);
         }
 
         DeviceManager *deviceManager = m_Window ? m_Window->GetDeviceManager() : DeviceManager::GetInstance();
@@ -683,7 +691,7 @@ namespace ignite
         }
 
         // Flush Rust-side deferred operations before frame ends
-        ignite_rs_engine_end_frame();
+        ignite_engine_end_frame();
 
         UpdateAverageTimeTime(m_DeltaTime);
         ++m_FrameIndex;

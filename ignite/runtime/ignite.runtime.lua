@@ -24,6 +24,7 @@ project "Ignite.Runtime"
         "Ignite.Engine",
         "Ignite.Core",
         "Ignite.Physics",
+        "Ignite.Server",
         "JOLT",
         "ZLIB",
         "yaml-cpp",
@@ -49,9 +50,8 @@ project "Ignite.Runtime"
         "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/engine/src",
         "%{wks.location}/ignite/physics/src",
-
-        "%{wks.location}/crates/src/include",
-
+        "%{IncludeDir.IGNITE_SERVER}",
+        "%{IncludeDir.GAME_NETWORKING_SOCKETS}",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -154,7 +154,8 @@ project "Ignite.Runtime"
             "/usr/local/lib",
             "%{LibraryDir.FMOD_LINUX}",
             "%{LibraryDir.VULKAN_SDK}",
-            "%{LibraryDir.SDL3_LINUX}"
+            "%{LibraryDir.SDL3_LINUX}",
+            "%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}"
         }
         includedirs {
             "/usr/include",
@@ -182,7 +183,8 @@ project "Ignite.Runtime"
             "dl",
             "m",
             "rt",
-            "glib-2.0"
+            "glib-2.0",
+            "GameNetworkingSockets"
         }
         linkoptions {
             "-Wl,-rpath,'$$ORIGIN'",

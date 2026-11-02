@@ -48,7 +48,7 @@ namespace ignite
         {
             static_assert(sizeof(T) <= 64, "Type too large!");
 
-            if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
+            if (!m_ScriptHost || fieldName.empty())
             {
                 return T();
             }
@@ -82,7 +82,7 @@ namespace ignite
         template<>
         inline std::string GetFieldValue<std::string>(const std::string &fieldName)
         {
-            if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
+            if (!m_ScriptHost || fieldName.empty())
             {
                 return {};
             }

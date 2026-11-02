@@ -68,6 +68,7 @@ namespace ignite
         { "Widget", CompType_Widget },
         { "Sphere Collider", CompType_SphereCollider },
         { "Capsule Collider", CompType_CapsuleCollider },
+        { "Network Identity", CompType_NetworkIdentity },
         { "Mesh Collider", CompType_MeshCollider },
         { "Plane Collider", CompType_PlaneCollider },
         { "Audio Source", CompType_AudioSource },
@@ -956,6 +957,22 @@ namespace ignite
         ParticleSystemComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_ParticleSystem)
+    };
+
+    class NetworkIdentityComponent final : public IComponent
+    {
+    public:
+        uint64_t netId = 0;         // Network Unique ID (assigned by server)
+        uint32_t ownerClient = 0;   // 0 = server, > 0 = client id
+        bool isLocalPlayer = false; // true if controlled locally by this client
+        bool replicate = true;      // whether this entity replicates state
+        std::string prefab;         // prefab/template identifier for spawning
+
+        NetworkIdentityComponent() = default;
+        NetworkIdentityComponent(uint64_t id, uint32_t owner = 0, bool local = false, const std::string &prefabName = "")
+            : netId(id), ownerClient(owner), isLocalPlayer(local), prefab(prefabName) {}
+
+        COMPONENT_CLASS_TYPE(CompType_NetworkIdentity)
     };
 
 }

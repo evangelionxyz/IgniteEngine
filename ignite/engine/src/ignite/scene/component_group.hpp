@@ -65,6 +65,7 @@ namespace ignite
         HeightFieldColliderComponent,
         ParticleSystemComponent,
         PrefabComponent,
-        PhysicsJointComponent
+        PhysicsJointComponent,
+        NetworkIdentityComponent
     >; 
 }

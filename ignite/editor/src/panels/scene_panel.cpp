@@ -813,6 +813,101 @@ namespace ignite
 
             }, false); // false: not allowed to remove the component
 
+            // Network Identity component
+            RenderComponent<NetworkIdentityComponent>("Network Identity", selectedEntity, [&]()
+            {
+                auto &comp = selectedEntity.GetComponent<NetworkIdentityComponent>();
+
+                // Net ID (editable U64 with Gen button)
+                ImGui::PushID("NetID_Control");
+                ImGui::BeginColumns("NetID_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
+                ImGui::SetColumnWidth(0, UI::defColWidth);
+                ImGui::Text("Net ID");
+                ImGui::NextColumn();
+
+                float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+                float genBtnWidth = ImGui::CalcTextSize("Gen").x + GImGui->Style.FramePadding.x * 2.0f;
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - genBtnWidth - GImGui->Style.ItemSpacing.x);
+
+                uint64_t currentNetId = comp.netId;
+                if (ImGui::InputScalar("##net_id_input", ImGuiDataType_U64, &currentNetId))
+                {
+                    if (currentNetId != comp.netId)
+                    {
+                        if (m_Scene)
+                            m_Scene->UnregisterNetEntity(comp.netId);
+                        comp.netId = currentNetId;
+                        if (m_Scene)
+                            m_Scene->RegisterNetEntity(comp.netId, selectedEntity);
+                    }
+                }
+                ImGui::PopItemWidth();
+
+                ImGui::SameLine();
+                if (ImGui::Button("Gen", ImVec2(genBtnWidth, lineHeight)))
+                {
+                    if (m_Scene)
+                        m_Scene->UnregisterNetEntity(comp.netId);
+                    static uint64_t s_LocalGenCounter = 1000;
+                    comp.netId = ++s_LocalGenCounter;
+                    if (m_Scene)
+                        m_Scene->RegisterNetEntity(comp.netId, selectedEntity);
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Generate a new local Net ID");
+                }
+
+                ImGui::EndColumns();
+                ImGui::PopID();
+
+                // Owner Client (editable int control: 0 = Server, 1+ = Client ID)
+                int owner = static_cast<int>(comp.ownerClient);
+                if (UI::DrawIntControl("Owner Client", &owner, 1.0f, 0, 65535, 0))
+                {
+                    comp.ownerClient = static_cast<uint32_t>(std::max(0, owner));
+                }
+
+                // Prefab / Template Identifier
+                ImGui::PushID("NetPrefab_Control");
+                ImGui::BeginColumns("NetPrefab_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
+                ImGui::SetColumnWidth(0, UI::defColWidth);
+                ImGui::Text("Prefab");
+                ImGui::NextColumn();
+
+                char prefabBuf[256] = {};
+                strncpy(prefabBuf, comp.prefab.c_str(), sizeof(prefabBuf) - 1);
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                if (ImGui::InputText("##net_prefab_input", prefabBuf, sizeof(prefabBuf)))
+                {
+                    comp.prefab = prefabBuf;
+                }
+                ImGui::PopItemWidth();
+
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                    {
+                        if (payload->DataSize == sizeof(AssetHandle))
+                        {
+                            AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                            AssetMetaData metadata = assetManager->GetMetaData(handle);
+                            if (metadata.type == AssetType::Prefab)
+                            {
+                                comp.prefab = metadata.filepath.stem().string();
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::EndColumns();
+                ImGui::PopID();
+
+                UI::DrawCheckbox("Is Local", &comp.isLocalPlayer);
+                UI::DrawCheckbox("Replicate", &comp.replicate);
+            });
+
             RenderComponent<PrefabComponent>("Prefab", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<PrefabComponent>();
@@ -3686,7 +3781,11 @@ namespace ignite
                     case CompType_PhysicsJoint:
                         entity.AddComponent<PhysicsJointComponent>();
                         break;
-                    default: break;
+                    case CompType_NetworkIdentity:
+                        entity.AddComponent<NetworkIdentityComponent>();
+                        break;
+                    default:
+                        break;
                     }
                 };
 

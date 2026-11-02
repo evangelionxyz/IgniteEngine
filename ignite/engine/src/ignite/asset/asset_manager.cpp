@@ -16,7 +16,9 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/terrain/terrain.hpp"
 
-#include "ignite_rs/core.h"
+#include "ignite/asset/asset.hpp"
+#include "ignite/asset/serial.hpp"
+#include "ignite/core/core.hpp"
 #include <fbxsdk.h>
 #include <stdexcept>
 
@@ -267,8 +269,8 @@ namespace ignite
             std::unique_lock lock(m_AssetMutex);
 
             // Sync metadata with Rust AssetManager backend
-            ignite_rs_asset_assign_metadata(static_cast<uint64_t>(handle),
-                metadata.filepath.generic_string().c_str(), static_cast<AssetType_RS>(metadata.type));
+            ignite_asset_assign_metadata(static_cast<uint64_t>(handle),
+                metadata.filepath.generic_string().c_str(), metadata.type);
         }
 
         SyncFromRust();
@@ -293,7 +295,7 @@ namespace ignite
             std::unique_lock lock(m_AssetMutex);
 
             // Sync removal with Rust AssetManager backend
-            ignite_rs_asset_remove_metadata(static_cast<uint64_t>(handle));
+            ignite_asset_remove_metadata(static_cast<uint64_t>(handle));
         }
 
         SyncFromRust();
@@ -589,11 +591,11 @@ namespace ignite
 
     void AssetManager::SyncFromRust()
     {
-        const uint64_t rustVersion = ignite_rs_asset_get_registry_version();
+        const uint64_t rustVersion = ignite_asset_get_registry_version();
         if (rustVersion == m_LastSyncedRustVersion)
             return;
 
-        const size_t count = ignite_rs_asset_get_registry_count();
+        const size_t count = ignite_asset_get_registry_count();
         if (count == 0)
         {
             m_LastSyncedRustVersion = rustVersion;
@@ -601,7 +603,7 @@ namespace ignite
         }
 
         std::vector<IgniteAssetRegistryEntryFFI> entries(count);
-        const size_t fetched = ignite_rs_asset_get_registry_snapshot(entries.data(), count);
+        const size_t fetched = ignite_asset_get_registry_snapshot(entries.data(), count);
 
         std::unique_lock lock(m_AssetMutex);
         auto activeProject = LockActiveProject();

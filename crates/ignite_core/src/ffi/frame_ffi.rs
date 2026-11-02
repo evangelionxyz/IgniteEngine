@@ -10,7 +10,7 @@ use crate::ffi::result_ffi::{IgniteResult, set_last_error, clear_last_error};
 /// # Arguments
 /// * `delta_time` - Time elapsed since last frame, in seconds
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_engine_begin_frame(delta_time: f32) -> IgniteResult {
+pub extern "C" fn ignite_engine_begin_frame(delta_time: f32) -> IgniteResult {
     clear_last_error();
     match with_engine(|engine| {
         engine.frame.begin_frame(delta_time);
@@ -30,7 +30,7 @@ pub extern "C" fn ignite_rs_engine_begin_frame(delta_time: f32) -> IgniteResult 
 /// * `IgniteResult::Ok` on success
 /// * `IgniteResult::ErrNotInitialized` if engine is not initialized
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_engine_end_frame() -> IgniteResult {
+pub extern "C" fn ignite_engine_end_frame() -> IgniteResult {
     clear_last_error();
     match with_engine(|engine| {
         engine.frame.end_frame();
@@ -46,32 +46,32 @@ pub extern "C" fn ignite_rs_engine_end_frame() -> IgniteResult {
 /// Returns the current frame count (number of frames since engine init).
 /// Returns 0 if the engine is not initialized.
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_get_frame_count() -> u64 {
+pub extern "C" fn ignite_get_frame_count() -> u64 {
     with_engine_ref(|engine| engine.frame.frame_count).unwrap_or(0)
 }
 
 /// Returns the total accumulated time since engine init, in seconds.
 /// Returns 0.0 if the engine is not initialized.
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_get_total_time() -> f64 {
+pub extern "C" fn ignite_get_total_time() -> f64 {
     with_engine_ref(|engine| engine.frame.total_time).unwrap_or(0.0)
 }
 
 /// Returns the current frame's delta time, in seconds.
 /// Returns 0.0 if the engine is not initialized.
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_get_delta_time() -> f32 {
+pub extern "C" fn ignite_get_delta_time() -> f32 {
     with_engine_ref(|engine| engine.frame.delta_time).unwrap_or(0.0)
 }
 
 /// Returns whether the engine is currently in a frame (between begin_frame and end_frame).
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_is_in_frame() -> bool {
+pub extern "C" fn ignite_is_in_frame() -> bool {
     with_engine_ref(|engine| engine.frame.in_frame).unwrap_or(false)
 }
 
 /// Returns the number of pending deferred callbacks.
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_get_pending_deferred_count() -> usize {
+pub extern "C" fn ignite_get_pending_deferred_count() -> usize {
     with_engine_ref(|engine| engine.frame.pending_deferred_count()).unwrap_or(0)
 }

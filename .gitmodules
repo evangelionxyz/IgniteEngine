@@ -16,8 +16,8 @@
 [submodule "thirdparty/JOLT"]
 	path = thirdparty/JOLT
 	url = https://github.com/jrouwe/JoltPhysics.git
-[submodule "thirdparty/IGNSERVER"]
-	path = thirdparty/IGNSERVER
+[submodule "thirdparty/Ignite-Server"]
+	path = thirdparty/Ignite-Server
 	url = https://github.com/evangelionxyz/Ignite-Server.git
 [submodule "thirdparty/MochiSharp"]
 	path = thirdparty/MochiSharp

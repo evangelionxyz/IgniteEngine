@@ -9,6 +9,7 @@
 #ifdef PLATFORM_WINDOWS
     #include <wrl/client.h>
     #include <dxgi.h>
+    #include <d3dcommon.h>
 #endif
 
 #ifdef IGNITE_WITH_DX12
