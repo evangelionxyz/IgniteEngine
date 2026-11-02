@@ -547,7 +547,7 @@ namespace ignite
                         const auto &[netComp, tr] = view.get<NetworkIdentityComponent, TransformComponent>(e);
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
-                        ImGui::Text("%llu", netComp.netId);
+                        ImGui::Text("%lu", netComp.netId);
                         ImGui::TableSetColumnIndex(1);
                         ImGui::Text("%u", netComp.ownerClient);
                         ImGui::TableSetColumnIndex(2);

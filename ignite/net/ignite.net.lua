@@ -81,14 +81,13 @@ project "Ignite.Network"
     -- linux
     filter {"system:linux"}
         pic "on"
-        libdirs { "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/Linux" }
+        libdirs { "%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}" }
         links {
-            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so",
-            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23",
+            "GameNetworkingSockets"
         }
         postbuildcommands {
-            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so", "%{cfg.targetdir}"),
-            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23", "%{cfg.targetdir}"),
+            copy_file("%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}/libGameNetworkingSockets.so", "%{cfg.targetdir}"),
+            copy_file("%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}/libprotobuf.so.23", "%{cfg.targetdir}"),
         }
 
     -- windows
@@ -130,7 +129,7 @@ project "Ignite.Network"
             copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Debug/libprotobufd.dll", "%{cfg.targetdir}"),
         }
 
-    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profilling", "system:windows"}
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:windows"}
         libdirs { "%{wks.location}/crates/target/release" }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
@@ -260,7 +259,7 @@ project "Ignite.NetTests"
     filter { "configurations:Debug or Debug-Profiling", "system:windows" }
         libdirs { "%{wks.location}/crates/target/debug" }
 
-    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profilling", "system:windows"}
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:windows"}
         libdirs { "%{wks.location}/crates/target/release" }
 
     filter { "configurations:Debug or Debug-Profiling"}
