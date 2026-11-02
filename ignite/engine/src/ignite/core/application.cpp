@@ -12,6 +12,7 @@
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/audio/fmod_audio.hpp"
+#include "ignite/net/network_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
@@ -214,6 +215,8 @@ namespace ignite
         {
             AddSubsystem(new FmodAudio());
         }
+
+        AddSubsystem(new NetworkManager());
 
         if (!m_CreateInfo.headless)
         {
@@ -624,6 +627,11 @@ namespace ignite
         if (m_CreateInfo.useAudio)
         {
             FmodAudio::Update();
+        }
+
+        if (auto *netManager = NetworkManager::GetInstance())
+        {
+            netManager->Update(m_DeltaTime);
         }
 
         DeviceManager *deviceManager = m_Window ? m_Window->GetDeviceManager() : DeviceManager::GetInstance();

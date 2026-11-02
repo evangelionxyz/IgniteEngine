@@ -39,7 +39,6 @@ project "Ignite.Test"
         "freetype",
         "tracy",
         "MochiSharp.Native",
-
     }
 
     includedirs {

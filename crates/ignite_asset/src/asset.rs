@@ -21,17 +21,11 @@ pub type AssetHandle = UUID;
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AssetState {
-    /// Not loaded, no pending operations
     Unloaded = 0,
-    /// Import has been requested, waiting for C++ to pick up
     Queued = 1,
-    /// C++ is actively importing/loading the asset
     Loading = 2,
-    /// Asset is fully loaded and ready for use
     Ready = 3,
-    /// Asset data has been modified, needs re-save or re-import
     Dirty = 4,
-    /// Asset is being unloaded by C++
     Unloading = 5,
 }
 

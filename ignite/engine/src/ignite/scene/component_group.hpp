@@ -55,6 +55,7 @@ namespace ignite
         PlaneColliderComponent,
         AudioSourceComponent,
         ScriptComponent,
+        LuaScriptComponent,
         TextComponent,
         WorldEnvironment,
         DirectionalLightComponent,
@@ -65,6 +66,7 @@ namespace ignite
         HeightFieldColliderComponent,
         ParticleSystemComponent,
         PrefabComponent,
-        PhysicsJointComponent
+        PhysicsJointComponent,
+        NetworkIdentityComponent
     >; 
 }

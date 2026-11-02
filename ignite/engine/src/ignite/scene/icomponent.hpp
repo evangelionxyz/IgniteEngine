@@ -47,6 +47,8 @@ namespace ignite
         CompType_Prefab,
         CompType_ParticleSystem,
         CompType_PhysicsJoint,
+        CompType_NetworkIdentity,
+        CompType_LuaScript,
 
         CompType_COUNT
     };

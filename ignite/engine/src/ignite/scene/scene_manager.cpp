@@ -2,6 +2,8 @@
 
 #include "ignite_pch.hpp"
 #include "scene_manager.hpp"
+#include "ignite/scripting/lua_script_runtime.hpp"
+#include "ignite/scripting/lua_script_runtime.hpp"
 #include "scene.hpp"
 #include "prefab.hpp"
 #include "ignite/core/application.hpp"
@@ -356,10 +358,13 @@ namespace ignite
 
     void SceneManager::DestroyEntity(Scene *scene, Entity entity)
     {
-        scene->SetDirtyFlag(true);
-
         if (!scene || !scene->registry->valid(entity))
             return;
+
+        scene->SetDirtyFlag(true);
+
+        if (scene->GetLuaScriptRuntime() && entity.HasComponent<LuaScriptComponent>())
+            scene->GetLuaScriptRuntime()->DestroyInstance(entity.GetUUID());
 
         if (entity.HasComponent<PhysicsJointComponent>())
         {
@@ -417,6 +422,12 @@ namespace ignite
             DestroyEntity(scene, GetEntity(scene, childId));
         }
 
+        if (entity.HasComponent<NetworkIdentityComponent>())
+        {
+            const auto &netComp = entity.GetComponent<NetworkIdentityComponent>();
+            scene->UnregisterNetEntity(netComp.netId);
+        }
+
         scene->registry->destroy(entity);
         scene->entities.erase(idComp.uuid);
 
@@ -444,6 +455,12 @@ namespace ignite
 
         // copy current entity's components to new entity
         SceneManager::CopyComponentIfExists(AllComponents{}, newEntity, entity);
+
+        if (newEntity.HasComponent<NetworkIdentityComponent>())
+        {
+            auto &netComp = newEntity.GetComponent<NetworkIdentityComponent>();
+            netComp.netId = 0; // Avoid duplicate netId in the same scene
+        }
 
         // get new entity's ID Component
         IDComponent &newEntityIDComp = newEntity.GetComponent<IDComponent>();
@@ -761,6 +778,17 @@ namespace ignite
         }
 
         SceneManager::CopyComponent(AllComponents{}, destRegistry, srcRegistry, entityMap);
+
+        // Re-register network entities in the copied scene
+        auto netView = destRegistry->view<NetworkIdentityComponent>();
+        for (entt::entity e : netView)
+        {
+            auto &netComp = netView.get<NetworkIdentityComponent>(e);
+            if (netComp.netId != 0)
+            {
+                newScene->RegisterNetEntity(netComp.netId, Entity{ e, newScene.get() });
+            }
+        }
 
         // copy scene extra data
         newScene->handle = other->handle;

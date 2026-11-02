@@ -2,6 +2,7 @@
 
 #include "pch.hpp"
 #include "editor_layer.hpp"
+#include <ignite/net/network_manager.hpp>
 #include "ext/editor_ui.hpp"
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
@@ -737,6 +738,11 @@ namespace ignite
                     m_State.gameplayViewportWindow = true;
                 }
 
+                if (ImGui::MenuItem("Network Diagnostics", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    m_State.networkWindow = true;
+                }
+
                 if (ImGui::MenuItem("Settings", nullptr, false, m_ActiveProject != nullptr))
                 {
                     m_State.settingsWindow = true;
@@ -1063,6 +1069,10 @@ namespace ignite
 
         // Set new scene
         m_ActiveScene = scene;
+        if (auto *net = NetworkManager::GetInstance())
+        {
+            net->SetActiveScene(m_ActiveScene.get());
+        }
 
         // Update all systems with new scene
         if (m_ScenePanel)
@@ -1214,9 +1224,7 @@ namespace ignite
         {
             // 1. Save current scene if the Current Scene Handle is the same with the current scene
             const AssetHandle activeSceneHandle = m_ActiveScene ? m_ActiveScene->handle : AssetHandle(0);
-            if (m_CurrentSceneHandle != AssetHandle(0)
-                && m_CurrentSceneHandle == activeSceneHandle
-                && !m_CurrentSceneFilePath.empty())
+            if (m_CurrentSceneHandle != AssetHandle(0) && m_CurrentSceneHandle == activeSceneHandle && !m_CurrentSceneFilePath.empty())
             {
                 SaveScene(m_CurrentSceneFilePath);
             }
@@ -1881,7 +1889,15 @@ namespace ignite
 
     void EditorLayer::UISettings()
     {
-        if (m_ActiveScene && m_State.settingsWindow)
+        if (m_State.networkWindow)
+            {
+                if (auto *net = NetworkManager::GetInstance())
+                {
+                    net->OnImGuiRender(&m_State.networkWindow);
+                }
+            }
+
+            if (m_ActiveScene && m_State.settingsWindow)
         {
             ImGui::Begin("Settings", &m_State.settingsWindow);
 

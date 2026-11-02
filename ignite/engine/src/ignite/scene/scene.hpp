@@ -25,6 +25,7 @@ namespace ignite::physics
 
 namespace ignite
 {
+    class LuaScriptRuntime;
     class CameraComponent;
     class Entity;
     class Environment;
@@ -40,6 +41,13 @@ namespace ignite
         Play = 2,
         Simulate = 3,
         Paused = 4,
+    };
+
+    enum class ENetMode : uint8_t
+    {
+        Standalone = 0,
+        DedicatedServer,
+        Client,
     };
 
     class IGN_API Scene final : public Asset
@@ -70,11 +78,21 @@ namespace ignite
 
         const ESceneState &GetState() const { return m_State; }
 
+        void SetNetMode(ENetMode mode) { m_NetMode = mode; }
+        ENetMode GetNetMode() const { return m_NetMode; }
+        bool IsClient() const { return m_NetMode == ENetMode::Client; }
+        bool IsServer() const { return m_NetMode == ENetMode::DedicatedServer; }
+
+        Entity FindEntityByNetId(uint64_t netId);
+        void RegisterNetEntity(uint64_t netId, Entity entity);
+        void UnregisterNetEntity(uint64_t netId);
+
         template<typename T>
         void OnComponentAdded(Entity entity, T &comp);
 
         Entity GetPrimaryCamera();
         inline Project *GetProject() { return m_Project; }
+        LuaScriptRuntime *GetLuaScriptRuntime() const { return m_LuaScriptRuntime.get(); }
         inline AssetManager *GetAssetManager() { return m_AssetManager; }
 
         Ref<WidgetCanvas> GetRootWidget() const;
@@ -118,6 +136,7 @@ namespace ignite
         AssetManager *m_AssetManager;
         physics::Physics2D *m_Physics2D;
         physics::Physics3D *m_Physics3D;
+        Scope<LuaScriptRuntime> m_LuaScriptRuntime;
 
         uint32_t m_ViewportWidth;
         uint32_t m_ViewportHeight;
@@ -129,6 +148,8 @@ namespace ignite
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
         std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;
+        ENetMode m_NetMode = ENetMode::Standalone;
+        std::unordered_map<uint64_t, entt::entity> m_NetEntities;
 
         friend class SceneManager;
     };

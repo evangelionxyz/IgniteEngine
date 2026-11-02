@@ -1090,10 +1090,8 @@ namespace ignite
         vk::SubmitInfo submitInfo{};
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &viewportData->presentSemaphore;
-        {
-            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-            deviceManager->m_GraphicsQueue.submit(1, &submitInfo, nullptr);
-        }
+
+        const vk::Result _ = deviceManager->m_GraphicsQueue.submit(1, &submitInfo, nullptr);
 
         const vk::PresentInfoKHR presentInfo = vk::PresentInfoKHR()
             .setWaitSemaphoreCount(1)

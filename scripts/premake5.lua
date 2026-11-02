@@ -70,6 +70,9 @@ group "Engine"
     include "../ignite/engine/ignite.engine.lua"
     include "../ignite/core/ignite.core.lua"
     include "../ignite/physics/ignite.physics.lua"
+    include "../ignite/net/ignite.net.lua"
+
+    include "./thirdparty_scripts/ignite-server.lua"
 
     -- Rust
     include "../crates/ignite_rs.lua"

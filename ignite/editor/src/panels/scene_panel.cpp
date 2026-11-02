@@ -813,6 +813,101 @@ namespace ignite
 
             }, false); // false: not allowed to remove the component
 
+            // Network Identity component
+            RenderComponent<NetworkIdentityComponent>("Network Identity", selectedEntity, [&]()
+            {
+                auto &comp = selectedEntity.GetComponent<NetworkIdentityComponent>();
+
+                // Net ID (editable U64 with Gen button)
+                ImGui::PushID("NetID_Control");
+                ImGui::BeginColumns("NetID_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
+                ImGui::SetColumnWidth(0, UI::defColWidth);
+                ImGui::Text("Net ID");
+                ImGui::NextColumn();
+
+                float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+                float genBtnWidth = ImGui::CalcTextSize("Gen").x + GImGui->Style.FramePadding.x * 2.0f;
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - genBtnWidth - GImGui->Style.ItemSpacing.x);
+
+                uint64_t currentNetId = comp.netId;
+                if (ImGui::InputScalar("##net_id_input", ImGuiDataType_U64, &currentNetId))
+                {
+                    if (currentNetId != comp.netId)
+                    {
+                        if (m_Scene)
+                            m_Scene->UnregisterNetEntity(comp.netId);
+                        comp.netId = currentNetId;
+                        if (m_Scene)
+                            m_Scene->RegisterNetEntity(comp.netId, selectedEntity);
+                    }
+                }
+                ImGui::PopItemWidth();
+
+                ImGui::SameLine();
+                if (ImGui::Button("Gen", ImVec2(genBtnWidth, lineHeight)))
+                {
+                    if (m_Scene)
+                        m_Scene->UnregisterNetEntity(comp.netId);
+                    static uint64_t s_LocalGenCounter = 1000;
+                    comp.netId = ++s_LocalGenCounter;
+                    if (m_Scene)
+                        m_Scene->RegisterNetEntity(comp.netId, selectedEntity);
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Generate a new local Net ID");
+                }
+
+                ImGui::EndColumns();
+                ImGui::PopID();
+
+                // Owner Client (editable int control: 0 = Server, 1+ = Client ID)
+                int owner = static_cast<int>(comp.ownerClient);
+                if (UI::DrawIntControl("Owner Client", &owner, 1.0f, 0, 65535, 0))
+                {
+                    comp.ownerClient = static_cast<uint32_t>(std::max(0, owner));
+                }
+
+                // Prefab / Template Identifier
+                ImGui::PushID("NetPrefab_Control");
+                ImGui::BeginColumns("NetPrefab_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
+                ImGui::SetColumnWidth(0, UI::defColWidth);
+                ImGui::Text("Prefab");
+                ImGui::NextColumn();
+
+                char prefabBuf[256] = {};
+                strncpy(prefabBuf, comp.prefab.c_str(), sizeof(prefabBuf) - 1);
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                if (ImGui::InputText("##net_prefab_input", prefabBuf, sizeof(prefabBuf)))
+                {
+                    comp.prefab = prefabBuf;
+                }
+                ImGui::PopItemWidth();
+
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                    {
+                        if (payload->DataSize == sizeof(AssetHandle))
+                        {
+                            AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                            AssetMetaData metadata = assetManager->GetMetaData(handle);
+                            if (metadata.type == AssetType::Prefab)
+                            {
+                                comp.prefab = metadata.filepath.stem().string();
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::EndColumns();
+                ImGui::PopID();
+
+                UI::DrawCheckbox("Is Local", &comp.isLocalPlayer);
+                UI::DrawCheckbox("Replicate", &comp.replicate);
+            });
+
             RenderComponent<PrefabComponent>("Prefab", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<PrefabComponent>();
@@ -3240,6 +3335,49 @@ namespace ignite
                 }
             });
 
+            RenderComponent<LuaScriptComponent>("Lua Script", selectedEntity, [&]()
+            {
+                auto &component = selectedEntity.GetComponent<LuaScriptComponent>();
+                const bool isRunning = m_Scene && m_Scene->IsRunning();
+                ImGui::BeginDisabled(isRunning);
+                ImGui::TextUnformatted("Script");
+                ImGui::SameLine(120.0f);
+                const std::string label = component.scriptPath.empty() ? "No Lua script assigned" : component.scriptPath.generic_string();
+                ImGui::TextWrapped("%s", label.c_str());
+                if (ImGui::Button("Browse Lua Script..."))
+                {
+#ifdef PLATFORM_WINDOWS
+                    static const char filter[] = "Lua Script\0*.lua\0All Files\0*.*\0\0";
+#else
+                    static const char filter[] = "Lua Script | *.lua";
+#endif
+                    const std::string selectedPath = FileDialogs::OpenFile(filter);
+                    if (!selectedPath.empty())
+                    {
+                        const std::filesystem::path absolutePath(selectedPath);
+                        const std::filesystem::path path = m_Scene && m_Scene->GetProject()
+                            ? m_Scene->GetProject()->GetProjectRelativeFilepath(absolutePath)
+                            : absolutePath;
+                        if (m_Scene && m_Scene->GetProject() && path.is_absolute())
+                        {
+                            LOG_WARN("Lua scripts must be inside the project directory: {}", absolutePath.generic_string());
+                        }
+                        else
+                        {
+                            component.scriptPath = path;
+                            m_Scene->SetDirtyFlag(true);
+                        }
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Clear Lua Script"))
+                {
+                    component.scriptPath.clear();
+                    m_Scene->SetDirtyFlag(true);
+                }
+                ImGui::EndDisabled();
+            });
+
             RenderComponent<TerrainComponent>("Terrain", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<TerrainComponent>();
@@ -3680,13 +3818,20 @@ namespace ignite
                     case CompType_Script:
                         entity.AddComponent<ScriptComponent>();
                         break;
+                    case CompType_LuaScript:
+                        entity.AddComponent<LuaScriptComponent>();
+                        break;
                     case CompType_ParticleSystem:
                         entity.AddComponent<ParticleSystemComponent>();
                         break;
                     case CompType_PhysicsJoint:
                         entity.AddComponent<PhysicsJointComponent>();
                         break;
-                    default: break;
+                    case CompType_NetworkIdentity:
+                        entity.AddComponent<NetworkIdentityComponent>();
+                        break;
+                    default:
+                        break;
                     }
                 };
 

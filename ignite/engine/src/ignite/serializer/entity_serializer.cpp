@@ -859,6 +859,14 @@ namespace ignite
                 sr.EndMap();
             }
 
+            if (entity.HasComponent<LuaScriptComponent>())
+            {
+                const auto &comp = entity.GetComponent<LuaScriptComponent>();
+                sr.BeginMap("LuaScript");
+                sr.AddKeyValue("ScriptPath", comp.scriptPath.generic_string());
+                sr.EndMap();
+            }
+
             if (entity.HasComponent<PrefabComponent>())
             {
                 const auto &comp = entity.GetComponent<PrefabComponent>();
@@ -866,6 +874,19 @@ namespace ignite
                 {
                     sr.AddKeyValue("PrefabHandle", static_cast<uint64_t>(comp.prefabHandle));
                     sr.AddKeyValue("PrefabEntityUUID", static_cast<uint64_t>(comp.prefabEntityUUID));
+                }
+                sr.EndMap();
+            }
+
+            if (entity.HasComponent<NetworkIdentityComponent>())
+            {
+                const auto &comp = entity.GetComponent<NetworkIdentityComponent>();
+                sr.BeginMap("NetworkIdentityComponent");
+                {
+                    sr.AddKeyValue("NetId", comp.netId);
+                    sr.AddKeyValue("OwnerClient", comp.ownerClient);
+                    sr.AddKeyValue("Replicate", comp.replicate);
+                    sr.AddKeyValue("Prefab", comp.prefab);
                 }
                 sr.EndMap();
             }
@@ -1510,11 +1531,31 @@ namespace ignite
             }
         }
 
+        if (JsonNode node = entityNode["LuaScript"])
+        {
+            auto &comp = desEntity.AddComponent<LuaScriptComponent>();
+            if (auto path = node["ScriptPath"]) comp.scriptPath = path.as<std::string>();
+        }
+
         if (JsonNode node = entityNode["PrefabComponent"])
         {
             auto &comp = desEntity.AddComponent<PrefabComponent>();
             if (auto n = node["PrefabHandle"]) comp.prefabHandle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["PrefabEntityUUID"]) comp.prefabEntityUUID = UUID(n.as<uint64_t>());
+        }
+
+        if (JsonNode node = entityNode["NetworkIdentityComponent"])
+        {
+            auto &comp = desEntity.AddComponent<NetworkIdentityComponent>();
+            if (auto n = node["NetId"]) comp.netId = n.as<uint64_t>();
+            if (auto n = node["OwnerClient"]) comp.ownerClient = n.as<uint32_t>();
+            if (auto n = node["Replicate"]) comp.replicate = n.as<bool>();
+            if (auto n = node["Prefab"]) comp.prefab = n.as<std::string>();
+
+            if (scene && comp.netId != 0)
+            {
+                scene->RegisterNetEntity(comp.netId, desEntity);
+            }
         }
 
         // Particle System Component

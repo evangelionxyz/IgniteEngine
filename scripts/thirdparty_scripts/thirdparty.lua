@@ -99,9 +99,11 @@ IncludeDir["SDL3"]                  = "%{THIRDPARTY_DIR}/SDL3/include"
 IncludeDir["JSON"]                  = "%{THIRDPARTY_DIR}/JSON"
 IncludeDir["TINYGLTF"]              = "%{THIRDPARTY_DIR}/TINYGLTF/include"
 IncludeDir["FILEWATCHER"]           = "%{THIRDPARTY_DIR}/Filewatcher/include"
-IncludeDir["VULKAN_HEADERS"]           = "%{THIRDPARTY_DIR}/Vulkan-Headers/include"
+IncludeDir["IGNITE_SERVER"]         = "%{THIRDPARTY_DIR}/Ignite-Server/Networking/source"
+IncludeDir["GAME_NETWORKING_SOCKETS"] = "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/include"
+IncludeDir["VULKAN_HEADERS"]        = "%{THIRDPARTY_DIR}/Vulkan-Headers/include"
 IncludeDir["VULKAN_MEMORY_ALLOCATOR"]  = "%{THIRDPARTY_DIR}/VulkanMemoryAllocator"
-IncludeDir["DIRECTX_HEADERS"]          = "%{THIRDPARTY_DIR}/DirectX-Headers/include"
+IncludeDir["DIRECTX_HEADERS"]       = "%{THIRDPARTY_DIR}/DirectX-Headers/include"
 IncludeDir["DIRECTX_MEMORY_ALLOCATOR"] = "%{THIRDPARTY_DIR}/D3D12MemoryAllocator"
 IncludeDir["MochiSharpNative"]      = "%{THIRDPARTY_DIR}/MochiSharp/MochiSharp.Native/Source"
 IncludeDir["VULKAN_SDK"]            = VULKAN_SDK_INCLUDE_PATH
@@ -202,6 +204,7 @@ LibraryDir["FBX_SDK_LINUX_DEBUG"]   = "%{FBX_SDK_PATH}/lib/debug"
 LibraryDir["FBX_SDK_LINUX_RELEASE"] = "%{FBX_SDK_PATH}/lib/release"
 
 LibraryDir["SDL3_LINUX"]            = "%{THIRDPARTY_DIR}/SDL3/build-linux"
+LibraryDir["GAME_NETWORKING_SOCKETS_LINUX"] = "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux"
 
 -- include lua files
 group "Third Party"

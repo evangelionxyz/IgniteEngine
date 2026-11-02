@@ -55,6 +55,7 @@ namespace ignite
             bool takeScreenshot = false;
             bool gameplayViewportWindow = false;
             bool consoleWindow = true;
+            bool networkWindow = false;
 
             const int STABLE_RESIZE_FRAME = 6;
 

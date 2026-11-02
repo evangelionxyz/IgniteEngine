@@ -19,8 +19,6 @@ project "Ignite.Core"
     includedirs {
         "src",
         "src/ignite",
-
-
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.BOX2D}",
@@ -94,7 +92,7 @@ project "Ignite.Core"
         prebuildcommands {
             -- Configure and Build SDL
             'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build-linux" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
-            'cmake --build "%{wks.location}/thirdparty/SDL3/build-linux" --config "Debug"',
+            '+cmake --build "%{wks.location}/thirdparty/SDL3/build-linux" --config "Debug"',
 
             -- Build Rust
             'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
@@ -119,7 +117,7 @@ project "Ignite.Core"
         prebuildcommands {
             -- Configure and Build SDL
             'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build-linux" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
-            'cmake --build "%{wks.location}/thirdparty/SDL3/build-linux" --config "Release"',
+            '+cmake --build "%{wks.location}/thirdparty/SDL3/build-linux" --config "Release"',
 
             -- Build Rust
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
