@@ -813,7 +813,7 @@ namespace ignite
 
             }, false); // false: not allowed to remove the component
 
-            // Rendering component
+            // Network Identity component
             RenderComponent<NetworkIdentityComponent>("Network Identity", selectedEntity, [&]()
             {
                 auto &comp = selectedEntity.GetComponent<NetworkIdentityComponent>();
@@ -3697,6 +3697,7 @@ namespace ignite
                         break;
                     case CompType_PhysicsJoint:
                         entity.AddComponent<PhysicsJointComponent>();
+                        break;
                     case CompType_NetworkIdentity:
                         entity.AddComponent<NetworkIdentityComponent>();
                         break;
