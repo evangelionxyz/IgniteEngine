@@ -2,9 +2,49 @@
 
 #include "net_replication.hpp"
 #include <ignite/scene/scene_manager.hpp>
+#include <ignite/scene/prefab.hpp>
+#include <ignite/asset/asset_manager.hpp>
+#include <ignite/scene/entity.hpp>
+#include <ignite/scene/component.hpp>
+#include <ignite/math/transform.hpp>
 
 namespace ignite
 {
+    // Helper to apply world transform accounting for parent hierarchy
+    static void ApplyEntityTransform(Scene *scene, Entity entity, const glm::vec3 &pos, const glm::quat &rot, const glm::vec3 &scale = glm::vec3(1.0f))
+    {
+        auto &tr = entity.GetTransform();
+        if (entity.HasComponent<IDComponent>())
+        {
+            auto &idc = entity.GetComponent<IDComponent>();
+            if (idc.parent != 0)
+            {
+                Entity parent = SceneManager::GetEntity(scene, idc.parent);
+                if (parent.IsValid() && parent.HasComponent<TransformComponent>())
+                {
+                    const auto &parentTr = parent.GetComponent<TransformComponent>();
+                    const glm::mat4 childWorldMatrix = glm::translate(glm::mat4(1.0f), pos)
+                        * glm::toMat4(rot) * glm::scale(glm::mat4(1.0f), scale);
+                    const glm::mat4 childLocalMatrix = glm::inverse(parentTr.world.GetMatrix()) * childWorldMatrix;
+                    const glm::vec3 savedLocalScale = tr.local.scale;
+                    Transform::Decompose(childLocalMatrix, tr.local);
+                    tr.local.scale = savedLocalScale;
+                    tr.world.translation = pos;
+                    tr.world.rotation = rot;
+                    tr.world.scale = scale;
+                    return;
+                }
+            }
+        }
+
+        tr.local.translation = pos;
+        tr.local.rotation = rot;
+        tr.local.scale = scale;
+        tr.world.translation = pos;
+        tr.world.rotation = rot;
+        tr.world.scale = scale;
+    }
+
     // =========================================================================
     // Server-Side Replication Implementation
     // =========================================================================
@@ -14,6 +54,21 @@ namespace ignite
         if (m_Scene)
         {
             m_Scene->SetNetMode(ENetMode::DedicatedServer);
+
+            // Register existing pre-placed scene entities and ensure server generated NetIds won't collide
+            uint64_t maxId = 1000;
+            auto view = m_Scene->registry->view<NetworkIdentityComponent>();
+            for (entt::entity e : view)
+            {
+                auto &netComp = view.get<NetworkIdentityComponent>(e);
+                if (netComp.netId != 0)
+                {
+                    m_Scene->RegisterNetEntity(netComp.netId, Entity{ e, m_Scene });
+                    if (netComp.netId >= maxId)
+                        maxId = netComp.netId;
+                }
+            }
+            m_NextNetId = maxId + 1;
         }
     }
 
@@ -27,16 +82,47 @@ namespace ignite
             return {};
 
         const uint64_t netId = GenerateNetId();
-        const std::string name = prefab.empty() ? ("NetEntity_" + std::to_string(netId)) : prefab;
+        Entity entity;
 
-        Entity entity = SceneManager::CreateEntity(m_Scene, name, EntityType_Node);
-        auto &tr = entity.GetTransform();
-        tr.local.translation = position;
-        tr.local.rotation = rotation;
-        tr.world.translation = position;
-        tr.world.rotation = rotation;
+        if (!prefab.empty() && m_Scene->GetAssetManager())
+        {
+            AssetManager *am = m_Scene->GetAssetManager();
+            for (const auto &[handle, metadata] : am->GetAssetAssetRegistry())
+            {
+                if (metadata.type == AssetType::Prefab && metadata.filepath.stem().string() == prefab)
+                {
+                    Ref<Prefab> p = am->GetAsset<Prefab>(handle);
+                    if (p)
+                    {
+                        entity = SceneManager::InstantiatePrefab(m_Scene, p);
+                        break;
+                    }
+                }
+            }
+        }
 
-        entity.AddComponent<NetworkIdentityComponent>(netId, ownerClient, false, prefab);
+        if (!entity.IsValid())
+        {
+            const std::string name = prefab.empty() ? ("NetEntity_" + std::to_string(netId)) : prefab;
+            entity = SceneManager::CreateEntity(m_Scene, name, EntityType_Node);
+        }
+
+        ApplyEntityTransform(m_Scene, entity, position, rotation);
+
+        if (!entity.HasComponent<NetworkIdentityComponent>())
+        {
+            entity.AddComponent<NetworkIdentityComponent>(netId, ownerClient, false, prefab);
+        }
+        else
+        {
+            auto &netComp = entity.GetComponent<NetworkIdentityComponent>();
+            netComp.netId = netId;
+            netComp.ownerClient = ownerClient;
+            netComp.isLocalPlayer = false;
+            netComp.prefab = prefab;
+        }
+
+        m_Scene->RegisterNetEntity(netId, entity);
 
         // Broadcast spawn to all connected clients
         netproto::SpawnMsg msg;
@@ -61,6 +147,7 @@ namespace ignite
         Entity entity = m_Scene->FindEntityByNetId(netId);
         if (entity.IsValid())
         {
+            m_Scene->UnregisterNetEntity(netId);
             SceneManager::DestroyEntity(m_Scene, entity);
         }
 
@@ -138,6 +225,17 @@ namespace ignite
         if (m_Scene)
         {
             m_Scene->SetNetMode(ENetMode::Client);
+
+            // Scan and register existing pre-placed scene entities
+            auto view = m_Scene->registry->view<NetworkIdentityComponent>();
+            for (entt::entity e : view)
+            {
+                auto &netComp = view.get<NetworkIdentityComponent>(e);
+                if (netComp.netId != 0)
+                {
+                    m_Scene->RegisterNetEntity(netComp.netId, Entity{ e, m_Scene });
+                }
+            }
         }
 
         if (m_Client)
@@ -157,13 +255,28 @@ namespace ignite
         if (!m_Scene || !m_Client)
             return;
 
-        // If entity already exists, update it
-        Entity existing = m_Scene->FindEntityByNetId(msg.netId);
-        if (existing.IsValid())
-            return;
-
         const bool isLocal = (msg.ownerClient != 0 && msg.ownerClient == m_Client->GetClientId());
 
+        // 1. If entity already exists in the scene (e.g. pre-placed mesh entity), bind to it!
+        Entity existing = m_Scene->FindEntityByNetId(msg.netId);
+        if (existing.IsValid())
+        {
+            if (existing.HasComponent<NetworkIdentityComponent>())
+            {
+                auto &netComp = existing.GetComponent<NetworkIdentityComponent>();
+                netComp.ownerClient = msg.ownerClient;
+                netComp.isLocalPlayer = isLocal;
+                if (!msg.prefab.empty())
+                    netComp.prefab = msg.prefab;
+            }
+            m_Scene->RegisterNetEntity(msg.netId, existing);
+
+            // Snap initial transform
+            ApplyEntityTransform(m_Scene, existing, msg.position, msg.rotation);
+            return;
+        }
+
+        // 2. Entity does not exist yet (dynamically spawned at runtime)
         Entity entity;
         if (m_CustomSpawner)
         {
@@ -171,18 +284,35 @@ namespace ignite
         }
         else
         {
-            const std::string name = msg.prefab.empty() ? ("NetEntity_" + std::to_string(msg.netId)) : msg.prefab;
-            entity = SceneManager::CreateEntity(m_Scene, name, EntityType_Node);
+            // Try instantiating prefab if specified
+            if (!msg.prefab.empty() && m_Scene->GetAssetManager())
+            {
+                AssetManager *am = m_Scene->GetAssetManager();
+                for (const auto &[handle, metadata] : am->GetAssetAssetRegistry())
+                {
+                    if (metadata.type == AssetType::Prefab && metadata.filepath.stem().string() == msg.prefab)
+                    {
+                        Ref<Prefab> prefab = am->GetAsset<Prefab>(handle);
+                        if (prefab)
+                        {
+                            entity = SceneManager::InstantiatePrefab(m_Scene, prefab);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!entity.IsValid())
+            {
+                const std::string name = msg.prefab.empty() ? ("NetEntity_" + std::to_string(msg.netId)) : msg.prefab;
+                entity = SceneManager::CreateEntity(m_Scene, name, EntityType_Node);
+            }
         }
 
         if (!entity.IsValid())
             return;
 
-        auto &tr = entity.GetTransform();
-        tr.local.translation = msg.position;
-        tr.local.rotation = msg.rotation;
-        tr.world.translation = msg.position;
-        tr.world.rotation = msg.rotation;
+        ApplyEntityTransform(m_Scene, entity, msg.position, msg.rotation);
 
         if (!entity.HasComponent<NetworkIdentityComponent>())
         {
@@ -195,8 +325,9 @@ namespace ignite
             netComp.ownerClient = msg.ownerClient;
             netComp.isLocalPlayer = isLocal;
             netComp.prefab = msg.prefab;
-            m_Scene->RegisterNetEntity(msg.netId, entity);
         }
+
+        m_Scene->RegisterNetEntity(msg.netId, entity);
     }
 
     void NetClientReplication::OnDespawn(const netproto::DespawnMsg &msg)
@@ -207,6 +338,7 @@ namespace ignite
         Entity entity = m_Scene->FindEntityByNetId(msg.netId);
         if (entity.IsValid())
         {
+            m_Scene->UnregisterNetEntity(msg.netId);
             SceneManager::DestroyEntity(m_Scene, entity);
         }
 
@@ -233,11 +365,7 @@ namespace ignite
                 if (m_Prediction.Reconcile(msg.lastProcessedInputSeq, st.position, st.rotation,
                                            1.0f / 60.0f, nullptr, correctedPos, correctedRot))
                 {
-                    auto &tr = entity.GetTransform();
-                    tr.local.translation = correctedPos;
-                    tr.local.rotation = correctedRot;
-                    tr.world.translation = correctedPos;
-                    tr.world.rotation = correctedRot;
+                    ApplyEntityTransform(m_Scene, entity, correctedPos, correctedRot, st.scale);
                 }
             }
             else
@@ -267,13 +395,7 @@ namespace ignite
             glm::quat rot;
             if (interp.Sample(m_CurrentTime, pos, rot, scale))
             {
-                auto &tr = entity.GetTransform();
-                tr.local.translation = pos;
-                tr.local.rotation = rot;
-                tr.local.scale = scale;
-                tr.world.translation = pos;
-                tr.world.rotation = rot;
-                tr.world.scale = scale;
+                ApplyEntityTransform(m_Scene, entity, pos, rot, scale);
             }
         }
     }
@@ -293,4 +415,3 @@ namespace ignite
         return {};
     }
 }
-

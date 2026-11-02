@@ -1224,9 +1224,7 @@ namespace ignite
         {
             // 1. Save current scene if the Current Scene Handle is the same with the current scene
             const AssetHandle activeSceneHandle = m_ActiveScene ? m_ActiveScene->handle : AssetHandle(0);
-            if (m_CurrentSceneHandle != AssetHandle(0)
-                && m_CurrentSceneHandle == activeSceneHandle
-                && !m_CurrentSceneFilePath.empty())
+            if (m_CurrentSceneHandle != AssetHandle(0) && m_CurrentSceneHandle == activeSceneHandle && !m_CurrentSceneFilePath.empty())
             {
                 SaveScene(m_CurrentSceneFilePath);
             }

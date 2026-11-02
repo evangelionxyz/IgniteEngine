@@ -14,6 +14,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
+#include "ignite/scene/scene_manager.hpp"
 
 using namespace ignite;
 
@@ -169,6 +170,48 @@ int main()
     CHECK(!c1EntityAfter.IsValid());
     CHECK(!c2EntityAfter.IsValid());
     std::printf("Entity %llu successfully despawned on all clients!\n", netId);
+
+    // 6.5 Test Pre-placed Scene Entity (avoid creating empty duplicate)
+    // Create pre-placed entity in server scene with netId 2000
+    Entity srvPreplaced = SceneManager::CreateEntity(serverScene.get(), "PreplacedMesh", EntityType_Mesh);
+    srvPreplaced.AddComponent<NetworkIdentityComponent>(2000ULL, 0U, false, "");
+    auto &srvTr = srvPreplaced.GetTransform();
+    srvTr.local.translation = glm::vec3(50.0f, 0.0f, 50.0f);
+    srvTr.world.translation = glm::vec3(50.0f, 0.0f, 50.0f);
+    serverScene->RegisterNetEntity(2000ULL, srvPreplaced);
+
+    // Create same pre-placed entity in client 1 scene (as loaded from level file)
+    Entity c1Preplaced = SceneManager::CreateEntity(client1Scene.get(), "PreplacedMesh", EntityType_Mesh);
+    c1Preplaced.AddComponent<NetworkIdentityComponent>(2000ULL, 0U, false, "");
+    auto &c1Tr = c1Preplaced.GetTransform();
+    c1Tr.local.translation = glm::vec3(0.0f, 0.0f, 0.0f);
+    c1Tr.world.translation = glm::vec3(0.0f, 0.0f, 0.0f);
+    client1Scene->RegisterNetEntity(2000ULL, c1Preplaced);
+
+    // Sync world to client 1
+    serverRep.SyncWorldToClient(c1JoinedId);
+
+    for (int i = 0; i < 20; ++i)
+    {
+        server.Tick();
+        client1.Tick();
+        client1Rep.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Verify client 1 bound to c1Preplaced and did not duplicate
+    size_t netCompCount = 0;
+    for (auto e : client1Scene->registry->view<NetworkIdentityComponent>())
+    {
+        (void)e;
+        netCompCount++;
+    }
+    CHECK(netCompCount == 1); // Only 2000 exists (netId was despawned in step 6)
+    Entity c1Found = client1Scene->FindEntityByNetId(2000ULL);
+    CHECK(c1Found.IsValid());
+    CHECK(c1Found == c1Preplaced);
+    CHECK(c1Found.GetTransform().world.translation.x == 50.0f);
+    std::printf("Pre-placed scene entity test passed: correctly bound, no duplicates, transform snapped!\n");
 
     // 7. Cleanup
     client1.Disconnect();

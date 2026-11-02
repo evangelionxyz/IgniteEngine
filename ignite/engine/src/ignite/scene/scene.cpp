@@ -52,7 +52,7 @@ namespace ignite
 
         void ApplyMeshRuntimeParamsToController(const SkeletalMeshComponent &meshComp, AnimatorController &controller)
         {
-			IGN_PROFILE_FUNCTION();
+            IGN_PROFILE_FUNCTION();
 
             for (auto &[name, param] : controller.params)
             {
@@ -188,22 +188,22 @@ namespace ignite
             m_Physics3D = m_Project->GetPhysics3D();
         }
 
-		m_AssetManager = AssetManager::GetInstance();
-		m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
-		[this](const AssetChangeSignal &signal)
-		{
-			OnAssetChangeSignal(signal);
-		});
+        m_AssetManager = AssetManager::GetInstance();
+        m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
+        [this](const AssetChangeSignal &signal)
+        {
+            OnAssetChangeSignal(signal);
+        });
     }
 
     Scene::~Scene()
     {
         // Remove signal
-		SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
+        SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
         m_AssetChangeToken = kInvalidSignalToken;
 
         m_Physics3D = nullptr;
-		m_Physics2D = nullptr;
+        m_Physics2D = nullptr;
 
         // Clear all entities from registry before deletion
         if (registry)
@@ -231,7 +231,7 @@ namespace ignite
 
     void Scene::OnStart(ESceneState playOrSimulateState)
     {
-		LOG_ASSERT(playOrSimulateState == ESceneState::Play || playOrSimulateState == ESceneState::Simulate, "Invalid scene state for OnStart");
+        LOG_ASSERT(playOrSimulateState == ESceneState::Play || playOrSimulateState == ESceneState::Simulate, "Invalid scene state for OnStart");
 
         m_State = playOrSimulateState;
         m_PreviousState = playOrSimulateState;
@@ -258,20 +258,20 @@ namespace ignite
                 continue;
 
             Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
-			if (sound)
-			{
-				RebuildAudioSourceDspChain(as, sound);
+            if (sound)
+            {
+                RebuildAudioSourceDspChain(as, sound);
 
                 sound->Stop();
 
                 if (as.playOnStart)
                     sound->Play();
 
-				sound->SetVolume(as.volume);
-				sound->SetPitch(as.pitch);
-				sound->SetPan(as.pan);
-				sound->SetMode(as.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
-			}
+                sound->SetVolume(as.volume);
+                sound->SetPitch(as.pitch);
+                sound->SetPan(as.pan);
+                sound->SetMode(as.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
+            }
 
         }
 
@@ -664,18 +664,18 @@ namespace ignite
         m_StepFrame = 0;
         timeInSeconds = 0.0f;
 
-		registry->view<AudioSourceComponent>().each([this](entt::entity e, AudioSourceComponent &as)
-		{
-			if (as.handle == AssetHandle(0))
-				return;
+        registry->view<AudioSourceComponent>().each([this](entt::entity e, AudioSourceComponent &as)
+        {
+            if (as.handle == AssetHandle(0))
+                return;
 
             if (m_AssetManager->IsAssetLoaded(as.handle))
             {
-			    Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
-			    if (sound)
-				    sound->Stop();
+                Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+                if (sound)
+                    sound->Stop();
             }
-		});
+        });
 
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
@@ -844,20 +844,20 @@ namespace ignite
         UpdateTransforms(deltaTime);
     }
 
-	void Scene::OnFixedUpdateEdit()
-	{
-		// {
-		// 	IGN_PROFILE_SCOPE("Scene::Physics2D");
-		// 	m_Physics2D->Simulate(1.0f / 60.0f);
-		// }
+    void Scene::OnFixedUpdateEdit()
+    {
+        // {
+        // 	IGN_PROFILE_SCOPE("Scene::Physics2D");
+        // 	m_Physics2D->Simulate(1.0f / 60.0f);
+        // }
         //
-		// {
-		// 	IGN_PROFILE_SCOPE("Scene::Physics3D");
-		// 	m_JoltScene->Simulate(1.0f / 60.0f);
-		// }
-	}
+        // {
+        // 	IGN_PROFILE_SCOPE("Scene::Physics3D");
+        // 	m_JoltScene->Simulate(1.0f / 60.0f);
+        // }
+    }
 
-	Entity Scene::GetPrimaryCamera()
+    Entity Scene::GetPrimaryCamera()
     {
         auto camView = registry->view<CameraComponent>();
         for (entt::entity entity : camView)
@@ -899,15 +899,15 @@ namespace ignite
             timeInSeconds += deltaTime;
 
             // Update audio
-			registry->view<AudioSourceComponent>().each([this, deltaTime](entt::entity e, AudioSourceComponent &as)
-			{
-				if (as.handle == AssetHandle(0))
+            registry->view<AudioSourceComponent>().each([this, deltaTime](entt::entity e, AudioSourceComponent &as)
+            {
+                if (as.handle == AssetHandle(0))
                     return;
 
-				Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
+                Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
                 if (sound)
                     sound->Update(deltaTime);
-			});
+            });
 
             {
                 IGN_PROFILE_SCOPE("Scene::Script OnUpdate");
@@ -918,7 +918,7 @@ namespace ignite
                 });
             }
 
-			UpdateTransforms(deltaTime);
+            UpdateTransforms(deltaTime);
 
             // Update physics
             {
@@ -1397,20 +1397,20 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("Scene::CollisionEvents");
 
-				// Helper: try to find a script instance for an entity
-				// Uses the ScriptComponent view to avoid error-logging for entities without scripts
-				auto getScriptInstance = [&](uint64_t entityId) -> Ref<ScriptInstance>
-				{
-					auto it = entities.find(UUID(entityId));
-					if (it == entities.end())
-						return nullptr;
+                // Helper: try to find a script instance for an entity
+                // Uses the ScriptComponent view to avoid error-logging for entities without scripts
+                auto getScriptInstance = [&](uint64_t entityId) -> Ref<ScriptInstance>
+                {
+                    auto it = entities.find(UUID(entityId));
+                    if (it == entities.end())
+                        return nullptr;
 
-					Entity ent{ it->second, this };
-					if (!ent.HasComponent<ScriptComponent>())
-						return nullptr;
+                    Entity ent{ it->second, this };
+                    if (!ent.HasComponent<ScriptComponent>())
+                        return nullptr;
 
-					return ent.GetComponent<ScriptComponent>().runtimeScriptInstance;
-				};
+                    return ent.GetComponent<ScriptComponent>().runtimeScriptInstance;
+                };
 
                 if (m_Physics3D)
                 {
@@ -1468,23 +1468,44 @@ namespace ignite
         }
     }
 
-	void Scene::OnFixedUpdateRuntimeSimulate() const
+    void Scene::OnFixedUpdateRuntimeSimulate() const
     {
-		{
-			IGN_PROFILE_SCOPE("Scene::Script OnFixedUpdate");
-			registry->view<ScriptComponent>().each([](entt::entity e, ScriptComponent &script)
-			{
-				if (script.runtimeScriptInstance)
-					script.runtimeScriptInstance->InvokeOnFixedUpdate();
-			});
-		}
-	}
+        {
+            IGN_PROFILE_SCOPE("Scene::Script OnFixedUpdate");
+            registry->view<ScriptComponent>().each([](entt::entity e, ScriptComponent &script)
+            {
+                if (script.runtimeScriptInstance)
+                    script.runtimeScriptInstance->InvokeOnFixedUpdate();
+            });
+        }
+    }
 
     Entity Scene::FindEntityByNetId(uint64_t netId)
     {
+        if (netId == 0)
+            return {};
+
         auto it = m_NetEntities.find(netId);
         if (it != m_NetEntities.end() && registry->valid(it->second))
-            return Entity{ it->second, this };
+        {
+            if (registry->any_of<NetworkIdentityComponent>(it->second))
+            {
+                if (registry->get<NetworkIdentityComponent>(it->second).netId == netId)
+                    return Entity{ it->second, this };
+            }
+        }
+
+        // Fallback: search registry for an entity with matching NetworkIdentityComponent::netId
+        auto view = registry->view<NetworkIdentityComponent>();
+        for (entt::entity e : view)
+        {
+            if (view.get<NetworkIdentityComponent>(e).netId == netId)
+            {
+                m_NetEntities[netId] = e;
+                return Entity{ e, this };
+            }
+        }
+
         return {};
     }
 
@@ -1499,7 +1520,7 @@ namespace ignite
         m_NetEntities.erase(netId);
     }
 
-	Ref<Scene> Scene::Create(Project *project)
+    Ref<Scene> Scene::Create(Project *project)
     {
         return CreateRef<Scene>(project);
     }
@@ -1632,13 +1653,13 @@ namespace ignite
         }
     }
 
-	void Scene::OnAssetChangeSignal(const AssetChangeSignal &signal)
-	{
+    void Scene::OnAssetChangeSignal(const AssetChangeSignal &signal)
+    {
         switch (signal.type)
         {
         case AssetType::AnimatorController:
         {
-			auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
+            auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
             for (auto ent : skeletalMeshView)
             {
                 auto &smc = skeletalMeshView.get<SkeletalMeshComponent>(ent);
@@ -1652,9 +1673,9 @@ namespace ignite
             break;
         }
         }
-	}
+    }
 
-	void Scene::UpdateAnimations(float deltaTime)
+    void Scene::UpdateAnimations(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -1672,13 +1693,13 @@ namespace ignite
             if (!mesh)
                 continue;
 
-			const auto worldMatrix = tr.world.GetMatrix();
-			smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
-			smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
+            const auto worldMatrix = tr.world.GetMatrix();
+            smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+            smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
 
             AssetHandle sourceAnimatorHandle = mesh->GetAnimatorHandle();
-			if (smc.runtimeAnimatorHandle != AssetHandle(0))
-				sourceAnimatorHandle = smc.runtimeAnimatorHandle;
+            if (smc.runtimeAnimatorHandle != AssetHandle(0))
+                sourceAnimatorHandle = smc.runtimeAnimatorHandle;
 
             // If source animator 0, reset
             if (sourceAnimatorHandle == AssetHandle(0))
@@ -1748,7 +1769,7 @@ namespace ignite
 
             if (sharedRuntime)
             {
-				IGN_PROFILE_SCOPE("Scene::Shared Animation Runtime");
+                IGN_PROFILE_SCOPE("Scene::Shared Animation Runtime");
 
                 // Only advance time once per shared controller per frame
                 if (updatedSharedHandles.find(sourceAnimatorHandle) == updatedSharedHandles.end())
@@ -2028,7 +2049,7 @@ namespace ignite
     template<>
     IGN_API void Scene::OnComponentAdded<NetworkIdentityComponent>(Entity entity, NetworkIdentityComponent &comp)
     {
-        if (comp.netId != 0)
+        if (comp.netId != 0 && entity.IsValid())
         {
             RegisterNetEntity(comp.netId, entity);
         }

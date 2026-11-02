@@ -1537,6 +1537,11 @@ namespace ignite
             if (auto n = node["OwnerClient"]) comp.ownerClient = n.as<uint32_t>();
             if (auto n = node["Replicate"]) comp.replicate = n.as<bool>();
             if (auto n = node["Prefab"]) comp.prefab = n.as<std::string>();
+
+            if (scene && comp.netId != 0)
+            {
+                scene->RegisterNetEntity(comp.netId, desEntity);
+            }
         }
 
         // Particle System Component
