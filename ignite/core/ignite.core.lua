@@ -19,8 +19,6 @@ project "Ignite.Core"
     includedirs {
         "src",
         "src/ignite",
-
-
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.BOX2D}",

@@ -991,3 +991,19 @@ pub struct PrefabComponentSerial {
     #[serde(rename = "PrefabEntityUUID", default)]
     pub prefab_entity_uuid: u64,
 }
+
+// -------------------------------------------------
+// Network Components
+// -------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct NetworkIdentityComponentSerial {
+    #[serde(rename = "NetID", default)]
+    pub net_id: u64,
+    #[serde(rename = "OwnerClient", default)]
+    pub owner_client: u32,
+    #[serde(rename = "Replicate", default)]
+    pub replicate: bool,
+    #[serde(rename = "Prefab", default)]
+    pub prefab: String,
+}

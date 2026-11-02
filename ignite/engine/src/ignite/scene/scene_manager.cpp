@@ -417,6 +417,12 @@ namespace ignite
             DestroyEntity(scene, GetEntity(scene, childId));
         }
 
+        if (entity.HasComponent<NetworkIdentityComponent>())
+        {
+            const auto &netComp = entity.GetComponent<NetworkIdentityComponent>();
+            scene->UnregisterNetEntity(netComp.netId);
+        }
+
         scene->registry->destroy(entity);
         scene->entities.erase(idComp.uuid);
 

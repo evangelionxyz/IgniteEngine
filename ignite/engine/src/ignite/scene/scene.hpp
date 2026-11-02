@@ -42,6 +42,13 @@ namespace ignite
         Paused = 4,
     };
 
+    enum class ENetMode : uint8_t
+    {
+        Standalone = 0,
+        DedicatedServer,
+        Client,
+    };
+
     class IGN_API Scene final : public Asset
     {
     public:
@@ -69,6 +76,15 @@ namespace ignite
         void SetSceneRenderer(SceneRenderer *sceneRenderer) { m_SceneRenderer = sceneRenderer; }
 
         const ESceneState &GetState() const { return m_State; }
+
+        void SetNetMode(ENetMode mode) { m_NetMode = mode; }
+        ENetMode GetNetMode() const { return m_NetMode; }
+        bool IsClient() const { return m_NetMode == ENetMode::Client; }
+        bool IsServer() const { return m_NetMode == ENetMode::DedicatedServer; }
+
+        Entity FindEntityByNetId(uint64_t netId);
+        void RegisterNetEntity(uint64_t netId, Entity entity);
+        void UnregisterNetEntity(uint64_t netId);
 
         template<typename T>
         void OnComponentAdded(Entity entity, T &comp);
@@ -129,6 +145,8 @@ namespace ignite
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
         std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;
+        ENetMode m_NetMode = ENetMode::Standalone;
+        std::unordered_map<uint64_t, entt::entity> m_NetEntities;
 
         friend class SceneManager;
     };

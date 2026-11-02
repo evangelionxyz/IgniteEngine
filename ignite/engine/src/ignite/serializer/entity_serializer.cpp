@@ -870,6 +870,19 @@ namespace ignite
                 sr.EndMap();
             }
 
+            if (entity.HasComponent<NetworkIdentityComponent>())
+            {
+                const auto &comp = entity.GetComponent<NetworkIdentityComponent>();
+                sr.BeginMap("NetworkIdentityComponent");
+                {
+                    sr.AddKeyValue("NetId", comp.netId);
+                    sr.AddKeyValue("OwnerClient", comp.ownerClient);
+                    sr.AddKeyValue("Replicate", comp.replicate);
+                    sr.AddKeyValue("Prefab", comp.prefab);
+                }
+                sr.EndMap();
+            }
+
             // Particle System Component
             if (entity.HasComponent<ParticleSystemComponent>())
             {
@@ -1515,6 +1528,15 @@ namespace ignite
             auto &comp = desEntity.AddComponent<PrefabComponent>();
             if (auto n = node["PrefabHandle"]) comp.prefabHandle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["PrefabEntityUUID"]) comp.prefabEntityUUID = UUID(n.as<uint64_t>());
+        }
+
+        if (JsonNode node = entityNode["NetworkIdentityComponent"])
+        {
+            auto &comp = desEntity.AddComponent<NetworkIdentityComponent>();
+            if (auto n = node["NetId"]) comp.netId = n.as<uint64_t>();
+            if (auto n = node["OwnerClient"]) comp.ownerClient = n.as<uint32_t>();
+            if (auto n = node["Replicate"]) comp.replicate = n.as<bool>();
+            if (auto n = node["Prefab"]) comp.prefab = n.as<std::string>();
         }
 
         // Particle System Component

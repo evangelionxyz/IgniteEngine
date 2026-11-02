@@ -99,6 +99,10 @@ pub struct EntitySerial {
     pub script: Option<ScriptComponentSerial>,
     #[serde(rename = "PrefabComponent", skip_serializing_if = "Option::is_none", default)]
     pub prefab: Option<PrefabComponentSerial>,
+
+    // Network
+    #[serde(rename = "NetworkIdentityComponent", skip_serializing_if = "Option::is_none", default)]
+    pub network_identity: Option<NetworkIdentityComponentSerial>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

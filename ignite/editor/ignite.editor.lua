@@ -24,6 +24,7 @@ project "Ignite.Editor"
         "Ignite.Engine",
         "Ignite.Core",
         "Ignite.Physics",
+        "Ignite.Server",
         "JOLT",
         "ZLIB",
         "yaml-cpp",
@@ -48,8 +49,8 @@ project "Ignite.Editor"
         "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/engine/src",
         "%{wks.location}/ignite/physics/src",
-
-
+        "%{IncludeDir.IGNITE_SERVER}",
+        "%{IncludeDir.GAME_NETWORKING_SOCKETS}",
 
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",

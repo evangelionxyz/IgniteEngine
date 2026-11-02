@@ -813,6 +813,18 @@ namespace ignite
 
             }, false); // false: not allowed to remove the component
 
+            // Rendering component
+            RenderComponent<NetworkIdentityComponent>("Network Identity", selectedEntity, [&]()
+            {
+                auto &comp = selectedEntity.GetComponent<NetworkIdentityComponent>();
+
+                ImGui::Text("Net ID %llu", comp.netId);
+                ImGui::Text("Owner Client %llu", comp.ownerClient);
+
+                UI::DrawCheckbox("Is Local", &comp.isLocalPlayer);
+                UI::DrawCheckbox("Replicate", &comp.replicate);
+            });
+
             RenderComponent<PrefabComponent>("Prefab", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<PrefabComponent>();
@@ -3685,8 +3697,11 @@ namespace ignite
                         break;
                     case CompType_PhysicsJoint:
                         entity.AddComponent<PhysicsJointComponent>();
+                    case CompType_NetworkIdentity:
+                        entity.AddComponent<NetworkIdentityComponent>();
                         break;
-                    default: break;
+                    default:
+                        break;
                     }
                 };
 

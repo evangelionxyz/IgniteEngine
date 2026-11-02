@@ -17,6 +17,7 @@
 #include <ignite/scene/scene_manager.hpp>
 #include <ignite/scene/component.hpp>
 
+#include <ignite/net/network_manager.hpp>
 #include "runtime_layer.hpp"
 
 namespace ignite
@@ -162,6 +163,7 @@ namespace ignite
                 GameUISystem::SetSceneContext(m_ActiveScene.get());
 
                 m_ActiveScene->OnStart(ESceneState::Play);
+                if (auto *net = NetworkManager::GetInstance()) net->SetActiveScene(m_ActiveScene.get());
             }
         }
         LOG_ASSERT(m_ActiveScene, "[Runtime] Failed to load default scene!");
@@ -173,6 +175,7 @@ namespace ignite
             return;
 
         GameUISystem::SetSceneContext(nullptr);
+        if (auto *net = NetworkManager::GetInstance()) net->SetActiveScene(nullptr);
 
         if (m_ActiveScene)
             m_ActiveScene->OnStop();

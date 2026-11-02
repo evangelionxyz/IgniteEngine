@@ -28,8 +28,6 @@ project "Ignite.Engine"
         "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/physics/src",
 
-
-
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -41,6 +39,8 @@ project "Ignite.Engine"
         "%{IncludeDir.IMGUIZMO}",
         "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.SPDLOG}",
+        "%{IncludeDir.IGNITE_SERVER}",
+        "%{IncludeDir.GAME_NETWORKING_SOCKETS}",
         "%{IncludeDir.MONO}",
         "%{IncludeDir.NVRHI}",
         "%{IncludeDir.NRI}/Include",
@@ -73,6 +73,7 @@ project "Ignite.Engine"
     libdirs { "%{cfg.targetdir}" }
 
     links {
+        "Ignite.Server",
         "Ignite.Physics",
         "Ignite.Core",
         "IMGUI",

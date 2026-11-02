@@ -1247,16 +1247,20 @@ namespace ignite
                             }
                         }
 
-                        if (dynActor)
+                        const bool isRemoteNetEntity = IsClient() && registry->any_of<NetworkIdentityComponent>(e) && !registry->get<NetworkIdentityComponent>(e).isLocalPlayer;
+                        if (!isRemoteNetEntity)
                         {
-                            if (dynActor->IsActive())
+                            if (dynActor)
                             {
-                                CalculateParentTransform(idc, tr, dynActor->GetPosition(), dynActor->GetRotation());
+                                if (dynActor->IsActive())
+                                {
+                                    CalculateParentTransform(idc, tr, dynActor->GetPosition(), dynActor->GetRotation());
+                                }
                             }
-                        }
-                        else if (stActor)
-                        {
-                            CalculateParentTransform(idc, tr, stActor->GetPosition(), stActor->GetRotation());
+                            else if (stActor)
+                            {
+                                CalculateParentTransform(idc, tr, stActor->GetPosition(), stActor->GetRotation());
+                            }
                         }
                     }
 
@@ -1301,10 +1305,19 @@ namespace ignite
                             cc.dirty = false;
                         }
 
+                        const bool isRemoteChar = IsClient() && registry->any_of<NetworkIdentityComponent>(e) && !registry->get<NetworkIdentityComponent>(e).isLocalPlayer;
                         if (auto ccActor = cc.character.lock())
                         {
-                            ccActor->Move(cc.linearVelocity, 1.0f / 60.0f);
-                            CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
+                            if (!isRemoteChar)
+                            {
+                                ccActor->Move(cc.linearVelocity, 1.0f / 60.0f);
+                                CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
+                            }
+                            else
+                            {
+                                ccActor->SetPosition(tr.world.translation);
+                                ccActor->SetRotation(tr.world.rotation);
+                            }
                         }
                     }
 
@@ -1466,6 +1479,25 @@ namespace ignite
 			});
 		}
 	}
+
+    Entity Scene::FindEntityByNetId(uint64_t netId)
+    {
+        auto it = m_NetEntities.find(netId);
+        if (it != m_NetEntities.end() && registry->valid(it->second))
+            return Entity{ it->second, this };
+        return {};
+    }
+
+    void Scene::RegisterNetEntity(uint64_t netId, Entity entity)
+    {
+        if (netId != 0 && entity.IsValid())
+            m_NetEntities[netId] = entity;
+    }
+
+    void Scene::UnregisterNetEntity(uint64_t netId)
+    {
+        m_NetEntities.erase(netId);
+    }
 
 	Ref<Scene> Scene::Create(Project *project)
     {
@@ -1991,6 +2023,15 @@ namespace ignite
     template<>
     IGN_API void Scene::OnComponentAdded<Sprite2DComponent>(Entity entity, Sprite2DComponent &comp)
     {
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<NetworkIdentityComponent>(Entity entity, NetworkIdentityComponent &comp)
+    {
+        if (comp.netId != 0)
+        {
+            RegisterNetEntity(comp.netId, entity);
+        }
     }
 
     template<>
