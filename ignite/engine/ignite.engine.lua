@@ -28,7 +28,7 @@ project "Ignite.Engine"
         "%{wks.location}/ignite/core/src",
         "%{wks.location}/ignite/physics/src",
 
-        "%{wks.location}/crates/src/include",
+
 
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",

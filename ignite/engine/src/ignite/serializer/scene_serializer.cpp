@@ -21,6 +21,7 @@
 
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/scene_manager.hpp"
+#include "ignite/asset/serial.hpp"
 
 #include <nlohmann/json.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -178,6 +179,13 @@ namespace ignite
 
     std::string SceneSerializer::DeserializeHierarchyJson(const std::filesystem::path &filepath)
     {
+        // Delegate to fast Rust serde_json serializer
+        std::string rustPath = filepath.string();
+        std::vector<char> buffer(2 * 1024 * 1024);
+        if (ignite_scene_deserialize_hierarchy_json(rustPath.c_str(), buffer.data(), buffer.size()) == IgniteResult_Ok)
+        {
+            return std::string(buffer.data());
+        }
         if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[SceneSerializer] File does not exist: {}", filepath.generic_string());

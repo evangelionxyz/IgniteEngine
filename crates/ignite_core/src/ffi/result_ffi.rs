@@ -42,7 +42,7 @@ pub fn clear_last_error() {
 /// The pointer is valid until the next FFI call on the same thread.
 /// Returns an empty string if no error has been set.
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_get_last_error(out_buf: *mut c_char, max_len: usize) -> usize {
+pub extern "C" fn ignite_get_last_error(out_buf: *mut c_char, max_len: usize) -> usize {
     if out_buf.is_null() || max_len == 0 {
         return 0;
     }

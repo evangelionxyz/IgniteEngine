@@ -33,7 +33,7 @@ pub struct IgniteAssetRegistryEntryFFI {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_assign_metadata(
+pub extern "C" fn ignite_asset_assign_metadata(
     handle: u64,
     path_ptr: *const c_char,
     asset_type: AssetType,
@@ -58,7 +58,7 @@ pub extern "C" fn ignite_rs_asset_assign_metadata(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_get_metadata(
+pub extern "C" fn ignite_asset_get_metadata(
     handle: u64,
     out_path_buf: *mut c_char,
     max_len: usize,
@@ -84,7 +84,7 @@ pub extern "C" fn ignite_rs_asset_get_metadata(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_remove_metadata(handle: u64) -> IgniteResult {
+pub extern "C" fn ignite_asset_remove_metadata(handle: u64) -> IgniteResult {
     if handle == 0 {
         return IgniteResult::ErrInvalidHandle;
     }
@@ -98,17 +98,17 @@ pub extern "C" fn ignite_rs_asset_remove_metadata(handle: u64) -> IgniteResult {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_get_registry_version() -> u64 {
+pub extern "C" fn ignite_asset_get_registry_version() -> u64 {
     with_asset_manager(|mgr| mgr.registry_version)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_get_registry_count() -> usize {
+pub extern "C" fn ignite_asset_get_registry_count() -> usize {
     with_asset_manager(|mgr| mgr.registry_count())
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_get_registry_snapshot(
+pub extern "C" fn ignite_asset_get_registry_snapshot(
     out_entries: *mut IgniteAssetRegistryEntryFFI,
     max_count: usize,
 ) -> usize {
@@ -134,7 +134,7 @@ pub extern "C" fn ignite_rs_asset_get_registry_snapshot(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_request_import(handle: u64) -> IgniteResult {
+pub extern "C" fn ignite_asset_request_import(handle: u64) -> IgniteResult {
     if handle == 0 {
         return IgniteResult::ErrInvalidHandle;
     }
@@ -148,7 +148,7 @@ pub extern "C" fn ignite_rs_asset_request_import(handle: u64) -> IgniteResult {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_poll_import_requests(
+pub extern "C" fn ignite_asset_poll_import_requests(
     out_handles: *mut u64,
     max_count: usize,
 ) -> usize {
@@ -167,7 +167,7 @@ pub extern "C" fn ignite_rs_asset_poll_import_requests(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_mark_ready(handle: u64) -> IgniteResult {
+pub extern "C" fn ignite_asset_mark_ready(handle: u64) -> IgniteResult {
     if handle == 0 {
         return IgniteResult::ErrInvalidHandle;
     }
@@ -181,7 +181,7 @@ pub extern "C" fn ignite_rs_asset_mark_ready(handle: u64) -> IgniteResult {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_get_state(handle: u64) -> AssetState {
+pub extern "C" fn ignite_asset_get_state(handle: u64) -> AssetState {
     if handle == 0 {
         return AssetState::Unloaded;
     }
@@ -189,7 +189,7 @@ pub extern "C" fn ignite_rs_asset_get_state(handle: u64) -> AssetState {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_asset_set_state(handle: u64, state: AssetState) -> IgniteResult {
+pub extern "C" fn ignite_asset_set_state(handle: u64, state: AssetState) -> IgniteResult {
     if handle == 0 {
         return IgniteResult::ErrInvalidHandle;
     }

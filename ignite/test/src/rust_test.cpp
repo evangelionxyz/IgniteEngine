@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 
-#include "ignite_rs/core.h"
-#include "ignite_rs/asset.h"
+#include "ignite/core/rust.hpp"
+
+
 
 #include "ignite/core/logger.hpp"
 
@@ -17,7 +18,7 @@
 
 TEST(RustInterop, TestConnection)
 {
-    int connectionResult = ignite_rs_test_connection();
+    int connectionResult = ignite_test_connection();
     EXPECT_EQ(connectionResult, 0x52555354); // RUST magic number
 }
 
@@ -36,23 +37,23 @@ TEST(RustInterop, ResultProtocol)
 TEST(RustInterop, EngineLifecycle)
 {
     // The engine is initialized by Application startup
-    bool isInit = ignite_rs_engine_is_initialized();
+    bool isInit = ignite_engine_is_initialized();
     if (!isInit)
     {
-        EXPECT_TRUE(ignite_rs_engine_init());
-        EXPECT_TRUE(ignite_rs_engine_is_initialized());
+        EXPECT_TRUE(ignite_engine_init());
+        EXPECT_TRUE(ignite_engine_is_initialized());
     }
 
     // Calling init again when already initialized should return false
-    EXPECT_FALSE(ignite_rs_engine_init());
+    EXPECT_FALSE(ignite_engine_init());
 
     // Test shutdown and re-initialization
-    EXPECT_TRUE(ignite_rs_engine_shutdown());
-    EXPECT_FALSE(ignite_rs_engine_is_initialized());
+    EXPECT_TRUE(ignite_engine_shutdown());
+    EXPECT_FALSE(ignite_engine_is_initialized());
 
     // Re-initialize for Application lifetime
-    EXPECT_TRUE(ignite_rs_engine_init());
-    EXPECT_TRUE(ignite_rs_engine_is_initialized());
+    EXPECT_TRUE(ignite_engine_init());
+    EXPECT_TRUE(ignite_engine_is_initialized());
 }
 
 TEST(RustInterop, AssetHandleAndTypes)
@@ -67,21 +68,31 @@ TEST(RustInterop, AssetHandleAndTypes)
     EXPECT_TRUE(ignite_asset_handle_is_valid(validHandle));
 
     // Test Rust AssetType enum to string FFI conversion
-    const char *textureStr = ignite_asset_type_to_string(AssetType_RS_Texture);
+    const char *textureStr = ignite_asset_type_to_string(Ignite_AssetType::Texture);
     ASSERT_NE(textureStr, nullptr);
     EXPECT_STREQ(textureStr, "Texture");
 
-    const char *sceneStr = ignite_asset_type_to_string(AssetType_RS_Scene);
+    const char *sceneStr = ignite_asset_type_to_string(Ignite_AssetType::Scene);
     ASSERT_NE(sceneStr, nullptr);
     EXPECT_STREQ(sceneStr, "Scene");
 
-    const char *meshStr = ignite_asset_type_to_string(AssetType_RS_Mesh);
+    const char *meshStr = ignite_asset_type_to_string(Ignite_AssetType::Mesh);
     ASSERT_NE(meshStr, nullptr);
     EXPECT_STREQ(meshStr, "Mesh");
 
-    const char *prefabStr = ignite_asset_type_to_string(AssetType_RS_Prefab);
+    const char *prefabStr = ignite_asset_type_to_string(Ignite_AssetType::Prefab);
     ASSERT_NE(prefabStr, nullptr);
     EXPECT_STREQ(prefabStr, "Prefab");
+
+    const char *terrainStr = ignite_asset_type_to_string(Ignite_AssetType::Terrain);
+    ASSERT_NE(terrainStr, nullptr);
+    EXPECT_STREQ(terrainStr, "Terrain");
+
+    // Test reverse string to Ignite_AssetType
+    EXPECT_EQ(ignite_asset_type_from_string("Texture"), Ignite_AssetType::Texture);
+    EXPECT_EQ(ignite_asset_type_from_string("Scene"), Ignite_AssetType::Scene);
+    EXPECT_EQ(ignite_asset_type_from_string("Terrain"), Ignite_AssetType::Terrain);
+    EXPECT_EQ(ignite_asset_type_from_string("NonExistent"), Ignite_AssetType::Invalid);
 }
 
 TEST(RustInterop, UUIDPrimitives)
@@ -112,16 +123,16 @@ TEST(RustInterop, LoggingBridge)
     g_CapturedLogs.clear();
 
     // Register log callback
-    IgniteResult regResult = ignite_rs_log_register_callback(TestLogCallback);
+    IgniteResult regResult = ignite_log_register_callback(TestLogCallback);
     EXPECT_EQ(regResult, IgniteResult_Ok);
 
     // Send log messages across FFI
-    EXPECT_EQ(ignite_rs_log(IgniteLogLevel_Info, "Hello from C++ FFI Test!"), IgniteResult_Ok);
-    EXPECT_EQ(ignite_rs_log(IgniteLogLevel_Warn, "Warning event from Rust FFI!"), IgniteResult_Ok);
-    EXPECT_EQ(ignite_rs_log(IgniteLogLevel_Error, "Error event from Rust FFI!"), IgniteResult_Ok);
+    EXPECT_EQ(ignite_log(IgniteLogLevel_Info, "Hello from C++ FFI Test!"), IgniteResult_Ok);
+    EXPECT_EQ(ignite_log(IgniteLogLevel_Warn, "Warning event from Rust FFI!"), IgniteResult_Ok);
+    EXPECT_EQ(ignite_log(IgniteLogLevel_Error, "Error event from Rust FFI!"), IgniteResult_Ok);
 
     // Test null message error safety
-    EXPECT_EQ(ignite_rs_log(IgniteLogLevel_Info, nullptr), IgniteResult_ErrNullPointer);
+    EXPECT_EQ(ignite_log(IgniteLogLevel_Info, nullptr), IgniteResult_ErrNullPointer);
 
     // Verify received log calls
     ASSERT_EQ(g_CapturedLogs.size(), 3u);
@@ -135,10 +146,10 @@ TEST(RustInterop, LoggingBridge)
     EXPECT_STREQ(g_CapturedLogs[2].second.c_str(), "Error event from Rust FFI!");
 
     // Unregister callback
-    EXPECT_EQ(ignite_rs_log_unregister_callback(), IgniteResult_Ok);
+    EXPECT_EQ(ignite_log_unregister_callback(), IgniteResult_Ok);
 
     // Calling log after unregistering should return ErrNotFound
-    EXPECT_EQ(ignite_rs_log(IgniteLogLevel_Info, "Should fail"), IgniteResult_ErrNotFound);
+    EXPECT_EQ(ignite_log(IgniteLogLevel_Info, "Should fail"), IgniteResult_ErrNotFound);
 }
 
 // -------------------------------------------------
@@ -185,55 +196,55 @@ TEST(RustInterop, MemoryBoundary)
 
 TEST(RustInterop, Phase1StringUtils)
 {
-    EXPECT_TRUE(ignite_rs_string_ends_with("texture.png", ".png"));
-    EXPECT_FALSE(ignite_rs_string_ends_with("texture.png", ".jpg"));
-    EXPECT_FALSE(ignite_rs_string_ends_with(nullptr, ".png"));
-    EXPECT_FALSE(ignite_rs_string_ends_with("texture.png", nullptr));
+    EXPECT_TRUE(ignite_string_ends_with("texture.png", ".png"));
+    EXPECT_FALSE(ignite_string_ends_with("texture.png", ".jpg"));
+    EXPECT_FALSE(ignite_string_ends_with(nullptr, ".png"));
+    EXPECT_FALSE(ignite_string_ends_with("texture.png", nullptr));
 
     char lowerBuf[64] = {0};
-    size_t lowerLen = ignite_rs_string_to_lower("IGNITE ENGINE 2026", lowerBuf, sizeof(lowerBuf));
+    size_t lowerLen = ignite_string_to_lower("IGNITE ENGINE 2026", lowerBuf, sizeof(lowerBuf));
     EXPECT_EQ(lowerLen, 18u);
     EXPECT_STREQ(lowerBuf, "ignite engine 2026");
 
     char trimBuf[64] = {0};
-    size_t trimLen = ignite_rs_string_trim("   Hello Ignite   \t", trimBuf, sizeof(trimBuf));
+    size_t trimLen = ignite_string_trim("   Hello Ignite   \t", trimBuf, sizeof(trimBuf));
     EXPECT_EQ(trimLen, 12u);
     EXPECT_STREQ(trimBuf, "Hello Ignite");
 }
 
 TEST(RustInterop, Phase1Hashing)
 {
-    uint64_t hash1 = ignite_rs_hash_string("Ignite");
-    uint64_t hash2 = ignite_rs_hash_string("Ignite");
-    uint64_t hash3 = ignite_rs_hash_string("Engine");
+    uint64_t hash1 = ignite_hash_string("Ignite");
+    uint64_t hash2 = ignite_hash_string("Ignite");
+    uint64_t hash3 = ignite_hash_string("Engine");
 
     EXPECT_NE(hash1, 0u);
     EXPECT_EQ(hash1, hash2);
     EXPECT_NE(hash1, hash3);
-    EXPECT_EQ(ignite_rs_hash_string(nullptr), 0u);
+    EXPECT_EQ(ignite_hash_string(nullptr), 0u);
 
-    uint64_t combined = ignite_rs_hash_combine(100, 200);
+    uint64_t combined = ignite_hash_combine(100, 200);
     EXPECT_NE(combined, 100u);
     EXPECT_NE(combined, 200u);
 }
 
 TEST(RustInterop, Phase1Timers)
 {
-    uint64_t timerId = ignite_rs_timer_create();
+    uint64_t timerId = ignite_timer_create();
     EXPECT_NE(timerId, 0u);
 
-    float elapsed = ignite_rs_timer_elapsed_seconds(timerId);
+    float elapsed = ignite_timer_elapsed_seconds(timerId);
     EXPECT_GE(elapsed, 0.0f);
 
-    EXPECT_TRUE(ignite_rs_timer_reset(timerId));
-    EXPECT_TRUE(ignite_rs_timer_destroy(timerId));
-    EXPECT_FALSE(ignite_rs_timer_destroy(timerId)); // Already destroyed
+    EXPECT_TRUE(ignite_timer_reset(timerId));
+    EXPECT_TRUE(ignite_timer_destroy(timerId));
+    EXPECT_FALSE(ignite_timer_destroy(timerId)); // Already destroyed
 }
 
 TEST(RustInterop, Phase1SignalBus)
 {
-    EXPECT_EQ(ignite_rs_signal_publish("on_test_signal", nullptr, 0), IgniteResult_Ok);
-    EXPECT_EQ(ignite_rs_signal_publish(nullptr, nullptr, 0), IgniteResult_ErrNullPointer);
+    EXPECT_EQ(ignite_signal_publish("on_test_signal", nullptr, 0), IgniteResult_Ok);
+    EXPECT_EQ(ignite_signal_publish(nullptr, nullptr, 0), IgniteResult_ErrNullPointer);
 }
 
 // -------------------------------------------------
@@ -246,23 +257,23 @@ TEST(RustInterop, Phase2AssetRegistryAndMetadata)
     const char* path = "Assets/Textures/player.png";
 
     // Assign metadata in Rust asset registry
-    IgniteResult assignRes = ignite_rs_asset_assign_metadata(handle, path, AssetType_RS_Texture);
+    IgniteResult assignRes = ignite_asset_assign_metadata(handle, path, Ignite_AssetType::Texture);
     EXPECT_EQ(assignRes, IgniteResult_Ok);
 
     // Retrieve metadata
     char outBuf[128] = {0};
-    AssetType_RS outType = AssetType_RS_Invalid;
-    IgniteResult getRes = ignite_rs_asset_get_metadata(handle, outBuf, sizeof(outBuf), &outType);
+    Ignite_AssetType outType = Ignite_AssetType::Invalid;
+    IgniteResult getRes = ignite_asset_get_metadata(handle, outBuf, sizeof(outBuf), &outType);
     EXPECT_EQ(getRes, IgniteResult_Ok);
     EXPECT_STREQ(outBuf, path);
-    EXPECT_EQ(outType, AssetType_RS_Texture);
+    EXPECT_EQ(outType, Ignite_AssetType::Texture);
 
     // Remove metadata
-    IgniteResult removeRes = ignite_rs_asset_remove_metadata(handle);
+    IgniteResult removeRes = ignite_asset_remove_metadata(handle);
     EXPECT_EQ(removeRes, IgniteResult_Ok);
 
     // Get after remove should return ErrNotFound
-    EXPECT_EQ(ignite_rs_asset_get_metadata(handle, outBuf, sizeof(outBuf), &outType), IgniteResult_ErrNotFound);
+    EXPECT_EQ(ignite_asset_get_metadata(handle, outBuf, sizeof(outBuf), &outType), IgniteResult_ErrNotFound);
 }
 
 
@@ -276,18 +287,18 @@ TEST(RustInterop, Phase3YamlSerialization)
     const char* path = "Assets/Scenes/Level1.ixscene";
 
     char yamlBuf[256] = {0};
-    IgniteResult serRes = ignite_rs_serialize_metadata_yaml(handle, path, AssetType_RS_Scene, yamlBuf, sizeof(yamlBuf));
+    IgniteResult serRes = ignite_serialize_metadata_yaml(handle, path, Ignite_AssetType::Scene, yamlBuf, sizeof(yamlBuf));
     EXPECT_EQ(serRes, IgniteResult_Ok);
     EXPECT_NE(strstr(yamlBuf, "filepath"), nullptr);
     EXPECT_NE(strstr(yamlBuf, "Scene"), nullptr);
 
     // Deserialize back from YAML
     char outPathBuf[256] = {0};
-    AssetType_RS outType = AssetType_RS_Invalid;
-    IgniteResult deserRes = ignite_rs_deserialize_metadata_yaml(yamlBuf, outPathBuf, sizeof(outPathBuf), &outType);
+    Ignite_AssetType outType = Ignite_AssetType::Invalid;
+    IgniteResult deserRes = ignite_deserialize_metadata_yaml(yamlBuf, outPathBuf, sizeof(outPathBuf), &outType);
     EXPECT_EQ(deserRes, IgniteResult_Ok);
     EXPECT_STREQ(outPathBuf, path);
-    EXPECT_EQ(outType, AssetType_RS_Scene);
+    EXPECT_EQ(outType, Ignite_AssetType::Scene);
 }
 
 TEST(RustInterop, Phase3BinarySerialization)
@@ -299,7 +310,7 @@ TEST(RustInterop, Phase3BinarySerialization)
     const uint8_t* ptr = nullptr;
     size_t len = 0;
 
-    IgniteResult serRes = ignite_rs_serialize_metadata_binary(handle, path, AssetType_RS_Mesh, &bufHandle, &ptr, &len);
+    IgniteResult serRes = ignite_serialize_metadata_binary(handle, path, Ignite_AssetType::Mesh, &bufHandle, &ptr, &len);
     EXPECT_EQ(serRes, IgniteResult_Ok);
     EXPECT_NE(bufHandle, 0u);
     ASSERT_NE(ptr, nullptr);
@@ -312,14 +323,14 @@ TEST(RustInterop, Phase3BinarySerialization)
 
 TEST(RustInterop, Phase4EcsSceneLifecycle)
 {
-    uint64_t sceneHandle = ignite_rs_scene_create("TestScene_Rust");
+    uint64_t sceneHandle = ignite_scene_create("TestScene_Rust");
     EXPECT_NE(sceneHandle, 0u);
 
-    uint64_t entityId = ignite_rs_scene_create_entity(sceneHandle, "PlayerEntity");
+    uint64_t entityId = ignite_scene_create_entity(sceneHandle, "PlayerEntity");
     EXPECT_NE(entityId, 0u);
 
     char nameBuf[64] = {0};
-    IgniteResult nameRes = ignite_rs_entity_get_name(sceneHandle, entityId, nameBuf, sizeof(nameBuf));
+    IgniteResult nameRes = ignite_entity_get_name(sceneHandle, entityId, nameBuf, sizeof(nameBuf));
     EXPECT_EQ(nameRes, IgniteResult_Ok);
     EXPECT_STREQ(nameBuf, "PlayerEntity");
 
@@ -327,20 +338,20 @@ TEST(RustInterop, Phase4EcsSceneLifecycle)
     float rot[3] = { 0.0f, 0.0f, 0.0f };
     float scale[3] = { 1.0f, 1.0f, 1.0f };
 
-    IgniteResult setTransformRes = ignite_rs_entity_set_transform(sceneHandle, entityId, pos, rot, scale);
+    IgniteResult setTransformRes = ignite_entity_set_transform(sceneHandle, entityId, pos, rot, scale);
     EXPECT_EQ(setTransformRes, IgniteResult_Ok);
 
     float outPos[3] = {0};
     float outRot[3] = {0};
     float outScale[3] = {0};
-    IgniteResult getTransformRes = ignite_rs_entity_get_transform(sceneHandle, entityId, outPos, outRot, outScale);
+    IgniteResult getTransformRes = ignite_entity_get_transform(sceneHandle, entityId, outPos, outRot, outScale);
     EXPECT_EQ(getTransformRes, IgniteResult_Ok);
     EXPECT_FLOAT_EQ(outPos[0], 1.0f);
     EXPECT_FLOAT_EQ(outPos[1], 2.0f);
     EXPECT_FLOAT_EQ(outPos[2], 3.0f);
 
-    EXPECT_EQ(ignite_rs_scene_destroy_entity(sceneHandle, entityId), IgniteResult_Ok);
-    EXPECT_EQ(ignite_rs_scene_destroy(sceneHandle), IgniteResult_Ok);
+    EXPECT_EQ(ignite_scene_destroy_entity(sceneHandle, entityId), IgniteResult_Ok);
+    EXPECT_EQ(ignite_scene_destroy(sceneHandle), IgniteResult_Ok);
 }
 
 // -------------------------------------------------
@@ -356,25 +367,79 @@ static void MockMochiSharpScriptTick(float dt)
 TEST(RustInterop, Phase5ProjectAndScriptingBridge)
 {
     // Test Rust Project Creation FFI
-    uint64_t projHandle = ignite_rs_project_create("DemoProject", "D:/Projects/Demo");
+    uint64_t projHandle = ignite_project_create("DemoProject", "D:/Projects/Demo");
     EXPECT_NE(projHandle, 0u);
 
     char projName[64] = {0};
-    EXPECT_EQ(ignite_rs_project_get_name(projHandle, projName, sizeof(projName)), IgniteResult_Ok);
+    EXPECT_EQ(ignite_project_get_name(projHandle, projName, sizeof(projName)), IgniteResult_Ok);
     EXPECT_STREQ(projName, "DemoProject");
 
     char assetDir[256] = {0};
-    EXPECT_EQ(ignite_rs_project_get_asset_directory(projHandle, assetDir, sizeof(assetDir)), IgniteResult_Ok);
+    EXPECT_EQ(ignite_project_get_asset_directory(projHandle, assetDir, sizeof(assetDir)), IgniteResult_Ok);
     EXPECT_NE(strstr(assetDir, "Assets"), nullptr);
 
-    EXPECT_EQ(ignite_rs_project_destroy(projHandle), IgniteResult_Ok);
+    EXPECT_EQ(ignite_project_destroy(projHandle), IgniteResult_Ok);
 
     // Test MochiSharp C# Scripting Bridge Callback FFI
     g_ScriptTickCount = 0;
-    EXPECT_EQ(ignite_rs_script_register_tick_callback(MockMochiSharpScriptTick), IgniteResult_Ok);
-    EXPECT_TRUE(ignite_rs_script_trigger_tick(0.016f));
+    EXPECT_EQ(ignite_script_register_tick_callback(MockMochiSharpScriptTick), IgniteResult_Ok);
+    EXPECT_TRUE(ignite_script_trigger_tick(0.016f));
     EXPECT_EQ(g_ScriptTickCount, 1);
 
-    EXPECT_EQ(ignite_rs_script_unregister_tick_callback(), IgniteResult_Ok);
-    EXPECT_FALSE(ignite_rs_script_trigger_tick(0.016f));
+    EXPECT_EQ(ignite_script_unregister_tick_callback(), IgniteResult_Ok);
+    EXPECT_FALSE(ignite_script_trigger_tick(0.016f));
+}
+
+TEST(RustInterop, Phase3SceneJsonSerialization)
+{
+    // Locate Test_Scene.ixscene
+    std::filesystem::path scenePath = "test-resources/Test_Scene.ixscene";
+    if (!std::filesystem::exists(scenePath))
+    {
+        scenePath = "ignite/test/test-resources/Test_Scene.ixscene";
+    }
+    if (!std::filesystem::exists(scenePath))
+    {
+        scenePath = "../../ignite/test/test-resources/Test_Scene.ixscene";
+    }
+    ASSERT_TRUE(std::filesystem::exists(scenePath));
+
+    // 1. Load scene using Rust serde_json FFI
+    uint64_t sceneHandle = ignite_scene_load_file(scenePath.string().c_str());
+    ASSERT_NE(sceneHandle, 0u);
+
+    // 2. Verify version and entity count
+    uint32_t version = ignite_scene_get_version(sceneHandle);
+    EXPECT_EQ(version, 4096u);
+
+    size_t entityCount = ignite_scene_get_entity_count(sceneHandle);
+    EXPECT_EQ(entityCount, 20u);
+
+    // 3. Test roundtrip saving to temp directory
+    std::filesystem::path tempOutDir = "test-resources/temp";
+    if (!std::filesystem::exists(tempOutDir))
+    {
+        std::filesystem::create_directories(tempOutDir);
+    }
+    std::filesystem::path tempOutPath = tempOutDir / "Test_Scene_RustOut.ixscene";
+    IgniteResult saveRes = ignite_scene_save_file(sceneHandle, tempOutPath.string().c_str());
+    EXPECT_EQ(saveRes, IgniteResult_Ok);
+    ASSERT_TRUE(std::filesystem::exists(tempOutPath));
+
+    // 4. Load back saved scene and verify
+    uint64_t reloadHandle = ignite_scene_load_file(tempOutPath.string().c_str());
+    EXPECT_NE(reloadHandle, 0u);
+    EXPECT_EQ(ignite_scene_get_version(reloadHandle), 4096u);
+    EXPECT_EQ(ignite_scene_get_entity_count(reloadHandle), 20u);
+
+    // 5. Test hierarchy JSON extraction
+    std::vector<char> hierarchyBuf(1024 * 1024);
+    IgniteResult hierRes = ignite_scene_deserialize_hierarchy_json(scenePath.string().c_str(), hierarchyBuf.data(), hierarchyBuf.size());
+    EXPECT_EQ(hierRes, IgniteResult_Ok);
+    EXPECT_NE(strstr(hierarchyBuf.data(), "Box A"), nullptr);
+    EXPECT_NE(strstr(hierarchyBuf.data(), "Main Camera"), nullptr);
+
+    // 6. Clean up handles
+    EXPECT_EQ(ignite_scene_release(sceneHandle), IgniteResult_Ok);
+    EXPECT_EQ(ignite_scene_release(reloadHandle), IgniteResult_Ok);
 }

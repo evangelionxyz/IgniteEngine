@@ -8,8 +8,8 @@ project "Ignite.Rust"
     files {
         "%{wks.location}/crates/**.rs",
         "%{wks.location}/crates/**.toml",
-        "%{wks.location}/crates/src/include/**.h",
-        "%{wks.location}/crates/src/include/**.hpp",
+
+
     }
 
     removefiles {

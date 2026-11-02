@@ -50,7 +50,7 @@ project "Ignite.Runtime"
         "%{wks.location}/ignite/engine/src",
         "%{wks.location}/ignite/physics/src",
 
-        "%{wks.location}/crates/src/include",
+
 
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",

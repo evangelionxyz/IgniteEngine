@@ -1,8 +1,20 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+pub mod scene;
+
 use serde::{Serialize, Deserialize};
 use ignite_asset::{AssetHandle, AssetType};
 
+// JSON Serializer
+pub fn serialize_json<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
+    serde_json::to_string(value)
+}
+
+pub fn deserialize_json<T: for<'de> Deserialize<'de>>(json_str: &str) -> Result<T, serde_json::Error> {
+    serde_json::from_str(json_str)
+}
+
+// YAML Serializer
 pub fn serialize_yaml<T: Serialize>(value: &T) -> Result<String, serde_yaml::Error> {
     serde_yaml::to_string(value)
 }
@@ -11,6 +23,7 @@ pub fn deserialize_yaml<T: for<'de> Deserialize<'de>>(yaml_str: &str) -> Result<
     serde_yaml::from_str(yaml_str)
 }
 
+// BINARY Serializer
 pub fn serialize_binary<T: Serialize>(value: &T) -> Result<Vec<u8>, bincode::Error> {
     bincode::serialize(value)
 }
@@ -41,9 +54,18 @@ pub struct AssetRegistryFile {
     pub registry: AssetRegistryWrapper,
 }
 
+// Asset Registry File
 impl AssetRegistryFile {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serialize_json(self)
+    }
+
+    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
+        deserialize_json(json_str)
     }
 
     pub fn to_yaml(&self) -> Result<String, serde_yaml::Error> {
