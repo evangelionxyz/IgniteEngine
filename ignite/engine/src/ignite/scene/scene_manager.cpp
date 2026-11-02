@@ -2,6 +2,8 @@
 
 #include "ignite_pch.hpp"
 #include "scene_manager.hpp"
+#include "ignite/scripting/lua_script_runtime.hpp"
+#include "ignite/scripting/lua_script_runtime.hpp"
 #include "scene.hpp"
 #include "prefab.hpp"
 #include "ignite/core/application.hpp"
@@ -356,10 +358,13 @@ namespace ignite
 
     void SceneManager::DestroyEntity(Scene *scene, Entity entity)
     {
-        scene->SetDirtyFlag(true);
-
         if (!scene || !scene->registry->valid(entity))
             return;
+
+        scene->SetDirtyFlag(true);
+
+        if (scene->GetLuaScriptRuntime() && entity.HasComponent<LuaScriptComponent>())
+            scene->GetLuaScriptRuntime()->DestroyInstance(entity.GetUUID());
 
         if (entity.HasComponent<PhysicsJointComponent>())
         {

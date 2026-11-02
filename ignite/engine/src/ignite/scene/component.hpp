@@ -31,6 +31,7 @@
 
 #include <string>
 #include <glm/glm.hpp>
+#include <filesystem>
 
 // Forward declaration
 namespace JPH
@@ -74,6 +75,7 @@ namespace ignite
         { "Audio Source", CompType_AudioSource },
         { "World Environment", CompType_WorldEnvironment },
         { "C# Script", CompType_Script },
+        { "Lua Script", CompType_LuaScript },
         { "Animator 2D", CompType_Animator2D },
         { "Point Light", CompType_PointLight },
         { "Spot Light", CompType_SpotLight },
@@ -195,6 +197,7 @@ namespace ignite
             case CompType_AudioSource: return "CompType_AudioSource";
             case CompType_Text: return "CompType_Text";
             case CompType_Script: return "CompType_Script";
+            case CompType_LuaScript: return "CompType_LuaScript";
             case CompType_ID: return "CompType_ID";
             case CompType_Transform: return "CompType_Transform";
             case CompType_Widget: return "CompType_Widget";
@@ -874,6 +877,15 @@ namespace ignite
 
         ScriptComponent() = default;
         COMPONENT_CLASS_TYPE(CompType_Script)
+    };
+
+    class LuaScriptComponent : public IComponent
+    {
+    public:
+        std::filesystem::path scriptPath;
+
+        LuaScriptComponent() = default;
+        COMPONENT_CLASS_TYPE(CompType_LuaScript)
     };
 
     class TerrainComponent : public IComponent

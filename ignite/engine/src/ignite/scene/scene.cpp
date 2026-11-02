@@ -11,6 +11,7 @@
 #include "ignite/physics/3d/physics_3d.hpp"
 #include "ignite/math/transform.hpp"
 #include "ignite/scripting/script_engine.hpp"
+#include "ignite/scripting/lua_script_runtime.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/animation_2d.hpp"
@@ -198,6 +199,8 @@ namespace ignite
 
     Scene::~Scene()
     {
+        m_LuaScriptRuntime.reset();
+
         // Remove signal
         SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
         m_AssetChangeToken = kInvalidSignalToken;
@@ -242,6 +245,8 @@ namespace ignite
         {
             scriptEngine->SetSceneContext(this);
         }
+
+        m_LuaScriptRuntime = CreateScope<LuaScriptRuntime>(this);
 
         // reset time
         timeInSeconds = 0.0f;
@@ -645,6 +650,15 @@ namespace ignite
             script.runtimeScriptInstance = ScriptEngine::GetInstance()->OnCreateEntityInstance(instanceID, script.className);
         });
 
+        if (m_LuaScriptRuntime)
+        {
+            registry->view<LuaScriptComponent>().each([this](entt::entity e, LuaScriptComponent &script)
+            {
+                const Entity entity{ e, this };
+                m_LuaScriptRuntime->CreateInstance(entity.GetUUID(), script.scriptPath);
+            });
+        }
+
         registry->view<SkeletalMeshComponent>().each([](entt::entity, SkeletalMeshComponent &smc)
         {
             smc.ResetAnimatorRuntime();
@@ -663,6 +677,8 @@ namespace ignite
 
         m_StepFrame = 0;
         timeInSeconds = 0.0f;
+
+        m_LuaScriptRuntime.reset();
 
         registry->view<AudioSourceComponent>().each([this](entt::entity e, AudioSourceComponent &as)
         {
@@ -916,6 +932,8 @@ namespace ignite
                     if (script.runtimeScriptInstance)
                         script.runtimeScriptInstance->InvokeOnUpdate(deltaTime);
                 });
+                if (m_LuaScriptRuntime)
+                    m_LuaScriptRuntime->Update(deltaTime);
             }
 
             UpdateTransforms(deltaTime);
@@ -1478,6 +1496,8 @@ namespace ignite
                     script.runtimeScriptInstance->InvokeOnFixedUpdate();
             });
         }
+        if (m_LuaScriptRuntime)
+            m_LuaScriptRuntime->FixedUpdate();
     }
 
     Entity Scene::FindEntityByNetId(uint64_t netId)
@@ -2191,6 +2211,11 @@ namespace ignite
 
     template<>
     IGN_API void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent &comp)
+    {
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<LuaScriptComponent>(Entity entity, LuaScriptComponent &comp)
     {
     }
 

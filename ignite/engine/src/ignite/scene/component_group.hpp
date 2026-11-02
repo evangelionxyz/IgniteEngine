@@ -55,6 +55,7 @@ namespace ignite
         PlaneColliderComponent,
         AudioSourceComponent,
         ScriptComponent,
+        LuaScriptComponent,
         TextComponent,
         WorldEnvironment,
         DirectionalLightComponent,
