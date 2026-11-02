@@ -51,6 +51,20 @@ pub extern "C" fn ignite_asset_type_to_string(asset_type: AssetType) -> *const c
         "Animation2D" => "Animation2D\0".as_ptr() as *const c_char,
         "AnimatorController2D" => "AnimatorController2D\0".as_ptr() as *const c_char,
         "Prefab" => "Prefab\0".as_ptr() as *const c_char,
+        "Terrain" => "Terrain\0".as_ptr() as *const c_char,
         _ => "Unknown\0".as_ptr() as *const c_char,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_asset_type_from_string(type_str: *const c_char) -> AssetType {
+    if type_str.is_null() {
+        return AssetType::Invalid;
+    }
+    unsafe {
+        match std::ffi::CStr::from_ptr(type_str).to_str() {
+            Ok(s) => AssetType::from_str_name(s),
+            Err(_) => AssetType::Invalid,
+        }
     }
 }

@@ -8,14 +8,14 @@ use std::fs;
 use ignite_asset::{AssetMetaData, AssetType};
 use ignite_serial as serial;
 use crate::ffi::result_ffi::IgniteResult;
-use crate::ffi::asset_manager_ffi::ignite_rs_asset_assign_metadata;
+use crate::ffi::asset_manager_ffi::ignite_asset_assign_metadata;
 use crate::ffi::log_ffi::{log_internal, IgniteLogLevel};
 
 static SERIAL_BUFFERS: Mutex<Option<HashMap<u64, Vec<u8>>>> = Mutex::new(None);
 static NEXT_SERIAL_HANDLE: Mutex<u64> = Mutex::new(1);
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_serialize_metadata_yaml(
+pub extern "C" fn ignite_serialize_metadata_yaml(
     handle: u64,
     path_ptr: *const c_char,
     asset_type: AssetType,
@@ -45,7 +45,7 @@ pub extern "C" fn ignite_rs_serialize_metadata_yaml(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_deserialize_metadata_yaml(
+pub extern "C" fn ignite_deserialize_metadata_yaml(
     yaml_str_ptr: *const c_char,
     out_path_buf: *mut c_char,
     max_len: usize,
@@ -74,7 +74,7 @@ pub extern "C" fn ignite_rs_deserialize_metadata_yaml(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_serialize_metadata_binary(
+pub extern "C" fn ignite_serialize_metadata_binary(
     handle: u64,
     path_ptr: *const c_char,
     asset_type: AssetType,
@@ -124,7 +124,7 @@ pub extern "C" fn ignite_rs_serialize_metadata_binary(
 /// Loads and parses an `.ixreg` YAML asset registry file in Rust,
 /// registering all deserialized metadata directly into the Rust AssetManager!
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_load_asset_registry_file(file_path_ptr: *const c_char) -> usize {
+pub extern "C" fn ignite_load_asset_registry_file(file_path_ptr: *const c_char) -> usize {
     if file_path_ptr.is_null() {
         return 0;
     }
@@ -148,7 +148,7 @@ pub extern "C" fn ignite_rs_load_asset_registry_file(file_path_ptr: *const c_cha
                         Ok(c) => c,
                         Err(_) => continue,
                     };
-                    if ignite_rs_asset_assign_metadata(item.handle.into(), path_c.as_ptr(), item.asset_type) == IgniteResult::Ok {
+                    if ignite_asset_assign_metadata(item.handle.into(), path_c.as_ptr(), item.asset_type) == IgniteResult::Ok {
                         count += 1;
                     }
                 }
@@ -161,4 +161,183 @@ pub extern "C" fn ignite_rs_load_asset_registry_file(file_path_ptr: *const c_cha
             }
         }
     }
+}
+
+// -------------------------------------------------
+// Scene JSON Serialization FFI
+// -------------------------------------------------
+
+static SCENE_FILES: Mutex<Option<HashMap<u64, serial::scene::SceneFile>>> = Mutex::new(None);
+static NEXT_SCENE_FILE_HANDLE: Mutex<u64> = Mutex::new(1);
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_scene_load_file(file_path_ptr: *const c_char) -> u64 {
+    if file_path_ptr.is_null() {
+        return 0;
+    }
+    unsafe {
+        let file_path = match CStr::from_ptr(file_path_ptr).to_str() {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
+
+        match serial::scene::SceneFile::from_file(file_path) {
+            Ok(scene_file) => {
+                let mut next_id = match NEXT_SCENE_FILE_HANDLE.lock() {
+                    Ok(g) => g,
+                    Err(p) => p.into_inner(),
+                };
+                let handle = *next_id;
+                *next_id += 1;
+
+                let entity_count = scene_file.scene.entities.len();
+                let version = scene_file.scene.version;
+
+                let mut lock = match SCENE_FILES.lock() {
+                    Ok(g) => g,
+                    Err(p) => p.into_inner(),
+                };
+                let map = lock.get_or_insert_with(HashMap::new);
+                map.insert(handle, scene_file);
+
+                log_internal(
+                    IgniteLogLevel::Info,
+                    &format!(
+                        "[Rust Scene Serializer] Loaded scene '{}' (v{}, {} entities, handle: {})",
+                        file_path, version, entity_count, handle
+                    ),
+                );
+
+                handle
+            }
+            Err(e) => {
+                log_internal(
+                    IgniteLogLevel::Error,
+                    &format!("[Rust Scene Serializer] Failed to load scene from '{}': {}", file_path, e),
+                );
+                0
+            }
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_scene_get_version(scene_handle: u64) -> u32 {
+    if scene_handle == 0 {
+        return 0;
+    }
+    let lock = match SCENE_FILES.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if let Some(map) = lock.as_ref() {
+        if let Some(scene_file) = map.get(&scene_handle) {
+            return scene_file.scene.version;
+        }
+    }
+    0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_scene_get_entity_count(scene_handle: u64) -> usize {
+    if scene_handle == 0 {
+        return 0;
+    }
+    let lock = match SCENE_FILES.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if let Some(map) = lock.as_ref() {
+        if let Some(scene_file) = map.get(&scene_handle) {
+            return scene_file.scene.entities.len();
+        }
+    }
+    0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_scene_save_file(scene_handle: u64, file_path_ptr: *const c_char) -> IgniteResult {
+    if scene_handle == 0 || file_path_ptr.is_null() {
+        return IgniteResult::ErrNullPointer;
+    }
+    unsafe {
+        let file_path = match CStr::from_ptr(file_path_ptr).to_str() {
+            Ok(s) => s,
+            Err(_) => return IgniteResult::ErrInvalidParam,
+        };
+
+        let lock = match SCENE_FILES.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        if let Some(map) = lock.as_ref() {
+            if let Some(scene_file) = map.get(&scene_handle) {
+                return match scene_file.to_file(file_path) {
+                    Ok(_) => {
+                        log_internal(
+                            IgniteLogLevel::Info,
+                            &format!("[Rust Scene Serializer] Saved scene to '{}'", file_path),
+                        );
+                        IgniteResult::Ok
+                    }
+                    Err(e) => {
+                        log_internal(
+                            IgniteLogLevel::Error,
+                            &format!("[Rust Scene Serializer] Failed to write scene to '{}': {}", file_path, e),
+                        );
+                        IgniteResult::ErrOperationFailed
+                    }
+                };
+            }
+        }
+        IgniteResult::ErrNotFound
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_scene_deserialize_hierarchy_json(
+    file_path_ptr: *const c_char,
+    out_buf: *mut c_char,
+    max_len: usize,
+) -> IgniteResult {
+    if file_path_ptr.is_null() || out_buf.is_null() || max_len == 0 {
+        return IgniteResult::ErrNullPointer;
+    }
+    unsafe {
+        let file_path = match CStr::from_ptr(file_path_ptr).to_str() {
+            Ok(s) => s,
+            Err(_) => return IgniteResult::ErrInvalidParam,
+        };
+
+        match serial::scene::SceneFile::from_file(file_path) {
+            Ok(scene_file) => match scene_file.to_hierarchy_json() {
+                Ok(json_str) => {
+                    let bytes = json_str.as_bytes();
+                    let copy_len = bytes.len().min(max_len - 1);
+                    std::ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, out_buf, copy_len);
+                    *out_buf.add(copy_len) = 0;
+                    IgniteResult::Ok
+                }
+                Err(_) => IgniteResult::ErrOperationFailed,
+            },
+            Err(_) => IgniteResult::ErrNotFound,
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_scene_release(scene_handle: u64) -> IgniteResult {
+    if scene_handle == 0 {
+        return IgniteResult::ErrInvalidHandle;
+    }
+    let mut lock = match SCENE_FILES.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if let Some(map) = lock.as_mut() {
+        if map.remove(&scene_handle).is_some() {
+            return IgniteResult::Ok;
+        }
+    }
+    IgniteResult::ErrNotFound
 }

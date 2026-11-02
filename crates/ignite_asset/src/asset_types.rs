@@ -39,6 +39,7 @@ pub enum AssetType {
     Animation2D,
     AnimatorController2D,
     Prefab,
+    Terrain,
 }
 
 impl AssetType {
@@ -77,6 +78,46 @@ impl AssetType {
             AssetType::Animation2D => "Animation2D",
             AssetType::AnimatorController2D => "AnimatorController2D",
             AssetType::Prefab => "Prefab",
+            AssetType::Terrain => "Terrain",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> AssetType {
+        match s {
+            "Metadata" => AssetType::Metadata,
+            "Auto" => AssetType::Auto,
+            "Audio" => AssetType::Audio,
+            "ScriptableObject" => AssetType::ScriptableObject,
+            "AudioMixer" => AssetType::AudioMixer,
+            "SoundCue" => AssetType::SoundCue,
+            "Model" => AssetType::Model,
+            "Project" => AssetType::Project,
+            "Texture" => AssetType::Texture,
+            "SpriteSheet" => AssetType::SpriteSheet,
+            "Shader" => AssetType::Shader,
+            "Material" => AssetType::Material,
+            "Font" => AssetType::Font,
+            "TextureCube" => AssetType::TextureCube,
+            "SkeletalAnimation" => AssetType::SkeletalAnimation,
+            "AnimationMontage" => AssetType::AnimationMontage,
+            "BlendSpace" => AssetType::BlendSpace,
+            "LocomotionController" => AssetType::LocomotionController,
+            "Environment" => AssetType::Environment,
+            "Anim2D" => AssetType::Anim2D,
+            "Skeleton" => AssetType::Skeleton,
+            "Mesh" => AssetType::Mesh,
+            "StaticMesh" => AssetType::StaticMesh,
+            "SkeletalMesh" => AssetType::SkeletalMesh,
+            "InputMapping" => AssetType::InputMapping,
+            "Scene" => AssetType::Scene,
+            "Widget" => AssetType::Widget,
+            "AnimatorController" => AssetType::AnimatorController,
+            "Material2D" => AssetType::Material2D,
+            "Animation2D" => AssetType::Animation2D,
+            "AnimatorController2D" => AssetType::AnimatorController2D,
+            "Prefab" => AssetType::Prefab,
+            "Terrain" => AssetType::Terrain,
+            _ => AssetType::Invalid,
         }
     }
 }

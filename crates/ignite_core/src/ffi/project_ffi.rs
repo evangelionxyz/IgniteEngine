@@ -11,7 +11,7 @@ static PROJECTS: Mutex<Option<HashMap<u64, Project>>> = Mutex::new(None);
 static NEXT_PROJECT_ID: Mutex<u64> = Mutex::new(1);
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_project_create(name_ptr: *const c_char, dir_ptr: *const c_char) -> u64 {
+pub extern "C" fn ignite_project_create(name_ptr: *const c_char, dir_ptr: *const c_char) -> u64 {
     if name_ptr.is_null() || dir_ptr.is_null() {
         return 0;
     }
@@ -43,7 +43,7 @@ pub extern "C" fn ignite_rs_project_create(name_ptr: *const c_char, dir_ptr: *co
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_project_destroy(proj_handle: u64) -> IgniteResult {
+pub extern "C" fn ignite_project_destroy(proj_handle: u64) -> IgniteResult {
     if proj_handle == 0 {
         return IgniteResult::ErrInvalidHandle;
     }
@@ -60,7 +60,7 @@ pub extern "C" fn ignite_rs_project_destroy(proj_handle: u64) -> IgniteResult {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_project_get_name(
+pub extern "C" fn ignite_project_get_name(
     proj_handle: u64,
     out_buf: *mut c_char,
     max_len: usize,
@@ -87,7 +87,7 @@ pub extern "C" fn ignite_rs_project_get_name(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_project_get_asset_directory(
+pub extern "C" fn ignite_project_get_asset_directory(
     proj_handle: u64,
     out_buf: *mut c_char,
     max_len: usize,
@@ -116,18 +116,18 @@ pub extern "C" fn ignite_rs_project_get_asset_directory(
 
 // MochiSharp Scripting Bridge FFI
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_script_register_tick_callback(cb: MochiSharpTickCallback) -> IgniteResult {
+pub extern "C" fn ignite_script_register_tick_callback(cb: MochiSharpTickCallback) -> IgniteResult {
     register_script_tick_callback(cb);
     IgniteResult::Ok
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_script_unregister_tick_callback() -> IgniteResult {
+pub extern "C" fn ignite_script_unregister_tick_callback() -> IgniteResult {
     unregister_script_tick_callback();
     IgniteResult::Ok
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_script_trigger_tick(delta_time: f32) -> bool {
+pub extern "C" fn ignite_script_trigger_tick(delta_time: f32) -> bool {
     trigger_script_tick(delta_time)
 }

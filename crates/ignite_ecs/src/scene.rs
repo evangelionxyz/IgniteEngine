@@ -34,6 +34,21 @@ impl Scene {
         id
     }
 
+    pub fn create_entity_with_id(&mut self, id: EntityId, name: impl Into<String>) -> EntityId {
+        if id.0 >= self.next_entity_id {
+            self.next_entity_id = id.0 + 1;
+        }
+        self.entities.push(id);
+        self.tags.insert(id, TagComponent::new(name));
+        self.transforms.insert(id, TransformComponent::default());
+        self.hierarchies.insert(id, HierarchyComponent::default());
+        id
+    }
+
+    pub fn entities(&self) -> &[EntityId] {
+        &self.entities
+    }
+
     pub fn destroy_entity(&mut self, id: EntityId) -> bool {
         if !id.is_valid() || !self.entities.contains(&id) {
             return false;

@@ -19,7 +19,7 @@ project "Ignite.Core"
     includedirs {
         "src",
         "src/ignite",
-        "%{wks.location}/crates/src/include",
+
 
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",

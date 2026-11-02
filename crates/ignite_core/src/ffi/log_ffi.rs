@@ -18,7 +18,7 @@ pub type LogCallbackFn = extern "C" fn(level: IgniteLogLevel, message: *const c_
 static LOG_CALLBACK: Mutex<Option<LogCallbackFn>> = Mutex::new(None);
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_log_register_callback(callback: LogCallbackFn) -> IgniteResult {
+pub extern "C" fn ignite_log_register_callback(callback: LogCallbackFn) -> IgniteResult {
     let mut lock = match LOG_CALLBACK.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -28,7 +28,7 @@ pub extern "C" fn ignite_rs_log_register_callback(callback: LogCallbackFn) -> Ig
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_log_unregister_callback() -> IgniteResult {
+pub extern "C" fn ignite_log_unregister_callback() -> IgniteResult {
     let mut lock = match LOG_CALLBACK.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -38,7 +38,7 @@ pub extern "C" fn ignite_rs_log_unregister_callback() -> IgniteResult {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ignite_rs_log(level: IgniteLogLevel, message: *const c_char) -> IgniteResult {
+pub extern "C" fn ignite_log(level: IgniteLogLevel, message: *const c_char) -> IgniteResult {
     if message.is_null() {
         return IgniteResult::ErrNullPointer;
     }
@@ -58,6 +58,6 @@ pub extern "C" fn ignite_rs_log(level: IgniteLogLevel, message: *const c_char) -
 
 pub fn log_internal(level: IgniteLogLevel, msg: &str) {
     if let Ok(c_str) = std::ffi::CString::new(msg) {
-        let _ = ignite_rs_log(level, c_str.as_ptr());
+        let _ = ignite_log(level, c_str.as_ptr());
     }
 }
