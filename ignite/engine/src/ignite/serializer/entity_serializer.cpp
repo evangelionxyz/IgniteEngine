@@ -859,6 +859,14 @@ namespace ignite
                 sr.EndMap();
             }
 
+            if (entity.HasComponent<LuaScriptComponent>())
+            {
+                const auto &comp = entity.GetComponent<LuaScriptComponent>();
+                sr.BeginMap("LuaScript");
+                sr.AddKeyValue("ScriptPath", comp.scriptPath.generic_string());
+                sr.EndMap();
+            }
+
             if (entity.HasComponent<PrefabComponent>())
             {
                 const auto &comp = entity.GetComponent<PrefabComponent>();
@@ -1521,6 +1529,12 @@ namespace ignite
                     }
                 }
             }
+        }
+
+        if (JsonNode node = entityNode["LuaScript"])
+        {
+            auto &comp = desEntity.AddComponent<LuaScriptComponent>();
+            if (auto path = node["ScriptPath"]) comp.scriptPath = path.as<std::string>();
         }
 
         if (JsonNode node = entityNode["PrefabComponent"])

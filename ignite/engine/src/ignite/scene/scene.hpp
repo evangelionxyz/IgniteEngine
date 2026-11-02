@@ -25,6 +25,7 @@ namespace ignite::physics
 
 namespace ignite
 {
+    class LuaScriptRuntime;
     class CameraComponent;
     class Entity;
     class Environment;
@@ -91,6 +92,7 @@ namespace ignite
 
         Entity GetPrimaryCamera();
         inline Project *GetProject() { return m_Project; }
+        LuaScriptRuntime *GetLuaScriptRuntime() const { return m_LuaScriptRuntime.get(); }
         inline AssetManager *GetAssetManager() { return m_AssetManager; }
 
         Ref<WidgetCanvas> GetRootWidget() const;
@@ -134,6 +136,7 @@ namespace ignite
         AssetManager *m_AssetManager;
         physics::Physics2D *m_Physics2D;
         physics::Physics3D *m_Physics3D;
+        Scope<LuaScriptRuntime> m_LuaScriptRuntime;
 
         uint32_t m_ViewportWidth;
         uint32_t m_ViewportHeight;

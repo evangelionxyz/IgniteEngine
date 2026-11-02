@@ -474,6 +474,15 @@ namespace ignite
                 entry.components.push_back(c);
             }
 
+            if (entityNode["LuaScript"])
+            {
+                json c;
+                c["type"] = "LuaScript";
+                c["displayName"] = "Lua Script";
+                c["scriptPath"] = entityNode["LuaScript"]["ScriptPath"].as<std::string>();
+                entry.components.push_back(c);
+            }
+
             // WorldEnvironment
             if (entityNode["WorldEnvironment"])
             {
@@ -893,6 +902,16 @@ namespace ignite
                 c["type"] = "Script";
                 c["displayName"] = "Script";
                 c["className"] = comp.className;
+                entry.components.push_back(c);
+            }
+
+            if (entity.HasComponent<LuaScriptComponent>())
+            {
+                const auto &comp = entity.GetComponent<LuaScriptComponent>();
+                json c;
+                c["type"] = "LuaScript";
+                c["displayName"] = "Lua Script";
+                c["scriptPath"] = comp.scriptPath.generic_string();
                 entry.components.push_back(c);
             }
 

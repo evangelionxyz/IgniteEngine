@@ -34,6 +34,7 @@ namespace ignite
         std::optional<WorldEnvironment>        worldEnv;
         std::optional<AudioSourceComponent>    audioSource;
         std::optional<ScriptComponent>         script;
+        std::optional<LuaScriptComponent>      luaScript;
 
         // 2D Physics — body / shape IDs are runtime-only, we copy editable fields only
         struct Rigidbody2DSnapshot
@@ -134,6 +135,9 @@ namespace ignite
 
         if (entity.HasComponent<ScriptComponent>())
             snap.script = entity.GetComponent<ScriptComponent>();
+
+        if (entity.HasComponent<LuaScriptComponent>())
+            snap.luaScript = entity.GetComponent<LuaScriptComponent>();
 
         if (entity.HasComponent<Rigidbody2DComponent>())
         {
@@ -248,6 +252,9 @@ namespace ignite
 
         if (snap.script)
             e.AddOrReplaceComponent<ScriptComponent>(*snap.script);
+
+        if (snap.luaScript)
+            e.AddOrReplaceComponent<LuaScriptComponent>(*snap.luaScript);
 
         if (snap.rigidbody2D)
         {

@@ -3335,6 +3335,49 @@ namespace ignite
                 }
             });
 
+            RenderComponent<LuaScriptComponent>("Lua Script", selectedEntity, [&]()
+            {
+                auto &component = selectedEntity.GetComponent<LuaScriptComponent>();
+                const bool isRunning = m_Scene && m_Scene->IsRunning();
+                ImGui::BeginDisabled(isRunning);
+                ImGui::TextUnformatted("Script");
+                ImGui::SameLine(120.0f);
+                const std::string label = component.scriptPath.empty() ? "No Lua script assigned" : component.scriptPath.generic_string();
+                ImGui::TextWrapped("%s", label.c_str());
+                if (ImGui::Button("Browse Lua Script..."))
+                {
+#ifdef PLATFORM_WINDOWS
+                    static const char filter[] = "Lua Script\0*.lua\0All Files\0*.*\0\0";
+#else
+                    static const char filter[] = "Lua Script | *.lua";
+#endif
+                    const std::string selectedPath = FileDialogs::OpenFile(filter);
+                    if (!selectedPath.empty())
+                    {
+                        const std::filesystem::path absolutePath(selectedPath);
+                        const std::filesystem::path path = m_Scene && m_Scene->GetProject()
+                            ? m_Scene->GetProject()->GetProjectRelativeFilepath(absolutePath)
+                            : absolutePath;
+                        if (m_Scene && m_Scene->GetProject() && path.is_absolute())
+                        {
+                            LOG_WARN("Lua scripts must be inside the project directory: {}", absolutePath.generic_string());
+                        }
+                        else
+                        {
+                            component.scriptPath = path;
+                            m_Scene->SetDirtyFlag(true);
+                        }
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Clear Lua Script"))
+                {
+                    component.scriptPath.clear();
+                    m_Scene->SetDirtyFlag(true);
+                }
+                ImGui::EndDisabled();
+            });
+
             RenderComponent<TerrainComponent>("Terrain", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<TerrainComponent>();
@@ -3774,6 +3817,9 @@ namespace ignite
                         break;
                     case CompType_Script:
                         entity.AddComponent<ScriptComponent>();
+                        break;
+                    case CompType_LuaScript:
+                        entity.AddComponent<LuaScriptComponent>();
                         break;
                     case CompType_ParticleSystem:
                         entity.AddComponent<ParticleSystemComponent>();
