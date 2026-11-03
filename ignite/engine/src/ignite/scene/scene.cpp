@@ -21,6 +21,7 @@
 #include "ignite/graphics/ui/widget_canvas.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "scene_manager.hpp"
+#include "ignite/net/net_protocol.hpp"
 
 namespace ignite
 {
@@ -962,6 +963,16 @@ namespace ignite
                         if (rb.isGizmoDragging)
                             continue;
 
+                        const bool isRemote2D = IsClient() && registry->any_of<NetworkIdentityComponent>(e) && !registry->get<NetworkIdentityComponent>(e).isLocalPlayer;
+                        if (isRemote2D)
+                        {
+                            if (m_Physics2D->IsValidBody(rb.bodyId))
+                            {
+                                m_Physics2D->SetPosition(rb.bodyId, { tr.world.translation.x, tr.world.translation.y });
+                            }
+                            continue;
+                        }
+
                         if (rb.dirty && m_Physics2D->IsValidBody(rb.bodyId))
                         {
                             m_Physics2D->SetLinearVelocity(rb.bodyId, rb.linearVelocity);
@@ -1289,6 +1300,14 @@ namespace ignite
                                 CalculateParentTransform(idc, tr, stActor->GetPosition(), stActor->GetRotation());
                             }
                         }
+                        else
+                        {
+                            if (dynActor)
+                            {
+                                dynActor->SetPosition(tr.world.translation, false);
+                                dynActor->SetRotation(tr.world.rotation, false);
+                            }
+                        }
                     }
 
                     // Character controllers
@@ -1547,6 +1566,291 @@ namespace ignite
     void Scene::UnregisterNetEntity(uint64_t netId)
     {
         m_NetEntities.erase(netId);
+    }
+
+    uint32_t Scene::GetAvailableComponentMask(Entity entity) const
+    {
+        if (!entity.IsValid())
+            return NetComp_None;
+
+        uint32_t mask = NetComp_None;
+        if (entity.HasComponent<TransformComponent>())           mask |= NetComp_Transform;
+        if (entity.HasComponent<PointLightComponent>())          mask |= NetComp_PointLight;
+        if (entity.HasComponent<DirectionalLightComponent>())    mask |= NetComp_DirectionalLight;
+        if (entity.HasComponent<SpotLightComponent>())           mask |= NetComp_SpotLight;
+        if (entity.HasComponent<Sprite2DComponent>())            mask |= NetComp_Sprite2D;
+        if (entity.HasComponent<Circle2DComponent>())            mask |= NetComp_Circle2D;
+        if (entity.HasComponent<TextComponent>())                mask |= NetComp_Text;
+        if (entity.HasComponent<StaticMeshComponent>())          mask |= NetComp_StaticMesh;
+        if (entity.HasComponent<AudioSourceComponent>())         mask |= NetComp_AudioSource;
+        if (entity.HasComponent<RigidbodyComponent>())           mask |= NetComp_Rigidbody;
+        if (entity.HasComponent<CameraComponent>())              mask |= NetComp_Camera;
+        if (entity.HasComponent<CharacterControllerComponent>()) mask |= NetComp_CharacterController;
+        return mask;
+    }
+
+    void Scene::SerializeEntityComponents(Entity entity, uint32_t compMask, netproto::ComponentSyncMsg &outMsg) const
+    {
+        if (!entity.IsValid())
+            return;
+
+        if (entity.HasComponent<NetworkIdentityComponent>())
+            outMsg.netId = entity.GetComponent<NetworkIdentityComponent>().netId;
+
+        const uint32_t available = GetAvailableComponentMask(entity);
+        outMsg.compMask = compMask & available;
+
+        if (outMsg.compMask & NetComp_PointLight)
+        {
+            const auto &c = entity.GetComponent<PointLightComponent>();
+            outMsg.pointLight.color = c.color;
+            outMsg.pointLight.intensity = c.intensity;
+            outMsg.pointLight.range = c.range;
+            outMsg.pointLight.linearAttenuation = c.linearAttenuation;
+            outMsg.pointLight.quadraticAttenuation = c.quadraticAttenuation;
+            outMsg.pointLight.enabled = c.enabled;
+        }
+
+        if (outMsg.compMask & NetComp_DirectionalLight)
+        {
+            const auto &c = entity.GetComponent<DirectionalLightComponent>();
+            outMsg.dirLight.color = c.color;
+            outMsg.dirLight.intensity = c.intensity;
+            outMsg.dirLight.cascadeShadow = c.cascadeShadow;
+        }
+
+        if (outMsg.compMask & NetComp_SpotLight)
+        {
+            const auto &c = entity.GetComponent<SpotLightComponent>();
+            outMsg.spotLight.color = c.color;
+            outMsg.spotLight.intensity = c.intensity;
+            outMsg.spotLight.range = c.range;
+            outMsg.spotLight.innerConeAngle = c.innerConeAngle;
+            outMsg.spotLight.outerConeAngle = c.outerConeAngle;
+            outMsg.spotLight.enabled = c.enabled;
+        }
+
+        if (outMsg.compMask & NetComp_Sprite2D)
+        {
+            const auto &c = entity.GetComponent<Sprite2DComponent>();
+            outMsg.sprite2D.color = c.color;
+            outMsg.sprite2D.tilingFactor = c.tilingFactor;
+            outMsg.sprite2D.uv0 = c.uv0;
+            outMsg.sprite2D.uv1 = c.uv1;
+            outMsg.sprite2D.flipX = c.flipX;
+            outMsg.sprite2D.flipY = c.flipY;
+            outMsg.sprite2D.materialHandle = static_cast<uint64_t>(c.materialHandle);
+            outMsg.sprite2D.textureHandle = static_cast<uint64_t>(c.handle);
+        }
+
+        if (outMsg.compMask & NetComp_Circle2D)
+        {
+            const auto &c = entity.GetComponent<Circle2DComponent>();
+            outMsg.circle2D.color = c.color;
+            outMsg.circle2D.thickness = c.thickness;
+            outMsg.circle2D.fade = c.fade;
+        }
+
+        if (outMsg.compMask & NetComp_Text)
+        {
+            const auto &c = entity.GetComponent<TextComponent>();
+            outMsg.textComp.text = c.text;
+            outMsg.textComp.color = c.color;
+            outMsg.textComp.lineSpacing = c.lineSpacing;
+            outMsg.textComp.kerning = c.kerning;
+        }
+
+        if (outMsg.compMask & NetComp_StaticMesh)
+        {
+            const auto &c = entity.GetComponent<StaticMeshComponent>();
+            outMsg.staticMesh.meshHandle = static_cast<uint64_t>(c.handle);
+        }
+
+        if (outMsg.compMask & NetComp_AudioSource)
+        {
+            const auto &c = entity.GetComponent<AudioSourceComponent>();
+            outMsg.audioSource.handle = static_cast<uint64_t>(c.handle);
+            outMsg.audioSource.volume = c.volume;
+            outMsg.audioSource.pitch = c.pitch;
+            outMsg.audioSource.pan = c.pan;
+            outMsg.audioSource.loop = c.loop;
+            outMsg.audioSource.playOnStart = c.playOnStart;
+        }
+
+        if (outMsg.compMask & NetComp_Rigidbody)
+        {
+            const auto &c = entity.GetComponent<RigidbodyComponent>();
+            outMsg.rigidbody.linearVelocity = c.linearVelocity;
+            outMsg.rigidbody.angularVelocity = c.angularVelocity;
+        }
+
+        if (outMsg.compMask & NetComp_Camera)
+        {
+            const auto &c = entity.GetComponent<CameraComponent>();
+            outMsg.camera.primary = c.primary;
+            outMsg.camera.isOrthographic = (c.camera.projectionType == ProjectionType::Orthographic);
+            outMsg.camera.fov = c.camera.fov;
+            outMsg.camera.orthographicSize = c.camera.orthoSize;
+            outMsg.camera.nearClip = c.camera.nearPlane;
+            outMsg.camera.farClip = c.camera.farPlane;
+        }
+
+        if (outMsg.compMask & NetComp_CharacterController)
+        {
+            const auto &c = entity.GetComponent<CharacterControllerComponent>();
+            outMsg.charController.linearVelocity = c.linearVelocity;
+        }
+    }
+
+    void Scene::ApplyEntityComponentSync(Entity entity, const netproto::ComponentSyncMsg &msg)
+    {
+        if (!entity.IsValid())
+            return;
+
+        // Point Light
+        if (msg.compMask & NetComp_PointLight)
+        {
+            if (!entity.HasComponent<PointLightComponent>())
+                entity.AddComponent<PointLightComponent>();
+            auto &c = entity.GetComponent<PointLightComponent>();
+            c.color = msg.pointLight.color;
+            c.intensity = msg.pointLight.intensity;
+            c.range = msg.pointLight.range;
+            c.linearAttenuation = msg.pointLight.linearAttenuation;
+            c.quadraticAttenuation = msg.pointLight.quadraticAttenuation;
+            c.enabled = msg.pointLight.enabled;
+        }
+
+        // Directional Light
+        if (msg.compMask & NetComp_DirectionalLight)
+        {
+            if (!entity.HasComponent<DirectionalLightComponent>())
+                entity.AddComponent<DirectionalLightComponent>();
+            auto &c = entity.GetComponent<DirectionalLightComponent>();
+            c.color = msg.dirLight.color;
+            c.intensity = msg.dirLight.intensity;
+            c.cascadeShadow = msg.dirLight.cascadeShadow;
+        }
+
+        // Spot Light
+        if (msg.compMask & NetComp_SpotLight)
+        {
+            if (!entity.HasComponent<SpotLightComponent>())
+                entity.AddComponent<SpotLightComponent>();
+            auto &c = entity.GetComponent<SpotLightComponent>();
+            c.color = msg.spotLight.color;
+            c.intensity = msg.spotLight.intensity;
+            c.range = msg.spotLight.range;
+            c.innerConeAngle = msg.spotLight.innerConeAngle;
+            c.outerConeAngle = msg.spotLight.outerConeAngle;
+            c.enabled = msg.spotLight.enabled;
+        }
+
+        // Sprite 2D
+        if (msg.compMask & NetComp_Sprite2D)
+        {
+            if (!entity.HasComponent<Sprite2DComponent>())
+                entity.AddComponent<Sprite2DComponent>();
+            auto &c = entity.GetComponent<Sprite2DComponent>();
+            c.color = msg.sprite2D.color;
+            c.tilingFactor = msg.sprite2D.tilingFactor;
+            c.uv0 = msg.sprite2D.uv0;
+            c.uv1 = msg.sprite2D.uv1;
+            c.flipX = msg.sprite2D.flipX;
+            c.flipY = msg.sprite2D.flipY;
+            if (msg.sprite2D.materialHandle != 0)
+                c.materialHandle = AssetHandle(msg.sprite2D.materialHandle);
+            if (msg.sprite2D.textureHandle != 0)
+                c.handle = AssetHandle(msg.sprite2D.textureHandle);
+        }
+
+        // Circle 2D
+        if (msg.compMask & NetComp_Circle2D)
+        {
+            if (!entity.HasComponent<Circle2DComponent>())
+                entity.AddComponent<Circle2DComponent>();
+            auto &c = entity.GetComponent<Circle2DComponent>();
+            c.color = msg.circle2D.color;
+            c.thickness = msg.circle2D.thickness;
+            c.fade = msg.circle2D.fade;
+        }
+
+        // Text
+        if (msg.compMask & NetComp_Text)
+        {
+            if (!entity.HasComponent<TextComponent>())
+                entity.AddComponent<TextComponent>();
+            auto &c = entity.GetComponent<TextComponent>();
+            c.text = msg.textComp.text;
+            c.color = msg.textComp.color;
+            c.lineSpacing = msg.textComp.lineSpacing;
+            c.kerning = msg.textComp.kerning;
+        }
+
+        // Static Mesh
+        if (msg.compMask & NetComp_StaticMesh)
+        {
+            if (!entity.HasComponent<StaticMeshComponent>())
+                entity.AddComponent<StaticMeshComponent>();
+            auto &c = entity.GetComponent<StaticMeshComponent>();
+            if (msg.staticMesh.meshHandle != 0)
+                c.handle = AssetHandle(msg.staticMesh.meshHandle);
+        }
+
+        // Audio Source
+        if (msg.compMask & NetComp_AudioSource)
+        {
+            if (!entity.HasComponent<AudioSourceComponent>())
+                entity.AddComponent<AudioSourceComponent>();
+            auto &c = entity.GetComponent<AudioSourceComponent>();
+            if (msg.audioSource.handle != 0)
+                c.handle = AssetHandle(msg.audioSource.handle);
+            c.volume = msg.audioSource.volume;
+            c.pitch = msg.audioSource.pitch;
+            c.pan = msg.audioSource.pan;
+            c.loop = msg.audioSource.loop;
+            c.playOnStart = msg.audioSource.playOnStart;
+        }
+
+        // Rigidbody
+        if (msg.compMask & NetComp_Rigidbody)
+        {
+            if (!entity.HasComponent<RigidbodyComponent>())
+                entity.AddComponent<RigidbodyComponent>();
+            auto &c = entity.GetComponent<RigidbodyComponent>();
+            c.linearVelocity = msg.rigidbody.linearVelocity;
+            c.angularVelocity = msg.rigidbody.angularVelocity;
+            if (auto dyn = c.dynamicActor.lock())
+            {
+                dyn->SetLinearVelocity(msg.rigidbody.linearVelocity);
+                dyn->SetAngularVelocity(msg.rigidbody.angularVelocity);
+            }
+        }
+
+        // Camera
+        if (msg.compMask & NetComp_Camera)
+        {
+            if (!entity.HasComponent<CameraComponent>())
+                entity.AddComponent<CameraComponent>();
+            auto &c = entity.GetComponent<CameraComponent>();
+            c.primary = msg.camera.primary;
+            c.camera.projectionType = msg.camera.isOrthographic ? ProjectionType::Orthographic : ProjectionType::Perspective;
+            c.camera.fov = msg.camera.fov;
+            c.camera.orthoSize = msg.camera.orthographicSize;
+            c.camera.nearPlane = msg.camera.nearClip;
+            c.camera.farPlane = msg.camera.farClip;
+        }
+
+        // Character Controller
+        if (msg.compMask & NetComp_CharacterController)
+        {
+            if (!entity.HasComponent<CharacterControllerComponent>())
+                entity.AddComponent<CharacterControllerComponent>();
+            auto &c = entity.GetComponent<CharacterControllerComponent>();
+            c.linearVelocity = msg.charController.linearVelocity;
+        }
+
+        SetDirtyFlag(true);
     }
 
     Ref<Scene> Scene::Create(Project *project)

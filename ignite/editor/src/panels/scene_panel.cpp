@@ -908,6 +908,37 @@ namespace ignite
 
                 UI::DrawCheckbox("Is Local", &comp.isLocalPlayer);
                 UI::DrawCheckbox("Replicate", &comp.replicate);
+
+                if (ImGui::CollapsingHeader("Replicated Components", ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    auto DrawCompMaskCheckbox = [&](const char *label, NetCompFlag flag)
+                    {
+                        bool enabled = (comp.syncComponentsMask & flag) != 0;
+                        if (UI::DrawCheckbox(label, &enabled))
+                        {
+                            if (enabled) comp.syncComponentsMask |= flag;
+                            else comp.syncComponentsMask &= ~flag;
+                            comp.MarkDirty(flag);
+                        }
+                    };
+
+                    DrawCompMaskCheckbox("Point Light", NetComp_PointLight);
+                    DrawCompMaskCheckbox("Directional Light", NetComp_DirectionalLight);
+                    DrawCompMaskCheckbox("Spot Light", NetComp_SpotLight);
+                    DrawCompMaskCheckbox("Sprite 2D", NetComp_Sprite2D);
+                    DrawCompMaskCheckbox("Circle 2D", NetComp_Circle2D);
+                    DrawCompMaskCheckbox("Text", NetComp_Text);
+                    DrawCompMaskCheckbox("Static Mesh", NetComp_StaticMesh);
+                    DrawCompMaskCheckbox("Audio Source", NetComp_AudioSource);
+                    DrawCompMaskCheckbox("Rigidbody", NetComp_Rigidbody);
+                    DrawCompMaskCheckbox("Camera", NetComp_Camera);
+                    DrawCompMaskCheckbox("Character Controller", NetComp_CharacterController);
+
+                    if (ImGui::Button("Sync Components to Clients"))
+                    {
+                        comp.MarkDirty(comp.syncComponentsMask);
+                    }
+                }
             });
 
             RenderComponent<PrefabComponent>("Prefab", selectedEntity, [&]()

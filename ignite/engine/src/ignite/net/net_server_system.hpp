@@ -71,6 +71,9 @@ namespace ignite
         // Client queries (only handshaked clients are visible).
         size_t GetClientCount() const;
         RemoteClient *FindClient(uint32_t clientId);
+        bool HasClient(uint32_t clientId) const;
+        std::vector<uint32_t> GetConnectedClientIds() const;
+        std::vector<std::string> GetConnectedClientNames() const;
         bool GetClientRealTimeStatus(uint32_t clientId, SteamNetConnectionRealTimeStatus_t *status) const;
         template<typename Fn>
         void ForEachClient(Fn &&fn)

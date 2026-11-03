@@ -84,7 +84,10 @@ namespace ignite
                     const float factor = delta > 0.0001 ? static_cast<float>((renderTime - s0.timestamp) / delta) : 0.0f;
 
                     outPos = glm::mix(s0.position, s1.position, factor);
-                    outRot = glm::slerp(s0.rotation, s1.rotation, factor);
+                    glm::quat q1 = s1.rotation;
+                    if (glm::dot(s0.rotation, q1) < 0.0f)
+                        q1 = -q1;
+                    outRot = glm::normalize(glm::slerp(s0.rotation, q1, factor));
                     outScale = glm::mix(s0.scale, s1.scale, factor);
                     return true;
                 }
@@ -116,6 +119,10 @@ namespace ignite
 
         void SetInterpolationDelay(double delaySec) { m_InterpolationDelay = delaySec; }
         double GetInterpolationDelay() const { return m_InterpolationDelay; }
+        void SetMaxExtrapolation(double maxExtrapSec) { m_MaxExtrapolation = maxExtrapSec; }
+        double GetMaxExtrapolation() const { return m_MaxExtrapolation; }
+        size_t GetSnapshotCount() const { return m_Snapshots.size(); }
+        bool IsEmpty() const { return m_Snapshots.empty(); }
 
     private:
         static constexpr size_t kMaxSnapshots = 32;

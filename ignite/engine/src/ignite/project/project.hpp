@@ -30,6 +30,19 @@ namespace ignite
         Shipping
     };
 
+    struct ServerSettings
+    {
+        uint16_t port = 8192;
+        uint16_t tickRate = 60;
+        uint16_t snapshotRate = 20;
+        uint32_t maxClients = 32;
+        double handshakeTimeoutSec = 5.0;
+        double chatMinIntervalSec = 0.25;
+        bool autoStart = false;
+
+        bool operator==(const ServerSettings &other) const = default;
+    };
+
     struct ProjectInfo
     {
         std::string name;
@@ -41,8 +54,9 @@ namespace ignite
         std::filesystem::path scriptsDirectory = "Scripts";
         std::filesystem::path assetRegistryFilepath = "AssetRegistry.ixreg";
 
-		physics::Physics3DType physics3DType = physics::Physics3DType::Jolt;
-		physics::Physics3DSettings physicsSettings;
+        physics::Physics3DType physics3DType = physics::Physics3DType::Jolt;
+        physics::Physics3DSettings physicsSettings;
+        ServerSettings serverSettings;
         ProjectConfiguration configuration = ProjectConfiguration::Debug;
     };
 
@@ -105,10 +119,13 @@ namespace ignite
         ProjectInfo &GetInfo() { return m_Info; }
 
         WeakRef<Scene> GetActiveSceneWeak() const { return m_ActiveScene; }
-		Ref<Scene> LockActiveScene() const { return m_ActiveScene; }
+        Ref<Scene> LockActiveScene() const { return m_ActiveScene; }
 
         physics::Physics3D *GetPhysics3D() { return m_Physics3D.get(); }
-		physics::Physics2D *GetPhysics2D() { return m_Physics2D.get(); }
+        physics::Physics2D *GetPhysics2D() { return m_Physics2D.get(); }
+
+        const ServerSettings &GetServerSettings() const { return m_Info.serverSettings; }
+        ServerSettings &GetServerSettings() { return m_Info.serverSettings; }
 
         ProjectConfiguration GetConfiguration() const { return m_Info.configuration; }
 
@@ -141,7 +158,7 @@ namespace ignite
         ProjectInfo m_Info;
 
         MaterialManager m_MaterialManager;
-		ScriptEngine *m_ScriptEngine = nullptr;
+        ScriptEngine *m_ScriptEngine = nullptr;
 
         Scope<physics::Physics2D> m_Physics2D;
         Scope<physics::Physics3D> m_Physics3D;

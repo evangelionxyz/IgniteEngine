@@ -204,6 +204,7 @@ LibraryDir["FBX_SDK_LINUX_DEBUG"]   = "%{FBX_SDK_PATH}/lib/debug"
 LibraryDir["FBX_SDK_LINUX_RELEASE"] = "%{FBX_SDK_PATH}/lib/release"
 
 LibraryDir["SDL3_LINUX"]            = "%{THIRDPARTY_DIR}/SDL3/build-linux"
+LibraryDir["GAME_NETWORKING_SOCKETS_LINUX"] = "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux"
 
 -- include lua files
 group "Third Party"

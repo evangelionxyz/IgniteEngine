@@ -31,6 +31,14 @@ IgniteResult ignite_scene_save_file(uint64_t scene_handle, const char *file_path
 IgniteResult ignite_scene_deserialize_hierarchy_json(const char *file_path, char *out_buf, size_t max_len);
 IgniteResult ignite_scene_release(uint64_t scene_handle);
 
+// Project (.ixproj) Serialization FFI
+uint64_t ignite_project_file_load(const char *file_path);
+IgniteResult ignite_project_file_save(uint64_t proj_handle, const char *file_path);
+IgniteResult ignite_project_file_get_name(uint64_t proj_handle, char *out_buf, size_t max_len);
+uint16_t ignite_project_file_get_server_port(uint64_t proj_handle);
+uint16_t ignite_project_file_get_server_tick_rate(uint64_t proj_handle);
+IgniteResult ignite_project_file_release(uint64_t proj_handle);
+
 #ifdef __cplusplus
 }
 #endif

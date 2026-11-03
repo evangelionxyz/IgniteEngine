@@ -94,12 +94,17 @@ namespace ignite
                 glm::vec3 currentPos = serverPos;
                 glm::quat currentRot = serverRot;
 
+                SimulationFn effectiveSim = simulateFn ? simulateFn : m_SimulationFn;
+                if (!effectiveSim)
+                {
+                    effectiveSim = [this](const netproto::InputCmd &cmd, float dt, glm::vec3 &inOutPos, glm::quat &) {
+                        inOutPos += glm::vec3(cmd.move.x, 0.0f, cmd.move.y) * m_DefaultSpeed * dt;
+                    };
+                }
+
                 for (size_t i = ackIdx + 1; i < m_History.size(); ++i)
                 {
-                    if (simulateFn)
-                    {
-                        simulateFn(m_History[i].cmd, tickDt, currentPos, currentRot);
-                    }
+                    effectiveSim(m_History[i].cmd, tickDt, currentPos, currentRot);
                     m_History[i].position = currentPos;
                     m_History[i].rotation = currentRot;
                 }
@@ -133,10 +138,19 @@ namespace ignite
 
         glm::vec3 GetVisualOffset() const { return m_VisualOffset; }
         const std::deque<PredictedState> &GetHistory() const { return m_History; }
+        size_t GetHistoryCount() const { return m_History.size(); }
+
+        void SetSimulationFn(SimulationFn fn) { m_SimulationFn = std::move(fn); }
+        void SetDefaultSpeed(float speed) { m_DefaultSpeed = speed; }
+        float GetDefaultSpeed() const { return m_DefaultSpeed; }
+        void SetErrorThreshold(float threshold) { m_ErrorThreshold = threshold; }
+        float GetErrorThreshold() const { return m_ErrorThreshold; }
 
     private:
         static constexpr size_t kMaxHistory = 128;
         float m_ErrorThreshold = 0.05f;
+        float m_DefaultSpeed = 5.0f;
+        SimulationFn m_SimulationFn;
         glm::vec3 m_VisualOffset{ 0.0f };
         std::deque<PredictedState> m_History;
     };

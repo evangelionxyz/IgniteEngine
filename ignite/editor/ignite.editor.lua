@@ -154,7 +154,8 @@ project "Ignite.Editor"
             "/usr/local/lib",
             "%{LibraryDir.FMOD_LINUX}",
             "%{LibraryDir.VULKAN_SDK}",
-            "%{LibraryDir.SDL3_LINUX}"
+            "%{LibraryDir.SDL3_LINUX}",
+            "%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}"
         }
         includedirs {
             "/usr/include",
@@ -183,7 +184,8 @@ project "Ignite.Editor"
             "dl",
             "m",
             "rt",
-            "glib-2.0"
+            "glib-2.0",
+            "GameNetworkingSockets"
         }
         linkoptions {
             "-Wl,-rpath,'$$ORIGIN'",

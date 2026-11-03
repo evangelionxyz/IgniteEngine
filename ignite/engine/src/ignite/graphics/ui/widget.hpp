@@ -320,6 +320,7 @@ namespace ignite
                 case HorizontalAlignment::Center: alignedMin.x += (availableSize.x - resolvedSize.x) / 2.0f; break;
                 case HorizontalAlignment::Right: alignedMin.x += (availableSize.x - resolvedSize.x); break;
                 case HorizontalAlignment::ExpandHorizontally: resolvedSize.x = availableSize.x; break;
+                case HorizontalAlignment::COUNT: break;
             }
 
             switch (layout.verticalAlignment)
@@ -328,6 +329,7 @@ namespace ignite
                 case VerticalAlignment::Middle: alignedMin.y += (availableSize.y - resolvedSize.y) / 2.0f; break;
                 case VerticalAlignment::Bottom: alignedMin.y += (availableSize.y - resolvedSize.y); break;
                 case VerticalAlignment::ExpandVertically: resolvedSize.y = availableSize.y; break;
+                case VerticalAlignment::COUNT: break;
             }
 
             alignedMin += layout.position;

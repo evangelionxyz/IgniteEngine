@@ -63,6 +63,7 @@ namespace ignite
         std::function<void(const netproto::SpawnMsg &)> onSpawn;
         std::function<void(const netproto::DespawnMsg &)> onDespawn;
         std::function<void(const netproto::SnapshotMsg &)> onSnapshot;
+        std::function<void(const netproto::ComponentSyncMsg &)> onComponentSync;
         std::function<void(const netproto::ChatMsg &)> onChat;
         std::function<void()> onConnected;    // fired after a successful handshake
         std::function<void()> onDisconnected;

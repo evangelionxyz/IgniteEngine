@@ -325,10 +325,47 @@ namespace ignite
             m_Log("[NetServer] " + msg);
     }
 
+    bool NetServerSystem::HasClient(uint32_t clientId) const
+    {
+        for (const auto &[conn, client] : m_Clients)
+        {
+            if (client.handshaked && client.clientId == clientId)
+                return true;
+        }
+        return false;
+    }
+
+    std::vector<uint32_t> NetServerSystem::GetConnectedClientIds() const
+    {
+        std::vector<uint32_t> ids;
+        for (const auto &[conn, client] : m_Clients)
+        {
+            if (client.handshaked)
+                ids.push_back(client.clientId);
+        }
+        return ids;
+    }
+
+    std::vector<std::string> NetServerSystem::GetConnectedClientNames() const
+    {
+        std::vector<std::string> names;
+        for (const auto &[conn, client] : m_Clients)
+        {
+            if (client.handshaked)
+                names.push_back(client.name);
+        }
+        return names;
+    }
+
     bool NetServerSystem::GetClientRealTimeStatus(uint32_t clientId, SteamNetConnectionRealTimeStatus_t *status) const
     {
-        if (m_Server)
-            return m_Server->GetClientRealTimeStatus(clientId, status);
+        if (!m_Server)
+            return false;
+        for (const auto &[conn, client] : m_Clients)
+        {
+            if (client.handshaked && client.clientId == clientId)
+                return m_Server->GetClientRealTimeStatus(conn, status);
+        }
         return false;
     }
 }

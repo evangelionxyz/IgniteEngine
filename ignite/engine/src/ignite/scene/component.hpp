@@ -972,6 +972,24 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_ParticleSystem)
     };
 
+    enum NetCompFlag : uint32_t
+    {
+        NetComp_None                = 0,
+        NetComp_Transform           = 1 << 0,
+        NetComp_PointLight          = 1 << 1,
+        NetComp_DirectionalLight    = 1 << 2,
+        NetComp_SpotLight           = 1 << 3,
+        NetComp_Sprite2D            = 1 << 4,
+        NetComp_Circle2D            = 1 << 5,
+        NetComp_Text                = 1 << 6,
+        NetComp_StaticMesh          = 1 << 7,
+        NetComp_AudioSource         = 1 << 8,
+        NetComp_Rigidbody           = 1 << 9,
+        NetComp_Camera              = 1 << 10,
+        NetComp_CharacterController = 1 << 11,
+        NetComp_All                 = 0xFFFFFFFF
+    };
+
     class NetworkIdentityComponent final : public IComponent
     {
     public:
@@ -980,6 +998,13 @@ namespace ignite
         bool isLocalPlayer = false; // true if controlled locally by this client
         bool replicate = true;      // whether this entity replicates state
         std::string prefab;         // prefab/template identifier for spawning
+
+        uint32_t syncComponentsMask = NetComp_All;
+        uint32_t dirtyComponentsMask = 0;
+
+        void MarkDirty(uint32_t flags = NetComp_All) { dirtyComponentsMask |= flags; }
+        void ClearDirty() { dirtyComponentsMask = 0; }
+        bool IsDirty(uint32_t flag) const { return (dirtyComponentsMask & flag) != 0; }
 
         NetworkIdentityComponent() = default;
         NetworkIdentityComponent(uint64_t id, uint32_t owner = 0, bool local = false, const std::string &prefabName = "")

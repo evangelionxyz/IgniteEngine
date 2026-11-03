@@ -446,3 +446,75 @@ TEST(RustInterop, Phase3SceneJsonSerialization)
     EXPECT_EQ(ignite_scene_release(sceneHandle), IgniteResult_Ok);
     EXPECT_EQ(ignite_scene_release(reloadHandle), IgniteResult_Ok);
 }
+
+
+TEST(RustInterop, Phase3ProjectJsonSerialization)
+{
+    std::filesystem::path tempOutDir = "test-resources/temp";
+    if (!std::filesystem::exists(tempOutDir))
+    {
+        std::filesystem::create_directories(tempOutDir);
+    }
+
+    std::filesystem::path projPath = tempOutDir / "SampleTestProject.ixproj";
+    {
+        std::ofstream out(projPath);
+        out << R"json({
+  "Project": {
+    "Version": "1.0.0",
+    "Name": "SampleArena",
+    "AssetPath": "Assets",
+    "AssetRegistry": "AssetRegistry.ixreg",
+    "DefaultSceneHandle": 9999,
+    "Configuration": "Debug",
+    "Physics": {
+      "Gravity": [0.0, -9.81, 0.0],
+      "LayerCount": 2,
+      "LayerNames": ["Default", "Player"],
+      "CollisionMasks": [4294967295, 4294967295]
+    },
+    "Server": {
+      "Port": 7788,
+      "TickRate": 64,
+      "SnapshotRate": 32,
+      "MaxClients": 16,
+      "HandshakeTimeout": 6.0,
+      "ChatMinInterval": 0.5,
+      "AutoStart": true
+    }
+  }
+})json";
+    }
+
+    ASSERT_TRUE(std::filesystem::exists(projPath));
+
+    // 1. Load project file using Rust serializer FFI
+    uint64_t projHandle = ignite_project_file_load(projPath.string().c_str());
+    ASSERT_NE(projHandle, 0u);
+
+    // 2. Validate fields
+    char nameBuf[64] = { 0 };
+    EXPECT_EQ(ignite_project_file_get_name(projHandle, nameBuf, sizeof(nameBuf)), IgniteResult_Ok);
+    EXPECT_STREQ(nameBuf, "SampleArena");
+
+    EXPECT_EQ(ignite_project_file_get_server_port(projHandle), 7788);
+    EXPECT_EQ(ignite_project_file_get_server_tick_rate(projHandle), 64);
+
+    // 3. Save to another file
+    std::filesystem::path savePath = tempOutDir / "SampleTestProject_Saved.ixproj";
+    EXPECT_EQ(ignite_project_file_save(projHandle, savePath.string().c_str()), IgniteResult_Ok);
+    ASSERT_TRUE(std::filesystem::exists(savePath));
+
+    // 4. Reload saved file
+    uint64_t reloadHandle = ignite_project_file_load(savePath.string().c_str());
+    ASSERT_NE(reloadHandle, 0u);
+    char reloadName[64] = { 0 };
+    EXPECT_EQ(ignite_project_file_get_name(reloadHandle, reloadName, sizeof(reloadName)), IgniteResult_Ok);
+    EXPECT_STREQ(reloadName, "SampleArena");
+    EXPECT_EQ(ignite_project_file_get_server_port(reloadHandle), 7788);
+    EXPECT_EQ(ignite_project_file_get_server_tick_rate(reloadHandle), 64);
+
+    // 5. Cleanup
+    EXPECT_EQ(ignite_project_file_release(projHandle), IgniteResult_Ok);
+    EXPECT_EQ(ignite_project_file_release(reloadHandle), IgniteResult_Ok);
+}

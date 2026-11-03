@@ -19,10 +19,10 @@ project "Ignite.Server"
 
     -- linux
     filter {"system:linux"}
-        libdirs { "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/Linux" }
+        pic "On"
+        libdirs { "%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}" }
         links {
-            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so",
-            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23",
+            "GameNetworkingSockets",
         }
 
     -- windows
@@ -31,7 +31,7 @@ project "Ignite.Server"
             "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Debug/GameNetworkingSockets.lib",
         }
 
-    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profilling", "system:windows"}
+    filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:windows"}
         links {
             "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Release/GameNetworkingSockets.lib",
         }

@@ -125,7 +125,7 @@ project "Ignite.Engine"
         prebuildcommands {
             -- Configure and Build FastNoise2
             'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
-            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
+            '+cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
 
             -- Build Rust
             'cargo build --manifest-path "%{wks.location}/crates/Cargo.toml"',
@@ -150,7 +150,7 @@ project "Ignite.Engine"
         prebuildcommands {
             -- Configure and Build FastNoise2
             'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
-            'cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
+            '+cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
 
             -- Build Rust
             'cargo build --release --manifest-path "%{wks.location}/crates/Cargo.toml"',
@@ -172,7 +172,8 @@ project "Ignite.Engine"
             "%{LibraryDir.FBX_SDK}/release",
             "%{LibraryDir.FMOD_LINUX}",
             "%{LibraryDir.VULKAN_SDK}",
-            "%{LibraryDir.SDL3_LINUX}"
+            "%{LibraryDir.SDL3_LINUX}",
+            "%{LibraryDir.GAME_NETWORKING_SOCKETS_LINUX}"
         }
         includedirs {
             "/usr/include",
@@ -199,7 +200,8 @@ project "Ignite.Engine"
             "dl",
             "m",
             "rt",
-            "glib-2.0"
+            "glib-2.0",
+            "GameNetworkingSockets"
         }
         -- Set rpath to $ORIGIN so the binary finds .so files next to itself
         linkoptions {
