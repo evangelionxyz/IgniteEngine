@@ -20,6 +20,7 @@ project "Ignite.Test"
     links {
         "gtest",
         "Ignite.Engine",
+        "Ignite.Server", 
         "Ignite.Core",
         "Ignite.Physics",
         "JOLT",
@@ -48,6 +49,8 @@ project "Ignite.Test"
         "%{wks.location}/ignite/physics/src",
         "%{wks.location}/ignite/physics/src/ignite",
 
+        "%{IncludeDir.IGNITE_SERVER}",
+        "%{IncludeDir.GAME_NETWORKING_SOCKETS}",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
@@ -106,7 +109,10 @@ project "Ignite.Test"
         }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/debug/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}")
+            copy_file("%{wks.location}/crates/target/debug/ignite_core.pdb", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Debug/GameNetworkingSockets.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Debug/libcrypto-3-x64.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Debug/libprotobufd.dll", "%{cfg.targetdir}")
         }
 
     filter { "configurations:Debug or Debug-Profiling", "system:linux" }
@@ -125,7 +131,10 @@ project "Ignite.Test"
         }
         postbuildcommands {
             copy_file("%{wks.location}/crates/target/release/ignite_core.dll", "%{cfg.targetdir}"),
-            copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}")
+            copy_file("%{wks.location}/crates/target/release/ignite_core.pdb", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Release/GameNetworkingSockets.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Release/libcrypto-3-x64.dll", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Windows/Release/libprotobuf.dll", "%{cfg.targetdir}")
         }
 
     filter { "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling", "system:linux" }

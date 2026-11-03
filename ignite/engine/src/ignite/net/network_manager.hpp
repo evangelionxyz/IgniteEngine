@@ -5,6 +5,7 @@
 
 #include <ignite/core/base.hpp>
 #include <ignite/core/subsystem.hpp>
+#include <ignite/project/project.hpp>
 #include "net_protocol.hpp"
 #include "net_client_system.hpp"
 #include "net_server_system.hpp"
@@ -67,9 +68,22 @@ namespace ignite
         // ---------------------------------------------------------------------
         // Server Mode (Host / Dedicated)
         // ---------------------------------------------------------------------
+        bool StartServer();
+        bool StartServer(const NetServerSystem::Config &config);
         bool StartServer(uint16_t port, uint16_t tickRate = 60, uint16_t snapshotRate = 20);
         void StopServer();
         bool IsServerRunning() const;
+
+        void KickClient(uint32_t clientId, const std::string &reason = "");
+        size_t GetClientCount() const;
+        std::vector<uint32_t> GetConnectedClientIds() const;
+        std::vector<std::string> GetConnectedClientNames() const;
+        uint32_t GetServerTick() const;
+        uint32_t GetClientServerTick() const;
+
+        using ClientEventCallback = std::function<void(uint32_t clientId, const std::string &name)>;
+        void SetClientJoinedCallback(ClientEventCallback cb) { m_ClientJoinedCallback = std::move(cb); }
+        void SetClientLeftCallback(ClientEventCallback cb) { m_ClientLeftCallback = std::move(cb); }
 
         // ---------------------------------------------------------------------
         // Per-Frame Update
@@ -95,6 +109,19 @@ namespace ignite
         void SetSimulationSettings(int lagMs, float lossPercent);
         int GetSimulationLagMs() const { return m_SimLagMs; }
         float GetSimulationPacketLoss() const { return m_SimPacketLoss; }
+
+        // ---------------------------------------------------------------------
+        // ---------------------------------------------------------------------
+        // Configuration & Project Synchronization
+        // ---------------------------------------------------------------------
+        void SyncFromProject(Project *project = nullptr);
+        void SyncToProject(Project *project = nullptr);
+
+        ServerSettings GetServerSettings() const;
+        void SetServerSettings(const ServerSettings &settings);
+
+        uint16_t GetPort() const { return static_cast<uint16_t>(m_UiPort); }
+        void SetPort(uint16_t port);
 
         // ---------------------------------------------------------------------
         // Diagnostics & ImGui UI
@@ -124,17 +151,29 @@ namespace ignite
 
         uint32_t m_NextInputSeq = 1;
         ChatCallback m_ChatCallback;
+        ClientEventCallback m_ClientJoinedCallback;
+        ClientEventCallback m_ClientLeftCallback;
         std::vector<NetChatMessage> m_ChatHistory;
+        std::vector<netproto::InputCmd> m_InputHistory;
 
         // Server tick accumulation
         float m_ServerTickAccumulator = 0.0f;
         float m_ServerSnapshotAccumulator = 0.0f;
 
-        // UI state buffers
+        // UI & Network configuration state buffers
         char m_UiAddressBuf[128] = "127.0.0.1";
         int m_UiPort = 8192;
+        int m_UiTickRate = 60;
+        int m_UiSnapshotRate = 20;
+        int m_UiMaxClients = 32;
+        float m_UiHandshakeTimeout = 5.0f;
+        float m_UiChatInterval = 0.25f;
+        bool m_UiAutoStart = false;
         char m_UiPlayerName[64] = "Player";
         char m_UiChatInputBuf[256] = "";
+
+        Ref<Project> m_LastSyncedProject;
+        ServerSettings m_LastSyncedServerSettings;
     };
 }
 

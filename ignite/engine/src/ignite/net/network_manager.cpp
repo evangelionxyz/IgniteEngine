@@ -113,6 +113,8 @@ namespace ignite
 
     void NetworkManager::Disconnect()
     {
+        m_InputHistory.clear();
+
         if (m_ClientSystem)
         {
             m_ClientSystem->Disconnect();
@@ -143,7 +145,32 @@ namespace ignite
         return m_ClientSystem ? m_ClientSystem->GetClientId() : 0;
     }
 
+    bool NetworkManager::StartServer()
+    {
+        NetServerSystem::Config cfg;
+        if (auto project = Project::GetActive())
+        {
+            const auto &s = project->GetInfo().serverSettings;
+            cfg.port = s.port;
+            cfg.tickRate = s.tickRate;
+            cfg.snapshotRate = s.snapshotRate;
+            cfg.maxClients = s.maxClients;
+            cfg.handshakeTimeoutSec = s.handshakeTimeoutSec;
+            cfg.chatMinIntervalSec = s.chatMinIntervalSec;
+        }
+        return StartServer(cfg);
+    }
+
     bool NetworkManager::StartServer(uint16_t port, uint16_t tickRate, uint16_t snapshotRate)
+    {
+        NetServerSystem::Config cfg;
+        cfg.port = port;
+        cfg.tickRate = tickRate;
+        cfg.snapshotRate = snapshotRate;
+        return StartServer(cfg);
+    }
+
+    bool NetworkManager::StartServer(const NetServerSystem::Config &config)
     {
         Disconnect();
         StopServer();
@@ -164,12 +191,7 @@ namespace ignite
             m_ActiveScene->SetNetMode(ENetMode::DedicatedServer);
         }
 
-        NetServerSystem::Config cfg;
-        cfg.port = port;
-        cfg.tickRate = tickRate;
-        cfg.snapshotRate = snapshotRate;
-
-        m_ServerSystem = std::make_unique<NetServerSystem>(cfg);
+        m_ServerSystem = std::make_unique<NetServerSystem>(config);
         m_ServerSystem->SetLogCallback([](const std::string &msg) {
             LOG_INFO("{}", msg);
         });
@@ -183,6 +205,10 @@ namespace ignite
                 m_ServerReplication->SyncWorldToClient(client.clientId);
                 // Automatically spawn a player entity for this client
                 m_ServerReplication->SpawnEntity("Player_" + client.name, glm::vec3(0.0f, 1.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), client.clientId);
+            }
+            if (m_ClientJoinedCallback)
+            {
+                m_ClientJoinedCallback(client.clientId, client.name);
             }
         });
 
@@ -204,6 +230,10 @@ namespace ignite
                     m_ServerReplication->DespawnEntity(netId);
                 }
             }
+            if (m_ClientLeftCallback)
+            {
+                m_ClientLeftCallback(client.clientId, client.name);
+            }
         });
 
         m_ServerSystem->SetChatCallback([this](NetServerSystem::RemoteClient &client, const netproto::ChatMsg &msg) {
@@ -218,7 +248,7 @@ namespace ignite
 
         if (!m_ServerSystem->Start())
         {
-            LOG_ERROR("[NetworkManager] Failed to start server on port {}", port);
+            LOG_ERROR("[NetworkManager] Failed to start server on port {}", config.port);
             m_ServerSystem.reset();
             m_ServerReplication.reset();
             return false;
@@ -227,6 +257,39 @@ namespace ignite
         m_ServerTickAccumulator = 0.0f;
         m_ServerSnapshotAccumulator = 0.0f;
         return true;
+    }
+
+    void NetworkManager::KickClient(uint32_t clientId, const std::string &reason)
+    {
+        if (m_ServerSystem)
+        {
+            m_ServerSystem->Kick(clientId, reason);
+        }
+    }
+
+    size_t NetworkManager::GetClientCount() const
+    {
+        return m_ServerSystem ? m_ServerSystem->GetClientCount() : 0;
+    }
+
+    std::vector<uint32_t> NetworkManager::GetConnectedClientIds() const
+    {
+        return m_ServerSystem ? m_ServerSystem->GetConnectedClientIds() : std::vector<uint32_t>{};
+    }
+
+    std::vector<std::string> NetworkManager::GetConnectedClientNames() const
+    {
+        return m_ServerSystem ? m_ServerSystem->GetConnectedClientNames() : std::vector<std::string>{};
+    }
+
+    uint32_t NetworkManager::GetServerTick() const
+    {
+        return m_ServerSystem ? m_ServerSystem->GetTick() : 0;
+    }
+
+    uint32_t NetworkManager::GetClientServerTick() const
+    {
+        return m_ClientSystem ? m_ClientSystem->GetServerTick() : 0;
     }
 
     void NetworkManager::StopServer()
@@ -371,9 +434,16 @@ namespace ignite
             }
         }
 
-        // Send unreliable packet over wire
+        m_InputHistory.push_back(cmd);
+        if (m_InputHistory.size() > netproto::MAX_INPUTS_PER_PACKET)
+            m_InputHistory.erase(m_InputHistory.begin());
+
+        netproto::InputMsg msg;
+        msg.cmds = m_InputHistory;
+
+        // Send unreliable packet over wire with full InputMsg framing
         m_ClientSystem->Send([&](net::StreamWriter &w) {
-            cmd.Write(w);
+            msg.Write(w);
         }, false);
     }
 

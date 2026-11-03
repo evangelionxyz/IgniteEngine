@@ -341,3 +341,167 @@ pub extern "C" fn ignite_scene_release(scene_handle: u64) -> IgniteResult {
     }
     IgniteResult::ErrNotFound
 }
+
+
+// -------------------------------------------------
+// Project (.ixproj) Serialization FFI
+// -------------------------------------------------
+
+static PROJECT_FILES: Mutex<Option<HashMap<u64, serial::ProjectFile>>> = Mutex::new(None);
+static NEXT_PROJECT_FILE_HANDLE: Mutex<u64> = Mutex::new(1);
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_project_file_load(file_path_ptr: *const c_char) -> u64 {
+    if file_path_ptr.is_null() {
+        return 0;
+    }
+    unsafe {
+        let file_path = match CStr::from_ptr(file_path_ptr).to_str() {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
+
+        match serial::ProjectFile::from_file(file_path) {
+            Ok(proj_file) => {
+                let mut next_id = match NEXT_PROJECT_FILE_HANDLE.lock() {
+                    Ok(g) => g,
+                    Err(p) => p.into_inner(),
+                };
+                let handle = *next_id;
+                *next_id += 1;
+
+                let name = proj_file.project.name.clone();
+
+                let mut lock = match PROJECT_FILES.lock() {
+                    Ok(g) => g,
+                    Err(p) => p.into_inner(),
+                };
+                let map = lock.get_or_insert_with(HashMap::new);
+                map.insert(handle, proj_file);
+
+                log_internal(
+                    IgniteLogLevel::Info,
+                    &format!("[Rust Project Serializer] Loaded project '{}' from '{}' (handle: {})", name, file_path, handle),
+                );
+
+                handle
+            }
+            Err(e) => {
+                log_internal(
+                    IgniteLogLevel::Error,
+                    &format!("[Rust Project Serializer] Failed to load project from '{}': {}", file_path, e),
+                );
+                0
+            }
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_project_file_save(proj_handle: u64, out_path_ptr: *const c_char) -> IgniteResult {
+    if proj_handle == 0 || out_path_ptr.is_null() {
+        return IgniteResult::ErrInvalidHandle;
+    }
+    unsafe {
+        let out_path = match CStr::from_ptr(out_path_ptr).to_str() {
+            Ok(s) => s,
+            Err(_) => return IgniteResult::ErrInvalidParam,
+        };
+
+        let lock = match PROJECT_FILES.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        if let Some(map) = lock.as_ref() {
+            if let Some(proj_file) = map.get(&proj_handle) {
+                return match proj_file.save_file(out_path) {
+                    Ok(_) => IgniteResult::Ok,
+                    Err(_) => IgniteResult::ErrOperationFailed,
+                };
+            }
+        }
+        IgniteResult::ErrNotFound
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_project_file_get_name(
+    proj_handle: u64,
+    out_buf: *mut c_char,
+    max_len: usize,
+) -> IgniteResult {
+    if proj_handle == 0 || out_buf.is_null() || max_len == 0 {
+        return IgniteResult::ErrNullPointer;
+    }
+    let lock = match PROJECT_FILES.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if let Some(map) = lock.as_ref() {
+        if let Some(proj_file) = map.get(&proj_handle) {
+            unsafe {
+                let bytes = proj_file.project.name.as_bytes();
+                let copy_len = bytes.len().min(max_len - 1);
+                std::ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, out_buf, copy_len);
+                *out_buf.add(copy_len) = 0;
+            }
+            return IgniteResult::Ok;
+        }
+    }
+    IgniteResult::ErrNotFound
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_project_file_get_server_port(proj_handle: u64) -> u16 {
+    if proj_handle == 0 {
+        return 0;
+    }
+    let lock = match PROJECT_FILES.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if let Some(map) = lock.as_ref() {
+        if let Some(proj_file) = map.get(&proj_handle) {
+            if let Some(ref server) = proj_file.project.server {
+                return server.port;
+            }
+        }
+    }
+    0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_project_file_get_server_tick_rate(proj_handle: u64) -> u16 {
+    if proj_handle == 0 {
+        return 0;
+    }
+    let lock = match PROJECT_FILES.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if let Some(map) = lock.as_ref() {
+        if let Some(proj_file) = map.get(&proj_handle) {
+            if let Some(ref server) = proj_file.project.server {
+                return server.tick_rate;
+            }
+        }
+    }
+    0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ignite_project_file_release(proj_handle: u64) -> IgniteResult {
+    if proj_handle == 0 {
+        return IgniteResult::ErrInvalidHandle;
+    }
+    let mut lock = match PROJECT_FILES.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if let Some(map) = lock.as_mut() {
+        if map.remove(&proj_handle).is_some() {
+            return IgniteResult::Ok;
+        }
+    }
+    IgniteResult::ErrNotFound
+}

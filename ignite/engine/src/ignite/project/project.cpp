@@ -283,6 +283,16 @@ R"(<Project>
             projectSr.EndSequence();
             projectSr.EndMap();
 
+            projectSr.BeginMap("Server");
+            projectSr.AddKeyValue("Port", m_Info.serverSettings.port);
+            projectSr.AddKeyValue("TickRate", m_Info.serverSettings.tickRate);
+            projectSr.AddKeyValue("SnapshotRate", m_Info.serverSettings.snapshotRate);
+            projectSr.AddKeyValue("MaxClients", m_Info.serverSettings.maxClients);
+            projectSr.AddKeyValue("HandshakeTimeout", m_Info.serverSettings.handshakeTimeoutSec);
+            projectSr.AddKeyValue("ChatMinInterval", m_Info.serverSettings.chatMinIntervalSec);
+            projectSr.AddKeyValue("AutoStart", m_Info.serverSettings.autoStart);
+            projectSr.EndMap();
+
             projectSr.EndMap();
         }
 
@@ -402,6 +412,17 @@ R"(<Project>
                     }
                 }
             }
+        }
+
+        if (JsonNode serverNode = projectNode["Server"])
+        {
+            if (auto n = serverNode["Port"]) info.serverSettings.port = n.as<uint16_t>();
+            if (auto n = serverNode["TickRate"]) info.serverSettings.tickRate = n.as<uint16_t>();
+            if (auto n = serverNode["SnapshotRate"]) info.serverSettings.snapshotRate = n.as<uint16_t>();
+            if (auto n = serverNode["MaxClients"]) info.serverSettings.maxClients = n.as<uint32_t>();
+            if (auto n = serverNode["HandshakeTimeout"]) info.serverSettings.handshakeTimeoutSec = n.as<double>();
+            if (auto n = serverNode["ChatMinInterval"]) info.serverSettings.chatMinIntervalSec = n.as<double>();
+            if (auto n = serverNode["AutoStart"]) info.serverSettings.autoStart = n.as<bool>();
         }
 
         Ref<Project> project = Project::Create(info);

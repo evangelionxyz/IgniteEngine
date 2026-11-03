@@ -998,7 +998,7 @@ pub struct PrefabComponentSerial {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct NetworkIdentityComponentSerial {
-    #[serde(rename = "NetID", default)]
+    #[serde(rename = "NetID", alias = "NetId", default)]
     pub net_id: u64,
     #[serde(rename = "OwnerClient", default)]
     pub owner_client: u32,
@@ -1006,4 +1006,15 @@ pub struct NetworkIdentityComponentSerial {
     pub replicate: bool,
     #[serde(rename = "Prefab", default)]
     pub prefab: String,
+}
+
+
+// -------------------------------------------------
+// Lua Script Component
+// -------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LuaScriptComponentSerial {
+    #[serde(rename = "ScriptPath", default)]
+    pub script_path: String,
 }
