@@ -138,6 +138,7 @@ namespace ignite
         // Modal state for create/rename/delete operations
         bool m_ShowCreateFolderModal = false;
         bool m_ShowCreateScriptModal = false;
+        bool m_ShowCreateLuaScriptModal = false;
         bool m_ShowCreateScriptableObjectModal = false;
         std::string m_PendingScriptableObjectClassName;  // class to instantiate
         std::string m_PendingScriptableObjectFileName;   // suggested file name

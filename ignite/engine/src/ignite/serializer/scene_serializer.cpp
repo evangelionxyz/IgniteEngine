@@ -911,6 +911,7 @@ namespace ignite
                 json c;
                 c["type"] = "LuaScript";
                 c["displayName"] = "Lua Script";
+                c["scriptHandle"] = static_cast<uint64_t>(comp.scriptHandle);
                 c["scriptPath"] = comp.scriptPath.generic_string();
                 entry.components.push_back(c);
             }

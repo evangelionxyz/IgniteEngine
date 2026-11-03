@@ -23,6 +23,7 @@ project "Ignite.Test"
         "Ignite.Server", 
         "Ignite.Core",
         "Ignite.Physics",
+        "Ignite.Server",
         "JOLT",
         "ZLIB",
         "yaml-cpp",
@@ -193,11 +194,17 @@ project "Ignite.Test"
         linkoptions {
             "-Wl,-rpath,'$$ORIGIN'",
             "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'",
-            "-Wl,-rpath-link,'%{cfg.targetdir}'"
+            "-Wl,-rpath-link,'%{cfg.targetdir}'",
+            "-Wl,--no-as-needed",
+            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so",
+            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23",
+            "-Wl,--as-needed"
         }
         postbuildcommands {
             'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"',
-            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true',
+            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so", "%{cfg.targetdir}"),
+            copy_file("%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23", "%{cfg.targetdir}"),
         }
 
     filter { "system:linux", "configurations:Debug or Debug-Profiling" }

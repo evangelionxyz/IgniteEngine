@@ -798,6 +798,11 @@ namespace ignite
                     m_ShowCreateScriptModal = true;
                 }
 
+                if (ImGui::MenuItem("Lua Script"))
+                {
+                    m_ShowCreateLuaScriptModal = true;
+                }
+
                 if (ImGui::MenuItem("Prefab"))
                 {
                     CreateNewPrefab();
@@ -1025,6 +1030,55 @@ namespace ignite
         else
         {
             focusCreateScript = true;
+        }
+
+        // Create Lua Script Modal
+        if (m_ShowCreateLuaScriptModal)
+        {
+            ImGui::OpenPopup("Create Lua Script");
+            m_ShowCreateLuaScriptModal = false;
+        }
+
+        static bool focusCreateLuaScript = true;
+        if (ImGui::BeginPopupModal("Create Lua Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Create Lua script in: %s", m_CurrentDirectory.generic_string().c_str());
+            ImGui::Spacing();
+            if (focusCreateLuaScript)
+            {
+                ImGui::SetKeyboardFocusHere();
+                focusCreateLuaScript = false;
+            }
+            const bool submitByEnter = ImGui::InputText("Script Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+
+            ImGui::Separator();
+            if (submitByEnter || ImGui::Button("Create"))
+            {
+                std::string name = m_PopupInputBuffer;
+                if (!name.empty())
+                {
+                    if (!name.ends_with(".lua")) name += ".lua";
+                    std::filesystem::path newPath = m_CurrentDirectory / name;
+                    if (!std::filesystem::exists(newPath))
+                    {
+                        m_EditorLayer->GetActiveProject()->CreateLuaScript(newPath);
+                        Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                    }
+                }
+                m_PopupInputBuffer[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel"))
+            {
+                m_PopupInputBuffer[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        else
+        {
+            focusCreateLuaScript = true;
         }
 
         // Create Scriptable Object Modal
@@ -2711,6 +2765,7 @@ namespace ignite
             case AssetType::AnimatorController: return s_SharedIcons["anim_ctrl"];
             case AssetType::AnimatorController2D: return s_SharedIcons["anim_ctrl_2d"];
             case AssetType::Terrain: return s_SharedIcons["mesh"];
+            case AssetType::LuaScript: return s_SharedIcons.contains("script") ? s_SharedIcons["script"] : s_SharedIcons["font"];
             default: break;
         }
 

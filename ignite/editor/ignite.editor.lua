@@ -163,6 +163,7 @@ project "Ignite.Editor"
             "%{IncludeDir.IMATH_LINUX}"
         }
         links {
+            "Ignite.Server",
             "ignite_core",
             "vulkan",
             "dxcompiler",
@@ -189,11 +190,17 @@ project "Ignite.Editor"
         linkoptions {
             "-Wl,-rpath,'$$ORIGIN'",
             "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'",
-            "-Wl,-rpath-link,'%{cfg.targetdir}'"
+            "-Wl,-rpath-link,'%{cfg.targetdir}'",
+            "-Wl,--no-as-needed",
+            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so",
+            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23",
+            "-Wl,--as-needed"
         }
         postbuildcommands {
             'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"',
-            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true',
+            'cp -u "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so" "%{cfg.targetdir}"',
+            'cp -u "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23" "%{cfg.targetdir}"'
         }
 
     filter { "system:linux", "configurations:Debug" }

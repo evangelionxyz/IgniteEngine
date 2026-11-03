@@ -656,7 +656,16 @@ namespace ignite
             registry->view<LuaScriptComponent>().each([this](entt::entity e, LuaScriptComponent &script)
             {
                 const Entity entity{ e, this };
-                m_LuaScriptRuntime->CreateInstance(entity.GetUUID(), script.scriptPath);
+                std::filesystem::path path = script.scriptPath;
+                if (script.scriptHandle != AssetHandle(0) && m_AssetManager)
+                {
+                    const auto &meta = m_AssetManager->GetMetaData(script.scriptHandle);
+                    if (!meta.filepath.empty())
+                    {
+                        path = meta.filepath;
+                    }
+                }
+                m_LuaScriptRuntime->CreateInstance(entity.GetUUID(), path, script.scriptHandle);
             });
         }
 
@@ -2521,6 +2530,20 @@ namespace ignite
     template<>
     IGN_API void Scene::OnComponentAdded<LuaScriptComponent>(Entity entity, LuaScriptComponent &comp)
     {
+        if (m_LuaScriptRuntime && IsRunning())
+        {
+            std::filesystem::path path = comp.scriptPath;
+            if (comp.scriptHandle != AssetHandle(0) && m_AssetManager)
+            {
+                const auto &meta = m_AssetManager->GetMetaData(comp.scriptHandle);
+                if (!meta.filepath.empty())
+                    path = meta.filepath;
+            }
+            if (!path.empty())
+            {
+                m_LuaScriptRuntime->CreateInstance(entity.GetUUID(), path, comp.scriptHandle);
+            }
+        }
     }
 
     template<>

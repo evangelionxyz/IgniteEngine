@@ -57,12 +57,12 @@ if os.target() == "linux" then
     local env_fbx = os.getenv("FBX_SDK_LINUX") or os.getenv("FBX_SDK")
     if env_fbx and os.isdir(env_fbx) then
         FBX_SDK_PATH = env_fbx
-    elseif os.isdir("/opt/fbxsdk/2020.3.9") then
-        FBX_SDK_PATH = "/opt/fbxsdk/2020.3.9"
     elseif os.isdir("/opt/fbxsdk") then
         FBX_SDK_PATH = "/opt/fbxsdk"
-    else
+    elseif os.isdir("/opt/fbxsdk/2020.3.9") then
         FBX_SDK_PATH = "/opt/fbxsdk/2020.3.9"
+    else
+        FBX_SDK_PATH = "/opt/fbxsdk"
     end
 else
     FBX_SDK_PATH = os.getenv("FBX_SDK")

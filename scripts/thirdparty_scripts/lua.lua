@@ -14,6 +14,12 @@ project "Lua"
         "%{THIRDPARTY_DIR}/lua/**.h",
     }
 
+    removefiles {
+        "%{THIRDPARTY_DIR}/lua/onelua.c",
+        "%{THIRDPARTY_DIR}/lua/lua.c",
+        "%{THIRDPARTY_DIR}/lua/ltests.c",
+    }
+
     includedirs {
         "%{THIRDPARTY_DIR}/lua",
     }

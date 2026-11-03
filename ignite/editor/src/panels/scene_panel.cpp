@@ -27,6 +27,8 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
+#include "ignite/scripting/lua_script.hpp"
+#include "ignite/scripting/lua_script_runtime.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -3370,12 +3372,58 @@ namespace ignite
             {
                 auto &component = selectedEntity.GetComponent<LuaScriptComponent>();
                 const bool isRunning = m_Scene && m_Scene->IsRunning();
-                ImGui::BeginDisabled(isRunning);
-                ImGui::TextUnformatted("Script");
-                ImGui::SameLine(120.0f);
-                const std::string label = component.scriptPath.empty() ? "No Lua script assigned" : component.scriptPath.generic_string();
-                ImGui::TextWrapped("%s", label.c_str());
-                if (ImGui::Button("Browse Lua Script..."))
+
+                std::string label = "Drag Lua Script Here";
+                if (component.scriptHandle != AssetHandle(0))
+                {
+                    std::string assetName = assetManager->GetAssetDisplayName(component.scriptHandle);
+                    if (!assetName.empty())
+                        label = assetName;
+                    else if (!component.scriptPath.empty())
+                        label = component.scriptPath.filename().generic_string();
+                }
+                else if (!component.scriptPath.empty())
+                {
+                    label = component.scriptPath.filename().generic_string();
+                }
+
+                UI::DrawButtonWithColumn("Script Asset", label.c_str(), nullptr, [&]()
+                {
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            if (payload->DataSize == sizeof(AssetHandle))
+                            {
+                                AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                if (metadata.type == AssetType::LuaScript || metadata.filepath.extension() == ".lua")
+                                {
+                                    component.scriptHandle = handle;
+                                    component.scriptPath = metadata.filepath;
+                                    m_Scene->SetDirtyFlag(true);
+
+                                    if (isRunning && m_Scene->GetLuaScriptRuntime())
+                                    {
+                                        m_Scene->GetLuaScriptRuntime()->CreateInstance(selectedEntity.GetUUID(), component.scriptPath, component.scriptHandle);
+                                    }
+                                }
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                });
+
+                if (component.scriptHandle != AssetHandle(0))
+                {
+                    ImGui::TextDisabled("Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(component.scriptHandle)));
+                }
+                if (!component.scriptPath.empty())
+                {
+                    ImGui::TextDisabled("Path: %s", component.scriptPath.generic_string().c_str());
+                }
+
+                if (ImGui::Button("Browse..."))
                 {
 #ifdef PLATFORM_WINDOWS
                     static const char filter[] = "Lua Script\0*.lua\0All Files\0*.*\0\0";
@@ -3396,17 +3444,49 @@ namespace ignite
                         else
                         {
                             component.scriptPath = path;
+                            if (assetManager)
+                            {
+                                AssetHandle handle = assetManager->GetAssetHandle(path);
+                                if (handle == AssetHandle(0))
+                                {
+                                    handle = assetManager->ImportAsset(path);
+                                }
+                                component.scriptHandle = handle;
+                            }
                             m_Scene->SetDirtyFlag(true);
+
+                            if (isRunning && m_Scene->GetLuaScriptRuntime())
+                            {
+                                m_Scene->GetLuaScriptRuntime()->CreateInstance(selectedEntity.GetUUID(), component.scriptPath, component.scriptHandle);
+                            }
                         }
                     }
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Clear Lua Script"))
+                if (ImGui::Button("Clear"))
                 {
+                    component.scriptHandle = AssetHandle(0);
                     component.scriptPath.clear();
                     m_Scene->SetDirtyFlag(true);
+
+                    if (isRunning && m_Scene->GetLuaScriptRuntime())
+                    {
+                        m_Scene->GetLuaScriptRuntime()->DestroyInstance(selectedEntity.GetUUID());
+                    }
                 }
-                ImGui::EndDisabled();
+                ImGui::SameLine();
+                if (ImGui::Button("Reload"))
+                {
+                    if (isRunning && m_Scene->GetLuaScriptRuntime())
+                    {
+                        m_Scene->GetLuaScriptRuntime()->ReloadInstance(selectedEntity.GetUUID());
+                    }
+                    else if (component.scriptHandle != AssetHandle(0) && assetManager)
+                    {
+                        auto script = assetManager->GetAsset<LuaScript>(component.scriptHandle);
+                        if (script) script->Reload();
+                    }
+                }
             });
 
             RenderComponent<TerrainComponent>("Terrain", selectedEntity, [&]()

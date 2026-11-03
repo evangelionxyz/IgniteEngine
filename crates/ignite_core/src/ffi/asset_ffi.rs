@@ -52,6 +52,7 @@ pub extern "C" fn ignite_asset_type_to_string(asset_type: AssetType) -> *const c
         "AnimatorController2D" => "AnimatorController2D\0".as_ptr() as *const c_char,
         "Prefab" => "Prefab\0".as_ptr() as *const c_char,
         "Terrain" => "Terrain\0".as_ptr() as *const c_char,
+        "LuaScript" => "LuaScript\0".as_ptr() as *const c_char,
         _ => "Unknown\0".as_ptr() as *const c_char,
     }
 }

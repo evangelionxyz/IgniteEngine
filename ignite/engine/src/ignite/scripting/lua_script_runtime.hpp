@@ -3,10 +3,14 @@
 
 #include "ignite/core/base.hpp"
 #include "ignite/core/uuid.hpp"
+#include "ignite/asset/asset_types.hpp"
+#include "ignite/core/file_watcher.hpp"
 
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 
 struct lua_State;
 
@@ -24,14 +28,20 @@ namespace ignite
         LuaScriptRuntime &operator=(const LuaScriptRuntime &) = delete;
 
         bool IsInitialized() const { return m_State != nullptr; }
-        void CreateInstance(UUID entityId, const std::filesystem::path &scriptPath);
+        void CreateInstance(UUID entityId, const std::filesystem::path &scriptPath, AssetHandle scriptHandle = AssetHandle(0));
         void DestroyInstance(UUID entityId);
+        bool ReloadInstance(UUID entityId);
+        void ReloadScript(const std::filesystem::path &scriptPath);
+
         void Update(float deltaTime);
         void FixedUpdate();
+
+        void ProcessPendingReloads();
 
     private:
         struct Instance
         {
+            AssetHandle handle = AssetHandle(0);
             std::filesystem::path path;
             int environmentRef = -2;
             int callbacksRef = -2;
@@ -40,8 +50,15 @@ namespace ignite
         bool Invoke(UUID entityId, Instance &instance, const char *callback, float deltaTime, bool hasDeltaTime);
         std::filesystem::path ResolvePath(const std::filesystem::path &path) const;
 
+        void WatchScriptFile(const std::filesystem::path &absolutePath);
+        void UnwatchUnusedFiles();
+
         Scene *m_Scene = nullptr;
         lua_State *m_State = nullptr;
         std::unordered_map<UUID, Instance> m_Instances;
+
+        std::unordered_map<std::filesystem::path, FileWatchToken> m_WatchedFiles;
+        std::unordered_set<std::filesystem::path> m_PendingReloads;
+        std::mutex m_ReloadMutex;
     };
 }

@@ -9,9 +9,13 @@
 #include "ignite/project/project.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
+#include "ignite/asset/asset_manager.hpp"
 
+#include <glm/gtx/quaternion.hpp>
 #include <cstring>
+#include <algorithm>
 
 extern "C"
 {
@@ -112,6 +116,17 @@ namespace ignite
             return 1;
         }
 
+        int EntityGetTransform(lua_State *state)
+        {
+            auto *ref = static_cast<LuaEntityRef *>(luaL_checkudata(state, 1, kEntityMetatable));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (!entity || !entity.HasComponent<TransformComponent>()) { lua_pushnil(state); return 1; }
+            auto *component = static_cast<LuaComponentRef *>(lua_newuserdatauv(state, sizeof(LuaComponentRef), 0));
+            *component = { ref->scene, ref->id, LuaComponentType::Transform };
+            luaL_getmetatable(state, kComponentMetatable); lua_setmetatable(state, -2);
+            return 1;
+        }
+
         int EntityIndex(lua_State *state)
         {
             auto *ref = static_cast<LuaEntityRef *>(luaL_checkudata(state, 1, kEntityMetatable));
@@ -129,8 +144,75 @@ namespace ignite
                 lua_pushcfunction(state, EntityGetComponent);
                 return 1;
             }
+            if (strcmp(key, "get_transform") == 0)
+            {
+                lua_pushcfunction(state, EntityGetTransform);
+                return 1;
+            }
             lua_pushnil(state);
             return 1;
+        }
+
+        int Rigidbody2DApplyForce(lua_State *state)
+        {
+            auto *ref = static_cast<LuaComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const float fx = static_cast<float>(luaL_checknumber(state, 2));
+            const float fy = static_cast<float>(luaL_checknumber(state, 3));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<Rigidbody2DComponent>())
+            {
+                auto &c = entity.GetComponent<Rigidbody2DComponent>();
+                if (b2Body_IsValid(c.bodyId))
+                {
+                    b2Body_ApplyForceToCenter(c.bodyId, b2Vec2{ fx, fy }, true);
+                }
+                else
+                {
+                    c.linearVelocity += glm::vec2(fx, fy);
+                }
+            }
+            return 0;
+        }
+
+        int Rigidbody2DApplyLinearImpulse(lua_State *state)
+        {
+            auto *ref = static_cast<LuaComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const float ix = static_cast<float>(luaL_checknumber(state, 2));
+            const float iy = static_cast<float>(luaL_checknumber(state, 3));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<Rigidbody2DComponent>())
+            {
+                auto &c = entity.GetComponent<Rigidbody2DComponent>();
+                if (b2Body_IsValid(c.bodyId))
+                {
+                    b2Body_ApplyLinearImpulseToCenter(c.bodyId, b2Vec2{ ix, iy }, true);
+                }
+                else
+                {
+                    c.linearVelocity += glm::vec2(ix, iy);
+                }
+            }
+            return 0;
+        }
+
+        int Rigidbody2DApplyTorque(lua_State *state)
+        {
+            auto *ref = static_cast<LuaComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const float torque = static_cast<float>(luaL_checknumber(state, 2));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<Rigidbody2DComponent>())
+            {
+                auto &c = entity.GetComponent<Rigidbody2DComponent>();
+                if (b2Body_IsValid(c.bodyId))
+                {
+                    b2Body_ApplyTorque(c.bodyId, torque, true);
+                }
+                else
+                {
+                    c.angularVelocity += torque;
+                }
+            }
+            return 0;
         }
 
         int ComponentIndex(lua_State *state)
@@ -145,6 +227,7 @@ namespace ignite
                 {
                     auto &t = entity.GetComponent<TransformComponent>().local;
                     if (strcmp(key, "position") == 0) { PushVector(state, t.translation); return 1; }
+                    if (strcmp(key, "rotation") == 0) { PushVector(state, glm::degrees(glm::eulerAngles(t.rotation))); return 1; }
                     if (strcmp(key, "scale") == 0) { PushVector(state, t.scale); return 1; }
                     break;
                 }
@@ -154,6 +237,9 @@ namespace ignite
                     if (strcmp(key, "linear_velocity") == 0) { PushVector(state, glm::vec3(c.linearVelocity, 0.0f)); return 1; }
                     if (strcmp(key, "angular_velocity") == 0) { lua_pushnumber(state, c.angularVelocity); return 1; }
                     if (strcmp(key, "gravity_scale") == 0) { lua_pushnumber(state, c.gravityScale); return 1; }
+                    if (strcmp(key, "apply_force") == 0) { lua_pushcfunction(state, Rigidbody2DApplyForce); return 1; }
+                    if (strcmp(key, "apply_linear_impulse") == 0) { lua_pushcfunction(state, Rigidbody2DApplyLinearImpulse); return 1; }
+                    if (strcmp(key, "apply_torque") == 0) { lua_pushcfunction(state, Rigidbody2DApplyTorque); return 1; }
                     break;
                 }
                 case LuaComponentType::Rigidbody3D:
@@ -205,6 +291,7 @@ namespace ignite
                 {
                     auto &t = entity.GetComponent<TransformComponent>().local;
                     if (strcmp(key, "position") == 0) { t.translation = ReadVector(state, 3); return 0; }
+                    if (strcmp(key, "rotation") == 0) { t.rotation = glm::quat(glm::radians(ReadVector(state, 3))); return 0; }
                     if (strcmp(key, "scale") == 0) { t.scale = ReadVector(state, 3); return 0; }
                     break;
                 }
@@ -255,15 +342,16 @@ namespace ignite
             return 0;
         }
 
-        int IgniteFindEntity(lua_State *state)
+        int IgniteLogWarn(lua_State *state)
         {
-            auto **scene = static_cast<Scene **>(lua_touserdata(state, lua_upvalueindex(1)));
-            const uint64_t id = static_cast<uint64_t>(luaL_checkinteger(state, 1));
-            if (!ResolveEntity(*scene, id)) { lua_pushnil(state); return 1; }
-            auto *ref = static_cast<LuaEntityRef *>(lua_newuserdatauv(state, sizeof(LuaEntityRef), 0));
-            *ref = { *scene, id };
-            luaL_getmetatable(state, kEntityMetatable); lua_setmetatable(state, -2);
-            return 1;
+            LOG_WARN("[Lua] {}", luaL_checkstring(state, 1));
+            return 0;
+        }
+
+        int IgniteLogError(lua_State *state)
+        {
+            LOG_ERROR("[Lua] {}", luaL_checkstring(state, 1));
+            return 0;
         }
 
         void PushEntity(lua_State *state, Scene *scene, uint64_t id)
@@ -273,11 +361,70 @@ namespace ignite
             luaL_getmetatable(state, kEntityMetatable); lua_setmetatable(state, -2);
         }
 
+        int IgniteFindEntity(lua_State *state)
+        {
+            auto **scene = static_cast<Scene **>(lua_touserdata(state, lua_upvalueindex(1)));
+            const uint64_t id = static_cast<uint64_t>(luaL_checkinteger(state, 1));
+            if (!ResolveEntity(*scene, id)) { lua_pushnil(state); return 1; }
+            PushEntity(state, *scene, id);
+            return 1;
+        }
+
+        int IgniteFindEntityByName(lua_State *state)
+        {
+            auto **scene = static_cast<Scene **>(lua_touserdata(state, lua_upvalueindex(1)));
+            const char *name = luaL_checkstring(state, 1);
+            if (!*scene) { lua_pushnil(state); return 1; }
+            for (const auto &[uuid, enttId] : (*scene)->entities)
+            {
+                if (!(*scene)->registry->valid(enttId)) continue;
+                Entity e(enttId, *scene);
+                if (e.GetName() == name)
+                {
+                    PushEntity(state, *scene, static_cast<uint64_t>(uuid));
+                    return 1;
+                }
+            }
+            lua_pushnil(state);
+            return 1;
+        }
+
+        int LuaInputIsKeyPressed(lua_State *state)
+        {
+            const int key = static_cast<int>(luaL_checkinteger(state, 1));
+            lua_pushboolean(state, InputSystem::IsKeyPressed(static_cast<KeyCode>(key)));
+            return 1;
+        }
+
+        int LuaInputIsMouseButtonPressed(lua_State *state)
+        {
+            const int button = static_cast<int>(luaL_checkinteger(state, 1));
+            lua_pushboolean(state, InputSystem::IsMouseButtonPressed(static_cast<MouseCode>(button)));
+            return 1;
+        }
+
+        int LuaInputIsActionPressed(lua_State *state)
+        {
+            const char *action = luaL_checkstring(state, 1);
+            lua_pushboolean(state, InputSystem::IsActionPressed(action));
+            return 1;
+        }
+
+        int LuaInputGetMousePosition(lua_State *state)
+        {
+            const glm::ivec2 pos = InputSystem::GetMousePosition();
+            lua_createtable(state, 0, 2);
+            lua_pushnumber(state, pos.x); lua_setfield(state, -2, "x");
+            lua_pushnumber(state, pos.y); lua_setfield(state, -2, "y");
+            return 1;
+        }
+
         void RegisterBindings(lua_State *state, Scene *scene)
         {
             luaL_newmetatable(state, kEntityMetatable);
             lua_pushcfunction(state, EntityIndex); lua_setfield(state, -2, "__index");
             lua_pop(state, 1);
+
             luaL_newmetatable(state, kComponentMetatable);
             lua_pushcfunction(state, ComponentIndex); lua_setfield(state, -2, "__index");
             lua_pushcfunction(state, ComponentNewIndex); lua_setfield(state, -2, "__newindex");
@@ -285,9 +432,25 @@ namespace ignite
 
             lua_newtable(state);
             lua_pushcfunction(state, IgniteLog); lua_setfield(state, -2, "Log");
+            lua_pushcfunction(state, IgniteLogWarn); lua_setfield(state, -2, "LogWarn");
+            lua_pushcfunction(state, IgniteLogError); lua_setfield(state, -2, "LogError");
+
             auto **sceneRef = static_cast<Scene **>(lua_newuserdatauv(state, sizeof(Scene *), 0));
             *sceneRef = scene;
             lua_pushcclosure(state, IgniteFindEntity, 1); lua_setfield(state, -2, "FindEntity");
+
+            auto **sceneRef2 = static_cast<Scene **>(lua_newuserdatauv(state, sizeof(Scene *), 0));
+            *sceneRef2 = scene;
+            lua_pushcclosure(state, IgniteFindEntityByName, 1); lua_setfield(state, -2, "FindEntityByName");
+
+            // Input sub-table
+            lua_newtable(state);
+            lua_pushcfunction(state, LuaInputIsKeyPressed); lua_setfield(state, -2, "IsKeyPressed");
+            lua_pushcfunction(state, LuaInputIsMouseButtonPressed); lua_setfield(state, -2, "IsMouseButtonPressed");
+            lua_pushcfunction(state, LuaInputIsActionPressed); lua_setfield(state, -2, "IsActionPressed");
+            lua_pushcfunction(state, LuaInputGetMousePosition); lua_setfield(state, -2, "GetMousePosition");
+            lua_setfield(state, -2, "Input");
+
             lua_setglobal(state, "Ignite");
         }
     }
@@ -306,6 +469,12 @@ namespace ignite
 
     LuaScriptRuntime::~LuaScriptRuntime()
     {
+        for (auto &[path, token] : m_WatchedFiles)
+        {
+            FileWatcher::Unwatch(token);
+        }
+        m_WatchedFiles.clear();
+
         if (m_State)
         {
             for (auto &[id, instance] : m_Instances)
@@ -315,6 +484,7 @@ namespace ignite
                 luaL_unref(m_State, LUA_REGISTRYINDEX, instance.environmentRef);
             }
             lua_close(m_State);
+            m_State = nullptr;
         }
     }
 
@@ -325,11 +495,63 @@ namespace ignite
         return project ? (project->GetDirectory() / path).lexically_normal() : path;
     }
 
-    void LuaScriptRuntime::CreateInstance(UUID entityId, const std::filesystem::path &scriptPath)
+    void LuaScriptRuntime::WatchScriptFile(const std::filesystem::path &absolutePath)
+    {
+        if (absolutePath.empty() || m_WatchedFiles.contains(absolutePath))
+            return;
+
+        if (std::filesystem::exists(absolutePath))
+        {
+            FileWatchToken token = FileWatcher::WatchFile(absolutePath, [this, absolutePath](const FileChangeEvent &event)
+            {
+                if (event.type != FileChangeType::Removed)
+                {
+                    std::lock_guard<std::mutex> lock(m_ReloadMutex);
+                    m_PendingReloads.insert(absolutePath);
+                }
+            });
+
+            if (token != kInvalidFileWatchToken)
+            {
+                m_WatchedFiles[absolutePath] = token;
+            }
+        }
+    }
+
+    void LuaScriptRuntime::UnwatchUnusedFiles()
+    {
+        std::vector<std::filesystem::path> unused;
+        for (const auto &[watchedPath, token] : m_WatchedFiles)
+        {
+            bool inUse = false;
+            for (const auto &[id, instance] : m_Instances)
+            {
+                if (ResolvePath(instance.path) == watchedPath)
+                {
+                    inUse = true;
+                    break;
+                }
+            }
+            if (!inUse)
+            {
+                unused.push_back(watchedPath);
+            }
+        }
+
+        for (const auto &path : unused)
+        {
+            FileWatcher::Unwatch(m_WatchedFiles[path]);
+            m_WatchedFiles.erase(path);
+        }
+    }
+
+    void LuaScriptRuntime::CreateInstance(UUID entityId, const std::filesystem::path &scriptPath, AssetHandle scriptHandle)
     {
         if (!m_State || !m_Scene || scriptPath.empty()) return;
         DestroyInstance(entityId);
+
         Instance instance;
+        instance.handle = scriptHandle;
         instance.path = scriptPath;
         const std::filesystem::path absolutePath = ResolvePath(scriptPath);
         const int baseTop = lua_gettop(m_State);
@@ -372,10 +594,105 @@ namespace ignite
         }
         instance.callbacksRef = luaL_ref(m_State, LUA_REGISTRYINDEX);
         lua_settop(m_State, baseTop);
+
         m_Instances.emplace(entityId, instance);
+
+        // Register file watch
+        WatchScriptFile(absolutePath);
+
         auto it = m_Instances.find(entityId);
         if (!Invoke(entityId, it->second, "on_create", 0.0f, false))
             DestroyInstance(entityId);
+    }
+
+    bool LuaScriptRuntime::ReloadInstance(UUID entityId)
+    {
+        auto it = m_Instances.find(entityId);
+        if (it == m_Instances.end()) return false;
+        Instance &instance = it->second;
+
+        const std::filesystem::path absolutePath = ResolvePath(instance.path);
+        const int baseTop = lua_gettop(m_State);
+
+        if (luaL_loadfile(m_State, absolutePath.string().c_str()) != LUA_OK)
+        {
+            LOG_ERROR("[Lua] Hot reload failed loading '{}' for entity {}: {}",
+                      instance.path.generic_string(), static_cast<uint64_t>(entityId), LuaErrorMessage(m_State));
+            lua_settop(m_State, baseTop);
+            return false;
+        }
+
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, instance.environmentRef);
+        if (!lua_setupvalue(m_State, -2, 1))
+        {
+            LOG_ERROR("[Lua] Script '{}' has no environment upvalue during reload", instance.path.generic_string());
+            lua_settop(m_State, baseTop);
+            return false;
+        }
+
+        if (lua_pcall(m_State, 0, 1, 0) != LUA_OK)
+        {
+            LOG_ERROR("[Lua] Hot reload failed executing '{}' for entity {}: {}",
+                      instance.path.generic_string(), static_cast<uint64_t>(entityId), LuaErrorMessage(m_State));
+            lua_settop(m_State, baseTop);
+            return false;
+        }
+
+        if (!lua_istable(m_State, -1))
+        {
+            LOG_ERROR("[Lua] Reloaded script '{}' must return a callback table", instance.path.generic_string());
+            lua_settop(m_State, baseTop);
+            return false;
+        }
+
+        if (instance.callbacksRef != LUA_NOREF && instance.callbacksRef != LUA_REFNIL)
+        {
+            luaL_unref(m_State, LUA_REGISTRYINDEX, instance.callbacksRef);
+        }
+
+        instance.callbacksRef = luaL_ref(m_State, LUA_REGISTRYINDEX);
+        lua_settop(m_State, baseTop);
+
+        LOG_INFO("[Lua] Successfully reloaded script '{}' for entity {}",
+                 instance.path.generic_string(), static_cast<uint64_t>(entityId));
+
+        Invoke(entityId, instance, "on_reload", 0.0f, false);
+        return true;
+    }
+
+    void LuaScriptRuntime::ReloadScript(const std::filesystem::path &scriptPath)
+    {
+        const std::filesystem::path target = ResolvePath(scriptPath);
+        for (auto &[entityId, instance] : m_Instances)
+        {
+            if (ResolvePath(instance.path) == target)
+            {
+                ReloadInstance(entityId);
+            }
+        }
+    }
+
+    void LuaScriptRuntime::ProcessPendingReloads()
+    {
+        std::unordered_set<std::filesystem::path> toReload;
+        {
+            std::lock_guard<std::mutex> lock(m_ReloadMutex);
+            if (m_PendingReloads.empty())
+                return;
+            toReload = std::move(m_PendingReloads);
+            m_PendingReloads.clear();
+        }
+
+        for (const auto &path : toReload)
+        {
+            for (auto &[entityId, instance] : m_Instances)
+            {
+                if (ResolvePath(instance.path) == path)
+                {
+                    ReloadInstance(entityId);
+                }
+            }
+        }
     }
 
     bool LuaScriptRuntime::Invoke(UUID entityId, Instance &instance, const char *callback, float deltaTime, bool hasDeltaTime)
@@ -416,10 +733,13 @@ namespace ignite
             luaL_unref(m_State, LUA_REGISTRYINDEX, it->second.environmentRef);
         }
         m_Instances.erase(it);
+        UnwatchUnusedFiles();
     }
 
     void LuaScriptRuntime::Update(float deltaTime)
     {
+        ProcessPendingReloads();
+
         std::vector<UUID> failed;
         for (auto &[id, instance] : m_Instances)
         {

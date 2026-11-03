@@ -58,6 +58,7 @@ namespace ignite
         AnimatorController2D,
         Prefab,
         Terrain,
+        LuaScript,
     };
 }
 
@@ -102,6 +103,7 @@ typedef enum Ignite_AssetType
     Ignite_AssetType_AnimatorController2D,
     Ignite_AssetType_Prefab,
     Ignite_AssetType_Terrain,
+    Ignite_AssetType_LuaScript,
 } Ignite_AssetType;
 
 typedef Ignite_AssetType AssetType_RS;
@@ -226,6 +228,7 @@ namespace ignite
         { ".ac", AssetType::AnimatorController },
         { ".ac2d", AssetType::AnimatorController2D },
         { ".ter", AssetType::Terrain },
+        { ".lua", AssetType::LuaScript },
     };
 
     // Binary Extensions
@@ -256,6 +259,7 @@ namespace ignite
             case AssetType::AnimatorController: return ".ac";
             case AssetType::AnimatorController2D: return ".ac2d";
             case AssetType::Terrain: return ".ter";
+            case AssetType::LuaScript: return ".lua";
             default: return ".invalid";
         }
     }
