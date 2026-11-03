@@ -378,7 +378,7 @@ namespace ignite
                     }
                 });
 
-                if (m_ActiveScene)
+                if (m_ActiveScene && m_ActiveScene->IsRunning())
                 {
                     m_ActiveScene->OnFixedUpdateRuntimeSimulate();
                 }
@@ -390,6 +390,7 @@ namespace ignite
                 if (m_ServerReplication)
                 {
                     m_ServerReplication->BroadcastSnapshots();
+                    m_ServerReplication->BroadcastDirtyComponents();
                 }
             }
         }

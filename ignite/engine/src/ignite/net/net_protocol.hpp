@@ -16,6 +16,27 @@
 
 namespace ignite::netproto
 {
+#ifndef IGN_NET_COMP_FLAG
+#define IGN_NET_COMP_FLAG
+    enum NetCompFlag : uint32_t
+    {
+        NetComp_None                = 0,
+        NetComp_Transform           = 1 << 0,
+        NetComp_PointLight          = 1 << 1,
+        NetComp_DirectionalLight    = 1 << 2,
+        NetComp_SpotLight           = 1 << 3,
+        NetComp_Sprite2D            = 1 << 4,
+        NetComp_Circle2D            = 1 << 5,
+        NetComp_Text                = 1 << 6,
+        NetComp_StaticMesh          = 1 << 7,
+        NetComp_AudioSource         = 1 << 8,
+        NetComp_Rigidbody           = 1 << 9,
+        NetComp_Camera              = 1 << 10,
+        NetComp_CharacterController = 1 << 11,
+        NetComp_All                 = 0xFFFFFFFF
+    };
+#endif
+
     constexpr uint16_t PROTOCOL_VERSION = 1;
     constexpr uint32_t MAX_SNAPSHOT_ENTITIES = 4096;
 
@@ -33,6 +54,7 @@ namespace ignite::netproto
         Ping,       // C->S unreliable
         Pong,       // S->C unreliable
         Chat,       // both reliable
+        ComponentSync, // reliable: multi-component state sync
     };
 
     // -----------------------------------------------------------------
@@ -373,6 +395,295 @@ namespace ignite::netproto
             return true;
         }
     };
+
+    struct ComponentSyncMsg
+    {
+        uint64_t netId = 0;
+        uint32_t compMask = 0;
+
+        struct PointLightData
+        {
+            glm::vec4 color{ 1.0f };
+            float intensity = 1.0f;
+            float range = 10.0f;
+            float linearAttenuation = 0.09f;
+            float quadraticAttenuation = 0.032f;
+            bool enabled = true;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(color);
+                w.WriteRaw(intensity);
+                w.WriteRaw(range);
+                w.WriteRaw(linearAttenuation);
+                w.WriteRaw(quadraticAttenuation);
+                w.WriteRaw(enabled);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(color) && r.ReadRaw(intensity) && r.ReadRaw(range)
+                    && r.ReadRaw(linearAttenuation) && r.ReadRaw(quadraticAttenuation)
+                    && r.ReadRaw(enabled);
+            }
+        } pointLight;
+
+        struct DirectionalLightData
+        {
+            glm::vec4 color{ 1.0f };
+            float intensity = 0.5f;
+            bool cascadeShadow = true;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(color);
+                w.WriteRaw(intensity);
+                w.WriteRaw(cascadeShadow);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(color) && r.ReadRaw(intensity) && r.ReadRaw(cascadeShadow);
+            }
+        } dirLight;
+
+        struct SpotLightData
+        {
+            glm::vec4 color{ 1.0f };
+            float intensity = 1.0f;
+            float range = 10.0f;
+            float innerConeAngle = 12.5f;
+            float outerConeAngle = 45.0f;
+            bool enabled = true;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(color);
+                w.WriteRaw(intensity);
+                w.WriteRaw(range);
+                w.WriteRaw(innerConeAngle);
+                w.WriteRaw(outerConeAngle);
+                w.WriteRaw(enabled);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(color) && r.ReadRaw(intensity) && r.ReadRaw(range)
+                    && r.ReadRaw(innerConeAngle) && r.ReadRaw(outerConeAngle)
+                    && r.ReadRaw(enabled);
+            }
+        } spotLight;
+
+        struct Sprite2DData
+        {
+            glm::vec4 color{ 1.0f };
+            glm::vec2 tilingFactor{ 1.0f };
+            glm::vec2 uv0{ 0.0f, 1.0f };
+            glm::vec2 uv1{ 1.0f, 0.0f };
+            bool flipX = false;
+            bool flipY = false;
+            uint64_t materialHandle = 0;
+            uint64_t textureHandle = 0;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(color);
+                w.WriteRaw(tilingFactor);
+                w.WriteRaw(uv0);
+                w.WriteRaw(uv1);
+                w.WriteRaw(flipX);
+                w.WriteRaw(flipY);
+                w.WriteRaw(materialHandle);
+                w.WriteRaw(textureHandle);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(color) && r.ReadRaw(tilingFactor) && r.ReadRaw(uv0)
+                    && r.ReadRaw(uv1) && r.ReadRaw(flipX) && r.ReadRaw(flipY)
+                    && r.ReadRaw(materialHandle) && r.ReadRaw(textureHandle);
+            }
+        } sprite2D;
+
+        struct Circle2DData
+        {
+            glm::vec4 color{ 1.0f };
+            float thickness = 1.0f;
+            float fade = 0.005f;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(color);
+                w.WriteRaw(thickness);
+                w.WriteRaw(fade);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(color) && r.ReadRaw(thickness) && r.ReadRaw(fade);
+            }
+        } circle2D;
+
+        struct TextData
+        {
+            std::string text;
+            glm::vec4 color{ 1.0f };
+            float lineSpacing = -0.025f;
+            float kerning = 0.0f;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteString(text);
+                w.WriteRaw(color);
+                w.WriteRaw(lineSpacing);
+                w.WriteRaw(kerning);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadString(text) && r.ReadRaw(color)
+                    && r.ReadRaw(lineSpacing) && r.ReadRaw(kerning);
+            }
+        } textComp;
+
+        struct StaticMeshData
+        {
+            uint64_t meshHandle = 0;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(meshHandle);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(meshHandle);
+            }
+        } staticMesh;
+
+        struct AudioSourceData
+        {
+            uint64_t handle = 0;
+            float volume = 1.0f;
+            float pitch = 1.0f;
+            float pan = 0.0f;
+            bool loop = false;
+            bool playOnStart = false;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(handle);
+                w.WriteRaw(volume);
+                w.WriteRaw(pitch);
+                w.WriteRaw(pan);
+                w.WriteRaw(loop);
+                w.WriteRaw(playOnStart);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(handle) && r.ReadRaw(volume) && r.ReadRaw(pitch)
+                    && r.ReadRaw(pan) && r.ReadRaw(loop) && r.ReadRaw(playOnStart);
+            }
+        } audioSource;
+
+        struct RigidbodyData
+        {
+            glm::vec3 linearVelocity{ 0.0f };
+            glm::vec3 angularVelocity{ 0.0f };
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(linearVelocity);
+                w.WriteRaw(angularVelocity);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(linearVelocity) && r.ReadRaw(angularVelocity);
+            }
+        } rigidbody;
+
+        struct CameraData
+        {
+            bool primary = true;
+            bool isOrthographic = false;
+            float fov = 45.0f;
+            float orthographicSize = 10.0f;
+            float nearClip = 0.1f;
+            float farClip = 500.0f;
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(primary);
+                w.WriteRaw(isOrthographic);
+                w.WriteRaw(fov);
+                w.WriteRaw(orthographicSize);
+                w.WriteRaw(nearClip);
+                w.WriteRaw(farClip);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(primary) && r.ReadRaw(isOrthographic) && r.ReadRaw(fov)
+                    && r.ReadRaw(orthographicSize) && r.ReadRaw(nearClip) && r.ReadRaw(farClip);
+            }
+        } camera;
+
+        struct CharacterControllerData
+        {
+            glm::vec3 linearVelocity{ 0.0f };
+
+            void Write(net::StreamWriter &w) const
+            {
+                w.WriteRaw(linearVelocity);
+            }
+
+            bool Read(net::StreamReader &r)
+            {
+                return r.ReadRaw(linearVelocity);
+            }
+        } charController;
+
+        void Write(net::StreamWriter &w) const
+        {
+            w.WriteRaw(MsgType::ComponentSync);
+            w.WriteRaw(netId);
+            w.WriteRaw(compMask);
+
+            if (compMask & NetComp_PointLight)          pointLight.Write(w);
+            if (compMask & NetComp_DirectionalLight)    dirLight.Write(w);
+            if (compMask & NetComp_SpotLight)           spotLight.Write(w);
+            if (compMask & NetComp_Sprite2D)            sprite2D.Write(w);
+            if (compMask & NetComp_Circle2D)            circle2D.Write(w);
+            if (compMask & NetComp_Text)                textComp.Write(w);
+            if (compMask & NetComp_StaticMesh)          staticMesh.Write(w);
+            if (compMask & NetComp_AudioSource)         audioSource.Write(w);
+            if (compMask & NetComp_Rigidbody)           rigidbody.Write(w);
+            if (compMask & NetComp_Camera)              camera.Write(w);
+            if (compMask & NetComp_CharacterController) charController.Write(w);
+        }
+
+        bool Read(net::StreamReader &r)
+        {
+            if (!r.ReadRaw(netId) || !r.ReadRaw(compMask))
+                return false;
+
+            if (compMask & NetComp_PointLight)          { if (!pointLight.Read(r)) return false; }
+            if (compMask & NetComp_DirectionalLight)    { if (!dirLight.Read(r)) return false; }
+            if (compMask & NetComp_SpotLight)           { if (!spotLight.Read(r)) return false; }
+            if (compMask & NetComp_Sprite2D)            { if (!sprite2D.Read(r)) return false; }
+            if (compMask & NetComp_Circle2D)            { if (!circle2D.Read(r)) return false; }
+            if (compMask & NetComp_Text)                { if (!textComp.Read(r)) return false; }
+            if (compMask & NetComp_StaticMesh)          { if (!staticMesh.Read(r)) return false; }
+            if (compMask & NetComp_AudioSource)         { if (!audioSource.Read(r)) return false; }
+            if (compMask & NetComp_Rigidbody)           { if (!rigidbody.Read(r)) return false; }
+            if (compMask & NetComp_Camera)              { if (!camera.Read(r)) return false; }
+            if (compMask & NetComp_CharacterController) { if (!charController.Read(r)) return false; }
+            return true;
+        }
+    };
+
 
     struct PingMsg
     {

@@ -23,6 +23,11 @@ namespace ignite::physics
     class Physics3D;
 }
 
+namespace ignite::netproto
+{
+    struct ComponentSyncMsg;
+}
+
 namespace ignite
 {
     class LuaScriptRuntime;
@@ -86,6 +91,11 @@ namespace ignite
         Entity FindEntityByNetId(uint64_t netId);
         void RegisterNetEntity(uint64_t netId, Entity entity);
         void UnregisterNetEntity(uint64_t netId);
+
+        // Network Component Synchronization
+        void SerializeEntityComponents(Entity entity, uint32_t compMask, netproto::ComponentSyncMsg &outMsg) const;
+        void ApplyEntityComponentSync(Entity entity, const netproto::ComponentSyncMsg &msg);
+        uint32_t GetAvailableComponentMask(Entity entity) const;
 
         template<typename T>
         void OnComponentAdded(Entity entity, T &comp);

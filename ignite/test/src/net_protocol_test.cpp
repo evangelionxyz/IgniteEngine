@@ -384,3 +384,145 @@ TEST(NetProtocol, HostileBufferOverrunDefense)
     }
 }
 
+
+TEST(NetProtocol, ComponentSyncMsgSerializationRoundtrip)
+{
+    uint8_t storage[4096];
+    net::Buffer buf(storage, sizeof(storage));
+
+    // Full mask roundtrip
+    {
+        netproto::ComponentSyncMsg inMsg;
+        inMsg.netId = 7777;
+        inMsg.compMask = netproto::NetComp_All;
+
+        inMsg.pointLight.color = glm::vec4(1.0f, 0.5f, 0.2f, 1.0f);
+        inMsg.pointLight.intensity = 4.5f;
+        inMsg.pointLight.range = 25.0f;
+        inMsg.pointLight.linearAttenuation = 0.05f;
+        inMsg.pointLight.quadraticAttenuation = 0.01f;
+        inMsg.pointLight.enabled = true;
+
+        inMsg.dirLight.color = glm::vec4(0.9f, 0.9f, 1.0f, 1.0f);
+        inMsg.dirLight.intensity = 2.0f;
+        inMsg.dirLight.cascadeShadow = false;
+
+        inMsg.spotLight.color = glm::vec4(0.1f, 0.8f, 0.3f, 1.0f);
+        inMsg.spotLight.intensity = 3.0f;
+        inMsg.spotLight.range = 15.0f;
+        inMsg.spotLight.innerConeAngle = 10.0f;
+        inMsg.spotLight.outerConeAngle = 35.0f;
+        inMsg.spotLight.enabled = true;
+
+        inMsg.sprite2D.color = glm::vec4(0.8f, 0.2f, 0.4f, 1.0f);
+        inMsg.sprite2D.tilingFactor = glm::vec2(2.0f, 3.0f);
+        inMsg.sprite2D.uv0 = glm::vec2(0.0f, 1.0f);
+        inMsg.sprite2D.uv1 = glm::vec2(1.0f, 0.0f);
+        inMsg.sprite2D.flipX = true;
+        inMsg.sprite2D.flipY = false;
+        inMsg.sprite2D.materialHandle = 12345678;
+        inMsg.sprite2D.textureHandle = 87654321;
+
+        inMsg.circle2D.color = glm::vec4(0.2f, 0.4f, 0.9f, 1.0f);
+        inMsg.circle2D.thickness = 0.8f;
+        inMsg.circle2D.fade = 0.01f;
+
+        inMsg.textComp.text = "Hello Live Edit Networking!";
+        inMsg.textComp.color = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+        inMsg.textComp.lineSpacing = 1.2f;
+        inMsg.textComp.kerning = 0.5f;
+
+        inMsg.staticMesh.meshHandle = 11112222;
+
+        inMsg.audioSource.handle = 55556666;
+        inMsg.audioSource.volume = 0.75f;
+        inMsg.audioSource.pitch = 1.1f;
+        inMsg.audioSource.pan = 0.0f;
+        inMsg.audioSource.loop = true;
+        inMsg.audioSource.playOnStart = false;
+
+        inMsg.rigidbody.linearVelocity = glm::vec3(1.0f, 2.0f, 3.0f);
+        inMsg.rigidbody.angularVelocity = glm::vec3(0.1f, 0.2f, 0.3f);
+
+        inMsg.camera.primary = true;
+        inMsg.camera.isOrthographic = false;
+        inMsg.camera.fov = 65.0f;
+        inMsg.camera.orthographicSize = 12.0f;
+        inMsg.camera.nearClip = 0.2f;
+        inMsg.camera.farClip = 2000.0f;
+
+        inMsg.charController.linearVelocity = glm::vec3(4.0f, 0.0f, -4.0f);
+
+        net::BufferStreamWriter writer(buf);
+        inMsg.Write(writer);
+
+        net::BufferStreamReader reader(buf);
+        EXPECT_EQ(netproto::ReadMsgType(reader), netproto::MsgType::ComponentSync);
+
+        netproto::ComponentSyncMsg outMsg;
+        ASSERT_TRUE(outMsg.Read(reader));
+
+        EXPECT_EQ(outMsg.netId, inMsg.netId);
+        EXPECT_EQ(outMsg.compMask, inMsg.compMask);
+
+        EXPECT_EQ(outMsg.pointLight.color, inMsg.pointLight.color);
+        EXPECT_FLOAT_EQ(outMsg.pointLight.intensity, inMsg.pointLight.intensity);
+        EXPECT_FLOAT_EQ(outMsg.pointLight.range, inMsg.pointLight.range);
+        EXPECT_EQ(outMsg.pointLight.enabled, inMsg.pointLight.enabled);
+
+        EXPECT_EQ(outMsg.dirLight.color, inMsg.dirLight.color);
+        EXPECT_FLOAT_EQ(outMsg.dirLight.intensity, inMsg.dirLight.intensity);
+        EXPECT_EQ(outMsg.dirLight.cascadeShadow, inMsg.dirLight.cascadeShadow);
+
+        EXPECT_EQ(outMsg.spotLight.color, inMsg.spotLight.color);
+        EXPECT_FLOAT_EQ(outMsg.spotLight.range, inMsg.spotLight.range);
+
+        EXPECT_EQ(outMsg.sprite2D.color, inMsg.sprite2D.color);
+        EXPECT_EQ(outMsg.sprite2D.tilingFactor, inMsg.sprite2D.tilingFactor);
+        EXPECT_EQ(outMsg.sprite2D.flipX, inMsg.sprite2D.flipX);
+        EXPECT_EQ(outMsg.sprite2D.materialHandle, inMsg.sprite2D.materialHandle);
+        EXPECT_EQ(outMsg.sprite2D.textureHandle, inMsg.sprite2D.textureHandle);
+
+        EXPECT_EQ(outMsg.circle2D.color, inMsg.circle2D.color);
+        EXPECT_FLOAT_EQ(outMsg.circle2D.thickness, inMsg.circle2D.thickness);
+
+        EXPECT_EQ(outMsg.textComp.text, inMsg.textComp.text);
+        EXPECT_EQ(outMsg.textComp.color, inMsg.textComp.color);
+        EXPECT_FLOAT_EQ(outMsg.textComp.lineSpacing, inMsg.textComp.lineSpacing);
+
+        EXPECT_EQ(outMsg.staticMesh.meshHandle, inMsg.staticMesh.meshHandle);
+        EXPECT_EQ(outMsg.audioSource.handle, inMsg.audioSource.handle);
+        EXPECT_FLOAT_EQ(outMsg.audioSource.volume, inMsg.audioSource.volume);
+
+        EXPECT_EQ(outMsg.rigidbody.linearVelocity, inMsg.rigidbody.linearVelocity);
+
+        EXPECT_FLOAT_EQ(outMsg.camera.fov, inMsg.camera.fov);
+        EXPECT_EQ(outMsg.charController.linearVelocity, inMsg.charController.linearVelocity);
+    }
+
+    // Partial mask roundtrip
+    {
+        netproto::ComponentSyncMsg inMsg;
+        inMsg.netId = 8888;
+        inMsg.compMask = netproto::NetComp_PointLight | netproto::NetComp_Text;
+
+        inMsg.pointLight.color = glm::vec4(0.2f, 0.3f, 0.4f, 1.0f);
+        inMsg.pointLight.intensity = 7.0f;
+        inMsg.textComp.text = "Partial Mask Only";
+
+        net::BufferStreamWriter writer(buf);
+        inMsg.Write(writer);
+
+        net::BufferStreamReader reader(buf);
+        EXPECT_EQ(netproto::ReadMsgType(reader), netproto::MsgType::ComponentSync);
+
+        netproto::ComponentSyncMsg outMsg;
+        ASSERT_TRUE(outMsg.Read(reader));
+
+        EXPECT_EQ(outMsg.netId, inMsg.netId);
+        EXPECT_EQ(outMsg.compMask, inMsg.compMask);
+        EXPECT_EQ(outMsg.pointLight.color, inMsg.pointLight.color);
+        EXPECT_FLOAT_EQ(outMsg.pointLight.intensity, inMsg.pointLight.intensity);
+        EXPECT_EQ(outMsg.textComp.text, inMsg.textComp.text);
+    }
+}

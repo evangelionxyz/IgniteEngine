@@ -482,24 +482,28 @@ namespace ignite
         const auto &acquireSemaphore = m_AcquireSemaphores[m_CurrentFrame];
 
         vk::Result res;
-        for (int attempt = 0; attempt < 3; ++attempt)
+        if (m_SwapChain)
         {
-            res = m_VulkanDevice.acquireNextImageKHR(
-                m_SwapChain,
-                std::numeric_limits<uint64_t>::max(),
-                acquireSemaphore,
-                vk::Fence(),
-                &m_SwapChainIndex);
-
-            if (res == vk::Result::eErrorOutOfDateKHR)
+            for (int attempt = 0; attempt < 3; ++attempt)
             {
-                ResizeSwapChain();
-                return false;
-            }
+                res = m_VulkanDevice.acquireNextImageKHR(
+                    m_SwapChain,
+                    std::numeric_limits<uint64_t>::max(),
+                    acquireSemaphore,
+                    vk::Fence(),
+                    &m_SwapChainIndex);
 
-            if (res == vk::Result::eSuccess || res == vk::Result::eSuboptimalKHR)
-                break;
+                if (res == vk::Result::eErrorOutOfDateKHR)
+                {
+                    ResizeSwapChain();
+                    return false;
+                }
+
+                if (res == vk::Result::eSuccess || res == vk::Result::eSuboptimalKHR)
+                    break;
+            }
         }
+        
 
         if (res == vk::Result::eSuccess || res == vk::Result::eSuboptimalKHR)
         {
@@ -514,6 +518,7 @@ namespace ignite
                 std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
                 vk::Result submitRes = m_GraphicsQueue.submit(1, &submitInfo, vk::Fence()); (void)submitRes;
             }
+
             return true;
         }
 

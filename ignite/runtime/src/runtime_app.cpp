@@ -12,7 +12,7 @@ public:
     explicit RuntimeApp(const ignite::ApplicationCreateInfo &createInfo)
         : Application(createInfo)
     {
-        PushLayer(new ignite::RuntimeLayer("Ignite Runtime Layer"));
+        PushLayer(new ignite::RuntimeLayer("Ignite Runtime Layer", createInfo.cmdLineArgs));
     }
 };
 
@@ -29,8 +29,16 @@ namespace ignite
         createInfo.name = "Ignite Runtime";
         createInfo.width = 1640;
         createInfo.height = 940;
-        createInfo.useGui = false;
+        createInfo.useGui = true;
         createInfo.maximized = true;
+
+        for (int i = 1; i < args.count; i++)
+        {
+            if (std::string_view(args[i]) == "--nogui")
+            {
+                createInfo.useGui = false;
+            }
+        }
 
         // vulkan by default
         createInfo.graphicsApi = nri::GraphicsAPI::VK;

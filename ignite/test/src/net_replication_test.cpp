@@ -140,3 +140,137 @@ TEST(NetReplication, EntityDespawnAndSceneCleanup)
     server.Stop();
 }
 
+
+TEST(NetReplication, EntityComponentSyncApplyAndExtract)
+{
+    Scene scene;
+    Entity entity = SceneManager::CreateEntity(&scene, "TestMultiCompEntity", EntityType_Node);
+    entity.AddComponent<NetworkIdentityComponent>(5001, 0, false);
+
+    // Apply ComponentSyncMsg to dynamically add and configure components
+    netproto::ComponentSyncMsg syncMsg;
+    syncMsg.netId = 5001;
+    syncMsg.compMask = NetComp_PointLight | NetComp_Sprite2D | NetComp_Text;
+
+    syncMsg.pointLight.color = glm::vec4(0.1f, 0.7f, 0.9f, 1.0f);
+    syncMsg.pointLight.intensity = 5.0f;
+    syncMsg.pointLight.range = 18.0f;
+
+    syncMsg.sprite2D.color = glm::vec4(1.0f, 0.0f, 0.5f, 1.0f);
+    syncMsg.sprite2D.flipX = true;
+
+    syncMsg.textComp.text = "Sync Extracted Test";
+
+    scene.ApplyEntityComponentSync(entity, syncMsg);
+
+    // Verify entity received components
+    ASSERT_TRUE(entity.HasComponent<PointLightComponent>());
+    ASSERT_TRUE(entity.HasComponent<Sprite2DComponent>());
+    ASSERT_TRUE(entity.HasComponent<TextComponent>());
+
+    const auto &plc = entity.GetComponent<PointLightComponent>();
+    EXPECT_EQ(plc.color, syncMsg.pointLight.color);
+    EXPECT_FLOAT_EQ(plc.intensity, syncMsg.pointLight.intensity);
+    EXPECT_FLOAT_EQ(plc.range, syncMsg.pointLight.range);
+
+    const auto &sc = entity.GetComponent<Sprite2DComponent>();
+    EXPECT_EQ(sc.color, syncMsg.sprite2D.color);
+    EXPECT_TRUE(sc.flipX);
+
+    const auto &tc = entity.GetComponent<TextComponent>();
+    EXPECT_EQ(tc.text, "Sync Extracted Test");
+
+    // Now serialize entity components and verify roundtrip extraction
+    netproto::ComponentSyncMsg extractedMsg;
+    scene.SerializeEntityComponents(entity, NetComp_All, extractedMsg);
+
+    EXPECT_EQ(extractedMsg.netId, 5001u);
+    EXPECT_TRUE((extractedMsg.compMask & NetComp_PointLight) != 0);
+    EXPECT_TRUE((extractedMsg.compMask & NetComp_Sprite2D) != 0);
+    EXPECT_TRUE((extractedMsg.compMask & NetComp_Text) != 0);
+    EXPECT_EQ(extractedMsg.pointLight.color, syncMsg.pointLight.color);
+    EXPECT_EQ(extractedMsg.textComp.text, syncMsg.textComp.text);
+}
+
+TEST(NetReplication, LiveEditDirtyComponentBroadcast)
+{
+    NetServerSystem::Config cfg;
+    cfg.port = 8213;
+    NetServerSystem server(cfg);
+    ASSERT_TRUE(server.Start());
+
+    Scene serverScene;
+    NetServerReplication serverRep(&serverScene, &server);
+    server.SetClientJoinedCallback([&](NetServerSystem::RemoteClient &c) {
+        serverRep.SyncWorldToClient(c.clientId);
+    });
+
+    Entity e = serverRep.SpawnEntity("LiveLight", glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(e.IsValid());
+    uint64_t netId = e.GetComponent<NetworkIdentityComponent>().netId;
+
+    e.AddComponent<PointLightComponent>();
+    auto &plc = e.GetComponent<PointLightComponent>();
+    plc.color = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
+    plc.intensity = 10.0f;
+
+    auto &netComp = e.GetComponent<NetworkIdentityComponent>();
+    netComp.MarkDirty(NetComp_PointLight);
+    EXPECT_TRUE(netComp.IsDirty(NetComp_PointLight));
+
+    // Client setup
+    NetClientSystem client;
+    Scene clientScene;
+    NetClientReplication clientRep(&clientScene, &client);
+
+    bool connected = false;
+    client.onConnected = [&]() { connected = true; };
+    client.Connect("127.0.0.1:8213", "LiveEditTester");
+
+    // Pump events to complete connection and late-joiner sync
+    for (int i = 0; i < 30 && !connected; i++)
+    {
+        server.Tick();
+        client.Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(connected);
+
+    // Give server time to send SpawnMsg + ComponentSyncMsg
+    for (int i = 0; i < 20; i++)
+    {
+        server.Tick();
+        client.Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    // Verify entity was spawned on client with initial component state
+    Entity clientEnt = clientScene.FindEntityByNetId(netId);
+    ASSERT_TRUE(clientEnt.IsValid());
+    ASSERT_TRUE(clientEnt.HasComponent<PointLightComponent>());
+    EXPECT_EQ(clientEnt.GetComponent<PointLightComponent>().color, glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
+
+    // Live Edit: modify light color to Cyan on server
+    plc.color = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f); // Cyan
+    plc.intensity = 20.0f;
+    netComp.MarkDirty(NetComp_PointLight);
+
+    // Server broadcasts dirty components
+    serverRep.BroadcastDirtyComponents();
+    EXPECT_FALSE(netComp.IsDirty(NetComp_PointLight)); // Dirty cleared
+
+    // Client receives update
+    for (int i = 0; i < 20; i++)
+    {
+        server.Tick();
+        client.Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    // Verify client received the live-edited color without respawning!
+    EXPECT_EQ(clientEnt.GetComponent<PointLightComponent>().color, glm::vec4(0.0f, 1.0f, 1.0f, 1.0f));
+    EXPECT_FLOAT_EQ(clientEnt.GetComponent<PointLightComponent>().intensity, 20.0f);
+
+    client.Disconnect();
+    server.Stop();
+}
