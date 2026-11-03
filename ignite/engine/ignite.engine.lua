@@ -205,14 +205,20 @@ project "Ignite.Engine"
         linkoptions {
             "-Wl,-rpath,'$$ORIGIN'",
             "-Wl,-rpath-link,'%{LibraryDir.VULKAN_SDK}'",
-            "-Wl,-rpath-link,'%{cfg.targetdir}'"
+            "-Wl,-rpath-link,'%{cfg.targetdir}'",
+            "-Wl,--no-as-needed",
+            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so",
+            "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23",
+            "-Wl,--as-needed"
         }
         postbuildcommands {
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14", "%{cfg.targetdir}"),
             copy_file("%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13", "%{cfg.targetdir}"),
             'cp -u "%{THIRDPARTY_DIR}/SDL3/build-linux/libSDL3.so"* "%{cfg.targetdir}"',
-            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true'
+            'cp -u "%{LibraryDir.VULKAN_SDK}/libdxcompiler.so"* "%{cfg.targetdir}" 2>/dev/null || true',
+            'cp -u "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libGameNetworkingSockets.so" "%{cfg.targetdir}"',
+            'cp -u "%{THIRDPARTY_DIR}/Ignite-Server/ThirdParty/GameNetworkingSockets/lib/Linux/libprotobuf.so.23" "%{cfg.targetdir}"'
         }
 
     --windows

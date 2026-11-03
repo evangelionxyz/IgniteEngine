@@ -863,6 +863,7 @@ namespace ignite
             {
                 const auto &comp = entity.GetComponent<LuaScriptComponent>();
                 sr.BeginMap("LuaScript");
+                sr.AddKeyValue("ScriptHandle", static_cast<uint64_t>(comp.scriptHandle));
                 sr.AddKeyValue("ScriptPath", comp.scriptPath.generic_string());
                 sr.EndMap();
             }
@@ -1534,6 +1535,7 @@ namespace ignite
         if (JsonNode node = entityNode["LuaScript"])
         {
             auto &comp = desEntity.AddComponent<LuaScriptComponent>();
+            if (auto h = node["ScriptHandle"]) comp.scriptHandle = AssetHandle(h.as<uint64_t>());
             if (auto path = node["ScriptPath"]) comp.scriptPath = path.as<std::string>();
         }
 

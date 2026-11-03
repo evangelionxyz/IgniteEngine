@@ -53,6 +53,25 @@ public class {CLASS_NAME} : Entity
 }
 )";
 
+    static std::string s_LuaScriptTemplate =
+R"(-- Ignite Lua Script: {SCRIPT_NAME}
+local script = {}
+
+function script.on_create(entity)
+end
+
+function script.on_update(entity, delta_time)
+end
+
+function script.on_fixed_update(entity)
+end
+
+function script.on_destroy(entity)
+end
+
+return script
+)";
+
     static std::string s_SlnxTemplate =
 R"(<Solution Description="Visual Studio slnx" Version="1.4">
   <Configurations>
@@ -765,6 +784,25 @@ R"(<Project>
         out.close();
 
         RegenerateCSharpProject();
+    }
+
+    void Project::CreateLuaScript(const std::filesystem::path &filepath)
+    {
+        if (std::filesystem::exists(filepath))
+            return;
+
+        std::string scriptTemplate = s_LuaScriptTemplate;
+        std::string scriptName = filepath.stem().string();
+        stringutils::ReplaceWith(scriptTemplate, "{SCRIPT_NAME}", scriptName);
+
+        std::ofstream out(filepath, std::ios::out);
+        out << scriptTemplate;
+        out.close();
+
+        if (auto *assetManager = AssetManager::GetInstance())
+        {
+            assetManager->ImportAsset(filepath);
+        }
     }
 
     void Project::CreateScriptableObject(const std::string &className, const std::string &fileName, const std::filesystem::path &targetDirectory)

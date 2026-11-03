@@ -40,6 +40,7 @@ pub enum AssetType {
     AnimatorController2D,
     Prefab,
     Terrain,
+    LuaScript,
 }
 
 impl AssetType {
@@ -79,6 +80,7 @@ impl AssetType {
             AssetType::AnimatorController2D => "AnimatorController2D",
             AssetType::Prefab => "Prefab",
             AssetType::Terrain => "Terrain",
+            AssetType::LuaScript => "LuaScript",
         }
     }
 
@@ -117,6 +119,7 @@ impl AssetType {
             "AnimatorController2D" => AssetType::AnimatorController2D,
             "Prefab" => AssetType::Prefab,
             "Terrain" => AssetType::Terrain,
+            "LuaScript" => AssetType::LuaScript,
             _ => AssetType::Invalid,
         }
     }

@@ -882,6 +882,7 @@ namespace ignite
     class LuaScriptComponent : public IComponent
     {
     public:
+        AssetHandle scriptHandle = AssetHandle(0);
         std::filesystem::path scriptPath;
 
         LuaScriptComponent() = default;

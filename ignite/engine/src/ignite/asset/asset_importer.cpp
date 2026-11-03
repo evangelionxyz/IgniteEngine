@@ -38,6 +38,7 @@
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/graphics/font.hpp"
 #include "ignite/scripting/scriptable_object.hpp"
+#include "ignite/scripting/lua_script.hpp"
 
 namespace ignite
 {
@@ -69,21 +70,22 @@ namespace ignite
         { AssetType::Animation2D, AssetImporter::ImportAnimation2D },
         { AssetType::AnimatorController2D, AssetImporter::ImportAnimatorController2D },
         { AssetType::ScriptableObject, AssetImporter::ImportScriptableObject },
+        { AssetType::LuaScript, AssetImporter::ImportLuaScript },
         { AssetType::Terrain, AssetImporter::ImportTerrain },
     };
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
         // should be always importing with full filepath
-		if (auto project = assetManager->LockActiveProject())
-		{
-			AssetMetaData metadataCopy = metadata;
-			metadataCopy.filepath = project->GetProjectFilepath(metadata.filepath);
-			if (s_ImportFunctions.contains(metadataCopy.type))
-			{
-				return s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy, assetManager);
-			}
-		}
+        if (auto project = assetManager->LockActiveProject())
+        {
+            AssetMetaData metadataCopy = metadata;
+            metadataCopy.filepath = project->GetProjectFilepath(metadata.filepath);
+            if (s_ImportFunctions.contains(metadataCopy.type))
+            {
+                return s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy, assetManager);
+            }
+        }
         
         return nullptr;
     }
@@ -112,7 +114,7 @@ namespace ignite
         if (!assetManager)
             return nullptr;
 
-		auto project = assetManager->LockActiveProject();
+        auto project = assetManager->LockActiveProject();
         if (!project)
             return nullptr;
 
@@ -204,7 +206,7 @@ namespace ignite
         if (asset)
         {
             asset->handle = handle;
-			asset->SetSkeletonAssetHandle(asset->GetSkeletonAssetHandle());
+            asset->SetSkeletonAssetHandle(asset->GetSkeletonAssetHandle());
             asset->SetReadyFlag(true);
         }
         return asset;
@@ -234,7 +236,7 @@ namespace ignite
         const auto animationBinExt = GetAssetExtensionFromType(AssetType::SkeletalAnimation);
         const auto materialBinExt = GetAssetExtensionFromType(AssetType::Material);
 
-		auto project = assetManager->LockActiveProject();
+        auto project = assetManager->LockActiveProject();
         if (!project)
             return nullptr;
 
@@ -560,7 +562,7 @@ namespace ignite
         const auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
         const auto materialBinExt = GetAssetExtensionFromType(AssetType::Material);
 
-		auto project = assetManager->LockActiveProject();
+        auto project = assetManager->LockActiveProject();
         if (!project)
             return nullptr;
 
@@ -877,13 +879,31 @@ namespace ignite
         return so;
     }
 
+    Ref<LuaScript> AssetImporter::ImportLuaScript(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("[AssetImporter] LuaScript file does not exist: {}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        Ref<LuaScript> script = CreateRef<LuaScript>(metadata.filepath);
+        if (script)
+        {
+            script->handle = handle;
+            script->SetReadyFlag(true);
+            script->SetDirtyFlag(false);
+        }
+        return script;
+    }
+
     Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
         Ref<Scene> scene;
-		if (auto project = assetManager->LockActiveProject())
-		{
-			scene = SceneSerializer::Deserialize(metadata.filepath, project.get());
-		}
+        if (auto project = assetManager->LockActiveProject())
+        {
+            scene = SceneSerializer::Deserialize(metadata.filepath, project.get());
+        }
 
         if (scene)
         {
