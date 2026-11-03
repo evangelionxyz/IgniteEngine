@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 pub mod scene;
+pub mod project;
+
+pub use project::*;
 
 use serde::{Serialize, Deserialize};
 use ignite_asset::{AssetHandle, AssetType};

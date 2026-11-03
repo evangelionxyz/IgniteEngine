@@ -172,6 +172,13 @@ namespace ignite
                 onDespawn(msg);
             break;
         }
+        case netproto::MsgType::ComponentSync:
+        {
+            netproto::ComponentSyncMsg msg;
+            if (msg.Read(reader) && onComponentSync)
+                onComponentSync(msg);
+            break;
+        }
         case netproto::MsgType::Snapshot:
         {
             netproto::SnapshotMsg msg;

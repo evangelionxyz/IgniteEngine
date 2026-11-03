@@ -1448,7 +1448,7 @@ namespace ignite
                 m_CurrentProjectFilepath = filepath;
 
                 Application::SubmitToMainThread([this]()
-                {                       
+                {
                     OnOpenProject();
                 });
             }
@@ -1890,14 +1890,14 @@ namespace ignite
     void EditorLayer::UISettings()
     {
         if (m_State.networkWindow)
+        {
+            if (auto *net = NetworkManager::GetInstance())
             {
-                if (auto *net = NetworkManager::GetInstance())
-                {
-                    net->OnImGuiRender(&m_State.networkWindow);
-                }
+                net->OnImGuiRender(&m_State.networkWindow);
             }
+        }
 
-            if (m_ActiveScene && m_State.settingsWindow)
+        if (m_ActiveScene && m_State.settingsWindow)
         {
             ImGui::Begin("Settings", &m_State.settingsWindow);
 
@@ -2001,6 +2001,68 @@ namespace ignite
                                     ImGui::EndTable();
                                 }
                                 ImGui::TreePop();
+                            }
+                        }
+                    }
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Server"))
+                {
+                    if (auto assetManager = AssetManager::GetInstance())
+                    {
+                        if (auto project = assetManager->LockActiveProject())
+                        {
+                            auto &serverSettings = project->GetInfo().serverSettings;
+
+                            ImGui::Text("Server Configuration");
+                            ImGui::Spacing();
+
+                            int port = static_cast<int>(serverSettings.port);
+                            if (ImGui::InputInt("Port", &port))
+                            {
+                                serverSettings.port = static_cast<uint16_t>(std::clamp(port, 1024, 65535));
+                                project->SetDirtyFlag(true);
+                            }
+
+                            int tickRate = static_cast<int>(serverSettings.tickRate);
+                            if (ImGui::SliderInt("Tick Rate (Hz)", &tickRate, 10, 128))
+                            {
+                                serverSettings.tickRate = static_cast<uint16_t>(tickRate);
+                                project->SetDirtyFlag(true);
+                            }
+
+                            int snapshotRate = static_cast<int>(serverSettings.snapshotRate);
+                            if (ImGui::SliderInt("Snapshot Rate (Hz)", &snapshotRate, 5, 64))
+                            {
+                                serverSettings.snapshotRate = static_cast<uint16_t>(snapshotRate);
+                                project->SetDirtyFlag(true);
+                            }
+
+                            int maxClients = static_cast<int>(serverSettings.maxClients);
+                            if (ImGui::SliderInt("Max Clients", &maxClients, 1, 256))
+                            {
+                                serverSettings.maxClients = static_cast<uint32_t>(maxClients);
+                                project->SetDirtyFlag(true);
+                            }
+
+                            float handshakeTimeout = static_cast<float>(serverSettings.handshakeTimeoutSec);
+                            if (ImGui::DragFloat("Handshake Timeout (s)", &handshakeTimeout, 0.25f, 1.0f, 60.0f, "%.2f"))
+                            {
+                                serverSettings.handshakeTimeoutSec = static_cast<double>(handshakeTimeout);
+                                project->SetDirtyFlag(true);
+                            }
+
+                            float chatInterval = static_cast<float>(serverSettings.chatMinIntervalSec);
+                            if (ImGui::DragFloat("Chat Interval Limit (s)", &chatInterval, 0.05f, 0.0f, 5.0f, "%.2f"))
+                            {
+                                serverSettings.chatMinIntervalSec = static_cast<double>(chatInterval);
+                                project->SetDirtyFlag(true);
+                            }
+
+                            if (ImGui::Checkbox("Auto-Start Server on Load", &serverSettings.autoStart))
+                            {
+                                project->SetDirtyFlag(true);
                             }
                         }
                     }

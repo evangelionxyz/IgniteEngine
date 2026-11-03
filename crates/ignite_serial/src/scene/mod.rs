@@ -97,6 +97,8 @@ pub struct EntitySerial {
     pub widget_component: Option<WidgetComponentSerial>,
     #[serde(rename = "Script", skip_serializing_if = "Option::is_none", default)]
     pub script: Option<ScriptComponentSerial>,
+    #[serde(rename = "LuaScript", skip_serializing_if = "Option::is_none", default)]
+    pub lua_script: Option<LuaScriptComponentSerial>,
     #[serde(rename = "PrefabComponent", skip_serializing_if = "Option::is_none", default)]
     pub prefab: Option<PrefabComponentSerial>,
 

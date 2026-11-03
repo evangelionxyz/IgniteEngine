@@ -177,6 +177,60 @@ namespace ignite
             m_Server->SendTo(clientId, [&](net::StreamWriter &w) {
                 msg.Write(w);
             }, true);
+
+            // Synchronize attached components
+            netproto::ComponentSyncMsg compMsg;
+            m_Scene->SerializeEntityComponents(Entity{ e, m_Scene }, netComp.syncComponentsMask, compMsg);
+            if (compMsg.compMask != 0)
+            {
+                m_Server->SendTo(clientId, [&](net::StreamWriter &w) {
+                    compMsg.Write(w);
+                }, true);
+            }
+        }
+    }
+
+    void NetServerReplication::BroadcastDirtyComponents()
+    {
+        if (!m_Scene || !m_Server || m_Server->GetClientCount() == 0)
+            return;
+
+        auto view = m_Scene->registry->view<NetworkIdentityComponent>();
+        for (entt::entity e : view)
+        {
+            auto &netComp = view.get<NetworkIdentityComponent>(e);
+            if (!netComp.replicate || netComp.dirtyComponentsMask == 0)
+                continue;
+
+            netproto::ComponentSyncMsg compMsg;
+            m_Scene->SerializeEntityComponents(Entity{ e, m_Scene }, netComp.dirtyComponentsMask & netComp.syncComponentsMask, compMsg);
+            netComp.ClearDirty();
+
+            if (compMsg.compMask != 0)
+            {
+                m_Server->Broadcast([&](net::StreamWriter &w) {
+                    compMsg.Write(w);
+                }, true);
+            }
+        }
+    }
+
+    void NetServerReplication::BroadcastComponentSync(uint64_t netId, uint32_t compMask)
+    {
+        if (!m_Scene || !m_Server || m_Server->GetClientCount() == 0)
+            return;
+
+        Entity entity = m_Scene->FindEntityByNetId(netId);
+        if (!entity.IsValid())
+            return;
+
+        netproto::ComponentSyncMsg compMsg;
+        m_Scene->SerializeEntityComponents(entity, compMask, compMsg);
+        if (compMsg.compMask != 0)
+        {
+            m_Server->Broadcast([&](net::StreamWriter &w) {
+                compMsg.Write(w);
+            }, true);
         }
     }
 
@@ -243,6 +297,7 @@ namespace ignite
             m_Client->onSpawn = [this](const netproto::SpawnMsg &msg) { OnSpawn(msg); };
             m_Client->onDespawn = [this](const netproto::DespawnMsg &msg) { OnDespawn(msg); };
             m_Client->onSnapshot = [this](const netproto::SnapshotMsg &msg) { OnSnapshot(msg); };
+            m_Client->onComponentSync = [this](const netproto::ComponentSyncMsg &msg) { OnComponentSync(msg); };
         }
     }
 
@@ -343,6 +398,18 @@ namespace ignite
         }
 
         m_Interpolators.erase(msg.netId);
+    }
+
+    void NetClientReplication::OnComponentSync(const netproto::ComponentSyncMsg &msg)
+    {
+        if (!m_Scene)
+            return;
+
+        Entity entity = m_Scene->FindEntityByNetId(msg.netId);
+        if (entity.IsValid())
+        {
+            m_Scene->ApplyEntityComponentSync(entity, msg);
+        }
     }
 
     void NetClientReplication::OnSnapshot(const netproto::SnapshotMsg &msg)

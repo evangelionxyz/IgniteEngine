@@ -18,19 +18,51 @@
 #include <ignite/scene/component.hpp>
 
 #include <ignite/net/network_manager.hpp>
+#include <imgui.h>
 #include "runtime_layer.hpp"
 
 namespace ignite
 {
-    RuntimeLayer::RuntimeLayer(const std::string &name)
+    namespace
+    {
+        void BindSharedImGuiContext()
+        {
+            ImGuiContext *sharedContext = Application::GetImGuiContext();
+            LOG_ASSERT(sharedContext, "Engine ImGui context has not been created");
+
+            if (ImGui::GetCurrentContext() != sharedContext)
+            {
+                ImGui::SetCurrentContext(sharedContext);
+            }
+        }
+    }
+
+    RuntimeLayer::RuntimeLayer(const std::string &name, const ApplicationCommandLineArgs &args)
         : Layer(name)
     {
         auto *app = Application::GetInstance();
 
+        ParseCommandLineArgs(args);
+
         m_SceneRenderer = CreateRef<SceneRenderer>();
-        OpenProject("D:/Dev/IgniteProject/Hello/Hello.ixproj");
+        if (!m_InitialProjectPath.empty() && std::filesystem::exists(m_InitialProjectPath))
+        {
+            OpenProject(m_InitialProjectPath);
+        }
+        else if (std::filesystem::exists("D:/Dev/IgniteProject/Hello/Hello.ixproj"))
+        {
+            OpenProject("D:/Dev/IgniteProject/Hello/Hello.ixproj");
+        }
 
         app->GetWindow()->Show();
+
+        if (m_AutoConnect)
+        {
+            if (auto *net = NetworkManager::GetInstance())
+            {
+                net->Connect(m_HostAddress, static_cast<uint16_t>(m_HostPort), m_PlayerName);
+            }
+        }
     }
 
     RuntimeLayer::~RuntimeLayer()
@@ -39,6 +71,7 @@ namespace ignite
 
     void RuntimeLayer::OnAttach()
     {
+        BindSharedImGuiContext();
     }
 
     void RuntimeLayer::OnDetach()
@@ -200,7 +233,142 @@ namespace ignite
 
     void RuntimeLayer::OnEvent(Event &e)
     {
+        BindSharedImGuiContext();
+
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<FramebufferResizeEvent>(BIND_CLASS_EVENT_FN(RuntimeLayer::OnFramebufferResize));
+        dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(RuntimeLayer::OnKeyPressed));
+    }
+
+    bool RuntimeLayer::OnKeyPressed(const KeyPressedEvent &event)
+    {
+        if (event.GetKeyCode() == Key::F1 || event.GetKeyCode() == Key::GraveAccent)
+        {
+            m_ShowNetworkOverlay = !m_ShowNetworkOverlay;
+            return true;
+        }
+        return false;
+    }
+
+    void RuntimeLayer::ParseCommandLineArgs(const ApplicationCommandLineArgs &args)
+    {
+        for (int i = 1; i < args.count; i++)
+        {
+            std::string_view arg(args[i]);
+            if (arg == "--project" && i + 1 < args.count)
+            {
+                m_InitialProjectPath = args[++i];
+            }
+            else if (arg == "--connect" && i + 1 < args.count)
+            {
+                std::string connStr = args[++i];
+                auto colonPos = connStr.find(':');
+                if (colonPos != std::string::npos)
+                {
+                    strncpy(m_HostAddress, connStr.substr(0, colonPos).c_str(), sizeof(m_HostAddress) - 1);
+                    m_HostPort = std::stoi(connStr.substr(colonPos + 1));
+                }
+                else
+                {
+                    strncpy(m_HostAddress, connStr.c_str(), sizeof(m_HostAddress) - 1);
+                }
+                m_AutoConnect = true;
+            }
+            else if (arg == "--port" && i + 1 < args.count)
+            {
+                m_HostPort = std::stoi(args[++i]);
+            }
+            else if (arg == "--host" && i + 1 < args.count)
+            {
+                strncpy(m_HostAddress, args[++i], sizeof(m_HostAddress) - 1);
+            }
+        }
+    }
+
+    void RuntimeLayer::OnGuiRender()
+    {
+        BindSharedImGuiContext();
+
+        if (m_DiagnosticsOpen)
+        {
+            if (auto *net = NetworkManager::GetInstance())
+            {
+                net->OnImGuiRender(&m_DiagnosticsOpen);
+            }
+        }
+
+        if (!m_ShowNetworkOverlay)
+            return;
+
+        auto *net = NetworkManager::GetInstance();
+        const bool isConnected = net && net->IsConnected();
+        const bool isConnecting = net && net->IsConnecting();
+
+        ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(380.0f, 0.0f), ImGuiCond_FirstUseEver);
+
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse;
+        if (ImGui::Begin("Runtime Live-Edit & Network [F1 to toggle]", &m_ShowNetworkOverlay, windowFlags))
+        {
+            // Status banner
+            if (isConnected)
+            {
+                ImGui::TextColored(ImVec4(0.2f, 0.95f, 0.3f, 1.0f), "[CONNECTED] Live Edit Interop Active");
+                ImGui::Text("Client ID: %u | Server Tick: %u", net->GetClientId(), net->GetClientServerTick());
+                NetStats stats = net->GetStats();
+                ImGui::Text("RTT: %d ms | Loss: %.1f%%", stats.rttMs, stats.packetLossPercent);
+                ImGui::Text("Bandwidth: In: %.1f KB/s | Out: %.1f KB/s", stats.inKBytesPerSec, stats.outKBytesPerSec);
+            }
+            else if (isConnecting)
+            {
+                ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.2f, 1.0f), "[CONNECTING] Handshaking with Host...");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "[OFFLINE] Standalone Runtime");
+            }
+
+            ImGui::Separator();
+
+            // Host & Port Configuration
+            ImGui::BeginDisabled(isConnected || isConnecting);
+            ImGui::InputText("Host Address", m_HostAddress, sizeof(m_HostAddress));
+            ImGui::InputInt("Host Port", &m_HostPort);
+            ImGui::InputText("Player Name", m_PlayerName, sizeof(m_PlayerName));
+            ImGui::EndDisabled();
+
+            ImGui::Spacing();
+
+            if (!isConnected && !isConnecting)
+            {
+                if (ImGui::Button("Connect to Editor", ImVec2(160, 0)))
+                {
+                    if (net)
+                    {
+                        net->Connect(m_HostAddress, static_cast<uint16_t>(m_HostPort), m_PlayerName);
+                    }
+                }
+            }
+            else
+            {
+                if (ImGui::Button("Disconnect", ImVec2(120, 0)))
+                {
+                    if (net)
+                    {
+                        net->Disconnect();
+                    }
+                }
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Diagnostics", ImVec2(100, 0)))
+            {
+                m_DiagnosticsOpen = !m_DiagnosticsOpen;
+            }
+
+            ImGui::Separator();
+            ImGui::TextDisabled("Press F1 or ~ to toggle this overlay");
+        }
+        ImGui::End();
     }
 }

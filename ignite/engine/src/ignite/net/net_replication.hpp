@@ -41,6 +41,10 @@ namespace ignite
         // Build and broadcast authoritative entity transform snapshots to clients
         void BroadcastSnapshots();
 
+        // Broadcast dirty component updates to clients
+        void BroadcastDirtyComponents();
+        void BroadcastComponentSync(uint64_t netId, uint32_t compMask = NetComp_All);
+
         uint64_t GenerateNetId() { return m_NextNetId++; }
 
     private:
@@ -75,6 +79,7 @@ namespace ignite
         void OnSpawn(const netproto::SpawnMsg &msg);
         void OnDespawn(const netproto::DespawnMsg &msg);
         void OnSnapshot(const netproto::SnapshotMsg &msg);
+        void OnComponentSync(const netproto::ComponentSyncMsg &msg);
 
     private:
         Scene *m_Scene = nullptr;
