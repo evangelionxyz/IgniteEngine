@@ -14,7 +14,7 @@ fi
 echo "=== Detecting Package Manager ==="
 
 if command -v pacman &> /dev/null; then
-    echo "[Ignite] Arch Linux / Garuda detected! Installing packages via pacman..."
+    echo "[Ignite] Arch Linux Installing packages via pacman..."
     sudo pacman -S --needed --noconfirm \
         base-devel gcc clang lld cmake ninja pkgconf git make tar expect \
         python python-pip vulkan-headers vulkan-icd-loader \
@@ -50,16 +50,31 @@ else
 fi
 
 
-# Ensure Clang is the default compiler for CMake and build tools
-export CC=clang
-export CXX=clang++
-if [ -n "$GITHUB_ENV" ]; then
-    echo "CC=clang" >> "$GITHUB_ENV"
-    echo "CXX=clang++" >> "$GITHUB_ENV"
+# Ensure the newest Clang is the default compiler for CMake and build tools
+LLVM_BIN_DIR=$(find /usr/lib/llvm* -maxdepth 2 -name "clang++" 2>/dev/null | sort -V | tail -n 1 | xargs -r dirname)
+if [ -n "$LLVM_BIN_DIR" ]; then
+    echo "Configuring Clang from $LLVM_BIN_DIR..."
+    sudo ln -sf "$LLVM_BIN_DIR/clang" /usr/local/bin/clang
+    sudo ln -sf "$LLVM_BIN_DIR/clang++" /usr/local/bin/clang++
+    if [ -f "$LLVM_BIN_DIR/llvm-cov" ]; then
+        sudo ln -sf "$LLVM_BIN_DIR/llvm-cov" /usr/local/bin/llvm-cov
+        sudo ln -sf "$LLVM_BIN_DIR/llvm-profdata" /usr/local/bin/llvm-profdata
+    fi
+    export CC=/usr/local/bin/clang
+    export CXX=/usr/local/bin/clang++
+elif command -v clang &> /dev/null; then
+    export CC=$(command -v clang)
+    export CXX=$(command -v clang++)
 fi
+
+if [ -n "$GITHUB_ENV" ]; then
+    echo "CC=$CC" >> "$GITHUB_ENV"
+    echo "CXX=$CXX" >> "$GITHUB_ENV"
+fi
+
 if command -v update-alternatives &> /dev/null; then
-    sudo update-alternatives --set cc /usr/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
-    sudo update-alternatives --set c++ /usr/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+    sudo update-alternatives --set cc "$CC" 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc "$CC" 100 2>/dev/null || true
+    sudo update-alternatives --set c++ "$CXX" 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ "$CXX" 100 2>/dev/null || true
 fi
 
 # Ensure Autodesk FBX SDK dependency libxml2.so.2 is symlinked on modern Linux systems
