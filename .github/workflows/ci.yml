@@ -268,6 +268,9 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed             base-devel gcc clang lld cmake ninja pkgconf git make tar             python python-pip vulkan-headers vulkan-icd-loader             sdl3 wayland libxkbcommon libx11 libxext libxrandr libxcursor             libxfixes libxi libxss libxtst libdrm mesa alsa-lib             pulseaudio zlib fmt libxml2 openexr imath glib2 gdb zenity             dotnet-sdk shaderc spirv-tools spirv-cross rust
 
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory "*"
+
       - name: Run Generate Script
         run: |
           chmod +x gen.sh

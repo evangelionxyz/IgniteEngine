@@ -3,6 +3,9 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 export PAGER=cat
 
+# Configure git safe.directory for containerized builds
+git config --global --add safe.directory "*" 2>/dev/null || true
+
 # Fallback for container environments where sudo may not be installed
 if ! command -v sudo &> /dev/null; then
     sudo() { "$@"; }
