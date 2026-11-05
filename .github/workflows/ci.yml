@@ -217,6 +217,10 @@ jobs:
       fail-fast: false
       matrix:
         configuration: [Release]
+    env:
+      PREMAKE_VERSION: 5.0.0-beta8
+      CC: clang
+      CXX: clang++
     steps:
       - name: Install Git & Basic Tools in Arch Container
         run: |

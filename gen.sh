@@ -60,15 +60,22 @@ if [ -n "$LLVM_BIN_DIR" ]; then
         sudo ln -sf "$LLVM_BIN_DIR/llvm-cov" /usr/local/bin/llvm-cov
         sudo ln -sf "$LLVM_BIN_DIR/llvm-profdata" /usr/local/bin/llvm-profdata
     fi
+    export CC=/usr/local/bin/clang
+    export CXX=/usr/local/bin/clang++
+elif command -v clang &> /dev/null; then
+    export CC=$(command -v clang)
+    export CXX=$(command -v clang++)
 fi
-export CC=/usr/local/bin/clang
-export CXX=/usr/local/bin/clang++
+
 if [ -n "$GITHUB_ENV" ]; then
-    echo "CC=/usr/local/bin/clang" >> "$GITHUB_ENV"
-    echo "CXX=/usr/local/bin/clang++" >> "$GITHUB_ENV"
+    echo "CC=$CC" >> "$GITHUB_ENV"
+    echo "CXX=$CXX" >> "$GITHUB_ENV"
 fi
-sudo update-alternatives --set cc /usr/local/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/local/bin/clang 100
-sudo update-alternatives --set c++ /usr/local/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/local/bin/clang++ 100
+
+if command -v update-alternatives &> /dev/null; then
+    sudo update-alternatives --set cc "$CC" 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc "$CC" 100 2>/dev/null || true
+    sudo update-alternatives --set c++ "$CXX" 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ "$CXX" 100 2>/dev/null || true
+fi
 
 # Ensure Autodesk FBX SDK dependency libxml2.so.2 is symlinked on modern Linux systems
 if [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so ]; then
