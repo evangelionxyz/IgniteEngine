@@ -156,37 +156,51 @@ jobs:
           chmod +x gen.sh
           ./gen.sh
 
-      - name: Build Editor (Linux)
+      - name: Install LLVM coverage tools
+        if: matrix.configuration == 'Release'
+        run: sudo apt-get update && sudo apt-get install -y llvm
+
+      - name: Install Sonar build wrapper
+        if: matrix.configuration == 'Release'
+        uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v8
+
+      - name: Build Native Targets (Linux)
         run: |
           CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
-          make -j$(nproc) config=$CONFIG_LOWER Ignite.Editor
+          BUILD_COMMAND="make -j$(nproc) config=$CONFIG_LOWER Ignite.Editor Ignite.ScriptEngine Ignite.Test"
+          if [ "${{ matrix.configuration }}" = "Release" ]; then
+            build-wrapper-linux-x86-64 --out-dir build_wrapper_output_directory \
+              env CFLAGS="-fprofile-instr-generate -fcoverage-mapping" \
+              CXXFLAGS="-fprofile-instr-generate -fcoverage-mapping" \
+              LDFLAGS="-fprofile-instr-generate" \
+              bash -c "$BUILD_COMMAND"
+          else
+            bash -c "$BUILD_COMMAND"
+          fi
 
-      - name: Build ScriptEngine (Linux)
+      - name: Run Test Suite and Create Coverage Report
+        if: matrix.configuration == 'Release'
         run: |
-          CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
-          make -j$(nproc) config=$CONFIG_LOWER Ignite.ScriptEngine
-
-      - name: Build Test Suite (Linux)
-        run: |
-          CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
-          make -j$(nproc) config=$CONFIG_LOWER Ignite.Test
-
-  sonar:
-    name: Sonar-Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          LLVM_PROFILE_FILE="$PWD/coverage-%p.profraw" ./bin/Release/Ignite.Test
+          llvm-profdata merge -sparse coverage-*.profraw -o coverage.profdata
+          llvm-cov show ./bin/Release/Ignite.Test \
+            -instr-profile=coverage.profdata \
+            -format=text > coverage.txt
 
       - name: Cache SonarQube packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: matrix.configuration == 'Release'
+        uses: actions/cache@v4
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8.4.0
+        if: matrix.configuration == 'Release'
+        uses: SonarSource/sonarqube-scan-action@v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.cfamily.compile-commands=${{ github.workspace }}/build_wrapper_output_directory/compile_commands.json
+            -Dsonar.cfamily.llvm-cov.reportPath=${{ github.workspace }}/coverage.txt
