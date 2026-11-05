@@ -14,9 +14,9 @@ if command -v pacman &> /dev/null; then
     echo "[Ignite] Arch Linux / Garuda detected! Installing packages via pacman..."
     sudo pacman -S --needed --noconfirm \
         base-devel gcc clang lld cmake ninja pkgconf git make tar \
-        python python-pip vulkan-devel vulkan-headers vulkan-icd-loader \
+        python python-pip vulkan-headers vulkan-icd-loader \
         sdl3 wayland libxkbcommon libx11 libxext libxrandr libxcursor \
-        libxfixes libxi libxss libxtst libdrm libgbm mesa alsa-lib \
+        libxfixes libxi libxss libxtst libdrm mesa alsa-lib \
         pulseaudio zlib fmt libxml2 openexr imath glib2 gdb zenity \
         dotnet-sdk shaderc spirv-tools spirv-cross rust
 elif command -v apt-get &> /dev/null; then
