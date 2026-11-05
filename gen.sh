@@ -3,70 +3,44 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 export PAGER=cat
 
-echo "Updating package lists..."
-sudo apt-get update
+# Fallback for container environments where sudo may not be installed
+if ! command -v sudo &> /dev/null; then
+    sudo() { "$@"; }
+fi
 
-echo "Installing required dependencies..."
-sudo apt-get install -y \
-    build-essential \
-    g++-14 \
-    clang \
-    lld \
-    cmake \
-    ninja-build \
-    pkg-config \
-    git \
-    make \
-    tar \
-    expect \
-    python3 \
-    python3-pip \
-    python3-venv \
-    libvulkan-dev \
-    vulkan-tools \
-    mesa-vulkan-drivers \
-    libwayland-dev \
-    libxkbcommon-dev \
-    xorg-dev \
-    libasound2-dev \
-    libpulse-dev \
-    libaudio-dev \
-    libfribidi-dev \
-    libjack-dev \
-    libsndio-dev \
-    libx11-dev \
-    libxext-dev \
-    libxrandr-dev \
-    libxcursor-dev \
-    libxfixes-dev \
-    libxi-dev \
-    libxss-dev \
-    libxtst-dev \
-    libdrm-dev \
-    libgbm-dev \
-    libgl1-mesa-dev \
-    libgles2-mesa-dev \
-    libegl1-mesa-dev \
-    libdbus-1-dev \
-    libibus-1.0-dev \
-    libudev-dev \
-    libthai-dev \
-    libusb-1.0-0-dev \
-    zlib1g-dev \
-    libfmt-dev \
-    libxml2-dev \
-    libopenexr-dev \
-    libimath-dev \
-    libglib2.0-dev \
-    gdb \
-    libgmock-dev \
-    zenity \
-    dotnet-sdk-10.0 \
-    libshaderc-dev \
-    spirv-tools \
-    spirv-cross \
-    libspirv-cross-c-shared-dev \
-    libspirv-cross-c-shared0 \
+echo "=== Detecting Package Manager ==="
+
+if command -v pacman &> /dev/null; then
+    echo "[Ignite] Arch Linux / Garuda detected! Installing packages via pacman..."
+    sudo pacman -S --needed --noconfirm \
+        base-devel gcc clang lld cmake ninja pkgconf git make tar \
+        python python-pip vulkan-headers vulkan-icd-loader \
+        sdl3 wayland libxkbcommon libx11 libxext libxrandr libxcursor \
+        libxfixes libxi libxss libxtst libdrm mesa alsa-lib \
+        pulseaudio zlib fmt libxml2 openexr imath glib2 gdb zenity \
+        dotnet-sdk shaderc spirv-tools spirv-cross rust
+elif command -v apt-get &> /dev/null; then
+    echo "[Ignite] Debian / Ubuntu detected! Installing packages via apt-get..."
+    export DEBIAN_FRONTEND=noninteractive
+    sudo apt-get update
+    sudo apt-get install -y \
+        build-essential g++-14 clang lld cmake ninja-build pkg-config \
+        git make tar expect python3 python3-pip python3-venv \
+        libvulkan-dev vulkan-tools mesa-vulkan-drivers libwayland-dev \
+        libxkbcommon-dev xorg-dev libasound2-dev libpulse-dev \
+        libaudio-dev libfribidi-dev libjack-dev libsndio-dev \
+        libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+        libxfixes-dev libxi-dev libxss-dev libxtst-dev libdrm-dev \
+        libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+        libdbus-1-dev libibus-1.0-dev libudev-dev libthai-dev \
+        libusb-1.0-0-dev zlib1g-dev libfmt-dev libxml2-dev \
+        libopenexr-dev libimath-dev libglib2.0-dev gdb libgmock-dev \
+        zenity dotnet-sdk-10.0 libshaderc-dev spirv-tools \
+        spirv-cross libspirv-cross-c-shared-dev libspirv-cross-c-shared0
+else
+    echo "[Ignite] Warning: Unknown package manager. Continuing with existing system packages..."
+fi
+
 
 # Ensure Clang is the default compiler for CMake and build tools
 export CC=clang
@@ -75,8 +49,10 @@ if [ -n "$GITHUB_ENV" ]; then
     echo "CC=clang" >> "$GITHUB_ENV"
     echo "CXX=clang++" >> "$GITHUB_ENV"
 fi
-sudo update-alternatives --set cc /usr/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
-sudo update-alternatives --set c++ /usr/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+if command -v update-alternatives &> /dev/null; then
+    sudo update-alternatives --set cc /usr/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
+    sudo update-alternatives --set c++ /usr/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+fi
 
 # Ensure Autodesk FBX SDK dependency libxml2.so.2 is symlinked on modern Linux systems
 if [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so ]; then
