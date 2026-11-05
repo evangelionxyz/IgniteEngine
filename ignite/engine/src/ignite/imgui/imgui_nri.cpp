@@ -1027,6 +1027,8 @@ namespace ignite
 
             if (width > 0 && height > 0)
             {
+                // The viewport textures and swapchain may still be referenced by the previous frame.
+                GPUUploadSync::DeviceWaitIdle(renderer->m_Device);
                 std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
 
                 RemoveViewportPipelines(renderer, viewportData);
@@ -1091,7 +1093,16 @@ namespace ignite
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &viewportData->presentSemaphore;
 
-        const vk::Result _ = deviceManager->m_GraphicsQueue.submit(1, &submitInfo, nullptr);
+        {
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+            const vk::Result submitResult = deviceManager->m_GraphicsQueue.submit(1, &submitInfo, nullptr);
+            if (submitResult != vk::Result::eSuccess)
+            {
+                LOG_WARN("Failed to submit ImGui Vulkan viewport present signal, result={}", static_cast<int>(submitResult));
+                viewportData->hasAcquiredImage = false;
+                return;
+            }
+        }
 
         const vk::PresentInfoKHR presentInfo = vk::PresentInfoKHR()
             .setWaitSemaphoreCount(1)
