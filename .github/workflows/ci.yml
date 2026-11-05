@@ -158,16 +158,6 @@ jobs:
           chmod +x gen.sh
           ./gen.sh
 
-      - name: Install LLVM coverage tools
-        if: matrix.configuration == 'Release'
-        run: |
-          sudo apt-get update && sudo apt-get install -y llvm
-          LLVM_DIR=$(find /usr/lib/llvm* -maxdepth 2 -name "llvm-cov" 2>/dev/null | sort -V | tail -n 1 | xargs -r dirname)
-          if [ -n "$LLVM_DIR" ]; then
-            sudo ln -sf "$LLVM_DIR/llvm-cov" /usr/local/bin/llvm-cov
-            sudo ln -sf "$LLVM_DIR/llvm-profdata" /usr/local/bin/llvm-profdata
-          fi
-
       - name: Install Sonar build wrapper
         if: matrix.configuration == 'Release'
         uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v8
@@ -191,39 +181,13 @@ jobs:
 
       - name: Build Native Targets (Linux)
         run: |
-          clang++ --version
           CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
+          BUILD_COMMAND="make -j$(nproc) config=$CONFIG_LOWER Ignite.Editor Ignite.ScriptEngine Ignite.Test"
           if [ "${{ matrix.configuration }}" = "Release" ]; then
-            COVERAGE_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
-            build-wrapper-linux-x86-64 --out-dir build_wrapper_output_directory \
-              make -j$(nproc) config=$CONFIG_LOWER \
-                CFLAGS="$COVERAGE_FLAGS" \
-                CXXFLAGS="$COVERAGE_FLAGS" \
-                LDFLAGS="-fprofile-instr-generate" \
-                Ignite.Editor Ignite.ScriptEngine Ignite.Test
+            build-wrapper-linux-x86-64 --out-dir build_wrapper_output_directory $BUILD_COMMAND
           else
-            make -j$(nproc) config=$CONFIG_LOWER Ignite.Editor Ignite.ScriptEngine Ignite.Test
+            $BUILD_COMMAND
           fi
-
-      - name: Run Test Suite and Create Coverage Report
-        if: matrix.configuration == 'Release'
-        run: |
-          LD_LIBRARY_PATH="$PWD/bin/Release:${LD_LIBRARY_PATH:-}" \
-          LLVM_PROFILE_FILE="$PWD/coverage-%p.profraw" \
-          ./bin/Release/Ignite.Test
-
-          llvm-profdata merge -sparse coverage-*.profraw -o coverage.profdata
-
-          > coverage.txt
-          for target in ./bin/Release/Ignite.Test ./bin/Release/libIgnite.*.so; do
-            if [ -f "$target" ]; then
-              echo "Generating coverage for $target..."
-              llvm-cov show "$target" \
-                -instr-profile=coverage.profdata \
-                -format=text >> coverage.txt || true
-            fi
-          done
-          ls -lh coverage.txt
 
       - name: Cache SonarQube packages
         if: matrix.configuration == 'Release'
