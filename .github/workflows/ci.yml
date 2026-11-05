@@ -207,7 +207,6 @@ jobs:
         with:
           args: >
             -Dsonar.cfamily.compile-commands=${{ github.workspace }}/build_wrapper_output_directory/compile_commands.json
-            -Dsonar.cfamily.llvm-cov.reportPath=${{ github.workspace }}/coverage.txt
 
   archlinux:
     name: Arch Linux Build (${{ matrix.configuration }})
