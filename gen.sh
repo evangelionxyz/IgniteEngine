@@ -68,6 +68,16 @@ sudo apt-get install -y \
     libspirv-cross-c-shared-dev \
     libspirv-cross-c-shared0 \
 
+# Ensure Clang is the default compiler for CMake and build tools
+export CC=clang
+export CXX=clang++
+if [ -n "$GITHUB_ENV" ]; then
+    echo "CC=clang" >> "$GITHUB_ENV"
+    echo "CXX=clang++" >> "$GITHUB_ENV"
+fi
+sudo update-alternatives --set cc /usr/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
+sudo update-alternatives --set c++ /usr/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+
 # Ensure Autodesk FBX SDK dependency libxml2.so.2 is symlinked on modern Linux systems
 if [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so ]; then
     echo "Creating symlink for libxml2.so.2 (needed by Autodesk FBX SDK)..."

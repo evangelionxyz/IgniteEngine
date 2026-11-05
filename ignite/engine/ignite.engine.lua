@@ -124,7 +124,7 @@ project "Ignite.Engine"
         libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
             -- Configure and Build FastNoise2
-            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
             '+cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Debug"',
 
             -- Build Rust
@@ -149,7 +149,7 @@ project "Ignite.Engine"
         libdirs { "%{wks.location}/crates/target/release" }
         prebuildcommands {
             -- Configure and Build FastNoise2
-            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+            'cmake -S "%{wks.location}/thirdparty/FastNoise2" -B "%{wks.location}/thirdparty/FastNoise2/build" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON',
             '+cmake --build "%{wks.location}/thirdparty/FastNoise2/build" --config "Release"',
 
             -- Build Rust
