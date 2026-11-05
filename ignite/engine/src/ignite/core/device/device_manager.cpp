@@ -36,7 +36,7 @@ namespace ignite
             }
             case nri::Message::ERROR:
             {
-                LOG_ERROR("[NRI ERROR] {}:{} - {}", file ? file : "", line, message ? message : "");
+                LOG_ASSERT(false, "[NRI ERROR] {}:{} - {}", file ? file : "", line, message ? message : "");
                 break;
             }
         }
