@@ -11,7 +11,7 @@ fi
 echo "=== Detecting Package Manager ==="
 
 if command -v pacman &> /dev/null; then
-    echo "[Ignite] Arch Linux / Garuda detected! Installing packages via pacman..."
+    echo "[Ignite] Arch Linux Installing packages via pacman..."
     sudo pacman -S --needed --noconfirm \
         base-devel gcc clang lld cmake ninja pkgconf git make tar \
         python python-pip vulkan-headers vulkan-icd-loader \
