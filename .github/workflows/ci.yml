@@ -189,6 +189,15 @@ jobs:
             $BUILD_COMMAND
           fi
 
+      - name: Cache CFamily Analysis
+        if: matrix.configuration == 'Release'
+        uses: actions/cache@v4
+        with:
+          path: .cfamily-cache
+          key: ${{ runner.os }}-cfamily-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cfamily-
+
       - name: Cache SonarQube packages
         if: matrix.configuration == 'Release'
         uses: actions/cache@v4
