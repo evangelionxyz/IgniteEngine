@@ -49,8 +49,10 @@ if [ -n "$GITHUB_ENV" ]; then
     echo "CC=clang" >> "$GITHUB_ENV"
     echo "CXX=clang++" >> "$GITHUB_ENV"
 fi
-sudo update-alternatives --set cc /usr/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
-sudo update-alternatives --set c++ /usr/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+if command -v update-alternatives &> /dev/null; then
+    sudo update-alternatives --set cc /usr/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
+    sudo update-alternatives --set c++ /usr/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+fi
 
 # Ensure Autodesk FBX SDK dependency libxml2.so.2 is symlinked on modern Linux systems
 if [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so ]; then
