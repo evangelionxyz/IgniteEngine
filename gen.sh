@@ -3,6 +3,9 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 export PAGER=cat
 
+# Configure git safe.directory for containerized builds
+git config --global --add safe.directory "*" 2>/dev/null || true
+
 # Fallback for container environments where sudo may not be installed
 if ! command -v sudo &> /dev/null; then
     sudo() { "$@"; }
@@ -13,12 +16,17 @@ echo "=== Detecting Package Manager ==="
 if command -v pacman &> /dev/null; then
     echo "[Ignite] Arch Linux / Garuda detected! Installing packages via pacman..."
     sudo pacman -S --needed --noconfirm \
-        base-devel gcc clang lld cmake ninja pkgconf git make tar \
+        base-devel gcc clang lld cmake ninja pkgconf git make tar expect \
         python python-pip vulkan-headers vulkan-icd-loader \
         sdl3 wayland libxkbcommon libx11 libxext libxrandr libxcursor \
         libxfixes libxi libxss libxtst libdrm mesa alsa-lib \
         pulseaudio zlib fmt libxml2 openexr imath glib2 gdb zenity \
         dotnet-sdk shaderc spirv-tools spirv-cross rust
+
+    # Ensure libxml2 symlink exists for FBX SDK installer compatibility
+    if [ ! -f /usr/lib/libxml2.so.2 ] && [ -f /usr/lib/libxml2.so ]; then
+        sudo ln -sf /usr/lib/libxml2.so /usr/lib/libxml2.so.2
+    fi
 elif command -v apt-get &> /dev/null; then
     echo "[Ignite] Debian / Ubuntu detected! Installing packages via apt-get..."
     export DEBIAN_FRONTEND=noninteractive
