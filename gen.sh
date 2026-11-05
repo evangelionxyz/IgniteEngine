@@ -3,6 +3,11 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 export PAGER=cat
 
+# Fallback for container environments where sudo may not be installed
+if ! command -v sudo &> /dev/null; then
+    sudo() { "$@"; }
+fi
+
 echo "=== Detecting Package Manager ==="
 
 if command -v pacman &> /dev/null; then

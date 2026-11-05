@@ -215,6 +215,10 @@ jobs:
       matrix:
         configuration: [Release]
     steps:
+      - name: Install Git & Basic Tools in Arch Container
+        run: |
+          pacman -Syu --noconfirm git sudo
+
       - name: Checkout repository recursively
         uses: actions/checkout@v4
         with:
