@@ -68,15 +68,25 @@ sudo apt-get install -y \
     libspirv-cross-c-shared-dev \
     libspirv-cross-c-shared0 \
 
-# Ensure Clang is the default compiler for CMake and build tools
-export CC=clang
-export CXX=clang++
-if [ -n "$GITHUB_ENV" ]; then
-    echo "CC=clang" >> "$GITHUB_ENV"
-    echo "CXX=clang++" >> "$GITHUB_ENV"
+# Ensure the newest Clang is the default compiler for CMake and build tools
+LLVM_BIN_DIR=$(find /usr/lib/llvm* -maxdepth 2 -name "clang++" 2>/dev/null | sort -V | tail -n 1 | xargs -r dirname)
+if [ -n "$LLVM_BIN_DIR" ]; then
+    echo "Configuring Clang from $LLVM_BIN_DIR..."
+    sudo ln -sf "$LLVM_BIN_DIR/clang" /usr/local/bin/clang
+    sudo ln -sf "$LLVM_BIN_DIR/clang++" /usr/local/bin/clang++
+    if [ -f "$LLVM_BIN_DIR/llvm-cov" ]; then
+        sudo ln -sf "$LLVM_BIN_DIR/llvm-cov" /usr/local/bin/llvm-cov
+        sudo ln -sf "$LLVM_BIN_DIR/llvm-profdata" /usr/local/bin/llvm-profdata
+    fi
 fi
-sudo update-alternatives --set cc /usr/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
-sudo update-alternatives --set c++ /usr/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+export CC=/usr/local/bin/clang
+export CXX=/usr/local/bin/clang++
+if [ -n "$GITHUB_ENV" ]; then
+    echo "CC=/usr/local/bin/clang" >> "$GITHUB_ENV"
+    echo "CXX=/usr/local/bin/clang++" >> "$GITHUB_ENV"
+fi
+sudo update-alternatives --set cc /usr/local/bin/clang 2>/dev/null || sudo update-alternatives --install /usr/bin/cc cc /usr/local/bin/clang 100
+sudo update-alternatives --set c++ /usr/local/bin/clang++ 2>/dev/null || sudo update-alternatives --install /usr/bin/c++ c++ /usr/local/bin/clang++ 100
 
 # Ensure Autodesk FBX SDK dependency libxml2.so.2 is symlinked on modern Linux systems
 if [ ! -f /usr/lib/x86_64-linux-gnu/libxml2.so.2 ] && [ -f /usr/lib/x86_64-linux-gnu/libxml2.so ]; then

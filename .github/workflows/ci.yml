@@ -162,9 +162,8 @@ jobs:
         if: matrix.configuration == 'Release'
         run: |
           sudo apt-get update && sudo apt-get install -y llvm
-          LLVM_DIR=$(find /usr/lib/llvm* -maxdepth 2 -name "llvm-cov" 2>/dev/null | head -n 1 | xargs -r dirname)
+          LLVM_DIR=$(find /usr/lib/llvm* -maxdepth 2 -name "llvm-cov" 2>/dev/null | sort -V | tail -n 1 | xargs -r dirname)
           if [ -n "$LLVM_DIR" ]; then
-            echo "$LLVM_DIR" >> "$GITHUB_PATH"
             sudo ln -sf "$LLVM_DIR/llvm-cov" /usr/local/bin/llvm-cov
             sudo ln -sf "$LLVM_DIR/llvm-profdata" /usr/local/bin/llvm-profdata
           fi
@@ -192,6 +191,7 @@ jobs:
 
       - name: Build Native Targets (Linux)
         run: |
+          clang++ --version
           CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
           if [ "${{ matrix.configuration }}" = "Release" ]; then
             COVERAGE_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
