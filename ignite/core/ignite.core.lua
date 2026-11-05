@@ -91,7 +91,7 @@ project "Ignite.Core"
         libdirs { "%{wks.location}/crates/target/debug" }
         prebuildcommands {
             -- Configure and Build SDL
-            'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build-linux" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
+            'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build-linux" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Debug',
             '+cmake --build "%{wks.location}/thirdparty/SDL3/build-linux" --config "Debug"',
 
             -- Build Rust
@@ -116,7 +116,7 @@ project "Ignite.Core"
         libdirs { "%{wks.location}/crates/target/release" }
         prebuildcommands {
             -- Configure and Build SDL
-            'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build-linux" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
+            'cmake -S "%{wks.location}/thirdparty/SDL3" -B "%{wks.location}/thirdparty/SDL3/build-linux" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DCMAKE_BUILD_TYPE=Release',
             '+cmake --build "%{wks.location}/thirdparty/SDL3/build-linux" --config "Release"',
 
             -- Build Rust

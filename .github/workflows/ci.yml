@@ -104,6 +104,8 @@ jobs:
         configuration: [Release]
     env:
       PREMAKE_VERSION: 5.0.0-beta8
+      CC: clang
+      CXX: clang++
 
     steps:
       - name: Skip Duplicate Actions
@@ -158,34 +160,70 @@ jobs:
 
       - name: Install LLVM coverage tools
         if: matrix.configuration == 'Release'
-        run: sudo apt-get update && sudo apt-get install -y llvm
+        run: |
+          sudo apt-get update && sudo apt-get install -y llvm
+          LLVM_DIR=$(find /usr/lib/llvm* -maxdepth 2 -name "llvm-cov" 2>/dev/null | head -n 1 | xargs -r dirname)
+          if [ -n "$LLVM_DIR" ]; then
+            echo "$LLVM_DIR" >> "$GITHUB_PATH"
+            sudo ln -sf "$LLVM_DIR/llvm-cov" /usr/local/bin/llvm-cov
+            sudo ln -sf "$LLVM_DIR/llvm-profdata" /usr/local/bin/llvm-profdata
+          fi
 
       - name: Install Sonar build wrapper
         if: matrix.configuration == 'Release'
         uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v8
+        env:
+          SONAR_HOST_URL: https://sonarcloud.io
+
+      - name: Build Thirdparty Dependencies (Linux)
+        run: |
+          cmake -S thirdparty/SDL3 -B thirdparty/SDL3/build-linux \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build thirdparty/SDL3/build-linux --config Release -j$(nproc)
+
+          cmake -S thirdparty/FastNoise2 -B thirdparty/FastNoise2/build \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DBUILD_SHARED_LIBS=ON -DFASTNOISE2_STANDALONE_PROJECT=ON \
+            -DFASTNOISE2_TOOLS=OFF -DFASTNOISE2_TESTS=OFF \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+          cmake --build thirdparty/FastNoise2/build --config Release -j$(nproc)
 
       - name: Build Native Targets (Linux)
         run: |
           CONFIG_LOWER=$(echo "${{ matrix.configuration }}" | tr '[:upper:]' '[:lower:]')
-          BUILD_COMMAND="make -j$(nproc) config=$CONFIG_LOWER Ignite.Editor Ignite.ScriptEngine Ignite.Test"
           if [ "${{ matrix.configuration }}" = "Release" ]; then
+            COVERAGE_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
             build-wrapper-linux-x86-64 --out-dir build_wrapper_output_directory \
-              env CFLAGS="-fprofile-instr-generate -fcoverage-mapping" \
-              CXXFLAGS="-fprofile-instr-generate -fcoverage-mapping" \
-              LDFLAGS="-fprofile-instr-generate" \
-              bash -c "$BUILD_COMMAND"
+              make -j$(nproc) config=$CONFIG_LOWER \
+                CFLAGS="$COVERAGE_FLAGS" \
+                CXXFLAGS="$COVERAGE_FLAGS" \
+                LDFLAGS="-fprofile-instr-generate" \
+                Ignite.Editor Ignite.ScriptEngine Ignite.Test
           else
-            bash -c "$BUILD_COMMAND"
+            make -j$(nproc) config=$CONFIG_LOWER Ignite.Editor Ignite.ScriptEngine Ignite.Test
           fi
 
       - name: Run Test Suite and Create Coverage Report
         if: matrix.configuration == 'Release'
         run: |
-          LLVM_PROFILE_FILE="$PWD/coverage-%p.profraw" ./bin/Release/Ignite.Test
+          LD_LIBRARY_PATH="$PWD/bin/Release:${LD_LIBRARY_PATH:-}" \
+          LLVM_PROFILE_FILE="$PWD/coverage-%p.profraw" \
+          ./bin/Release/Ignite.Test
+
           llvm-profdata merge -sparse coverage-*.profraw -o coverage.profdata
-          llvm-cov show ./bin/Release/Ignite.Test \
-            -instr-profile=coverage.profdata \
-            -format=text > coverage.txt
+
+          > coverage.txt
+          for target in ./bin/Release/Ignite.Test ./bin/Release/libIgnite.*.so; do
+            if [ -f "$target" ]; then
+              echo "Generating coverage for $target..."
+              llvm-cov show "$target" \
+                -instr-profile=coverage.profdata \
+                -format=text >> coverage.txt || true
+            fi
+          done
+          ls -lh coverage.txt
 
       - name: Cache SonarQube packages
         if: matrix.configuration == 'Release'
@@ -200,6 +238,8 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
             -Dsonar.cfamily.compile-commands=${{ github.workspace }}/build_wrapper_output_directory/compile_commands.json
