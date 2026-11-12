@@ -187,7 +187,7 @@ def install_fbx_sdk(target_directory):
 
 
 def _install_fbx_sdk_windows(target_directory):
-    fbx_sdk_version = "fbx202037"
+    fbx_sdk_version = "fbx2020311"
 
     target_directory = Path(target_directory)
     target_directory.mkdir(parents=True, exist_ok=True)
@@ -425,4 +425,3 @@ expect {
     os.environ["FBX_SDK"] = str(detected)
     print(f"FBX SDK (Linux) installed at: {detected}")
     return detected
-
