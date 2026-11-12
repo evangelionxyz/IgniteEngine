@@ -99,29 +99,7 @@ namespace ignite
         m_WidgetRenderer = nullptr;
         m_WorldEnvironment = nullptr;
 
-        m_AnimatedPSOCache.clear();
-        m_TransparentAnimatedPSOCache.clear();
-        m_AnimatedCSMPSOCache.clear();
-        m_StaticPSOCache.clear();
-        m_TransparentStaticPSOCache.clear();
-        m_StaticCSMPSOCache.clear();
-        m_SelectStaticPSOCache.clear();
-        m_SelectAnimatedPSOCache.clear();
-        m_EnvironmentPSOCache.clear();
-        m_CompositePSOCache.clear();
-        m_FXAAPSOCache.clear();
-        m_DebugGridPSOCache.clear();
-        m_CompositeBindingSetCache.clear();
-        m_DebugGridBindingSetCache.clear();
-        m_FXAABindingSetCache.clear();
-        m_RenderTargets.clear();
-        ImGui_NRI::ClearTextureCache();
-        m_Blooms.clear();
-        m_SSAOs.clear();
-
-        m_ResolvedAssetsCache.clear();
-        m_RuntimeMaterial.reset();
-        m_TerrainRenderer.reset();
+        ClearResources();
 
         if (m_Scene)
         {
@@ -159,39 +137,9 @@ namespace ignite
             m_WorldEnvironment = nullptr;
         }
 
-        m_SelectedEntities.clear();
-        m_Has2DPreRenderCache = false;
-
-        m_ResolvedAssetsCache.clear();
-
         m_Scene = scene;
-        m_AnimatedPSOCache.clear();
-        m_TransparentAnimatedPSOCache.clear();
-        m_AnimatedCSMPSOCache.clear();
-        m_StaticPSOCache.clear();
-        m_TransparentStaticPSOCache.clear();
-        m_StaticCSMPSOCache.clear();
-        m_SelectStaticPSOCache.clear();
-        m_SelectAnimatedPSOCache.clear();
-        m_EnvironmentPSOCache.clear();
-        m_CompositePSOCache.clear();
-        m_FXAAPSOCache.clear();
-        m_DebugGridPSOCache.clear();
-        m_CompositeBindingSetCache.clear();
-        m_DebugGridBindingSetCache.clear();
-        m_FXAABindingSetCache.clear();
 
-        m_RenderTargets.clear();
-        ImGui_NRI::ClearTextureCache();
-        m_EntityObjectIndexCache.clear();
-        m_EntityBoneOffsetCache.clear();
-        m_SocketObjectIndexCache.clear();
-
-        m_Blooms.clear();
-        m_SSAOs.clear();
-
-        BindingCache::Clear();
-        WidgetRenderer::ClearCache();
+        ClearResources();
 
         if (m_RuntimeMaterial)
         {
@@ -217,6 +165,45 @@ namespace ignite
         {
             m_Renderer2D->InvalidatePreRenderCache();
         }
+    }
+
+    void SceneRenderer::ClearResources()
+    {
+        m_SelectedEntities.clear();
+        m_Has2DPreRenderCache = false;
+
+        m_AnimatedPSOCache.clear();
+        m_TransparentAnimatedPSOCache.clear();
+        m_AnimatedCSMPSOCache.clear();
+        m_StaticPSOCache.clear();
+        m_TransparentStaticPSOCache.clear();
+        m_StaticCSMPSOCache.clear();
+        m_SelectStaticPSOCache.clear();
+        m_SelectAnimatedPSOCache.clear();
+        m_EnvironmentPSOCache.clear();
+        m_CompositePSOCache.clear();
+        m_FXAAPSOCache.clear();
+        m_DebugGridPSOCache.clear();
+        m_CompositeBindingSetCache.clear();
+        m_DebugGridBindingSetCache.clear();
+        m_FXAABindingSetCache.clear();
+        m_RenderTargets.clear();
+
+        ImGui_NRI::ClearTextureCache();
+
+        m_EntityObjectIndexCache.clear();
+        m_EntityBoneOffsetCache.clear();
+        m_SocketObjectIndexCache.clear();
+
+        m_Blooms.clear();
+        m_SSAOs.clear();
+
+        m_ResolvedAssetsCache.clear();
+        m_RuntimeMaterial.reset();
+        m_TerrainRenderer.reset();
+
+        BindingCache::Clear();
+        WidgetRenderer::ClearCache();
     }
 
     RenderPlan SceneRenderer::BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera)
@@ -1051,122 +1038,6 @@ namespace ignite
                 indices.push_back(objectIndex);
             }
             m_EntityObjectIndexCache[e] = indices;
-        }
-    }
-
-    void SceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
-    {
-        IGN_PROFILE_FUNCTION();
-        if (!camera || width == 0 || height == 0)
-            return;
-
-        // Descriptor sets cached for the old attachment views must not be reused
-        // after those views are destroyed. Wait once for this camera resize, then
-        // recreate all of its render targets without one device-wide stall per RT.
-        if (!m_ResizeWaitedThisFrame)
-        {
-            GPUUploadSync::DeviceWaitIdle(m_Device);
-            BindingCache::Clear();
-            m_ResizeWaitedThisFrame = true;
-        }
-
-        ISceneRenderer::ResizeFramebuffer(camera, width, height);
-
-        // Differentiate resizing between edit-viewport and game-viewport post-processing instances
-        bool isGameCamera = false;
-        if (m_Scene)
-        {
-            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
-            {
-                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                if (camera == &cc.camera)
-                {
-                    isGameCamera = true;
-                }
-            }
-        }
-
-        PostProcessing postProcessing = camera ? camera->postProcessing : PostProcessing{};
-        if (isGameCamera && m_Scene)
-        {
-            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
-            {
-                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                postProcessing = cc.camera.postProcessing;
-            }
-        }
-        postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
-
-        const uint32_t renderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(width) * postProcessing.renderScale)));
-        const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(height) * postProcessing.renderScale)));
-
-        m_CompositeBindingSetCache.clear();
-        m_DebugGridBindingSetCache.clear();
-        m_FXAABindingSetCache.clear();
-
-        // Resize Bloom and SSAO instances for the specific camera
-        {
-            auto it = m_Blooms.find(camera);
-            if (it != m_Blooms.end())
-            {
-                for (auto &bloom : it->second)
-                {
-                    if (bloom)
-                        bloom->Resize(renderWidth, renderHeight);
-                }
-            }
-        }
-
-        {
-            auto it = m_SSAOs.find(camera);
-            if (it != m_SSAOs.end())
-            {
-                for (auto &ssao : it->second)
-                {
-                    if (ssao)
-                        ssao->Resize(renderWidth, renderHeight);
-                }
-            }
-        }
-
-        {
-            // Render targets
-            auto it = m_RenderTargets.find(camera);
-            if (it == m_RenderTargets.end() && camera)
-            {
-                GetOrCreateRenderTarget(camera);
-                it = m_RenderTargets.find(camera);
-            }
-
-            if (it != m_RenderTargets.end())
-            {
-                auto &target = it->second;
-
-                if (target->sceneRT)
-                    target->sceneRT->Resize(renderWidth, renderHeight, false);
-                if (target->selectionRT)
-                    target->selectionRT->Resize(renderWidth, renderHeight, false);
-                if (target->sceneResolvedRT)
-                    target->sceneResolvedRT->Resize(renderWidth, renderHeight, false);
-                if (target->widgetRT)
-                    target->widgetRT->Resize(width, height, false);
-                if (target->compositeRT)
-                    target->compositeRT->Resize(width, height, false);
-                if (target->postProcessRT)
-                    target->postProcessRT->Resize(width, height, false);
-                for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
-                {
-                    if (historyRT)
-                        historyRT->Resize(width, height, false);
-                }
-                target->taaHistoryValid = false;
-
-                if (target->debugRT)
-                {
-                    target->debugRT->GetCreateInfo().depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
-                    target->debugRT->Resize(renderWidth, renderHeight, false);
-                }
-            }
         }
     }
 
@@ -3946,264 +3817,6 @@ namespace ignite
         m_CompositeBindingSetCache.emplace(key, bindingSet);
 
         return bindingSet;
-    }
-
-    void SceneRenderer::EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
-    {
-        if (!target->widgetRT)
-        {
-            RenderTargetCreateInfo widgetRTCreateInfo = {};
-            widgetRTCreateInfo.width = width;
-            widgetRTCreateInfo.height = height;
-            widgetRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
-                FramebufferAttachments{ "[Scene ColorAttachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT },
-            };
-            target->widgetRT = RenderTarget::Create(widgetRTCreateInfo, "[Scene Renderer] Widget RT");
-        }
-        else if (target->widgetRT->GetWidth() != width || target->widgetRT->GetHeight() != height)
-        {
-            target->widgetRT->Resize(width, height);
-        }
-    }
-
-    void SceneRenderer::EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight)
-    {
-        if (!target->debugRT)
-        {
-            RenderTargetCreateInfo debugRTCreateInfo = {};
-            debugRTCreateInfo.width = renderWidth;
-            debugRTCreateInfo.height = renderHeight;
-            debugRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene DebugAttachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT },
-                FramebufferAttachments{ "[Scene DebugObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT },
-                FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT }
-            };
-            debugRTCreateInfo.depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
-            target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
-        }
-        else if (target->debugRT->GetWidth() != renderWidth || target->debugRT->GetHeight() != renderHeight)
-        {
-            target->debugRT->GetCreateInfo().depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
-            target->debugRT->Resize(renderWidth, renderHeight);
-        }
-    }
-
-    void SceneRenderer::EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
-    {
-        if (!target->taaHistoryRT[0])
-        {
-            RenderTargetCreateInfo taaHistoryRTCreateInfo = {};
-            taaHistoryRTCreateInfo.width = width;
-            taaHistoryRTCreateInfo.height = height;
-            taaHistoryRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[TAA History Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::SHADER_RESOURCE }
-            };
-            for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
-            {
-                historyRT = RenderTarget::Create(taaHistoryRTCreateInfo, "[Scene Renderer] TAA History RT");
-            }
-        }
-        else if (target->taaHistoryRT[0]->GetWidth() != width || target->taaHistoryRT[0]->GetHeight() != height)
-        {
-            for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
-            {
-                if (historyRT)
-                    historyRT->Resize(width, height);
-            }
-        }
-    }
-
-    void SceneRenderer::EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight)
-    {
-        if (!target)
-            return;
-
-        const bool sampleCountChanged = (target->msaaSampleCount != desiredSampleCount);
-        const bool needsResolveRT = (desiredSampleCount > 1);
-        const bool resolveRTMissing = needsResolveRT && (!target->sceneResolvedRT);
-
-        if (!sampleCountChanged && !resolveRTMissing)
-            return;
-
-        target->msaaSampleCount = desiredSampleCount;
-
-        // Recreate sceneRT with the desired sample count
-        RenderTargetCreateInfo sceneRTCreateInfo = {};
-        sceneRTCreateInfo.width = renderWidth;
-        sceneRTCreateInfo.height = renderHeight;
-        sceneRTCreateInfo.sampleCount = desiredSampleCount;
-        sceneRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
-            FramebufferAttachments{ "[Scene ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
-        };
-        target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
-
-        // Manage resolved target
-        if (desiredSampleCount > 1)
-        {
-            RenderTargetCreateInfo resolvedRTCreateInfo = {};
-            resolvedRTCreateInfo.width = renderWidth;
-            resolvedRTCreateInfo.height = renderHeight;
-            resolvedRTCreateInfo.sampleCount = 1;
-            resolvedRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::SHADER_RESOURCE },
-                FramebufferAttachments{ "[Scene Resolved ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::SHADER_RESOURCE }
-            };
-            target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
-        }
-        else
-        {
-            target->sceneResolvedRT = nullptr;
-        }
-
-        // Invalidate debugRT so EnsureDebugRT recreates it with matching depth attachment or separate depth attachment
-        target->debugRT = nullptr;
-
-        m_CompositeBindingSetCache.clear();
-    }
-
-    Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
-    {
-        auto it = m_RenderTargets.find(camera);
-        if (it != m_RenderTargets.end())
-            return it->second;
-
-        Ref<CameraRenderTarget> target = CreateRef<CameraRenderTarget>();
-
-        // Determine MSAA sample count from camera or scene settings
-        const PostProcessing &pp = camera ? camera->postProcessing : PostProcessing{};
-        bool msaaEnabled = false;
-        int sampleCount = 1;
-        if (sceneRenderSettings.sampleMethod == SampleMethod::MSAA)
-        {
-            msaaEnabled = true;
-            sampleCount = sceneRenderSettings.msaaProperties.sampleCount;
-        }
-        else if (sceneRenderSettings.sampleMethod == SampleMethod::NONE || sceneRenderSettings.sampleMethod == SampleMethod::FXAA || sceneRenderSettings.sampleMethod == SampleMethod::TAA)
-        {
-            msaaEnabled = false;
-            sampleCount = 1;
-        }
-        else
-        {
-            msaaEnabled = pp.msaaProperties.enable;
-            sampleCount = pp.msaaProperties.sampleCount;
-        }
-
-        if (sampleCount <= 1) sampleCount = 1;
-        else if (sampleCount <= 2) sampleCount = 2;
-        else if (sampleCount <= 4) sampleCount = 4;
-        else sampleCount = 8;
-        target->msaaSampleCount = sampleCount;
-
-        // =========================================
-        // Create Render Targets
-        RenderTargetCreateInfo sceneRTCreateInfo = {};
-        sceneRTCreateInfo.sampleCount = sampleCount;
-        sceneRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT }, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT }, // HDR Main Color
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT } // Object ID
-        };
-
-        target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
-
-        // Selection IDs are rendered into a separate single-sample mask. This pass intentionally
-        // ignores scene depth so selected objects remain outlineable through occluders, without
-        // modifying the scene ID buffer consumed by PickEntity.
-        RenderTargetCreateInfo selectionRTCreateInfo = {};
-        selectionRTCreateInfo.sampleCount = 1;
-        selectionRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Selection Mask ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
-            FramebufferAttachments{ "[Selection Mask ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
-        };
-        target->selectionRT = RenderTarget::Create(selectionRTCreateInfo, "[Scene Renderer] Selection Mask RT");
-
-        // If MSAA is active, create a single-sample resolve target that downstream passes (bloom, composite) read from
-        if (sampleCount > 1)
-        {
-            RenderTargetCreateInfo resolvedRTCreateInfo = {};
-            resolvedRTCreateInfo.sampleCount = 1;
-            resolvedRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::SHADER_RESOURCE },
-                FramebufferAttachments{ "[Scene Resolved ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::SHADER_RESOURCE }
-            };
-            target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
-        }
-
-        // Composite RT (always needed for final output)
-        RenderTargetCreateInfo compositeRTCreateInfo = {};
-        compositeRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Composite Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT } // Main Color
-        };
-        target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
-        target->postProcessRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Post Process RT");
-
-        if (!m_WidgetRenderer)
-        {
-            m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
-        }
-
-        m_RenderTargets.emplace(camera, target);
-
-        const glm::uvec2 vpSize = camera ? camera->GetViewportSize() : glm::uvec2(0);
-        if (vpSize.x > 0 && vpSize.y > 0)
-        {
-            ResizeFramebuffer(camera, vpSize.x, vpSize.y);
-        }
-
-        return target;
-    }
-
-    std::vector<Ref<Bloom>> SceneRenderer::GetOrCreateBlooms(ICamera *camera)
-    {
-        constexpr uint32_t resolution = 1080;
-
-        auto it = m_Blooms.find(camera);
-        if (it != m_Blooms.end())
-            return it->second;
-
-        const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
-        std::vector<Ref<Bloom>> blooms(maxFrame);
-        for (uint32_t i = 0; i < maxFrame; ++i)
-        {
-            Ref<Bloom> bloom = CreateRef<Bloom>(resolution, resolution);
-            blooms[i] = bloom;
-        }
-
-        m_Blooms.emplace(camera, blooms);
-        return blooms;
-    }
-
-    std::vector<Ref<SSAO>> SceneRenderer::GetOrCreateSSAOs(nri::CommandBuffer *cmd, ICamera *camera)
-    {
-        constexpr uint32_t resolution = 1080;
-
-        auto it = m_SSAOs.find(camera);
-        if (it != m_SSAOs.end())
-            return it->second;
-
-        const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
-        std::vector<Ref<SSAO>> SSAOs(maxFrame);
-        for (uint32_t i = 0; i < maxFrame; ++i)
-        {
-            Ref<SSAO> ssao = CreateRef<SSAO>(cmd, resolution, resolution);
-            SSAOs[i] = ssao;
-        }
-
-        m_SSAOs.emplace(camera, SSAOs);
-        return SSAOs;
     }
 
     // FlushOpaqueBatches — dispatch all opaque static mesh batches as instanced draws.

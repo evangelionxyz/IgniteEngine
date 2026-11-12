@@ -32,7 +32,11 @@ namespace ignite
     class Font;
     class WidgetCanvas;
     class ScriptableObject;
-    class LuaScript;
+
+    namespace lua
+    {
+        class Script;
+    }
 
     enum class FileStatus : uint8_t
     {
@@ -101,7 +105,7 @@ namespace ignite
         static Ref<AnimatorController2D> ImportAnimatorController2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
 
         static Ref<ScriptableObject> ImportScriptableObject(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
-        static Ref<LuaScript> ImportLuaScript(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
+        static Ref<lua::Script> ImportLuaScript(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Prefab> ImportPrefab(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);

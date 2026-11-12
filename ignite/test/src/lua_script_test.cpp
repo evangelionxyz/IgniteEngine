@@ -2,8 +2,8 @@
 
 #include <gtest/gtest.h>
 
-#include "ignite/scripting/lua_script_runtime.hpp"
-#include "ignite/scripting/lua_script.hpp"
+#include "ignite/scripting/lua/lua_script_runtime.hpp"
+#include "ignite/scripting/lua/lua_script.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scene/entity.hpp"
@@ -67,7 +67,7 @@ TEST(LuaScriptRuntime, LifecycleAndIsolatedEnvironments)
     failing.AddComponent<LuaScriptComponent>().scriptPath = errorScriptPath;
 
     {
-        LuaScriptRuntime runtime(&scene);
+        lua::ScriptRuntime runtime(&scene);
         runtime.CreateInstance(first.GetUUID(), scriptPath);
         runtime.CreateInstance(second.GetUUID(), scriptPath);
         runtime.CreateInstance(failing.GetUUID(), errorScriptPath);
@@ -134,7 +134,7 @@ TEST(LuaScriptRuntime, ComponentAccessAndMutations)
     entity.AddComponent<AudioSourceComponent>();
 
     {
-        LuaScriptRuntime runtime(&scene);
+        lua::ScriptRuntime runtime(&scene);
         runtime.CreateInstance(entity.GetUUID(), scriptPath);
 
         // Verify Transform
@@ -198,7 +198,7 @@ TEST(LuaScriptRuntime, EntityQueriesAndLog)
     runner.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
 
     {
-        LuaScriptRuntime runtime(&scene);
+        lua::ScriptRuntime runtime(&scene);
         runtime.CreateInstance(runner.GetUUID(), scriptPath);
 
         const auto &targetT = target.GetComponent<TransformComponent>().local;
@@ -215,14 +215,18 @@ TEST(LuaScriptRuntime, HotReloadAndErrorResilience)
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path scriptPath = std::filesystem::temp_directory_path() / std::format("ignite_hot_reload_{}.lua", unique);
 
-    // Initial version v1: sets position.x = 10
+    // Initial version v1: captures script-local state during initialization.
     {
         std::ofstream script(scriptPath);
         script << R"lua(
             local script = {}
+            local offset = {}
+            function script.on_create(entity)
+                offset = entity:get_transform().position
+            end
             function script.on_update(entity, dt)
                 local t = entity:get_transform()
-                t.position = { x = 10, y = 0, z = 0 }
+                t.position = { x = 10 + offset.x, y = 0, z = 0 }
             end
             return script
         )lua";
@@ -233,20 +237,24 @@ TEST(LuaScriptRuntime, HotReloadAndErrorResilience)
     entity.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
 
     {
-        LuaScriptRuntime runtime(&scene);
+        lua::ScriptRuntime runtime(&scene);
         runtime.CreateInstance(entity.GetUUID(), scriptPath);
 
         runtime.Update(0.016f);
         EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 10.0f);
 
-        // Update script on disk to v2: sets position.x = 25
+        // Update script on disk to v2: its local state must be initialized again.
         {
             std::ofstream script(scriptPath, std::ios::trunc);
             script << R"lua(
                 local script = {}
+                local offset = {}
+                function script.on_create(entity)
+                    offset = entity:get_transform().position
+                end
                 function script.on_update(entity, dt)
                     local t = entity:get_transform()
-                    t.position = { x = 25, y = 0, z = 0 }
+                    t.position = { x = 25 + offset.x, y = 0, z = 0 }
                 end
                 function script.on_reload(entity)
                     local t = entity:get_transform()
@@ -261,7 +269,7 @@ TEST(LuaScriptRuntime, HotReloadAndErrorResilience)
         EXPECT_FLOAT_EQ(entity.GetTransform().local.scale.x, 7.0f);
 
         runtime.Update(0.016f);
-        EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 25.0f);
+        EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 35.0f);
 
         // Overwrite with syntax error
         {
@@ -274,7 +282,7 @@ TEST(LuaScriptRuntime, HotReloadAndErrorResilience)
 
         // Subsequent update should continue with old valid callbacks without crashing
         runtime.Update(0.016f);
-        EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 25.0f);
+        EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 35.0f);
     }
 
     std::filesystem::remove(scriptPath);
@@ -289,7 +297,7 @@ TEST(LuaScriptAsset, AssetManagerAndAssetHandleIntegration)
 
     const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_asset", "-- Hello Lua Asset\nreturn {}");
 
-    Ref<LuaScript> scriptAsset = LuaScript::Create(scriptPath);
+    Ref<lua::Script> scriptAsset = lua::Script::Create(scriptPath);
     ASSERT_NE(scriptAsset, nullptr);
     EXPECT_EQ(scriptAsset->GetAssetType(), AssetType::LuaScript);
     EXPECT_EQ(scriptAsset->GetFilepath(), scriptPath);

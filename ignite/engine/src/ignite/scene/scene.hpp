@@ -30,7 +30,6 @@ namespace ignite::netproto
 
 namespace ignite
 {
-    class LuaScriptRuntime;
     class CameraComponent;
     class Entity;
     class Environment;
@@ -38,6 +37,11 @@ namespace ignite
     class SceneRenderer;
     class Project;
     class WidgetCanvas;
+
+    namespace lua
+    {
+        class ScriptRuntime;
+    }
 
     enum class ESceneState : uint8_t
     {
@@ -102,7 +106,7 @@ namespace ignite
 
         Entity GetPrimaryCamera();
         inline Project *GetProject() { return m_Project; }
-        LuaScriptRuntime *GetLuaScriptRuntime() const { return m_LuaScriptRuntime.get(); }
+        lua::ScriptRuntime * GetLuaScriptRuntime() const { return m_LuaScriptRuntime.get(); }
         inline AssetManager *GetAssetManager() { return m_AssetManager; }
 
         Ref<WidgetCanvas> GetRootWidget() const;
@@ -146,7 +150,7 @@ namespace ignite
         AssetManager *m_AssetManager;
         physics::Physics2D *m_Physics2D;
         physics::Physics3D *m_Physics3D;
-        Scope<LuaScriptRuntime> m_LuaScriptRuntime;
+        Scope<lua::ScriptRuntime> m_LuaScriptRuntime;
 
         uint32_t m_ViewportWidth;
         uint32_t m_ViewportHeight;

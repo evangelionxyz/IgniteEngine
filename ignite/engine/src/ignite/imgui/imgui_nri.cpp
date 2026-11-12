@@ -781,6 +781,7 @@ namespace ignite
             static_cast<uint32_t>(deviceManager.m_GraphicsQueueFamily),
             static_cast<uint32_t>(deviceManager.m_PresentQueueFamily)
         };
+
         std::vector<uint32_t> queueFamilies(uniqueQueues.begin(), uniqueQueues.end());
         const bool sharedSwapChain = queueFamilies.size() > 1;
 
@@ -991,8 +992,8 @@ namespace ignite
         if (size.x <= 0.0f || size.y <= 0.0f)
             return;
 
-        const uint32_t requestedWidth = static_cast<uint32_t>(size.x);
-        const uint32_t requestedHeight = static_cast<uint32_t>(size.y);
+        const auto requestedWidth = static_cast<uint32_t>(size.x);
+        const auto requestedHeight = static_cast<uint32_t>(size.y);
 
         if (viewportData->hasPendingResize
             && viewportData->pendingWidth == requestedWidth
@@ -1044,12 +1045,8 @@ namespace ignite
         }
 
         const vk::Result resetFencesResult = deviceManager->m_VulkanDevice.resetFences(1, &viewportData->acquireFence);
-        const vk::Result acquireResult = deviceManager->m_VulkanDevice.acquireNextImageKHR(
-            viewportData->swapChain,
-            0,
-            vk::Semaphore(),
-            viewportData->acquireFence,
-            &viewportData->currentImageIndex);
+        const vk::Result acquireResult = deviceManager->m_VulkanDevice.acquireNextImageKHR(viewportData->swapChain,
+            0, vk::Semaphore(), viewportData->acquireFence, &viewportData->currentImageIndex);
 
         viewportData->hasAcquiredImage = false;
 
@@ -1079,6 +1076,7 @@ namespace ignite
     {
         auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         auto *viewportData = GetViewportDataVK(viewport);
+
         DeviceManager_VK *deviceManager = DeviceManager_VK::GetInstance();
         if (!renderer || !viewportData || !viewportData->swapChain || !deviceManager)
             return;
@@ -1147,6 +1145,7 @@ namespace ignite
             if (tex)
                 nri.DestroyTexture(tex);
         }
+
         viewportData->nriTextures.clear();
         viewportData->renderTargets.clear();
         viewportData->backBuffers.clear();

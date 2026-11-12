@@ -110,6 +110,8 @@ namespace ignite
         void PreallocateGPUData(nri::CommandBuffer *cmd, FrameContext *frameContext);
 
     private:
+        void ClearResources();
+
         RenderPlan BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera);
         void EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
         void EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);

@@ -27,8 +27,8 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
-#include "ignite/scripting/lua_script.hpp"
-#include "ignite/scripting/lua_script_runtime.hpp"
+#include "ignite/scripting/lua/lua_script.hpp"
+#include "ignite/scripting/lua/lua_script_runtime.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -3423,45 +3423,6 @@ namespace ignite
                     ImGui::TextDisabled("Path: %s", component.scriptPath.generic_string().c_str());
                 }
 
-                if (ImGui::Button("Browse..."))
-                {
-#ifdef PLATFORM_WINDOWS
-                    static const char filter[] = "Lua Script\0*.lua\0All Files\0*.*\0\0";
-#else
-                    static const char filter[] = "Lua Script | *.lua";
-#endif
-                    const std::string selectedPath = FileDialogs::OpenFile(filter);
-                    if (!selectedPath.empty())
-                    {
-                        const std::filesystem::path absolutePath(selectedPath);
-                        const std::filesystem::path path = m_Scene && m_Scene->GetProject()
-                            ? m_Scene->GetProject()->GetProjectRelativeFilepath(absolutePath)
-                            : absolutePath;
-                        if (m_Scene && m_Scene->GetProject() && path.is_absolute())
-                        {
-                            LOG_WARN("Lua scripts must be inside the project directory: {}", absolutePath.generic_string());
-                        }
-                        else
-                        {
-                            component.scriptPath = path;
-                            if (assetManager)
-                            {
-                                AssetHandle handle = assetManager->GetAssetHandle(path);
-                                if (handle == AssetHandle(0))
-                                {
-                                    handle = assetManager->ImportAsset(path);
-                                }
-                                component.scriptHandle = handle;
-                            }
-                            m_Scene->SetDirtyFlag(true);
-
-                            if (isRunning && m_Scene->GetLuaScriptRuntime())
-                            {
-                                m_Scene->GetLuaScriptRuntime()->CreateInstance(selectedEntity.GetUUID(), component.scriptPath, component.scriptHandle);
-                            }
-                        }
-                    }
-                }
                 ImGui::SameLine();
                 if (ImGui::Button("Clear"))
                 {
@@ -3483,8 +3444,9 @@ namespace ignite
                     }
                     else if (component.scriptHandle != AssetHandle(0) && assetManager)
                     {
-                        auto script = assetManager->GetAsset<LuaScript>(component.scriptHandle);
-                        if (script) script->Reload();
+                        auto script = assetManager->GetAsset<lua::Script>(component.scriptHandle);
+                        if (script)
+                            script->Reload();
                     }
                 }
             });

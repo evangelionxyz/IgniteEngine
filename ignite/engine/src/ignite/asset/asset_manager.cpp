@@ -970,6 +970,7 @@ namespace ignite
         case AssetType::AnimatorController:
         case AssetType::AnimatorController2D:
         case AssetType::ScriptableObject:
+        case AssetType::LuaScript:
         case AssetType::Prefab:
         case AssetType::Terrain:
         {

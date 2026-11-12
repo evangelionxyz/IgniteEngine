@@ -17,15 +17,18 @@ struct lua_State;
 namespace ignite
 {
     class Scene;
+}
 
-    class IGN_API LuaScriptRuntime
+namespace ignite::lua
+{
+    class IGN_API ScriptRuntime
     {
     public:
-        explicit LuaScriptRuntime(Scene *scene);
-        ~LuaScriptRuntime();
+        explicit ScriptRuntime(Scene *scene);
+        ~ScriptRuntime();
 
-        LuaScriptRuntime(const LuaScriptRuntime &) = delete;
-        LuaScriptRuntime &operator=(const LuaScriptRuntime &) = delete;
+        ScriptRuntime(const ScriptRuntime &) = delete;
+        ScriptRuntime &operator=(const ScriptRuntime &) = delete;
 
         bool IsInitialized() const { return m_State != nullptr; }
         void CreateInstance(UUID entityId, const std::filesystem::path &scriptPath, AssetHandle scriptHandle = AssetHandle(0));

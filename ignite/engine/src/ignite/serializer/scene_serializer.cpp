@@ -27,6 +27,8 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <ranges>
+
 namespace ignite
 {
     SceneSerializer::SceneSerializer(const Ref<Scene> &scene, Project *project)
@@ -49,15 +51,13 @@ namespace ignite
 
         // Sort by name first: copy map contents into a vector for sorting
         std::vector<std::pair<UUID, entt::entity>> sortedEntities(m_Scene->entities.begin(), m_Scene->entities.end());
-        std::sort(sortedEntities.begin(), sortedEntities.end(), [scene = m_Scene](const auto &a, const auto &b)
+        std::ranges::sort(sortedEntities, [scene = m_Scene](const auto &a, const auto &b)
         {
             Entity entityA = { a.second, scene.get() };
             Entity entityB = { b.second, scene.get() };
 
             // Use Entity::GetName() to compare display names
-            const std::string &nameA = entityA.GetName();
-            const std::string &nameB = entityB.GetName();
-            return nameA < nameB;
+            return entityA.GetName() < entityB.GetName();
         });
 
         // entities sequence
@@ -66,9 +66,7 @@ namespace ignite
             Entity entity = { e, m_Scene.get() };
             const IDComponent &idComp = entity.GetComponent<IDComponent>();
 
-            const bool isPrefab = idComp.IsInType(EntityType_Prefab);
-
-            if (isPrefab)
+            if (idComp.IsInType(EntityType_Prefab))
                 continue;
 
             EntitySerializer::SerializeEntity(sr, entity);
@@ -160,10 +158,9 @@ namespace ignite
         }
 
         // attach each node to it's parent
-        for (auto &[uuid, e] : desScene->entities)
+        for (const auto &[uuid, e] : desScene->entities)
         {
             Entity entity { e, desScene.get() };
-
             if (entity.GetParentUUID() != UUID(0))
             {
                 Entity parent = SceneManager::GetEntity(desScene.get(), entity.GetParentUUID());
@@ -181,11 +178,11 @@ namespace ignite
     {
         // Delegate to fast Rust serde_json serializer
         std::string rustPath = filepath.string();
-        std::vector<char> buffer(2 * 1024 * 1024);
-        if (ignite_scene_deserialize_hierarchy_json(rustPath.c_str(), buffer.data(), buffer.size()) == IgniteResult_Ok)
+        if (std::vector<char> buffer(2 * 1024 * 1024); ignite_scene_deserialize_hierarchy_json(rustPath.c_str(), buffer.data(), buffer.size()) == IgniteResult_Ok)
         {
             return std::string(buffer.data());
         }
+
         if (!std::filesystem::exists(filepath))
         {
             LOG_ERROR("[SceneSerializer] File does not exist: {}", filepath.generic_string());
@@ -243,8 +240,12 @@ namespace ignite
             if (entityNode["Transform"])
             {
                 JsonNode tNode = entityNode["Transform"];
-                glm::vec3 pos = tNode["LocalTranslation"] ? tNode["LocalTranslation"].as<glm::vec3>(glm::vec3(0.0f)) :
-                    (tNode["WorldTranslation"] ? tNode["WorldTranslation"].as<glm::vec3>(glm::vec3(0.0f)) : glm::vec3(0.0f));
+                glm::vec3 pos = tNode["LocalTranslation"]
+                    ? tNode["LocalTranslation"].as<glm::vec3>(glm::vec3(0.0f))
+                    : (tNode["WorldTranslation"]
+                        ? tNode["WorldTranslation"].as<glm::vec3>(glm::vec3(0.0f))
+                        : glm::vec3(0.0f));
+
                 glm::vec3 rot(0.0f);
                 if (tNode["LocalRotation"])
                 {
@@ -272,8 +273,12 @@ namespace ignite
                         catch (...) {}
                     }
                 }
-                glm::vec3 scl = tNode["LocalScale"] ? tNode["LocalScale"].as<glm::vec3>(glm::vec3(1.0f)) :
-                    (tNode["WorldScale"] ? tNode["WorldScale"].as<glm::vec3>(glm::vec3(1.0f)) : glm::vec3(1.0f));
+
+                glm::vec3 scl = tNode["LocalScale"]
+                    ? tNode["LocalScale"].as<glm::vec3>(glm::vec3(1.0f))
+                    : (tNode["WorldScale"]
+                        ? tNode["WorldScale"].as<glm::vec3>(glm::vec3(1.0f))
+                        : glm::vec3(1.0f));
 
                 json c;
                 c["type"] = "Transform";

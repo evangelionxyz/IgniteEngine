@@ -2,8 +2,7 @@
 
 #include "ignite_pch.hpp"
 #include "scene_manager.hpp"
-#include "ignite/scripting/lua_script_runtime.hpp"
-#include "ignite/scripting/lua_script_runtime.hpp"
+#include "ignite/scripting/lua/lua_script_runtime.hpp"
 #include "scene.hpp"
 #include "prefab.hpp"
 #include "ignite/core/application.hpp"
@@ -145,83 +144,83 @@ namespace ignite
         return createdEntity;
     }
 
-	Entity SceneManager::CreateCircle(Scene *scene, const std::string &name, UUID uuid)
-	{
-		// create local storage for entity data
-		Entity createdEntity;
+    Entity SceneManager::CreateCircle(Scene *scene, const std::string &name, UUID uuid)
+    {
+        // create local storage for entity data
+        Entity createdEntity;
 
-		// prepare entity creation logic
-		std::function createFunc = [=, &createdEntity]() mutable
-			{
-				createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
-				createdEntity.AddComponent<Circle2DComponent>();
-			};
+        // prepare entity creation logic
+        std::function createFunc = [=, &createdEntity]() mutable
+            {
+                createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
+                createdEntity.AddComponent<Circle2DComponent>();
+            };
 
-		// immediately call createFunc to initialize createdEntity
-		createFunc();
+        // immediately call createFunc to initialize createdEntity
+        createFunc();
 
-		// capture scene and entity by value to preserve the for undo
-		Scene *capturedScene = scene;
-		UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
+        // capture scene and entity by value to preserve the for undo
+        Scene *capturedScene = scene;
+        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
 
-		std::function destroyFunc = [capturedScene, capturedUUID]()
-			{
-				if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-				{
-					DestroyEntity(capturedScene, entityToDestroy);
-				}
-			};
+        std::function destroyFunc = [capturedScene, capturedUUID]()
+            {
+                if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
+                {
+                    DestroyEntity(capturedScene, entityToDestroy);
+                }
+            };
 
-		CommandManager::AddCommand(
-			CreateScope<EntityManagerCommand>(
-				createFunc,
-				destroyFunc,
-				CommandState_Create
-			)
-		);
+        CommandManager::AddCommand(
+            CreateScope<EntityManagerCommand>(
+                createFunc,
+                destroyFunc,
+                CommandState_Create
+            )
+        );
 
-		return createdEntity;
-	}
+        return createdEntity;
+    }
 
-	Entity SceneManager::CreatePointLight2D(Scene *scene, const std::string &name, UUID uuid)
-	{
-		// create local storage for entity data
-		Entity createdEntity;
+    Entity SceneManager::CreatePointLight2D(Scene *scene, const std::string &name, UUID uuid)
+    {
+        // create local storage for entity data
+        Entity createdEntity;
 
-		// prepare entity creation logic
-		std::function createFunc = [=, &createdEntity]() mutable
-			{
-				createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
-				createdEntity.AddComponent<PointLight2DComponent>();
-			};
+        // prepare entity creation logic
+        std::function createFunc = [=, &createdEntity]() mutable
+            {
+                createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
+                createdEntity.AddComponent<PointLight2DComponent>();
+            };
 
-		// immediately call createFunc to initialize createdEntity
-		createFunc();
+        // immediately call createFunc to initialize createdEntity
+        createFunc();
 
-		// capture scene and entity by value to preserve the for undo
-		Scene *capturedScene = scene;
-		UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
+        // capture scene and entity by value to preserve the for undo
+        Scene *capturedScene = scene;
+        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
 
-		std::function destroyFunc = [capturedScene, capturedUUID]()
-			{
-				if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-				{
-					DestroyEntity(capturedScene, entityToDestroy);
-				}
-			};
+        std::function destroyFunc = [capturedScene, capturedUUID]()
+            {
+                if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
+                {
+                    DestroyEntity(capturedScene, entityToDestroy);
+                }
+            };
 
-		CommandManager::AddCommand(
-			CreateScope<EntityManagerCommand>(
-				createFunc,
-				destroyFunc,
-				CommandState_Create
-			)
-		);
+        CommandManager::AddCommand(
+            CreateScope<EntityManagerCommand>(
+                createFunc,
+                destroyFunc,
+                CommandState_Create
+            )
+        );
 
-		return createdEntity;
-	}
+        return createdEntity;
+    }
 
-	Entity SceneManager::CreateMesh(Scene *scene, const std::string &name, UUID uuid)
+    Entity SceneManager::CreateMesh(Scene *scene, const std::string &name, UUID uuid)
     {
         scene->SetDirtyFlag(true);
 
@@ -405,13 +404,13 @@ namespace ignite
             }
         }
 
-		if (entity.HasComponent<RigidbodyComponent>())
-		{
-			auto &rb = entity.GetComponent<RigidbodyComponent>();
-			if (auto dynActor = rb.dynamicActor.lock()) dynActor->DestroyBody();
-			if (auto statActor = rb.staticActor.lock()) statActor->DestroyBody();
-		}
-		scene->DestroyPhysics2DBody(entity);
+        if (entity.HasComponent<RigidbodyComponent>())
+        {
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            if (auto dynActor = rb.dynamicActor.lock()) dynActor->DestroyBody();
+            if (auto statActor = rb.staticActor.lock()) statActor->DestroyBody();
+        }
+        scene->DestroyPhysics2DBody(entity);
 
         IDComponent idComp = entity.GetComponent<IDComponent>();
 
@@ -628,24 +627,24 @@ namespace ignite
                 }
             }
 
-		    scene->CreatePhysics2DBody(newEntity);
+            scene->CreatePhysics2DBody(newEntity);
         }
 
         if (!scene->IsRunning())
         {
-			// Capture the new entity UUID so undo can destroy it
-			UUID newUUID = newEntityIDComp.uuid;
-			CommandManager::AddCommand(
-				CreateScope<EntityManagerCommand>(
-					[scene, newUUID]() { /* no-op: already duplicated */ },
-					[scene, newUUID]()
-					{
-						if (Entity e = GetEntity(scene, newUUID))
-							DestroyEntity(scene, e);
-					},
-					CommandState_Create
-				)
-			);
+            // Capture the new entity UUID so undo can destroy it
+            UUID newUUID = newEntityIDComp.uuid;
+            CommandManager::AddCommand(
+                CreateScope<EntityManagerCommand>(
+                    [scene, newUUID]() { /* no-op: already duplicated */ },
+                    [scene, newUUID]()
+                    {
+                        if (Entity e = GetEntity(scene, newUUID))
+                            DestroyEntity(scene, e);
+                    },
+                    CommandState_Create
+                )
+            );
         }
 
         return newEntity;
@@ -679,8 +678,8 @@ namespace ignite
 
     bool SceneManager::AddChild(Scene *scene, Entity destination, Entity source)
     {
-		if (source == destination)
-			return false;
+        if (source == destination)
+            return false;
 
         IDComponent &destIDComp = destination.GetComponent<IDComponent>();
         IDComponent &sourceIDComp = source.GetComponent<IDComponent>();
@@ -845,10 +844,10 @@ namespace ignite
 
         Application::SubmitToMainThread([nextSceneHandle, assetManager]()
         {
-			// Load incoming scene async so we can collect its referenced assets
-			Ref<Scene> nextScene = assetManager->GetAsset<Scene>(nextSceneHandle);
-			s_TransitionPending = true;
-			s_PendingSceneHandle = nextSceneHandle;
+            // Load incoming scene async so we can collect its referenced assets
+            Ref<Scene> nextScene = assetManager->GetAsset<Scene>(nextSceneHandle);
+            s_TransitionPending = true;
+            s_PendingSceneHandle = nextSceneHandle;
         });
     }
 

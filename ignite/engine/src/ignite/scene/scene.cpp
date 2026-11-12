@@ -11,7 +11,7 @@
 #include "ignite/physics/3d/physics_3d.hpp"
 #include "ignite/math/transform.hpp"
 #include "ignite/scripting/script_engine.hpp"
-#include "ignite/scripting/lua_script_runtime.hpp"
+#include "ignite/scripting/lua/lua_script_runtime.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/animation_2d.hpp"
@@ -247,7 +247,7 @@ namespace ignite
             scriptEngine->SetSceneContext(this);
         }
 
-        m_LuaScriptRuntime = CreateScope<LuaScriptRuntime>(this);
+        m_LuaScriptRuntime = CreateScope<lua::ScriptRuntime>(this);
 
         // reset time
         timeInSeconds = 0.0f;

@@ -7,15 +7,15 @@
 #include <fstream>
 #include <sstream>
 
-namespace ignite
+namespace ignite::lua
 {
-    LuaScript::LuaScript(const std::filesystem::path &filepath)
+    Script::Script(const std::filesystem::path &filepath)
         : m_Filepath(filepath)
     {
         LoadFromFile(filepath);
     }
 
-    bool LuaScript::LoadFromFile(const std::filesystem::path &filepath)
+    bool Script::LoadFromFile(const std::filesystem::path &filepath)
     {
         m_Filepath = filepath;
         if (!std::filesystem::exists(filepath))
@@ -41,14 +41,14 @@ namespace ignite
         return true;
     }
 
-    bool LuaScript::Reload()
+    bool Script::Reload()
     {
         return LoadFromFile(m_Filepath);
     }
 
-    Ref<LuaScript> LuaScript::Create(const std::filesystem::path &filepath)
+    Ref<Script> Script::Create(const std::filesystem::path &filepath)
     {
-        return CreateRef<LuaScript>(filepath);
+        return CreateRef<lua::Script>(filepath);
     }
 }
 
