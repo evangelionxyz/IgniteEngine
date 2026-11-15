@@ -6,6 +6,7 @@
 #include "ignite/asset/asset_types.hpp"
 #include "ignite/core/file_watcher.hpp"
 
+#include <glm/glm.hpp>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -37,7 +38,10 @@ namespace ignite::lua
         void ReloadScript(const std::filesystem::path &scriptPath);
 
         void Update(float deltaTime);
-        void FixedUpdate();
+        void FixedUpdate(float fixedDeltaTime = 1.0f / 60.0f);
+        void InvokeCollision(UUID entityId, UUID otherEntityId, const char *callback, const glm::vec3 &contactPoint, const glm::vec3 &contactNormal);
+
+        bool ExecuteSnippet(const std::string &code, std::string &outResult, std::string &outError);
 
         void ProcessPendingReloads();
 

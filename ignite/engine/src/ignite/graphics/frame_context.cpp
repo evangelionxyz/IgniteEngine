@@ -17,7 +17,8 @@ namespace ignite
             const char *debugName,
             nri::Buffer *&outBuffer,
             nri::Memory *&outMemory,
-            nri::Descriptor *&outDescriptor)
+            nri::Descriptor *&outDescriptor,
+            uint8_t *&outMappedMemory)
         {
             auto *dm = DeviceManager::GetInstance();
             if (!device && dm)
@@ -36,12 +37,19 @@ namespace ignite
             nri.SetDebugName(outBuffer, debugName);
 
             nri::MemoryDesc memDesc = {};
-            nri.GetBufferMemoryDesc(*outBuffer, nri::MemoryLocation::HOST_UPLOAD, memDesc);
+            nri.GetBufferMemoryDesc(*outBuffer, nri::MemoryLocation::DEVICE_UPLOAD, memDesc);
 
             nri::AllocateMemoryDesc allocDesc = {};
             allocDesc.size = memDesc.size;
             allocDesc.type = memDesc.type;
             res = nri.AllocateMemory(*device, allocDesc, outMemory);
+            if (res != nri::Result::SUCCESS || !outMemory)
+            {
+                nri.GetBufferMemoryDesc(*outBuffer, nri::MemoryLocation::HOST_UPLOAD, memDesc);
+                allocDesc.size = memDesc.size;
+                allocDesc.type = memDesc.type;
+                res = nri.AllocateMemory(*device, allocDesc, outMemory);
+            }
             LOG_ASSERT(res == nri::Result::SUCCESS && outMemory, "[FrameContext] Failed to allocate memory for {}", debugName);
 
             nri::BindBufferMemoryDesc bindDesc = {};
@@ -50,6 +58,8 @@ namespace ignite
             bindDesc.offset = 0;
             res = nri.BindBufferMemory(&bindDesc, 1);
             LOG_ASSERT(res == nri::Result::SUCCESS, "[FrameContext] Failed to bind memory for {}", debugName);
+
+            outMappedMemory = static_cast<uint8_t *>(nri.MapBuffer(*outBuffer, 0, byteSize));
 
             nri::BufferViewDesc viewDesc = {};
             viewDesc.buffer = outBuffer;
@@ -61,7 +71,7 @@ namespace ignite
             LOG_ASSERT(res == nri::Result::SUCCESS && outDescriptor, "[FrameContext] Failed to create descriptor for {}", debugName);
         }
 
-        void DestroyStructuredBuffer(nri::Buffer *&buffer, nri::Memory *&memory, nri::Descriptor *&descriptor)
+        void DestroyStructuredBuffer(nri::Buffer *&buffer, nri::Memory *&memory, nri::Descriptor *&descriptor, uint8_t *&mappedMemory)
         {
             auto *dm = DeviceManager::GetInstance();
             if (!dm || !dm->GetDevice())
@@ -75,6 +85,11 @@ namespace ignite
             }
             if (buffer)
             {
+                if (mappedMemory)
+                {
+                    nri.UnmapBuffer(*buffer);
+                    mappedMemory = nullptr;
+                }
                 nri.DestroyBuffer(buffer);
                 buffer = nullptr;
             }
@@ -102,8 +117,15 @@ namespace ignite
             return maxObjects > 0 ? (maxObjects - 1) : 0;
         }
 
+        const uint64_t offset = static_cast<uint64_t>(index) * sizeof(Mesh_GPUData);
+        if (m_MappedMemory)
+        {
+            std::memcpy(m_MappedMemory + offset, &data, sizeof(Mesh_GPUData));
+            return index;
+        }
+
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
-        void *mapped = nri.MapBuffer(*m_Buffer, static_cast<uint64_t>(index) * sizeof(Mesh_GPUData), sizeof(Mesh_GPUData));
+        void *mapped = nri.MapBuffer(*m_Buffer, offset, sizeof(Mesh_GPUData));
         if (mapped)
         {
             std::memcpy(mapped, &data, sizeof(Mesh_GPUData));
@@ -131,9 +153,17 @@ namespace ignite
             return base < maxIndices ? base : 0;
         }
 
-        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        const uint64_t offset = static_cast<uint64_t>(base) * sizeof(uint32_t);
         const uint64_t copySize = static_cast<uint64_t>(count) * sizeof(uint32_t);
-        void *mapped = nri.MapBuffer(*m_Buffer, static_cast<uint64_t>(base) * sizeof(uint32_t), copySize);
+        if (m_MappedMemory)
+        {
+            std::memcpy(m_MappedMemory + offset, indices, copySize);
+            m_IndexCount += count;
+            return base;
+        }
+
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        void *mapped = nri.MapBuffer(*m_Buffer, offset, copySize);
         if (mapped)
         {
             std::memcpy(mapped, indices, copySize);
@@ -146,12 +176,12 @@ namespace ignite
     void InstanceIndexBuffer::Initialize(uint32_t maxIndices, nri::Device *device)
     {
         m_ByteSize = sizeof(uint32_t) * maxIndices;
-        CreateHostUploadStructuredBuffer(device, m_ByteSize, sizeof(uint32_t), "Instance Index Buffer", m_Buffer, m_Memory, m_Descriptor);
+        CreateHostUploadStructuredBuffer(device, m_ByteSize, sizeof(uint32_t), "Instance Index Buffer", m_Buffer, m_Memory, m_Descriptor, m_MappedMemory);
     }
 
     void InstanceIndexBuffer::Shutdown()
     {
-        DestroyStructuredBuffer(m_Buffer, m_Memory, m_Descriptor);
+        DestroyStructuredBuffer(m_Buffer, m_Memory, m_Descriptor, m_MappedMemory);
         m_ByteSize = 0;
     }
 
@@ -172,9 +202,16 @@ namespace ignite
             return 0;
         }
 
-        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        const uint64_t offset = static_cast<uint64_t>(index) * sizeof(glm::mat4);
         const uint64_t copySize = static_cast<uint64_t>(count) * sizeof(glm::mat4);
-        void *mapped = nri.MapBuffer(*m_Buffer, static_cast<uint64_t>(index) * sizeof(glm::mat4), copySize);
+        if (m_MappedMemory)
+        {
+            std::memcpy(m_MappedMemory + offset, bones, copySize);
+            return index;
+        }
+
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        void *mapped = nri.MapBuffer(*m_Buffer, offset, copySize);
         if (mapped)
         {
             std::memcpy(mapped, bones, copySize);
@@ -186,24 +223,24 @@ namespace ignite
     void ObjectBuffer::Initialize(uint32_t maxObjects, nri::Device *device)
     {
         m_ByteSize = sizeof(Mesh_GPUData) * maxObjects;
-        CreateHostUploadStructuredBuffer(device, m_ByteSize, sizeof(Mesh_GPUData), "Object Buffer", m_Buffer, m_Memory, m_Descriptor);
+        CreateHostUploadStructuredBuffer(device, m_ByteSize, sizeof(Mesh_GPUData), "Object Buffer", m_Buffer, m_Memory, m_Descriptor, m_MappedMemory);
     }
 
     void ObjectBuffer::Shutdown()
     {
-        DestroyStructuredBuffer(m_Buffer, m_Memory, m_Descriptor);
+        DestroyStructuredBuffer(m_Buffer, m_Memory, m_Descriptor, m_MappedMemory);
         m_ByteSize = 0;
     }
 
     void BoneBuffer::Initialize(uint32_t maxBones, nri::Device *device)
     {
         m_ByteSize = sizeof(glm::mat4) * maxBones;
-        CreateHostUploadStructuredBuffer(device, m_ByteSize, sizeof(glm::mat4), "Bone Buffer", m_Buffer, m_Memory, m_Descriptor);
+        CreateHostUploadStructuredBuffer(device, m_ByteSize, sizeof(glm::mat4), "Bone Buffer", m_Buffer, m_Memory, m_Descriptor, m_MappedMemory);
     }
 
     void BoneBuffer::Shutdown()
     {
-        DestroyStructuredBuffer(m_Buffer, m_Memory, m_Descriptor);
+        DestroyStructuredBuffer(m_Buffer, m_Memory, m_Descriptor, m_MappedMemory);
         m_ByteSize = 0;
     }
 

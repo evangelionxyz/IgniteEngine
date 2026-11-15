@@ -37,6 +37,24 @@ namespace ignite
         createInfo.useGui = true;
         createInfo.maximized = true;
 
+        for (int i = 1; i < args.count; ++i)
+        {
+            const std::string_view arg(args[i]);
+            if (arg == "--nogui" || arg == "--headless")
+            {
+                createInfo.useGui = false;
+                createInfo.offscreen = true;
+            }
+            else if (arg == "--offscreen")
+            {
+                createInfo.offscreen = true;
+            }
+            else if (arg == "--windowed")
+            {
+                createInfo.maximized = false;
+            }
+        }
+
         // vulkan by default
         createInfo.graphicsApi = nri::GraphicsAPI::VK;
         return new EditorApp(createInfo);

@@ -426,13 +426,13 @@ namespace ignite
             const auto &netComp = entity.GetComponent<NetworkIdentityComponent>();
             if (netComp.isLocalPlayer)
             {
-                // Local player: reconcile prediction
+                // Local player: reconcile prediction and retain smooth visual error offset
                 glm::vec3 correctedPos;
                 glm::quat correctedRot;
                 if (m_Prediction.Reconcile(msg.lastProcessedInputSeq, st.position, st.rotation,
                                            1.0f / 60.0f, nullptr, correctedPos, correctedRot))
                 {
-                    ApplyEntityTransform(m_Scene, entity, correctedPos, correctedRot, st.scale);
+                    ApplyEntityTransform(m_Scene, entity, correctedPos + m_Prediction.GetVisualOffset(), correctedRot, st.scale);
                 }
             }
             else
@@ -446,10 +446,24 @@ namespace ignite
     void NetClientReplication::Update(float deltaTime)
     {
         m_CurrentTime += deltaTime;
+        const glm::vec3 prevOffset = m_Prediction.GetVisualOffset();
         m_Prediction.UpdateVisualOffset(deltaTime);
+        const glm::vec3 offsetDelta = m_Prediction.GetVisualOffset() - prevOffset;
 
         if (!m_Scene)
             return;
+
+        if (glm::dot(offsetDelta, offsetDelta) > 0.0f)
+        {
+            Entity localPlayer = GetLocalPlayerEntity();
+            if (localPlayer.IsValid() && localPlayer.HasComponent<TransformComponent>())
+            {
+                auto &tc = localPlayer.GetComponent<TransformComponent>();
+                tc.local.translation += offsetDelta;
+                tc.world.translation += offsetDelta;
+                tc.dirty = true;
+            }
+        }
 
         // Apply interpolation samples to remote entities
         for (auto &[netId, interp] : m_Interpolators)

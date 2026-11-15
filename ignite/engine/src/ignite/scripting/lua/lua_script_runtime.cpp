@@ -346,6 +346,26 @@ namespace ignite::lua
     {
         ProcessPendingReloads();
 
+        // Spawn instances for any LuaScriptComponents added at runtime
+        if (m_Scene && m_Scene->registry)
+        {
+            std::vector<std::tuple<UUID, std::filesystem::path, AssetHandle>> toCreate;
+            auto view = m_Scene->registry->view<LuaScriptComponent, IDComponent>();
+            for (auto e : view)
+            {
+                const auto &idc = view.get<IDComponent>(e);
+                const auto &lsc = view.get<LuaScriptComponent>(e);
+                if (!m_Instances.contains(idc.uuid) && !lsc.scriptPath.empty())
+                {
+                    toCreate.emplace_back(idc.uuid, lsc.scriptPath, lsc.scriptHandle);
+                }
+            }
+            for (const auto &[id, path, handle] : toCreate)
+            {
+                CreateInstance(id, path, handle);
+            }
+        }
+
         std::vector<UUID> failed;
         for (auto &[id, instance] : m_Instances)
         {
@@ -358,17 +378,107 @@ namespace ignite::lua
             DestroyInstance(id);
     }
 
-    void ScriptRuntime::FixedUpdate()
+    void ScriptRuntime::FixedUpdate(float fixedDeltaTime)
     {
         std::vector<UUID> failed;
         for (auto &[id, instance] : m_Instances)
         {
             Entity entity = lua::ResolveEntity(m_Scene, static_cast<uint64_t>(id));
-            if (!entity || !entity.HasComponent<LuaScriptComponent>() || !Invoke(id, instance, "on_fixed_update", 0.0f, false))
+            if (!entity || !entity.HasComponent<LuaScriptComponent>() || !Invoke(id, instance, "on_fixed_update", fixedDeltaTime, true))
                 failed.push_back(id);
         }
 
         for (UUID id : failed)
             DestroyInstance(id);
+    }
+
+    void ScriptRuntime::InvokeCollision(UUID entityId, UUID otherEntityId, const char *callback, const glm::vec3 &contactPoint, const glm::vec3 &contactNormal)
+    {
+        if (!m_State || !m_Scene || !callback)
+            return;
+
+        auto it = m_Instances.find(entityId);
+        if (it == m_Instances.end())
+            return;
+
+        Instance &instance = it->second;
+        if (instance.callbacksRef == LUA_NOREF)
+            return;
+
+        const int baseTop = lua_gettop(m_State);
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, instance.callbacksRef);
+        lua_pushstring(m_State, callback);
+        lua_rawget(m_State, -2);
+
+        if (!lua_isfunction(m_State, -1))
+        {
+            lua_settop(m_State, baseTop);
+            return;
+        }
+
+        lua::PushEntity(m_State, m_Scene, static_cast<uint64_t>(entityId));
+        if (lua::ResolveEntity(m_Scene, static_cast<uint64_t>(otherEntityId)))
+            lua::PushEntity(m_State, m_Scene, static_cast<uint64_t>(otherEntityId));
+        else
+            lua_pushnil(m_State);
+
+        lua::PushVector(m_State, contactPoint);
+        lua::PushVector(m_State, contactNormal);
+
+        if (lua_pcall(m_State, 4, 0, 0) != LUA_OK)
+        {
+            LOG_ERROR("[Lua] Collision callback '{}' failed in '{}' for entity {}: {}",
+                callback, instance.path.generic_string(), static_cast<uint64_t>(entityId), lua::LuaErrorMessage(m_State));
+        }
+
+        lua_settop(m_State, baseTop);
+    }
+
+    bool ScriptRuntime::ExecuteSnippet(const std::string &code, std::string &outResult, std::string &outError)
+    {
+        outResult.clear();
+        outError.clear();
+
+        if (!m_State)
+        {
+            outError = "Lua state is not initialized";
+            return false;
+        }
+
+        const int baseTop = lua_gettop(m_State);
+        if (luaL_loadbuffer(m_State, code.data(), code.size(), "agent_snippet") != LUA_OK)
+        {
+            outError = lua::LuaErrorMessage(m_State);
+            lua_settop(m_State, baseTop);
+            return false;
+        }
+
+        if (lua_pcall(m_State, 0, LUA_MULTRET, 0) != LUA_OK)
+        {
+            outError = lua::LuaErrorMessage(m_State);
+            lua_settop(m_State, baseTop);
+            return false;
+        }
+
+        const int retCount = lua_gettop(m_State) - baseTop;
+        for (int i = 1; i <= retCount; ++i)
+        {
+            const int idx = baseTop + i;
+            if (i > 1)
+                outResult += ", ";
+
+            if (lua_isboolean(m_State, idx))
+                outResult += lua_toboolean(m_State, idx) ? "true" : "false";
+            else if (lua_isnil(m_State, idx))
+                outResult += "nil";
+            else if (const char *s = luaL_tolstring(m_State, idx, nullptr))
+            {
+                outResult += s;
+                lua_pop(m_State, 1);
+            }
+        }
+
+        lua_settop(m_State, baseTop);
+        return true;
     }
 }

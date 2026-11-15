@@ -100,6 +100,8 @@ namespace ignite
         m_WorldEnvironment = nullptr;
 
         ClearResources();
+        m_RuntimeMaterial.reset();
+        m_TerrainRenderer.reset();
 
         if (m_Scene)
         {
@@ -199,8 +201,10 @@ namespace ignite
         m_SSAOs.clear();
 
         m_ResolvedAssetsCache.clear();
-        m_RuntimeMaterial.reset();
-        m_TerrainRenderer.reset();
+        m_FramePacket.Clear();
+
+        if (m_RuntimeMaterial)
+            m_RuntimeMaterial->InvalidateBindingSet();
 
         BindingCache::Clear();
         WidgetRenderer::ClearCache();
@@ -511,6 +515,8 @@ namespace ignite
             }
 
             // Full render path
+            CollectSceneLighting(frameContext);
+
             CameraBufferData cameraData = { projection, camera->GetView(), glm::vec4(camera->position, 1.0f) };
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::WriteFrameData");
@@ -518,9 +524,20 @@ namespace ignite
                 frameContext->sceneBuffer.SetData(&m_SceneGPUData, sizeof(m_SceneGPUData));
             }
 
+            m_FramePacket.view = camera->GetView();
+            m_FramePacket.projection = projection;
+            m_FramePacket.viewProjection = projection * m_FramePacket.view;
+            m_FramePacket.cameraPosition = camera->position;
+            m_FramePacket.isGameCamera = isGameCamera;
+            m_FramePacket.drawDebug = drawDebug;
+
             if (plan.hasMeshes || plan.hasTerrain)
             {
                 PreallocateGPUData(cmd, frameContext);
+            }
+            else
+            {
+                m_FramePacket.Clear();
             }
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
@@ -798,6 +815,131 @@ namespace ignite
         SubmitCommandBuffer(cmd);
     }
 
+    void SceneRenderer::CollectSceneLighting(FrameContext *frameContext)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!m_Scene || !m_Scene->registry)
+            return;
+
+        auto worldEnvView = m_Scene->registry->view<WorldEnvironment>();
+        for (entt::entity e : worldEnvView)
+        {
+            WorldEnvironment &world = worldEnvView.get<WorldEnvironment>(e);
+            m_SceneGPUData.exposure = world.exposure;
+            m_SceneGPUData.gamma = world.gamma;
+            m_SceneGPUData.ambient = world.ambient;
+            m_SceneGPUData.skyType = static_cast<int>(world.skyType);
+            break;
+        }
+
+        // Collect point lights
+        {
+            PointLightBufferData &pointLightData = m_FramePacket.pointLights;
+            pointLightData = {};
+            int pointLightCount = 0;
+
+            auto pointLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, PointLightComponent>();
+            for (entt::entity e : pointLightView)
+            {
+                if (pointLightCount >= MAX_POINT_LIGHTS)
+                    break;
+
+                const auto &[tr, rc, light] = pointLightView.get<TransformComponent, RenderingComponent, PointLightComponent>(e);
+                if (!rc.visible || !light.enabled)
+                    continue;
+
+                PointLight_GPUData &gpu = pointLightData.lights[pointLightCount];
+                gpu.positionAndRange = glm::vec4(tr.world.translation, std::max(light.range, 0.001f));
+                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+                gpu.attenuation = glm::vec4(std::max(light.constantAttenuation, 0.001f), light.linearAttenuation, light.quadraticAttenuation, 0.0f);
+                ++pointLightCount;
+            }
+
+            m_SceneGPUData.numPointLights = pointLightCount;
+            m_FramePacket.stats.pointLightCount = static_cast<uint32_t>(pointLightCount);
+            frameContext->pointLightBuffer.SetData(&pointLightData, sizeof(pointLightData));
+        }
+
+        // Collect spot lights
+        {
+            SpotLightBufferData &spotLightData = m_FramePacket.spotLights;
+            spotLightData = {};
+            int spotLightCount = 0;
+
+            auto spotLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, SpotLightComponent>();
+            for (entt::entity e : spotLightView)
+            {
+                if (spotLightCount >= MAX_SPOT_LIGHTS)
+                    break;
+
+                const auto &[tr, rc, light] = spotLightView.get<TransformComponent, RenderingComponent, SpotLightComponent>(e);
+                if (!rc.visible || !light.enabled)
+                    continue;
+
+                const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+
+                SpotLight_GPUData &gpu = spotLightData.lights[spotLightCount];
+                gpu.positionAndRange = glm::vec4(tr.world.translation, std::max(light.range, 0.001f));
+                gpu.directionAndAngle = glm::vec4(forward, glm::cos(glm::radians(light.outerConeAngle)));
+                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+                gpu.attenuation = glm::vec4(std::max(light.constantAttenuation, 0.001f), light.linearAttenuation, light.quadraticAttenuation,
+                    glm::cos(glm::radians(light.innerConeAngle)));
+                ++spotLightCount;
+            }
+
+            m_SceneGPUData.numSpotLights = spotLightCount;
+            m_FramePacket.stats.spotLightCount = static_cast<uint32_t>(spotLightCount);
+            frameContext->spotLightBuffer.SetData(&spotLightData, sizeof(spotLightData));
+        }
+
+        glm::vec3 sunDirection =
+        {
+            glm::cos(m_SceneGPUData.sungAngles.y) * glm::sin(m_SceneGPUData.sungAngles.x),
+            glm::sin(m_SceneGPUData.sungAngles.y),
+            glm::cos(m_SceneGPUData.sungAngles.y) * glm::cos(m_SceneGPUData.sungAngles.x)
+        };
+
+        bool cascadeShadow = false;
+        float shadowDist = 200.0f;
+        auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
+        for (entt::entity e : lightView)
+        {
+            const TransformComponent &tr = lightView.get<TransformComponent>(e);
+            const DirectionalLightComponent &light = lightView.get<DirectionalLightComponent>(e);
+
+            sunDirection = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            cascadeShadow = light.cascadeShadow;
+
+            auto &csmData = m_CascadedShadowMap->GetGPUData();
+            csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
+            csmData.minBias = light.shadowMinBias;
+            csmData.maxBias = light.shadowMaxBias;
+            csmData.pcfRadius = light.pcfRadius;
+            shadowDist = light.shadowDistance;
+
+            m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+            m_SceneGPUData.sungAngles.x = std::atan2(sunDirection.x, sunDirection.z);
+            m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
+            m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
+            m_SceneGPUData.sunDirection = glm::vec4(sunDirection, 0.0f);
+
+            const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
+            if (m_CascadedShadowMap->GetQuality() != quality)
+            {
+                m_CascadedShadowMap->Resize(quality);
+                Application::SubmitToMainThread([]() { SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment }); });
+            }
+
+            break;
+        }
+
+        m_FramePacket.sunDirection = sunDirection;
+        m_FramePacket.shadowDistance = shadowDist;
+        m_FramePacket.cascadeShadow = cascadeShadow;
+        m_FramePacket.stats.hasDirectionalShadow = cascadeShadow;
+    }
+
     void SceneRenderer::PreallocateGPUData(nri::CommandBuffer *cmd, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
@@ -805,6 +947,8 @@ namespace ignite
         m_EntityObjectIndexCache.clear();
         m_EntityBoneOffsetCache.clear();
         m_SocketObjectIndexCache.clear();
+        m_FramePacket.Clear();
+        m_FramePacket.Reserve();
 
         // 1. Preallocate and upload Skeletal Meshes (including bone data)
         auto skeletalMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
@@ -864,6 +1008,17 @@ namespace ignite
                 indices.push_back(objectIndex);
             }
             m_EntityObjectIndexCache[e] = indices;
+
+            SkeletalMeshPacketItem skelItem;
+            skelItem.entity = e;
+            skelItem.objectID = objectID;
+            skelItem.worldMatrix = tr.world.GetMatrix();
+            skelItem.normalMatrix = smc.normalMatrix;
+            skelItem.mesh = skeletalMesh.get();
+            skelItem.component = &smc;
+            skelItem.boneOffset = boneOffset;
+            m_FramePacket.skeletalMeshes.push_back(skelItem);
+            m_FramePacket.skeletalMeshAABBs.push_back(smc.worldAABB);
 
             // Handle socket attachments
             if (skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
@@ -960,6 +1115,7 @@ namespace ignite
                 }
             }
         }
+        m_FramePacket.stats.totalSkeletalMeshes = static_cast<uint32_t>(m_FramePacket.skeletalMeshes.size());
 
         // 2. Preallocate and upload Static Meshes
         auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
@@ -974,6 +1130,7 @@ namespace ignite
                 continue;
 
             const auto &instances = staticMesh->GetMeshInstances();
+            const uint32_t firstObjectOffset = static_cast<uint32_t>(m_FramePacket.staticMeshObjectIndices.size());
             std::vector<uint32_t> indices;
             indices.reserve(instances.size());
 
@@ -1004,9 +1161,23 @@ namespace ignite
 
                 uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
                 indices.push_back(objectIndex);
+                m_FramePacket.staticMeshObjectIndices.push_back(objectIndex);
             }
             m_EntityObjectIndexCache[e] = indices;
+
+            StaticMeshPacketItem staticItem;
+            staticItem.entity = e;
+            staticItem.objectID = objectID;
+            staticItem.worldMatrix = tr.world.GetMatrix();
+            staticItem.normalMatrix = smc.normalMatrix;
+            staticItem.mesh = staticMesh.get();
+            staticItem.component = &smc;
+            staticItem.firstObjectIndexOffset = firstObjectOffset;
+            staticItem.instanceCount = static_cast<uint32_t>(instances.size());
+            m_FramePacket.staticMeshes.push_back(staticItem);
+            m_FramePacket.staticMeshAABBs.push_back(smc.worldAABB);
         }
+        m_FramePacket.stats.totalStaticMeshes = static_cast<uint32_t>(m_FramePacket.staticMeshes.size());
 
         // 3. Preallocate and upload Terrain Meshes
         auto terrainView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
@@ -1016,7 +1187,7 @@ namespace ignite
             if (!rc.visible)
                 continue;
 
-            if (!tc.gpuInitialized || tc.chunks.empty())
+            if ((!tc.gpuInitialized || tc.chunks.empty()) && m_TerrainRenderer)
             {
                 m_TerrainRenderer->RebuildMesh(cmd, tc, tr.world.GetMatrix());
             }
@@ -1026,11 +1197,14 @@ namespace ignite
             std::vector<uint32_t> indices;
             indices.reserve(tc.chunks.size());
 
+            const glm::mat4 worldMat = tr.world.GetMatrix();
+            const glm::mat4 normalMat = glm::transpose(glm::inverse(glm::mat3(worldMat)));
+
             for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
             {
                 Mesh_GPUData gpuData;
-                gpuData.transformation = tr.world.GetMatrix();
-                gpuData.normal = glm::transpose(glm::inverse(glm::mat3(tr.world.GetMatrix())));
+                gpuData.transformation = worldMat;
+                gpuData.normal = normalMat;
                 gpuData.objectID = objectID;
                 gpuData.boneOffset = 0;
 
@@ -1038,131 +1212,26 @@ namespace ignite
                 indices.push_back(objectIndex);
             }
             m_EntityObjectIndexCache[e] = indices;
+
+            TerrainPacketItem terrainItem;
+            terrainItem.entity = e;
+            terrainItem.objectID = objectID;
+            terrainItem.worldMatrix = worldMat;
+            terrainItem.normalMatrix = normalMat;
+            terrainItem.component = &tc;
+            Ref<Material> mat = ResolveAsset<Material>(tc.materialHandle);
+            terrainItem.material = mat ? mat.get() : nullptr;
+            m_FramePacket.terrains.push_back(terrainItem);
         }
+        m_FramePacket.stats.totalTerrains = static_cast<uint32_t>(m_FramePacket.terrains.size());
     }
 
     void SceneRenderer::ShadowPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
 
-        // Static
-        Ref<GraphicsPipeline> staticCSMPSO = GetStaticCSMPSO();
-
-        // Animated
-        Ref<GraphicsPipeline> animatedCSMPSO = GetAnimatedCSMPSO();
-
-        auto worldEnvView = m_Scene->registry->view<WorldEnvironment>();
-        for (entt::entity e : worldEnvView)
-        {
-            WorldEnvironment &world = worldEnvView.get<WorldEnvironment>(e);
-            m_SceneGPUData.exposure = world.exposure;
-            m_SceneGPUData.gamma = world.gamma;
-            m_SceneGPUData.ambient = world.ambient;
-            m_SceneGPUData.skyType = static_cast<int>(world.skyType);
-            break;
-        }
-
-        // Collect point lights
-        {
-            PointLightBufferData pointLightData = {};
-            int pointLightCount = 0;
-
-            auto pointLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, PointLightComponent>();
-            for (entt::entity e : pointLightView)
-            {
-                if (pointLightCount >= MAX_POINT_LIGHTS)
-                    break;
-
-                const auto &[tr, rc, light] = pointLightView.get<TransformComponent, RenderingComponent, PointLightComponent>(e);
-                if (!rc.visible || !light.enabled)
-                    continue;
-
-                PointLight_GPUData &gpu = pointLightData.lights[pointLightCount];
-                gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
-                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation, 0.0f);
-                ++pointLightCount;
-            }
-
-            m_SceneGPUData.numPointLights = pointLightCount;
-            frameContext->pointLightBuffer.SetData(&pointLightData, sizeof(pointLightData));
-        }
-
-        // Collect spot lights
-        {
-            SpotLightBufferData spotLightData = {};
-            int spotLightCount = 0;
-
-            auto spotLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, SpotLightComponent>();
-            for (entt::entity e : spotLightView)
-            {
-                if (spotLightCount >= MAX_SPOT_LIGHTS)
-                    break;
-
-                const auto &[tr, rc, light] = spotLightView.get<TransformComponent, RenderingComponent, SpotLightComponent>(e);
-                if (!rc.visible || !light.enabled)
-                    continue;
-
-                const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-
-                SpotLight_GPUData &gpu = spotLightData.lights[spotLightCount];
-                gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
-                gpu.directionAndAngle = glm::vec4(forward, glm::cos(glm::radians(light.outerConeAngle)));
-                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation,
-                    glm::cos(glm::radians(light.innerConeAngle)));
-                ++spotLightCount;
-            }
-
-            m_SceneGPUData.numSpotLights = spotLightCount;
-            frameContext->spotLightBuffer.SetData(&spotLightData, sizeof(spotLightData));
-        }
-
-        glm::vec3 sunDirection =
-        {
-            glm::cos(m_SceneGPUData.sungAngles.y) * glm::sin(m_SceneGPUData.sungAngles.x),
-            glm::sin(m_SceneGPUData.sungAngles.y),
-            glm::cos(m_SceneGPUData.sungAngles.y) * glm::cos(m_SceneGPUData.sungAngles.x)
-        };
-
-        bool cascadeShadow = false;
-        float shadowDist = 200.0f; // default if no directional light found
-        auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
-        for (entt::entity e : lightView)
-        {
-            const TransformComponent &tr = lightView.get<TransformComponent>(e);
-            const DirectionalLightComponent &light = lightView.get<DirectionalLightComponent>(e);
-
-            sunDirection = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-
-            cascadeShadow = light.cascadeShadow;
-
-            auto &csmData = m_CascadedShadowMap->GetGPUData();
-            csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
-            csmData.minBias = light.shadowMinBias;
-            csmData.maxBias = light.shadowMaxBias;
-            csmData.pcfRadius = light.pcfRadius;
-            shadowDist = light.shadowDistance;
-
-            m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-            m_SceneGPUData.sungAngles.x = std::atan2(sunDirection.x, sunDirection.z);
-            m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
-            m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
-            m_SceneGPUData.sunDirection = glm::vec4(sunDirection, 0.0f);
-
-            const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
-            if (m_CascadedShadowMap->GetQuality() != quality)
-            {
-                m_CascadedShadowMap->Resize(quality);
-
-                Application::SubmitToMainThread([]() { SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment }); });
-            }
-
-            break;
-        }
-
         // If no directional light has cascaded shadows enabled, write default disabled CSM buffer and return immediately
-        if (!cascadeShadow)
+        if (!m_FramePacket.cascadeShadow)
         {
             CSM_GPUData sceneCascadeData = {};
             sceneCascadeData.cascadeIndex = -1;
@@ -1170,9 +1239,15 @@ namespace ignite
             frameContext->csmBuffer.SetData(&sceneCascadeData, sizeof(sceneCascadeData));
             return;
         }
-        
+
+        // Static
+        Ref<GraphicsPipeline> staticCSMPSO = GetStaticCSMPSO();
+
+        // Animated
+        Ref<GraphicsPipeline> animatedCSMPSO = GetAnimatedCSMPSO();
+
         {
-            m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
+            m_CascadedShadowMap->ComputeMatrices(camera, m_FramePacket.sunDirection, m_FramePacket.shadowDistance);
 
             // Share cascade data with the main scene pass (cascadeIndex is unused there)
             CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
@@ -1198,57 +1273,36 @@ namespace ignite
 
                 Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
 
-                // Static Mesh Shadows — batch instanced
+                // Static Mesh Shadows — batch instanced from pre-extracted FramePacket
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshShadow::BatchCollect");
 
                     m_ShadowBatchBuilder.Clear();
 
-                    auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
-                    std::vector<entt::entity> candidateEntities;
-                    std::vector<AABB> candidateAABBs;
-
-                    for (entt::entity e : staticMeshView)
+                    const size_t staticCount = m_FramePacket.staticMeshes.size();
+                    if (staticCount > 0)
                     {
-                        const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
-                        if (!rc.visible || smc.handle == AssetHandle(0))
-                            continue;
+                        m_FramePacket.visibilityScratch.resize(staticCount);
+                        cascadeFrustum.IsAABBVisibleBatch(m_FramePacket.staticMeshAABBs.data(), staticCount, m_FramePacket.visibilityScratch.data());
 
-                        candidateEntities.push_back(e);
-                        candidateAABBs.push_back(smc.worldAABB);
-                    }
-
-                    if (!candidateEntities.empty())
-                    {
-                        std::vector<uint8_t> visibility(candidateEntities.size());
-                        cascadeFrustum.IsAABBVisibleBatch(candidateAABBs.data(), candidateAABBs.size(), visibility.data());
-
-                        for (size_t cIdx = 0; cIdx < candidateEntities.size(); ++cIdx)
+                        for (size_t cIdx = 0; cIdx < staticCount; ++cIdx)
                         {
-                            if (!visibility[cIdx])
+                            if (!m_FramePacket.visibilityScratch[cIdx])
                                 continue;
 
-                            entt::entity e = candidateEntities[cIdx];
-                            StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-                            auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
-                            if (!staticMesh)
+                            const StaticMeshPacketItem &item = m_FramePacket.staticMeshes[cIdx];
+                            if (!item.mesh)
                                 continue;
 
-                            const auto &instances = staticMesh->GetMeshInstances();
-                            for (size_t idx = 0; idx < instances.size(); ++idx)
+                            const auto &instances = item.mesh->GetMeshInstances();
+                            for (size_t idx = 0; idx < instances.size() && idx < item.instanceCount; ++idx)
                             {
                                 auto &meshInstance = instances[idx];
                                 auto &primitive = meshInstance->GetPrimitive();
-                                if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                                {
-                                    primitive->WriteBuffer(cmd);
-                                }
-
-                                auto cacheIt = m_EntityObjectIndexCache.find(e);
-                                if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                                if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                                     continue;
 
-                                const uint32_t objectIndex = cacheIt->second[idx];
+                                const uint32_t objectIndex = m_FramePacket.staticMeshObjectIndices[item.firstObjectIndexOffset + idx];
 
                                 BatchKey key;
                                 key.vertexBuffer = *primitive->vertexBuffer;
@@ -1265,28 +1319,27 @@ namespace ignite
                         }
                     }
 
-                    // Terrain Shadows
-                    auto terrainShadowView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
-                    for (entt::entity e : terrainShadowView)
+                    // Terrain Shadows from FramePacket
+                    for (const TerrainPacketItem &tItem : m_FramePacket.terrains)
                     {
-                        auto [tr, rc, tc] = terrainShadowView.get<TransformComponent, RenderingComponent, TerrainComponent>(e);
-                        if (!rc.visible)
+                        if (!tItem.component)
                             continue;
 
-                        auto cacheIt = m_EntityObjectIndexCache.find(e);
+                        auto cacheIt = m_EntityObjectIndexCache.find(tItem.entity);
                         if (cacheIt == m_EntityObjectIndexCache.end())
                             continue;
 
-                        for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
+                        const auto &chunks = tItem.component->chunks;
+                        for (size_t idx = 0; idx < chunks.size(); ++idx)
                         {
                             if (idx >= cacheIt->second.size())
                                 break;
 
-                            auto &chunk = tc.chunks[idx];
+                            const auto &chunk = chunks[idx];
                             if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
                                 continue;
 
-                            AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
+                            AABB worldBounds = chunk.bounds.Transform(tItem.worldMatrix);
                             if (!cascadeFrustum.IsAABBVisible(worldBounds))
                                 continue;
 
@@ -1310,51 +1363,43 @@ namespace ignite
                     FlushShadowBatches(cmd, frameContext, static_cast<uint32_t>(i));
                 }
 
-                // Skeletal Mesh
+                // Skeletal Mesh Shadows from FramePacket
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshShadow");
 
-                    auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
-                    std::vector<entt::entity> candidateSkelEntities;
-                    std::vector<AABB> candidateSkelAABBs;
-
-                    for (entt::entity e : skelMeshView)
+                    const size_t skelCount = m_FramePacket.skeletalMeshes.size();
+                    if (skelCount > 0)
                     {
-                        const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
-                        if (!rc.visible || smc.handle == AssetHandle(0))
-                            continue;
+                        m_FramePacket.visibilityScratch.resize(skelCount);
+                        cascadeFrustum.IsAABBVisibleBatch(m_FramePacket.skeletalMeshAABBs.data(), skelCount, m_FramePacket.visibilityScratch.data());
 
-                        candidateSkelEntities.push_back(e);
-                        candidateSkelAABBs.push_back(smc.worldAABB);
-                    }
+                        const bool startedSkelShadowPass = !csmFramebuffer->IsRendering();
+                        if (startedSkelShadowPass)
+                            csmFramebuffer->BeginRendering(cmd, false, false);
 
-                    if (!candidateSkelEntities.empty())
-                    {
-                        std::vector<uint8_t> visibility(candidateSkelEntities.size());
-                        cascadeFrustum.IsAABBVisibleBatch(candidateSkelAABBs.data(), candidateSkelAABBs.size(), visibility.data());
-
-                        for (size_t cIdx = 0; cIdx < candidateSkelEntities.size(); ++cIdx)
+                        for (size_t cIdx = 0; cIdx < skelCount; ++cIdx)
                         {
-                            if (!visibility[cIdx])
+                            if (!m_FramePacket.visibilityScratch[cIdx])
                                 continue;
 
-                            entt::entity e = candidateSkelEntities[cIdx];
-                            const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
-                            auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+                            const SkeletalMeshPacketItem &item = m_FramePacket.skeletalMeshes[cIdx];
+                            if (!item.mesh || !item.component)
+                                continue;
+
+                            Ref<SkeletalMesh> skeletalMesh = ResolveAsset<SkeletalMesh>(item.component->handle);
                             if (!skeletalMesh)
                                 continue;
 
-                            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                                smc.finalBoneTransforms, smc.cachedInstanceTransforms, animatedCSMPSO, i, e);
+                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, skeletalMesh, item.worldMatrix, item.normalMatrix, item.objectID,
+                                item.component->finalBoneTransforms, item.component->cachedInstanceTransforms, animatedCSMPSO, i, item.entity);
 
                             // --- SOCKET SYSTEM: Render attached meshes for Shadows ---
-                            if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+                            if (skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
                             {
                                 Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
                                 if (skeleton)
                                 {
-                                    for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                                    for (const auto &[socketName, attachedMeshHandle] : item.component->socketAttachments)
                                     {
                                         if (attachedMeshHandle == AssetHandle(0))
                                             continue;
@@ -1363,25 +1408,28 @@ namespace ignite
                                         if (!attachedMeshAsset)
                                             continue;
 
-                                        glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                                        glm::mat4 socketWorld = item.component->GetSocketWorldTransform(item.worldMatrix, *skeleton, socketName);
                                         glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
 
                                         if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
                                         {
                                             auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-                                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                                smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedCSMPSO, i, e, socketName);
+                                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
+                                                item.component->finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedCSMPSO, i, item.entity, socketName);
                                         }
                                         else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
                                         {
                                             auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
-                                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                                std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticCSMPSO, i, e, socketName);
+                                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
+                                                std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticCSMPSO, i, item.entity, socketName);
                                         }
                                     }
                                 }
                             }
                         }
+
+                        if (startedSkelShadowPass && csmFramebuffer->IsRendering())
+                            csmFramebuffer->EndRendering(cmd);
                     }
                 }
             }
@@ -1411,69 +1459,47 @@ namespace ignite
 
         std::vector<TransparentDrawCall> transparentDrawCalls;
 
-        // Static Meshes — collected into the batch builder for instanced dispatch
+        // Static Meshes — collected from pre-extracted FramePacket into the batch builder for instanced dispatch
         {
             IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshColor::BatchCollect");
 
             m_OpaqueBatchBuilder.Clear();
 
-            auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
-            std::vector<entt::entity> candidateStaticEntities;
-            std::vector<AABB> candidateStaticAABBs;
-
-            for (entt::entity e : staticMeshView)
+            const size_t staticCount = m_FramePacket.staticMeshes.size();
+            if (staticCount > 0)
             {
-                const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
-                if (!rc.visible || smc.handle == AssetHandle(0))
-                    continue;
+                m_FramePacket.visibilityScratch.resize(staticCount);
+                frustum.IsAABBVisibleBatch(m_FramePacket.staticMeshAABBs.data(), staticCount, m_FramePacket.visibilityScratch.data());
 
-                candidateStaticEntities.push_back(e);
-                candidateStaticAABBs.push_back(smc.worldAABB);
-            }
-
-            if (!candidateStaticEntities.empty())
-            {
-                std::vector<uint8_t> visibility(candidateStaticEntities.size());
-                frustum.IsAABBVisibleBatch(candidateStaticAABBs.data(), candidateStaticAABBs.size(), visibility.data());
-
-                for (size_t cIdx = 0; cIdx < candidateStaticEntities.size(); ++cIdx)
+                for (size_t cIdx = 0; cIdx < staticCount; ++cIdx)
                 {
-                    if (!visibility[cIdx])
+                    if (!m_FramePacket.visibilityScratch[cIdx])
                         continue;
 
-                    entt::entity e = candidateStaticEntities[cIdx];
-                    const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
-                    auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
-                    if (!staticMesh)
+                    const StaticMeshPacketItem &item = m_FramePacket.staticMeshes[cIdx];
+                    if (!item.mesh || !item.component)
                         continue;
 
-                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                    m_FramePacket.stats.visibleStaticMeshes++;
 
                     // For each sub-mesh primitive, look up the pre-allocated object index and submit to batch builder
-                    const auto &instances = staticMesh->GetMeshInstances();
-                    for (size_t idx = 0; idx < instances.size(); ++idx)
+                    const auto &instances = item.mesh->GetMeshInstances();
+                    for (size_t idx = 0; idx < instances.size() && idx < item.instanceCount; ++idx)
                     {
                         auto &meshInstance = instances[idx];
                         auto &primitive = meshInstance->GetPrimitive();
-                        if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                        {
-                            primitive->WriteBuffer(cmd);
-                        }
-
-                        // Look up pre-allocated object index from PreallocateGPUData
-                        auto cacheIt = m_EntityObjectIndexCache.find(e);
-                        if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                        if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                             continue;
 
-                        const uint32_t objectIndex = cacheIt->second[idx];
+                        const uint32_t objectIndex = m_FramePacket.staticMeshObjectIndices[item.firstObjectIndexOffset + idx];
 
-                        Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                        Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), item.component->overrideMaterials, meshInstance->GetMaterialAssetHandle());
                         if (material)
                         {
                             if (uploadedMaterialsThisPass.insert(material.get()).second)
                                 material->UploadToGpu(cmd);
                         }
-                        else
+                        else if (m_RuntimeMaterial)
                         {
                             if (uploadedMaterialsThisPass.insert(m_RuntimeMaterial.get()).second)
                                 m_RuntimeMaterial->UploadToGpu(cmd);
@@ -1481,12 +1507,12 @@ namespace ignite
 
                         const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
                             ? material->GetBindingSet()
-                            : m_RuntimeMaterial->GetBindingSet();
+                            : (m_RuntimeMaterial ? m_RuntimeMaterial->GetBindingSet() : nullptr);
 
                         if (!materialBindingSet)
                             continue;
 
-                        MaterialType matType = material ? material->GetType() : m_RuntimeMaterial->GetType();
+                        MaterialType matType = material ? material->GetType() : (m_RuntimeMaterial ? m_RuntimeMaterial->GetType() : MaterialType::Opaque);
                         nri::CullMode matCullMode = material ? material->GetCullMode() : nri::CullMode::FRONT;
 
                         if (matType == MaterialType::Transparent)
@@ -1500,14 +1526,14 @@ namespace ignite
                             dc.pushConstants_ObjectIndex = objectIndex;
 
                             AABB localAABB = meshInstance->localAABB;
-                            AABB worldAABB = localAABB.Transform(tr.world.GetMatrix());
+                            AABB worldAABB = localAABB.Transform(item.worldMatrix);
                             glm::vec3 worldCenter = worldAABB.GetCenter();
                             dc.distanceToCamera = glm::dot(worldCenter - camera->position, camera->GetForwardDirection());
 
                             dc.isSkeletal = false;
-                            dc.gpuData.transformation = tr.world.GetMatrix();
-                            dc.gpuData.normal = smc.normalMatrix;
-                            dc.gpuData.objectID = objectID;
+                            dc.gpuData.transformation = item.worldMatrix;
+                            dc.gpuData.normal = item.normalMatrix;
+                            dc.gpuData.objectID = item.objectID;
                             dc.meshInstance = meshInstance;
                             dc.cullMode = matCullMode;
                             transparentDrawCalls.push_back(dc);
@@ -1533,65 +1559,57 @@ namespace ignite
                 }
             }
 
-            // Terrain Meshes
+            // Terrain Meshes from FramePacket
+            for (const TerrainPacketItem &tItem : m_FramePacket.terrains)
             {
-                auto terrainView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
-                for (entt::entity e : terrainView)
+                if (!tItem.component)
+                    continue;
+
+                auto cacheIt = m_EntityObjectIndexCache.find(tItem.entity);
+                if (cacheIt == m_EntityObjectIndexCache.end())
+                    continue;
+
+                Material *material = tItem.material;
+                if (material && uploadedMaterialsThisPass.insert(material).second)
+                    material->UploadToGpu(cmd);
+
+                if (material && !material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
+                    continue;
+
+                const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
+                    ? material->GetBindingSet() : (m_RuntimeMaterial ? m_RuntimeMaterial->GetBindingSet() : nullptr);
+
+                if (!materialBindingSet)
+                    continue;
+
+                const auto &chunks = tItem.component->chunks;
+                for (size_t idx = 0; idx < chunks.size(); ++idx)
                 {
-                    auto [tr, rc, tc] = terrainView.get<TransformComponent, RenderingComponent, TerrainComponent>(e);
-                    if (!rc.visible)
+                    if (idx >= cacheIt->second.size())
+                        break;
+
+                    const auto &chunk = chunks[idx];
+                    if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
                         continue;
 
-                    if (!tc.gpuInitialized || tc.chunks.empty())
-                    {
-                        m_TerrainRenderer->RebuildMesh(cmd, tc, tr.world.GetMatrix());
-                    }
-
-                    auto cacheIt = m_EntityObjectIndexCache.find(e);
-                    if (cacheIt == m_EntityObjectIndexCache.end())
+                    AABB worldBounds = chunk.bounds.Transform(tItem.worldMatrix);
+                    if (!frustum.IsAABBVisible(worldBounds))
                         continue;
 
-                    Ref<Material> material = ResolveAsset<Material>(tc.materialHandle);
-                    if (material && uploadedMaterialsThisPass.insert(material.get()).second)
-                        material->UploadToGpu(cmd);
+                    const uint32_t objectIndex = cacheIt->second[idx];
 
-                    if (material && !material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
-                        continue;
+                    BatchKey key;
+                    key.vertexBuffer = *chunk.primitive->vertexBuffer;
+                    key.indexBuffer = *chunk.primitive->indexBuffer;
+                    key.meshBindingSet = frameContext->staticMeshBindingSet->GetHandle();
+                    key.materialBindingSet = materialBindingSet->GetHandle();
+                    key.pipeline = staticPSO ? staticPSO->GetHandle() : nullptr;
 
-                    const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
-                        ? material->GetBindingSet() : m_RuntimeMaterial->GetBindingSet();
-
-                    if (!materialBindingSet)
-                        continue;
-
-                    for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
-                    {
-                        if (idx >= cacheIt->second.size())
-                            break;
-
-                        auto &chunk = tc.chunks[idx];
-                        if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
-                            continue;
-
-                        AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
-                        if (!frustum.IsAABBVisible(worldBounds))
-                            continue;
-
-                        const uint32_t objectIndex = cacheIt->second[idx];
-
-                        BatchKey key;
-                        key.vertexBuffer = *chunk.primitive->vertexBuffer;
-                        key.indexBuffer = *chunk.primitive->indexBuffer;
-                        key.meshBindingSet = frameContext->staticMeshBindingSet->GetHandle();
-                        key.materialBindingSet = materialBindingSet->GetHandle();
-                        key.pipeline = staticPSO ? staticPSO->GetHandle() : nullptr;
-
-                        m_OpaqueBatchBuilder.Submit(
-                            key, *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
-                            frameContext->staticMeshBindingSet,
-                            materialBindingSet, staticPSO,
-                            chunk.primitive->indexBuffer->GetCount(), objectIndex);
-                    }
+                    m_OpaqueBatchBuilder.Submit(
+                        key, *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
+                        frameContext->staticMeshBindingSet,
+                        materialBindingSet, staticPSO,
+                        chunk.primitive->indexBuffer->GetCount(), objectIndex);
                 }
             }
 
@@ -1599,53 +1617,47 @@ namespace ignite
             FlushOpaqueBatches(cmd, frameContext, framebuffer);
         }
 
-        // Skeletal Meshes
+        // Skeletal Meshes from FramePacket
         {
             IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshColor");
 
-            auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
-            std::vector<entt::entity> candidateSkelColorEntities;
-            std::vector<AABB> candidateSkelColorAABBs;
-
-            for (entt::entity e : skelMeshView)
+            const size_t skelCount = m_FramePacket.skeletalMeshes.size();
+            if (skelCount > 0)
             {
-                const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
-                if (!rc.visible || smc.handle == AssetHandle(0))
-                    continue;
+                m_FramePacket.visibilityScratch.resize(skelCount);
+                frustum.IsAABBVisibleBatch(m_FramePacket.skeletalMeshAABBs.data(), skelCount, m_FramePacket.visibilityScratch.data());
 
-                candidateSkelColorEntities.push_back(e);
-                candidateSkelColorAABBs.push_back(smc.worldAABB);
-            }
+                const bool startedSkelColorPass = framebuffer && !framebuffer->IsRendering();
+                if (startedSkelColorPass)
+                    framebuffer->BeginRendering(cmd, false, false);
 
-            if (!candidateSkelColorEntities.empty())
-            {
-                std::vector<uint8_t> visibility(candidateSkelColorEntities.size());
-                frustum.IsAABBVisibleBatch(candidateSkelColorAABBs.data(), candidateSkelColorAABBs.size(), visibility.data());
-
-                for (size_t cIdx = 0; cIdx < candidateSkelColorEntities.size(); ++cIdx)
+                for (size_t cIdx = 0; cIdx < skelCount; ++cIdx)
                 {
-                    if (!visibility[cIdx])
+                    if (!m_FramePacket.visibilityScratch[cIdx])
                         continue;
 
-                    entt::entity e = candidateSkelColorEntities[cIdx];
-                    const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
-                    auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+                    const SkeletalMeshPacketItem &item = m_FramePacket.skeletalMeshes[cIdx];
+                    if (!item.mesh || !item.component)
+                        continue;
+
+                    Ref<SkeletalMesh> skeletalMesh = ResolveAsset<SkeletalMesh>(item.component->handle);
                     if (!skeletalMesh)
                         continue;
 
-                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                    DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                        smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms,
-                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
+                    m_FramePacket.stats.visibleSkeletalMeshes++;
+
+                    DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, item.worldMatrix, item.normalMatrix, item.objectID,
+                        item.component->overrideMaterials, item.component->finalBoneTransforms, item.component->cachedInstanceTransforms,
+                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity);
                     Renderer::Stats.skeletalMeshCount++;
 
                     // --- SOCKET SYSTEM: Render attached meshes ---
-                    if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+                    if (skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
                     {
                         Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
                         if (skeleton)
                         {
-                            for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                            for (const auto &[socketName, attachedMeshHandle] : item.component->socketAttachments)
                             {
                                 if (attachedMeshHandle == AssetHandle(0))
                                     continue;
@@ -1654,27 +1666,30 @@ namespace ignite
                                 if (!attachedMeshAsset)
                                     continue;
 
-                                glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                                glm::mat4 socketWorld = item.component->GetSocketWorldTransform(item.worldMatrix, *skeleton, socketName);
                                 glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
 
                                 if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
                                 {
                                     auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                        std::unordered_map<int, AssetHandle>(), smc.finalBoneTransforms, std::vector<Mesh_GPUData>(),
-                                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
+                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
+                                        std::unordered_map<int, AssetHandle>(), item.component->finalBoneTransforms, std::vector<Mesh_GPUData>(),
+                                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity, socketName);
                                 }
                                 else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
                                 {
                                     auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
-                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
+                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
                                         std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(),
-                                        camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
+                                        camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity, socketName);
                                 }
                             }
                         }
                     }
                 }
+
+                if (startedSkelColorPass && framebuffer->IsRendering())
+                    framebuffer->EndRendering(cmd);
             }
         }
 
@@ -2894,7 +2909,6 @@ namespace ignite
             .AddBindingLayout(bindingLayoutDesc)
             .Build(framebuffer, params);
 
-        m_DebugGridPSOCache.clear();
         m_DebugGridPSOCache.emplace(key, gp);
         return gp;
     }
@@ -3011,7 +3025,6 @@ namespace ignite
 
         if (pipeline)
         {
-            cache.clear();
             cache.emplace(key, pipeline);
         }
 
@@ -3083,7 +3096,6 @@ namespace ignite
             .AddBindingLayout(BindlessSystem::GetBindingLayout())
             .Build(framebuffer, params);
 
-        cache.clear();
         cache.emplace(key, gp);
         return gp;
     }
@@ -3601,7 +3613,6 @@ namespace ignite
             .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT))
             .Build(framebuffer, params);
 
-        m_EnvironmentPSOCache.clear();
         m_EnvironmentPSOCache.emplace(key, gp);
         return gp;
     }

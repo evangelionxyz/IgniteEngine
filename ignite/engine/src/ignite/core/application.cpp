@@ -24,6 +24,7 @@
 #include "ignite/core/core.hpp"
 #include "ignite/core/log.hpp"
 #include "ignite/core/frame.hpp"
+#include "ignite/core/agent_controller.hpp"
 
 #include "command.hpp"
 #include "ignite/graphics/render_target.hpp"
@@ -153,9 +154,20 @@ namespace ignite
         }
 
         // Create native filesystem
-        const std::filesystem::path exeDir = (m_CreateInfo.cmdLineArgs.count > 0 && m_CreateInfo.cmdLineArgs.args)
+        std::filesystem::path exeDir = (m_CreateInfo.cmdLineArgs.count > 0 && m_CreateInfo.cmdLineArgs.args)
             ? std::filesystem::path(m_CreateInfo.cmdLineArgs[0]).parent_path()
             : std::filesystem::current_path();
+        if (exeDir.empty())
+        {
+            exeDir = std::filesystem::current_path();
+        }
+        {
+            std::error_code ec;
+            if (!std::filesystem::exists("resources", ec) && std::filesystem::exists(exeDir / "resources", ec))
+            {
+                std::filesystem::current_path(exeDir, ec);
+            }
+        }
         m_AppNativeFileSystem = CreateRef<vfs::NativeFileSystem>();
         m_AppRelativeFilesystem = CreateRef<vfs::RelativeFileSystem>(m_AppNativeFileSystem, exeDir);
 
@@ -637,7 +649,7 @@ namespace ignite
         DeviceManager *deviceManager = m_Window ? m_Window->GetDeviceManager() : DeviceManager::GetInstance();
         nri::Device *device = deviceManager ? deviceManager->GetDevice() : nullptr;
 
-        const bool canRender = m_CreateInfo.offscreen || (m_Window && (m_Window->IsExternalWindow() || (m_Window->IsVisible() && m_Window->IsInFocus())));
+        const bool canRender = m_CreateInfo.offscreen || AgentController::IsAutomationActive() || (m_Window && (m_Window->IsExternalWindow() || (m_Window->IsVisible() && m_Window->IsInFocus())));
         if (canRender)
         {
             IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");

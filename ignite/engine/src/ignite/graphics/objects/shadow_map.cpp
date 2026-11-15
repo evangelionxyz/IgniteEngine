@@ -147,7 +147,10 @@ namespace ignite
 
         glm::mat4 invView = glm::inverse(camera->GetView());
 
-        const float aspect = static_cast<float>(camera->GetViewportSize().x) / static_cast<float>(camera->GetViewportSize().y);
+        const uint32_t vpW = std::max(1u, camera->GetViewportSize().x);
+        const uint32_t vpH = std::max(1u, camera->GetViewportSize().y);
+        const float aspect = static_cast<float>(vpW) / static_cast<float>(vpH);
+        const bool isOrtho = (camera->projectionType == ProjectionType::Orthographic);
         const float fovRadians = glm::radians(camera->fov);
         const float tanHalfFovY = std::tan(fovRadians * 0.5f);
         const float tanHalfFovX = tanHalfFovY * aspect;
@@ -164,10 +167,12 @@ namespace ignite
             const float nearDist = lastSplitDist;
             const float farDist = splitDist;
 
-            const float nearX = tanHalfFovX * nearDist;
-            const float nearY = tanHalfFovY * nearDist;
-            const float farX = tanHalfFovX * farDist;
-            const float farY = tanHalfFovY * farDist;
+            const float orthoHalfH = camera->orthoSize * 0.5f;
+            const float orthoHalfW = orthoHalfH * aspect;
+            const float nearX = isOrtho ? orthoHalfW : (tanHalfFovX * nearDist);
+            const float nearY = isOrtho ? orthoHalfH : (tanHalfFovY * nearDist);
+            const float farX  = isOrtho ? orthoHalfW : (tanHalfFovX * farDist);
+            const float farY  = isOrtho ? orthoHalfH : (tanHalfFovY * farDist);
 
             std::array<glm::vec3, 8> frustumCornersVS{
                 glm::vec3(-nearX, -nearY, -nearDist),

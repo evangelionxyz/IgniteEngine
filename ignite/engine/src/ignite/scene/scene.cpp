@@ -1294,6 +1294,8 @@ namespace ignite
                                 {
                                     CalculateParentTransform(idc, tr, dynActor->GetPosition(), dynActor->GetRotation());
                                 }
+                                rb.linearVelocity = dynActor->GetLinearVelocity();
+                                rb.angularVelocity = dynActor->GetAngularVelocity();
                             }
                             else if (stActor)
                             {
@@ -1356,8 +1358,9 @@ namespace ignite
                         {
                             if (!isRemoteChar)
                             {
-                                ccActor->Move(cc.linearVelocity, 1.0f / 60.0f);
+                                ccActor->Move(cc.linearVelocity, deltaTime);
                                 CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
+                                cc.linearVelocity = ccActor->GetLinearVelocity();
                             }
                             else
                             {
@@ -1482,6 +1485,22 @@ namespace ignite
 
                         dispatch(getScriptInstance(ev.userDataA), ev.userDataB);
                         dispatch(getScriptInstance(ev.userDataB), ev.userDataA);
+
+                        if (m_LuaScriptRuntime)
+                        {
+                            const char *luaCallback = nullptr;
+                            switch (ev.type)
+                            {
+                                case physics::CollisionEventType::Enter: luaCallback = "on_collision_enter"; break;
+                                case physics::CollisionEventType::Stay:  luaCallback = "on_collision_stay";  break;
+                                case physics::CollisionEventType::Exit:  luaCallback = "on_collision_exit";  break;
+                            }
+                            if (luaCallback)
+                            {
+                                m_LuaScriptRuntime->InvokeCollision(UUID(ev.userDataA), UUID(ev.userDataB), luaCallback, ev.contactPoint, ev.contactNormal);
+                                m_LuaScriptRuntime->InvokeCollision(UUID(ev.userDataB), UUID(ev.userDataA), luaCallback, ev.contactPoint, -ev.contactNormal);
+                            }
+                        }
                     }
 
                     auto activationEvents = m_Physics3D->DrainActivationEvents();

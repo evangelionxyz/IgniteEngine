@@ -406,6 +406,27 @@ namespace ignite
 
         if (ImGui::BeginMenu("3D"))
         {
+            if (ImGui::BeginMenu("Primitives"))
+            {
+                if (ImGui::MenuItem("Cube"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CUBE, "Cube"));
+                if (ImGui::MenuItem("Sphere"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::SPHERE, "Sphere"));
+                if (ImGui::MenuItem("Icosphere"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::ICOSPHERE, "Icosphere"));
+                if (ImGui::MenuItem("Capsule"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CAPSULE, "Capsule"));
+                if (ImGui::MenuItem("Cylinder"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CYLINDER, "Cylinder"));
+                if (ImGui::MenuItem("Plane"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::PLANE, "Plane"));
+                if (ImGui::MenuItem("Cone"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CONE, "Cone"));
+                if (ImGui::MenuItem("Torus"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::TORUS, "Torus"));
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("Skeletal Mesh"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Skeletal Mesh"));

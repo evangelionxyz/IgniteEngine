@@ -886,7 +886,9 @@ namespace ignite
                 {
                     sr.AddKeyValue("NetId", comp.netId);
                     sr.AddKeyValue("OwnerClient", comp.ownerClient);
+                    sr.AddKeyValue("IsLocalPlayer", comp.isLocalPlayer);
                     sr.AddKeyValue("Replicate", comp.replicate);
+                    sr.AddKeyValue("SyncComponentsMask", comp.syncComponentsMask);
                     sr.AddKeyValue("Prefab", comp.prefab);
                 }
                 sr.EndMap();
@@ -1551,7 +1553,9 @@ namespace ignite
             auto &comp = desEntity.AddComponent<NetworkIdentityComponent>();
             if (auto n = node["NetId"]) comp.netId = n.as<uint64_t>();
             if (auto n = node["OwnerClient"]) comp.ownerClient = n.as<uint32_t>();
+            if (auto n = node["IsLocalPlayer"]) comp.isLocalPlayer = n.as<bool>();
             if (auto n = node["Replicate"]) comp.replicate = n.as<bool>();
+            if (auto n = node["SyncComponentsMask"]) comp.syncComponentsMask = n.as<uint32_t>();
             if (auto n = node["Prefab"]) comp.prefab = n.as<std::string>();
 
             if (scene && comp.netId != 0)

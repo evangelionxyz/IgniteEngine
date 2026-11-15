@@ -152,16 +152,21 @@ namespace ignite
             return false;
         }
 
-        // TODO: Implement material serialization
-        LOG_INFO("[MaterialManager] Material serialization not yet implemented");
-        return false;
+        return material->Serialize(filepath);
     }
 
     Ref<Material> MaterialManager::LoadMaterial(const std::filesystem::path &filepath)
     {
-        // TODO: Implement material deserialization
-        LOG_INFO("[MaterialManager] Material deserialization not yet implemented");
-        return nullptr;
+        Ref<Material> material = Material::Deserialize(filepath);
+        if (material)
+        {
+            if (material->name.empty())
+                material->name = filepath.stem().string();
+            m_Materials[material->name] = material;
+            if (material->handle != AssetHandle(0))
+                m_AssetToMaterialMap[material->handle] = material->name;
+        }
+        return material;
     }
 
     void MaterialManager::Clear()

@@ -71,6 +71,7 @@ project "Ignite.Network"
         "%{IncludeDir.FASTSIMD_CONFIG}",
         "%{IncludeDir.OPENEXR}",
         "%{IncludeDir.IMATH}",
+        "%{IncludeDir.JSON}",
     }
 
     libdirs { "%{cfg.targetdir}" }

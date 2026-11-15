@@ -233,6 +233,53 @@ namespace ignite
         return entity;
     }
 
+    Entity SceneManager::CreatePrimitive(Scene *scene, EMeshType type, const std::string &name, UUID uuid)
+    {
+        if (!scene)
+            return Entity{};
+
+        const std::string entityName = name.empty() ? std::string(Renderer::GetDefaultMeshName(type)) : name;
+        const AssetHandle meshHandle = Renderer::GetDefaultMeshHandle(type);
+        const bool recordUndo = !scene->IsRunning();
+
+        Entity createdEntity;
+        auto createFunc = [=, &createdEntity]() mutable
+        {
+            createdEntity = CreateEntity(scene, entityName, EntityType_Node | EntityType_Mesh, uuid);
+            auto &smc = createdEntity.AddComponent<StaticMeshComponent>();
+            smc.handle = meshHandle;
+            if (auto mesh = Renderer::GetDefaultMesh(type))
+            {
+                smc.worldAABB = mesh->localAABB;
+            }
+        };
+
+        createFunc();
+
+        if (recordUndo && createdEntity.IsValid())
+        {
+            Scene *capturedScene = scene;
+            UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
+            auto destroyFunc = [capturedScene, capturedUUID]()
+            {
+                if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
+                {
+                    DestroyEntity(capturedScene, entityToDestroy);
+                }
+            };
+
+            CommandManager::AddCommand(
+                CreateScope<EntityManagerCommand>(
+                    createFunc,
+                    destroyFunc,
+                    CommandState_Create
+                )
+            );
+        }
+
+        return createdEntity;
+    }
+
     Entity SceneManager::CreateCamera(Scene* scene, const std::string& name, UUID uuid)
     {
         // create local storage for entity data

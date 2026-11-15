@@ -97,9 +97,8 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
     }
 
     // Slope-scaled bias: steep surfaces get more bias to avoid acne.
-    // Per-cascade scale: far cascades have lower depth precision so they need
-    // proportionally more bias. cascade 0 = 1x, cascade 1 = 1.5x, ...
-    float cosTheta = saturate(dot(normal, -lightDirection));
+    // lightDirection points toward the light source (L), so dot(normal, lightDirection) > 0 on lit surfaces.
+    float cosTheta = saturate(dot(normal, lightDirection));
     float baseBias = lerp(csm.maxBias, csm.minBias, cosTheta);
     float cascadeBiasScale = 1.0f + float(cascadeIdx) * 0.5f;
     float bias = baseBias * cascadeBiasScale;

@@ -20,19 +20,21 @@ namespace ignite
     void SceneCamera::SetAspectRatioPreset(AspectRatioPreset preset)
     {
 		m_AspectRatioPreset = preset;
-		if (preset == AspectRatioPreset::Free)
+		if (preset == AspectRatioPreset::Free || m_ViewportSize.x == 0 || m_ViewportSize.y == 0)
 			return;
 
 		const float aspect = static_cast<float>(m_ViewportSize.x) / static_cast<float>(m_ViewportSize.y);
 		const float targetAspect = GetAspectRatioValue();
+        if (targetAspect <= 0.0001f)
+            return;
 
         if (aspect > targetAspect)
         {
-			m_ViewportSize.x = static_cast<uint32_t>(static_cast<float>(m_ViewportSize.y) * targetAspect);
+			m_ViewportSize.x = std::max(1u, static_cast<uint32_t>(static_cast<float>(m_ViewportSize.y) * targetAspect));
         }
         else
         {
-			m_ViewportSize.y = static_cast<uint32_t>(static_cast<float>(m_ViewportSize.x) / targetAspect);
+			m_ViewportSize.y = std::max(1u, static_cast<uint32_t>(static_cast<float>(m_ViewportSize.x) / targetAspect));
         }
     }
 

@@ -23,6 +23,22 @@
 
 namespace ignite
 {
+    static std::string SanitizeCSharpIdentifier(std::string_view name)
+    {
+        std::string safe;
+        safe.reserve(name.size());
+        for (unsigned char c : name)
+        {
+            if (std::isalnum(c) || c == '_')
+                safe.push_back(static_cast<char>(c));
+            else if (std::isspace(c) || c == '-')
+                safe.push_back('_');
+        }
+        if (safe.empty() || std::isdigit(static_cast<unsigned char>(safe[0])))
+            safe.insert(safe.begin(), '_');
+        return safe;
+    }
+
     static std::string s_CSSharpScriptTemplate =
 R"(using Ignite;
 using System;
@@ -753,32 +769,32 @@ R"(<Project>
 
     void Project::BuildSolution(bool forceRebuild) const
     {
-        bool buildSuccess = std::filesystem::exists(GetScriptModulePath());
+        const std::filesystem::path modulePath = GetScriptModulePath();
+        const std::filesystem::path solutionPath = GetSolutionFilepath();
+        bool buildSuccess = std::filesystem::exists(modulePath);
 
-        std::string_view verbosity = "/v:m"; // verbose minimal
+        std::string_view verbosity = "/v:q /nologo";
         std::string_view configStr = "Debug";
         if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
         else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
 
-        if (!buildSuccess || forceRebuild)
+        if ((!buildSuccess || forceRebuild) && std::filesystem::exists(solutionPath))
         {
-            std::string_view msbuildCmd = "msbuild";
-#if defined(PLATFORM_LINUX)
-            msbuildCmd = "dotnet msbuild";
-#endif
-            // restore NuGet
-            AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
-            std::string restoreCommand = std::format("{} \"{}\" /t:Restore /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                msbuildCmd, GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
-            std::system(restoreCommand.c_str());
-
-            AssetWorker::ReportStatus("Building Solution...", 0.8f);
-            std::string buildCommand = std::format("{} \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                msbuildCmd, GetSolutionFilepath().generic_string(), configStr, verbosity); // verbose minimal
-            std::system(buildCommand.c_str());
+            std::string_view msbuildCmd = "dotnet msbuild";
+            AssetWorker::ReportStatus("Building Solution...", 0.6f);
+            std::string buildCommand = std::format("{} \"{}\" /restore /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                msbuildCmd, solutionPath.generic_string(), configStr, verbosity);
+            int rc = std::system(buildCommand.c_str());
+            if (rc != 0)
+            {
+                // Fallback to standalone msbuild if dotnet msbuild failed
+                std::string fallbackCmd = std::format("msbuild \"{}\" /restore /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
+                    solutionPath.generic_string(), configStr, verbosity);
+                std::system(fallbackCmd.c_str());
+            }
         }
 
-        buildSuccess = std::filesystem::exists(GetScriptModulePath());
+        buildSuccess = std::filesystem::exists(modulePath);
 
         // Notify script engine that the build finished; the script engine will
         // load the assembly and then emit SignalType::Project for the editor layer.
@@ -1094,8 +1110,15 @@ R"(<Project>
     {
         CreateDirectories();
 
-        // Generate the Visual Studio project if there is no solution file
+        // Packaged runtime builds already ship the compiled script module without a .slnx
         std::filesystem::path solutionFilepath = GetSolutionFilepath();
+        if (!std::filesystem::exists(solutionFilepath) && std::filesystem::exists(GetScriptModulePath()))
+        {
+            IsCoreDependenciesUpToDate();
+            return;
+        }
+
+        // Generate the Visual Studio project if there is no solution file
         if (!std::filesystem::exists(solutionFilepath))
         {
             // Create visual studio .slnx
@@ -1159,7 +1182,7 @@ R"(<Project>
                     if (!std::filesystem::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(scriptsDir.string()))
                     {
                         std::string csharpScriptTemplate = s_CSSharpScriptTemplate;
-                        stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", m_Info.name);
+                        stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", SanitizeCSharpIdentifier(m_Info.name));
                         stringutils::ReplaceWith(csharpScriptTemplate, "{CLASS_NAME}", "Game");
                         std::ofstream out(defaultCSharpScriptFilepath, std::ios::out);
                         out << csharpScriptTemplate;
@@ -1197,7 +1220,7 @@ R"(<Project>
                 LOG_WARN("[Project] Creating default C# script {}", defaultCSharpScriptFilepath.filename().generic_string());
 
                 std::string csharpScriptTemplate = s_CSSharpScriptTemplate;
-                stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", m_Info.name);
+                stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", SanitizeCSharpIdentifier(m_Info.name));
                 stringutils::ReplaceWith(csharpScriptTemplate, "{CLASS_NAME}", "Game");
                 std::fstream outfile = std::fstream(defaultCSharpScriptFilepath, std::ios::out);
                 outfile << csharpScriptTemplate;

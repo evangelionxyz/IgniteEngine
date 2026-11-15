@@ -11,6 +11,8 @@
 #include "ignite/core/worker_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/scene.hpp"
@@ -278,6 +280,10 @@ namespace ignite
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
     {
+        EMeshType defaultMeshType = EMeshType::CUBE;
+        if (Renderer::IsDefaultMeshHandle(handle, &defaultMeshType))
+            return Renderer::GetDefaultMeshName(defaultMeshType);
+
         if (!IsAssetHandleValid(handle))
             return "None";
 
@@ -370,6 +376,11 @@ namespace ignite
 
     Ref<Asset> AssetManager::TryGetAsset(AssetHandle handle) const
     {
+        if (Renderer::IsDefaultMeshHandle(handle))
+        {
+            return Renderer::GetDefaultMeshByHandle(handle);
+        }
+
         std::unique_lock lock(m_AssetMutex);
         const auto it = m_LoadedAssets.find(handle);
         return it != m_LoadedAssets.end() ? it->second : nullptr;
@@ -377,6 +388,11 @@ namespace ignite
 
     AssetState AssetManager::GetAssetState(AssetHandle handle) const
     {
+        if (Renderer::IsDefaultMeshHandle(handle))
+        {
+            return AssetState::Ready;
+        }
+
         std::unique_lock lock(m_AssetMutex);
         if (const auto it = m_AssetRecords.find(handle); it != m_AssetRecords.end() && it->second)
         {
@@ -840,6 +856,9 @@ namespace ignite
 
     AssetType AssetManager::GetAssetType(AssetHandle handle) const
     {
+        if (Renderer::IsDefaultMeshHandle(handle))
+            return AssetType::StaticMesh;
+
         return GetMetaData(handle).type;
     }
 
@@ -888,6 +907,9 @@ namespace ignite
     {
         if (static_cast<uint64_t>(handle) == 0)
             return false;
+
+        if (Renderer::IsDefaultMeshHandle(handle))
+            return true;
 
         return m_AssetRegistry.contains(handle) || m_LoadedAssets.contains(handle);
     }

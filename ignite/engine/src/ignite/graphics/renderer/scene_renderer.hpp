@@ -8,6 +8,7 @@
 #include "iscene_renderer.hpp"
 #include "ignite/graphics/hash_keys.hpp"
 #include "batch_builder.hpp"
+#include "frame_packet.hpp"
 #include "ignite/terrain/terrain_renderer.hpp"
 #include "ignite/scene/icamera.hpp"
 #include <entt/entt.hpp>
@@ -108,9 +109,11 @@ namespace ignite
         Ref<CameraRenderTarget> GetRenderTarget(ICamera *camera);
 
         void PreallocateGPUData(nri::CommandBuffer *cmd, FrameContext *frameContext);
+        const FramePacket &GetLastFramePacket() const { return m_FramePacket; }
 
     private:
         void ClearResources();
+        void CollectSceneLighting(FrameContext *frameContext);
 
         RenderPlan BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera);
         void EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
@@ -148,7 +151,6 @@ namespace ignite
             bool isSkeletal = false;
             Mesh_GPUData gpuData;
             Ref<MeshInstance> meshInstance;
-            glm::mat4 bones[MAX_BONES];
             nri::CullMode cullMode = nri::CullMode::NONE;
         };
 
@@ -255,6 +257,7 @@ namespace ignite
         // -----------------------------------------------------------------------
         BatchBuilder m_OpaqueBatchBuilder;   // Color pass opaque static meshes
         BatchBuilder m_ShadowBatchBuilder;   // Shadow pass (CSM) static meshes
+        FramePacket m_FramePacket;
     };
 }
 

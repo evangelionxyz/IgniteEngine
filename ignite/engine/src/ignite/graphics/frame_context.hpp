@@ -19,6 +19,7 @@ namespace ignite
         void Shutdown();
         nri::Buffer *GetHandle() const { return m_Buffer; }
         nri::Descriptor *GetDescriptor() const { return m_Descriptor; }
+        uint8_t *GetMappedMemory() const { return m_MappedMemory; }
         size_t GetByteSize() const { return m_ByteSize; }
 
         operator nri::Buffer *() const { return m_Buffer; }
@@ -27,6 +28,7 @@ namespace ignite
         nri::Buffer *m_Buffer = nullptr;
         nri::Memory *m_Memory = nullptr;
         nri::Descriptor *m_Descriptor = nullptr;
+        uint8_t *m_MappedMemory = nullptr;
         size_t m_ByteSize = 0;
     };
 
@@ -37,6 +39,7 @@ namespace ignite
         void Shutdown();
         nri::Buffer *GetHandle() const { return m_Buffer; }
         nri::Descriptor *GetDescriptor() const { return m_Descriptor; }
+        uint8_t *GetMappedMemory() const { return m_MappedMemory; }
         size_t GetByteSize() const { return m_ByteSize; }
 
         operator nri::Buffer *() const { return m_Buffer; }
@@ -45,6 +48,7 @@ namespace ignite
         nri::Buffer *m_Buffer = nullptr;
         nri::Memory *m_Memory = nullptr;
         nri::Descriptor *m_Descriptor = nullptr;
+        uint8_t *m_MappedMemory = nullptr;
         size_t m_ByteSize = 0;
     };
 
@@ -55,6 +59,7 @@ namespace ignite
         void Shutdown();
         nri::Buffer *GetHandle() const { return m_Buffer; }
         nri::Descriptor *GetDescriptor() const { return m_Descriptor; }
+        uint8_t *GetMappedMemory() const { return m_MappedMemory; }
         size_t GetByteSize() const { return m_ByteSize; }
 
         operator nri::Buffer *() const { return m_Buffer; }
@@ -63,6 +68,7 @@ namespace ignite
         nri::Buffer *m_Buffer = nullptr;
         nri::Memory *m_Memory = nullptr;
         nri::Descriptor *m_Descriptor = nullptr;
+        uint8_t *m_MappedMemory = nullptr;
         size_t m_ByteSize = 0;
     };
 
@@ -71,12 +77,13 @@ namespace ignite
     public:
         void BeginFrame() { m_ObjectCount = 0; }
         uint32_t Allocate(nri::CommandBuffer *cmd, const Mesh_GPUData &data);
-        void SetBuffer(const ObjectBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_ByteSize = buffer.GetByteSize(); }
+        void SetBuffer(const ObjectBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_MappedMemory = buffer.GetMappedMemory(); m_ByteSize = buffer.GetByteSize(); }
 
         operator nri::Buffer *() const { return m_Buffer; }
 
     private:
         nri::Buffer *m_Buffer = nullptr;
+        uint8_t *m_MappedMemory = nullptr;
         size_t m_ByteSize = 0;
         uint32_t m_ObjectCount = 0;
     };
@@ -86,12 +93,13 @@ namespace ignite
     public:
         void BeginFrame() { m_BoneCount = 0; }
         uint32_t Allocate(nri::CommandBuffer *cmd, const glm::mat4 *bones, uint32_t count);
-        void SetBuffer(const BoneBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_ByteSize = buffer.GetByteSize(); }
+        void SetBuffer(const BoneBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_MappedMemory = buffer.GetMappedMemory(); m_ByteSize = buffer.GetByteSize(); }
 
         operator nri::Buffer *() const { return m_Buffer; }
 
     private:
         nri::Buffer *m_Buffer = nullptr;
+        uint8_t *m_MappedMemory = nullptr;
         size_t m_ByteSize = 0;
         uint32_t m_BoneCount = 0;
     };
@@ -101,12 +109,13 @@ namespace ignite
     public:
         void BeginFrame() { m_IndexCount = 0; }
         uint32_t Allocate(nri::CommandBuffer *cmd, const uint32_t *indices, uint32_t count);
-        void SetBuffer(const InstanceIndexBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_ByteSize = buffer.GetByteSize(); }
+        void SetBuffer(const InstanceIndexBuffer &buffer) { m_Buffer = buffer.GetHandle(); m_MappedMemory = buffer.GetMappedMemory(); m_ByteSize = buffer.GetByteSize(); }
 
         operator nri::Buffer *() const { return m_Buffer; }
 
     private:
         nri::Buffer *m_Buffer = nullptr;
+        uint8_t *m_MappedMemory = nullptr;
         size_t m_ByteSize = 0;
         uint32_t m_IndexCount = 0;
     };

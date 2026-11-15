@@ -162,8 +162,22 @@ namespace ignite
         template<typename T>
         Ref<T> ResolveAsset(AssetHandle handle)
         {
+            if (handle == AssetHandle(0))
+                return nullptr;
+
+            if constexpr (std::is_same_v<T, StaticMesh> || std::is_same_v<T, Asset>)
+            {
+                if (Renderer::IsDefaultMeshHandle(handle))
+                {
+                    if (Ref<StaticMesh> defaultMesh = Renderer::GetDefaultMeshByHandle(handle))
+                    {
+                        return std::static_pointer_cast<T>(defaultMesh);
+                    }
+                }
+            }
+
             auto assetManager = AssetManager::GetInstance();
-            if (!assetManager || handle == AssetHandle(0))
+            if (!assetManager)
                 return nullptr;
 
             if (auto project = assetManager->LockActiveProject())

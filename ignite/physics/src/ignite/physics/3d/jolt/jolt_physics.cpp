@@ -6,6 +6,7 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Body/BodyLock.h>
 
 #include "ignite/core/types.hpp"
 #include "ignite/core/logger.hpp"
@@ -360,7 +361,12 @@ namespace ignite::physics
 		uint32_t mask = 0xFFFFFFFF;
 		virtual bool ShouldCollide(JPH::ObjectLayer inLayer) const override
 		{
-			return (mask & (1u << static_cast<uint32_t>(inLayer))) != 0;
+			const uint32_t layerIdx = static_cast<uint32_t>(inLayer);
+			if (layerIdx >= 32)
+			{
+				return mask == 0xFFFFFFFFu;
+			}
+			return (mask & (1u << layerIdx)) != 0;
 		}
 	};
 
@@ -375,12 +381,25 @@ namespace ignite::physics
 		JoltRaycastLayerFilter layerFilter;
 		layerFilter.mask = layerMask;
 
-		if (m_PhysicsSystem.GetNarrowPhaseQuery().CastRay(rayCast, hit, JPH::SpecifiedBroadPhaseLayerFilter(BroadPhaseLayers::MOVING), layerFilter))
+		if (m_PhysicsSystem.GetNarrowPhaseQuery().CastRay(rayCast, hit, JPH::BroadPhaseLayerFilter{}, layerFilter))
 		{
 			outHit.fraction = hit.mFraction;
-			JPH::Vec3 hitPos = rayCast.GetPointOnRay(hit.mFraction);
-			outHit.hitPoint = { hitPos.GetX(), hitPos.GetY(), hitPos.GetZ() };
-			outHit.userData = m_BodyInterface->GetUserData(hit.mBodyID);
+			const JPH::RVec3 hitPos = rayCast.GetPointOnRay(hit.mFraction);
+			outHit.hitPoint = { static_cast<float>(hitPos.GetX()), static_cast<float>(hitPos.GetY()), static_cast<float>(hitPos.GetZ()) };
+			outHit.hitNormal = { 0.0f, 1.0f, 0.0f };
+
+			JPH::BodyLockRead lock(m_PhysicsSystem.GetBodyLockInterface(), hit.mBodyID);
+			if (lock.Succeeded())
+			{
+				const JPH::Body &body = lock.GetBody();
+				outHit.userData = body.GetUserData();
+				const JPH::Vec3 normal = body.GetWorldSpaceSurfaceNormal(hit.mSubShapeID2, hitPos);
+				outHit.hitNormal = { normal.GetX(), normal.GetY(), normal.GetZ() };
+			}
+			else
+			{
+				outHit.userData = m_BodyInterface->GetUserData(hit.mBodyID);
+			}
 			return true;
 		}
 

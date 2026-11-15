@@ -53,7 +53,11 @@ namespace ignite
                         float hU = comp.data ? comp.data->GetHeight(x, z < res - 1 ? z + 1 : z) : 0.0f;
 
                         glm::vec3 normal = glm::normalize(glm::vec3((hL - hR) * comp.maxHeight, 2.0f * step, (hD - hU) * comp.maxHeight));
-                        glm::vec3 tangent = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f));
+                        glm::vec3 rawTangent(1.0f, 0.0f, 0.0f);
+                        rawTangent -= normal * glm::dot(normal, rawTangent);
+                        glm::vec3 tangent = glm::length(rawTangent) > 1e-5f
+                            ? glm::normalize(rawTangent)
+                            : glm::normalize(glm::cross(glm::vec3(0.0f, 0.0f, 1.0f), normal));
                         glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
 
                         vert.position = glm::vec3(posX, posY, posZ);

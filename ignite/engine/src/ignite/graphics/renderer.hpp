@@ -6,10 +6,12 @@
 
 #include "ignite/core/subsystem.hpp"
 #include "ignite/core/types.hpp"
+#include "ignite/asset/asset.hpp"
 #include "frame_context.hpp"
 
 #include <NRI.h>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <mutex>
 
@@ -43,6 +45,14 @@ namespace ignite
     enum class EMeshType
     {
         UV_SPHERE = 0,
+        CUBE = 1,
+        SPHERE = 2,
+        ICOSPHERE = 3,
+        CYLINDER = 4,
+        CAPSULE = 5,
+        PLANE = 6,
+        CONE = 7,
+        TORUS = 8,
     };
 
     struct RendererStats
@@ -99,6 +109,11 @@ namespace ignite
         static Ref<Material> GetDefaultMaterial();
 
         static Ref<StaticMesh> GetDefaultMesh(EMeshType type);
+        static AssetHandle GetDefaultMeshHandle(EMeshType type);
+        static bool IsDefaultMeshHandle(AssetHandle handle, EMeshType *outType = nullptr);
+        static Ref<StaticMesh> GetDefaultMeshByHandle(AssetHandle handle);
+        static const char *GetDefaultMeshName(EMeshType type);
+        static bool ParseMeshType(std::string_view name, EMeshType &outType);
 
         static nri::GraphicsAPI GetGraphicsAPI();
         static const BindingLayoutDesc &GetBindingLayout(EBindingLayout type);

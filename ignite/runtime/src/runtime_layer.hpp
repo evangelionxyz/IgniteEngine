@@ -50,9 +50,13 @@ namespace ignite
 
         glm::uvec2 m_FramebufferSize = { 0, 0 };
         int m_ResizingFrame = 0;
+        float m_FixedAccumulator = 0.0f;
+        bool m_HideOverlay = false;
+
+        void SyncActiveSceneFromProject();
 
         // Network & Live Edit UI State
-        bool m_ShowNetworkOverlay = true;
+        bool m_ShowNetworkOverlay = false;
         char m_HostAddress[128] = "127.0.0.1";
         int m_HostPort = 8192;
         char m_PlayerName[64] = "RuntimeClient";

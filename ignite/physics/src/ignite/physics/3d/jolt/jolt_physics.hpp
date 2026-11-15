@@ -31,6 +31,8 @@
 
 #include <mutex>
 #include <array>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace ignite::physics
@@ -129,7 +131,14 @@ namespace ignite::physics
 			JPH::Vec3 pt = manifold.GetWorldSpaceContactPointOn1(0);
 			ev.contactPoint = { pt.GetX(), pt.GetY(), pt.GetZ() };
 			ev.contactNormal = { manifold.mWorldSpaceNormal.GetX(), manifold.mWorldSpaceNormal.GetY(), manifold.mWorldSpaceNormal.GetZ() };
+
+			const SubShapePairKey key = MakeCanonicalPairKey(
+				bodyA.GetID().GetIndexAndSequenceNumber(), manifold.mSubShapeID1.GetValue(),
+				bodyB.GetID().GetIndexAndSequenceNumber(), manifold.mSubShapeID2.GetValue()
+			);
+
 			std::lock_guard<std::mutex> lock(m_EventMutex);
+			m_ActiveContactUserData[key] = { ev.userDataA, ev.userDataB };
 			m_PendingEvents.push_back(ev);
 		}
 
@@ -150,7 +159,19 @@ namespace ignite::physics
 		{
 			CollisionEvent ev;
 			ev.type = CollisionEventType::Exit;
+
+			const SubShapePairKey key = MakeCanonicalPairKey(
+				inSubShapePair.GetBody1ID().GetIndexAndSequenceNumber(), inSubShapePair.GetSubShapeID1().GetValue(),
+				inSubShapePair.GetBody2ID().GetIndexAndSequenceNumber(), inSubShapePair.GetSubShapeID2().GetValue()
+			);
+
 			std::lock_guard<std::mutex> lock(m_EventMutex);
+			if (auto it = m_ActiveContactUserData.find(key); it != m_ActiveContactUserData.end())
+			{
+				ev.userDataA = it->second.first;
+				ev.userDataB = it->second.second;
+				m_ActiveContactUserData.erase(it);
+			}
 			m_PendingEvents.push_back(ev);
 		}
 
@@ -162,9 +183,47 @@ namespace ignite::physics
 			return result;
 		}
 
+		void Clear()
+		{
+			std::lock_guard<std::mutex> lock(m_EventMutex);
+			m_PendingEvents.clear();
+			m_ActiveContactUserData.clear();
+		}
+
 	private:
+		struct SubShapePairKey
+		{
+			uint32_t body1 = 0;
+			uint32_t subShape1 = 0;
+			uint32_t body2 = 0;
+			uint32_t subShape2 = 0;
+
+			bool operator==(const SubShapePairKey &other) const = default;
+		};
+
+		struct SubShapePairKeyHash
+		{
+			size_t operator()(const SubShapePairKey &k) const noexcept
+			{
+				uint64_t h = (static_cast<uint64_t>(k.body1) << 32) | k.subShape1;
+				uint64_t h2 = (static_cast<uint64_t>(k.body2) << 32) | k.subShape2;
+				h ^= h2 + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+				return static_cast<size_t>(h);
+			}
+		};
+
+		static SubShapePairKey MakeCanonicalPairKey(uint32_t b1, uint32_t s1, uint32_t b2, uint32_t s2)
+		{
+			if (b1 > b2 || (b1 == b2 && s1 > s2))
+			{
+				return SubShapePairKey{ b2, s2, b1, s1 };
+			}
+			return SubShapePairKey{ b1, s1, b2, s2 };
+		}
+
 		std::mutex m_EventMutex;
 		std::vector<CollisionEvent> m_PendingEvents;
+		std::unordered_map<SubShapePairKey, std::pair<uint64_t, uint64_t>, SubShapePairKeyHash> m_ActiveContactUserData;
 	};
 
 	class JoltBodyActivationListener : public JPH::BodyActivationListener

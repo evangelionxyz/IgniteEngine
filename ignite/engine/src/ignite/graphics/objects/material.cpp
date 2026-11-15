@@ -124,7 +124,12 @@ namespace ignite
         gpuData.normalTextureIndex = static_cast<int>(getBindlessIndex(normalTextureHandle, static_cast<uint32_t>(-1)));
         gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);
 
-        m_GPUDataBuffer->SetData(&gpuData, sizeof(Material_GPUData));
+        if (!m_HasUploadedGpuData || std::memcmp(&gpuData, &m_LastUploadedGpuData, sizeof(Material_GPUData)) != 0)
+        {
+            m_GPUDataBuffer->SetData(&gpuData, sizeof(Material_GPUData));
+            m_LastUploadedGpuData = gpuData;
+            m_HasUploadedGpuData = true;
+        }
     }
 
     void Material::SetSamplerDesc(const nri::SamplerDesc &desc)

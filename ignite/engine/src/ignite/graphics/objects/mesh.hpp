@@ -303,7 +303,7 @@ namespace ignite
         static void LoadSceneGraph(const std::string& filename, MeshScene<VertexType_T> &outScene, AssetManager *assetManager);
 
     private:
-        static std::vector<std::pair<std::string, Ref<Texture>>> LoadTextures(const tinygltf::Model& model);
+        static std::vector<std::pair<std::string, Ref<Texture>>> LoadTextures(const tinygltf::Model& model, const std::filesystem::path &baseDir = {});
         static std::vector<nri::SamplerDesc> GetSamplers(const tinygltf::Model& model);
         static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
     };

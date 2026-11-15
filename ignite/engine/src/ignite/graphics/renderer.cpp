@@ -11,10 +11,13 @@
 
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/objects/mesh_builder.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
+#include <algorithm>
+#include <cctype>
 
 
 namespace ignite
@@ -235,14 +238,117 @@ namespace ignite
         return s_RendererInstance->m_DefaultMaterial;
     }
 
+    static constexpr uint64_t kDefaultMeshHandleBase = 0x49474E5F4D455348ULL; // "IGN_MESH"
+    static std::mutex s_DefaultMeshMutex;
+
+    static Ref<StaticMesh> BuildDefaultMesh(EMeshType type)
+    {
+        MeshBuilder mb;
+        switch (type)
+        {
+            case EMeshType::CUBE:      mb = MeshBuilder::CreateCube(glm::vec3(1.0f)); break;
+            case EMeshType::UV_SPHERE:
+            case EMeshType::SPHERE:    mb = MeshBuilder::CreateSphere(0.5f, 24, 36); break;
+            case EMeshType::ICOSPHERE: mb = MeshBuilder::CreateIcosphere(0.5f, 2); break;
+            case EMeshType::CYLINDER:  mb = MeshBuilder::CreateCylinder(0.5f, 1.0f, 32, true); break;
+            case EMeshType::CAPSULE:   mb = MeshBuilder::CreateCapsule(0.5f, 2.0f, 12, 24); break;
+            case EMeshType::PLANE:     mb = MeshBuilder::CreatePlane(glm::vec2(10.0f), 1, 1); break;
+            case EMeshType::CONE:      mb = MeshBuilder::CreateCone(0.5f, 1.0f, 32, true); break;
+            case EMeshType::TORUS:     mb = MeshBuilder::CreateTorus(0.5f, 0.15f, 32, 16); break;
+            default:                   mb = MeshBuilder::CreateCube(glm::vec3(1.0f)); break;
+        }
+
+        const bool hasDevice = (DeviceManager::GetInstance() && DeviceManager::GetInstance()->GetDevice() != nullptr);
+        Ref<StaticMesh> mesh = mb.BuildStaticMesh(Renderer::GetDefaultMeshName(type), AssetHandle(0), hasDevice);
+        if (mesh)
+        {
+            mesh->handle = Renderer::GetDefaultMeshHandle(type);
+        }
+        return mesh;
+    }
+
     Ref<StaticMesh> Renderer::GetDefaultMesh(EMeshType type)
     {
-        auto it = s_RendererInstance->m_DefaultMeshes.find(type);
-        if (it != s_RendererInstance->m_DefaultMeshes.end())
-            return s_RendererInstance->m_DefaultMeshes[type];
+        if (!s_RendererInstance)
+        {
+            return BuildDefaultMesh(type);
+        }
 
-        s_RendererInstance->m_DefaultMeshes[type] = StaticMesh::Deserialize("resources/staticmeshes/uvsphere.mesh");
-        return s_RendererInstance->m_DefaultMeshes[type];
+        std::lock_guard<std::mutex> lock(s_DefaultMeshMutex);
+        auto it = s_RendererInstance->m_DefaultMeshes.find(type);
+        if (it != s_RendererInstance->m_DefaultMeshes.end() && it->second)
+        {
+            return it->second;
+        }
+
+        Ref<StaticMesh> mesh = BuildDefaultMesh(type);
+        s_RendererInstance->m_DefaultMeshes[type] = mesh;
+        return mesh;
+    }
+
+    AssetHandle Renderer::GetDefaultMeshHandle(EMeshType type)
+    {
+        return AssetHandle(kDefaultMeshHandleBase + static_cast<uint64_t>(type));
+    }
+
+    bool Renderer::IsDefaultMeshHandle(AssetHandle handle, EMeshType *outType)
+    {
+        const uint64_t raw = static_cast<uint64_t>(handle);
+        const uint64_t minVal = kDefaultMeshHandleBase;
+        const uint64_t maxVal = kDefaultMeshHandleBase + static_cast<uint64_t>(EMeshType::TORUS);
+        if (raw >= minVal && raw <= maxVal)
+        {
+            if (outType)
+            {
+                *outType = static_cast<EMeshType>(raw - kDefaultMeshHandleBase);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    Ref<StaticMesh> Renderer::GetDefaultMeshByHandle(AssetHandle handle)
+    {
+        EMeshType type = EMeshType::CUBE;
+        if (IsDefaultMeshHandle(handle, &type))
+        {
+            return GetDefaultMesh(type);
+        }
+        return nullptr;
+    }
+
+    const char *Renderer::GetDefaultMeshName(EMeshType type)
+    {
+        switch (type)
+        {
+            case EMeshType::UV_SPHERE: return "UVSphere";
+            case EMeshType::CUBE:      return "Cube";
+            case EMeshType::SPHERE:    return "Sphere";
+            case EMeshType::ICOSPHERE: return "Icosphere";
+            case EMeshType::CYLINDER:  return "Cylinder";
+            case EMeshType::CAPSULE:   return "Capsule";
+            case EMeshType::PLANE:     return "Plane";
+            case EMeshType::CONE:      return "Cone";
+            case EMeshType::TORUS:     return "Torus";
+            default:                   return "Primitive";
+        }
+    }
+
+    bool Renderer::ParseMeshType(std::string_view name, EMeshType &outType)
+    {
+        std::string lower(name);
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        if (lower == "cube" || lower == "box") { outType = EMeshType::CUBE; return true; }
+        if (lower == "sphere") { outType = EMeshType::SPHERE; return true; }
+        if (lower == "uv_sphere" || lower == "uvsphere") { outType = EMeshType::UV_SPHERE; return true; }
+        if (lower == "icosphere" || lower == "ico_sphere") { outType = EMeshType::ICOSPHERE; return true; }
+        if (lower == "cylinder") { outType = EMeshType::CYLINDER; return true; }
+        if (lower == "capsule") { outType = EMeshType::CAPSULE; return true; }
+        if (lower == "plane" || lower == "quad") { outType = EMeshType::PLANE; return true; }
+        if (lower == "cone") { outType = EMeshType::CONE; return true; }
+        if (lower == "torus" || lower == "donut") { outType = EMeshType::TORUS; return true; }
+        return false;
     }
 
     static std::mutex s_StatsMutex;

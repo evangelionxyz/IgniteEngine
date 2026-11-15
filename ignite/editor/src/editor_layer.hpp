@@ -141,6 +141,7 @@ namespace ignite
 
         static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
+        static void OnPackageFolderSelected(void *userData, const char *const *filelist, int filter);
 
         void OnOpenProject();
 
@@ -190,6 +191,7 @@ namespace ignite
 
         std::string m_StatusText;
         float m_LoadingProgress = 0.0f;
+        float m_FixedAccumulator = 0.0f;
 
         static EditorLayer *s_Instance;
 

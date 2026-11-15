@@ -23,45 +23,74 @@ namespace ignite
 
 	void FmodSound::Play()
     {
-        const FMOD_RESULT result = FmodAudio::GetFmodSystem()->playSound(
+        FMOD::System *system = FmodAudio::GetFmodSystem();
+        if (!m_Sound || !system)
+        {
+            return;
+        }
+
+        const FMOD_RESULT result = system->playSound(
             m_Sound,
             m_ChannelGroup ? m_ChannelGroup : FmodAudio::GetMasterChannel(),
-            false, // start paused
+            true, // start paused so mode and DSP chain apply cleanly before playback begins
             &m_Channel
         );
 
         FMOD_CHECK(result);
+        if (result != FMOD_OK || !m_Channel)
+        {
+            return;
+        }
+
+        m_Channel->setMode(m_Mode);
 
         // remove dsp
         int dsp_count = 0;
-        m_Channel->getNumDSPs((&dsp_count));
-        for (int i = 0; i < dsp_count; i++)
+        m_Channel->getNumDSPs(&dsp_count);
+        for (int i = dsp_count - 1; i >= 0; --i)
         {
-            FMOD::DSP *dsp;
+            FMOD::DSP *dsp = nullptr;
             m_Channel->getDSP(i, &dsp);
-            m_Channel->removeDSP(dsp);
+            if (dsp)
+            {
+                m_Channel->removeDSP(dsp);
+            }
         }
 
         // re-add dsp
         for (const auto &dsp : m_DSPs)
         {
-            m_Channel->addDSP(0, dsp);
+            if (dsp)
+            {
+                m_Channel->addDSP(0, dsp);
+            }
         }
+
+        m_Channel->setPaused(false);
     }
 
     void FmodSound::Stop() const
     {
-        m_Channel->stop();
+        if (m_Channel)
+        {
+            m_Channel->stop();
+        }
     }
 
     void FmodSound::Pause() const
     {
-        m_Channel->setPaused(true);
+        if (m_Channel)
+        {
+            m_Channel->setPaused(true);
+        }
     }
 
     void FmodSound::Resume() const
     {
-        m_Channel->setPaused(false);
+        if (m_Channel)
+        {
+            m_Channel->setPaused(false);
+        }
     }
 
     void FmodSound::SetName(const std::string &name)
@@ -71,24 +100,36 @@ namespace ignite
 
     void FmodSound::SetPan(const float pan) const
     {
-        m_Channel->setPan(pan);
+        if (m_Channel)
+        {
+            m_Channel->setPan(pan);
+        }
     }
 
     void FmodSound::SetVolume(float volume) const
     {
         volume = std::clamp(volume, 0.0f, 1.0f);
-        m_Channel->setVolume(volume);
+        if (m_Channel)
+        {
+            m_Channel->setVolume(volume);
+        }
     }
 
     void FmodSound::SetPitch(const float pitch) const
     {
-        m_Channel->setPitch(pitch);
+        if (m_Channel)
+        {
+            m_Channel->setPitch(pitch);
+        }
     }
 
     void FmodSound::SetMode(const FMOD_MODE mode)
     {
         m_Mode = mode;
-        m_Channel->setMode(m_Mode);
+        if (m_Channel)
+        {
+            m_Channel->setMode(m_Mode);
+        }
     }
 
     void FmodSound::SetFadeIn(uint32_t fade_in_start_ms, uint32_t fade_in_end_ms)
@@ -127,14 +168,22 @@ namespace ignite
 
     float FmodSound::GetPitch() const
     {
-        float pitch;
+        if (!m_Channel)
+        {
+            return 1.0f;
+        }
+        float pitch = 1.0f;
         m_Channel->getPitch(&pitch);
         return pitch;
     }
 
     float FmodSound::GetVolume() const
     {
-        float volume;
+        if (!m_Channel)
+        {
+            return 1.0f;
+        }
+        float volume = 1.0f;
         m_Channel->getVolume(&volume);
         return volume;
     }
@@ -182,7 +231,10 @@ namespace ignite
 
     const FMOD_MODE &FmodSound::GetMode()
     {
-        m_Channel->getMode(&m_Mode);
+        if (m_Channel)
+        {
+            m_Channel->getMode(&m_Mode);
+        }
         return m_Mode;
     }
 
@@ -193,6 +245,10 @@ namespace ignite
 
     bool FmodSound::IsPlaying() const
     {
+        if (!m_Channel)
+        {
+            return false;
+        }
         bool is_playing = false;
         m_Channel->isPlaying(&is_playing);
         return is_playing;
@@ -200,6 +256,10 @@ namespace ignite
 
     bool FmodSound::IsPaused() const
     {
+        if (!m_Channel)
+        {
+            return false;
+        }
         bool paused = false;
         m_Channel->getPaused(&paused);
         return paused;
@@ -207,19 +267,27 @@ namespace ignite
 
     bool FmodSound::IsLooping() const
     {
-        return ((m_Mode & FMOD_LOOP_NORMAL) == 0);
+        return (m_Mode & FMOD_LOOP_NORMAL) != 0;
     }
 
     u32 FmodSound::GetLengthMs() const
     {
-        u32 length;
+        if (!m_Sound)
+        {
+            return 0;
+        }
+        u32 length = 0;
         m_Sound->getLength(&length, FMOD_TIMEUNIT_MS);
         return length;
     }
 
     u32 FmodSound::GetPositionMs() const
     {
-        u32 position;
+        if (!m_Channel)
+        {
+            return 0;
+        }
+        u32 position = 0;
         m_Channel->getPosition(&position, FMOD_TIMEUNIT_MS);
         return position;
     }
@@ -232,7 +300,11 @@ namespace ignite
     Ref<FmodSound> FmodSound::Create(const std::string &name, const std::string &filepath, const FMOD_MODE mode)
     {
         Ref<FmodSound> fmod_sound = CreateRef<FmodSound>(name, mode);
-        FmodAudio::GetFmodSystem()->createSound(filepath.c_str(), mode, nullptr, &fmod_sound->m_Sound);
+        if (FMOD::System *system = FmodAudio::GetFmodSystem())
+        {
+            const FMOD_RESULT result = system->createSound(filepath.c_str(), mode, nullptr, &fmod_sound->m_Sound);
+            FMOD_CHECK(result);
+        }
 
         LOG_WARN("[FMOD Sound] Load sound '{}'", filepath);
 
@@ -242,29 +314,47 @@ namespace ignite
     Ref<FmodSound> FmodSound::CreateStream(const std::string &name, const std::string &filepath, const FMOD_MODE mode)
     {
         Ref<FmodSound> fmod_sound = CreateRef<FmodSound>(name, mode);
-        FmodAudio::GetFmodSystem()->createStream(filepath.c_str(), mode, nullptr, &fmod_sound->m_Sound);
+        if (FMOD::System *system = FmodAudio::GetFmodSystem())
+        {
+            const FMOD_RESULT result = system->createStream(filepath.c_str(), mode, nullptr, &fmod_sound->m_Sound);
+            FMOD_CHECK(result);
+        }
         return fmod_sound;
     }
 
     void FmodSound::UpdateFading() const
     {
-        u32 position = 0;
+        if (!m_Channel)
+        {
+            return;
+        }
 
-        m_Channel->getPosition(&position, FMOD_TIMEUNIT_MS);
+        u32 position = 0;
+        if (m_Channel->getPosition(&position, FMOD_TIMEUNIT_MS) != FMOD_OK)
+        {
+            return;
+        }
+
         float volume = GetVolume();
-        if (position >= m_FadeInStartMs && position <= m_FadeInEndMs)
+        bool shouldUpdate = false;
+        if (m_FadeInEndMs > m_FadeInStartMs && position >= m_FadeInStartMs && position <= m_FadeInEndMs)
         {
             const float fade_progress = static_cast<float>(position - m_FadeInStartMs) / static_cast<float>(m_FadeInEndMs - m_FadeInStartMs);
-            volume = fade_progress;
+            volume = std::clamp(fade_progress, 0.0f, 1.0f);
+            shouldUpdate = true;
         }
 
-        if (position >= m_FadeOutStartMs && position <= m_FadeOutEndMs)
+        if (m_FadeOutEndMs > m_FadeOutStartMs && position >= m_FadeOutStartMs && position <= m_FadeOutEndMs)
         {
             const float fade_progress = static_cast<float>(position - m_FadeOutStartMs) / static_cast<float>(m_FadeOutEndMs - m_FadeOutStartMs);
-            volume = 1.0f - fade_progress;
+            volume = std::clamp(1.0f - fade_progress, 0.0f, 1.0f);
+            shouldUpdate = true;
         }
 
-        SetVolume(volume);
+        if (shouldUpdate)
+        {
+            SetVolume(volume);
+        }
     }
 
 }

@@ -979,10 +979,11 @@ namespace ignite
             }
             else if (normals)
             {
-                // Generate tangent space if not provided
-                // Simple approach: assume UV-aligned tangent
-                vertex.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
-                vertex.bitangent = glm::cross(vertex.normal, vertex.tangent);
+                // Generate safe orthonormal tangent basis when glTF omits tangents
+                const glm::vec3 n = glm::normalize(vertex.normal);
+                const glm::vec3 helper = (std::abs(n.x) < 0.9f) ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+                vertex.tangent = glm::normalize(helper - n * glm::dot(n, helper));
+                vertex.bitangent = glm::normalize(glm::cross(n, vertex.tangent));
             }
 
             if (texCoords)
@@ -1155,7 +1156,8 @@ namespace ignite
         }
 
         // pre-load textures and samplers
-        const auto textures = LoadTextures(gltfModel);
+        const std::filesystem::path baseDir = std::filesystem::path(filename).parent_path();
+        const auto textures = LoadTextures(gltfModel, baseDir);
         const auto samplers = GetSamplers(gltfModel);
 
         // preserve nodes
@@ -1516,7 +1518,7 @@ namespace ignite
         }
     }
 
-    std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTextures(const tinygltf::Model &model)
+    std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTextures(const tinygltf::Model &model, const std::filesystem::path &baseDir)
     {
         std::vector<std::pair<std::string, Ref<Texture>>> gltfTextures;
         gltfTextures.resize(model.textures.size(), { "", nullptr });
@@ -1600,7 +1602,20 @@ namespace ignite
                     }
                     else if (!image.uri.empty())
                     {
-                        LOG_ASSERT(false, "Not implemented yet!");
+                        std::filesystem::path uriPath = baseDir.empty() ? std::filesystem::path(image.uri) : (baseDir / image.uri);
+                        if (std::filesystem::exists(uriPath))
+                        {
+                            texture = Texture::Create(uriPath, createInfo, nullptr);
+                            if (texture)
+                            {
+                                texture->PrepareUploadData(4);
+                                Texture::SubmitAsyncUpload(texture);
+                            }
+                        }
+                        else
+                        {
+                            LOG_WARN("[GLTF Loader] External texture URI not found: {}", uriPath.string());
+                        }
                     }
 
                     loadedImages[gltfTexture.source] = texture;
