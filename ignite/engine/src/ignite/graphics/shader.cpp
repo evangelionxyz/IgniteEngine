@@ -187,7 +187,34 @@ namespace ignite
 
         std::vector<uint8_t> shaderCode;
         std::filesystem::path cacheFilepath = (options.outputFilepath / options.filepath.filename().replace_extension(GetShaderExtension(api))).generic_string();
-        if (std::filesystem::exists(cacheFilepath) && !recompile)
+        bool cacheValid = !recompile && std::filesystem::exists(cacheFilepath);
+        if (cacheValid)
+        {
+            std::error_code ec;
+            const auto cacheTime = std::filesystem::last_write_time(cacheFilepath, ec);
+            const auto srcTime = std::filesystem::last_write_time(filepath, ec);
+            if (ec || srcTime > cacheTime)
+            {
+                cacheValid = false;
+            }
+            else
+            {
+                const std::filesystem::path includeDir = filepath.parent_path() / "include";
+                if (std::filesystem::exists(includeDir, ec))
+                {
+                    for (const auto &entry : std::filesystem::recursive_directory_iterator(includeDir, ec))
+                    {
+                        if (entry.is_regular_file(ec) && entry.last_write_time(ec) > cacheTime)
+                        {
+                            cacheValid = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (cacheValid)
         {
             std::ifstream file(cacheFilepath, std::ios::binary);
             file.seekg(0, std::ios::end);

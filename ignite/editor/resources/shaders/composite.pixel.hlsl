@@ -169,7 +169,7 @@ float4 main(VSOutput input) : SV_Target
         if (hasSSAO)
         {
             float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-            sceneColor *= lerp(1.0f, ao, chromAbParams.z);
+            sceneColor *= saturate(pow(max(ao, 1e-4f), max(chromAbParams.z, 0.0f)));
         }
         if (hasFog)
         {
@@ -181,7 +181,7 @@ float4 main(VSOutput input) : SV_Target
         if (hasSSAO)
         {
             float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-            sceneColor *= lerp(1.0f, ao, chromAbParams.z);
+            sceneColor *= saturate(pow(max(ao, 1e-4f), max(chromAbParams.z, 0.0f)));
         }
         if (hasFog)
         {

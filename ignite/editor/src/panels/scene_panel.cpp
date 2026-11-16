@@ -1094,8 +1094,9 @@ namespace ignite
                     c.dirtyEnvironment = true;
                 }
 
-                UI::DrawFloatControl("Exposure", &c.exposure, 0.025f, 0.0f, FLT_MAX);
-                UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 0.0f, FLT_MAX);
+                UI::DrawCheckbox("IBL Environment Lighting", &c.enableIBL);
+                UI::DrawFloatControl("Exposure", &c.exposure, 0.025f, 0.1f, 4.0f);
+                UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 1.4f, 2.8f);
                 UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
 
                 // Fog
@@ -1200,6 +1201,7 @@ namespace ignite
 
                 if (c.cascadeShadow)
                 {
+                    UI::DrawCheckbox("Soft Shadow Maps", &c.softShadows);
                     UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
                     UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
                     UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
@@ -1939,7 +1941,7 @@ namespace ignite
                         // Tonemapping & Color correction
                         if (ImGui::TreeNodeEx("Color Correction", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "Filmic" };
+                            const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "ACES Filmic" };
                             int currentTonemap = static_cast<int>(pp.tonemapMode);
                             if (UI::DrawComboBox("Tonemap Mode", tonemapModes, std::size(tonemapModes), &currentTonemap))
                             {
@@ -1955,7 +1957,7 @@ namespace ignite
 
                         // Depth of Field
                         c.dirty |= UI::DrawCheckbox("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
-                        if (c.camera.lens.enabledDOF)
+                        ImGui::BeginDisabled(!c.camera.lens.enabledDOF);
                         {
                             c.dirty |= UI::DrawFloatControl("Focal Length", &c.camera.lens.focalLength, 0.1f, 0.0f, FLT_MAX).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Focal Distance", &c.camera.lens.focalDistance, 0.05f, 0.0f, FLT_MAX).isItemEdited;
@@ -1963,10 +1965,11 @@ namespace ignite
                             c.dirty |= UI::DrawFloatControl("Focus Range", &c.camera.lens.focusRange, 0.05f, 0.0f, FLT_MAX).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Blur Amount", &c.camera.lens.blurAmount, 0.05f, 0.0f, FLT_MAX).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         // Bloom
                         c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
-                        if (pp.enableBloom)
+                        ImGui::BeginDisabled(!pp.enableBloom);
                         {
                             c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
@@ -1974,34 +1977,36 @@ namespace ignite
                             c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
                             c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         // Vignette
                         c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
-                        if (pp.enableVignette)
+                        ImGui::BeginDisabled(!pp.enableVignette);
                         {
                             c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         // Chromatic Aberration
                         c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
-                        if (pp.enableChromAb)
+                        ImGui::BeginDisabled(!pp.enableChromAb);
                         {
                             c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         // SSAO
-                        c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
-                        if (pp.enableSSAO)
+                        c.dirty |= UI::DrawCheckbox("SSAO (Hemisphere + Bilateral Blur)", &pp.enableSSAO).isItemEdited;
+                        ImGui::BeginDisabled(!pp.enableSSAO);
                         {
-                            c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
-                            c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 1.0f).isItemEdited;
-                            c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
-                            c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("SSAO Radius", &pp.aoRadius, 0.01f, 0.1f, 2.5f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("SSAO Intensity", &pp.aoIntensity, 0.05f, 0.2f, 3.0f).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         ImGui::TreePop();
                     }

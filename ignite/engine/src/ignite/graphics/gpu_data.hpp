@@ -31,14 +31,14 @@ namespace ignite
 		int renderMode = 0;
 		int debugShadow = 0;
 
-		float exposure = 1.1f;
+		float exposure = 1.0f;
 		float gamma = 2.2f;
 		float ambient = 0.5f;
 
 		int numPointLights = 0;
 		int numSpotLights = 0;
 		int skyType = 0; // 0 = HDRI, 1 = Procedural Sky
-		float _pad2 = 0.0f;
+		int enableIBL = 1; // 1 = IBL Environment Lighting enabled
 
 		glm::vec4 sunDirection = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 	};
@@ -53,11 +53,12 @@ namespace ignite
 		// Adjust via the Scene panel; these are sane defaults for ortho [0,1] depth.
 		float minBias = 0.0002f;  // bias for surfaces facing the light directly
 		float maxBias = 0.002f;   // bias for steep/grazing-angle surfaces
-		float pcfRadius = 0.3f;   // PCF filter radius in texels for cascade 0
+		float pcfRadius = 1.5f;   // PCF filter radius in texels for cascade 0
 
 		int cascadeIndex;
 		float shadowTexelSize = 1.0f / 2048.0f;
-		float padding[2];
+		int softShadows = 1;
+		float padding = 0.0f;
 	};
 
 	struct CSMModel_GPUData

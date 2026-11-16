@@ -2,12 +2,19 @@
 
 #include <gtest/gtest.h>
 
+#include "ignite/core/agent_controller.hpp"
 #include "ignite/graphics/objects/mesh_builder.hpp"
+#include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/frame_packet.hpp"
+#include "ignite/math/frustum.hpp"
+#include "ignite/scene/component.hpp"
+#include "ignite/scene/editor_camera.hpp"
 #include "ignite/scene/icamera.hpp"
+#include "ignite/scene/scene_camera.hpp"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 
 using namespace ignite;
@@ -152,4 +159,144 @@ TEST(MeshBuilderAndRenderer, FramePacketReuseAndCameraBasis)
     EXPECT_NEAR(glm::length(up), 1.0f, 0.001f);
     EXPECT_NEAR(glm::dot(fwd, right), 0.0f, 0.001f);
     EXPECT_NEAR(glm::dot(fwd, up), 0.0f, 0.001f);
+}
+
+
+TEST(RendererShadowAndCamera, CascadedShadowMapNoNearPlaneClipAndUpInvariant)
+{
+    SceneCamera cam;
+    cam.fov = 45.0f;
+    cam.nearPlane = 0.1f;
+    cam.farPlane = 500.0f;
+    cam.position = glm::vec3(10.0f, 5.0f, 20.0f);
+    const glm::mat4 camView = glm::lookAt(cam.position, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    cam.SetTransform(glm::inverse(camView));
+    cam.UpdateProjection(1280, 720);
+
+    const glm::vec3 toSun = glm::normalize(glm::vec3(-0.4f, 0.8f, -0.45f));
+    CascadedShadowMap csm(ShadowMapQuality::LOW);
+    csm.ComputeMatrices(&cam, toSun, 200.0f);
+
+    const CSM_GPUData &gpu = csm.GetGPUData();
+    EXPECT_EQ(gpu.softShadows, 1);
+    EXPECT_FLOAT_EQ(gpu.pcfRadius, 1.5f);
+    EXPECT_FLOAT_EQ(gpu.shadowStrength, 1.0f);
+
+    // Every cascade must include upstream shadow casters >= 100m toward the sun without near-plane clipping
+    for (int i = 0; i < NUM_CASCADES; ++i)
+    {
+        const glm::mat4 &vp = gpu.lightViewProj[i];
+        for (int col = 0; col < 4; ++col)
+        {
+            for (int row = 0; row < 4; ++row)
+            {
+                EXPECT_TRUE(std::isfinite(vp[col][row]));
+            }
+        }
+
+        const glm::mat4 invVP = glm::inverse(vp);
+        glm::vec4 worldCenterH = invVP * glm::vec4(0.0f, 0.0f, 0.5f, 1.0f);
+        const glm::vec3 cascadeCenter = glm::vec3(worldCenterH) / worldCenterH.w;
+
+        // Displace 100m upstream toward the sun along +toSun
+        const glm::vec3 upstreamCaster = cascadeCenter + toSun * 100.0f;
+        glm::vec4 clipCenter = vp * glm::vec4(cascadeCenter, 1.0f);
+        glm::vec4 clipUpstream = vp * glm::vec4(upstreamCaster, 1.0f);
+        const glm::vec3 ndcCenter = glm::vec3(clipCenter) / clipCenter.w;
+        const glm::vec3 ndcUpstream = glm::vec3(clipUpstream) / clipUpstream.w;
+
+        EXPECT_NEAR(ndcUpstream.x, ndcCenter.x, 1e-3f);
+        EXPECT_NEAR(ndcUpstream.y, ndcCenter.y, 1e-3f);
+        EXPECT_GE(ndcUpstream.z, 0.0f);
+        EXPECT_LE(ndcUpstream.z, 1.0f);
+        EXPECT_LT(ndcUpstream.z, ndcCenter.z);
+
+        Frustum cascadeFrustum(vp);
+        EXPECT_TRUE(cascadeFrustum.IsPointVisible(upstreamCaster));
+    }
+
+    // Light view-projection must not depend on stale SceneCamera pitch/yaw values
+    cam.pitch = 1.25f;
+    cam.yaw = -2.1f;
+    csm.ComputeMatrices(&cam, toSun, 200.0f);
+    const CSM_GPUData &gpuAfterAngles = csm.GetGPUData();
+    for (int i = 0; i < NUM_CASCADES; ++i)
+    {
+        for (int col = 0; col < 4; ++col)
+        {
+            for (int row = 0; row < 4; ++row)
+            {
+                EXPECT_NEAR(gpuAfterAngles.lightViewProj[i][col][row], gpu.lightViewProj[i][col][row], 1e-4f);
+            }
+        }
+    }
+
+    // Overhead vertical sun must fall back cleanly without NaNs
+    csm.ComputeMatrices(&cam, glm::vec3(0.0f, 1.0f, 0.0f), 200.0f);
+    for (int i = 0; i < NUM_CASCADES; ++i)
+    {
+        for (int col = 0; col < 4; ++col)
+        {
+            for (int row = 0; row < 4; ++row)
+            {
+                EXPECT_TRUE(std::isfinite(csm.GetGPUData().lightViewProj[i][col][row]));
+            }
+        }
+    }
+}
+
+TEST(RendererShadowAndCamera, ReferencePipelineComponentDefaults)
+{
+    DirectionalLightComponent dirLight;
+    EXPECT_TRUE(dirLight.cascadeShadow);
+    EXPECT_TRUE(dirLight.softShadows);
+    EXPECT_FLOAT_EQ(dirLight.intensity, 3.0f);
+    EXPECT_FLOAT_EQ(dirLight.shadowStrength, 1.0f);
+    EXPECT_FLOAT_EQ(dirLight.shadowMinBias, 0.0002f);
+    EXPECT_FLOAT_EQ(dirLight.shadowMaxBias, 0.002f);
+    EXPECT_LT(dirLight.shadowMinBias, dirLight.shadowMaxBias);
+    EXPECT_FLOAT_EQ(dirLight.pcfRadius, 1.5f);
+
+    WorldEnvironment worldEnv;
+    EXPECT_TRUE(worldEnv.enableIBL);
+    EXPECT_FLOAT_EQ(worldEnv.exposure, 1.0f);
+    EXPECT_FLOAT_EQ(worldEnv.gamma, 2.2f);
+
+    CameraComponent camComp;
+    EXPECT_TRUE(camComp.camera.postProcessing.enableSSAO);
+    EXPECT_FLOAT_EQ(camComp.camera.postProcessing.aoRadius, 0.65f);
+    EXPECT_FLOAT_EQ(camComp.camera.postProcessing.aoIntensity, 1.35f);
+    EXPECT_FLOAT_EQ(camComp.camera.postProcessing.aoBias, 0.025f);
+    EXPECT_FLOAT_EQ(camComp.camera.postProcessing.aoPower, 1.0f);
+    EXPECT_EQ(camComp.camera.postProcessing.tonemapMode, TonemapMode::Filmic);
+    EXPECT_FLOAT_EQ(camComp.camera.lens.exposure, 1.0f);
+    EXPECT_FLOAT_EQ(camComp.camera.lens.gamma, 2.2f);
+}
+
+TEST(RendererShadowAndCamera, EditorCameraSetTargetAndDistancePreserved)
+{
+    EditorCamera editorCam("TestEditorCam");
+    editorCam.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+
+    AgentExecutionContext ctx;
+    ctx.camera = &editorCam;
+
+    nlohmann::ordered_json cmd = {
+        { "action", "set_camera" },
+        { "position", { 12.0f, 6.0f, 18.0f } },
+        { "target", { 1.0f, 2.0f, -3.0f } }
+    };
+    const auto res = AgentController::ExecuteCommand(cmd, ctx);
+    ASSERT_TRUE(res.value("ok", false));
+
+    // Simulate subsequent editor frames updating orbit camera from target/distance/pitch/yaw
+    editorCam.UpdateCameraPosition(0.016f);
+    editorCam.UpdateView();
+
+    EXPECT_NEAR(editorCam.GetTarget().x, 1.0f, 1e-4f);
+    EXPECT_NEAR(editorCam.GetTarget().y, 2.0f, 1e-4f);
+    EXPECT_NEAR(editorCam.GetTarget().z, -3.0f, 1e-4f);
+    EXPECT_NEAR(editorCam.position.x, 12.0f, 1e-3f);
+    EXPECT_NEAR(editorCam.position.y, 6.0f, 1e-3f);
+    EXPECT_NEAR(editorCam.position.z, 18.0f, 1e-3f);
 }

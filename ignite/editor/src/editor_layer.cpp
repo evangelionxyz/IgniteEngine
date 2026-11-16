@@ -1236,7 +1236,12 @@ namespace ignite
 
         m_CurrentSceneFilePath.clear();
 
-        m_CurrentSceneHandle = AssetHandle(0);
+        // Unload current scene from RAM, so we can load directly from filepath (JSON)
+        if (m_CurrentSceneHandle != AssetHandle(0))
+        {
+            AssetManager::GetInstance()->UnloadAsset(m_CurrentSceneHandle);
+            m_CurrentSceneHandle = AssetHandle(0);
+        }
 
         // Clear active scene first to release references in renderer and panels
         SetActiveScene(nullptr);
@@ -1362,6 +1367,12 @@ namespace ignite
         {
             LOG_WARN("Dismiss opening current scene {0}", filepath.generic_string());
             return;
+        }
+
+        // Unload current scene from RAM, so we can load directly from filepath (JSON)
+        if (m_CurrentSceneHandle != AssetHandle(0))
+        {
+            AssetManager::GetInstance()->UnloadAsset(m_CurrentSceneHandle);
         }
 
         m_CurrentSceneHandle = sceneHandle;
@@ -2683,7 +2694,7 @@ namespace ignite
                 {
                     static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness", "Subsurface", "Transmission", "Coat", "Fuzz" };
                     static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
-                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
+                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "ACES Filmic" };
                     static const char *fillModeLabels[]{ "Solid", "Wireframe" };
 
                     int fillMode = static_cast<int>(renderSettings.fillMode);

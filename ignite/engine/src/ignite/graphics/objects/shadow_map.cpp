@@ -23,10 +23,11 @@ namespace ignite
         m_ModelGPUDataBuffer = ConstantBuffer::Create(sizeof(CSMModel_GPUData), true, 256, "Cascadded Model ShadowMap");
 
         // Initialize shadow parameters with reasonable defaults
-        m_GPUData.shadowStrength = 0.8f;   // 80% shadow visibility
+        m_GPUData.shadowStrength = 1.0f;   // full direct shadow attenuation; ambient/IBL remains lit
         m_GPUData.minBias = 0.0002f;       // bias for surfaces facing light directly
         m_GPUData.maxBias = 0.002f;        // bias for steep/grazing-angle surfaces
-        m_GPUData.pcfRadius = 0.3f;        // PCF filter radius in texels for cascade 0
+        m_GPUData.pcfRadius = 1.5f;        // PCF filter radius in texels for cascade 0
+        m_GPUData.softShadows = 1;
         
         Resize(quality);
     }
@@ -155,9 +156,8 @@ namespace ignite
         const float tanHalfFovY = std::tan(fovRadians * 0.5f);
         const float tanHalfFovX = tanHalfFovY * aspect;
 
-        glm::vec3 upDir = camera->GetUpDirection();
-        if (std::abs(glm::dot(upDir, lightDir)) > 0.95f)
-            upDir = glm::vec3(0.0f, 0.0f, 1.0f);
+        // Fixed world-space up vector so camera pitch/yaw never rotates light space or causes swimming/clipping
+        glm::vec3 upDir = (std::abs(lightDir.y) > 0.95f) ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
 
         float lastSplitDist = csmNear;
 
@@ -216,65 +216,40 @@ namespace ignite
                     }
                 };
 
-            // -----------------------------------------------------------------------
-            // Step 1 – Build an initial light-view from the raw frustum center so we
-            // can measure the sub-texel offset of that center.
-            // -----------------------------------------------------------------------
-            const float extent = radius; // symmetric ortho half-extent
-            const float texelsPerUnit = static_cast<float>(m_Resolution) / (2.0f * extent);
+            // Use a fixed origin-centered light rotation matrix so texel grid alignment
+            // depends only on light direction and never drifts or flips with camera orientation.
+            const glm::mat4 lightRot = glm::lookAt(glm::vec3(0.0f), lightDir, upDir);
 
-            glm::vec3 cascadeCenter = frustumCenter;
-            glm::vec3 lightPos = cascadeCenter - lightDir * radius * 2.0f;
-            glm::mat4 lightView = glm::lookAt(lightPos, cascadeCenter, upDir);
+            const float extent = radius;
+            const float texelBase = (extent * 2.0f) / static_cast<float>(m_Resolution);
+            const float safeExtent = extent + texelBase;
+            const float texelSize = (safeExtent * 2.0f) / static_cast<float>(m_Resolution);
 
-            // -----------------------------------------------------------------------
-            // Step 3 – Snap the light-eye position so the frustum center lands exactly
-            // on a texel boundary. We move the camera rather than patching the
-            // projection matrix — this avoids the NDC-scale-factor bug and is how
-            // Unreal Engine 4/5 and Unity HDRP implement stable CSM.
-            // -----------------------------------------------------------------------
+            glm::vec3 centerLS = glm::vec3(lightRot * glm::vec4(frustumCenter, 1.0f));
+            if (texelSize > 0.0f)
             {
-                // Project frustum center into light-view space.
-                glm::vec3 centerLS = glm::vec3(lightView * glm::vec4(cascadeCenter, 1.0f));
-
-                // Express in texel-space and find the fractional (sub-texel) part.
-                glm::vec2 centerTex  = glm::vec2(centerLS.x, centerLS.y) * texelsPerUnit;
-                glm::vec2 snapOffset = (glm::round(centerTex) - centerTex) / texelsPerUnit;
-
-                // Shift the light position along the light's local X/Y axes.
-                // Extracting the axes from the view matrix rows avoids an extra inverse.
-                glm::vec3 lightRight = glm::vec3(lightView[0][0], lightView[1][0], lightView[2][0]);
-                glm::vec3 lightUp    = glm::vec3(lightView[0][1], lightView[1][1], lightView[2][1]);
-                lightPos += lightRight * snapOffset.x + lightUp * snapOffset.y;
-
-                // Rebuild the view matrix with the snapped position.
-                lightView = glm::lookAt(lightPos, lightPos + lightDir, upDir);
+                centerLS.x = std::round(centerLS.x / texelSize) * texelSize;
+                centerLS.y = std::round(centerLS.y / texelSize) * texelSize;
             }
 
-            // -----------------------------------------------------------------------
-            // Step 4 – Build symmetric ortho and depth bounds.
-            // -----------------------------------------------------------------------
+            // Measure cascade Z bounds in lightRot space across the 8 frustum corners
             glm::vec3 cascadeMin, cascadeMax;
-            computeCascadeBounds(lightView, cascadeMin, cascadeMax);
+            computeCascadeBounds(lightRot, cascadeMin, cascadeMax);
 
-            cascadeMin.x = -extent;
-            cascadeMax.x =  extent;
-            cascadeMin.y = -extent;
-            cascadeMax.y =  extent;
+            // Pad Z upstream (+Z toward sun) and downstream (-Z away from sun) so tall or
+            // distant shadow casters outside the view sub-frustum are never clipped.
+            const float zPadding = glm::max(150.0f, m_ShadowDistance * 0.5f);
+            const float minZ_LS = cascadeMin.z - zPadding;
+            const float maxZ_LS = cascadeMax.z + zPadding;
 
-            // Extra Z padding so tall casters (trees, buildings) behind the camera
-            // sub-frustum are not clipped out of the shadow depth pass.
-            const float zPadding = 150.0f;
-            cascadeMin.z -= zPadding;
-            cascadeMax.z += zPadding;
+            // Shift lightView along Z so every point in [minZ_LS, maxZ_LS] sits strictly in front
+            // of nearPlaneLS = 1.0f, eliminating near-plane clamping/clipping behind lightPos.
+            const float nearPlaneLS = 1.0f;
+            const float farPlaneLS = glm::max(nearPlaneLS + 1.0f, (maxZ_LS - minZ_LS) + nearPlaneLS);
+            const float zShift = -(maxZ_LS + nearPlaneLS);
 
-            const float nearPlaneLS = glm::max(0.001f, -cascadeMax.z);
-            const float farPlaneLS  = glm::max(nearPlaneLS + 1.0f, -cascadeMin.z);
-
-            // NOTE: The light-eye position was already snapped to a texel boundary
-            // in Step 3 above. Do NOT apply a second snap here on lightProj — that
-            // would fight the first snap and re-introduce sub-texel jitter.
-            glm::mat4 lightProj = glm::orthoZO(cascadeMin.x, cascadeMax.x, cascadeMin.y, cascadeMax.y, nearPlaneLS, farPlaneLS);
+            const glm::mat4 lightView = glm::translate(glm::mat4(1.0f), glm::vec3(-centerLS.x, -centerLS.y, zShift)) * lightRot;
+            const glm::mat4 lightProj = glm::orthoZO(-safeExtent, safeExtent, -safeExtent, safeExtent, nearPlaneLS, farPlaneLS);
 
             m_GPUData.lightViewProj[cascadeIdx] = lightProj * lightView;
 

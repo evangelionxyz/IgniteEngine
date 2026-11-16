@@ -140,9 +140,13 @@ PSOutput main(PixelVertexInput input)
 
         float3 reflectDirection = reflect(-viewDirection, finalNormal);
         const float cameraAltitudeKm = camera.position.y * 0.001f;
-        float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, cameraAltitudeKm);
-        float3 blurredReflectRadiance = SampleRoughEnvironmentSpecular(environmentMapTexture, sampler0, reflectDirection, surface.specularRoughness, scene.skyType, cameraAltitudeKm);
-        float3 reflectedSpecular = OpenPBREnvironment(surface, finalNormal, viewDirection, reflectRadiance, blurredReflectRadiance);
+        float3 reflectedSpecular = float3(0.0f, 0.0f, 0.0f);
+        if (scene.enableIBL != 0)
+        {
+            float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, cameraAltitudeKm);
+            float3 blurredReflectRadiance = SampleRoughEnvironmentSpecular(environmentMapTexture, sampler0, reflectDirection, surface.specularRoughness, scene.skyType, cameraAltitudeKm);
+            reflectedSpecular = OpenPBREnvironment(surface, finalNormal, viewDirection, reflectRadiance, blurredReflectRadiance);
+        }
 
         float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
         float3 directLighting = OpenPBRDirect(surface, finalNormal, lightDirection, viewDirection, T, B, irradiance);
@@ -208,14 +212,16 @@ PSOutput main(PixelVertexInput input)
         }
 
         // Diffuse ambient from the (cosine convolved) environment. Not affected by the sun shadow.
-        float3 diffuseIrradiance = SampleEnvironmentIrradiance(environmentMapTexture, sampler0, finalNormal, scene.skyType, cameraAltitudeKm);
+        float3 ambient = float3(0.0f, 0.0f, 0.0f);
+        if (scene.enableIBL != 0)
+        {
+            float3 diffuseIrradiance = SampleEnvironmentIrradiance(environmentMapTexture, sampler0, finalNormal, scene.skyType, cameraAltitudeKm);
+            float3 kS = OpenPBRBaseSpecularAlbedo(surface, saturate(dot(finalNormal, viewDirection)));
+            float3 kD = (1.0f - kS) * (1.0f - surface.metalness);
 
-        float3 kS = OpenPBRBaseSpecularAlbedo(surface, saturate(dot(finalNormal, viewDirection)));
-        float3 kD = (1.0f - kS) * (1.0f - surface.metalness);
-
-        float3 ambient = kD * surface.baseWeight * surface.baseColor * diffuseIrradiance * ao;
-
-        reflectedSpecular *= ao;
+            ambient = kD * surface.baseWeight * surface.baseColor * diffuseIrradiance * ao;
+            reflectedSpecular *= ao;
+        }
 
         float3 finalColor = directLighting + ambient + reflectedSpecular;
 

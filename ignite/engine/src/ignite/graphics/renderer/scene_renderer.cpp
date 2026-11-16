@@ -822,6 +822,7 @@ namespace ignite
         if (!m_Scene || !m_Scene->registry)
             return;
 
+        m_SceneGPUData.enableIBL = 1;
         auto worldEnvView = m_Scene->registry->view<WorldEnvironment>();
         for (entt::entity e : worldEnvView)
         {
@@ -830,6 +831,7 @@ namespace ignite
             m_SceneGPUData.gamma = world.gamma;
             m_SceneGPUData.ambient = world.ambient;
             m_SceneGPUData.skyType = static_cast<int>(world.skyType);
+            m_SceneGPUData.enableIBL = world.enableIBL ? 1 : 0;
             break;
         }
 
@@ -913,9 +915,10 @@ namespace ignite
 
             auto &csmData = m_CascadedShadowMap->GetGPUData();
             csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
-            csmData.minBias = light.shadowMinBias;
-            csmData.maxBias = light.shadowMaxBias;
+            csmData.minBias = std::min(light.shadowMinBias, light.shadowMaxBias);
+            csmData.maxBias = std::max(light.shadowMinBias, light.shadowMaxBias);
             csmData.pcfRadius = light.pcfRadius;
+            csmData.softShadows = light.softShadows ? 1 : 0;
             shadowDist = light.shadowDistance;
 
             m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
@@ -2679,8 +2682,7 @@ namespace ignite
             }
             else
             {
-                m_PostProcessingData.tonemapMode = 0; // Reinhard
-                m_PostProcessingData.exposure = 1.1f;
+                m_PostProcessingData.exposure = 1.0f;
                 m_PostProcessingData.gamma = 2.2f;
                 m_PostProcessingData.fogDensity = 0.0f;
             }

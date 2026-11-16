@@ -305,17 +305,18 @@ namespace ignite
         DirectionalLightComponent() = default;
 
         glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        float intensity = 0.5f;
+        float intensity = 3.0f;
         float angularRadius = 45.0f; // degrees
 
         // Shadow
-        float shadowStrength = 0.5f;
-        float shadowMinBias = 0.05f;
-        float shadowMaxBias = 0.001f;
-        float pcfRadius = 0.3f;
+        float shadowStrength = 1.0f;
+        float shadowMinBias = 0.0002f;
+        float shadowMaxBias = 0.002f;
+        float pcfRadius = 1.5f;
         float shadowDistance = 200.0f; // max distance (world units) from camera at which shadows are rendered
         int shadowResolution = 2; // 0=Low, 1=Medium, 2=High, 3=Ultra
         bool cascadeShadow = true;
+        bool softShadows = true;
 
         COMPONENT_CLASS_TYPE(CompType_DirectionalLight)
     };
@@ -369,9 +370,10 @@ namespace ignite
         SkyType skyType = SkyType::HDRI;
         AtmosphereParams atmosphereParams;
 
-        float exposure = 1.1f;
+        float exposure = 1.0f;
         float gamma = 2.2f;
         float ambient = 0.5f;
+        bool enableIBL = true;
 
         // Fog
         float fogDensity = 0.0f;

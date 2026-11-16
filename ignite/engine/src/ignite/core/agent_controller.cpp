@@ -18,6 +18,7 @@
 #include "ignite/project/game_packager.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/scene/component.hpp"
+#include "ignite/scene/editor_camera.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/icamera.hpp"
 #include "ignite/scene/scene.hpp"
@@ -200,7 +201,13 @@ namespace ignite
                     { "fov", cc.camera.fov },
                     { "near_plane", cc.camera.nearPlane },
                     { "far_plane", cc.camera.farPlane },
-                    { "ortho_size", cc.camera.orthoSize }
+                    { "ortho_size", cc.camera.orthoSize },
+                    { "exposure", cc.camera.lens.exposure },
+                    { "gamma", cc.camera.lens.gamma },
+                    { "ssao", cc.camera.postProcessing.enableSSAO },
+                    { "ao_radius", cc.camera.postProcessing.aoRadius },
+                    { "ao_intensity", cc.camera.postProcessing.aoIntensity },
+                    { "tonemap_mode", static_cast<int>(cc.camera.postProcessing.tonemapMode) }
                 };
             }
 
@@ -211,7 +218,13 @@ namespace ignite
                     { "color", Vec4ToJson(dl.color) },
                     { "intensity", dl.intensity },
                     { "shadow_distance", dl.shadowDistance },
-                    { "cascade_shadow", dl.cascadeShadow }
+                    { "shadow_strength", dl.shadowStrength },
+                    { "shadow_min_bias", dl.shadowMinBias },
+                    { "shadow_max_bias", dl.shadowMaxBias },
+                    { "pcf_radius", dl.pcfRadius },
+                    { "shadow_resolution", dl.shadowResolution },
+                    { "cascade_shadow", dl.cascadeShadow },
+                    { "soft_shadows", dl.softShadows }
                 };
             }
 
@@ -281,6 +294,20 @@ namespace ignite
                 };
             }
 
+            if (e.HasComponent<WorldEnvironment>())
+            {
+                const auto &we = e.GetComponent<WorldEnvironment>();
+                j["WorldEnvironment"] = {
+                    { "sky_type", we.skyType == SkyType::ProceduralSky ? "procedural" : "hdri" },
+                    { "enable_ibl", we.enableIBL },
+                    { "exposure", we.exposure },
+                    { "gamma", we.gamma },
+                    { "ambient", we.ambient },
+                    { "fog_density", we.fogDensity },
+                    { "fog_color", Vec4ToJson(we.fogColor) }
+                };
+            }
+
             return j;
         }
 
@@ -333,11 +360,34 @@ namespace ignite
                 if (props.contains("near_plane")) cc.camera.nearPlane = props["near_plane"].get<float>();
                 if (props.contains("far_plane")) cc.camera.farPlane = props["far_plane"].get<float>();
                 if (props.contains("ortho_size")) cc.camera.orthoSize = props["ortho_size"].get<float>();
+                if (props.contains("exposure")) cc.camera.lens.exposure = props["exposure"].get<float>();
+                if (props.contains("gamma")) cc.camera.lens.gamma = props["gamma"].get<float>();
+                if (props.contains("ssao")) cc.camera.postProcessing.enableSSAO = props["ssao"].get<bool>();
+                if (props.contains("enable_ssao")) cc.camera.postProcessing.enableSSAO = props["enable_ssao"].get<bool>();
+                if (props.contains("ao_radius")) cc.camera.postProcessing.aoRadius = props["ao_radius"].get<float>();
+                if (props.contains("ao_intensity")) cc.camera.postProcessing.aoIntensity = props["ao_intensity"].get<float>();
+                if (props.contains("ao_bias")) cc.camera.postProcessing.aoBias = props["ao_bias"].get<float>();
+                if (props.contains("ao_power")) cc.camera.postProcessing.aoPower = props["ao_power"].get<float>();
+                if (props.contains("tonemap_mode"))
+                {
+                    if (props["tonemap_mode"].is_string())
+                    {
+                        const std::string tm = props["tonemap_mode"].get<std::string>();
+                        if (tm == "reinhard") cc.camera.postProcessing.tonemapMode = TonemapMode::Reinhard;
+                        else if (tm == "uncharted2") cc.camera.postProcessing.tonemapMode = TonemapMode::Uncharted2;
+                        else if (tm == "filmic" || tm == "aces" || tm == "aces_filmic") cc.camera.postProcessing.tonemapMode = TonemapMode::Filmic;
+                    }
+                    else if (props["tonemap_mode"].is_number_integer())
+                    {
+                        cc.camera.postProcessing.tonemapMode = static_cast<TonemapMode>(props["tonemap_mode"].get<int>());
+                    }
+                }
                 if (props.contains("projection_type") && props["projection_type"].is_string())
                 {
                     const std::string p = props["projection_type"].get<std::string>();
                     cc.camera.projectionType = (p == "orthographic" || p == "ortho") ? ProjectionType::Orthographic : ProjectionType::Perspective;
                 }
+                cc.dirty = true;
                 return true;
             }
 
@@ -347,7 +397,13 @@ namespace ignite
                 if (props.contains("color")) dl.color = ReadJsonVec4(props["color"], dl.color);
                 if (props.contains("intensity")) dl.intensity = props["intensity"].get<float>();
                 if (props.contains("shadow_distance")) dl.shadowDistance = props["shadow_distance"].get<float>();
+                if (props.contains("shadow_strength")) dl.shadowStrength = props["shadow_strength"].get<float>();
+                if (props.contains("shadow_min_bias")) dl.shadowMinBias = props["shadow_min_bias"].get<float>();
+                if (props.contains("shadow_max_bias")) dl.shadowMaxBias = props["shadow_max_bias"].get<float>();
+                if (props.contains("pcf_radius")) dl.pcfRadius = props["pcf_radius"].get<float>();
+                if (props.contains("shadow_resolution")) dl.shadowResolution = props["shadow_resolution"].get<uint32_t>();
                 if (props.contains("cascade_shadow")) dl.cascadeShadow = props["cascade_shadow"].get<bool>();
+                if (props.contains("soft_shadows")) dl.softShadows = props["soft_shadows"].get<bool>();
                 return true;
             }
 
@@ -376,6 +432,7 @@ namespace ignite
             if (type == "WorldEnvironment")
             {
                 auto &we = e.HasComponent<WorldEnvironment>() ? e.GetComponent<WorldEnvironment>() : e.AddComponent<WorldEnvironment>();
+                if (props.contains("enable_ibl")) we.enableIBL = props["enable_ibl"].get<bool>();
                 if (props.contains("exposure")) we.exposure = props["exposure"].get<float>();
                 if (props.contains("gamma")) we.gamma = props["gamma"].get<float>();
                 if (props.contains("ambient")) we.ambient = props["ambient"].get<float>();
@@ -1238,10 +1295,50 @@ namespace ignite
             if (cmd.contains("target"))
             {
                 const glm::vec3 target = ReadJsonVec3(cmd["target"]);
-                const glm::vec3 dir = glm::normalize(target - cam->position);
-                cam->pitch = glm::asin(glm::clamp(dir.y, -0.999f, 0.999f));
-                cam->yaw = std::atan2(dir.x, -dir.z);
-                cam->SetView(glm::lookAt(cam->position, target, glm::vec3(0.0f, 1.0f, 0.0f)));
+                glm::vec3 offset = cam->position - target;
+                float distance = glm::length(offset);
+                if (distance < 1e-4f)
+                {
+                    offset = glm::vec3(0.0f, 0.0f, 1.0f);
+                    distance = 1.0f;
+                }
+
+                if (auto *editorCam = dynamic_cast<EditorCamera *>(cam))
+                {
+                    editorCam->SetTarget(target);
+                    editorCam->SetDistance(distance);
+                    editorCam->pitch = glm::clamp(std::asin(glm::clamp(offset.y / distance, -0.999f, 0.999f)), editorCam->controls.minPitch, editorCam->controls.maxPitch);
+                    editorCam->yaw = std::atan2(offset.z, offset.x);
+                    if (editorCam->GetNavigationMode() != EditorCamera::NavigationMode::Fly)
+                    {
+                        editorCam->UpdateSphericalPosition();
+                    }
+                    editorCam->UpdateView();
+                }
+                else
+                {
+                    const glm::vec3 dir = (target - cam->position) / distance;
+                    cam->pitch = glm::asin(glm::clamp(dir.y, -0.999f, 0.999f));
+                    cam->yaw = std::atan2(dir.x, -dir.z);
+                    cam->SetView(glm::lookAt(cam->position, target, glm::vec3(0.0f, 1.0f, 0.0f)));
+                }
+            }
+            else if (cmd.contains("position"))
+            {
+                if (auto *editorCam = dynamic_cast<EditorCamera *>(cam))
+                {
+                    glm::vec3 offset = editorCam->position - editorCam->GetTarget();
+                    float distance = glm::length(offset);
+                    if (distance < 1e-4f)
+                    {
+                        offset = glm::vec3(0.0f, 0.0f, 1.0f);
+                        distance = 1.0f;
+                    }
+                    editorCam->SetDistance(distance);
+                    editorCam->pitch = glm::clamp(std::asin(glm::clamp(offset.y / distance, -0.999f, 0.999f)), editorCam->controls.minPitch, editorCam->controls.maxPitch);
+                    editorCam->yaw = std::atan2(offset.z, offset.x);
+                    editorCam->UpdateView();
+                }
             }
             else
             {
@@ -1274,6 +1371,10 @@ namespace ignite
                 if (cmd.contains("bloom_intensity")) pp.bloomIntensity = cmd["bloom_intensity"].get<float>();
                 if (cmd.contains("ssao")) pp.enableSSAO = cmd["ssao"].get<bool>();
                 if (cmd.contains("debug_ssao")) pp.debugSSAO = cmd["debug_ssao"].get<bool>();
+                if (cmd.contains("ao_radius")) pp.aoRadius = cmd["ao_radius"].get<float>();
+                if (cmd.contains("ao_intensity")) pp.aoIntensity = cmd["ao_intensity"].get<float>();
+                if (cmd.contains("ao_bias")) pp.aoBias = cmd["ao_bias"].get<float>();
+                if (cmd.contains("ao_power")) pp.aoPower = cmd["ao_power"].get<float>();
                 if (cmd.contains("dof")) ctx.camera->lens.enabledDOF = cmd["dof"].get<bool>();
                 if (cmd.contains("exposure")) ctx.camera->lens.exposure = cmd["exposure"].get<float>();
                 if (cmd.contains("gamma")) ctx.camera->lens.gamma = cmd["gamma"].get<float>();
@@ -1281,8 +1382,27 @@ namespace ignite
                 {
                     const std::string tm = cmd["tonemap_mode"].get<std::string>();
                     if (tm == "uncharted2") pp.tonemapMode = TonemapMode::Uncharted2;
-                    else if (tm == "filmic") pp.tonemapMode = TonemapMode::Filmic;
+                    else if (tm == "filmic" || tm == "aces" || tm == "aces_filmic") pp.tonemapMode = TonemapMode::Filmic;
                     else pp.tonemapMode = TonemapMode::Reinhard;
+                }
+            }
+            if (ctx.scene && ctx.scene->registry)
+            {
+                if (cmd.contains("enable_ibl"))
+                {
+                    const bool ibl = cmd["enable_ibl"].get<bool>();
+                    for (auto e : ctx.scene->registry->view<WorldEnvironment>())
+                    {
+                        ctx.scene->registry->get<WorldEnvironment>(e).enableIBL = ibl;
+                    }
+                }
+                if (cmd.contains("soft_shadows"))
+                {
+                    const bool soft = cmd["soft_shadows"].get<bool>();
+                    for (auto e : ctx.scene->registry->view<DirectionalLightComponent>())
+                    {
+                        ctx.scene->registry->get<DirectionalLightComponent>(e).softShadows = soft;
+                    }
                 }
             }
             res["ok"] = true;

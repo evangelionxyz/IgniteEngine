@@ -170,7 +170,14 @@ class IgniteMcpServer:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex[:8]}.tmp")
         tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        os.replace(tmp, path)
+        for attempt in range(8):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == 7:
+                    raise
+                time.sleep(0.015)
 
     def _send_watch_command(
         self,

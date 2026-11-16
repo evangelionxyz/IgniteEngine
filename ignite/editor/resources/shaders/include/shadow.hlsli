@@ -19,7 +19,8 @@ struct CascadesShadows
 
     int cascadeIndex;
     float shadowTexelSize;
-    float padding[2];
+    int softShadows;
+    float padding;
 };
 
 // ---------------------------------------------------------------------------
@@ -86,12 +87,13 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
     float3 ndc = lightSpace.xyz / lightSpace.w;
     float2 shadowUV = ndc.xy * 0.5f + 0.5f;
     float shadowDepth = ndc.z; // orthoZO outputs z in [0,1] for both D3D12 and Vulkan
-    // Vulkan texture UV origin is top-left while NDC Y+ is upward, so we must
-    // flip Y to convert from NDC-space to texture-space correctly.
+    // NRI normalizes viewport coordinates to D3D12 top-left origin on both D3D12 and Vulkan,
+    // so ndc.y = +1 maps to row 0 (v = 0) and ndc.y = -1 maps to row H (v = 1).
     shadowUV.y = 1.0f - shadowUV.y;
 
     if (shadowUV.x < 0.0f || shadowUV.x > 1.0f ||
-        shadowUV.y < 0.0f || shadowUV.y > 1.0f)
+        shadowUV.y < 0.0f || shadowUV.y > 1.0f ||
+        shadowDepth < 0.0f || shadowDepth > 1.0f)
     {
         return 1.0f;
     }
@@ -99,10 +101,22 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
     // Slope-scaled bias: steep surfaces get more bias to avoid acne.
     // lightDirection points toward the light source (L), so dot(normal, lightDirection) > 0 on lit surfaces.
     float cosTheta = saturate(dot(normal, lightDirection));
-    float baseBias = lerp(csm.maxBias, csm.minBias, cosTheta);
+    float loBias = min(csm.minBias, csm.maxBias);
+    float hiBias = max(csm.minBias, csm.maxBias);
+    float baseBias = lerp(hiBias, loBias, cosTheta);
     float cascadeBiasScale = 1.0f + float(cascadeIdx) * 0.5f;
     float bias = baseBias * cascadeBiasScale;
     float compareDepth = shadowDepth - bias;
+
+    if (csm.softShadows == 0)
+    {
+        float storedDepth = shadowMap.SampleLevel(
+            shadowSampler,
+            float3(shadowUV, float(cascadeIdx)),
+            0.0f).r;
+        float visibility = (compareDepth <= storedDepth) ? 1.0f : 0.0f;
+        return saturate(lerp(1.0f, visibility, csm.shadowStrength));
+    }
 
     // Texel size in UV space.
     float ts = csm.shadowTexelSize > 0.0f ? csm.shadowTexelSize : (1.0f / 2048.0f);
