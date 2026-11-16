@@ -3362,6 +3362,7 @@ namespace ignite
             {
                 auto &cc = entity.GetComponent<CharacterControllerComponent>();
                 cc.linearVelocity = *value;
+                cc.desiredVelocity = *value;
                 if (auto charCtrl = cc.character.lock())
                     charCtrl->SetLinearVelocity(*value);
             }

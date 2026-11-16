@@ -728,6 +728,7 @@ namespace ignite
 
         glm::vec3 up = { 0.0f, 1.0f, 0.0f };
         glm::vec3 linearVelocity = { 0.0f, 0.0f, 0.0f };
+        glm::vec3 desiredVelocity = { 0.0f, 0.0f, 0.0f };
 
         WeakRef<physics::PhysicsCharacterController> character;
 
@@ -743,6 +744,7 @@ namespace ignite
             , gravityFactor(other.gravityFactor)
             , up(other.up)
             , linearVelocity(other.linearVelocity)
+            , desiredVelocity(other.desiredVelocity)
             , character(other.character)
         {
         }
@@ -761,6 +763,7 @@ namespace ignite
                 gravityFactor = other.gravityFactor;
                 up = other.up;
                 linearVelocity = other.linearVelocity;
+                desiredVelocity = other.desiredVelocity;
                 character = other.character;
             }
             return *this;
@@ -1011,6 +1014,8 @@ namespace ignite
         bool isLocalPlayer = false; // true if controlled locally by this client
         bool replicate = true;      // whether this entity replicates state
         std::string prefab;         // prefab/template identifier for spawning
+        float replicatedMovementSpeed = 0.0f;
+        bool replicatedIsGrounded = false;
 
         uint32_t syncComponentsMask = NetComp_All;
         uint32_t dirtyComponentsMask = 0;

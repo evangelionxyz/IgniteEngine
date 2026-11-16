@@ -382,8 +382,9 @@ namespace ignite
         }
 
         auto *deviceManager = DeviceManager::GetInstance();
-        if (deviceManager)
+        if (deviceManager && (m_Handle || m_ShaderResourceView || m_Sampler))
         {
+            GPUUploadSync::DeviceWaitIdle(deviceManager->GetDevice());
             const auto &nri = deviceManager->GetCoreInterface();
             for (nri::Descriptor *mipSrv : m_MipSRVs)
             {

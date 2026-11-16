@@ -1269,6 +1269,53 @@
                 }
             },
             {
+                "ID": 8172293649183721123,
+                "Name": "NetworkServer",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/server_manager.lua"
+                }
+            },
+            {
                 "ID": 1555555555555555001,
                 "Name": "Pendulum_Anchor",
                 "Type": "Node",
@@ -2570,6 +2617,12 @@
                 "LuaScript": {
                     "ScriptHandle": 0,
                     "ScriptPath": "Scripts/moving_platform.lua"
+                },
+                "NetworkIdentityComponent": {
+                    "IsLocalPlayer": false,
+                    "Replicate": true,
+                    "SyncComponentsMask": 0,
+                    "Prefab": "Platform_Elevator"
                 }
             },
             {
@@ -2677,6 +2730,12 @@
                 "LuaScript": {
                     "ScriptHandle": 0,
                     "ScriptPath": "Scripts/moving_platform.lua"
+                },
+                "NetworkIdentityComponent": {
+                    "IsLocalPlayer": false,
+                    "Replicate": true,
+                    "SyncComponentsMask": 0,
+                    "Prefab": "Platform_Shuttle_A"
                 }
             },
             {
@@ -2784,6 +2843,12 @@
                 "LuaScript": {
                     "ScriptHandle": 0,
                     "ScriptPath": "Scripts/moving_platform.lua"
+                },
+                "NetworkIdentityComponent": {
+                    "IsLocalPlayer": false,
+                    "Replicate": true,
+                    "SyncComponentsMask": 0,
+                    "Prefab": "Platform_Shuttle_B"
                 }
             },
             {
@@ -2842,7 +2907,7 @@
                     "MaxSlopeAngle": 45.0,
                     "Mass": 80.0,
                     "Friction": 0.20000000298023224,
-                    "GravityFactor": 1.0,
+                    "GravityFactor": 2.240000009536743,
                     "Center": [
                         0.0,
                         2.0,
@@ -2864,74 +2929,10 @@
                     "ScriptPath": "Scripts/player_controller.lua"
                 },
                 "NetworkIdentityComponent": {
-                    "NetId": 1001,
-                    "OwnerClient": 0,
                     "IsLocalPlayer": true,
                     "Replicate": true,
                     "SyncComponentsMask": 4294967295,
-                    "Prefab": ""
-                }
-            },
-            {
-                "ID": 17960878075388470200,
-                "Name": "RemotePlayerBot",
-                "Type": "Node",
-                "Parent": 0,
-                "Transform": {
-                    "WorldTranslation": [
-                        5.150000095367432,
-                        0.0,
-                        0.0
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        0.47999998927116394,
-                        0.47999998927116394,
-                        0.47999998927116394
-                    ],
-                    "LocalTranslation": [
-                        5.150000095367432,
-                        0.0,
-                        0.0
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        0.47999998927116394,
-                        0.47999998927116394,
-                        0.47999998927116394
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true
-                },
-                "SkeletalMesh": {
-                    "Handle": 12136098296841181153,
-                    "AnimatorHandle": 100020,
-                    "UniqueAnimator": true,
-                    "OverrideMaterials": [],
-                    "SocketAttachments": []
-                },
-                "LuaScript": {
-                    "ScriptHandle": 0,
-                    "ScriptPath": "Scripts/remote_player.lua"
-                },
-                "NetworkIdentityComponent": {
-                    "NetId": 1002,
-                    "OwnerClient": 2,
-                    "IsLocalPlayer": false,
-                    "Replicate": true,
-                    "SyncComponentsMask": 4294967295,
-                    "Prefab": ""
+                    "Prefab": "PlayerRobot"
                 }
             },
             {

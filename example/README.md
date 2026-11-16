@@ -6,12 +6,15 @@ This example project demonstrates Ignite Engine's Lua 5.4 gameplay scripting, Jo
 
 ## Features Showcased
 
-1. **Multiplayer Networking (`Scripts/player_controller.lua`, `Scripts/remote_player.lua`)**
+1. **Multiplayer Networking (`Scripts/server_manager.lua`, `Scripts/player_controller.lua`, `Scripts/remote_player.lua`)**
    - Built-in ENet networking with client-side prediction, entity replication, and packet telemetry.
-   - `PlayerRobot` is replicated with `NetworkIdentityComponent` (NetId 1001, local owner).
+   - `PlayerRobot` is the listen-server host avatar and player template; the server assigns fresh runtime network IDs to the host and each joining client. IDs and client ownership are not saved in scene files.
    - Dedicated/Listen server hosting (`F2`), remote connection to `127.0.0.1:8192` (`F3`), and disconnection (`F4`).
    - Replicated state and client chat emotes (`T` key).
-   - Simulated `RemotePlayerBot` (NetId 1002, OwnerClient 2) demonstrating smooth remote interpolation, directional patrol AI, and overhead nametag sync.
+   - Each client controls its own avatar while other players are rendered from interpolated server snapshots and use movement-driven skeletal animation.
+    - `NetworkServer` delegates join-time spawning to `server_manager.lua`; edit its spawn points for each game's world. The server routes owner inputs to `player_controller.lua`'s `on_network_input` callback instead of imposing an engine-level movement speed or spawn layout.
+    - Server Lua callbacks are `on_network_client_joined(entity, client_id, client_name)` and `on_network_input(entity, client_id, move_x, move_y, buttons, yaw, dt)` on the owned player's script.
+    - Client fall-respawns are predicted locally, then applied authoritatively by the server; adjust `RESPAWN_POSITION` in `player_controller.lua` for the demo.
    - Live network HUD displaying RTT ping, packet loss %, server/client ticks, and connection status.
 
 2. **Physics Joints & Motorized Obstacles (`Scripts/joint_hazard.lua`)**

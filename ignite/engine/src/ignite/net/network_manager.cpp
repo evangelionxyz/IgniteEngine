@@ -7,6 +7,7 @@
 #include <ignite/scene/entity.hpp>
 #include <ignite/scene/component.hpp>
 #include <ignite/project/project.hpp>
+#include <ignite/scripting/lua/lua_script_runtime.hpp>
 
 #include <steam/steamnetworkingsockets.h>
 #include <steam/isteamnetworkingutils.h>
@@ -92,6 +93,21 @@ namespace ignite
         });
 
         m_ClientReplication = std::make_unique<NetClientReplication>(m_ActiveScene, m_ClientSystem.get());
+
+        m_ClientSystem->onConnected = [this]() {
+            if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
+            {
+                m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
+                    "on_network_connected", GetClientId(), "");
+            }
+        };
+        m_ClientSystem->onDisconnected = [this]() {
+            if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
+            {
+                m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
+                    "on_network_disconnected", GetClientId(), "");
+            }
+        };
 
         m_ClientSystem->onChat = [this](const netproto::ChatMsg &msg) {
             NetChatMessage chatMsg;
@@ -203,8 +219,11 @@ namespace ignite
             if (m_ServerReplication)
             {
                 m_ServerReplication->SyncWorldToClient(client.clientId);
-                // Automatically spawn a player entity for this client
-                m_ServerReplication->SpawnEntity("Player_" + client.name, glm::vec3(0.0f, 1.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), client.clientId);
+                if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
+                {
+                    m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
+                        "on_network_client_joined", client.clientId, client.name);
+                }
             }
             if (m_ClientJoinedCallback)
             {
@@ -229,6 +248,11 @@ namespace ignite
                 {
                     m_ServerReplication->DespawnEntity(netId);
                 }
+            }
+            if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
+            {
+                m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
+                    "on_network_client_left", client.clientId, client.name);
             }
             if (m_ClientLeftCallback)
             {
@@ -355,27 +379,9 @@ namespace ignite
                         Entity entity{ e, m_ActiveScene };
                         for (const auto &cmd : inputs)
                         {
-                            constexpr float speed = 5.0f;
-                            if (entity.HasComponent<CharacterControllerComponent>())
-                            {
-                                auto &cc = entity.GetComponent<CharacterControllerComponent>();
-                                const glm::vec3 moveDir(cmd.move.x, 0.0f, cmd.move.y);
-                                cc.linearVelocity.x = moveDir.x * speed;
-                                cc.linearVelocity.z = moveDir.z * speed;
-                                if (auto charActor = cc.character.lock())
-                                {
-                                    if ((cmd.buttons & netproto::InputButton_Jump) && charActor->IsOnGround())
-                                    {
-                                        cc.linearVelocity.y = 5.0f;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                auto &tc = entity.GetComponent<TransformComponent>();
-                                tc.local.translation += glm::vec3(cmd.move.x, 0.0f, cmd.move.y) * speed * tickInterval;
-                                tc.dirty = true;
-                            }
+                            if (auto *runtime = m_ActiveScene->GetLuaScriptRuntime())
+                                runtime->InvokeNetworkInput(entity.GetUUID(), client.clientId, cmd.move.x, cmd.move.y,
+                                    cmd.buttons, cmd.yaw, tickInterval);
                         }
                         break;
                     }
@@ -419,7 +425,7 @@ namespace ignite
         if (m_ClientReplication)
         {
             Entity localPlayer = m_ClientReplication->GetLocalPlayerEntity();
-            if (localPlayer.IsValid())
+            if (localPlayer.IsValid() && !localPlayer.HasComponent<CharacterControllerComponent>())
             {
                 auto &tc = localPlayer.GetComponent<TransformComponent>();
                 glm::vec3 predictedPos = tc.local.translation;

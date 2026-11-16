@@ -505,7 +505,14 @@ namespace ignite
         if (newEntity.HasComponent<NetworkIdentityComponent>())
         {
             auto &netComp = newEntity.GetComponent<NetworkIdentityComponent>();
+            if (netComp.netId != 0)
+            {
+                const uint64_t copiedNetId = netComp.netId;
+                scene->UnregisterNetEntity(copiedNetId);
+                scene->RegisterNetEntity(copiedNetId, entity);
+            }
             netComp.netId = 0; // Avoid duplicate netId in the same scene
+            netComp.ownerClient = 0;
         }
 
         // get new entity's ID Component
@@ -609,6 +616,7 @@ namespace ignite
                     ccDesc.halfHeight = halfHeight;
                     ccDesc.mass = cc.mass;
                     ccDesc.friction = cc.friction;
+                    ccDesc.gravityFactor = cc.gravityFactor;
                     ccDesc.maxStepHeight = cc.maxStepHeight;
                     ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
                     ccDesc.up = cc.up;
@@ -618,6 +626,7 @@ namespace ignite
                     {
                         charActor->SetPosition(tr.world.translation);
                         charActor->SetRotation(tr.world.rotation);
+                        charActor->SetLinearVelocity(cc.linearVelocity);
                     }
                     cc.character = charActor;
                 }

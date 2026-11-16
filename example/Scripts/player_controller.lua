@@ -3,10 +3,13 @@ local script = {}
 local WALK_SPEED = 5.2
 local RUN_SPEED = 9.0
 local JUMP_SPEED = 9.5
-local GRAVITY = 22.0
 local COYOTE_TIME = 0.14
 local JUMP_BUFFER_TIME = 0.14
 local TURN_SPEED = 12.0
+local INPUT_BUTTON_RESPAWN = 16
+local INPUT_BUTTON_BOUNCE = 32
+local BOUNCE_SPEED = 16.5
+local RESPAWN_POSITION = Ignite.Vec3(0.0, 0.0, 0.0)
 
 local function ensure_state()
     _G.DemoState = _G.DemoState or {
@@ -27,7 +30,6 @@ local function ensure_state()
         resetPhysicsRequested = false,
         bounceRequested = false,
         bounceVel = 0.0,
-        platformCarry = Ignite.Vec3(0.0, 0.0, 0.0),
     }
     return _G.DemoState
 end
@@ -59,14 +61,59 @@ local prev_t = false
 local spawn_toggle = false
 local net_sync_timer = 0.0
 
+local server_jump_held = false
+local server_respawn_jump_grace = false
+local respawn_request_pending = false
+local bounce_request_pending = false
+
 function script.on_create(entity)
     local st = ensure_state()
     local tr = entity:get_component("Transform")
     if tr then
         st.playerPos = tr.position
+        current_yaw = tr.rotation.y
+        st.playerYaw = current_yaw
     end
     Ignite.Debug.SetShowEntityNames(true)
     Ignite.Log("PlayerController initialized on " .. entity:get_name())
+end
+
+function script.on_network_input(entity, client_id, move_x, move_y, buttons, yaw, dt)
+    local cc = entity:get_component("CharacterController")
+    if not cc then return end
+
+    if (buttons & INPUT_BUTTON_RESPAWN) ~= 0 then
+        cc.linear_velocity = Ignite.Vec3(0.0, 0.0, 0.0)
+        cc:set_position(RESPAWN_POSITION)
+        cc:set_rotation(Ignite.Vec3(0.0, yaw, 0.0))
+        server_jump_held = false
+        server_respawn_jump_grace = true
+        return
+    end
+
+    local grounded = cc.is_grounded
+    if grounded then
+        server_respawn_jump_grace = false
+    end
+    local ground_velocity = cc.ground_velocity
+    local vertical_velocity = cc.linear_velocity.y - (grounded and ground_velocity.y or 0.0)
+    if grounded and vertical_velocity < 0.0 then
+        vertical_velocity = 0.0
+    end
+
+    local jump_held = (buttons & 1) ~= 0
+    if (buttons & INPUT_BUTTON_BOUNCE) ~= 0 then
+        vertical_velocity = BOUNCE_SPEED
+        server_respawn_jump_grace = false
+    elseif jump_held and not server_jump_held and (grounded or server_respawn_jump_grace) then
+        vertical_velocity = JUMP_SPEED
+        server_respawn_jump_grace = false
+    end
+    server_jump_held = jump_held
+
+    local speed = (buttons & 2) ~= 0 and RUN_SPEED or WALK_SPEED
+    cc.linear_velocity = Ignite.Vec3(move_x * speed, vertical_velocity, move_y * speed)
+    cc:set_rotation(Ignite.Vec3(0.0, yaw, 0.0))
 end
 
 function script.on_update(entity, dt)
@@ -74,17 +121,33 @@ function script.on_update(entity, dt)
     local tr = entity:get_component("Transform")
     local cc = entity:get_component("CharacterController")
     local skel = entity:get_component("SkeletalMesh")
+    local net = entity:get_component("NetworkIdentity")
     if not tr or not cc then return end
+
+    if net and not net.is_local_player then
+        local remoteSpeed = net.replicated_movement_speed
+
+        if skel then
+            skel:set_float("Speed", remoteSpeed)
+            skel:set_bool("IsGrounded", net.replicated_is_grounded)
+            skel:set_bool("IsDancing", false)
+            skel:set_bool("IsWaving", remoteSpeed < 0.1)
+        end
+        return
+    end
 
     local pos = tr.position
     st.playerPos = pos
 
     -- Fall respawn safety
     if pos.y < -12.0 then
-        cc:set_position(Ignite.Vec3(0.0, 2.5, 0.0))
+        if net and net.is_local_player and Ignite.Net.IsConnected() then
+            respawn_request_pending = true
+        end
+        cc:set_position(RESPAWN_POSITION)
         vert_vel = 0.0
         cc.linear_velocity = Ignite.Vec3(0.0, 0.0, 0.0)
-        st.playerPos = Ignite.Vec3(0.0, 2.5, 0.0)
+        st.playerPos = RESPAWN_POSITION
     end
 
     -- Edge-triggered actions
@@ -232,14 +295,15 @@ function script.on_update(entity, dt)
 
     local grounded = cc.is_grounded
     st.isGrounded = grounded
+    local groundVelocity = cc.ground_velocity
+    vert_vel = cc.linear_velocity.y - (grounded and groundVelocity.y or 0.0)
     if grounded then
         coyote_timer = COYOTE_TIME
         if vert_vel < 0.0 then
-            vert_vel = -1.5
+            vert_vel = 0.0
         end
     else
         coyote_timer = math.max(0.0, coyote_timer - dt)
-        vert_vel = vert_vel - GRAVITY * dt
     end
 
     -- Bounce pad impulse
@@ -247,6 +311,7 @@ function script.on_update(entity, dt)
         vert_vel = st.bounceVel
         coyote_timer = 0.0
         jump_buffer = 0.0
+        bounce_request_pending = Ignite.Net.IsConnected()
         st.bounceRequested = false
     end
 
@@ -260,8 +325,7 @@ function script.on_update(entity, dt)
         end
     end
 
-    local horizVel = moveDir * targetSpeed + st.platformCarry
-    st.platformCarry = Ignite.Vec3(0.0, 0.0, 0.0)
+    local horizVel = moveDir * targetSpeed
 
     local finalVel = Ignite.Vec3(horizVel.x, vert_vel, horizVel.z)
     cc.linear_velocity = finalVel
@@ -283,7 +347,15 @@ function script.on_update(entity, dt)
             local buttons = 0
             if jump_buffer > 0.0 or space_now then buttons = buttons + 1 end
             if isSprinting then buttons = buttons + 2 end
-            Ignite.Net.SendInput(inX, inZ, buttons, current_yaw)
+            if respawn_request_pending then
+                buttons = buttons + INPUT_BUTTON_RESPAWN
+                respawn_request_pending = false
+            end
+            if bounce_request_pending then
+                buttons = buttons + INPUT_BUTTON_BOUNCE
+                bounce_request_pending = false
+            end
+            Ignite.Net.SendInput(moveDir.x, moveDir.z, buttons, current_yaw)
         end
     end
 

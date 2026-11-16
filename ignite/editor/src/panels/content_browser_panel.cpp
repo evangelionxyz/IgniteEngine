@@ -1763,7 +1763,8 @@ namespace ignite
 
                     AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
                     AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
-                    if (!DispatchOpenAssetEditorEvent(handle, metadata))
+                    const bool isScript = metadata.type == AssetType::LuaScript || metadata.filepath.extension() == ".cs";
+                    if (isScript || !DispatchOpenAssetEditorEvent(handle, metadata))
                     {
                         // If not handled
                         // Windows

@@ -16,6 +16,7 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
+#include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "input/input_system.hpp"
 #include "ignite/asset/asset_manager.hpp"
@@ -423,6 +424,24 @@ namespace ignite
                 nri.EndCommandBuffer(*renderCommandBuffer);
 
                 const uint64_t signalValue = nextRenderFenceValue++;
+                if (renderCommandFence)
+                {
+                    const uint64_t currentFenceValue = nri.GetFenceValue(*renderCommandFence);
+                    if (currentFenceValue == std::numeric_limits<uint64_t>::max())
+                    {
+                        LOG_ERROR("[RenderThread] Command fence returned UINT64_MAX; stopping render thread");
+                        m_RenderThreadRunning = false;
+                    }
+                    else if (signalValue <= currentFenceValue)
+                    {
+                        nextRenderFenceValue = currentFenceValue + 1;
+                        LOG_ERROR("[RenderThread] Corrected non-increasing fence signal value {} to {}; stopping render thread", signalValue, nextRenderFenceValue);
+                        m_RenderThreadRunning = false;
+                    }
+                }
+                if (!m_RenderThreadRunning)
+                    continue;
+
                 nri::FenceSubmitDesc signalFence = {};
                 signalFence.fence = renderCommandFence;
                 signalFence.value = signalValue;
@@ -500,6 +519,24 @@ namespace ignite
                 nri.EndCommandBuffer(*renderCommandBuffer);
 
                 const uint64_t signalValue = nextRenderFenceValue++;
+                if (renderCommandFence)
+                {
+                    const uint64_t currentFenceValue = nri.GetFenceValue(*renderCommandFence);
+                    if (currentFenceValue == std::numeric_limits<uint64_t>::max())
+                    {
+                        LOG_ERROR("[RenderThread] Command fence returned UINT64_MAX; stopping render thread");
+                        m_RenderThreadRunning = false;
+                    }
+                    else if (signalValue <= currentFenceValue)
+                    {
+                        nextRenderFenceValue = currentFenceValue + 1;
+                        LOG_ERROR("[RenderThread] Corrected non-increasing fence signal value {} to {}; stopping render thread", signalValue, nextRenderFenceValue);
+                        m_RenderThreadRunning = false;
+                    }
+                }
+                if (!m_RenderThreadRunning)
+                    continue;
+
                 nri::FenceSubmitDesc signalFence = {};
                 signalFence.fence = renderCommandFence;
                 signalFence.value = signalValue;
@@ -742,7 +779,8 @@ namespace ignite
             FmodAudio::Update();
         }
 
-        if (auto *netManager = NetworkManager::GetInstance())
+        NetworkManager *netManager = NetworkManager::GetInstance();
+        if (netManager)
         {
             netManager->Update(m_DeltaTime);
         }
@@ -751,6 +789,15 @@ namespace ignite
         nri::Device *device = deviceManager ? deviceManager->GetDevice() : nullptr;
 
         const bool canRender = m_CreateInfo.offscreen || AgentController::IsAutomationActive() || (m_Window && (m_Window->IsExternalWindow() || (m_Window->IsVisible() && m_Window->IsInFocus())));
+        if (!canRender && netManager && (netManager->IsServerRunning() || netManager->IsConnected()))
+        {
+            Scene *networkScene = netManager->GetActiveScene();
+            if (networkScene && networkScene->IsRunning())
+            {
+                networkScene->OnUpdateRuntimeSimulate(m_DeltaTime);
+            }
+        }
+
         if (canRender)
         {
             IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");

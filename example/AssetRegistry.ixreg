@@ -122,6 +122,11 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Yes.ixanim"
             },
             {
+                "Handle": 2180521936609524435,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/server_manager.lua"
+            },
+            {
                 "Handle": 2380540141902232948,
                 "Type": "LuaScript",
                 "Filepath": "Scripts/remote_player.lua"

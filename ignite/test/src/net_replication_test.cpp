@@ -24,6 +24,256 @@
 
 using namespace ignite;
 
+TEST(NetReplication, ServerAssignsFreshIdsAndKeepsHostPlayerReplicated)
+{
+    Scene scene;
+    Entity hostPlayer = SceneManager::CreateEntity(&scene, "HostPlayer", EntityType_Node);
+    auto &hostIdentity = hostPlayer.AddComponent<NetworkIdentityComponent>();
+    hostIdentity.netId = 888;
+    scene.RegisterNetEntity(hostIdentity.netId, hostPlayer);
+    hostIdentity.isLocalPlayer = true;
+
+    Entity localOnly = SceneManager::CreateEntity(&scene, "LocalOnly", EntityType_Node);
+    auto &localOnlyIdentity = localOnly.AddComponent<NetworkIdentityComponent>();
+    localOnlyIdentity.replicate = false;
+
+    NetServerSystem server(NetServerSystem::Config{});
+    NetServerReplication replication(&scene, &server);
+
+    EXPECT_NE(hostIdentity.netId, 0u);
+    EXPECT_EQ(hostIdentity.ownerClient, 0u);
+    EXPECT_TRUE(hostIdentity.isLocalPlayer);
+    EXPECT_TRUE(hostIdentity.replicate);
+    EXPECT_NE(hostIdentity.netId, 888u);
+    EXPECT_EQ(scene.FindEntityByNetId(hostIdentity.netId), hostPlayer);
+    EXPECT_FALSE(scene.FindEntityByNetId(888).IsValid());
+    EXPECT_EQ(localOnlyIdentity.netId, 0u);
+}
+
+TEST(NetReplication, SnapshotUpdatesRemoteCharacterMovementState)
+{
+    Scene scene;
+    NetClientSystem client;
+    NetClientReplication replication(&scene, &client);
+
+    Entity remotePlayer = SceneManager::CreateEntity(&scene, "RemotePlayer", EntityType_Node);
+    auto &identity = remotePlayer.AddComponent<NetworkIdentityComponent>();
+    identity.netId = 42;
+    scene.RegisterNetEntity(identity.netId, remotePlayer);
+
+    netproto::SnapshotMsg snapshot;
+    netproto::EntityState state;
+    state.netId = identity.netId;
+    state.movementSpeed = 0.0f;
+    state.isGrounded = true;
+    snapshot.entities.push_back(state);
+
+    ASSERT_TRUE(client.onSnapshot);
+    client.onSnapshot(snapshot);
+
+    EXPECT_FLOAT_EQ(identity.replicatedMovementSpeed, 0.0f);
+    EXPECT_TRUE(identity.replicatedIsGrounded);
+}
+
+TEST(NetReplication, BindsReplicatedPlatformToAuthoredClientEntity)
+{
+    NetServerSystem::Config config;
+    config.port = 8215;
+    NetServerSystem server(config);
+    ASSERT_TRUE(server.Start());
+
+    Scene serverScene;
+    Entity serverPlatform = SceneManager::CreateEntity(&serverScene, "Platform_Elevator", EntityType_Node);
+    serverPlatform.AddComponent<TransformComponent>();
+    auto &serverIdentity = serverPlatform.AddComponent<NetworkIdentityComponent>();
+    serverIdentity.prefab = "Platform_Elevator";
+    serverIdentity.replicate = true;
+    NetServerReplication serverReplication(&serverScene, &server);
+    const uint64_t platformNetId = serverIdentity.netId;
+
+    server.SetClientJoinedCallback([&](NetServerSystem::RemoteClient &client)
+    {
+        serverReplication.SyncWorldToClient(client.clientId);
+    });
+
+    Scene clientScene;
+    Entity authoredPlatform = SceneManager::CreateEntity(&clientScene, "Platform_Elevator", EntityType_Node);
+    authoredPlatform.AddComponent<TransformComponent>();
+    auto &clientIdentity = authoredPlatform.AddComponent<NetworkIdentityComponent>();
+    clientIdentity.prefab = "Platform_Elevator";
+
+    NetClientSystem client;
+    NetClientReplication clientReplication(&clientScene, &client);
+    size_t spawnCount = 0;
+    const auto onSpawn = client.onSpawn;
+    client.onSpawn = [&](const netproto::SpawnMsg &msg)
+    {
+        ++spawnCount;
+        onSpawn(msg);
+    };
+    bool connected = false;
+    client.onConnected = [&]() { connected = true; };
+    client.Connect("127.0.0.1:8215", "PlatformTest");
+
+    for (int i = 0; i < 100 && !connected; ++i)
+    {
+        server.Tick();
+        client.Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(connected);
+    ASSERT_EQ(server.GetClientCount(), 1u);
+
+    for (int i = 0; i < 10; ++i)
+    {
+        server.Tick();
+        client.Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    EXPECT_EQ(spawnCount, 1u);
+    EXPECT_EQ(clientIdentity.netId, platformNetId);
+    Entity replicatedPlatform = clientScene.FindEntityByNetId(platformNetId);
+    EXPECT_EQ(replicatedPlatform, authoredPlatform);
+    EXPECT_EQ(clientScene.registry->view<NetworkIdentityComponent>().size(), 1u);
+
+    client.Disconnect();
+    server.Stop();
+}
+
+TEST(NetReplication, HostAndTwoClientsReceiveEveryPlayerAvatar)
+{
+    NetServerSystem::Config config;
+    config.port = 8214;
+    NetServerSystem server(config);
+    ASSERT_TRUE(server.Start());
+
+    Scene serverScene;
+    Entity hostPlayer = SceneManager::CreateEntity(&serverScene, "HostPlayer", EntityType_Node);
+    hostPlayer.AddComponent<TransformComponent>();
+    hostPlayer.GetTransform().local.scale = glm::vec3(0.48f);
+    hostPlayer.GetTransform().world.scale = glm::vec3(0.48f);
+    hostPlayer.AddComponent<RenderingComponent>();
+    auto &hostIdentity = hostPlayer.AddComponent<NetworkIdentityComponent>();
+    hostIdentity.isLocalPlayer = true;
+    NetServerReplication serverReplication(&serverScene, &server);
+    const uint64_t hostNetId = hostIdentity.netId;
+    std::vector<uint64_t> clientNetIds;
+    std::vector<glm::vec3> clientSpawnPositions;
+    std::vector<glm::quat> clientSpawnRotations;
+
+    server.SetClientJoinedCallback([&](NetServerSystem::RemoteClient &clientInfo)
+    {
+        serverReplication.SyncWorldToClient(clientInfo.clientId);
+        const glm::vec3 spawnPosition(2.0f * clientInfo.clientId, 1.0f, -3.0f);
+        const glm::quat spawnRotation = glm::angleAxis(glm::radians(10.0f * clientInfo.clientId), glm::vec3(0.0f, 1.0f, 0.0f));
+        Entity player = serverReplication.SpawnEntity("HostPlayer", spawnPosition, spawnRotation, clientInfo.clientId);
+        if (player.IsValid())
+        {
+            clientNetIds.push_back(player.GetComponent<NetworkIdentityComponent>().netId);
+            clientSpawnPositions.push_back(spawnPosition);
+            clientSpawnRotations.push_back(spawnRotation);
+        }
+    });
+
+    auto createClientTemplate = [](Scene &scene)
+    {
+        Entity entity = SceneManager::CreateEntity(&scene, "HostPlayer", EntityType_Node);
+        entity.AddComponent<TransformComponent>();
+        entity.GetTransform().local.scale = glm::vec3(0.48f);
+        entity.GetTransform().world.scale = glm::vec3(0.48f);
+        entity.AddComponent<RenderingComponent>();
+        entity.AddComponent<NetworkIdentityComponent>().isLocalPlayer = true;
+    };
+
+    Scene clientSceneB;
+    createClientTemplate(clientSceneB);
+    Scene clientSceneC;
+    createClientTemplate(clientSceneC);
+
+    NetClientSystem clientB;
+    NetClientReplication clientReplicationB(&clientSceneB, &clientB);
+    bool connectedB = false;
+    clientB.onConnected = [&]() { connectedB = true; };
+    clientB.Connect("127.0.0.1:8214", "ClientB");
+
+    for (int i = 0; i < 100 && !connectedB; ++i)
+    {
+        server.Tick();
+        clientB.Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(connectedB);
+
+    NetClientSystem clientC;
+    NetClientReplication clientReplicationC(&clientSceneC, &clientC);
+    bool connectedC = false;
+    clientC.onConnected = [&]() { connectedC = true; };
+    clientC.Connect("127.0.0.1:8214", "ClientC");
+
+    for (int i = 0; i < 100 && !connectedC; ++i)
+    {
+        server.Tick();
+        clientB.Tick();
+        clientC.Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(connectedC);
+
+    for (int i = 0; i < 20; ++i)
+    {
+        server.Tick();
+        clientB.Tick();
+        clientC.Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    ASSERT_EQ(clientNetIds.size(), 2u);
+    const uint64_t clientBNetId = clientNetIds[0];
+    const uint64_t clientCNetId = clientNetIds[1];
+    auto clientBPlayerOnServer = serverScene.FindEntityByNetId(clientBNetId);
+    auto clientCPlayerOnServer = serverScene.FindEntityByNetId(clientCNetId);
+    ASSERT_TRUE(clientBPlayerOnServer.IsValid());
+    ASSERT_TRUE(clientCPlayerOnServer.IsValid());
+    EXPECT_TRUE(clientBPlayerOnServer.GetComponent<RenderingComponent>().visible);
+    EXPECT_TRUE(clientCPlayerOnServer.GetComponent<RenderingComponent>().visible);
+    EXPECT_FLOAT_EQ(clientBPlayerOnServer.GetTransform().world.scale.x, 0.48f);
+    EXPECT_FLOAT_EQ(clientCPlayerOnServer.GetTransform().world.scale.x, 0.48f);
+    EXPECT_NEAR(glm::distance(clientBPlayerOnServer.GetTransform().world.translation, clientSpawnPositions[0]), 0.0f, 1e-5f);
+    EXPECT_NEAR(glm::distance(clientCPlayerOnServer.GetTransform().world.translation, clientSpawnPositions[1]), 0.0f, 1e-5f);
+    EXPECT_NEAR(glm::abs(glm::dot(clientBPlayerOnServer.GetTransform().world.rotation, clientSpawnRotations[0])), 1.0f, 1e-5f);
+    EXPECT_NEAR(glm::abs(glm::dot(clientCPlayerOnServer.GetTransform().world.rotation, clientSpawnRotations[1])), 1.0f, 1e-5f);
+
+    Entity playerB = clientReplicationB.GetLocalPlayerEntity();
+    Entity playerC = clientReplicationC.GetLocalPlayerEntity();
+    Entity hostOnB = clientSceneB.FindEntityByNetId(hostNetId);
+    Entity clientCOnB = clientSceneB.FindEntityByNetId(clientCNetId);
+    Entity hostOnC = clientSceneC.FindEntityByNetId(hostNetId);
+    Entity clientBOnC = clientSceneC.FindEntityByNetId(clientBNetId);
+    ASSERT_TRUE(playerB.IsValid());
+    ASSERT_TRUE(playerC.IsValid());
+    ASSERT_TRUE(hostOnB.IsValid());
+    ASSERT_TRUE(clientCOnB.IsValid());
+    ASSERT_TRUE(hostOnC.IsValid());
+    ASSERT_TRUE(clientBOnC.IsValid());
+    EXPECT_NE(playerB, clientCOnB);
+    EXPECT_NE(playerC, clientBOnC);
+    EXPECT_TRUE(playerB.GetComponent<NetworkIdentityComponent>().isLocalPlayer);
+    EXPECT_TRUE(playerC.GetComponent<NetworkIdentityComponent>().isLocalPlayer);
+    EXPECT_FALSE(clientCOnB.GetComponent<NetworkIdentityComponent>().isLocalPlayer);
+    EXPECT_FALSE(clientBOnC.GetComponent<NetworkIdentityComponent>().isLocalPlayer);
+    EXPECT_TRUE(hostOnB.GetComponent<RenderingComponent>().visible);
+    EXPECT_TRUE(clientCOnB.GetComponent<RenderingComponent>().visible);
+    EXPECT_TRUE(hostOnC.GetComponent<RenderingComponent>().visible);
+    EXPECT_TRUE(clientBOnC.GetComponent<RenderingComponent>().visible);
+    EXPECT_FLOAT_EQ(clientCOnB.GetTransform().world.scale.x, 0.48f);
+    EXPECT_FLOAT_EQ(clientBOnC.GetTransform().world.scale.x, 0.48f);
+
+    clientB.Disconnect();
+    clientC.Disconnect();
+    server.Stop();
+}
+
 TEST(NetReplication, EntitySpawnAndNetworkIdentity)
 {
     NetServerSystem::Config cfg;

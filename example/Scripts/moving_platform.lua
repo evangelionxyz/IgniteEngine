@@ -1,7 +1,8 @@
 local script = {}
 
 local base_pos = Ignite.Vec3(0.0, 0.0, 0.0)
-local prev_pos = Ignite.Vec3(0.0, 0.0, 0.0)
+local previous_target = nil
+local platform_time = 0.0
 local mode = "horizontal_x"
 local amplitude = 4.0
 local speed = 1.4
@@ -11,8 +12,9 @@ function script.on_create(entity)
     local tr = entity:get_component("Transform")
     if tr then
         base_pos = tr.position
-        prev_pos = tr.position
     end
+    previous_target = nil
+    platform_time = 0.0
 
     local name = entity:get_name()
     if name == "Platform_Elevator" then
@@ -36,33 +38,30 @@ function script.on_fixed_update(entity, dt)
     local rb = entity:get_component("Rigidbody")
     if not tr or not rb or dt <= 0.0 then return end
 
-    local t = Ignite.Scene.GetTime() * speed + phase
+    local net = entity:get_component("NetworkIdentity")
+    if Ignite.Net.IsConnected() and net and not net.is_local_player then return end
+
+    platform_time = platform_time + dt
+    local t = platform_time * speed + phase
     local offset = Ignite.Vec3(0.0, 0.0, 0.0)
 
     if mode == "vertical" then
-        offset.y = math.sin(t) * amplitude
+        offset.y = (math.sin(t) - math.sin(phase)) * amplitude
     elseif mode == "horizontal_x" then
-        offset.x = math.sin(t) * amplitude
+        offset.x = (math.sin(t) - math.sin(phase)) * amplitude
     elseif mode == "horizontal_z" then
-        offset.z = math.sin(t) * amplitude
+        offset.z = (math.sin(t) - math.sin(phase)) * amplitude
     end
 
     local desired = base_pos + offset
     local current = tr.position
-    local vel = (desired - current) / dt
+    local vel = previous_target and (desired - previous_target) / dt or Ignite.Vec3(0.0, 0.0, 0.0)
+    previous_target = desired
 
     rb:activate()
     rb.linear_velocity = vel
 
-    -- Carry player smoothly if standing above this platform
     local st = _G.DemoState
-    if st and st.playerPos then
-        local dp = st.playerPos - current
-        if math.abs(dp.x) < 2.2 and math.abs(dp.z) < 2.2 and dp.y > 0.2 and dp.y < 1.8 then
-            st.platformCarry = Ignite.Vec3(vel.x, 0.0, vel.z)
-        end
-    end
-
     if st and st.showDebugOverlay then
         Ignite.Debug.DrawTextWorld(
             current + Ignite.Vec3(0.0, 1.0, 0.0),
@@ -73,8 +72,6 @@ function script.on_fixed_update(entity, dt)
             true
         )
     end
-
-    prev_pos = current
 end
 
 return script

@@ -177,6 +177,43 @@ TEST(LuaScriptRuntime, ComponentAccessAndMutations)
     std::filesystem::remove(scriptPath);
 }
 
+TEST(LuaScriptRuntime, NetworkInputCallbackReceivesOwnedEntityAndInput)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_network_input", R"lua(
+        local script = {}
+        function script.on_network_client_joined(entity, client_id, client_name)
+            entity:get_component("Transform").position = { x = client_id, y = 0, z = 0 }
+        end
+        function script.on_network_input(entity, client_id, move_x, move_y, buttons, yaw, dt)
+            local transform = entity:get_component("Transform")
+            transform.position = {
+                x = move_x + client_id,
+                y = buttons,
+                z = move_y + yaw + dt
+            }
+        end
+        return script
+    )lua");
+
+    Scene scene;
+    Entity player = SceneManager::CreateEntity(&scene, "NetworkPlayer", EntityType_Node);
+    player.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
+
+    {
+        lua::ScriptRuntime runtime(&scene);
+        runtime.InvokeNetworkEvent("on_network_client_joined", 7, "ClientSeven");
+        EXPECT_FLOAT_EQ(player.GetTransform().local.translation.x, 7.0f);
+        runtime.InvokeNetworkInput(player.GetUUID(), 3, 0.25f, -0.5f, 2, 45.0f, 1.0f / 60.0f);
+
+        const glm::vec3 position = player.GetTransform().local.translation;
+        EXPECT_FLOAT_EQ(position.x, 3.25f);
+        EXPECT_FLOAT_EQ(position.y, 2.0f);
+        EXPECT_NEAR(position.z, 44.516666f, 1e-4f);
+    }
+
+    std::filesystem::remove(scriptPath);
+}
+
 TEST(LuaScriptRuntime, EntityQueriesAndLog)
 {
     const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_queries", R"lua(

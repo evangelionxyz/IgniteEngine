@@ -40,6 +40,8 @@ namespace ignite::lua
         void Update(float deltaTime);
         void FixedUpdate(float fixedDeltaTime = 1.0f / 60.0f);
         void InvokeCollision(UUID entityId, UUID otherEntityId, const char *callback, const glm::vec3 &contactPoint, const glm::vec3 &contactNormal);
+        void InvokeNetworkEvent(const char *callback, uint32_t clientId, const std::string &clientName);
+        void InvokeNetworkInput(UUID entityId, uint32_t clientId, float moveX, float moveY, uint16_t buttons, float yaw, float deltaTime);
 
         bool ExecuteSnippet(const std::string &code, std::string &outResult, std::string &outError);
 
@@ -55,6 +57,7 @@ namespace ignite::lua
         };
 
         bool Invoke(UUID entityId, Instance &instance, const char *callback, float deltaTime, bool hasDeltaTime);
+        void CreatePendingInstances();
         std::filesystem::path ResolvePath(const std::filesystem::path &path) const;
 
         void WatchScriptFile(const std::filesystem::path &absolutePath);

@@ -841,56 +841,6 @@ namespace ignite
             {
                 auto &comp = selectedEntity.GetComponent<NetworkIdentityComponent>();
 
-                // Net ID (editable U64 with Gen button)
-                ImGui::PushID("NetID_Control");
-                ImGui::BeginColumns("NetID_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
-                ImGui::SetColumnWidth(0, UI::defColWidth);
-                ImGui::Text("Net ID");
-                ImGui::NextColumn();
-
-                float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-                float genBtnWidth = ImGui::CalcTextSize("Gen").x + GImGui->Style.FramePadding.x * 2.0f;
-                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - genBtnWidth - GImGui->Style.ItemSpacing.x);
-
-                uint64_t currentNetId = comp.netId;
-                if (ImGui::InputScalar("##net_id_input", ImGuiDataType_U64, &currentNetId))
-                {
-                    if (currentNetId != comp.netId)
-                    {
-                        if (m_Scene)
-                            m_Scene->UnregisterNetEntity(comp.netId);
-                        comp.netId = currentNetId;
-                        if (m_Scene)
-                            m_Scene->RegisterNetEntity(comp.netId, selectedEntity);
-                    }
-                }
-                ImGui::PopItemWidth();
-
-                ImGui::SameLine();
-                if (ImGui::Button("Gen", ImVec2(genBtnWidth, lineHeight)))
-                {
-                    if (m_Scene)
-                        m_Scene->UnregisterNetEntity(comp.netId);
-                    static uint64_t s_LocalGenCounter = 1000;
-                    comp.netId = ++s_LocalGenCounter;
-                    if (m_Scene)
-                        m_Scene->RegisterNetEntity(comp.netId, selectedEntity);
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("Generate a new local Net ID");
-                }
-
-                ImGui::EndColumns();
-                ImGui::PopID();
-
-                // Owner Client (editable int control: 0 = Server, 1+ = Client ID)
-                int owner = static_cast<int>(comp.ownerClient);
-                if (UI::DrawIntControl("Owner Client", &owner, 1.0f, 0, 65535, 0))
-                {
-                    comp.ownerClient = static_cast<uint32_t>(std::max(0, owner));
-                }
-
                 // Prefab / Template Identifier
                 ImGui::PushID("NetPrefab_Control");
                 ImGui::BeginColumns("NetPrefab_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
@@ -1199,7 +1149,7 @@ namespace ignite
                 ImGui::SeparatorText("Shadow");
                 UI::DrawCheckbox("Cascade Shadow", &c.cascadeShadow);
 
-                if (c.cascadeShadow)
+                ImGui::BeginDisabled(!c.cascadeShadow);
                 {
                     UI::DrawCheckbox("Soft Shadow Maps", &c.softShadows);
                     UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
@@ -1229,6 +1179,7 @@ namespace ignite
                     //     }
                     // }
                 }
+                ImGui::EndDisabled();
             });
 
             RenderComponent<PointLightComponent>("Point Light", selectedEntity, [&]()
@@ -2399,27 +2350,32 @@ namespace ignite
                     c.dirty |= UI::DrawFloatControl("Min Distance", &d.minDistance, 0.025f, 0.0f, 10000.0f);
                     c.dirty |= UI::DrawFloatControl("Max Distance (-1 = Auto)", &d.maxDistance, 0.025f, -1.0f, 10000.0f, -1.0f);
                     c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
-                    if (d.enableSpring)
+                    ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
                         c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
                     }
+                    ImGui::EndDisabled();
                 }
                 else if (d.type == physics::JointType::Hinge)
                 {
                     ImGui::SeparatorText("Hinge Limits & Spring");
+
                     c.dirty |= UI::DrawCheckbox("Enable Limits", &d.enableLimits);
-                    if (d.enableLimits)
+                    ImGui::BeginDisabled(!d.enableLimits);
                     {
                         c.dirty |= UI::DrawFloatControl("Min Angle (deg)", &d.limitsMin, 0.5f, -180.0f, 0.0f, -45.0f);
                         c.dirty |= UI::DrawFloatControl("Max Angle (deg)", &d.limitsMax, 0.5f, 0.0f, 180.0f, 45.0f);
                     }
+                    ImGui::EndDisabled();
+
                     c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
-                    if (d.enableSpring)
+                    ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
                         c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
                     }
+                    ImGui::EndDisabled();
                     c.dirty |= UI::DrawFloatControl("Max Friction Torque", &d.maxFriction, 0.1f, 0.0f, 100000.0f);
 
                     ImGui::SeparatorText("Hinge Motor");
@@ -2448,18 +2404,23 @@ namespace ignite
                 else if (d.type == physics::JointType::Slider)
                 {
                     ImGui::SeparatorText("Slider Limits & Spring");
+
                     c.dirty |= UI::DrawCheckbox("Enable Limits", &d.enableLimits);
-                    if (d.enableLimits)
+                    ImGui::BeginDisabled(!d.enableLimits);
                     {
                         c.dirty |= UI::DrawFloatControl("Min Limit (m)", &d.limitsMin, 0.05f, -10000.0f, 0.0f, -1.0f);
                         c.dirty |= UI::DrawFloatControl("Max Limit (m)", &d.limitsMax, 0.05f, 0.0f, 10000.0f, 1.0f);
                     }
+                    ImGui::EndDisabled();
+
                     c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
-                    if (d.enableSpring)
+                    ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
                         c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
                     }
+                    ImGui::EndDisabled();
+
                     c.dirty |= UI::DrawFloatControl("Max Friction Force", &d.maxFriction, 0.1f, 0.0f, 100000.0f);
 
                     ImGui::SeparatorText("Slider Motor");
@@ -3403,7 +3364,8 @@ namespace ignite
                 const bool isRunning = m_Scene && m_Scene->IsRunning();
 
                 std::string label = "Drag Lua Script Here";
-                if (component.scriptHandle != AssetHandle(0))
+                const bool isLoaded = component.scriptHandle != AssetHandle(0);
+                if (isLoaded)
                 {
                     std::string assetName = assetManager->GetAssetDisplayName(component.scriptHandle);
                     if (!assetName.empty())
@@ -3441,6 +3403,22 @@ namespace ignite
                         }
                         ImGui::EndDragDropTarget();
                     }
+
+                    if (isLoaded)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X"))
+                        {
+                            component.scriptHandle = AssetHandle(0);
+                            component.scriptPath.clear();
+                            m_Scene->SetDirtyFlag(true);
+
+                            if (isRunning && m_Scene->GetLuaScriptRuntime())
+                            {
+                                m_Scene->GetLuaScriptRuntime()->DestroyInstance(selectedEntity.GetUUID());
+                            }
+                        }
+                    }
                 });
 
                 if (component.scriptHandle != AssetHandle(0))
@@ -3451,21 +3429,8 @@ namespace ignite
                 {
                     ImGui::TextDisabled("Path: %s", component.scriptPath.generic_string().c_str());
                 }
-
-                ImGui::SameLine();
-                if (ImGui::Button("Clear"))
-                {
-                    component.scriptHandle = AssetHandle(0);
-                    component.scriptPath.clear();
-                    m_Scene->SetDirtyFlag(true);
-
-                    if (isRunning && m_Scene->GetLuaScriptRuntime())
-                    {
-                        m_Scene->GetLuaScriptRuntime()->DestroyInstance(selectedEntity.GetUUID());
-                    }
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Reload"))
+                
+                if (ImGui::Button("Reload", {-1.0, 0.0f}))
                 {
                     if (isRunning && m_Scene->GetLuaScriptRuntime())
                     {

@@ -1309,6 +1309,13 @@ namespace ignite::lua
             return 1;
         }
 
+        int LuaNetIsConnecting(lua_State *state)
+        {
+            NetworkManager *nm = NetworkManager::GetInstance();
+            lua_pushboolean(state, nm && nm->IsConnecting());
+            return 1;
+        }
+
         int LuaNetGetClientId(lua_State *state)
         {
             NetworkManager *nm = NetworkManager::GetInstance();
@@ -1360,6 +1367,34 @@ namespace ignite::lua
             if (NetworkManager *nm = NetworkManager::GetInstance())
                 nm->Disconnect();
             return 0;
+        }
+
+        int LuaNetSpawnEntity(lua_State *state)
+        {
+            NetworkManager *nm = NetworkManager::GetInstance();
+            if (!nm || !nm->IsServerRunning() || !nm->GetServerReplication())
+            {
+                lua_pushnil(state);
+                return 1;
+            }
+
+            // Retrieve Lua Ignite.SpawnEntity parameters
+            const char *templateOrPrefab = luaL_checkstring(state, 1);
+            const glm::vec3 position   = ReadVector(state, 2);
+            const auto yawDegrees     = static_cast<float>(luaL_optnumber(state, 3, 0.0));
+            const auto ownerClient = static_cast<uint32_t>(luaL_checkinteger(state, 5));
+
+            const glm::quat rotation = glm::angleAxis(glm::radians(yawDegrees), glm::vec3(0.0f, 1.0f, 0.0f));
+
+            Entity entity = nm->GetServerReplication()->SpawnEntity(templateOrPrefab, position, rotation, ownerClient);
+            if (!entity.IsValid())
+            {
+                lua_pushnil(state);
+                return 1;
+            }
+
+            PushEntity(state, nm->GetActiveScene(), static_cast<uint64_t>(entity.GetUUID()));
+            return 1;
         }
 
         int LuaNetSendInput(lua_State *state)
@@ -1979,6 +2014,12 @@ namespace ignite::lua
                 lua_pushboolean(state, actor && actor->IsOnGround());
                 return 1;
             }
+            if (strcmp(key, "ground_velocity") == 0)
+            {
+                auto actor = c.character.lock();
+                PushVector(state, actor ? actor->GetGroundVelocity() : glm::vec3(0.0f));
+                return 1;
+            }
             if (strcmp(key, "ground_normal") == 0)
             {
                 auto actor = c.character.lock();
@@ -2174,6 +2215,8 @@ namespace ignite::lua
             if (strcmp(key, "is_local_player") == 0) { lua_pushboolean(state, c.isLocalPlayer); return 1; }
             if (strcmp(key, "replicate") == 0) { lua_pushboolean(state, c.replicate); return 1; }
             if (strcmp(key, "sync_mask") == 0) { lua_pushinteger(state, static_cast<lua_Integer>(c.syncComponentsMask)); return 1; }
+            if (strcmp(key, "replicated_movement_speed") == 0) { lua_pushnumber(state, c.replicatedMovementSpeed); return 1; }
+            if (strcmp(key, "replicated_is_grounded") == 0) { lua_pushboolean(state, c.replicatedIsGrounded); return 1; }
             if (strcmp(key, "mark_dirty") == 0) { lua_pushcfunction(state, NetMarkDirty); return 1; }
             break;
         }
@@ -2376,16 +2419,17 @@ namespace ignite::lua
             auto &c = entity.GetComponent<CharacterControllerComponent>();
             if (strcmp(key, "linear_velocity") == 0)
             {
-                c.linearVelocity = ReadVector(state, 3);
+                c.desiredVelocity = ReadVector(state, 3);
+                c.linearVelocity = c.desiredVelocity;
                 if (auto actor = c.character.lock())
-                    actor->SetLinearVelocity(c.linearVelocity);
+                    actor->SetLinearVelocity(c.desiredVelocity);
                 return 0;
             }
             if (strcmp(key, "radius") == 0) { c.radius = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
             if (strcmp(key, "height") == 0) { c.height = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
             if (strcmp(key, "max_step_height") == 0) { c.maxStepHeight = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
             if (strcmp(key, "max_slope_angle") == 0) { c.maxSlopeAngle = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
-            if (strcmp(key, "gravity_factor") == 0) { c.gravityFactor = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
+            if (strcmp(key, "gravity_factor") == 0) { c.gravityFactor = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
             break;
         }
         case ComponentType::Sprite2D:
@@ -2840,11 +2884,13 @@ namespace ignite::lua
         lua_newtable(state);
         lua_pushcfunction(state, LuaNetIsConnected); lua_setfield(state, -2, "IsConnected");
         lua_pushcfunction(state, LuaNetIsServerRunning); lua_setfield(state, -2, "IsServerRunning");
+        lua_pushcfunction(state, LuaNetIsConnecting); lua_setfield(state, -2, "IsConnecting");
         lua_pushcfunction(state, LuaNetGetClientId); lua_setfield(state, -2, "GetClientId");
         lua_pushcfunction(state, LuaNetStartServer); lua_setfield(state, -2, "StartServer");
         lua_pushcfunction(state, LuaNetStopServer); lua_setfield(state, -2, "StopServer");
         lua_pushcfunction(state, LuaNetConnect); lua_setfield(state, -2, "Connect");
         lua_pushcfunction(state, LuaNetDisconnect); lua_setfield(state, -2, "Disconnect");
+        lua_pushcfunction(state, LuaNetSpawnEntity); lua_setfield(state, -2, "SpawnEntity");
         lua_pushcfunction(state, LuaNetSendInput); lua_setfield(state, -2, "SendInput");
         lua_pushcfunction(state, LuaNetSendChat); lua_setfield(state, -2, "SendChat");
         lua_pushcfunction(state, LuaNetGetStats); lua_setfield(state, -2, "GetStats");

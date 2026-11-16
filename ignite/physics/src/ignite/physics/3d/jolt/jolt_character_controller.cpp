@@ -36,6 +36,7 @@ namespace ignite::physics
 
 	JoltCharacterController::JoltCharacterController(const CharacterControllerDesc &desc, uint64_t userData, JPH::PhysicsSystem *physicsSystem, JPH::TempAllocator *tempAllocator)
 		: m_UserData(userData)
+		, m_GravityFactor(desc.gravityFactor)
 		, m_PhysicsSystem(physicsSystem)
 		, m_TempAllocator(tempAllocator)
 	{
@@ -70,12 +71,24 @@ namespace ignite::physics
 	{
 		if (m_Character && m_PhysicsSystem && m_TempAllocator)
 		{
-			m_Character->SetLinearVelocity(GlmToJoltVec3(displacement));
+			const JPH::Vec3 gravity = m_PhysicsSystem->GetGravity() * m_GravityFactor;
+			JPH::Vec3 velocity = GlmToJoltVec3(displacement);
+			if (m_Character->GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround)
+			{
+				m_Character->UpdateGroundVelocity();
+				velocity += m_Character->GetGroundVelocity();
+			}
+			else
+			{
+				velocity += gravity * deltaTime;
+			}
+
+			m_Character->SetLinearVelocity(velocity);
 
 			JPH::CharacterVirtual::ExtendedUpdateSettings updateSettings;
 			m_Character->ExtendedUpdate(
 				deltaTime,
-				m_PhysicsSystem->GetGravity(),
+				gravity,
 				updateSettings,
 				m_PhysicsSystem->GetDefaultBroadPhaseLayerFilter(1),
 				m_PhysicsSystem->GetDefaultLayerFilter(1),
@@ -110,6 +123,11 @@ namespace ignite::physics
 	glm::vec3 JoltCharacterController::GetLinearVelocity() const
 	{
 		return m_Character ? JoltToGlmVec3(m_Character->GetLinearVelocity()) : glm::vec3(0.0f);
+	}
+
+	glm::vec3 JoltCharacterController::GetGroundVelocity() const
+	{
+		return m_Character ? JoltToGlmVec3(m_Character->GetGroundVelocity()) : glm::vec3(0.0f);
 	}
 
 	bool JoltCharacterController::IsOnGround() const

@@ -12,6 +12,8 @@
 #include <ignite/serializer/scene_serializer.hpp>
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 
 using namespace ignite;
 
@@ -50,7 +52,7 @@ TEST(NetworkingUpgrades, ProjectServerSettingsRoundtrip)
     std::filesystem::remove_all(tempDir, ec);
 }
 
-TEST(NetworkingUpgrades, NetworkIdentitySerializationPreservesMaskAndLocalFlag)
+TEST(NetworkingUpgrades, NetworkIdentitySerializationOmitsRuntimeOwnershipAndId)
 {
     const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "IgniteNetSceneSerializeTest";
     std::error_code ec;
@@ -79,6 +81,13 @@ TEST(NetworkingUpgrades, NetworkIdentitySerializationPreservesMaskAndLocalFlag)
 
         SceneSerializer serializer(scene, proj.get());
         ASSERT_TRUE(serializer.Serialize(scenePath));
+
+        std::ifstream serializedFile(scenePath);
+        ASSERT_TRUE(serializedFile.is_open());
+        const std::string serializedScene{
+            std::istreambuf_iterator<char>(serializedFile), std::istreambuf_iterator<char>() };
+        EXPECT_EQ(serializedScene.find("\"NetId\""), std::string::npos);
+        EXPECT_EQ(serializedScene.find("\"OwnerClient\""), std::string::npos);
     }
 
     {
@@ -98,8 +107,8 @@ TEST(NetworkingUpgrades, NetworkIdentitySerializationPreservesMaskAndLocalFlag)
         EXPECT_EQ(static_cast<uint64_t>(found.GetUUID()), expectedEntityId);
         ASSERT_TRUE(found.HasComponent<NetworkIdentityComponent>());
         const auto &nid = found.GetComponent<NetworkIdentityComponent>();
-        EXPECT_EQ(nid.netId, 424242ULL);
-        EXPECT_EQ(nid.ownerClient, 7u);
+        EXPECT_EQ(nid.netId, 0u);
+        EXPECT_EQ(nid.ownerClient, 0u);
         EXPECT_TRUE(nid.isLocalPlayer);
         EXPECT_EQ(nid.syncComponentsMask, 0x5Au);
     }

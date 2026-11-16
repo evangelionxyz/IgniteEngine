@@ -11,7 +11,7 @@
 namespace ignite
 {
     // Helper to apply world transform accounting for parent hierarchy
-    static void ApplyEntityTransform(Scene *scene, Entity entity, const glm::vec3 &pos, const glm::quat &rot, const glm::vec3 &scale = glm::vec3(1.0f))
+    static void ApplyEntityTransform(Scene *scene, Entity entity, const glm::vec3 &pos, const glm::quat &rot, const glm::vec3 &scale)
     {
         auto &tr = entity.GetTransform();
         if (entity.HasComponent<IDComponent>())
@@ -32,6 +32,7 @@ namespace ignite
                     tr.world.translation = pos;
                     tr.world.rotation = rot;
                     tr.world.scale = scale;
+                    tr.dirty = true;
                     return;
                 }
             }
@@ -43,6 +44,14 @@ namespace ignite
         tr.world.translation = pos;
         tr.world.rotation = rot;
         tr.world.scale = scale;
+        tr.dirty = true;
+    }
+
+    static glm::vec3 GetEntityWorldScale(Entity entity)
+    {
+        return entity.HasComponent<TransformComponent>()
+            ? entity.GetComponent<TransformComponent>().world.scale
+            : glm::vec3(1.0f);
     }
 
     // =========================================================================
@@ -55,20 +64,29 @@ namespace ignite
         {
             m_Scene->SetNetMode(ENetMode::DedicatedServer);
 
-            // Register existing pre-placed scene entities and ensure server generated NetIds won't collide
-            uint64_t maxId = 1000;
+            // Scene files contain player roles, not runtime network identifiers.
+            m_NextNetId = 1000;
             auto view = m_Scene->registry->view<NetworkIdentityComponent>();
             for (entt::entity e : view)
             {
                 auto &netComp = view.get<NetworkIdentityComponent>(e);
                 if (netComp.netId != 0)
+                    m_Scene->UnregisterNetEntity(netComp.netId);
+                netComp.netId = 0;
+                netComp.ownerClient = 0;
+
+                if (netComp.isLocalPlayer)
                 {
-                    m_Scene->RegisterNetEntity(netComp.netId, Entity{ e, m_Scene });
-                    if (netComp.netId >= maxId)
-                        maxId = netComp.netId;
+                    netComp.replicate = true;
+                    if (netComp.prefab.empty())
+                        netComp.prefab = Entity{ e, m_Scene }.GetName();
                 }
+                if (!netComp.replicate)
+                    continue;
+
+                netComp.netId = GenerateNetId();
+                m_Scene->RegisterNetEntity(netComp.netId, Entity{ e, m_Scene });
             }
-            m_NextNetId = maxId + 1;
         }
     }
 
@@ -101,13 +119,31 @@ namespace ignite
             }
         }
 
+        if (!entity.IsValid() && !prefab.empty())
+        {
+            auto view = m_Scene->registry->view<IDComponent>();
+            for (entt::entity candidate : view)
+            {
+                Entity templateEntity(candidate, m_Scene);
+                if (templateEntity.GetName() == prefab)
+                {
+                    entity = SceneManager::DuplicateEntity(m_Scene, templateEntity);
+                    if (entity.IsValid())
+                    {
+                        SceneManager::RenameEntity(m_Scene, entity, "Player_" + std::to_string(ownerClient));
+                    }
+                    break;
+                }
+            }
+        }
+
         if (!entity.IsValid())
         {
             const std::string name = prefab.empty() ? ("NetEntity_" + std::to_string(netId)) : prefab;
             entity = SceneManager::CreateEntity(m_Scene, name, EntityType_Node);
         }
 
-        ApplyEntityTransform(m_Scene, entity, position, rotation);
+        ApplyEntityTransform(m_Scene, entity, position, rotation, GetEntityWorldScale(entity));
 
         if (!entity.HasComponent<NetworkIdentityComponent>())
         {
@@ -119,6 +155,7 @@ namespace ignite
             netComp.netId = netId;
             netComp.ownerClient = ownerClient;
             netComp.isLocalPlayer = false;
+            netComp.replicate = true;
             netComp.prefab = prefab;
         }
 
@@ -167,14 +204,19 @@ namespace ignite
         for (entt::entity e : view)
         {
             const auto &[netComp, tr] = view.get<NetworkIdentityComponent, TransformComponent>(e);
+            if (!netComp.replicate || netComp.netId == 0)
+                continue;
+
             netproto::SpawnMsg msg;
             msg.netId = netComp.netId;
             msg.ownerClient = netComp.ownerClient;
             msg.prefab = netComp.prefab;
+
             msg.position = tr.world.translation;
             msg.rotation = tr.world.rotation;
 
-            m_Server->SendTo(clientId, [&](net::StreamWriter &w) {
+            m_Server->SendTo(clientId, [&](net::StreamWriter &w)
+            {
                 msg.Write(w);
             }, true);
 
@@ -183,7 +225,8 @@ namespace ignite
             m_Scene->SerializeEntityComponents(Entity{ e, m_Scene }, netComp.syncComponentsMask, compMsg);
             if (compMsg.compMask != 0)
             {
-                m_Server->SendTo(clientId, [&](net::StreamWriter &w) {
+                m_Server->SendTo(clientId, [&](net::StreamWriter &w)
+                {
                     compMsg.Write(w);
                 }, true);
             }
@@ -199,7 +242,7 @@ namespace ignite
         for (entt::entity e : view)
         {
             auto &netComp = view.get<NetworkIdentityComponent>(e);
-            if (!netComp.replicate || netComp.dirtyComponentsMask == 0)
+            if (!netComp.replicate || netComp.netId == 0 || netComp.dirtyComponentsMask == 0)
                 continue;
 
             netproto::ComponentSyncMsg compMsg;
@@ -208,7 +251,8 @@ namespace ignite
 
             if (compMsg.compMask != 0)
             {
-                m_Server->Broadcast([&](net::StreamWriter &w) {
+                m_Server->Broadcast([&](net::StreamWriter &w)
+                {
                     compMsg.Write(w);
                 }, true);
             }
@@ -228,7 +272,8 @@ namespace ignite
         m_Scene->SerializeEntityComponents(entity, compMask, compMsg);
         if (compMsg.compMask != 0)
         {
-            m_Server->Broadcast([&](net::StreamWriter &w) {
+            m_Server->Broadcast([&](net::StreamWriter &w)
+            {
                 compMsg.Write(w);
             }, true);
         }
@@ -246,7 +291,7 @@ namespace ignite
         for (entt::entity e : view)
         {
             const auto &[netComp, tr] = view.get<NetworkIdentityComponent, TransformComponent>(e);
-            if (!netComp.replicate)
+            if (!netComp.replicate || netComp.netId == 0)
                 continue;
 
             netproto::EntityState st;
@@ -254,6 +299,19 @@ namespace ignite
             st.position = tr.world.translation;
             st.rotation = tr.world.rotation;
             st.scale = tr.world.scale;
+            if (m_Scene->registry->any_of<CharacterControllerComponent>(e))
+            {
+                const auto &controller = m_Scene->registry->get<CharacterControllerComponent>(e);
+                glm::vec3 groundVelocity(0.0f);
+                if (auto character = controller.character.lock())
+                {
+                    st.isGrounded = character->IsOnGround();
+                    if (st.isGrounded)
+                        groundVelocity = character->GetGroundVelocity();
+                }
+                const glm::vec3 movementVelocity = controller.linearVelocity - groundVelocity;
+                st.movementSpeed = glm::length(glm::vec2(movementVelocity.x, movementVelocity.z));
+            }
             states.push_back(st);
         }
 
@@ -264,7 +322,8 @@ namespace ignite
             snap.lastProcessedInputSeq = client.lastInputSeq;
             snap.entities = states;
 
-            m_Server->SendTo(client.clientId, [&](net::StreamWriter &w) {
+            m_Server->SendTo(client.clientId, [&](net::StreamWriter &w)
+            {
                 snap.Write(w);
             }, false); // snapshots are unreliable
         });
@@ -280,14 +339,23 @@ namespace ignite
         {
             m_Scene->SetNetMode(ENetMode::Client);
 
-            // Scan and register existing pre-placed scene entities
+            // Scene-authored IDs are stale by definition; IDs arrive from the server.
             auto view = m_Scene->registry->view<NetworkIdentityComponent>();
             for (entt::entity e : view)
             {
                 auto &netComp = view.get<NetworkIdentityComponent>(e);
                 if (netComp.netId != 0)
                 {
-                    m_Scene->RegisterNetEntity(netComp.netId, Entity{ e, m_Scene });
+                    m_Scene->UnregisterNetEntity(netComp.netId);
+                }
+
+                netComp.netId = 0;
+                netComp.ownerClient = 0;
+                if (netComp.isLocalPlayer && !m_LocalTemplate.IsValid())
+                {
+                    m_LocalTemplate = Entity{ e, m_Scene };
+                    if (m_LocalTemplate.HasComponent<RenderingComponent>())
+                        m_LocalTemplate.GetComponent<RenderingComponent>().visible = false;
                 }
             }
         }
@@ -311,23 +379,58 @@ namespace ignite
             return;
 
         const bool isLocal = (msg.ownerClient != 0 && msg.ownerClient == m_Client->GetClientId());
+        const auto matchesLocalTemplate = [this, &msg]()
+        {
+            if (!m_LocalTemplate.IsValid() || msg.prefab.empty())
+                return false;
+
+            if (msg.prefab == m_LocalTemplate.GetName())
+                return true;
+
+            return m_LocalTemplate.HasComponent<NetworkIdentityComponent>() && msg.prefab == m_LocalTemplate.GetComponent<NetworkIdentityComponent>().prefab;
+        };
+
+        const bool isPlayerAvatar = matchesLocalTemplate();
 
         // 1. If entity already exists in the scene (e.g. pre-placed mesh entity), bind to it!
         Entity existing = m_Scene->FindEntityByNetId(msg.netId);
+        if (!existing.IsValid() && !isLocal && !msg.prefab.empty())
+        {
+            auto view = m_Scene->registry->view<NetworkIdentityComponent>();
+            for (entt::entity candidate : view)
+            {
+                const auto &identity = view.get<NetworkIdentityComponent>(candidate);
+                if (identity.netId != 0 || identity.isLocalPlayer || !identity.replicate)
+                    continue;
+
+                Entity authoredEntity{ candidate, m_Scene };
+                if (authoredEntity.GetName() == msg.prefab || identity.prefab == msg.prefab)
+                {
+                    existing = authoredEntity;
+                    break;
+                }
+            }
+        }
         if (existing.IsValid())
         {
             if (existing.HasComponent<NetworkIdentityComponent>())
             {
                 auto &netComp = existing.GetComponent<NetworkIdentityComponent>();
+                netComp.netId = msg.netId;
                 netComp.ownerClient = msg.ownerClient;
                 netComp.isLocalPlayer = isLocal;
+                netComp.replicate = true;
+                netComp.replicatedMovementSpeed = 0.0f;
+                netComp.replicatedIsGrounded = false;
                 if (!msg.prefab.empty())
                     netComp.prefab = msg.prefab;
             }
             m_Scene->RegisterNetEntity(msg.netId, existing);
+            if (existing.HasComponent<RenderingComponent>())
+                existing.GetComponent<RenderingComponent>().visible = true;
 
             // Snap initial transform
-            ApplyEntityTransform(m_Scene, existing, msg.position, msg.rotation);
+            ApplyEntityTransform(m_Scene, existing, msg.position, msg.rotation, GetEntityWorldScale(existing));
             return;
         }
 
@@ -336,6 +439,21 @@ namespace ignite
         if (m_CustomSpawner)
         {
             entity = m_CustomSpawner(m_Scene, msg);
+        }
+        else if (isPlayerAvatar && isLocal && !m_LocalClaimed)
+        {
+            // Our own avatar: claim the scene's player entity (locally controlled).
+            entity = m_LocalTemplate;
+            m_LocalClaimed = true;
+        }
+        else if (isPlayerAvatar && !isLocal && m_LocalTemplate.IsValid())
+        {
+            // Each remote player gets an independent copy of the authored avatar.
+            entity = SceneManager::DuplicateEntity(m_Scene, m_LocalTemplate);
+            if (entity.IsValid())
+            {
+                SceneManager::RenameEntity(m_Scene, entity, "Player_" + std::to_string(msg.ownerClient));
+            }
         }
         else
         {
@@ -367,7 +485,10 @@ namespace ignite
         if (!entity.IsValid())
             return;
 
-        ApplyEntityTransform(m_Scene, entity, msg.position, msg.rotation);
+        if (entity.HasComponent<RenderingComponent>())
+            entity.GetComponent<RenderingComponent>().visible = true;
+
+        ApplyEntityTransform(m_Scene, entity, msg.position, msg.rotation, GetEntityWorldScale(entity));
 
         if (!entity.HasComponent<NetworkIdentityComponent>())
         {
@@ -379,7 +500,10 @@ namespace ignite
             netComp.netId = msg.netId;
             netComp.ownerClient = msg.ownerClient;
             netComp.isLocalPlayer = isLocal;
+            netComp.replicate = true;
             netComp.prefab = msg.prefab;
+            netComp.replicatedMovementSpeed = 0.0f;
+            netComp.replicatedIsGrounded = false;
         }
 
         m_Scene->RegisterNetEntity(msg.netId, entity);
@@ -398,6 +522,7 @@ namespace ignite
         }
 
         m_Interpolators.erase(msg.netId);
+        m_PreviousInterpolatedPositions.erase(msg.netId);
     }
 
     void NetClientReplication::OnComponentSync(const netproto::ComponentSyncMsg &msg)
@@ -423,9 +548,15 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<NetworkIdentityComponent>())
                 continue;
 
-            const auto &netComp = entity.GetComponent<NetworkIdentityComponent>();
+            auto &netComp = entity.GetComponent<NetworkIdentityComponent>();
+            netComp.replicatedMovementSpeed = st.movementSpeed;
+            netComp.replicatedIsGrounded = st.isGrounded;
             if (netComp.isLocalPlayer)
             {
+                // Physics character controllers are driven locally; don't fight them.
+                if (entity.HasComponent<CharacterControllerComponent>())
+                    continue;
+
                 // Local player: reconcile prediction and retain smooth visual error offset
                 glm::vec3 correctedPos;
                 glm::quat correctedRot;
@@ -472,10 +603,26 @@ namespace ignite
             if (!entity.IsValid())
                 continue;
 
-            glm::vec3 pos, scale;
+            glm::vec3 pos;
+            glm::vec3 scale;
             glm::quat rot;
             if (interp.Sample(m_CurrentTime, pos, rot, scale))
             {
+                if (entity.HasComponent<RigidbodyComponent>() && deltaTime > 0.0f)
+                {
+                    auto &rigidbody = entity.GetComponent<RigidbodyComponent>();
+                    if (rigidbody.bodyType == physics::BodyType::Kinematic)
+                    {
+                        auto previous = m_PreviousInterpolatedPositions.find(netId);
+                        if (previous != m_PreviousInterpolatedPositions.end())
+                        {
+                            rigidbody.linearVelocity = (pos - previous->second) / deltaTime;
+                            if (auto actor = rigidbody.dynamicActor.lock())
+                                actor->SetLinearVelocity(rigidbody.linearVelocity);
+                        }
+                    }
+                }
+                m_PreviousInterpolatedPositions[netId] = pos;
                 ApplyEntityTransform(m_Scene, entity, pos, rot, scale);
             }
         }

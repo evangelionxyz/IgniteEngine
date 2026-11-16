@@ -37,7 +37,7 @@ namespace ignite::netproto
     };
 #endif
 
-    constexpr uint16_t PROTOCOL_VERSION = 1;
+    constexpr uint16_t PROTOCOL_VERSION = 2;
     constexpr uint32_t MAX_SNAPSHOT_ENTITIES = 4096;
 
     // Wire message types. The first byte of every packet.
@@ -199,21 +199,24 @@ namespace ignite::netproto
             w.WriteRaw(netId);
             w.WriteRaw(ownerClient);
             w.WriteString(prefab);
+
             w.WriteRaw(QuantizePos(position.x));
             w.WriteRaw(QuantizePos(position.y));
             w.WriteRaw(QuantizePos(position.z));
+
             w.WriteRaw(QuantizeQuat(rotation));
         }
 
         bool Read(net::StreamReader &r)
         {
-            int32_t x, y, z;
+            int32_t px, py, pz;
             uint32_t q;
             if (!(r.ReadRaw(netId) && r.ReadRaw(ownerClient) && r.ReadString(prefab)
-                && r.ReadRaw(x) && r.ReadRaw(y) && r.ReadRaw(z) && r.ReadRaw(q)))
+                && r.ReadRaw(px) && r.ReadRaw(py) && r.ReadRaw(pz)
+                && r.ReadRaw(q)))
                 return false;
 
-            position = { DequantizePos(x), DequantizePos(y), DequantizePos(z) };
+            position = { DequantizePos(px), DequantizePos(py), DequantizePos(pz) };
             rotation = DequantizeQuat(q);
             return true;
         }
@@ -240,6 +243,8 @@ namespace ignite::netproto
         InputButton_Sprint = 1 << 1,
         InputButton_Fire = 1 << 2,
         InputButton_Use = 1 << 3,
+        InputButton_Respawn = 1 << 4,
+        InputButton_Bounce = 1 << 5,
     };
 
     struct InputCmd
@@ -309,6 +314,8 @@ namespace ignite::netproto
         glm::vec3 position{ 0.0f };
         glm::quat rotation{ 1.0f, 0.0f, 0.0f, 0.0f };
         glm::vec3 scale{ 1.0f };
+        float movementSpeed = 0.0f;
+        bool isGrounded = false;
 
         void Write(net::StreamWriter &w) const
         {
@@ -320,18 +327,26 @@ namespace ignite::netproto
             w.WriteRaw(scale.x);
             w.WriteRaw(scale.y);
             w.WriteRaw(scale.z);
+            w.WriteRaw(movementSpeed);
+            w.WriteRaw(static_cast<uint8_t>(isGrounded));
         }
 
         bool Read(net::StreamReader &r)
         {
             int32_t x, y, z;
             uint32_t q;
+            uint8_t grounded;
             if (!(r.ReadRaw(netId) && r.ReadRaw(x) && r.ReadRaw(y) && r.ReadRaw(z) && r.ReadRaw(q)
-                && r.ReadRaw(scale.x) && r.ReadRaw(scale.y) && r.ReadRaw(scale.z)))
+                && r.ReadRaw(scale.x) && r.ReadRaw(scale.y) && r.ReadRaw(scale.z)
+                && r.ReadRaw(movementSpeed) && r.ReadRaw(grounded)))
+                return false;
+
+            if (!std::isfinite(movementSpeed) || movementSpeed < 0.0f || grounded > 1)
                 return false;
 
             position = { DequantizePos(x), DequantizePos(y), DequantizePos(z) };
             rotation = DequantizeQuat(q);
+            isGrounded = grounded != 0;
             return true;
         }
     };

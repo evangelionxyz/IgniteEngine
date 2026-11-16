@@ -23,6 +23,7 @@ namespace ignite::physics
 
 		virtual void SetLinearVelocity(const glm::vec3 &velocity) = 0;
 		virtual glm::vec3 GetLinearVelocity() const = 0;
+		virtual glm::vec3 GetGroundVelocity() const = 0;
 
 		virtual bool IsOnGround() const = 0;
 		virtual glm::vec3 GetGroundNormal() const = 0;

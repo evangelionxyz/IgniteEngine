@@ -216,13 +216,20 @@ namespace ignite
         const auto &nri = deviceManager->GetCoreInterface();
         nri.EndCommandBuffer(*cmd);
 
-        const uint64_t signalValue = m_NextFenceValue++;
-        for (auto &slot : m_CommandSlots)
+        const uint64_t signalValue = m_NextFenceValue;
+        if (m_CommandFence)
         {
-            if (slot.commandBuffer == cmd)
+            const uint64_t currentFenceValue = nri.GetFenceValue(*m_CommandFence);
+            if (currentFenceValue == std::numeric_limits<uint64_t>::max())
             {
-                slot.fenceValue = signalValue;
-                break;
+                LOG_ERROR("[ImGui] Command fence returned UINT64_MAX; skipping queue submission");
+                return;
+            }
+            if (signalValue <= currentFenceValue)
+            {
+                m_NextFenceValue = currentFenceValue + 1;
+                LOG_ERROR("[ImGui] Corrected non-increasing fence signal value {} to {}", signalValue, m_NextFenceValue);
+                return;
             }
         }
 
@@ -242,7 +249,22 @@ namespace ignite
 
         {
             std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
-            nri.QueueSubmit(*deviceManager->GetGraphicsQueue(), submitDesc);
+            const nri::Result result = nri.QueueSubmit(*deviceManager->GetGraphicsQueue(), submitDesc);
+            if (result != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("[ImGui] QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
+                return;
+            }
+        }
+
+        ++m_NextFenceValue;
+        for (auto &slot : m_CommandSlots)
+        {
+            if (slot.commandBuffer == cmd)
+            {
+                slot.fenceValue = signalValue;
+                break;
+            }
         }
     }
 

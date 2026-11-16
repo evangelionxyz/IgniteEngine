@@ -148,7 +148,7 @@ TEST(MeshBuilderAndRenderer, FramePacketReuseAndCameraBasis)
     cam.position = glm::vec3(0.0f, 2.0f, 5.0f);
     cam.pitch = 0.0f;
     cam.yaw = 0.0f;
-    cam.UpdateProjection(1280.0f, 720.0f);
+    cam.UpdateProjection(1280, 720);
     cam.UpdateView();
 
     const glm::vec3 fwd = cam.GetForwardDirection();

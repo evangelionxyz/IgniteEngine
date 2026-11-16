@@ -328,6 +328,130 @@ namespace ignite::lua
         return true;
     }
 
+    void ScriptRuntime::CreatePendingInstances()
+    {
+        if (!m_Scene || !m_Scene->registry)
+            return;
+
+        std::vector<std::tuple<UUID, std::filesystem::path, AssetHandle>> toCreate;
+        auto view = m_Scene->registry->view<LuaScriptComponent, IDComponent>();
+        for (auto e : view)
+        {
+            const auto &idc = view.get<IDComponent>(e);
+            const auto &script = view.get<LuaScriptComponent>(e);
+            if (!m_Instances.contains(idc.uuid) && !script.scriptPath.empty())
+                toCreate.emplace_back(idc.uuid, script.scriptPath, script.scriptHandle);
+        }
+
+        for (const auto &[id, path, handle] : toCreate)
+            CreateInstance(id, path, handle);
+    }
+
+    void ScriptRuntime::InvokeNetworkEvent(const char *callback, uint32_t clientId, const std::string &clientName)
+    {
+        if (!m_State || !m_Scene || !callback)
+            return;
+
+        CreatePendingInstances();
+
+        const std::vector<UUID> instanceIds = [&]()
+        {
+            std::vector<UUID> ids;
+            ids.reserve(m_Instances.size());
+            for (const auto &[id, instance] : m_Instances)
+                ids.push_back(id);
+            return ids;
+        }();
+
+        for (UUID entityId : instanceIds)
+        {
+            auto it = m_Instances.find(entityId);
+            if (it == m_Instances.end())
+                continue;
+
+            Instance &instance = it->second;
+            const int baseTop = lua_gettop(m_State);
+            lua_rawgeti(m_State, LUA_REGISTRYINDEX, instance.callbacksRef);
+            lua_pushstring(m_State, callback);
+            lua_rawget(m_State, -2);
+            if (lua_isnil(m_State, -1))
+            {
+                lua_settop(m_State, baseTop);
+                continue;
+            }
+            if (!lua_isfunction(m_State, -1))
+            {
+                LOG_ERROR("[Lua] Network callback '{}' in '{}' is not a function", callback, instance.path.generic_string());
+                lua_settop(m_State, baseTop);
+                continue;
+            }
+
+            lua::PushEntity(m_State, m_Scene, static_cast<uint64_t>(entityId));
+            lua_pushinteger(m_State, static_cast<lua_Integer>(clientId));
+            lua_pushlstring(m_State, clientName.data(), clientName.size());
+            if (lua_pcall(m_State, 3, 0, 0) != LUA_OK)
+            {
+                LOG_ERROR("[Lua] Network callback '{}' failed in '{}': {}",
+                    callback, instance.path.generic_string(), lua::LuaErrorMessage(m_State));
+            }
+            lua_settop(m_State, baseTop);
+        }
+    }
+
+    void ScriptRuntime::InvokeNetworkInput(UUID entityId, uint32_t clientId, float moveX, float moveY, uint16_t buttons, float yaw, float deltaTime)
+    {
+        if (!m_State || !m_Scene)
+            return;
+
+        auto it = m_Instances.find(entityId);
+        if (it == m_Instances.end())
+        {
+            Entity entity = lua::ResolveEntity(m_Scene, static_cast<uint64_t>(entityId));
+            if (!entity || !entity.HasComponent<LuaScriptComponent>())
+                return;
+
+            const auto &script = entity.GetComponent<LuaScriptComponent>();
+            if (script.scriptPath.empty())
+                return;
+
+            CreateInstance(entityId, script.scriptPath, script.scriptHandle);
+            it = m_Instances.find(entityId);
+            if (it == m_Instances.end())
+                return;
+        }
+
+        Instance &instance = it->second;
+        const int baseTop = lua_gettop(m_State);
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, instance.callbacksRef);
+        lua_pushstring(m_State, "on_network_input");
+        lua_rawget(m_State, -2);
+        if (lua_isnil(m_State, -1))
+        {
+            lua_settop(m_State, baseTop);
+            return;
+        }
+        if (!lua_isfunction(m_State, -1))
+        {
+            LOG_ERROR("[Lua] Network input callback in '{}' is not a function", instance.path.generic_string());
+            lua_settop(m_State, baseTop);
+            return;
+        }
+
+        lua::PushEntity(m_State, m_Scene, static_cast<uint64_t>(entityId));
+        lua_pushinteger(m_State, static_cast<lua_Integer>(clientId));
+        lua_pushnumber(m_State, moveX);
+        lua_pushnumber(m_State, moveY);
+        lua_pushinteger(m_State, static_cast<lua_Integer>(buttons));
+        lua_pushnumber(m_State, yaw);
+        lua_pushnumber(m_State, deltaTime);
+        if (lua_pcall(m_State, 7, 0, 0) != LUA_OK)
+        {
+            LOG_ERROR("[Lua] Network input callback failed in '{}' for entity {}: {}",
+                instance.path.generic_string(), static_cast<uint64_t>(entityId), lua::LuaErrorMessage(m_State));
+        }
+        lua_settop(m_State, baseTop);
+    }
+
     void ScriptRuntime::DestroyInstance(UUID entityId)
     {
         auto it = m_Instances.find(entityId);
@@ -345,26 +469,7 @@ namespace ignite::lua
     void ScriptRuntime::Update(float deltaTime)
     {
         ProcessPendingReloads();
-
-        // Spawn instances for any LuaScriptComponents added at runtime
-        if (m_Scene && m_Scene->registry)
-        {
-            std::vector<std::tuple<UUID, std::filesystem::path, AssetHandle>> toCreate;
-            auto view = m_Scene->registry->view<LuaScriptComponent, IDComponent>();
-            for (auto e : view)
-            {
-                const auto &idc = view.get<IDComponent>(e);
-                const auto &lsc = view.get<LuaScriptComponent>(e);
-                if (!m_Instances.contains(idc.uuid) && !lsc.scriptPath.empty())
-                {
-                    toCreate.emplace_back(idc.uuid, lsc.scriptPath, lsc.scriptHandle);
-                }
-            }
-            for (const auto &[id, path, handle] : toCreate)
-            {
-                CreateInstance(id, path, handle);
-            }
-        }
+        CreatePendingInstances();
 
         std::vector<UUID> failed;
         for (auto &[id, instance] : m_Instances)

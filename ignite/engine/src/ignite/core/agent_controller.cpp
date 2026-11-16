@@ -578,8 +578,14 @@ namespace ignite
                 if (props.contains("center")) { cc.center = ReadJsonVec3(props["center"], cc.center); cc.dirty = true; }
                 if (props.contains("max_step_height")) { cc.maxStepHeight = props["max_step_height"].get<float>(); cc.dirty = true; }
                 if (props.contains("max_slope_angle")) { cc.maxSlopeAngle = props["max_slope_angle"].get<float>(); cc.dirty = true; }
-                if (props.contains("gravity_factor")) cc.gravityFactor = props["gravity_factor"].get<float>();
-                if (props.contains("linear_velocity")) cc.linearVelocity = ReadJsonVec3(props["linear_velocity"], cc.linearVelocity);
+                if (props.contains("gravity_factor")) { cc.gravityFactor = props["gravity_factor"].get<float>(); cc.dirty = true; }
+                if (props.contains("linear_velocity"))
+                {
+                    cc.linearVelocity = ReadJsonVec3(props["linear_velocity"], cc.linearVelocity);
+                    cc.desiredVelocity = cc.linearVelocity;
+                    if (auto actor = cc.character.lock())
+                        actor->SetLinearVelocity(cc.desiredVelocity);
+                }
                 return true;
             }
 

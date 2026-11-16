@@ -89,6 +89,21 @@ namespace ignite
         nri.EndCommandBuffer(*cmd);
 
         const uint64_t signalValue = m_NextFenceValue;
+        if (m_CommandFence)
+        {
+            const uint64_t currentFenceValue = nri.GetFenceValue(*m_CommandFence);
+            if (currentFenceValue == std::numeric_limits<uint64_t>::max())
+            {
+                LOG_ERROR("[SceneRenderer] Command fence returned UINT64_MAX; skipping queue submission");
+                return;
+            }
+            if (signalValue <= currentFenceValue)
+            {
+                m_NextFenceValue = currentFenceValue + 1;
+                LOG_ERROR("[SceneRenderer] Corrected non-increasing fence signal value {} to {}", signalValue, m_NextFenceValue);
+                return;
+            }
+        }
 
         nri::FenceSubmitDesc signalFence = {};
         signalFence.fence = m_CommandFence;

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -102,6 +102,8 @@ namespace ignite
         m_WidgetRenderer = nullptr;
         m_WorldEnvironment = nullptr;
 
+        GPUUploadSync::DeviceWaitIdle(m_Device);
+
         ClearResources();
         m_RuntimeMaterial.reset();
         m_ScreenCameraBuffer.reset();
@@ -123,16 +125,9 @@ namespace ignite
             return;
         }
 
-        // The current frame may still reference scene textures, cached descriptor
-        // sets, environment maps, and pipelines. Retire that work before releasing
-        // any of those objects during a scene transition.
         if (m_Scene)
         {
             GPUUploadSync::DeviceWaitIdle(m_Device);
-        }
-
-        if (m_Scene)
-        {
             m_Scene->SetSceneRenderer(nullptr);
         }
 

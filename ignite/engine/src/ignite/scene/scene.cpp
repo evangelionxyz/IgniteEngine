@@ -568,6 +568,7 @@ namespace ignite
                 ccDesc.halfHeight = halfHeight;
                 ccDesc.mass = cc.mass;
                 ccDesc.friction = cc.friction;
+                ccDesc.gravityFactor = cc.gravityFactor;
                 ccDesc.maxStepHeight = cc.maxStepHeight;
                 ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
                 ccDesc.up = cc.up;
@@ -577,7 +578,9 @@ namespace ignite
                 {
                     charActor->SetPosition(tr.world.translation);
                     charActor->SetRotation(tr.world.rotation);
+                    charActor->SetLinearVelocity(cc.linearVelocity);
                 }
+                cc.desiredVelocity = cc.linearVelocity;
                 cc.character = charActor;
             }
 
@@ -1333,6 +1336,7 @@ namespace ignite
                             ccDesc.halfHeight = halfHeight;
                             ccDesc.mass = cc.mass;
                             ccDesc.friction = cc.friction;
+                            ccDesc.gravityFactor = cc.gravityFactor;
                             ccDesc.maxStepHeight = cc.maxStepHeight;
                             ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
                             ccDesc.up = cc.up;
@@ -1350,6 +1354,7 @@ namespace ignite
                             {
                                 charActor->SetPosition(currentPos);
                                 charActor->SetRotation(currentRot);
+                                charActor->SetLinearVelocity(cc.linearVelocity);
                             }
                             cc.character = charActor;
                             cc.dirty = false;
@@ -1360,9 +1365,12 @@ namespace ignite
                         {
                             if (!isRemoteChar)
                             {
-                                ccActor->Move(cc.linearVelocity, deltaTime);
+                                ccActor->Move(cc.desiredVelocity, deltaTime);
                                 CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
                                 cc.linearVelocity = ccActor->GetLinearVelocity();
+                                cc.desiredVelocity.y = cc.linearVelocity.y;
+                                if (ccActor->IsOnGround())
+                                    cc.desiredVelocity.y -= ccActor->GetGroundVelocity().y;
                             }
                             else
                             {
