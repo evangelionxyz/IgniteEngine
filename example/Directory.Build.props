@@ -1,0 +1,8 @@
+<Project>
+    <PropertyGroup>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <BaseOutputPath>$(MSBuildProjectDirectory)\Bin\</BaseOutputPath>
+        <IntermediateOutputPath>$(MSBuildProjectDirectory)\Bin\Objs\$(MSBuildProjectName)\</IntermediateOutputPath>
+        <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    </PropertyGroup>
+</Project>

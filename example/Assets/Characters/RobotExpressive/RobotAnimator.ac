@@ -1,0 +1,213 @@
+AnimatorController:
+  DefaultState: Idle
+  SkeletonHandle: 15341683802629369554
+  States:
+    - Name: Idle
+      MotionType: SkeletalAnimation
+      MotionHandle: 11195833070019743305
+      AnimHandle: 11195833070019743305
+      EditorPos: [100, 200]
+    - Name: Walking
+      MotionType: SkeletalAnimation
+      MotionHandle: 15726826690600203939
+      AnimHandle: 15726826690600203939
+      EditorPos: [360, 120]
+    - Name: Running
+      MotionType: SkeletalAnimation
+      MotionHandle: 3116501098474714171
+      AnimHandle: 3116501098474714171
+      EditorPos: [620, 120]
+    - Name: Jump
+      MotionType: SkeletalAnimation
+      MotionHandle: 6624530890808932250
+      AnimHandle: 6624530890808932250
+      EditorPos: [360, 320]
+    - Name: Dance
+      MotionType: SkeletalAnimation
+      MotionHandle: 6970606114947867429
+      AnimHandle: 6970606114947867429
+      EditorPos: [100, 40]
+    - Name: Wave
+      MotionType: SkeletalAnimation
+      MotionHandle: 247795413042560131
+      AnimHandle: 247795413042560131
+      EditorPos: [100, 360]
+  Params:
+    - Name: Speed
+      Type: Float
+      Value: 0.0
+    - Name: IsGrounded
+      Type: Bool
+      Value: true
+    - Name: IsDancing
+      Type: Bool
+      Value: false
+    - Name: IsWaving
+      Type: Bool
+      Value: false
+  Transitions:
+    - From: ""
+      To: Jump
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.1
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: false
+    - From: Jump
+      To: Running
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.12
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: true
+        - Param: Speed
+          Op: GreaterEq
+          Threshold: 7.0
+    - From: Jump
+      To: Walking
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.12
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: true
+        - Param: Speed
+          Op: GreaterEq
+          Threshold: 0.5
+        - Param: Speed
+          Op: Less
+          Threshold: 7.0
+    - From: Jump
+      To: Idle
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.12
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: true
+        - Param: Speed
+          Op: Less
+          Threshold: 0.5
+    - From: Idle
+      To: Walking
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.15
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: true
+        - Param: Speed
+          Op: GreaterEq
+          Threshold: 0.5
+    - From: Idle
+      To: Dance
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.18
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: true
+        - Param: IsDancing
+          Op: Equals
+          Threshold: true
+    - From: Idle
+      To: Wave
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.18
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: true
+        - Param: IsWaving
+          Op: Equals
+          Threshold: true
+    - From: Dance
+      To: Idle
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.15
+      Conditions:
+        - Param: IsDancing
+          Op: Equals
+          Threshold: false
+    - From: Dance
+      To: Walking
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.12
+      Conditions:
+        - Param: Speed
+          Op: GreaterEq
+          Threshold: 0.5
+    - From: Wave
+      To: Idle
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.15
+      Conditions:
+        - Param: IsWaving
+          Op: Equals
+          Threshold: false
+    - From: Wave
+      To: Walking
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.12
+      Conditions:
+        - Param: Speed
+          Op: GreaterEq
+          Threshold: 0.5
+    - From: Walking
+      To: Running
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.15
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: true
+        - Param: Speed
+          Op: GreaterEq
+          Threshold: 7.0
+    - From: Walking
+      To: Idle
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.15
+      Conditions:
+        - Param: Speed
+          Op: Less
+          Threshold: 0.5
+    - From: Running
+      To: Walking
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.15
+      Conditions:
+        - Param: IsGrounded
+          Op: Equals
+          Threshold: true
+        - Param: Speed
+          Op: Less
+          Threshold: 7.0
+        - Param: Speed
+          Op: GreaterEq
+          Threshold: 0.5
+    - From: Running
+      To: Idle
+      HasExitTime: false
+      ExitTime: 1.0
+      TransitionDuration: 0.18
+      Conditions:
+        - Param: Speed
+          Op: Less
+          Threshold: 0.5
