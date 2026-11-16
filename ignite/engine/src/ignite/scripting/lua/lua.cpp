@@ -341,6 +341,17 @@ namespace ignite::lua
             return 1;
         }
 
+        int EntityGetName(lua_State *state)
+        {
+            auto *ref = static_cast<EntityRef *>(luaL_checkudata(state, 1, kEntityMetatable));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity)
+                lua_pushstring(state, entity.GetName().c_str());
+            else
+                lua_pushnil(state);
+            return 1;
+        }
+
         int EntityGetParent(lua_State *state)
         {
             auto *ref = static_cast<EntityRef *>(luaL_checkudata(state, 1, kEntityMetatable));
@@ -627,6 +638,167 @@ namespace ignite::lua
                     entity.GetComponent<TransformComponent>().local.translation = pos;
                     entity.GetComponent<TransformComponent>().dirty = true;
                 }
+            }
+            return 0;
+        }
+
+        int CharacterSetRotation(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const glm::vec3 eulerDeg = lua_istable(state, 2)
+                ? ReadVector(state, 2)
+                : glm::vec3(luaL_optnumber(state, 2, 0.0), luaL_optnumber(state, 3, 0.0), luaL_optnumber(state, 4, 0.0));
+            const glm::quat q(glm::radians(eulerDeg));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto actor = cc.character.lock())
+                {
+                    actor->SetRotation(q);
+                }
+                if (entity.HasComponent<TransformComponent>())
+                {
+                    entity.GetComponent<TransformComponent>().local.rotation = q;
+                    entity.GetComponent<TransformComponent>().dirty = true;
+                }
+            }
+            return 0;
+        }
+
+        // SkeletalMesh / Animator methods
+        void EnsureSkeletalRuntimeParam(SkeletalMeshComponent &c, const char *name, AnimParam::Type type)
+        {
+            if (AnimParam *existing = Animator::FindAnimParam(c.runtimeParams, name))
+            {
+                existing->type = type;
+                return;
+            }
+            AnimParam param;
+            param.name = name;
+            param.type = type;
+            c.runtimeParams[name] = std::move(param);
+        }
+
+        int SkeletalSetFloat(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const float val = static_cast<float>(luaL_checknumber(state, 3));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<SkeletalMeshComponent>())
+            {
+                auto &c = entity.GetComponent<SkeletalMeshComponent>();
+                EnsureSkeletalRuntimeParam(c, name, AnimParam::Type::Float);
+                c.runtimeParams[name].floatVal = val;
+            }
+            return 0;
+        }
+
+        int SkeletalSetBool(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const bool val = lua_toboolean(state, 3) != 0;
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<SkeletalMeshComponent>())
+            {
+                auto &c = entity.GetComponent<SkeletalMeshComponent>();
+                EnsureSkeletalRuntimeParam(c, name, AnimParam::Type::Bool);
+                c.runtimeParams[name].boolVal = val;
+            }
+            return 0;
+        }
+
+        int SkeletalSetInt(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const int val = static_cast<int>(luaL_checkinteger(state, 3));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<SkeletalMeshComponent>())
+            {
+                auto &c = entity.GetComponent<SkeletalMeshComponent>();
+                EnsureSkeletalRuntimeParam(c, name, AnimParam::Type::Int);
+                c.runtimeParams[name].intVal = val;
+            }
+            return 0;
+        }
+
+        int SkeletalSetString(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const char *val = luaL_checkstring(state, 3);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<SkeletalMeshComponent>())
+            {
+                auto &c = entity.GetComponent<SkeletalMeshComponent>();
+                EnsureSkeletalRuntimeParam(c, name, AnimParam::Type::String);
+                c.runtimeParams[name].strVal = val;
+            }
+            return 0;
+        }
+
+        int SkeletalGetFloat(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            float out = 0.0f;
+            if (entity && entity.HasComponent<SkeletalMeshComponent>())
+            {
+                if (const AnimParam *p = Animator::FindAnimParam(entity.GetComponent<SkeletalMeshComponent>().runtimeParams, name))
+                    out = p->floatVal;
+            }
+            lua_pushnumber(state, out);
+            return 1;
+        }
+
+        int SkeletalGetBool(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            bool out = false;
+            if (entity && entity.HasComponent<SkeletalMeshComponent>())
+            {
+                if (const AnimParam *p = Animator::FindAnimParam(entity.GetComponent<SkeletalMeshComponent>().runtimeParams, name))
+                    out = p->boolVal;
+            }
+            lua_pushboolean(state, out);
+            return 1;
+        }
+
+        int SkeletalGetInt(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            int out = 0;
+            if (entity && entity.HasComponent<SkeletalMeshComponent>())
+            {
+                if (const AnimParam *p = Animator::FindAnimParam(entity.GetComponent<SkeletalMeshComponent>().runtimeParams, name))
+                    out = p->intVal;
+            }
+            lua_pushinteger(state, out);
+            return 1;
+        }
+
+        int SkeletalPlayState(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *stateName = luaL_checkstring(state, 2);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<SkeletalMeshComponent>())
+            {
+                auto &c = entity.GetComponent<SkeletalMeshComponent>();
+                c.currentStateName = stateName;
+                c.stateElapsed = 0.0f;
+                c.stateNormalized = 0.0f;
+                c.isTransitioning = false;
+                c.transitionTargetState.clear();
+                c.transitionElapsed = 0.0f;
             }
             return 0;
         }
@@ -933,6 +1105,88 @@ namespace ignite::lua
                 return 1;
             }
             PushEntity(state, scene, static_cast<uint64_t>(cam.GetUUID()));
+            return 1;
+        }
+
+        int LuaDebugDrawTextWorld(lua_State *state)
+        {
+            Scene *scene = GetSceneUpvalue(state);
+            if (!scene) return 0;
+
+            DebugTextWorldItem item;
+            item.position = ReadVector(state, 1);
+            item.text = luaL_checkstring(state, 2);
+            if (lua_gettop(state) >= 3 && lua_istable(state, 3))
+                item.color = ReadVec4(state, 3);
+            if (lua_gettop(state) >= 4 && lua_isnumber(state, 4))
+                item.scale = static_cast<float>(lua_tonumber(state, 4));
+            if (lua_gettop(state) >= 5 && !lua_isnil(state, 5))
+                item.billboard = lua_toboolean(state, 5) != 0;
+            if (lua_gettop(state) >= 6 && !lua_isnil(state, 6))
+                item.center = lua_toboolean(state, 6) != 0;
+
+            scene->AddDebugTextWorld(item);
+            return 0;
+        }
+
+        int LuaDebugDrawTextScreen(lua_State *state)
+        {
+            Scene *scene = GetSceneUpvalue(state);
+            if (!scene) return 0;
+
+            DebugTextScreenItem item;
+            int argOffset = 0;
+            if (lua_istable(state, 1))
+            {
+                item.position = ReadVec2(state, 1);
+                argOffset = 0;
+            }
+            else
+            {
+                item.position.x = static_cast<float>(luaL_checknumber(state, 1));
+                item.position.y = static_cast<float>(luaL_checknumber(state, 2));
+                argOffset = 1;
+            }
+
+            item.text = luaL_checkstring(state, 2 + argOffset);
+            if (lua_gettop(state) >= 3 + argOffset && lua_istable(state, 3 + argOffset))
+                item.color = ReadVec4(state, 3 + argOffset);
+            if (lua_gettop(state) >= 4 + argOffset && lua_isnumber(state, 4 + argOffset))
+                item.fontSize = static_cast<float>(lua_tonumber(state, 4 + argOffset));
+            if (lua_gettop(state) >= 5 + argOffset && !lua_isnil(state, 5 + argOffset))
+                item.center = lua_toboolean(state, 5 + argOffset) != 0;
+
+            scene->AddDebugTextScreen(item);
+            return 0;
+        }
+
+        int LuaDebugDrawLine(lua_State *state)
+        {
+            Scene *scene = GetSceneUpvalue(state);
+            if (!scene) return 0;
+
+            DebugLineItem item;
+            item.p0 = ReadVector(state, 1);
+            item.p1 = ReadVector(state, 2);
+            if (lua_gettop(state) >= 3 && lua_istable(state, 3))
+                item.color = ReadVec4(state, 3);
+
+            scene->AddDebugLine(item);
+            return 0;
+        }
+
+        int LuaDebugSetShowEntityNames(lua_State *state)
+        {
+            Scene *scene = GetSceneUpvalue(state);
+            if (scene)
+                scene->showDebugEntityNames = lua_toboolean(state, 1) != 0;
+            return 0;
+        }
+
+        int LuaDebugGetShowEntityNames(lua_State *state)
+        {
+            Scene *scene = GetSceneUpvalue(state);
+            lua_pushboolean(state, scene && scene->showDebugEntityNames);
             return 1;
         }
 
@@ -1440,6 +1694,7 @@ namespace ignite::lua
         if (strcmp(key, "get_transform") == 0) { lua_pushcfunction(state, EntityGetTransform); return 1; }
         if (strcmp(key, "destroy") == 0) { lua_pushcfunction(state, EntityDestroy); return 1; }
         if (strcmp(key, "is_valid") == 0) { lua_pushcfunction(state, EntityIsValid); return 1; }
+        if (strcmp(key, "get_name") == 0) { lua_pushcfunction(state, EntityGetName); return 1; }
         if (strcmp(key, "get_parent") == 0) { lua_pushcfunction(state, EntityGetParent); return 1; }
         if (strcmp(key, "set_parent") == 0) { lua_pushcfunction(state, EntitySetParent); return 1; }
         if (strcmp(key, "get_children") == 0) { lua_pushcfunction(state, EntityGetChildren); return 1; }
@@ -1628,6 +1883,7 @@ namespace ignite::lua
             }
             if (strcmp(key, "move") == 0) { lua_pushcfunction(state, CharacterMove); return 1; }
             if (strcmp(key, "set_position") == 0) { lua_pushcfunction(state, CharacterSetPosition); return 1; }
+            if (strcmp(key, "set_rotation") == 0) { lua_pushcfunction(state, CharacterSetRotation); return 1; }
             break;
         }
         case ComponentType::Sprite2D:
@@ -1658,6 +1914,19 @@ namespace ignite::lua
         {
             auto &c = entity.GetComponent<SkeletalMeshComponent>();
             if (strcmp(key, "asset_handle") == 0) { lua_pushinteger(state, static_cast<lua_Integer>(static_cast<uint64_t>(c.handle))); return 1; }
+            if (strcmp(key, "animator_handle") == 0) { lua_pushinteger(state, static_cast<lua_Integer>(static_cast<uint64_t>(c.runtimeAnimatorHandle))); return 1; }
+            if (strcmp(key, "current_state") == 0) { lua_pushstring(state, c.currentStateName.c_str()); return 1; }
+            if (strcmp(key, "state_elapsed") == 0) { lua_pushnumber(state, c.stateElapsed); return 1; }
+            if (strcmp(key, "state_normalized") == 0) { lua_pushnumber(state, c.stateNormalized); return 1; }
+            if (strcmp(key, "unique_animator") == 0) { lua_pushboolean(state, c.uniqueAnimator); return 1; }
+            if (strcmp(key, "set_float") == 0) { lua_pushcfunction(state, SkeletalSetFloat); return 1; }
+            if (strcmp(key, "set_bool") == 0) { lua_pushcfunction(state, SkeletalSetBool); return 1; }
+            if (strcmp(key, "set_int") == 0) { lua_pushcfunction(state, SkeletalSetInt); return 1; }
+            if (strcmp(key, "set_string") == 0) { lua_pushcfunction(state, SkeletalSetString); return 1; }
+            if (strcmp(key, "get_float") == 0) { lua_pushcfunction(state, SkeletalGetFloat); return 1; }
+            if (strcmp(key, "get_bool") == 0) { lua_pushcfunction(state, SkeletalGetBool); return 1; }
+            if (strcmp(key, "get_int") == 0) { lua_pushcfunction(state, SkeletalGetInt); return 1; }
+            if (strcmp(key, "play_state") == 0) { lua_pushcfunction(state, SkeletalPlayState); return 1; }
             break;
         }
         case ComponentType::AudioSource:
@@ -1781,7 +2050,10 @@ namespace ignite::lua
             if (strcmp(key, "color") == 0) { PushVector(state, c.color); return 1; }
             if (strcmp(key, "kerning") == 0) { lua_pushnumber(state, c.kerning); return 1; }
             if (strcmp(key, "line_spacing") == 0) { lua_pushnumber(state, c.lineSpacing); return 1; }
+            if (strcmp(key, "font_size") == 0) { lua_pushnumber(state, c.fontSize); return 1; }
             if (strcmp(key, "screen_space") == 0) { lua_pushboolean(state, c.screenSpace); return 1; }
+            if (strcmp(key, "billboard") == 0) { lua_pushboolean(state, c.billboard); return 1; }
+            if (strcmp(key, "center_align") == 0) { lua_pushboolean(state, c.centerAlign); return 1; }
             break;
         }
         case ComponentType::Widget:
@@ -1939,7 +2211,13 @@ namespace ignite::lua
         case ComponentType::CharacterController:
         {
             auto &c = entity.GetComponent<CharacterControllerComponent>();
-            if (strcmp(key, "linear_velocity") == 0) { c.linearVelocity = ReadVector(state, 3); return 0; }
+            if (strcmp(key, "linear_velocity") == 0)
+            {
+                c.linearVelocity = ReadVector(state, 3);
+                if (auto actor = c.character.lock())
+                    actor->SetLinearVelocity(c.linearVelocity);
+                return 0;
+            }
             if (strcmp(key, "radius") == 0) { c.radius = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
             if (strcmp(key, "height") == 0) { c.height = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
             if (strcmp(key, "max_step_height") == 0) { c.maxStepHeight = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
@@ -2010,6 +2288,9 @@ namespace ignite::lua
         {
             auto &c = entity.GetComponent<SkeletalMeshComponent>();
             if (strcmp(key, "asset_handle") == 0) { c.handle = AssetHandle(static_cast<uint64_t>(luaL_checkinteger(state, 3))); return 0; }
+            if (strcmp(key, "animator_handle") == 0) { c.runtimeAnimatorHandle = AssetHandle(static_cast<uint64_t>(luaL_checkinteger(state, 3))); return 0; }
+            if (strcmp(key, "current_state") == 0) { c.currentStateName = luaL_checkstring(state, 3); return 0; }
+            if (strcmp(key, "unique_animator") == 0) { c.uniqueAnimator = lua_toboolean(state, 3) != 0; return 0; }
             break;
         }
         case ComponentType::Camera:
@@ -2108,7 +2389,10 @@ namespace ignite::lua
             if (strcmp(key, "color") == 0) { c.color = ReadVec4(state, 3); return 0; }
             if (strcmp(key, "kerning") == 0) { c.kerning = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
             if (strcmp(key, "line_spacing") == 0) { c.lineSpacing = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
+            if (strcmp(key, "font_size") == 0) { c.fontSize = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
             if (strcmp(key, "screen_space") == 0) { c.screenSpace = lua_toboolean(state, 3) != 0; return 0; }
+            if (strcmp(key, "billboard") == 0) { c.billboard = lua_toboolean(state, 3) != 0; return 0; }
+            if (strcmp(key, "center_align") == 0) { c.centerAlign = lua_toboolean(state, 3) != 0; return 0; }
             break;
         }
         case ComponentType::Widget:
@@ -2301,6 +2585,15 @@ namespace ignite::lua
         lua_newtable(state);
         RegisterSceneClosure(state, scene, "Raycast", LuaPhysicsRaycast);
         lua_setfield(state, -2, "Physics");
+
+        // Ignite.Debug
+        lua_newtable(state);
+        RegisterSceneClosure(state, scene, "DrawTextWorld", LuaDebugDrawTextWorld);
+        RegisterSceneClosure(state, scene, "DrawTextScreen", LuaDebugDrawTextScreen);
+        RegisterSceneClosure(state, scene, "DrawLine", LuaDebugDrawLine);
+        RegisterSceneClosure(state, scene, "SetShowEntityNames", LuaDebugSetShowEntityNames);
+        RegisterSceneClosure(state, scene, "GetShowEntityNames", LuaDebugGetShowEntityNames);
+        lua_setfield(state, -2, "Debug");
 
         // Ignite.Net
         lua_newtable(state);

@@ -4,6 +4,7 @@
 #include "agent_controller.hpp"
 
 #include "ignite/asset/asset_manager.hpp"
+#include "ignite/asset/asset_importer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
@@ -290,7 +291,11 @@ namespace ignite
                 const auto &tc = e.GetComponent<TextComponent>();
                 j["Text"] = {
                     { "text", tc.text },
-                    { "color", Vec4ToJson(tc.color) }
+                    { "color", Vec4ToJson(tc.color) },
+                    { "font_size", tc.fontSize },
+                    { "screen_space", tc.screenSpace },
+                    { "billboard", tc.billboard },
+                    { "center_align", tc.centerAlign }
                 };
             }
 
@@ -349,6 +354,20 @@ namespace ignite
                 }
                 else if (props.contains("asset_handle"))
                     smc.handle = AssetHandle(props["asset_handle"].get<uint64_t>());
+                if (props.contains("material_handle"))
+                    smc.overrideMaterials[0] = AssetHandle(props["material_handle"].get<uint64_t>());
+                return true;
+            }
+
+            if (type == "SkeletalMesh")
+            {
+                auto &smc = e.HasComponent<SkeletalMeshComponent>() ? e.GetComponent<SkeletalMeshComponent>() : e.AddComponent<SkeletalMeshComponent>();
+                if (props.contains("asset_handle"))
+                    smc.handle = AssetHandle(props["asset_handle"].get<uint64_t>());
+                if (props.contains("animator_handle"))
+                    smc.runtimeAnimatorHandle = AssetHandle(props["animator_handle"].get<uint64_t>());
+                if (props.contains("unique_animator"))
+                    smc.uniqueAnimator = props["unique_animator"].get<bool>();
                 return true;
             }
 
@@ -555,6 +574,7 @@ namespace ignite
                 auto &cc = e.HasComponent<CharacterControllerComponent>() ? e.GetComponent<CharacterControllerComponent>() : e.AddComponent<CharacterControllerComponent>();
                 if (props.contains("radius")) { cc.radius = props["radius"].get<float>(); cc.dirty = true; }
                 if (props.contains("height")) { cc.height = props["height"].get<float>(); cc.dirty = true; }
+                if (props.contains("center")) { cc.center = ReadJsonVec3(props["center"], cc.center); cc.dirty = true; }
                 if (props.contains("max_step_height")) { cc.maxStepHeight = props["max_step_height"].get<float>(); cc.dirty = true; }
                 if (props.contains("max_slope_angle")) { cc.maxSlopeAngle = props["max_slope_angle"].get<float>(); cc.dirty = true; }
                 if (props.contains("gravity_factor")) cc.gravityFactor = props["gravity_factor"].get<float>();
@@ -608,9 +628,15 @@ namespace ignite
             if (type == "Text")
             {
                 auto &tx = e.HasComponent<TextComponent>() ? e.GetComponent<TextComponent>() : e.AddComponent<TextComponent>();
+                if (props.contains("font_handle")) tx.fontHandle = AssetHandle(props["font_handle"].get<uint64_t>());
                 if (props.contains("text") && props["text"].is_string()) tx.text = props["text"].get<std::string>();
                 if (props.contains("color")) tx.color = ReadJsonVec4(props["color"], tx.color);
+                if (props.contains("font_size")) tx.fontSize = props["font_size"].get<float>();
+                if (props.contains("kerning")) tx.kerning = props["kerning"].get<float>();
+                if (props.contains("line_spacing")) tx.lineSpacing = props["line_spacing"].get<float>();
                 if (props.contains("screen_space")) tx.screenSpace = props["screen_space"].get<bool>();
+                if (props.contains("billboard")) tx.billboard = props["billboard"].get<bool>();
+                if (props.contains("center_align")) tx.centerAlign = props["center_align"].get<bool>();
                 return true;
             }
 
@@ -1106,6 +1132,75 @@ namespace ignite
             return res;
         }
 
+        if (action == "import_asset")
+        {
+            if (!ctx.project) { res["error"] = "No active project"; return res; }
+            auto *am = AssetManager::GetInstance();
+            if (!am) { res["error"] = "AssetManager unavailable"; return res; }
+
+            const std::string srcPathStr = cmd.value("path", "");
+            const std::string typeStr = cmd.value("type", "StaticMesh");
+            const std::string targetDirStr = cmd.value("target_dir", "");
+            if (srcPathStr.empty()) { res["error"] = "Missing 'path'"; return res; }
+
+            std::filesystem::path srcPath = ctx.project->GetProjectFilepath(srcPathStr);
+            if (!std::filesystem::exists(srcPath)) { res["error"] = "File not found: " + srcPath.string(); return res; }
+
+            const std::filesystem::path targetDir = targetDirStr.empty()
+                ? srcPath.parent_path()
+                : ctx.project->GetProjectFilepath(targetDirStr);
+
+            const AssetType assetType = AssetTypeFromString(typeStr);
+            if (assetType == AssetType::Invalid) { res["error"] = "Invalid asset type: " + typeStr; return res; }
+
+            AssetMetaData md;
+            md.filepath = ctx.project->GetProjectRelativeFilepath(srcPath);
+            md.type = assetType;
+
+            AssetHandle handle = am->GetAssetHandle(md.filepath);
+            if (handle == AssetHandle(0))
+                handle = AssetHandle();
+
+            Ref<Asset> imported;
+            if (assetType == AssetType::SkeletalMesh)
+            {
+                SkeletalMeshImportPayload payload;
+                payload.targetDirectory = targetDir;
+                payload.forceRebuild = cmd.value("force_rebuild", false);
+                AssetMetaData fullMd = md;
+                fullMd.filepath = srcPath;
+                imported = AssetImporter::ImportSkeletalMesh(handle, fullMd, am, payload);
+            }
+            else if (assetType == AssetType::StaticMesh)
+            {
+                StaticMeshImportPayload payload;
+                payload.targetDirectory = targetDir;
+                payload.forceRebuild = cmd.value("force_rebuild", false);
+                AssetMetaData fullMd = md;
+                fullMd.filepath = srcPath;
+                imported = AssetImporter::ImportStaticMesh(handle, fullMd, am, payload);
+            }
+            else
+            {
+                am->AssignMetaData(handle, md);
+                imported = am->GetAssetImmediate<Asset>(handle);
+            }
+
+            if (!imported)
+            {
+                res["error"] = "Failed importing asset: " + srcPath.string();
+                return res;
+            }
+
+            Project::SaveActive();
+            res["ok"] = true;
+            res["data"] = {
+                { "handle", static_cast<uint64_t>(imported->handle) },
+                { "type", AssetTypeToString(imported->GetAssetType()) }
+            };
+            return res;
+        }
+
         if (action == "list_assets")
         {
             if (!AssetManager::GetInstance()) { res["error"] = "AssetManager unavailable"; return res; }
@@ -1359,6 +1454,7 @@ namespace ignite
                 if (cmd.contains("debug_shadow")) ctx.sceneRenderer->SetDebugShadowMode(cmd["debug_shadow"].get<int>());
                 if (cmd.contains("show_colliders")) ctx.sceneRenderer->sceneRenderSettings.showPhysicsCollider = cmd["show_colliders"].get<bool>();
                 if (cmd.contains("show_bounds")) ctx.sceneRenderer->sceneRenderSettings.showBoundingBox = cmd["show_bounds"].get<bool>();
+                if (cmd.contains("show_entity_names")) ctx.sceneRenderer->sceneRenderSettings.showEntityNames = cmd["show_entity_names"].get<bool>();
                 if (cmd.contains("fxaa"))
                 {
                     ctx.sceneRenderer->SetSampleMethod(cmd["fxaa"].get<bool>() ? SampleMethod::FXAA : SampleMethod::None);

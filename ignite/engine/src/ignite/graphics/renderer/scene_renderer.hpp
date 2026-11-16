@@ -35,6 +35,7 @@ namespace ignite
         bool hasEnvironment = false;
         bool hasParticles = false;
         bool hasWidgets = false;
+        bool hasScreenText = false;
         bool hasActiveShadows = false;
         bool requiresObjectId = false;
         bool requiresDebugOverlay = false;
@@ -51,7 +52,7 @@ namespace ignite
 
         bool IsEmptyScene() const
         {
-            return !HasRenderables() && !hasWidgets && !requiresDebugOverlay && !requiresObjectId;
+            return !HasRenderables() && !hasWidgets && !hasScreenText && !requiresDebugOverlay && !requiresObjectId;
         }
     };
 
@@ -203,6 +204,9 @@ namespace ignite
 
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
+        Ref<Renderer2D> m_ScreenTextRenderer2D;
+        Ref<Renderer2D> m_DebugRenderer2D;
+        Ref<ConstantBuffer> m_ScreenCameraBuffer;
 
         std::unordered_map<ICamera *, Ref<CameraRenderTarget>> m_RenderTargets;
         std::unordered_map<ICamera *, std::vector<Ref<Bloom>>> m_Blooms;

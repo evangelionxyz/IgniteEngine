@@ -2564,9 +2564,12 @@ namespace ignite
                 }
 
                 UI::DrawColorVec4("Color", c.color);
+                UI::DrawFloatControl("Font Size", &c.fontSize, 0.25f, 4.0f, 256.0f);
                 UI::DrawFloatControl("Kerning", &c.kerning, 0.001f, -10.0f, 10.0f);
                 UI::DrawFloatControl("Line Spacing", &c.lineSpacing, 0.001f, -10.0f, 10.0f);
                 UI::DrawCheckbox("Screen Space", &c.screenSpace);
+                UI::DrawCheckbox("Billboard", &c.billboard);
+                UI::DrawCheckbox("Center Align", &c.centerAlign);
             });
 
             RenderComponent<AudioSourceComponent>("Audio Source", selectedEntity, [&]()

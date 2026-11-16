@@ -813,7 +813,10 @@ namespace ignite
                     sr.AddKeyValue("Color", comp.color);
                     sr.AddKeyValue("Kerning", comp.kerning);
                     sr.AddKeyValue("LineSpacing", comp.lineSpacing);
+                    sr.AddKeyValue("FontSize", comp.fontSize);
                     sr.AddKeyValue("ScreenSpace", comp.screenSpace);
+                    sr.AddKeyValue("Billboard", comp.billboard);
+                    sr.AddKeyValue("CenterAlign", comp.centerAlign);
                 }
                 sr.EndMap();
             }
@@ -1491,7 +1494,10 @@ namespace ignite
             if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
             if (auto n = node["Kerning"]) comp.kerning = n.as<float>();
             if (auto n = node["LineSpacing"]) comp.lineSpacing = n.as<float>();
+            if (auto n = node["FontSize"]) comp.fontSize = n.as<float>();
             if (auto n = node["ScreenSpace"]) comp.screenSpace = n.as<bool>();
+            if (auto n = node["Billboard"]) comp.billboard = n.as<bool>();
+            if (auto n = node["CenterAlign"]) comp.centerAlign = n.as<bool>();
         }
 
         // Widget Component

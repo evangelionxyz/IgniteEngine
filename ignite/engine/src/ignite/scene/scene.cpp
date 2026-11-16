@@ -684,6 +684,7 @@ namespace ignite
 
         m_State = ESceneState::Stop;
         m_PreviousState = ESceneState::Stop;
+        ClearDebugDraw();
 
         m_StepFrame = 0;
         timeInSeconds = 0.0f;
@@ -923,6 +924,7 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("Scene::RuntimeTick");
             timeInSeconds += deltaTime;
+            ClearDebugDraw();
 
             // Update audio
             registry->view<AudioSourceComponent>().each([this, deltaTime](entt::entity e, AudioSourceComponent &as)
@@ -2163,6 +2165,10 @@ namespace ignite
                 runtime.currentStateName = smc.currentStateName;
                 runtime.stateElapsed = smc.stateElapsed;
                 runtime.stateNormalized = smc.stateNormalized;
+                runtime.isTransitioning = smc.isTransitioning;
+                runtime.transitionTargetState = smc.transitionTargetState;
+                runtime.transitionDuration = smc.transitionDuration;
+                runtime.transitionElapsed = smc.transitionElapsed;
                 runtime.blendSpaceSmoothedInput = smc.blendSpaceSmoothedInput;
                 runtime.blendSpaceVelocity = smc.blendSpaceVelocity;
 
@@ -2180,6 +2186,10 @@ namespace ignite
                     smc.currentStateName = runtime.currentStateName;
                     smc.stateElapsed = runtime.stateElapsed;
                     smc.stateNormalized = runtime.stateNormalized;
+                    smc.isTransitioning = runtime.isTransitioning;
+                    smc.transitionTargetState = runtime.transitionTargetState;
+                    smc.transitionDuration = runtime.transitionDuration;
+                    smc.transitionElapsed = runtime.transitionElapsed;
                     smc.blendSpaceSmoothedInput = runtime.blendSpaceSmoothedInput;
                     smc.blendSpaceVelocity = runtime.blendSpaceVelocity;
 

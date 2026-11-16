@@ -437,7 +437,10 @@ namespace ignite
         glm::vec4 color = glm::vec4(1.0f);
         float kerning = 0.0f;
         float lineSpacing = -0.025f;
+        float fontSize = 24.0f; // pixel size when screenSpace is true
         bool screenSpace = false;
+        bool billboard = false;
+        bool centerAlign = false;
 
         TextComponent() = default;
 
@@ -481,6 +484,10 @@ namespace ignite
         std::string currentStateName;
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
+        bool isTransitioning = false;
+        std::string transitionTargetState;
+        float transitionDuration = 0.0f;
+        float transitionElapsed = 0.0f;
         glm::vec2 blendSpaceSmoothedInput = glm::vec2(0.0f);
         glm::vec2 blendSpaceVelocity = glm::vec2(0.0f);
         AssetHandle runtimeAnimatorHandle = AssetHandle(0);
@@ -505,6 +512,10 @@ namespace ignite
 			this->currentStateName.clear();
 			this->stateElapsed = 0.0f;
 			this->stateNormalized = 0.0f;
+			this->isTransitioning = false;
+			this->transitionTargetState.clear();
+			this->transitionDuration = 0.0f;
+			this->transitionElapsed = 0.0f;
 			this->blendSpaceSmoothedInput = glm::vec2(0.0f);
 			this->blendSpaceVelocity = glm::vec2(0.0f);
         }

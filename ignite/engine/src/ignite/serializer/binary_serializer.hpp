@@ -1073,7 +1073,7 @@ namespace ignite
 
                 std::memcpy(&joint.inverseBindPose[0].x, dj.inverseBindPose, sizeof(float) * 16);
                 std::memcpy(&joint.localTransform[0].x, dj.localTransform, sizeof(float) * 16);
-
+                Transform::Decompose(joint.localTransform, joint.defaultTransform);
                 skeleton->joints.push_back(std::move(joint));
 
                 skeleton->nameToJointMap[jointName] = joint.id;

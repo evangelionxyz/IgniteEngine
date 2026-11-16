@@ -67,6 +67,7 @@ namespace ignite
 
         bool showBoundingBox = false;
         bool showPhysicsCollider = false;
+        bool showEntityNames = false;
 
         SampleMethod sampleMethod = SampleMethod::FXAA;
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive

@@ -5,6 +5,7 @@
 #include "renderer.hpp"
 #include "renderer/renderer_2d.hpp"
 #include "texture.hpp"
+#include "font.hpp"
 #include "shader.hpp"
 #include "binding_cache.hpp"
 #include "bindless_system.hpp"
@@ -129,6 +130,7 @@ namespace ignite
         m_BlackUIntTexture.reset();
 
         m_DefaultMaterial.reset();
+        m_DefaultFont.reset();
 
         m_DefaultMeshes.clear();
 
@@ -236,6 +238,32 @@ namespace ignite
     Ref<Material> Renderer::GetDefaultMaterial()
     {
         return s_RendererInstance->m_DefaultMaterial;
+    }
+
+    Ref<Font> Renderer::GetDefaultFont()
+    {
+        if (!s_RendererInstance)
+            return nullptr;
+
+        if (!s_RendererInstance->m_DefaultFont)
+        {
+            static constexpr const char *kDefaultFontCandidates[] = {
+                "resources/fonts/segoeui.ttf",
+                "ignite/editor/resources/fonts/segoeui.ttf"
+            };
+
+            std::error_code ec;
+            for (const char *candidate : kDefaultFontCandidates)
+            {
+                if (std::filesystem::exists(candidate, ec))
+                {
+                    s_RendererInstance->m_DefaultFont = Font::Create(candidate);
+                    break;
+                }
+            }
+        }
+
+        return s_RendererInstance->m_DefaultFont;
     }
 
     static constexpr uint64_t kDefaultMeshHandleBase = 0x49474E5F4D455348ULL; // "IGN_MESH"

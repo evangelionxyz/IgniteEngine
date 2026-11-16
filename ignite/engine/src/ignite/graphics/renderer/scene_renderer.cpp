@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu
+﻿// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "ignite_pch.hpp"
 
@@ -12,6 +12,7 @@
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/physics/3d/physics_3d.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/core/agent_controller.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/core/input/input_system.hpp"
 #include "ignite/core/signal_bus.hpp"
@@ -84,6 +85,8 @@ namespace ignite
         nri.CreateSampler(*m_Device, compositeSamplerDesc, m_CompositeSampler);
 
         m_Renderer2D = Renderer2D::Create();
+        m_ScreenTextRenderer2D = Renderer2D::Create();
+        m_DebugRenderer2D = Renderer2D::Create();
         m_OutlineJFA = OutlineJFA::Create();
         m_OutlineJFA->CreatePipeline();
 
@@ -101,6 +104,9 @@ namespace ignite
 
         ClearResources();
         m_RuntimeMaterial.reset();
+        m_ScreenCameraBuffer.reset();
+        m_ScreenTextRenderer2D.reset();
+        m_DebugRenderer2D.reset();
         m_TerrainRenderer.reset();
 
         if (m_Scene)
@@ -152,6 +158,14 @@ namespace ignite
         {
             m_Renderer2D->InvalidatePreRenderCache();
         }
+        if (m_ScreenTextRenderer2D)
+        {
+            m_ScreenTextRenderer2D->InvalidatePreRenderCache();
+        }
+        if (m_DebugRenderer2D)
+        {
+            m_DebugRenderer2D->InvalidatePreRenderCache();
+        }
 
         if (m_Scene)
         {
@@ -166,6 +180,14 @@ namespace ignite
         if (m_Renderer2D)
         {
             m_Renderer2D->InvalidatePreRenderCache();
+        }
+        if (m_ScreenTextRenderer2D)
+        {
+            m_ScreenTextRenderer2D->InvalidatePreRenderCache();
+        }
+        if (m_DebugRenderer2D)
+        {
+            m_DebugRenderer2D->InvalidatePreRenderCache();
         }
     }
 
@@ -202,6 +224,7 @@ namespace ignite
 
         m_ResolvedAssetsCache.clear();
         m_FramePacket.Clear();
+        m_ScreenCameraBuffer.reset();
 
         if (m_RuntimeMaterial)
             m_RuntimeMaterial->InvalidateBindingSet();
@@ -281,7 +304,7 @@ namespace ignite
                 for (entt::entity e : textView)
                 {
                     const auto &[tr, rc, text] = registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
-                    if (rc.visible && !text.text.empty() && text.fontHandle != AssetHandle(0))
+                    if (rc.visible && !text.text.empty() && !text.screenSpace)
                     {
                         plan.has2D = true;
                         break;
@@ -324,10 +347,28 @@ namespace ignite
             plan.hasEnvironment = true;
         }
 
-        // 5. Check for Widgets
+        // 5. Check for Widgets & Screen Space Text
         if (m_Scene->GetRootWidget() != nullptr)
         {
             plan.hasWidgets = true;
+        }
+
+        if (!m_Scene->GetDebugScreenTexts().empty())
+        {
+            plan.hasScreenText = true;
+        }
+        else
+        {
+            auto textView = registry->view<TransformComponent, RenderingComponent, TextComponent>();
+            for (entt::entity e : textView)
+            {
+                const auto &[tr, rc, text] = registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                if (rc.visible && !text.text.empty() && text.screenSpace)
+                {
+                    plan.hasScreenText = true;
+                    break;
+                }
+            }
         }
 
         // 6. Check for Active Directional Light with Cascaded Shadows
@@ -348,7 +389,9 @@ namespace ignite
         plan.requiresObjectId = !isGameCamera || !m_SelectedEntities.empty();
 
         // 8. Check for Debug Overlays
-        if (drawDebug && (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider))
+        const bool wantsEntityNames = (drawDebug && sceneRenderSettings.showEntityNames) || m_Scene->showDebugEntityNames;
+        const bool hasQueuedDebug = !m_Scene->GetDebugWorldTexts().empty() || !m_Scene->GetDebugLines().empty();
+        if ((drawDebug && (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider)) || wantsEntityNames || hasQueuedDebug)
         {
             plan.requiresDebugOverlay = true;
         }
@@ -496,7 +539,7 @@ namespace ignite
                     target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
 
-                if (target->previousPlan.hasWidgets && target->widgetRT)
+                if ((target->previousPlan.hasWidgets || target->previousPlan.hasScreenText) && target->widgetRT)
                 {
                     target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
@@ -567,13 +610,13 @@ namespace ignite
                     target->selectionRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
 
-                if (plan.hasWidgets)
+                if (plan.hasWidgets || plan.hasScreenText)
                 {
                     EnsureWidgetRT(target, width, height);
                     target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
-                else if (target->previousPlan.hasWidgets && target->widgetRT)
+                else if ((target->previousPlan.hasWidgets || target->previousPlan.hasScreenText) && target->widgetRT)
                 {
                     target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
@@ -621,7 +664,7 @@ namespace ignite
                 : nullptr;
             ColorPass(cmd, camera, frameContext, sceneFramebuffer, selectionFramebuffer, drawDebug);
 
-            if (plan.hasWidgets && target->widgetRT)
+            if ((plan.hasWidgets || plan.hasScreenText) && target->widgetRT)
             {
                 UIPass(cmd, camera, target->widgetRT->GetFramebuffer(), frameContext);
             }
@@ -743,17 +786,28 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
                 RenderTarget *finalCompositeFB = targetFramebuffer ? targetFramebuffer : target->compositeRT->GetFramebuffer();
-                
+                const bool mirrorCompositeForAgent = targetFramebuffer && target->compositeRT
+                    && targetFramebuffer != target->compositeRT->GetFramebuffer()
+                    && AgentController::IsAutomationActive();
+
                 if (sceneRenderSettings.enableFXAA && target->postProcessRT)
                 {
                     CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, target->postProcessRT->GetFramebuffer());
                     
                     IGN_PROFILE_SCOPE("SceneRenderer::FXAAPass");
                     FXAAPass(cmd, finalCompositeFB, target->postProcessRT->GetColorAttachment(0));
+                    if (mirrorCompositeForAgent)
+                    {
+                        FXAAPass(cmd, target->compositeRT->GetFramebuffer(), target->postProcessRT->GetColorAttachment(0));
+                    }
                 }
                 else
                 {
                     CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, finalCompositeFB);
+                    if (mirrorCompositeForAgent)
+                    {
+                        CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, target->compositeRT->GetFramebuffer());
+                    }
                 }
             }
 
@@ -1276,7 +1330,7 @@ namespace ignite
 
                 Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
 
-                // Static Mesh Shadows — batch instanced from pre-extracted FramePacket
+                // Static Mesh Shadows â€” batch instanced from pre-extracted FramePacket
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshShadow::BatchCollect");
 
@@ -1462,7 +1516,7 @@ namespace ignite
 
         std::vector<TransparentDrawCall> transparentDrawCalls;
 
-        // Static Meshes — collected from pre-extracted FramePacket into the batch builder for instanced dispatch
+        // Static Meshes â€” collected from pre-extracted FramePacket into the batch builder for instanced dispatch
         {
             IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshColor::BatchCollect");
 
@@ -1860,7 +1914,7 @@ namespace ignite
                         std::swap(uv0.x, uv1.x);
                     }
 
-                    // Find material if available (use frame cache — avoids repeated AssetManager map lookups)
+                    // Find material if available (use frame cache â€” avoids repeated AssetManager map lookups)
                     Ref<Material2D> mat2d = ResolveAsset<Material2D>(sprite.materialHandle);
 
                     // Render with Material2D
@@ -1884,16 +1938,25 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::2DPass::TextView");
 
+                const glm::mat4 camView = camera ? camera->GetView() : glm::mat4(1.0f);
+                const glm::vec3 camRight(camView[0][0], camView[1][0], camView[2][0]);
+                const glm::vec3 camUp(camView[0][1], camView[1][1], camView[2][1]);
+                const glm::vec3 camFwd = glm::cross(camRight, camUp);
+                glm::mat4 billboardRot(1.0f);
+                billboardRot[0] = glm::vec4(camRight, 0.0f);
+                billboardRot[1] = glm::vec4(camUp, 0.0f);
+                billboardRot[2] = glm::vec4(camFwd, 0.0f);
+
                 auto textView = m_Scene->registry->view<TransformComponent, RenderingComponent, TextComponent>();
                 for (entt::entity e : textView)
                 {
                     const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
-                    if (!rc.visible || text.fontHandle == AssetHandle(0) || text.text.empty())
+                    if (!rc.visible || text.screenSpace || text.text.empty())
                         continue;
 
                     const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
-                    auto font = ResolveAsset<Font>(text.fontHandle);
+                    Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
                     if (!font)
                         continue;
 
@@ -1910,7 +1973,11 @@ namespace ignite
                         }
                     }
 
-                    m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(), text.kerning, text.lineSpacing, objectID);
+                    const glm::mat4 worldMat = text.billboard
+                        ? (glm::translate(glm::mat4(1.0f), tr.world.translation) * billboardRot * glm::scale(glm::mat4(1.0f), tr.world.scale))
+                        : tr.world.GetMatrix();
+
+                    m_Renderer2D->DrawString(text.text, font, textColor, worldMat, text.kerning, text.lineSpacing, objectID, false, text.centerAlign);
                 }
             }
 
@@ -1934,81 +2001,163 @@ namespace ignite
         if (!m_Scene || !framebuffer)
             return;
 
-        // Set root widget
-        auto rootWidget = m_Scene->GetRootWidget();
-        if (!rootWidget)
-            return;
-
-        m_WidgetRenderer->SetActiveWidget(rootWidget);
-
         const uint32_t width = std::max(1u, framebuffer->GetWidth());
         const uint32_t height = std::max(1u, framebuffer->GetHeight());
-        if (m_WidgetRenderer->GetWidth() != width || m_WidgetRenderer->GetHeight() != height)
-        {
-            m_WidgetRenderer->Resize(width, height);
-        }
 
-        uint32_t mouseX = 0;
-        uint32_t mouseY = 0;
-        bool isHovered = false;
-        bool useOverride = false;
+        // Set root widget
+        if (auto rootWidget = m_Scene->GetRootWidget())
+        {
+            m_WidgetRenderer->SetActiveWidget(rootWidget);
 
-        // Check per-camera input map first
-        auto it = m_CameraInputStates.find(camera);
-        if (it != m_CameraInputStates.end() && it->second.useOverride)
-        {
-            mouseX = it->second.mouseX;
-            mouseY = it->second.mouseY;
-            isHovered = it->second.hovered;
-            useOverride = true;
-        }
-        else
-        {
-            // Fallback to legacy Editor/Gameplay mouse state
-            bool isGameCamera = false;
-            if (m_Scene)
+            if (m_WidgetRenderer->GetWidth() != width || m_WidgetRenderer->GetHeight() != height)
             {
-                if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+                m_WidgetRenderer->Resize(width, height);
+            }
+
+            uint32_t mouseX = 0;
+            uint32_t mouseY = 0;
+            bool isHovered = false;
+            bool useOverride = false;
+
+            // Check per-camera input map first
+            auto it = m_CameraInputStates.find(camera);
+            if (it != m_CameraInputStates.end() && it->second.useOverride)
+            {
+                mouseX = it->second.mouseX;
+                mouseY = it->second.mouseY;
+                isHovered = it->second.hovered;
+                useOverride = true;
+            }
+            else
+            {
+                // Fallback to legacy Editor/Gameplay mouse state
+                bool isGameCamera = false;
+                if (m_Scene)
                 {
-                    const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                    if (camera == &cc.camera)
+                    if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
                     {
-                        isGameCamera = true;
+                        const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                        if (camera == &cc.camera)
+                        {
+                            isGameCamera = true;
+                        }
+                    }
+                }
+
+                useOverride = isGameCamera ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
+                if (useOverride)
+                {
+                    mouseX = isGameCamera ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
+                    mouseY = isGameCamera ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
+                    isHovered = isGameCamera ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
+                }
+            }
+
+            if (useOverride)
+            {
+                if (isHovered)
+                {
+                    m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
+                }
+                else
+                {
+                    const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+                    m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
+                }
+            }
+            else
+            {
+                const glm::ivec2 mousePos = InputSystem::GetMousePosition();
+                m_WidgetRenderer->SetMousePosition(
+                    static_cast<uint32_t>(std::max(mousePos.x, 0)),
+                    static_cast<uint32_t>(std::max(mousePos.y, 0)));
+            }
+
+            m_WidgetRenderer->Update(0.0f);
+            m_WidgetRenderer->Render(cmd, framebuffer);
+        }
+
+        // Screen-space TextComponents and queued debug screen texts
+        if (m_ScreenTextRenderer2D && m_Scene->registry)
+        {
+            bool hasScreenItems = !m_Scene->GetDebugScreenTexts().empty();
+            if (!hasScreenItems)
+            {
+                auto textView = m_Scene->registry->view<TransformComponent, RenderingComponent, TextComponent>();
+                for (entt::entity e : textView)
+                {
+                    const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                    if (rc.visible && text.screenSpace && !text.text.empty())
+                    {
+                        hasScreenItems = true;
+                        break;
                     }
                 }
             }
 
-            useOverride = isGameCamera ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
-            if (useOverride)
+            if (hasScreenItems)
             {
-                mouseX = isGameCamera ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
-                mouseY = isGameCamera ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
-                isHovered = isGameCamera ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
-            }
-        }
+                if (!m_ScreenCameraBuffer)
+                {
+                    m_ScreenCameraBuffer = ConstantBuffer::Create(sizeof(CameraBufferData), false, 1, "[SceneRenderer] Screen Text Camera");
+                }
 
-        if (useOverride)
-        {
-            if (isHovered)
-            {
-                m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
-            }
-            else
-            {
-                const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
-                m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
-            }
-        }
-        else
-        {
-            const glm::ivec2 mousePos = InputSystem::GetMousePosition();
-            m_WidgetRenderer->SetMousePosition(
-                static_cast<uint32_t>(std::max(mousePos.x, 0)),
-                static_cast<uint32_t>(std::max(mousePos.y, 0)));
-        }
+                CameraBufferData screenCamData;
+                screenCamData.viewProjection = glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, -1.0f, 1.0f);
+                screenCamData.view = glm::mat4(1.0f);
+                screenCamData.position = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+                m_ScreenCameraBuffer->SetData(&screenCamData, sizeof(screenCamData));
 
-        m_WidgetRenderer->Update(0.0f);
-        m_WidgetRenderer->Render(cmd, framebuffer);
+                m_ScreenTextRenderer2D->Begin(cmd);
+
+                auto textView = m_Scene->registry->view<TransformComponent, RenderingComponent, TextComponent>();
+                for (entt::entity e : textView)
+                {
+                    const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                    if (!rc.visible || !text.screenSpace || text.text.empty())
+                        continue;
+
+                    Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
+                    if (!font || !font->GetAtlasTexture() || !font->GetAtlasTexture()->IsReady())
+                        continue;
+
+                    glm::vec4 textColor = text.color;
+                    if (text.material2dHandle != AssetHandle(0))
+                    {
+                        if (auto material2d = ResolveAsset<Material2D>(text.material2dHandle))
+                        {
+                            textColor = text.color + material2d->data.baseColor;
+                        }
+                    }
+
+                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                    const float pxSize = std::max(text.fontSize, 1.0f);
+                    const glm::mat4 screenTransform = glm::translate(glm::mat4(1.0f), glm::vec3(tr.world.translation.x, tr.world.translation.y, 0.0f))
+                        * glm::toMat4(tr.world.rotation)
+                        * glm::scale(glm::mat4(1.0f), glm::vec3(pxSize * tr.world.scale.x, pxSize * tr.world.scale.y, 1.0f));
+
+                    m_ScreenTextRenderer2D->DrawString(text.text, font, textColor, screenTransform, text.kerning, text.lineSpacing, objectID, true, text.centerAlign);
+                }
+
+                if (Ref<Font> debugFont = Renderer::GetDefaultFont(); debugFont && debugFont->GetAtlasTexture() && debugFont->GetAtlasTexture()->IsReady())
+                {
+                    for (const auto &item : m_Scene->GetDebugScreenTexts())
+                    {
+                        if (item.text.empty())
+                            continue;
+
+                        const float pxSize = std::max(item.fontSize, 4.0f);
+                        const glm::mat4 screenTransform = glm::translate(glm::mat4(1.0f), glm::vec3(item.position.x, item.position.y, 0.0f))
+                            * glm::scale(glm::mat4(1.0f), glm::vec3(pxSize, pxSize, 1.0f));
+
+                        m_ScreenTextRenderer2D->DrawString(item.text, debugFont, item.color, screenTransform, 0.0f, 0.0f, 0xFFFFFFFFu, true, item.center);
+                    }
+                }
+
+                m_ScreenTextRenderer2D->Flush(framebuffer, m_ScreenCameraBuffer->GetDescriptor(), false);
+                m_ScreenTextRenderer2D->End();
+            }
+        }
     }
 
     void SceneRenderer::DebugPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext)
@@ -2101,17 +2250,17 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!framebuffer)
+        if (!framebuffer || !m_DebugRenderer2D)
             return;
 
-        m_Renderer2D->Begin(cmd);
+        m_DebugRenderer2D->Begin(cmd);
 
         // 2D Physics debug draw
         const glm::vec4 kPhysicsDebugColor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
         constexpr int kCircleDebugSegments = 24;
         constexpr float kTwoPi = 6.28318530718f;
 
-        if (sceneRenderSettings.showPhysicsCollider)
+        if (m_FramePacket.drawDebug && sceneRenderSettings.showPhysicsCollider)
         {
             auto boxCollider2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, BoxCollider2DComponent>();
             for (entt::entity e : boxCollider2DView)
@@ -2131,10 +2280,10 @@ namespace ignite
                 const glm::vec4 c2 = world * glm::vec4(offset.x + halfExtents.x, offset.y + halfExtents.y, 0.0f, 1.0f);
                 const glm::vec4 c3 = world * glm::vec4(offset.x - halfExtents.x, offset.y + halfExtents.y, 0.0f, 1.0f);
 
-                m_Renderer2D->DrawLine(glm::vec3(c0), glm::vec3(c1), kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(glm::vec3(c1), glm::vec3(c2), kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(glm::vec3(c2), glm::vec3(c3), kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(glm::vec3(c3), glm::vec3(c0), kPhysicsDebugColor);
+                m_DebugRenderer2D->DrawLine(glm::vec3(c0), glm::vec3(c1), kPhysicsDebugColor);
+                m_DebugRenderer2D->DrawLine(glm::vec3(c1), glm::vec3(c2), kPhysicsDebugColor);
+                m_DebugRenderer2D->DrawLine(glm::vec3(c2), glm::vec3(c3), kPhysicsDebugColor);
+                m_DebugRenderer2D->DrawLine(glm::vec3(c3), glm::vec3(c0), kPhysicsDebugColor);
             }
 
             auto circleCollider2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, CircleCollider2DComponent>();
@@ -2160,19 +2309,19 @@ namespace ignite
                     const glm::vec3 p0 = centerWorld + glm::vec3(std::cos(t0) * scaledRadius, std::sin(t0) * scaledRadius, 0.0f);
                     const glm::vec3 p1 = centerWorld + glm::vec3(std::cos(t1) * scaledRadius, std::sin(t1) * scaledRadius, 0.0f);
 
-                    m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
+                    m_DebugRenderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
                 }
             }
         }
-        m_Renderer2D->Flush(framebuffer, frameContext->cameraBuffer);
-        m_Renderer2D->End();
+        m_DebugRenderer2D->Flush(framebuffer, frameContext->cameraBuffer);
+        m_DebugRenderer2D->End();
     }
 
     void SceneRenderer::DrawDebug3D(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!framebuffer || !m_Scene || !m_Scene->registry)
+        if (!framebuffer || !m_DebugRenderer2D || !m_Scene || !m_Scene->registry)
             return;
 
         const glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
@@ -2189,7 +2338,7 @@ namespace ignite
 
                     const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
                     const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                    m_Renderer2D->DrawLine(p0, p1, color);
+                    m_DebugRenderer2D->DrawLine(p0, p1, color);
                 }
             };
 
@@ -2202,19 +2351,23 @@ namespace ignite
 
                     const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
                     const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                    m_Renderer2D->DrawLine(p0, p1, color);
+                    m_DebugRenderer2D->DrawLine(p0, p1, color);
                 }
             };
 
         const glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
         const glm::vec4 boundsColor(0.7f, 0.2f, 0.8f, 1.0f);
 
-        if (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider)
+        const bool drawWireDebug = m_FramePacket.drawDebug && (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider);
+        const bool drawEntityNames = (m_FramePacket.drawDebug && sceneRenderSettings.showEntityNames) || m_Scene->showDebugEntityNames;
+        const bool hasQueuedDebug = !m_Scene->GetDebugWorldTexts().empty() || !m_Scene->GetDebugLines().empty();
+
+        if (drawWireDebug || drawEntityNames || hasQueuedDebug)
         {
-            m_Renderer2D->Begin(cmd);
+            m_DebugRenderer2D->Begin(cmd);
         }
 
-        if (sceneRenderSettings.showBoundingBox)
+        if (m_FramePacket.drawDebug && sceneRenderSettings.showBoundingBox)
         {
             // Draw bounding boxes
             for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>())
@@ -2222,7 +2375,7 @@ namespace ignite
                 const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
                 if (!rc.visible || smc.handle == AssetHandle(0))
                     continue;
-                m_Renderer2D->DrawAABB(smc.worldAABB, boundsColor);
+                m_DebugRenderer2D->DrawAABB(smc.worldAABB, boundsColor);
             }
 
             for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>())
@@ -2230,7 +2383,7 @@ namespace ignite
                 const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
                 if (!rc.visible || smc.handle == AssetHandle(0))
                     continue;
-                m_Renderer2D->DrawAABB(smc.worldAABB, boundsColor);
+                m_DebugRenderer2D->DrawAABB(smc.worldAABB, boundsColor);
             }
 
             for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>())
@@ -2250,14 +2403,14 @@ namespace ignite
                     AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
                     minPos = glm::min(minPos, worldBounds.min);
                     maxPos = glm::max(maxPos, worldBounds.max);
-                    m_Renderer2D->DrawAABB(worldBounds, { 0.9f, 0.9f, 0.9, 0.5f });
+                    m_DebugRenderer2D->DrawAABB(worldBounds, { 0.9f, 0.9f, 0.9, 0.5f });
                 }
 
-                m_Renderer2D->DrawAABB(AABB::FromMinMax(minPos, maxPos), boundsColor);
+                m_DebugRenderer2D->DrawAABB(AABB::FromMinMax(minPos, maxPos), boundsColor);
             }
         }
 
-        if (sceneRenderSettings.showPhysicsCollider)
+        if (m_FramePacket.drawDebug && sceneRenderSettings.showPhysicsCollider)
         {
             // Box Colliders
             for (entt::entity e : m_Scene->registry->view<TransformComponent, BoxColliderComponent>())
@@ -2271,7 +2424,7 @@ namespace ignite
                 const glm::mat4 boxTransform = glm::translate(glm::mat4(1.0f), centerWorld)
                     * glm::toMat4(tr.world.rotation)
                     * glm::scale(glm::mat4(1.0f), sizeWorld);
-                m_Renderer2D->DrawBox(boxTransform, colliderColor);
+                m_DebugRenderer2D->DrawBox(boxTransform, colliderColor);
             }
 
             // Sphere Colliders
@@ -2319,10 +2472,10 @@ namespace ignite
                 DrawCircleRing(bottomCenter, right, forward, kCircleSegments, colliderColor);
 
                 // Draw connecting lines between the top and bottom circles
-                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, colliderColor);
-                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, colliderColor);
-                m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, colliderColor);
-                m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter + forward, bottomCenter + forward, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter - forward, bottomCenter - forward, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter + right, bottomCenter + right, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter - right, bottomCenter - right, colliderColor);
 
                 // Draw arcs to represent the rounded ends of the capsule
                 DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, colliderColor);
@@ -2356,10 +2509,10 @@ namespace ignite
                 DrawCircleRing(bottomCenter, right, forward, kCircleSegments, colliderColor);
 
                 // Draw connecting lines between the top and bottom circles
-                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, colliderColor);
-                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, colliderColor);
-                m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, colliderColor);
-                m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter + forward, bottomCenter + forward, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter - forward, bottomCenter - forward, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter + right, bottomCenter + right, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter - right, bottomCenter - right, colliderColor);
 
                 // Draw arcs to represent the rounded ends of the capsule
                 DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, colliderColor);
@@ -2384,14 +2537,14 @@ namespace ignite
                 glm::vec3 p2 = glm::vec3(planeMat * glm::vec4(0.5f * scaleWorld.x, 0.0f, 0.5f * scaleWorld.z, 1.0f));
                 glm::vec3 p3 = glm::vec3(planeMat * glm::vec4(-0.5f * scaleWorld.x, 0.0f, 0.5f * scaleWorld.z, 1.0f));
 
-                m_Renderer2D->DrawLine(p0, p1, colliderColor);
-                m_Renderer2D->DrawLine(p1, p2, colliderColor);
-                m_Renderer2D->DrawLine(p2, p3, colliderColor);
-                m_Renderer2D->DrawLine(p3, p0, colliderColor);
+                m_DebugRenderer2D->DrawLine(p0, p1, colliderColor);
+                m_DebugRenderer2D->DrawLine(p1, p2, colliderColor);
+                m_DebugRenderer2D->DrawLine(p2, p3, colliderColor);
+                m_DebugRenderer2D->DrawLine(p3, p0, colliderColor);
 
                 glm::vec3 normStart = centerWorld;
                 glm::vec3 normEnd = centerWorld + (tr.world.rotation * glm::vec3(0.0f, 1.0f, 0.0f));
-                m_Renderer2D->DrawLine(normStart, normEnd, colliderColor);
+                m_DebugRenderer2D->DrawLine(normStart, normEnd, colliderColor);
             }
 
             // Mesh Colliders
@@ -2414,14 +2567,14 @@ namespace ignite
                         glm::vec3 v1 = glm::vec3(meshMat * glm::vec4(mc.vertices[mc.indices[i + 1]], 1.0f));
                         glm::vec3 v2 = glm::vec3(meshMat * glm::vec4(mc.vertices[mc.indices[i + 2]], 1.0f));
 
-                        m_Renderer2D->DrawLine(v0, v1, colliderColor);
-                        m_Renderer2D->DrawLine(v1, v2, colliderColor);
-                        m_Renderer2D->DrawLine(v2, v0, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v0, v1, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v1, v2, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v2, v0, colliderColor);
                     }
                 }
                 else
                 {
-                    m_Renderer2D->DrawBox(meshMat, colliderColor);
+                    m_DebugRenderer2D->DrawBox(meshMat, colliderColor);
                 }
             }
 
@@ -2455,11 +2608,11 @@ namespace ignite
                         glm::vec3 v01 = getPos(x, nextZ);
                         glm::vec3 v11 = getPos(nextX, nextZ);
 
-                        m_Renderer2D->DrawLine(v00, v10, colliderColor);
-                        m_Renderer2D->DrawLine(v00, v01, colliderColor);
-                        m_Renderer2D->DrawLine(v10, v01, colliderColor);
-                        m_Renderer2D->DrawLine(v10, v11, colliderColor);
-                        m_Renderer2D->DrawLine(v01, v11, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v00, v10, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v00, v01, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v10, v01, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v10, v11, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v01, v11, colliderColor);
                     }
                 }
             }
@@ -2497,11 +2650,11 @@ namespace ignite
                         glm::vec3 v01 = getPos(x, nextZ);
                         glm::vec3 v11 = getPos(nextX, nextZ);
 
-                        m_Renderer2D->DrawLine(v00, v10, colliderColor);
-                        m_Renderer2D->DrawLine(v00, v01, colliderColor);
-                        m_Renderer2D->DrawLine(v10, v01, colliderColor);
-                        m_Renderer2D->DrawLine(v10, v11, colliderColor);
-                        m_Renderer2D->DrawLine(v01, v11, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v00, v10, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v00, v01, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v10, v01, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v10, v11, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v01, v11, colliderColor);
                     }
                 }
             }
@@ -2547,12 +2700,12 @@ namespace ignite
 
                 // Draw marker at anchorA
                 constexpr float markerSize = 0.12f;
-                m_Renderer2D->DrawLine(anchorA - glm::vec3(markerSize, 0.0f, 0.0f), anchorA + glm::vec3(markerSize, 0.0f, 0.0f), jointColor);
-                m_Renderer2D->DrawLine(anchorA - glm::vec3(0.0f, markerSize, 0.0f), anchorA + glm::vec3(0.0f, markerSize, 0.0f), jointColor);
-                m_Renderer2D->DrawLine(anchorA - glm::vec3(0.0f, 0.0f, markerSize), anchorA + glm::vec3(0.0f, 0.0f, markerSize), jointColor);
+                m_DebugRenderer2D->DrawLine(anchorA - glm::vec3(markerSize, 0.0f, 0.0f), anchorA + glm::vec3(markerSize, 0.0f, 0.0f), jointColor);
+                m_DebugRenderer2D->DrawLine(anchorA - glm::vec3(0.0f, markerSize, 0.0f), anchorA + glm::vec3(0.0f, markerSize, 0.0f), jointColor);
+                m_DebugRenderer2D->DrawLine(anchorA - glm::vec3(0.0f, 0.0f, markerSize), anchorA + glm::vec3(0.0f, 0.0f, markerSize), jointColor);
 
                 // Line from entity A origin to anchor A
-                m_Renderer2D->DrawLine(trA.world.translation, anchorA, jointColor);
+                m_DebugRenderer2D->DrawLine(trA.world.translation, anchorA, jointColor);
 
                 // Connected entity visualization
                 if (jointComp.connectedEntity != UUID(0))
@@ -2569,22 +2722,22 @@ namespace ignite
                                 : d.localAnchorB;
                         }
 
-                        m_Renderer2D->DrawLine(anchorA, anchorB, linkColor);
-                        m_Renderer2D->DrawLine(anchorB, trB.world.translation, linkColor);
+                        m_DebugRenderer2D->DrawLine(anchorA, anchorB, linkColor);
+                        m_DebugRenderer2D->DrawLine(anchorB, trB.world.translation, linkColor);
                     }
                 }
 
                 // Joint-type specific gizmos
                 if (d.type == physics::JointType::Hinge)
                 {
-                    m_Renderer2D->DrawLine(anchorA - axisA * 0.35f, anchorA + axisA * 0.35f, axisColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + normalA * 0.3f, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA - axisA * 0.35f, anchorA + axisA * 0.35f, axisColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + normalA * 0.3f, jointColor);
                     if (d.enableLimits)
                     {
                         const glm::vec3 minDir = glm::angleAxis(glm::radians(d.limitsMin), axisA) * normalA;
                         const glm::vec3 maxDir = glm::angleAxis(glm::radians(d.limitsMax), axisA) * normalA;
-                        m_Renderer2D->DrawLine(anchorA, anchorA + minDir * 0.3f, linkColor);
-                        m_Renderer2D->DrawLine(anchorA, anchorA + maxDir * 0.3f, linkColor);
+                        m_DebugRenderer2D->DrawLine(anchorA, anchorA + minDir * 0.3f, linkColor);
+                        m_DebugRenderer2D->DrawLine(anchorA, anchorA + maxDir * 0.3f, linkColor);
                     }
                 }
                 else if (d.type == physics::JointType::Slider)
@@ -2593,9 +2746,9 @@ namespace ignite
                     const float maxLim = d.enableLimits ? d.limitsMax : 0.5f;
                     const glm::vec3 pMin = anchorA + axisA * minLim;
                     const glm::vec3 pMax = anchorA + axisA * maxLim;
-                    m_Renderer2D->DrawLine(pMin, pMax, axisColor);
-                    m_Renderer2D->DrawLine(pMin - normalA * 0.1f, pMin + normalA * 0.1f, jointColor);
-                    m_Renderer2D->DrawLine(pMax - normalA * 0.1f, pMax + normalA * 0.1f, jointColor);
+                    m_DebugRenderer2D->DrawLine(pMin, pMax, axisColor);
+                    m_DebugRenderer2D->DrawLine(pMin - normalA * 0.1f, pMin + normalA * 0.1f, jointColor);
+                    m_DebugRenderer2D->DrawLine(pMax - normalA * 0.1f, pMax + normalA * 0.1f, jointColor);
                 }
                 else if (d.type == physics::JointType::Cone)
                 {
@@ -2606,19 +2759,103 @@ namespace ignite
                     const glm::vec3 r1 = glm::angleAxis(-halfAngleRad, normalA) * axisA;
                     const glm::vec3 r2 = glm::angleAxis(halfAngleRad, biNormalA) * axisA;
                     const glm::vec3 r3 = glm::angleAxis(-halfAngleRad, biNormalA) * axisA;
-                    m_Renderer2D->DrawLine(anchorA, anchorA + axisA * coneLen, axisColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + r0 * coneLen, jointColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + r1 * coneLen, jointColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + r2 * coneLen, jointColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + r3 * coneLen, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + axisA * coneLen, axisColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + r0 * coneLen, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + r1 * coneLen, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + r2 * coneLen, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + r3 * coneLen, jointColor);
                 }
             }
         }
 
-        if (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider)
+        for (const auto &line : m_Scene->GetDebugLines())
         {
-            m_Renderer2D->Flush(framebuffer, frameContext->cameraBuffer);
-            m_Renderer2D->End();
+            m_DebugRenderer2D->DrawLine(line.p0, line.p1, line.color);
+        }
+
+        if (drawEntityNames || !m_Scene->GetDebugWorldTexts().empty())
+        {
+            Ref<Font> debugFont = Renderer::GetDefaultFont();
+            if (debugFont && debugFont->GetAtlasTexture() && debugFont->GetAtlasTexture()->IsReady())
+            {
+                const glm::mat4 camView = camera ? camera->GetView() : glm::mat4(1.0f);
+                const glm::vec3 camRight(camView[0][0], camView[1][0], camView[2][0]);
+                const glm::vec3 camUp(camView[0][1], camView[1][1], camView[2][1]);
+                const glm::vec3 camFwd = glm::cross(camRight, camUp);
+                glm::mat4 billboardRot(1.0f);
+                billboardRot[0] = glm::vec4(camRight, 0.0f);
+                billboardRot[1] = glm::vec4(camUp, 0.0f);
+                billboardRot[2] = glm::vec4(camFwd, 0.0f);
+                const glm::vec3 camPos = camera ? camera->position : glm::vec3(0.0f);
+
+                if (drawEntityNames)
+                {
+                    for (entt::entity e : m_Scene->registry->view<IDComponent, TransformComponent>())
+                    {
+                        if (const auto *rc = m_Scene->registry->try_get<RenderingComponent>(e); rc && !rc->visible)
+                            continue;
+                        if (const auto *cam = m_Scene->registry->try_get<CameraComponent>(e); cam && cam->primary)
+                            continue;
+                        if (m_Scene->registry->any_of<TextComponent>(e))
+                            continue;
+
+                        const auto &[id, tr] = m_Scene->registry->get<IDComponent, TransformComponent>(e);
+                        if (id.name.empty())
+                            continue;
+
+                        glm::vec3 labelPos = tr.world.translation + glm::vec3(0.0f, 0.5f, 0.0f);
+                        glm::vec4 labelColor(0.92f, 0.94f, 0.98f, 0.95f);
+
+                        if (const auto *smc = m_Scene->registry->try_get<StaticMeshComponent>(e); smc && smc->handle != AssetHandle(0))
+                        {
+                            labelPos = glm::vec3((smc->worldAABB.min.x + smc->worldAABB.max.x) * 0.5f, smc->worldAABB.max.y + 0.3f, (smc->worldAABB.min.z + smc->worldAABB.max.z) * 0.5f);
+                        }
+                        if (const auto *skc = m_Scene->registry->try_get<SkeletalMeshComponent>(e); skc && skc->handle != AssetHandle(0))
+                        {
+                            labelPos = glm::vec3((skc->worldAABB.min.x + skc->worldAABB.max.x) * 0.5f, skc->worldAABB.max.y + 0.35f, (skc->worldAABB.min.z + skc->worldAABB.max.z) * 0.5f);
+                            labelColor = glm::vec4(1.0f, 0.86f, 0.35f, 1.0f);
+                        }
+                        if (const auto *cc = m_Scene->registry->try_get<CharacterControllerComponent>(e))
+                        {
+                            labelPos = tr.world.translation + glm::vec3(0.0f, cc->height * 0.5f + 0.55f, 0.0f);
+                            labelColor = glm::vec4(0.35f, 0.95f, 1.0f, 1.0f);
+                        }
+                        else if (const auto *rb = m_Scene->registry->try_get<RigidbodyComponent>(e); rb && rb->bodyType == physics::BodyType::Dynamic)
+                        {
+                            labelColor = glm::vec4(0.45f, 1.0f, 0.55f, 1.0f);
+                        }
+
+                        const float dist = glm::distance(camPos, labelPos);
+                        if (dist > 60.0f)
+                            continue;
+
+                        const float textScale = glm::clamp(dist * 0.03f, 0.24f, 0.85f);
+                        const glm::mat4 mat = glm::translate(glm::mat4(1.0f), labelPos)
+                            * billboardRot
+                            * glm::scale(glm::mat4(1.0f), glm::vec3(textScale));
+
+                        m_DebugRenderer2D->DrawString(id.name, debugFont, labelColor, mat, 0.0f, 0.0f, 0xFFFFFFFFu, false, true);
+                    }
+                }
+
+                for (const auto &item : m_Scene->GetDebugWorldTexts())
+                {
+                    if (item.text.empty())
+                        continue;
+
+                    const glm::mat4 mat = item.billboard
+                        ? (glm::translate(glm::mat4(1.0f), item.position) * billboardRot * glm::scale(glm::mat4(1.0f), glm::vec3(item.scale)))
+                        : (glm::translate(glm::mat4(1.0f), item.position) * glm::scale(glm::mat4(1.0f), glm::vec3(item.scale)));
+
+                    m_DebugRenderer2D->DrawString(item.text, debugFont, item.color, mat, 0.0f, 0.0f, 0xFFFFFFFFu, false, item.center);
+                }
+            }
+        }
+
+        if (drawWireDebug || drawEntityNames || hasQueuedDebug)
+        {
+            m_DebugRenderer2D->Flush(framebuffer, frameContext->cameraBuffer, true);
+            m_DebugRenderer2D->End();
         }
     }
 
@@ -3538,10 +3775,10 @@ namespace ignite
                     continue;
 
                 const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
-                if (!rc.visible || text.fontHandle == AssetHandle(0) || text.text.empty())
+                if (!rc.visible || text.screenSpace || text.text.empty())
                     continue;
 
-                auto font = ResolveAsset<Font>(text.fontHandle);
+                Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
                 if (!font)
                     continue;
 
@@ -3832,7 +4069,7 @@ namespace ignite
         return bindingSet;
     }
 
-    // FlushOpaqueBatches — dispatch all opaque static mesh batches as instanced draws.
+    // FlushOpaqueBatches â€” dispatch all opaque static mesh batches as instanced draws.
     // Each DrawBatch contains N instances sharing the same vertex buffer, index buffer,
     // material binding set, and PSO. The object indices are uploaded to the
     // InstanceIndexBuffer and referenced via push constant base offset.
@@ -3914,7 +4151,7 @@ namespace ignite
     }
 
     // ---------------------------------------------------------------------------
-    // FlushShadowBatches — dispatch all CSM shadow batches as instanced draws.
+    // FlushShadowBatches â€” dispatch all CSM shadow batches as instanced draws.
     // Similar to FlushOpaqueBatches but uses the CSM framebuffer and no material
     // binding set (shadow pass only writes depth).
     // ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ namespace ignite
     class Material;
     class Shader;
     class ConstantBuffer;
+    class Font;
 
     enum class EBindingLayout
     {
@@ -107,6 +108,7 @@ namespace ignite
         static Ref<Texture> GetBlackUIntTexture();
 
         static Ref<Material> GetDefaultMaterial();
+        static Ref<Font> GetDefaultFont();
 
         static Ref<StaticMesh> GetDefaultMesh(EMeshType type);
         static AssetHandle GetDefaultMeshHandle(EMeshType type);
@@ -138,6 +140,7 @@ namespace ignite
         Ref<Texture> m_MagentaTexture;
         Ref<Texture> m_BlackUIntTexture;
         Ref<Material> m_DefaultMaterial;
+        Ref<Font> m_DefaultFont;
 
         std::vector<std::function<void(nri::CommandBuffer *)>> m_SubmitFuncs;
         std::vector<FrameContext> m_Frames; // Triple buffering

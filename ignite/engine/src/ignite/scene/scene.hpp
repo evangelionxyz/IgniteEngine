@@ -59,6 +59,33 @@ namespace ignite
         Client,
     };
 
+    struct DebugTextWorldItem
+    {
+        glm::vec3 position = glm::vec3(0.0f);
+        std::string text;
+        glm::vec4 color = glm::vec4(1.0f);
+        float scale = 0.35f;
+        bool billboard = true;
+        bool center = true;
+        bool depthTest = true;
+    };
+
+    struct DebugTextScreenItem
+    {
+        glm::vec2 position = glm::vec2(0.0f);
+        std::string text;
+        glm::vec4 color = glm::vec4(1.0f);
+        float fontSize = 20.0f;
+        bool center = false;
+    };
+
+    struct DebugLineItem
+    {
+        glm::vec3 p0 = glm::vec3(0.0f);
+        glm::vec3 p1 = glm::vec3(0.0f);
+        glm::vec4 color = glm::vec4(0.2f, 0.9f, 0.4f, 1.0f);
+    };
+
     class IGN_API Scene final : public Asset
     {
     public:
@@ -135,6 +162,20 @@ namespace ignite
         void PreloadReferencedAssets();
 
         float timeInSeconds = 0.0f;
+        bool showDebugEntityNames = false;
+
+        void AddDebugTextWorld(const DebugTextWorldItem &item) { m_DebugWorldTexts.push_back(item); }
+        void AddDebugTextScreen(const DebugTextScreenItem &item) { m_DebugScreenTexts.push_back(item); }
+        void AddDebugLine(const DebugLineItem &item) { m_DebugLines.push_back(item); }
+        void ClearDebugDraw()
+        {
+            m_DebugWorldTexts.clear();
+            m_DebugScreenTexts.clear();
+            m_DebugLines.clear();
+        }
+        const std::vector<DebugTextWorldItem> &GetDebugWorldTexts() const { return m_DebugWorldTexts; }
+        const std::vector<DebugTextScreenItem> &GetDebugScreenTexts() const { return m_DebugScreenTexts; }
+        const std::vector<DebugLineItem> &GetDebugLines() const { return m_DebugLines; }
 
         static AssetType GetStaticType() { return AssetType::Scene; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
@@ -164,6 +205,10 @@ namespace ignite
         std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;
         ENetMode m_NetMode = ENetMode::Standalone;
         std::unordered_map<uint64_t, entt::entity> m_NetEntities;
+
+        std::vector<DebugTextWorldItem> m_DebugWorldTexts;
+        std::vector<DebugTextScreenItem> m_DebugScreenTexts;
+        std::vector<DebugLineItem> m_DebugLines;
 
         friend class SceneManager;
     };

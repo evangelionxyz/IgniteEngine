@@ -54,9 +54,9 @@ namespace ignite
         ~Renderer2D();
 
         void Begin(nri::CommandBuffer *cmd);
-        void Flush(RenderTarget *framebuffer, nri::Descriptor *cameraBuffer);
-        void Flush(RenderTarget *framebuffer, const ConstantBuffer &cameraBuffer) { Flush(framebuffer, cameraBuffer.GetDescriptor()); }
-        void Flush(RenderTarget *framebuffer, const Ref<ConstantBuffer> &cameraBuffer) { Flush(framebuffer, cameraBuffer ? cameraBuffer->GetDescriptor() : nullptr); }
+        void Flush(RenderTarget *framebuffer, nri::Descriptor *cameraBuffer, bool depthTest = true);
+        void Flush(RenderTarget *framebuffer, const ConstantBuffer &cameraBuffer, bool depthTest = true) { Flush(framebuffer, cameraBuffer.GetDescriptor(), depthTest); }
+        void Flush(RenderTarget *framebuffer, const Ref<ConstantBuffer> &cameraBuffer, bool depthTest = true) { Flush(framebuffer, cameraBuffer ? cameraBuffer->GetDescriptor() : nullptr, depthTest); }
 
         void FlushSelect(RenderTarget *framebuffer, nri::Descriptor *cameraBuffer);
         void FlushSelect(RenderTarget *framebuffer, const ConstantBuffer &cameraBuffer) { FlushSelect(framebuffer, cameraBuffer.GetDescriptor()); }
@@ -85,7 +85,7 @@ namespace ignite
 
         void SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights);
 
-        void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID = 0xFFFFFFFFu);
+        void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID = 0xFFFFFFFFu, bool flipY = false, bool centerAlign = false);
 
         void BuildPreRenderCache();
         bool ReplayPreRenderCache(nri::CommandBuffer *cmd, RenderTarget *framebuffer, nri::Descriptor *cameraBuffer);
@@ -113,7 +113,7 @@ namespace ignite
 
     private:
         Ref<GraphicsPipeline> GetQuadPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
-        Ref<GraphicsPipeline> GetTextPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
+        Ref<GraphicsPipeline> GetTextPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode, bool depthTest = true);
         Ref<GraphicsPipeline> GetCirclePipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode);
         Ref<GraphicsPipeline> GetLinePipelineForFB(RenderTarget *framebuffer);
 
@@ -140,6 +140,7 @@ namespace ignite
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CirclePSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextOverlayPSOCache;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadSelectPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CircleSelectPSOCache;

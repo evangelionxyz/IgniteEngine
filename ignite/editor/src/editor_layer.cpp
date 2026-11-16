@@ -2648,6 +2648,7 @@ namespace ignite
             {
                 UI::DrawCheckbox("Bounding Box", &renderSettings.showBoundingBox);
                 UI::DrawCheckbox("Physics Collider", &renderSettings.showPhysicsCollider);
+                UI::DrawCheckbox("Entity Names", &renderSettings.showEntityNames);
                 ImGui::TreePop();
             }
 

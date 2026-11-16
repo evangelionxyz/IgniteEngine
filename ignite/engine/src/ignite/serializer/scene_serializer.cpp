@@ -895,7 +895,10 @@ namespace ignite
                 c["color"] = { comp.color.r, comp.color.g, comp.color.b, comp.color.a };
                 c["kerning"] = comp.kerning;
                 c["lineSpacing"] = comp.lineSpacing;
+                c["fontSize"] = comp.fontSize;
                 c["screenSpace"] = comp.screenSpace;
+                c["billboard"] = comp.billboard;
+                c["centerAlign"] = comp.centerAlign;
                 entry.components.push_back(c);
             }
 

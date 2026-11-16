@@ -10,6 +10,10 @@
 #include "ignite/scene/component.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/asset/asset_types.hpp"
+#include "ignite/project/project.hpp"
+#include "ignite/serializer/scene_serializer.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
+#include "ignite/animation/skeleton.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -314,5 +318,169 @@ TEST(LuaScriptAsset, AssetManagerAndAssetHandleIntegration)
     EXPECT_EQ(component.scriptPath, scriptPath);
 
     std::filesystem::remove(scriptPath);
+}
+
+TEST(LuaScriptRuntime, TextAndDebugOverlayBindingsAndSerialization)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_text_debug", R"lua(
+        local script = {}
+        function script.on_create(entity)
+            local tx = entity:get_component("Text")
+            tx.text = "World Sign Label"
+            tx.font_size = 32.0
+            tx.billboard = true
+            tx.center_align = true
+            tx.screen_space = true
+            tx.kerning = 1.5
+            tx.line_spacing = 1.25
+            tx.color = Ignite.Vec4(0.2, 0.8, 1.0, 0.9)
+
+            Ignite.Debug.SetShowEntityNames(true)
+            Ignite.Debug.DrawTextWorld(Ignite.Vec3(1.0, 2.0, 3.0), entity:get_name(), Ignite.Vec4(1, 1, 0, 1), 0.35, true, true)
+            Ignite.Debug.DrawTextScreen(40.0, 80.0, "Screen Telemetry", Ignite.Vec4(0, 1, 0.5, 1), 20.0, true)
+            Ignite.Debug.DrawLine(Ignite.Vec3(0, 0, 0), Ignite.Vec3(0, 5, 0), Ignite.Vec4(1, 0, 0, 1))
+        end
+        return script
+    )lua");
+
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "IgniteLuaTextSerializeTest";
+    std::error_code ec;
+    std::filesystem::remove_all(tempDir, ec);
+    std::filesystem::create_directories(tempDir, ec);
+
+    {
+        ProjectInfo info;
+        info.name = "TextSerializeTest";
+        info.rootDirectory = tempDir;
+        info.filepath = tempDir / "Test.ixproj";
+        info.assetDirectory = "Assets";
+        Ref<Project> proj = Project::Create(info);
+        Ref<Scene> scene = CreateRef<Scene>(proj.get());
+
+        Entity label = SceneManager::CreateEntity(scene.get(), "SignEntity", EntityType_Node);
+        label.AddComponent<TextComponent>();
+        label.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
+
+        {
+            lua::ScriptRuntime runtime(scene.get());
+            runtime.CreateInstance(label.GetUUID(), scriptPath);
+
+            const auto &tx = label.GetComponent<TextComponent>();
+            EXPECT_EQ(tx.text, "World Sign Label");
+            EXPECT_FLOAT_EQ(tx.fontSize, 32.0f);
+            EXPECT_TRUE(tx.billboard);
+            EXPECT_TRUE(tx.centerAlign);
+            EXPECT_TRUE(tx.screenSpace);
+            EXPECT_FLOAT_EQ(tx.kerning, 1.5f);
+            EXPECT_FLOAT_EQ(tx.lineSpacing, 1.25f);
+            EXPECT_FLOAT_EQ(tx.color.r, 0.2f);
+            EXPECT_FLOAT_EQ(tx.color.g, 0.8f);
+            EXPECT_FLOAT_EQ(tx.color.b, 1.0f);
+            EXPECT_FLOAT_EQ(tx.color.a, 0.9f);
+
+            EXPECT_TRUE(scene->showDebugEntityNames);
+            ASSERT_EQ(scene->GetDebugWorldTexts().size(), 1u);
+            EXPECT_EQ(scene->GetDebugWorldTexts()[0].text, "SignEntity");
+            EXPECT_TRUE(scene->GetDebugWorldTexts()[0].billboard);
+            EXPECT_TRUE(scene->GetDebugWorldTexts()[0].center);
+            ASSERT_EQ(scene->GetDebugScreenTexts().size(), 1u);
+            EXPECT_EQ(scene->GetDebugScreenTexts()[0].text, "Screen Telemetry");
+            EXPECT_FLOAT_EQ(scene->GetDebugScreenTexts()[0].fontSize, 20.0f);
+            EXPECT_TRUE(scene->GetDebugScreenTexts()[0].center);
+            ASSERT_EQ(scene->GetDebugLines().size(), 1u);
+
+            scene->ClearDebugDraw();
+            EXPECT_TRUE(scene->GetDebugWorldTexts().empty());
+            EXPECT_TRUE(scene->GetDebugScreenTexts().empty());
+            EXPECT_TRUE(scene->GetDebugLines().empty());
+        }
+
+        const std::filesystem::path scenePath = tempDir / "TextTest.ixscene";
+        SceneSerializer serializer(scene, proj.get());
+        ASSERT_TRUE(serializer.Serialize(scenePath));
+
+        Ref<Scene> loaded = SceneSerializer::Deserialize(scenePath, proj.get());
+        ASSERT_NE(loaded, nullptr);
+        Entity found;
+        auto view = loaded->registry->view<IDComponent>();
+        for (entt::entity e : view)
+        {
+            if (view.get<IDComponent>(e).name == "SignEntity")
+            {
+                found = Entity{ e, loaded.get() };
+                break;
+            }
+        }
+        ASSERT_TRUE(found.IsValid());
+        ASSERT_TRUE(found.HasComponent<TextComponent>());
+        const auto &loadedTx = found.GetComponent<TextComponent>();
+        EXPECT_EQ(loadedTx.text, "World Sign Label");
+        EXPECT_FLOAT_EQ(loadedTx.fontSize, 32.0f);
+        EXPECT_TRUE(loadedTx.billboard);
+        EXPECT_TRUE(loadedTx.centerAlign);
+        EXPECT_TRUE(loadedTx.screenSpace);
+    }
+
+    std::filesystem::remove(scriptPath, ec);
+    std::filesystem::remove_all(tempDir, ec);
+}
+
+TEST(LuaScriptRuntime, SkeletalAnimatorAndCharacterRotationBindings)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_skel_cc", R"lua(
+        local script = {}
+        function script.on_create(entity)
+            local cc = entity:get_component("CharacterController")
+            cc:set_rotation(Ignite.Vec3(0.0, 90.0, 0.0))
+
+            local skel = entity:get_component("SkeletalMesh")
+            skel.unique_animator = true
+            skel:set_float("Speed", 8.5)
+            skel:set_bool("IsGrounded", false)
+            skel:set_int("EmoteId", 2)
+            skel:play_state("Jump")
+
+            assert(math.abs(skel:get_float("Speed") - 8.5) < 0.001)
+            assert(skel:get_bool("IsGrounded") == false)
+            assert(skel:get_int("EmoteId") == 2)
+            assert(skel.current_state == "Jump")
+        end
+        return script
+    )lua");
+
+    Scene scene;
+    Entity bot = SceneManager::CreateEntity(&scene, "AnimBot", EntityType_Node);
+    bot.AddComponent<CharacterControllerComponent>();
+    auto &smc = bot.AddComponent<SkeletalMeshComponent>();
+    smc.uniqueAnimator = true;
+    smc.currentStateName = "Idle";
+
+    bot.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
+
+    {
+        lua::ScriptRuntime runtime(&scene);
+        runtime.CreateInstance(bot.GetUUID(), scriptPath);
+
+        // Verify CharacterController rotation update fell through to transform
+        const glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(bot.GetComponent<TransformComponent>().local.rotation));
+        EXPECT_NEAR(eulerDeg.y, 90.0f, 1.0f);
+
+        // Verify SkeletalMeshComponent runtimeParams and current state triggered by Lua
+        const auto *speedParam = Animator::FindAnimParam(smc.runtimeParams, "Speed");
+        ASSERT_NE(speedParam, nullptr);
+        EXPECT_FLOAT_EQ(speedParam->floatVal, 8.5f);
+        const auto *groundedParam = Animator::FindAnimParam(smc.runtimeParams, "IsGrounded");
+        ASSERT_NE(groundedParam, nullptr);
+        EXPECT_FALSE(groundedParam->boolVal);
+        const auto *emoteParam = Animator::FindAnimParam(smc.runtimeParams, "EmoteId");
+        ASSERT_NE(emoteParam, nullptr);
+        EXPECT_EQ(emoteParam->intVal, 2);
+
+        EXPECT_EQ(smc.currentStateName, "Jump");
+        EXPECT_FALSE(smc.isTransitioning);
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(scriptPath, ec);
 }
 
