@@ -31,6 +31,17 @@ namespace ignite
     static constexpr uint32_t s_BatchShrinkThresholdPercent = 30;
     static constexpr uint32_t s_BatchShrinkFrameThreshold = 300;
 
+    static std::vector<Ref<VertexBuffer>> s_RetiredVertexBuffers;
+    static std::vector<Ref<IndexBuffer>> s_RetiredIndexBuffers;
+    static std::mutex s_RetiredBuffersMutex;
+
+    void Renderer2D::ClearRetiredBuffers()
+    {
+        std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
+        s_RetiredVertexBuffers.clear();
+        s_RetiredIndexBuffers.clear();
+    }
+
     template<typename VertexType>
     static void ResizeBatch(BatchRender<VertexType> &batch, uint32_t newMaxCount, bool recreateIndexBuffer, nri::CommandBuffer *)
     {
@@ -58,9 +69,15 @@ namespace ignite
         const size_t verticesAllocSize = static_cast<size_t>(batch.maxVertices) * sizeof(VertexType);
         const size_t indicesAllocSize = static_cast<size_t>(batch.maxIndices) * sizeof(uint32_t);
 
-        if (batch.vertexBuffer || batch.indexBuffer)
+        if (batch.vertexBuffer)
         {
-            GPUUploadSync::DeviceWaitIdle();
+            std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
+            s_RetiredVertexBuffers.push_back(batch.vertexBuffer);
+        }
+        if (batch.indexBuffer && recreateIndexBuffer && batch.indicesPerObject > 0)
+        {
+            std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
+            s_RetiredIndexBuffers.push_back(batch.indexBuffer);
         }
 
         batch.vertexBuffer = VertexBuffer::Create(verticesAllocSize);
@@ -370,7 +387,7 @@ namespace ignite
 
     void Renderer2D::InitQuadData()
     {
-        m_QuadBatch.minCount = 32;
+        m_QuadBatch.minCount = 4096;
         m_QuadBatch.maxCount = m_QuadBatch.minCount;
         m_QuadBatch.verticesPerObject = 4;
         m_QuadBatch.indicesPerObject = 6;
@@ -418,7 +435,7 @@ namespace ignite
 
     void Renderer2D::InitLineData()
     {
-        m_LineBatch.minCount = 32;
+        m_LineBatch.minCount = 8192;
         m_LineBatch.maxCount = m_LineBatch.minCount;
         m_LineBatch.verticesPerObject = 24;
         m_LineBatch.indicesPerObject = 0;
@@ -434,7 +451,7 @@ namespace ignite
 
     void Renderer2D::InitCircleData()
     {
-        m_CircleBatch.minCount = 32;
+        m_CircleBatch.minCount = 1024;
         m_CircleBatch.maxCount = m_CircleBatch.minCount;
         m_CircleBatch.verticesPerObject = 4;
         m_CircleBatch.indicesPerObject = 6;
@@ -472,7 +489,7 @@ namespace ignite
 
     void Renderer2D::InitTextData()
     {
-        m_TextBatch.minCount = 512;
+        m_TextBatch.minCount = 8192;
         m_TextBatch.maxCount = m_TextBatch.minCount;
         m_TextBatch.verticesPerObject = 4;
         m_TextBatch.indicesPerObject = 6;
@@ -513,6 +530,8 @@ namespace ignite
     void Renderer2D::ClearPipelineCache()
     {
         IGN_PROFILE_FUNCTION();
+
+        ClearRetiredBuffers();
 
         m_LinePSOCache.clear();
         m_QuadPSOCache.clear();
@@ -1342,9 +1361,6 @@ namespace ignite
         if (it != m_QuadPSOCache.end())
             return it->second;
 
-        m_QuadPSOCache.clear();
-        m_QuadBindingSetCache.clear();
-
         bool hasDepthAttachment = framebuffer->HasDepthAttachment();
 
         GraphicsPipelineParams params;
@@ -1386,9 +1402,6 @@ namespace ignite
         auto it = cache.find(key);
         if (it != cache.end())
             return it->second;
-
-        cache.clear();
-        m_TextBindingSetCache.clear();
 
         const bool useDepth = depthTest && framebuffer->HasDepthAttachment();
 
@@ -1434,9 +1447,6 @@ namespace ignite
         auto it = m_CirclePSOCache.find(key);
         if (it != m_CirclePSOCache.end())
             return it->second;
-
-        m_CirclePSOCache.clear();
-        m_CircleBindingSetCache.clear();
 
         bool hasDepthAttachment = framebuffer->HasDepthAttachment();
 
@@ -1593,9 +1603,6 @@ namespace ignite
         auto it = m_LinePSOCache.find(key);
         if (it != m_LinePSOCache.end())
             return it->second;
-
-        m_LinePSOCache.clear();
-        m_LineBindingSetCache.clear();
 
         bool hasDepthAttachment = framebuffer->HasDepthAttachment();
 

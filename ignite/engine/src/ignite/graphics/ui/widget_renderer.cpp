@@ -278,9 +278,6 @@ namespace ignite
         if (it != s_WidgetQuadPSOCache.end())
             return it->second;
 
-        s_WidgetQuadPSOCache.clear();
-        s_WidgetBindingSetCache.clear();
-
         GraphicsPipelineParams params;
         params.enableBlend = true;
         params.srcBlend = nri::BlendFactor::SRC_ALPHA;
@@ -319,9 +316,6 @@ namespace ignite
         auto it = s_WidgetTextPSOCache.find(key);
         if (it != s_WidgetTextPSOCache.end())
             return it->second;
-
-        s_WidgetTextPSOCache.clear();
-        s_WidgetBindingSetCache.clear();
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
@@ -1032,7 +1026,7 @@ namespace ignite
 
     void WidgetRenderer::InitTextData()
     {
-        m_TextBatch.minCount = 64;
+        m_TextBatch.minCount = 2048;
         m_TextBatch.maxCount = m_TextBatch.minCount;
         m_TextBatch.verticesPerObject = 4;
         m_TextBatch.indicesPerObject = 6;

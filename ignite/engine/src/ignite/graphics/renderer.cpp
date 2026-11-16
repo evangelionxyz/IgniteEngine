@@ -182,6 +182,7 @@ namespace ignite
         m_FrameCounter = frameCounter;
 
         BindlessSystem::FlushPendingWrites();
+        Renderer2D::ClearRetiredBuffers();
 
         auto &frame = m_Frames[frameCounter % m_MaxFramesInFlight];
         frame.frameIndexInFlight = static_cast<uint32_t>(frameCounter % m_MaxFramesInFlight);
