@@ -5,6 +5,7 @@
 #include "renderer.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 namespace ignite
 {
@@ -28,36 +29,6 @@ namespace ignite
         std::vector<nri::RootConstantDesc> rootConstants;
         nri::PipelineLayoutBits flags = nri::PipelineLayoutBits::NONE;
 
-        setDescs.reserve(processedLayouts.size());
-        for (auto &layout : processedLayouts)
-        {
-            if (!layout.bindings.empty())
-            {
-                layout.ranges.clear();
-                layout.rootConstants.clear();
-                for (const auto &item : layout.bindings)
-                {
-                    layout.AddItem(item);
-                }
-            }
-            if (!layout.ranges.empty())
-            {
-                nri::DescriptorSetDesc setDesc = {};
-                setDesc.registerSpace = layout.registerSpace;
-                setDesc.ranges = layout.ranges.data();
-                setDesc.rangeNum = static_cast<uint32_t>(layout.ranges.size());
-                setDescs.push_back(setDesc);
-            }
-            for (const auto &rc : layout.rootConstants)
-            {
-                rootConstants.push_back(rc);
-            }
-            if (layout.isBindless)
-            {
-                flags |= nri::PipelineLayoutBits::RESOURCE_HEAP_DIRECTLY_INDEXED;
-            }
-        }
-
         nri::StageBits effectiveShaderStages = shaderStages;
         if (effectiveShaderStages == nri::StageBits::ALL)
         {
@@ -70,6 +41,42 @@ namespace ignite
             if (dm && dm->GetDeviceParameters().enableRayTracingExtensions)
             {
                 effectiveShaderStages |= nri::StageBits::RAY_TRACING_SHADERS;
+            }
+        }
+
+        setDescs.reserve(processedLayouts.size());
+        for (auto &layout : processedLayouts)
+        {
+            if (layout.visibility == nri::StageBits::ALL)
+                layout.SetVisibility(effectiveShaderStages);
+
+            if (!layout.bindings.empty())
+            {
+                layout.ranges.clear();
+                layout.rootConstants.clear();
+                for (const auto &item : layout.bindings)
+                {
+                    layout.AddItem(item);
+                }
+            }
+
+            if (!layout.ranges.empty())
+            {
+                nri::DescriptorSetDesc setDesc = {};
+                setDesc.registerSpace = layout.registerSpace;
+                setDesc.ranges = layout.ranges.data();
+                setDesc.rangeNum = static_cast<uint32_t>(layout.ranges.size());
+                setDescs.push_back(setDesc);
+            }
+
+            for (const auto &rc : layout.rootConstants)
+            {
+                rootConstants.push_back(rc);
+            }
+
+            if (layout.isBindless)
+            {
+                flags |= nri::PipelineLayoutBits::RESOURCE_HEAP_DIRECTLY_INDEXED;
             }
         }
 
@@ -136,7 +143,14 @@ namespace ignite
             m_Handle = AllocateAndUpdate(m_PipelineLayout, m_SetIndex, desc);
             return;
         }
-        Update(m_Handle, desc);
+        if (m_Handle)
+        {
+            if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+            }
+            Update(m_Handle, desc);
+        }
     }
 
     nri::DescriptorSet *BindingSet::AllocateAndUpdate(nri::PipelineLayout *pipelineLayout, uint32_t setIndex, const BindingSetDesc &desc)

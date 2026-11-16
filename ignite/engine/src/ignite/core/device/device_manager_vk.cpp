@@ -558,6 +558,7 @@ namespace ignite
 
         vk::Result res;
         {
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
             IGN_PROFILE_SCOPE("DeviceManager_VK::Present::PresentKHR");
             res = m_PresentQueue.presentKHR(&info);
         }
