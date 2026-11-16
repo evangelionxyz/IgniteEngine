@@ -8,6 +8,7 @@
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
+#include "ignite/project/project.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -142,4 +143,109 @@ TEST(LuaEnhancements, SnippetCapturesErrorsSafely)
     outError.clear();
     EXPECT_FALSE(runtime.ExecuteSnippet("error('intentional runtime error')", outResult, outError));
     EXPECT_NE(outError.find("intentional runtime error"), std::string::npos);
+}
+
+TEST(LuaEnhancements, PhysicsJointAndParticleSystemBindingsAndNetStats)
+{
+    ProjectInfo pInfo;
+    pInfo.name = "LuaJointTestProj";
+    pInfo.filepath = std::filesystem::temp_directory_path() / "LuaJointTestProj.ixproj";
+    pInfo.rootDirectory = std::filesystem::temp_directory_path();
+    Ref<Project> project = Project::Create(pInfo);
+    Scene scene(project.get());
+    lua::ScriptRuntime runtime(&scene);
+
+    std::string outResult;
+    std::string outError;
+    const bool ok = runtime.ExecuteSnippet(R"lua(
+        -- 1. Test Physics Joint bindings
+        local anchor = Ignite.CreateEntity("AnchorBeam")
+        local bob = Ignite.CreateEntity("BobSphere")
+        local joint = bob:add_component("PhysicsJoint")
+        assert(joint ~= nil, "joint component was nil")
+        assert(bob:has_component("PhysicsJoint"), "has_component PhysicsJoint failed")
+
+        joint.connected_entity = anchor.id
+        joint.joint_type = "Hinge"
+        joint.enable_limits = true
+        joint.limits_min = -60.0
+        joint.limits_max = 60.0
+        joint.motor_state = "Velocity"
+        joint.motor_velocity = 35.0
+        joint.max_motor_force = 2500.0
+        assert(joint.joint_type == "Hinge", "joint_type did not match")
+        assert(joint.motor_state == "Velocity", "motor_state did not match")
+
+        -- 2. Test Particle System bindings
+        local emitter = Ignite.CreateEntity("TorchParticle")
+        local ps = emitter:add_component("ParticleSystem")
+        assert(ps ~= nil, "particle component was nil")
+        assert(emitter:has_component("ParticleSystem"), "has_component ParticleSystem failed")
+        assert(emitter:has_component("Rendering"), "particle system should auto-ensure RenderingComponent")
+
+        ps:set_preset("Fire")
+        assert(ps.type == "Fire", "particle preset Fire failed")
+        ps.max_particles = 3200
+        ps.emission_rate = 95.0
+        ps.is_playing = true
+        assert(ps.max_particles == 3200, "max_particles mismatch")
+        assert(math.abs(ps.emission_rate - 95.0) < 0.01, "emission_rate mismatch")
+        ps:stop()
+        assert(ps.is_playing == false, "particle stop failed")
+        ps:play()
+        assert(ps.is_playing == true, "particle play failed")
+
+        -- 3. Test Net stats bindings
+        local stats = Ignite.Net.GetStats()
+        assert(type(stats) == "table", "GetStats did not return table")
+        assert(stats.rtt ~= nil, "GetStats missing rtt")
+        assert(stats.packet_loss ~= nil, "GetStats missing packet_loss")
+        assert(Ignite.Net.GetClientCount() ~= nil, "GetClientCount failed")
+
+        return "OK"
+    )lua", outResult, outError);
+
+    EXPECT_TRUE(ok) << outError;
+    EXPECT_EQ(outResult, "OK");
+
+    Entity bob = FindEntityByName(&scene, "BobSphere");
+    ASSERT_TRUE(static_cast<bool>(bob));
+    ASSERT_TRUE(bob.HasComponent<PhysicsJointComponent>());
+    const auto &jc = bob.GetComponent<PhysicsJointComponent>();
+    EXPECT_EQ(jc.desc.type, physics::JointType::Hinge);
+    EXPECT_TRUE(jc.desc.enableLimits);
+    EXPECT_NEAR(jc.desc.limitsMin, -60.0f, 0.01f);
+    EXPECT_NEAR(jc.desc.limitsMax, 60.0f, 0.01f);
+    EXPECT_EQ(jc.desc.motorState, physics::JointMotorState::Velocity);
+    EXPECT_NEAR(jc.desc.motorTargetVelocity, 35.0f, 0.01f);
+    EXPECT_TRUE(jc.dirty);
+
+    Entity emitter = FindEntityByName(&scene, "TorchParticle");
+    ASSERT_TRUE(static_cast<bool>(emitter));
+    ASSERT_TRUE(emitter.HasComponent<ParticleSystemComponent>());
+    ASSERT_TRUE(emitter.HasComponent<RenderingComponent>());
+    const auto &pc = emitter.GetComponent<ParticleSystemComponent>();
+    EXPECT_EQ(pc.settings.type, ParticleEmitterType::Fire);
+    EXPECT_EQ(pc.settings.maxParticles, 3200u);
+    EXPECT_NEAR(pc.settings.emissionRate, 95.0f, 0.01f);
+    EXPECT_TRUE(pc.isPlaying);
+
+    // Setup rigidbodies and colliders for anchor and bob, then verify Scene::Start() runs simulation
+    Entity anchor = FindEntityByName(&scene, "AnchorBeam");
+    ASSERT_TRUE(static_cast<bool>(anchor));
+    auto &rbAnchor = anchor.AddComponent<RigidbodyComponent>();
+    rbAnchor.bodyType = physics::BodyType::Static;
+    auto &colAnchor = anchor.AddComponent<BoxColliderComponent>();
+    colAnchor.scale = glm::vec3(0.5f);
+
+    auto &rbBob = bob.AddComponent<RigidbodyComponent>();
+    rbBob.bodyType = physics::BodyType::Dynamic;
+    rbBob.mass = 10.0f;
+    auto &colBob = bob.AddComponent<SphereColliderComponent>();
+    colBob.radius = 0.5f;
+
+    scene.OnStart(ESceneState::Play);
+    scene.OnUpdateRuntimeSimulate(0.016f);
+    EXPECT_FALSE(jc.runtimeJoint.expired());
+    scene.OnStop();
 }

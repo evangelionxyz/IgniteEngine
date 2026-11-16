@@ -896,6 +896,57 @@ namespace ignite::lua
             return 0;
         }
 
+        int ParticlePlay(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<ParticleSystemComponent>())
+            {
+                entity.GetComponent<ParticleSystemComponent>().isPlaying = true;
+            }
+            return 0;
+        }
+
+        int ParticleStop(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<ParticleSystemComponent>())
+            {
+                entity.GetComponent<ParticleSystemComponent>().isPlaying = false;
+            }
+            return 0;
+        }
+
+        int ParticleRestart(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<ParticleSystemComponent>())
+            {
+                auto &pc = entity.GetComponent<ParticleSystemComponent>();
+                pc.isPlaying = true;
+                pc.system = nullptr; // forces recreation & buffer reset on next frame
+            }
+            return 0;
+        }
+
+        int ParticleSetPreset(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *preset = luaL_checkstring(state, 2);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (entity && entity.HasComponent<ParticleSystemComponent>())
+            {
+                auto &pc = entity.GetComponent<ParticleSystemComponent>();
+                if (strcmp(preset, "Fire") == 0) pc.settings = ParticleEmitterSettings::CreateFire();
+                else if (strcmp(preset, "Smoke") == 0) pc.settings = ParticleEmitterSettings::CreateSmoke();
+                else if (strcmp(preset, "Spark") == 0) pc.settings = ParticleEmitterSettings::CreateSpark();
+                pc.system = nullptr;
+            }
+            return 0;
+        }
+
         // Top-level Scene / Entity / Physics / Network bindings
         int IgniteCreateEntity(lua_State *state)
         {
@@ -1341,6 +1392,41 @@ namespace ignite::lua
             return 0;
         }
 
+        int LuaNetGetStats(lua_State *state)
+        {
+            NetworkManager *nm = NetworkManager::GetInstance();
+            lua_newtable(state);
+            if (!nm) return 1;
+            NetStats s = nm->GetStats();
+            lua_pushinteger(state, s.rttMs); lua_setfield(state, -2, "rtt");
+            lua_pushnumber(state, s.packetLossPercent); lua_setfield(state, -2, "packet_loss");
+            lua_pushnumber(state, s.inKBytesPerSec); lua_setfield(state, -2, "in_kbps");
+            lua_pushnumber(state, s.outKBytesPerSec); lua_setfield(state, -2, "out_kbps");
+            lua_pushinteger(state, s.clientCount); lua_setfield(state, -2, "client_count");
+            return 1;
+        }
+
+        int LuaNetGetServerTick(lua_State *state)
+        {
+            NetworkManager *nm = NetworkManager::GetInstance();
+            lua_pushinteger(state, nm ? static_cast<lua_Integer>(nm->GetServerTick()) : 0);
+            return 1;
+        }
+
+        int LuaNetGetClientServerTick(lua_State *state)
+        {
+            NetworkManager *nm = NetworkManager::GetInstance();
+            lua_pushinteger(state, nm ? static_cast<lua_Integer>(nm->GetClientServerTick()) : 0);
+            return 1;
+        }
+
+        int LuaNetGetClientCount(lua_State *state)
+        {
+            NetworkManager *nm = NetworkManager::GetInstance();
+            lua_pushinteger(state, nm ? static_cast<lua_Integer>(nm->GetClientCount()) : 0);
+            return 1;
+        }
+
         int LuaInputGetMouseDelta(lua_State *state)
         {
             PushVector(state, InputSystem::GetMouseDelta());
@@ -1495,6 +1581,8 @@ namespace ignite::lua
         if (name == "Text") { type = ComponentType::Text; return true; }
         if (name == "Widget") { type = ComponentType::Widget; return true; }
         if (name == "NetworkIdentity") { type = ComponentType::NetworkIdentity; return true; }
+        if (name == "PhysicsJoint" || name == "Joint") { type = ComponentType::PhysicsJoint; return true; }
+        if (name == "ParticleSystem" || name == "Particle") { type = ComponentType::ParticleSystem; return true; }
         return false;
     }
 
@@ -1527,6 +1615,8 @@ namespace ignite::lua
         case ComponentType::Text:                return entity.HasComponent<TextComponent>();
         case ComponentType::Widget:              return entity.HasComponent<WidgetComponent>();
         case ComponentType::NetworkIdentity:     return entity.HasComponent<NetworkIdentityComponent>();
+        case ComponentType::PhysicsJoint:        return entity.HasComponent<PhysicsJointComponent>();
+        case ComponentType::ParticleSystem:      return entity.HasComponent<ParticleSystemComponent>();
         }
         return false;
     }
@@ -1597,6 +1687,18 @@ namespace ignite::lua
         case ComponentType::Text:                PushNewComponentRef<TextComponent>(state, ref->scene, ref->id, type, entity); return 1;
         case ComponentType::Widget:              PushNewComponentRef<WidgetComponent>(state, ref->scene, ref->id, type, entity); return 1;
         case ComponentType::NetworkIdentity:     PushNewComponentRef<NetworkIdentityComponent>(state, ref->scene, ref->id, type, entity); return 1;
+        case ComponentType::PhysicsJoint:
+        {
+            PushNewComponentRef<PhysicsJointComponent>(state, ref->scene, ref->id, type, entity);
+            if (entity.HasComponent<PhysicsJointComponent>()) entity.GetComponent<PhysicsJointComponent>().dirty = true;
+            return 1;
+        }
+        case ComponentType::ParticleSystem:
+        {
+            if (!entity.HasComponent<RenderingComponent>()) entity.AddComponent<RenderingComponent>();
+            PushNewComponentRef<ParticleSystemComponent>(state, ref->scene, ref->id, type, entity);
+            return 1;
+        }
         }
         lua_pushnil(state);
         return 1;
@@ -1641,6 +1743,8 @@ namespace ignite::lua
         case ComponentType::Text:                if (entity.HasComponent<TextComponent>()) entity.RemoveComponent<TextComponent>(); break;
         case ComponentType::Widget:              if (entity.HasComponent<WidgetComponent>()) entity.RemoveComponent<WidgetComponent>(); break;
         case ComponentType::NetworkIdentity:     if (entity.HasComponent<NetworkIdentityComponent>()) entity.RemoveComponent<NetworkIdentityComponent>(); break;
+        case ComponentType::PhysicsJoint:        if (entity.HasComponent<PhysicsJointComponent>()) entity.RemoveComponent<PhysicsJointComponent>(); break;
+        case ComponentType::ParticleSystem:      if (entity.HasComponent<ParticleSystemComponent>()) entity.RemoveComponent<ParticleSystemComponent>(); break;
         }
         return 0;
     }
@@ -2073,6 +2177,65 @@ namespace ignite::lua
             if (strcmp(key, "mark_dirty") == 0) { lua_pushcfunction(state, NetMarkDirty); return 1; }
             break;
         }
+        case ComponentType::PhysicsJoint:
+        {
+            auto &c = entity.GetComponent<PhysicsJointComponent>();
+            if (strcmp(key, "connected_entity") == 0) { lua_pushinteger(state, static_cast<lua_Integer>(static_cast<uint64_t>(c.connectedEntity))); return 1; }
+            if (strcmp(key, "type") == 0 || strcmp(key, "joint_type") == 0) { lua_pushstring(state, physics::JointTypeToString(c.desc.type)); return 1; }
+            if (strcmp(key, "space") == 0) { lua_pushstring(state, c.desc.space == physics::JointSpace::World ? "World" : "Local"); return 1; }
+            if (strcmp(key, "anchor_a") == 0) { PushVector(state, c.desc.localAnchorA); return 1; }
+            if (strcmp(key, "anchor_b") == 0) { PushVector(state, c.desc.localAnchorB); return 1; }
+            if (strcmp(key, "axis_a") == 0) { PushVector(state, c.desc.localAxisA); return 1; }
+            if (strcmp(key, "axis_b") == 0) { PushVector(state, c.desc.localAxisB); return 1; }
+            if (strcmp(key, "min_distance") == 0) { lua_pushnumber(state, c.desc.minDistance); return 1; }
+            if (strcmp(key, "max_distance") == 0) { lua_pushnumber(state, c.desc.maxDistance); return 1; }
+            if (strcmp(key, "enable_limits") == 0) { lua_pushboolean(state, c.desc.enableLimits); return 1; }
+            if (strcmp(key, "limits_min") == 0) { lua_pushnumber(state, c.desc.limitsMin); return 1; }
+            if (strcmp(key, "limits_max") == 0) { lua_pushnumber(state, c.desc.limitsMax); return 1; }
+            if (strcmp(key, "enable_spring") == 0) { lua_pushboolean(state, c.desc.enableSpring); return 1; }
+            if (strcmp(key, "spring_frequency") == 0) { lua_pushnumber(state, c.desc.springFrequency); return 1; }
+            if (strcmp(key, "spring_damping") == 0) { lua_pushnumber(state, c.desc.springDamping); return 1; }
+            if (strcmp(key, "motor_state") == 0) { lua_pushstring(state, physics::JointMotorStateToString(c.desc.motorState)); return 1; }
+            if (strcmp(key, "motor_velocity") == 0) { lua_pushnumber(state, c.desc.motorTargetVelocity); return 1; }
+            if (strcmp(key, "max_motor_force") == 0) { lua_pushnumber(state, c.desc.maxMotorForce); return 1; }
+            if (strcmp(key, "break_force") == 0) { lua_pushnumber(state, c.desc.breakForce); return 1; }
+            break;
+        }
+        case ComponentType::ParticleSystem:
+        {
+            auto &c = entity.GetComponent<ParticleSystemComponent>();
+            if (strcmp(key, "is_playing") == 0) { lua_pushboolean(state, c.isPlaying); return 1; }
+            if (strcmp(key, "type") == 0 || strcmp(key, "emitter_type") == 0)
+            {
+                switch (c.settings.type)
+                {
+                case ParticleEmitterType::Smoke: lua_pushstring(state, "Smoke"); return 1;
+                case ParticleEmitterType::Fire: lua_pushstring(state, "Fire"); return 1;
+                case ParticleEmitterType::Spark: lua_pushstring(state, "Spark"); return 1;
+                default: lua_pushstring(state, "Custom"); return 1;
+                }
+            }
+            if (strcmp(key, "blend_mode") == 0) { lua_pushstring(state, c.settings.blendMode == ParticleBlendMode::Additive ? "Additive" : "Alpha"); return 1; }
+            if (strcmp(key, "max_particles") == 0) { lua_pushinteger(state, c.settings.maxParticles); return 1; }
+            if (strcmp(key, "emission_rate") == 0) { lua_pushnumber(state, c.settings.emissionRate); return 1; }
+            if (strcmp(key, "lifetime_min") == 0) { lua_pushnumber(state, c.settings.lifetimeMin); return 1; }
+            if (strcmp(key, "lifetime_max") == 0) { lua_pushnumber(state, c.settings.lifetimeMax); return 1; }
+            if (strcmp(key, "velocity_min") == 0) { PushVector(state, c.settings.velocityMin); return 1; }
+            if (strcmp(key, "velocity_max") == 0) { PushVector(state, c.settings.velocityMax); return 1; }
+            if (strcmp(key, "acceleration") == 0) { PushVector(state, c.settings.acceleration); return 1; }
+            if (strcmp(key, "drag") == 0) { lua_pushnumber(state, c.settings.drag); return 1; }
+            if (strcmp(key, "start_color") == 0) { PushVector(state, c.settings.startColor); return 1; }
+            if (strcmp(key, "end_color") == 0) { PushVector(state, c.settings.endColor); return 1; }
+            if (strcmp(key, "start_size") == 0) { PushVector(state, c.settings.startSize); return 1; }
+            if (strcmp(key, "end_size") == 0) { PushVector(state, c.settings.endSize); return 1; }
+            if (strcmp(key, "spawn_radius") == 0) { lua_pushnumber(state, c.settings.spawnRadius); return 1; }
+            if (strcmp(key, "velocity_alignment") == 0) { lua_pushnumber(state, c.settings.velocityAlignment); return 1; }
+            if (strcmp(key, "play") == 0) { lua_pushcfunction(state, ParticlePlay); return 1; }
+            if (strcmp(key, "stop") == 0) { lua_pushcfunction(state, ParticleStop); return 1; }
+            if (strcmp(key, "restart") == 0) { lua_pushcfunction(state, ParticleRestart); return 1; }
+            if (strcmp(key, "set_preset") == 0) { lua_pushcfunction(state, ParticleSetPreset); return 1; }
+            break;
+        }
         }
         lua_pushnil(state);
         return 1;
@@ -2409,6 +2572,84 @@ namespace ignite::lua
             if (strcmp(key, "sync_mask") == 0) { c.syncComponentsMask = static_cast<uint32_t>(luaL_checkinteger(state, 3)); return 0; }
             break;
         }
+        case ComponentType::PhysicsJoint:
+        {
+            auto &c = entity.GetComponent<PhysicsJointComponent>();
+            if (strcmp(key, "connected_entity") == 0)
+            {
+                if (lua_isinteger(state, 3)) c.connectedEntity = UUID(static_cast<uint64_t>(lua_tointeger(state, 3)));
+                else if (auto *other = static_cast<EntityRef *>(luaL_testudata(state, 3, kEntityMetatable)))
+                {
+                    Entity otherEnt = ResolveEntity(other->scene, other->id);
+                    if (otherEnt) c.connectedEntity = otherEnt.GetUUID();
+                }
+                c.dirty = true;
+                return 0;
+            }
+            if (strcmp(key, "type") == 0 || strcmp(key, "joint_type") == 0)
+            {
+                c.desc.type = physics::JointTypeFromString(luaL_checkstring(state, 3));
+                c.dirty = true;
+                return 0;
+            }
+            if (strcmp(key, "space") == 0)
+            {
+                c.desc.space = (strcmp(luaL_checkstring(state, 3), "World") == 0) ? physics::JointSpace::World : physics::JointSpace::Local;
+                c.dirty = true;
+                return 0;
+            }
+            if (strcmp(key, "anchor_a") == 0) { c.desc.localAnchorA = ReadVector(state, 3); c.dirty = true; return 0; }
+            if (strcmp(key, "anchor_b") == 0) { c.desc.localAnchorB = ReadVector(state, 3); c.dirty = true; return 0; }
+            if (strcmp(key, "axis_a") == 0) { c.desc.localAxisA = ReadVector(state, 3); c.dirty = true; return 0; }
+            if (strcmp(key, "axis_b") == 0) { c.desc.localAxisB = ReadVector(state, 3); c.dirty = true; return 0; }
+            if (strcmp(key, "min_distance") == 0) { c.desc.minDistance = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "max_distance") == 0) { c.desc.maxDistance = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "enable_limits") == 0) { c.desc.enableLimits = lua_toboolean(state, 3) != 0; c.dirty = true; return 0; }
+            if (strcmp(key, "limits_min") == 0) { c.desc.limitsMin = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "limits_max") == 0) { c.desc.limitsMax = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "enable_spring") == 0) { c.desc.enableSpring = lua_toboolean(state, 3) != 0; c.dirty = true; return 0; }
+            if (strcmp(key, "spring_frequency") == 0) { c.desc.springFrequency = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "spring_damping") == 0) { c.desc.springDamping = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "motor_state") == 0) { c.desc.motorState = physics::JointMotorStateFromString(luaL_checkstring(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "motor_velocity") == 0) { c.desc.motorTargetVelocity = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "max_motor_force") == 0) { c.desc.maxMotorForce = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            if (strcmp(key, "break_force") == 0) { c.desc.breakForce = static_cast<float>(luaL_checknumber(state, 3)); c.dirty = true; return 0; }
+            break;
+        }
+        case ComponentType::ParticleSystem:
+        {
+            auto &c = entity.GetComponent<ParticleSystemComponent>();
+            if (strcmp(key, "is_playing") == 0) { c.isPlaying = lua_toboolean(state, 3) != 0; return 0; }
+            if (strcmp(key, "type") == 0 || strcmp(key, "emitter_type") == 0)
+            {
+                const char *s = luaL_checkstring(state, 3);
+                if (strcmp(s, "Fire") == 0) c.settings.type = ParticleEmitterType::Fire;
+                else if (strcmp(s, "Smoke") == 0) c.settings.type = ParticleEmitterType::Smoke;
+                else if (strcmp(s, "Spark") == 0) c.settings.type = ParticleEmitterType::Spark;
+                else c.settings.type = ParticleEmitterType::Custom;
+                return 0;
+            }
+            if (strcmp(key, "blend_mode") == 0)
+            {
+                c.settings.blendMode = (strcmp(luaL_checkstring(state, 3), "Additive") == 0) ? ParticleBlendMode::Additive : ParticleBlendMode::Alpha;
+                return 0;
+            }
+            if (strcmp(key, "max_particles") == 0) { c.settings.maxParticles = static_cast<uint32_t>(luaL_checkinteger(state, 3)); return 0; }
+            if (strcmp(key, "emission_rate") == 0) { c.settings.emissionRate = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
+            if (strcmp(key, "lifetime_min") == 0) { c.settings.lifetimeMin = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
+            if (strcmp(key, "lifetime_max") == 0) { c.settings.lifetimeMax = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
+            if (strcmp(key, "velocity_min") == 0) { c.settings.velocityMin = ReadVector(state, 3); return 0; }
+            if (strcmp(key, "velocity_max") == 0) { c.settings.velocityMax = ReadVector(state, 3); return 0; }
+            if (strcmp(key, "acceleration") == 0) { c.settings.acceleration = ReadVector(state, 3); return 0; }
+            if (strcmp(key, "drag") == 0) { c.settings.drag = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
+            if (strcmp(key, "start_color") == 0) { c.settings.startColor = ReadVec4(state, 3); return 0; }
+            if (strcmp(key, "end_color") == 0) { c.settings.endColor = ReadVec4(state, 3); return 0; }
+            if (strcmp(key, "start_size") == 0) { c.settings.startSize = ReadVec2(state, 3); return 0; }
+            if (strcmp(key, "end_size") == 0) { c.settings.endSize = ReadVec2(state, 3); return 0; }
+            if (strcmp(key, "spawn_radius") == 0) { c.settings.spawnRadius = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
+            if (strcmp(key, "velocity_alignment") == 0) { c.settings.velocityAlignment = static_cast<float>(luaL_checknumber(state, 3)); return 0; }
+            break;
+        }
         }
         return luaL_error(state, "unsupported property '%s' for component", key);
     }
@@ -2606,6 +2847,10 @@ namespace ignite::lua
         lua_pushcfunction(state, LuaNetDisconnect); lua_setfield(state, -2, "Disconnect");
         lua_pushcfunction(state, LuaNetSendInput); lua_setfield(state, -2, "SendInput");
         lua_pushcfunction(state, LuaNetSendChat); lua_setfield(state, -2, "SendChat");
+        lua_pushcfunction(state, LuaNetGetStats); lua_setfield(state, -2, "GetStats");
+        lua_pushcfunction(state, LuaNetGetServerTick); lua_setfield(state, -2, "GetServerTick");
+        lua_pushcfunction(state, LuaNetGetClientServerTick); lua_setfield(state, -2, "GetClientServerTick");
+        lua_pushcfunction(state, LuaNetGetClientCount); lua_setfield(state, -2, "GetClientCount");
         lua_setfield(state, -2, "Net");
 
         // Ignite.Input

@@ -1540,9 +1540,19 @@ namespace ignite
     {
         OnSceneStop();
 
+        if (!m_EditorScene)
+        {
+            LOG_WARN("[EditorLayer] Cannot play: m_EditorScene is null");
+            return;
+        }
+
         // copy initial components to new scene
-        SetActiveScene(SceneManager::Copy(m_EditorScene));
-        m_ActiveScene->OnStart(ESceneState::Play);
+        Ref<Scene> playScene = SceneManager::Copy(m_EditorScene);
+        if (playScene)
+        {
+            SetActiveScene(playScene);
+            m_ActiveScene->OnStart(ESceneState::Play);
+        }
     }
 
     void EditorLayer::OnSceneStop()
@@ -1563,9 +1573,19 @@ namespace ignite
 
         OnSceneStop();
 
+        if (!m_EditorScene)
+        {
+            LOG_WARN("[EditorLayer] Cannot simulate: m_EditorScene is null");
+            return;
+        }
+
         // copy initial components to new scene
-        SetActiveScene(SceneManager::Copy(m_EditorScene));
-        m_ActiveScene->OnStart(ESceneState::Simulate);
+        Ref<Scene> simScene = SceneManager::Copy(m_EditorScene);
+        if (simScene)
+        {
+            SetActiveScene(simScene);
+            m_ActiveScene->OnStart(ESceneState::Simulate);
+        }
     }
 
     void EditorLayer::OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter)
@@ -1771,21 +1791,24 @@ namespace ignite
         auto *editor = static_cast<EditorLayer *>(userData);
         if (!editor || !editor->m_ActiveProject) return;
 
-        PackageBuildConfig config;
-        config.outputDirectory = std::filesystem::path(filepath);
-        config.includeDedicatedServer = true;
+        AssetWorker::SubmitJob([editor, f = filepath]()
+        {
+            PackageBuildConfig config;
+            config.outputDirectory = std::filesystem::path(f);
+            config.includeDedicatedServer = true;
 
-        const PackageBuildResult result = GamePackager::PackageProject(editor->m_ActiveProject.get(), config);
-        if (result.success)
-        {
-            editor->SetStatusText("Packaged game to " + result.outputDirectory.string());
-            LOG_INFO("[Editor] Game packaged successfully: {}", result.executablePath.string());
-        }
-        else
-        {
-            editor->SetStatusText("Package failed: " + result.errorMessage);
-            LOG_ERROR("[Editor] Package failed: {}", result.errorMessage);
-        }
+            const PackageBuildResult result = GamePackager::PackageProject(editor->m_ActiveProject.get(), config);
+            if (result.success)
+            {
+                editor->SetStatusText("Packaged game to " + result.outputDirectory.string());
+                LOG_INFO("[Editor] Game packaged successfully: {}", result.executablePath.string());
+            }
+            else
+            {
+                editor->SetStatusText("Package failed: " + result.errorMessage);
+                LOG_ERROR("[Editor] Package failed: {}", result.errorMessage);
+            }
+        });
     }
 
     void EditorLayer::OnOpenProject()

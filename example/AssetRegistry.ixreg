@@ -122,6 +122,11 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Yes.ixanim"
             },
             {
+                "Handle": 2380540141902232948,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/remote_player.lua"
+            },
+            {
                 "Handle": 2606434827778452165,
                 "Type": "Texture",
                 "Filepath": "play_verify.png"
@@ -157,6 +162,11 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Dance.ixanim"
             },
             {
+                "Handle": 7058554600036747221,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/effects_manager.lua"
+            },
+            {
                 "Handle": 7740477268739284241,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/Punch.ixanim"
@@ -165,6 +175,11 @@
                 "Handle": 9172818322886732462,
                 "Type": "Material",
                 "Filepath": "Assets/Characters/RobotExpressive/Grey.ixmat"
+            },
+            {
+                "Handle": 9807310980490264862,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/joint_hazard.lua"
             },
             {
                 "Handle": 11195833070019743305,

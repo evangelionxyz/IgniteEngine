@@ -105,7 +105,7 @@ namespace ignite
         void InitTextData();
 
         void ClearPipelineCache();
-        static void ClearRetiredBuffers();
+        static void ClearRetiredBuffers(uint64_t currentFrame = 0, bool forceAll = false);
 
         uint32_t GetOrInsertQuadTexture(const Ref<Texture> &texture);
         uint32_t GetOrInsertFontTexture(const Ref<Texture> &texture);

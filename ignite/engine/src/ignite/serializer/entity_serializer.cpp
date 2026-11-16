@@ -1558,15 +1558,17 @@ namespace ignite
             if (auto n = node["PrefabEntityUUID"]) comp.prefabEntityUUID = UUID(n.as<uint64_t>());
         }
 
-        if (JsonNode node = entityNode["NetworkIdentityComponent"])
+        JsonNode netNode = entityNode["NetworkIdentityComponent"];
+        if (!netNode) netNode = entityNode["NetworkIdentity"];
+        if (netNode)
         {
             auto &comp = desEntity.AddComponent<NetworkIdentityComponent>();
-            if (auto n = node["NetId"]) comp.netId = n.as<uint64_t>();
-            if (auto n = node["OwnerClient"]) comp.ownerClient = n.as<uint32_t>();
-            if (auto n = node["IsLocalPlayer"]) comp.isLocalPlayer = n.as<bool>();
-            if (auto n = node["Replicate"]) comp.replicate = n.as<bool>();
-            if (auto n = node["SyncComponentsMask"]) comp.syncComponentsMask = n.as<uint32_t>();
-            if (auto n = node["Prefab"]) comp.prefab = n.as<std::string>();
+            if (auto n = netNode["NetId"]) comp.netId = n.as<uint64_t>();
+            if (auto n = netNode["OwnerClient"]) comp.ownerClient = n.as<uint32_t>();
+            if (auto n = netNode["IsLocalPlayer"]) comp.isLocalPlayer = n.as<bool>();
+            if (auto n = netNode["Replicate"]) comp.replicate = n.as<bool>();
+            if (auto n = netNode["SyncComponentsMask"]) comp.syncComponentsMask = n.as<uint32_t>();
+            if (auto n = netNode["Prefab"]) comp.prefab = n.as<std::string>();
 
             if (scene && comp.netId != 0)
             {

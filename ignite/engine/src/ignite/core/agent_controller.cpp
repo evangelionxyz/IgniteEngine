@@ -161,6 +161,7 @@ namespace ignite
             if (e.HasComponent<LuaScriptComponent>()) comps.push_back("LuaScript");
             if (e.HasComponent<ScriptComponent>()) comps.push_back("Script");
             if (e.HasComponent<NetworkIdentityComponent>()) comps.push_back("NetworkIdentity");
+            if (e.HasComponent<PhysicsJointComponent>()) comps.push_back("PhysicsJoint");
             if (e.HasComponent<ParticleSystemComponent>()) comps.push_back("ParticleSystem");
             return comps;
         }
@@ -640,6 +641,76 @@ namespace ignite
                 return true;
             }
 
+            if (type == "PhysicsJoint" || type == "Joint")
+            {
+                auto &jc = e.HasComponent<PhysicsJointComponent>() ? e.GetComponent<PhysicsJointComponent>() : e.AddComponent<PhysicsJointComponent>();
+                if (props.contains("connected_entity"))
+                {
+                    if (props["connected_entity"].is_number())
+                        jc.connectedEntity = UUID(props["connected_entity"].get<uint64_t>());
+                    else if (props["connected_entity"].is_string())
+                    {
+                        const std::string name = props["connected_entity"].get<std::string>();
+                        if (scene)
+                        {
+                            Entity target = SceneManager::GetEntity(scene, name);
+                            if (target) jc.connectedEntity = target.GetUUID();
+                        }
+                    }
+                }
+                if (props.contains("type")) jc.desc.type = physics::JointTypeFromString(props["type"].get<std::string>());
+                if (props.contains("space")) jc.desc.space = (props["space"].get<std::string>() == "World") ? physics::JointSpace::World : physics::JointSpace::Local;
+                if (props.contains("anchor_a")) jc.desc.localAnchorA = ReadJsonVec3(props["anchor_a"], jc.desc.localAnchorA);
+                if (props.contains("anchor_b")) jc.desc.localAnchorB = ReadJsonVec3(props["anchor_b"], jc.desc.localAnchorB);
+                if (props.contains("axis_a")) jc.desc.localAxisA = ReadJsonVec3(props["axis_a"], jc.desc.localAxisA);
+                if (props.contains("axis_b")) jc.desc.localAxisB = ReadJsonVec3(props["axis_b"], jc.desc.localAxisB);
+                if (props.contains("min_distance")) jc.desc.minDistance = props["min_distance"].get<float>();
+                if (props.contains("max_distance")) jc.desc.maxDistance = props["max_distance"].get<float>();
+                if (props.contains("enable_limits")) jc.desc.enableLimits = props["enable_limits"].get<bool>();
+                if (props.contains("limits_min")) jc.desc.limitsMin = props["limits_min"].get<float>();
+                if (props.contains("limits_max")) jc.desc.limitsMax = props["limits_max"].get<float>();
+                if (props.contains("enable_spring")) jc.desc.enableSpring = props["enable_spring"].get<bool>();
+                if (props.contains("spring_frequency")) jc.desc.springFrequency = props["spring_frequency"].get<float>();
+                if (props.contains("spring_damping")) jc.desc.springDamping = props["spring_damping"].get<float>();
+                if (props.contains("motor_state")) jc.desc.motorState = physics::JointMotorStateFromString(props["motor_state"].get<std::string>());
+                if (props.contains("motor_velocity")) jc.desc.motorTargetVelocity = props["motor_velocity"].get<float>();
+                if (props.contains("max_motor_force")) jc.desc.maxMotorForce = props["max_motor_force"].get<float>();
+                if (props.contains("break_force")) jc.desc.breakForce = props["break_force"].get<float>();
+                jc.dirty = true;
+                return true;
+            }
+
+            if (type == "ParticleSystem" || type == "Particle")
+            {
+                if (!e.HasComponent<RenderingComponent>())
+                    e.AddComponent<RenderingComponent>();
+
+                auto &pc = e.HasComponent<ParticleSystemComponent>() ? e.GetComponent<ParticleSystemComponent>() : e.AddComponent<ParticleSystemComponent>();
+                if (props.contains("preset") && props["preset"].is_string())
+                {
+                    const std::string pr = props["preset"].get<std::string>();
+                    if (pr == "Fire") pc.settings = ParticleEmitterSettings::CreateFire();
+                    else if (pr == "Smoke") pc.settings = ParticleEmitterSettings::CreateSmoke();
+                    else if (pr == "Spark") pc.settings = ParticleEmitterSettings::CreateSpark();
+                    pc.system = nullptr;
+                }
+                if (props.contains("is_playing")) pc.isPlaying = props["is_playing"].get<bool>();
+                if (props.contains("max_particles")) pc.settings.maxParticles = props["max_particles"].get<uint32_t>();
+                if (props.contains("emission_rate")) pc.settings.emissionRate = props["emission_rate"].get<float>();
+                if (props.contains("lifetime_min")) pc.settings.lifetimeMin = props["lifetime_min"].get<float>();
+                if (props.contains("lifetime_max")) pc.settings.lifetimeMax = props["lifetime_max"].get<float>();
+                if (props.contains("velocity_min")) pc.settings.velocityMin = ReadJsonVec3(props["velocity_min"], pc.settings.velocityMin);
+                if (props.contains("velocity_max")) pc.settings.velocityMax = ReadJsonVec3(props["velocity_max"], pc.settings.velocityMax);
+                if (props.contains("acceleration")) pc.settings.acceleration = ReadJsonVec3(props["acceleration"], pc.settings.acceleration);
+                if (props.contains("drag")) pc.settings.drag = props["drag"].get<float>();
+                if (props.contains("spawn_radius")) pc.settings.spawnRadius = props["spawn_radius"].get<float>();
+                if (props.contains("start_color")) pc.settings.startColor = ReadJsonVec4(props["start_color"], pc.settings.startColor);
+                if (props.contains("end_color")) pc.settings.endColor = ReadJsonVec4(props["end_color"], pc.settings.endColor);
+                if (props.contains("start_size")) pc.settings.startSize = ReadJsonVec2(props["start_size"], pc.settings.startSize);
+                if (props.contains("end_size")) pc.settings.endSize = ReadJsonVec2(props["end_size"], pc.settings.endSize);
+                return true;
+            }
+
             outError = "Unsupported component type: " + type;
             return false;
         }
@@ -667,17 +738,38 @@ namespace ignite
         for (int i = 1; i < args.count; ++i)
         {
             const std::string_view arg(args[i]);
-            if (arg == "--command-script" && i + 1 < args.count)
+            constexpr std::string_view kScriptPrefix = "--command-script=";
+            constexpr std::string_view kReportPrefix = "--command-report=";
+            constexpr std::string_view kWatchPrefix = "--watch-command-file=";
+            constexpr std::string_view kResponsePrefix = "--response-file=";
+
+            if (arg.starts_with(kScriptPrefix))
+            {
+                scriptPath = std::string(arg.substr(kScriptPrefix.size()));
+            }
+            else if (arg == "--command-script" && i + 1 < args.count)
             {
                 scriptPath = args[++i];
+            }
+            else if (arg.starts_with(kReportPrefix))
+            {
+                reportPath = std::string(arg.substr(kReportPrefix.size()));
             }
             else if (arg == "--command-report" && i + 1 < args.count)
             {
                 reportPath = args[++i];
             }
+            else if (arg.starts_with(kWatchPrefix))
+            {
+                watchPath = std::string(arg.substr(kWatchPrefix.size()));
+            }
             else if (arg == "--watch-command-file" && i + 1 < args.count)
             {
                 watchPath = args[++i];
+            }
+            else if (arg.starts_with(kResponsePrefix))
+            {
+                responsePath = std::string(arg.substr(kResponsePrefix.size()));
             }
             else if (arg == "--response-file" && i + 1 < args.count)
             {
@@ -940,6 +1032,7 @@ namespace ignite
             }
 
             WriteReportIfConfigured();
+            m_ScriptLoaded = false;
             if (m_QuitAfterScript)
             {
                 if (Application::GetInstance() && Application::GetInstance()->GetWindow())
@@ -1361,6 +1454,8 @@ namespace ignite
             else if (type == "LuaScript" && e.HasComponent<LuaScriptComponent>()) e.RemoveComponent<LuaScriptComponent>();
             else if (type == "NetworkIdentity" && e.HasComponent<NetworkIdentityComponent>()) e.RemoveComponent<NetworkIdentityComponent>();
             else if (type == "Text" && e.HasComponent<TextComponent>()) e.RemoveComponent<TextComponent>();
+            else if ((type == "PhysicsJoint" || type == "Joint") && e.HasComponent<PhysicsJointComponent>()) e.RemoveComponent<PhysicsJointComponent>();
+            else if ((type == "ParticleSystem" || type == "Particle") && e.HasComponent<ParticleSystemComponent>()) e.RemoveComponent<ParticleSystemComponent>();
             res["ok"] = true;
             return res;
         }

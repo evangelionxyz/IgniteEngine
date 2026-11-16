@@ -198,6 +198,8 @@ namespace ignite
         s_SharedIcons["arrow"] = Texture::Create("resources/ui/editor/ic_editor_arrow.png", createInfo, nullptr);
         s_SharedIcons["add"] = Texture::Create("resources/ui/editor/ic_editor_add.png", createInfo, nullptr);
         s_SharedIcons["audio"] = Texture::Create("resources/ui/editor/ic_editor_audio.png", createInfo, nullptr);
+        s_SharedIcons["csharp"] = Texture::Create("resources/ui/editor/ic_csharp.png", createInfo, nullptr);
+        s_SharedIcons["lua"] = Texture::Create("resources/ui/editor/ic_lua.png", createInfo, nullptr);
 
         s_SharedIcons["skeleton"] = Texture::Create("resources/ui/editor/ic_editor_skeleton.png", createInfo, nullptr);
         s_SharedIcons["mesh"] = Texture::Create("resources/ui/editor/ic_editor_sk_mesh.png", createInfo, nullptr);
@@ -2765,12 +2767,12 @@ namespace ignite
             case AssetType::AnimatorController: return s_SharedIcons["anim_ctrl"];
             case AssetType::AnimatorController2D: return s_SharedIcons["anim_ctrl_2d"];
             case AssetType::Terrain: return s_SharedIcons["mesh"];
-            case AssetType::LuaScript: return s_SharedIcons.contains("script") ? s_SharedIcons["script"] : s_SharedIcons["font"];
+            case AssetType::LuaScript: return s_SharedIcons["lua"];
             default: break;
         }
 
         if (filepath.extension() == ".cs")
-            return s_SharedIcons["font"]; // reuse font icon or we could add a script icon
+            return s_SharedIcons["csharp"];
 
         auto it = s_SharedThumbnails.find(filepath);
         if (it != s_SharedThumbnails.end())

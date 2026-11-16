@@ -86,6 +86,8 @@ namespace ignite
 
     public:
         void ReportLiveObjects() override;
+        bool IsDepthClampSupported() const override { return true; }
+        bool IsMultiViewportSupported() const override { return true; }
         bool EnumerateAdapters(std::vector<AdapterInfo> &outAdapters) override;
 
         static std::string GetAdapterName(DXGI_ADAPTER_DESC const &aDesc)

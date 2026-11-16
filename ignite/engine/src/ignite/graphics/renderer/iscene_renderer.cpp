@@ -105,7 +105,7 @@ namespace ignite
         }
 
         {
-            // std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+            std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
             const nri::Result result = nri.QueueSubmit(*deviceManager->GetGraphicsQueue(), submitDesc);
             if (result != nri::Result::SUCCESS)
             {

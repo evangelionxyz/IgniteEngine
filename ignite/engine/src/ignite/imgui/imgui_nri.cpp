@@ -645,10 +645,15 @@ namespace ignite
         }
         m_GraphicsPipelines.clear();
         m_BindingLayoutDesc.reset();
-        m_PipelineLayout = nullptr;
+
+        auto *deviceManager = DeviceManager::GetInstance();
+        if (deviceManager && deviceManager->GetDevice() && m_PipelineLayout)
+        {
+            deviceManager->GetCoreInterface().DestroyPipelineLayout(m_PipelineLayout);
+            m_PipelineLayout = nullptr;
+        }
 
         m_FontTexture = nullptr;
-        auto *deviceManager = DeviceManager::GetInstance();
         if (deviceManager && m_FontSampler)
         {
             deviceManager->GetCoreInterface().DestroyDescriptor(m_FontSampler);

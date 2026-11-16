@@ -217,6 +217,9 @@ namespace ignite
 
         virtual void ReportLiveObjects() {};
 
+        virtual bool IsDepthClampSupported() const { return false; }
+        virtual bool IsMultiViewportSupported() const { return false; }
+
         virtual bool IsVulkanInstanceExtensionEnabled(const char *extensionName) const { return false; }
         virtual bool IsVulkanDeviceExtensionEnabled(const char *extensionName) const { return false; }
         virtual bool IsVulkanLayerEnabled(const char *layerName) const { return false; }

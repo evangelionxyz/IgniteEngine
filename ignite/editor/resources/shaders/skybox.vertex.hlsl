@@ -26,22 +26,12 @@ struct PSInput
 PSInput main(VSInput input)
 {
     PSInput output;
-    // Remove translation from the matrix: convert to mat3 and back
-    float3x3 vpRotOnly = (float3x3) mul(camera.projection, camera.view);
+    // Rotate view direction with zero translation
+    float3 viewPos = mul(camera.view, float4(input.position, 0.0f)).xyz;
+    float4 pos = mul(camera.projection, float4(viewPos, 1.0f));
 
-    // Rebuild a float4x4 with zero translation
-    float4x4 viewProjectionNoTranslation = {
-        float4(vpRotOnly[0], 0.0f),
-        float4(vpRotOnly[1], 0.0f),
-        float4(vpRotOnly[2], 0.0f),
-        float4(0.0f, 0.0f, 0.0f, 1.0f)
-    };
-
-    float4 pos = mul(viewProjectionNoTranslation, float4(input.position, 1.0f));
-
-    // Push to far plane (w = z)
-    output.position = float4(pos.xy, pos.z, pos.z);
-
+    // Push to far plane (depth = 1.0 in Vulkan NDC [0, 1])
+    output.position = pos.xyww;
     output.UVW = input.position;
 
     return output;

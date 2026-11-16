@@ -19,7 +19,12 @@ namespace ignite
     {
         void TransitionTexture(nri::CommandBuffer *cmd, const Ref<Texture> &texture, nri::Layout beforeLayout, nri::Layout afterLayout)
         {
-            if (!cmd || !texture || !texture->GetHandle() || beforeLayout == afterLayout)
+            if (!cmd || !texture || !texture->GetHandle())
+                return;
+
+            beforeLayout = texture->GetCurrentLayout();
+
+            if (beforeLayout == afterLayout)
                 return;
 
             nri::AccessBits beforeAccess = nri::AccessBits::NONE;

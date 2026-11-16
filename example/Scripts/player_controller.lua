@@ -49,9 +49,15 @@ local vert_vel = 0.0
 local current_yaw = 0.0
 local prev_space = false
 local prev_e = false
+local prev_q = false
 local prev_r = false
 local prev_tab = false
+local prev_f2 = false
+local prev_f3 = false
+local prev_f4 = false
+local prev_t = false
 local spawn_toggle = false
+local net_sync_timer = 0.0
 
 function script.on_create(entity)
     local st = ensure_state()
@@ -114,6 +120,9 @@ function script.on_update(entity, dt)
         if hit and hit.entity and hit.entity:has_component("Rigidbody") then
             local rb = hit.entity:get_component("Rigidbody")
             rb:apply_impulse(fwd * 18.0 + Ignite.Vec3(0.0, 5.0, 0.0))
+            if _G.PlayParticleBurst then
+                _G.PlayParticleBurst(hit.point, "Spark", 400, 0.8)
+            end
         else
             spawn_toggle = not spawn_toggle
             st.spawnedCount = st.spawnedCount + 1
@@ -135,10 +144,67 @@ function script.on_update(entity, dt)
                     col.scale = Ignite.Vec3(0.5, 0.5, 0.5)
                 end
                 rb:apply_impulse(fwd * 12.0 + Ignite.Vec3(0.0, 4.0, 0.0))
+                if _G.PlayParticleBurst then
+                    _G.PlayParticleBurst(ptr.position, "Fire", 300, 0.6)
+                end
             end
         end
     end
     prev_e = e_now
+
+    -- Q: Nova Spark burst feature
+    local q_now = Ignite.Input.IsKeyPressed(Ignite.Key.Q)
+    if q_now and not prev_q then
+        if _G.PlayParticleBurst then
+            _G.PlayParticleBurst(pos + Ignite.Vec3(0.0, 0.9, 0.0), "Spark", 1500, 1.4)
+            _G.PlayParticleBurst(pos + Ignite.Vec3(0.0, 0.2, 0.0), "Fire", 600, 0.8)
+        end
+        if Ignite.Net.IsConnected() then
+            Ignite.Net.SendChat("Cast Nova Spark Burst!")
+        end
+        Ignite.Log("Triggered Nova Spark Burst at (" .. string.format("%.1f, %.1f, %.1f", pos.x, pos.y, pos.z) .. ")")
+    end
+    prev_q = q_now
+
+    -- Multiplayer hotkeys: F2 (Host), F3 (Connect), F4 (Disconnect), T (Chat)
+    local f2_now = Ignite.Input.IsKeyPressed(Ignite.Key.F2)
+    if f2_now and not prev_f2 then
+        if not Ignite.Net.IsServerRunning() then
+            local ok = Ignite.Net.StartServer(8192)
+            Ignite.Log("Host Server started on port 8192: " .. tostring(ok))
+        else
+            Ignite.Net.StopServer()
+            Ignite.Log("Host Server stopped")
+        end
+    end
+    prev_f2 = f2_now
+
+    local f3_now = Ignite.Input.IsKeyPressed(Ignite.Key.F3)
+    if f3_now and not prev_f3 then
+        if not Ignite.Net.IsConnected() then
+            local ok = Ignite.Net.Connect("127.0.0.1", 8192, "Player1")
+            Ignite.Log("Connecting to 127.0.0.1:8192: " .. tostring(ok))
+        end
+    end
+    prev_f3 = f3_now
+
+    local f4_now = Ignite.Input.IsKeyPressed(Ignite.Key.F4)
+    if f4_now and not prev_f4 then
+        if Ignite.Net.IsConnected() then
+            Ignite.Net.Disconnect()
+            Ignite.Log("Disconnected from server")
+        end
+    end
+    prev_f4 = f4_now
+
+    local t_now = Ignite.Input.IsKeyPressed(Ignite.Key.T)
+    if t_now and not prev_t then
+        if Ignite.Net.IsConnected() then
+            Ignite.Net.SendChat("Hello from Player1 at (" .. string.format("%.1f, %.1f", pos.x, pos.z) .. ")")
+            Ignite.Log("Sent multiplayer chat message")
+        end
+    end
+    prev_t = t_now
 
     -- Camera-relative movement input
     local inX = 0.0
@@ -189,6 +255,9 @@ function script.on_update(entity, dt)
         vert_vel = JUMP_SPEED
         jump_buffer = 0.0
         coyote_timer = 0.0
+        if _G.PlayParticleBurst then
+            _G.PlayParticleBurst(pos + Ignite.Vec3(0.0, 0.1, 0.0), "Smoke", 220, 0.5)
+        end
     end
 
     local horizVel = moveDir * targetSpeed + st.platformCarry
@@ -204,6 +273,18 @@ function script.on_update(entity, dt)
         current_yaw = lerp_angle_deg(current_yaw, targetYaw, TURN_SPEED * dt)
         cc:set_rotation(Ignite.Vec3(0.0, current_yaw, 0.0))
         st.playerYaw = current_yaw
+    end
+
+    -- Send networked client input when connected
+    if Ignite.Net.IsConnected() then
+        net_sync_timer = net_sync_timer + dt
+        if net_sync_timer >= (1.0 / 30.0) then
+            net_sync_timer = 0.0
+            local buttons = 0
+            if jump_buffer > 0.0 or space_now then buttons = buttons + 1 end
+            if isSprinting then buttons = buttons + 2 end
+            Ignite.Net.SendInput(inX, inZ, buttons, current_yaw)
+        end
     end
 
     -- Forward inspection raycast for debug HUD
@@ -235,7 +316,9 @@ function script.on_update(entity, dt)
 
     -- World-space live telemetry above player when debug overlay is active
     if st.showDebugOverlay then
-        local label = string.format("[%s] %.1f m/s %s", st.animState, targetSpeed, grounded and "GND" or "AIR")
+        local netStatus = Ignite.Net.IsConnected() and "[ONLINE: ID " .. tostring(Ignite.Net.GetClientId()) .. "]"
+            or (Ignite.Net.IsServerRunning() and "[HOST: Port 8192]" or "[OFFLINE]")
+        local label = string.format("%s [Player 1: %s] %.1f m/s %s", netStatus, st.animState, targetSpeed, grounded and "GND" or "AIR")
         Ignite.Debug.DrawTextWorld(
             pos + Ignite.Vec3(0.0, 2.25, 0.0),
             label,

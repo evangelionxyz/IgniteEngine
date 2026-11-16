@@ -178,8 +178,8 @@ namespace ignite
         deviceParams.startMaximized = m_CreateInfo.maximized;
         deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
-        deviceParams.enableDebugRuntime = false;
-        deviceParams.enableNRIValidation = false;
+        deviceParams.enableDebugRuntime = true;
+        deviceParams.enableNRIValidation = true;
         // deviceParams.enableGPUValidation = true;
 #endif
         deviceParams.swapChainBufferCount = 3; // TRIPLE BUFFER
@@ -326,15 +326,32 @@ namespace ignite
         const nri::CoreInterface &nri = deviceManager ? deviceManager->GetCoreInterface() : nri::CoreInterface{};
         nri::Queue *graphicsQueue = deviceManager ? deviceManager->GetGraphicsQueue() : nullptr;
 
-        // Create per-thread command allocator and command buffer
-        nri::CommandAllocator *renderCmdAllocator = nullptr;
-        nri::CommandBuffer *renderCommandBuffer = nullptr;
+        // Create per-frame-in-flight command allocators and command buffers to prevent GPU use-after-free
+        struct RenderCommandSlot
+        {
+            nri::CommandAllocator *allocator = nullptr;
+            nri::CommandBuffer *commandBuffer = nullptr;
+            uint64_t fenceValue = 0;
+        };
+
+        const uint32_t maxInFlight = deviceManager ? std::max(1u, deviceManager->GetDeviceParameters().maxFramesInFlight) : 3u;
+        std::vector<RenderCommandSlot> renderCommandSlots(maxInFlight);
+        nri::Fence *renderCommandFence = nullptr;
+        uint64_t nextRenderFenceValue = 1;
+
         if (device && graphicsQueue)
         {
-            nri.CreateCommandAllocator(*graphicsQueue, renderCmdAllocator);
-            if (renderCmdAllocator)
+            nri::FenceDesc fenceDesc = {};
+            fenceDesc.initialValue = 0;
+            nri.CreateFence(*device, fenceDesc, renderCommandFence);
+
+            for (auto &slot : renderCommandSlots)
             {
-                nri.CreateCommandBuffer(*renderCmdAllocator, renderCommandBuffer);
+                nri.CreateCommandAllocator(*graphicsQueue, slot.allocator);
+                if (slot.allocator)
+                {
+                    nri.CreateCommandBuffer(*slot.allocator, slot.commandBuffer);
+                }
             }
         }
 
@@ -385,6 +402,15 @@ namespace ignite
             // ------------------------------
             // Clear Back Buffer Framebuffer
             // ------------------------------
+            auto &slot = renderCommandSlots[currentFrame % renderCommandSlots.size()];
+            if (renderCommandFence && slot.fenceValue > 0 && nri.GetFenceValue(*renderCommandFence) < slot.fenceValue)
+            {
+                nri.Wait(*renderCommandFence, slot.fenceValue);
+            }
+
+            nri::CommandAllocator *renderCmdAllocator = slot.allocator;
+            nri::CommandBuffer *renderCommandBuffer = slot.commandBuffer;
+
             if (backBufferRenderTarget && renderCmdAllocator && renderCommandBuffer && graphicsQueue)
             {
                 IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
@@ -396,9 +422,20 @@ namespace ignite
                 backBufferRenderTarget->EndRendering(renderCommandBuffer);
                 nri.EndCommandBuffer(*renderCommandBuffer);
 
+                const uint64_t signalValue = nextRenderFenceValue++;
+                nri::FenceSubmitDesc signalFence = {};
+                signalFence.fence = renderCommandFence;
+                signalFence.value = signalValue;
+                signalFence.stages = nri::StageBits::ALL;
+
                 nri::QueueSubmitDesc submitDesc = {};
                 submitDesc.commandBuffers = &renderCommandBuffer;
                 submitDesc.commandBufferNum = 1;
+                if (renderCommandFence)
+                {
+                    submitDesc.signalFences = &signalFence;
+                    submitDesc.signalFenceNum = 1;
+                }
 
                 {
                     auto &queueMutex = GPUUploadSync::GetQueueMutex();
@@ -409,8 +446,17 @@ namespace ignite
                     }
                     {
                         IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexHold");
-                        nri.QueueSubmit(*graphicsQueue, submitDesc);
+                        const nri::Result result = nri.QueueSubmit(*graphicsQueue, submitDesc);
+                        if (result != nri::Result::SUCCESS)
+                        {
+                            LOG_ERROR("[RenderThread] Clear framebuffer QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
+                            m_RenderThreadRunning = false;
+                        }
                     }
+                }
+                if (m_RenderThreadRunning)
+                {
+                    slot.fenceValue = signalValue;
                 }
             }
             else if (backBuffer && backBufferRTV && renderCmdAllocator && renderCommandBuffer && graphicsQueue)
@@ -453,9 +499,20 @@ namespace ignite
 
                 nri.EndCommandBuffer(*renderCommandBuffer);
 
+                const uint64_t signalValue = nextRenderFenceValue++;
+                nri::FenceSubmitDesc signalFence = {};
+                signalFence.fence = renderCommandFence;
+                signalFence.value = signalValue;
+                signalFence.stages = nri::StageBits::ALL;
+
                 nri::QueueSubmitDesc submitDesc = {};
                 submitDesc.commandBuffers = &renderCommandBuffer;
                 submitDesc.commandBufferNum = 1;
+                if (renderCommandFence)
+                {
+                    submitDesc.signalFences = &signalFence;
+                    submitDesc.signalFenceNum = 1;
+                }
 
                 {
                     auto &queueMutex = GPUUploadSync::GetQueueMutex();
@@ -466,9 +523,23 @@ namespace ignite
                     }
                     {
                         IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexHold");
-                        nri.QueueSubmit(*graphicsQueue, submitDesc);
+                        const nri::Result result = nri.QueueSubmit(*graphicsQueue, submitDesc);
+                        if (result != nri::Result::SUCCESS)
+                        {
+                            LOG_ERROR("[RenderThread] Clear framebuffer QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
+                            m_RenderThreadRunning = false;
+                        }
                     }
                 }
+                if (m_RenderThreadRunning)
+                {
+                    slot.fenceValue = signalValue;
+                }
+            }
+
+            if (!m_RenderThreadRunning)
+            {
+                break;
             }
 
             if (Texture::HasPendingUploads())
@@ -545,9 +616,19 @@ namespace ignite
                     std::unique_lock<std::mutex> queueLock(queueMutex);
                     {
                         IGN_PROFILE_SCOPE("RenderThread::WorkerSubmit::QueueMutexHold");
-                        nri.QueueSubmit(*graphicsQueue, submitDesc);
+                        const nri::Result result = nri.QueueSubmit(*graphicsQueue, submitDesc);
+                        if (result != nri::Result::SUCCESS)
+                        {
+                            LOG_ERROR("[RenderThread] Worker QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
+                            m_RenderThreadRunning = false;
+                        }
                     }
                 }
+            }
+
+            if (!m_RenderThreadRunning)
+            {
+                break;
             }
 
             // Signal frame complete as soon as all GPU work for this frame has been submitted.
@@ -573,15 +654,35 @@ namespace ignite
             }
         }
 
-        if (renderCommandBuffer)
+        if (renderCommandFence)
         {
-            nri.DestroyCommandBuffer(renderCommandBuffer);
-            renderCommandBuffer = nullptr;
+            for (auto &slot : renderCommandSlots)
+            {
+                if (slot.fenceValue > 0 && nri.GetFenceValue(*renderCommandFence) < slot.fenceValue)
+                {
+                    nri.Wait(*renderCommandFence, slot.fenceValue);
+                }
+            }
         }
-        if (renderCmdAllocator)
+
+        for (auto &slot : renderCommandSlots)
         {
-            nri.DestroyCommandAllocator(renderCmdAllocator);
-            renderCmdAllocator = nullptr;
+            if (slot.commandBuffer)
+            {
+                nri.DestroyCommandBuffer(slot.commandBuffer);
+                slot.commandBuffer = nullptr;
+            }
+            if (slot.allocator)
+            {
+                nri.DestroyCommandAllocator(slot.allocator);
+                slot.allocator = nullptr;
+            }
+        }
+
+        if (renderCommandFence)
+        {
+            nri.DestroyFence(renderCommandFence);
+            renderCommandFence = nullptr;
         }
     }
 

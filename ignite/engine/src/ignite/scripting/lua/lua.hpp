@@ -43,7 +43,9 @@ namespace ignite::lua
         CircleCollider2D,
         Text,
         Widget,
-        NetworkIdentity
+        NetworkIdentity,
+        PhysicsJoint,
+        ParticleSystem
     };
 
     struct EntityRef

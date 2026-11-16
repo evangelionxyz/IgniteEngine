@@ -58,12 +58,27 @@ namespace ignite
             }
         }
 
+        nri::StageBits effectiveShaderStages = shaderStages;
+        if (effectiveShaderStages == nri::StageBits::ALL)
+        {
+            // Only include stages that are supported on standard desktop graphics devices without optional extensions (no mesh/task or RT unless enabled)
+            effectiveShaderStages = nri::StageBits::VERTEX_SHADER
+                                  | nri::StageBits::TESSELLATION_SHADERS
+                                  | nri::StageBits::GEOMETRY_SHADER
+                                  | nri::StageBits::FRAGMENT_SHADER
+                                  | nri::StageBits::COMPUTE_SHADER;
+            if (dm && dm->GetDeviceParameters().enableRayTracingExtensions)
+            {
+                effectiveShaderStages |= nri::StageBits::RAY_TRACING_SHADERS;
+            }
+        }
+
         nri::PipelineLayoutDesc pipelineLayoutDesc = {};
         pipelineLayoutDesc.descriptorSets = setDescs.empty() ? nullptr : setDescs.data();
         pipelineLayoutDesc.descriptorSetNum = static_cast<uint32_t>(setDescs.size());
         pipelineLayoutDesc.rootConstants = rootConstants.empty() ? nullptr : rootConstants.data();
         pipelineLayoutDesc.rootConstantNum = static_cast<uint32_t>(rootConstants.size());
-        pipelineLayoutDesc.shaderStages = shaderStages;
+        pipelineLayoutDesc.shaderStages = effectiveShaderStages;
         pipelineLayoutDesc.flags = flags;
 
         nri::PipelineLayout *pipelineLayout = nullptr;

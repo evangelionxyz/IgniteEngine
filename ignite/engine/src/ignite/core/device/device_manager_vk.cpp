@@ -1187,6 +1187,9 @@ namespace ignite
 
 #undef APPEND_EXTENSION
 
+        m_DepthClampSupported = physicalDeviceFeatures2.features.depthClamp;
+        m_MultiViewportSupported = physicalDeviceFeatures2.features.multiViewport;
+
         auto deviceFeatures = vk::PhysicalDeviceFeatures()
             .setIndependentBlend(true)
             .setShaderImageGatherExtended(true)
@@ -1199,7 +1202,9 @@ namespace ignite
             .setFillModeNonSolid(true)
             .setFragmentStoresAndAtomics(true)
             .setDualSrcBlend(true)
-            .setVertexPipelineStoresAndAtomics(true);
+            .setVertexPipelineStoresAndAtomics(true)
+            .setDepthClamp(m_DepthClampSupported)
+            .setMultiViewport(m_MultiViewportSupported);
 
         // add a Vulkan 1.1 structure with default settings to make it easier for apps to modify them
         auto vulkan11features = vk::PhysicalDeviceVulkan11Features()

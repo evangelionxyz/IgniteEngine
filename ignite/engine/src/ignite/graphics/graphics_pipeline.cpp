@@ -139,7 +139,7 @@ namespace ignite
         pipelineDesc.rasterization.fillMode = m_Params.fillMode;
         pipelineDesc.rasterization.cullMode = m_Params.cullMode;
         pipelineDesc.rasterization.frontCounterClockwise = false;
-        pipelineDesc.rasterization.depthClamp = !m_Params.enableDepthClip;
+        pipelineDesc.rasterization.depthClamp = !m_Params.enableDepthClip && DeviceManager::GetInstance() && DeviceManager::GetInstance()->IsDepthClampSupported();
         pipelineDesc.rasterization.depthBias = m_Params.depthBias;
 
         nri::MultisampleDesc multisampleDesc = {};

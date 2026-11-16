@@ -51,6 +51,11 @@ float2 GetTransmittanceUV(float r, float cosZenith)
 
 float3 SampleTransmittance(float r, float cosZenith)
 {
+    float sinHorizonSq = (PlanetRadius * PlanetRadius) / (r * r);
+    if (cosZenith < 0.0 && (1.0 - cosZenith * cosZenith) < sinHorizonSq)
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
     float2 uv = GetTransmittanceUV(r, cosZenith);
     return transmittanceLUT.SampleLevel(linearSampler, uv, 0).rgb;
 }
@@ -153,7 +158,7 @@ void main(uint3 id : SV_DispatchThreadID)
     }
 
     const int steps = 32;
-    float dt = tMax / steps;
+    float dt = tMax / float(steps);
 
     float cosTheta = dot(viewDir, sunDir);
     float rPhase = RayleighPhase(cosTheta);
@@ -164,7 +169,7 @@ void main(uint3 id : SV_DispatchThreadID)
 
     for (int i = 0; i < steps; i++)
     {
-        float3 p = rayStart + viewDir * (dt * (i + 0.5));
+        float3 p = rayStart + viewDir * (dt * (float(i) + 0.5));
         float pLen = length(p);
         float pHeight = max(0.0, pLen - PlanetRadius);
 
@@ -179,11 +184,13 @@ void main(uint3 id : SV_DispatchThreadID)
         float3 sampleTrans = exp(-extinction * dt);
 
         float cosSunZenithAtP = dot(normalize(p), sunDir);
-        float3 pSunTrans = cosSunZenithAtP > 0.0 ? SampleTransmittance(pLen, cosSunZenithAtP) : float3(0, 0, 0);
+        float3 pSunTrans = SampleTransmittance(pLen, cosSunZenithAtP);
         float3 multiScat = SampleMultiScattering(pLen, cosSunZenithAtP);
 
         float3 singleScat = (sRayleigh * rPhase + sMie * mPhase) * pSunTrans * sunColor;
-        float3 secondScat = multiScat * sunColor * 0.35f;
+        // Physically correct multiple scattering: isotropic radiance Psi arriving at p
+        // scattered into view direction by (sRayleigh + sMie)
+        float3 secondScat = (sRayleigh + sMie) * multiScat * sunColor;
 
         float3 stepScattering = singleScat + secondScat;
         float3 stepInScattering = (stepScattering - stepScattering * sampleTrans) / max(float3(1e-5, 1e-5, 1e-5), extinction);
@@ -195,14 +202,26 @@ void main(uint3 id : SV_DispatchThreadID)
     if (hitsGround)
     {
         float3 groundPos = rayStart + viewDir * planetHit.x;
-        float groundLen = length(groundPos);
-        float3 groundNorm = normalize(groundPos);
+        float groundNorm = normalize(groundPos);
         float NdotS = max(0.0, dot(groundNorm, sunDir));
-        float3 groundSunTrans = NdotS > 0.0 ? SampleTransmittance(groundLen, NdotS) : float3(0, 0, 0);
-        float3 groundRadiance = (GroundAlbedo / 3.14159265359) * groundSunTrans * sunColor * NdotS;
+        float3 groundSunTrans = SampleTransmittance(PlanetRadius, NdotS);
+        float3 groundDirect = (GroundAlbedo / 3.14159265359) * groundSunTrans * sunColor * NdotS;
+        float3 multiScatAtGround = SampleMultiScattering(PlanetRadius, dot(groundNorm, sunDir));
+        float3 groundAmbient = GroundAlbedo * multiScatAtGround * 0.5;
+        float3 groundRadiance = groundDirect + groundAmbient;
 
+        // Atmospheric haze smoothly fills the horizon view:
+        // As angle below horizon increases, ground radiance emerges
+        float horizonAngle = asin(clamp(PlanetRadius / r, 0.0, 1.0));
+        float angleBelow = max(0.0, zenith - horizonAngle);
+        float horizonHaze = exp(-angleBelow * 12.0f);
+        
         inScattering += transmittance * groundRadiance;
+        // Smooth blend to avoid harsh cliff edge at horizon
+        inScattering = lerp(groundRadiance, inScattering, 1.0 - horizonHaze * 0.5f);
     }
 
-    skyViewLUT[id.xy] = float4(inScattering, 1.0);
+    // Sky luminance factor to calibrate physical atmospheric radiance for HDR games
+    static const float SKY_LUMINANCE_FACTOR = 3.5f;
+    skyViewLUT[id.xy] = float4(inScattering * SKY_LUMINANCE_FACTOR, 1.0);
 }

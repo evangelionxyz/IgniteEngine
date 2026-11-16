@@ -796,6 +796,12 @@ namespace ignite
 
     Ref<Scene> SceneManager::Copy(Ref<Scene> &other)
     {
+        if (!other)
+        {
+            LOG_WARN("[SceneManager] Copy called with null scene");
+            return nullptr;
+        }
+
         // create new scene with other's name
         Ref<Scene> newScene = CreateRef<Scene>(other->GetProject());
 

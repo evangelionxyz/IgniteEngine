@@ -36,12 +36,27 @@ function script.on_update(entity, dt)
         local pickupRadius = is_goal and 2.2 or 1.55
         if d < pickupRadius then
             if is_goal then
-                st.goalReached = true
+                if not st.goalReached then
+                    st.goalReached = true
+                    if _G.PlayParticleBurst then
+                        _G.PlayParticleBurst(tr.position + Ignite.Vec3(0.0, 1.2, 0.0), "Fire", 2400, 3.5)
+                        _G.PlayParticleBurst(tr.position + Ignite.Vec3(0.0, 1.8, 0.0), "Spark", 1200, 2.5)
+                    end
+                    if Ignite.Net.IsConnected() then
+                        Ignite.Net.SendChat("SUMMIT GOAL REACHED! All Relics Gathered!")
+                    end
+                end
             else
                 collected = true
                 st.score = (st.score or 0) + 1
                 local rc = entity:get_component("Rendering")
                 if rc then rc.visible = false end
+                if _G.PlayParticleBurst then
+                    _G.PlayParticleBurst(tr.position, "Spark", 500, 1.0)
+                end
+                if Ignite.Net.IsConnected() then
+                    Ignite.Net.SendChat("Collected " .. entity:get_name() .. "! Score: " .. tostring(st.score))
+                end
                 Ignite.Log("Collected " .. entity:get_name() .. "! Score: " .. tostring(st.score))
             end
         end

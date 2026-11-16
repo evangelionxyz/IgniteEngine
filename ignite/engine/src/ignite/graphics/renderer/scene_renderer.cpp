@@ -3859,7 +3859,7 @@ namespace ignite
     // Helper to build a composite pipeline per framebuffer (once)
     Ref<GraphicsPipeline> SceneRenderer::GetCompositePSO(RenderTarget *framebuffer, nri::FillMode fillMode)
     {
-        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto key = MakeFramebufferKey(framebuffer, fillMode, nri::CullMode::NONE);
         auto it = m_CompositePSOCache.find(key);
 
         if (it != m_CompositePSOCache.end())
@@ -3911,7 +3911,7 @@ namespace ignite
 
     Ref<GraphicsPipeline> SceneRenderer::GetFXAAPSO(RenderTarget *framebuffer)
     {
-        auto key = MakeFramebufferKey(framebuffer, nri::FillMode::SOLID);
+        auto key = MakeFramebufferKey(framebuffer, nri::FillMode::SOLID, nri::CullMode::NONE);
         auto it = m_FXAAPSOCache.find(key);
         if (it != m_FXAAPSOCache.end())
             return it->second;

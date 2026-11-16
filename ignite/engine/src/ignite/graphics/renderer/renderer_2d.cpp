@@ -31,15 +31,61 @@ namespace ignite
     static constexpr uint32_t s_BatchShrinkThresholdPercent = 30;
     static constexpr uint32_t s_BatchShrinkFrameThreshold = 300;
 
-    static std::vector<Ref<VertexBuffer>> s_RetiredVertexBuffers;
-    static std::vector<Ref<IndexBuffer>> s_RetiredIndexBuffers;
-    static std::mutex s_RetiredBuffersMutex;
+    struct RetiredVertexBuffer
+    {
+        uint64_t retiredFrame = 0;
+        Ref<VertexBuffer> buffer;
+    };
 
-    void Renderer2D::ClearRetiredBuffers()
+    struct RetiredIndexBuffer
+    {
+        uint64_t retiredFrame = 0;
+        Ref<IndexBuffer> buffer;
+    };
+
+    static std::vector<RetiredVertexBuffer> s_RetiredVertexBuffers;
+    static std::vector<RetiredIndexBuffer> s_RetiredIndexBuffers;
+    static std::mutex s_RetiredBuffersMutex;
+    static std::atomic<uint64_t> s_CurrentFrameIndex{ 0 };
+
+    void Renderer2D::ClearRetiredBuffers(uint64_t currentFrame, bool forceAll)
     {
         std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
-        s_RetiredVertexBuffers.clear();
-        s_RetiredIndexBuffers.clear();
+        if (currentFrame > 0)
+        {
+            s_CurrentFrameIndex.store(currentFrame);
+        }
+        else
+        {
+            currentFrame = s_CurrentFrameIndex.load();
+        }
+
+        if (forceAll)
+        {
+            s_RetiredVertexBuffers.clear();
+            s_RetiredIndexBuffers.clear();
+            return;
+        }
+
+        // Keep retired buffers alive for at least 4 frames so GPU finishes drawing
+        // all in-flight frames before their vertex/index buffers are freed.
+        constexpr uint64_t kRetireDelayFrames = 4;
+
+        s_RetiredVertexBuffers.erase(
+            std::remove_if(s_RetiredVertexBuffers.begin(), s_RetiredVertexBuffers.end(),
+                [currentFrame](const RetiredVertexBuffer &entry)
+                {
+                    return currentFrame >= entry.retiredFrame + kRetireDelayFrames;
+                }),
+            s_RetiredVertexBuffers.end());
+
+        s_RetiredIndexBuffers.erase(
+            std::remove_if(s_RetiredIndexBuffers.begin(), s_RetiredIndexBuffers.end(),
+                [currentFrame](const RetiredIndexBuffer &entry)
+                {
+                    return currentFrame >= entry.retiredFrame + kRetireDelayFrames;
+                }),
+            s_RetiredIndexBuffers.end());
     }
 
     template<typename VertexType>
@@ -69,15 +115,16 @@ namespace ignite
         const size_t verticesAllocSize = static_cast<size_t>(batch.maxVertices) * sizeof(VertexType);
         const size_t indicesAllocSize = static_cast<size_t>(batch.maxIndices) * sizeof(uint32_t);
 
+        const uint64_t curFrame = s_CurrentFrameIndex.load();
         if (batch.vertexBuffer)
         {
             std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
-            s_RetiredVertexBuffers.push_back(batch.vertexBuffer);
+            s_RetiredVertexBuffers.push_back({ curFrame, batch.vertexBuffer });
         }
         if (batch.indexBuffer && recreateIndexBuffer && batch.indicesPerObject > 0)
         {
             std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
-            s_RetiredIndexBuffers.push_back(batch.indexBuffer);
+            s_RetiredIndexBuffers.push_back({ curFrame, batch.indexBuffer });
         }
 
         batch.vertexBuffer = VertexBuffer::Create(verticesAllocSize);
@@ -531,7 +578,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        ClearRetiredBuffers();
+        ClearRetiredBuffers(0, true);
 
         m_LinePSOCache.clear();
         m_QuadPSOCache.clear();

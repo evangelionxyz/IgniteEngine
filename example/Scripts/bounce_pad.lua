@@ -20,6 +20,9 @@ function script.on_update(entity, dt)
         st.bounceRequested = true
         st.bounceVel = BOUNCE_SPEED
         cooldown = 0.35
+        if _G.PlayParticleBurst then
+            _G.PlayParticleBurst(p + Ignite.Vec3(0.0, 0.35, 0.0), "Fire", 750, 0.6)
+        end
     end
 
     if st.showDebugOverlay then
