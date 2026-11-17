@@ -11,7 +11,7 @@
 #include "ignite/physics/3d/physics_3d.hpp"
 #include "ignite/math/transform.hpp"
 #include "ignite/scripting/script_engine.hpp"
-#include "ignite/scripting/lua_script_runtime.hpp"
+#include "ignite/scripting/lua/lua_script_runtime.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/animation_2d.hpp"
@@ -247,7 +247,7 @@ namespace ignite
             scriptEngine->SetSceneContext(this);
         }
 
-        m_LuaScriptRuntime = CreateScope<LuaScriptRuntime>(this);
+        m_LuaScriptRuntime = CreateScope<lua::ScriptRuntime>(this);
 
         // reset time
         timeInSeconds = 0.0f;
@@ -568,6 +568,7 @@ namespace ignite
                 ccDesc.halfHeight = halfHeight;
                 ccDesc.mass = cc.mass;
                 ccDesc.friction = cc.friction;
+                ccDesc.gravityFactor = cc.gravityFactor;
                 ccDesc.maxStepHeight = cc.maxStepHeight;
                 ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
                 ccDesc.up = cc.up;
@@ -577,7 +578,9 @@ namespace ignite
                 {
                     charActor->SetPosition(tr.world.translation);
                     charActor->SetRotation(tr.world.rotation);
+                    charActor->SetLinearVelocity(cc.linearVelocity);
                 }
+                cc.desiredVelocity = cc.linearVelocity;
                 cc.character = charActor;
             }
 
@@ -684,6 +687,7 @@ namespace ignite
 
         m_State = ESceneState::Stop;
         m_PreviousState = ESceneState::Stop;
+        ClearDebugDraw();
 
         m_StepFrame = 0;
         timeInSeconds = 0.0f;
@@ -923,6 +927,7 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("Scene::RuntimeTick");
             timeInSeconds += deltaTime;
+            ClearDebugDraw();
 
             // Update audio
             registry->view<AudioSourceComponent>().each([this, deltaTime](entt::entity e, AudioSourceComponent &as)
@@ -1294,6 +1299,8 @@ namespace ignite
                                 {
                                     CalculateParentTransform(idc, tr, dynActor->GetPosition(), dynActor->GetRotation());
                                 }
+                                rb.linearVelocity = dynActor->GetLinearVelocity();
+                                rb.angularVelocity = dynActor->GetAngularVelocity();
                             }
                             else if (stActor)
                             {
@@ -1329,6 +1336,7 @@ namespace ignite
                             ccDesc.halfHeight = halfHeight;
                             ccDesc.mass = cc.mass;
                             ccDesc.friction = cc.friction;
+                            ccDesc.gravityFactor = cc.gravityFactor;
                             ccDesc.maxStepHeight = cc.maxStepHeight;
                             ccDesc.maxSlopeAngle = cc.maxSlopeAngle;
                             ccDesc.up = cc.up;
@@ -1346,6 +1354,7 @@ namespace ignite
                             {
                                 charActor->SetPosition(currentPos);
                                 charActor->SetRotation(currentRot);
+                                charActor->SetLinearVelocity(cc.linearVelocity);
                             }
                             cc.character = charActor;
                             cc.dirty = false;
@@ -1356,8 +1365,12 @@ namespace ignite
                         {
                             if (!isRemoteChar)
                             {
-                                ccActor->Move(cc.linearVelocity, 1.0f / 60.0f);
+                                ccActor->Move(cc.desiredVelocity, deltaTime);
                                 CalculateParentTransform(idc, tr, ccActor->GetPosition(), ccActor->GetRotation());
+                                cc.linearVelocity = ccActor->GetLinearVelocity();
+                                cc.desiredVelocity.y = cc.linearVelocity.y;
+                                if (ccActor->IsOnGround())
+                                    cc.desiredVelocity.y -= ccActor->GetGroundVelocity().y;
                             }
                             else
                             {
@@ -1482,6 +1495,22 @@ namespace ignite
 
                         dispatch(getScriptInstance(ev.userDataA), ev.userDataB);
                         dispatch(getScriptInstance(ev.userDataB), ev.userDataA);
+
+                        if (m_LuaScriptRuntime)
+                        {
+                            const char *luaCallback = nullptr;
+                            switch (ev.type)
+                            {
+                                case physics::CollisionEventType::Enter: luaCallback = "on_collision_enter"; break;
+                                case physics::CollisionEventType::Stay:  luaCallback = "on_collision_stay";  break;
+                                case physics::CollisionEventType::Exit:  luaCallback = "on_collision_exit";  break;
+                            }
+                            if (luaCallback)
+                            {
+                                m_LuaScriptRuntime->InvokeCollision(UUID(ev.userDataA), UUID(ev.userDataB), luaCallback, ev.contactPoint, ev.contactNormal);
+                                m_LuaScriptRuntime->InvokeCollision(UUID(ev.userDataB), UUID(ev.userDataA), luaCallback, ev.contactPoint, -ev.contactNormal);
+                            }
+                        }
                     }
 
                     auto activationEvents = m_Physics3D->DrainActivationEvents();
@@ -2144,6 +2173,10 @@ namespace ignite
                 runtime.currentStateName = smc.currentStateName;
                 runtime.stateElapsed = smc.stateElapsed;
                 runtime.stateNormalized = smc.stateNormalized;
+                runtime.isTransitioning = smc.isTransitioning;
+                runtime.transitionTargetState = smc.transitionTargetState;
+                runtime.transitionDuration = smc.transitionDuration;
+                runtime.transitionElapsed = smc.transitionElapsed;
                 runtime.blendSpaceSmoothedInput = smc.blendSpaceSmoothedInput;
                 runtime.blendSpaceVelocity = smc.blendSpaceVelocity;
 
@@ -2161,6 +2194,10 @@ namespace ignite
                     smc.currentStateName = runtime.currentStateName;
                     smc.stateElapsed = runtime.stateElapsed;
                     smc.stateNormalized = runtime.stateNormalized;
+                    smc.isTransitioning = runtime.isTransitioning;
+                    smc.transitionTargetState = runtime.transitionTargetState;
+                    smc.transitionDuration = runtime.transitionDuration;
+                    smc.transitionElapsed = runtime.transitionElapsed;
                     smc.blendSpaceSmoothedInput = runtime.blendSpaceSmoothedInput;
                     smc.blendSpaceVelocity = runtime.blendSpaceVelocity;
 

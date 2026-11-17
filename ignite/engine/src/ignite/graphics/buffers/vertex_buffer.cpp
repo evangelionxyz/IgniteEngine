@@ -23,13 +23,18 @@ namespace ignite
         desc.size = size;
         desc.usage = nri::BufferUsageBits::VERTEX;
 
-        nri::Result result = nri.CreateCommittedBuffer(*device, nri::MemoryLocation::HOST_UPLOAD, 1.0f, desc, m_Handle);
+        nri::Result result = nri.CreateCommittedBuffer(*device, nri::MemoryLocation::DEVICE_UPLOAD, 1.0f, desc, m_Handle);
+        if (result != nri::Result::SUCCESS || !m_Handle)
+        {
+            result = nri.CreateCommittedBuffer(*device, nri::MemoryLocation::HOST_UPLOAD, 1.0f, desc, m_Handle);
+        }
         LOG_ASSERT(result == nri::Result::SUCCESS && m_Handle, "[Vertex Buffer] Failed to create handle!");
         if (m_Handle)
         {
             nri.SetDebugName((nri::Object*)m_Handle, debugName.c_str());
             IGN_PROFILE_ALLOC_N(m_Handle, size, "GPU Vertex Buffer");
             Renderer::Stats.gpuVertexBufferBytes += size;
+            m_MappedMemory = static_cast<uint8_t *>(nri.MapBuffer(*m_Handle, 0, size));
         }
     }
 
@@ -42,6 +47,11 @@ namespace ignite
             auto *deviceManager = DeviceManager::GetInstance();
             if (deviceManager)
             {
+                if (m_MappedMemory)
+                {
+                    deviceManager->GetCoreInterface().UnmapBuffer(*m_Handle);
+                    m_MappedMemory = nullptr;
+                }
                 deviceManager->GetCoreInterface().DestroyBuffer(m_Handle);
             }
             m_Handle = nullptr;
@@ -50,7 +60,13 @@ namespace ignite
 
     void VertexBuffer::SetData(const void *data, size_t dataSize, size_t offset) const
     {
-        if (!m_Handle || !data || dataSize == 0) return;
+        if (!m_Handle || !data || dataSize == 0 || offset + dataSize > m_ByteSize) return;
+
+        if (m_MappedMemory)
+        {
+            std::memcpy(m_MappedMemory + offset, data, dataSize);
+            return;
+        }
 
         auto *deviceManager = DeviceManager::GetInstance();
         const auto &nri = deviceManager->GetCoreInterface();

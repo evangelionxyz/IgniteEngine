@@ -13,6 +13,7 @@
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/asset/asset_manager.hpp"
 
 namespace ignite
@@ -25,6 +26,11 @@ namespace ignite
 
     ParticleSystem::~ParticleSystem()
     {
+        if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
+        {
+            GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+        }
+
         DestroyPipelines();
         DestroyBuffers();
     }
@@ -72,6 +78,11 @@ namespace ignite
 
     void ParticleSystem::Init(uint32_t maxParticles)
     {
+        if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
+        {
+            GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+        }
+
         DestroyPipelines();
         DestroyBuffers();
 

@@ -1,0 +1,87 @@
+{
+    "Material": {
+        "Version": 4096,
+        "Name": "Texture",
+        "Type": 0,
+        "CullMode": 1,
+        "BaseColorTextureHandle": 14001440461023133063,
+        "EmissiveTextureHandle": 0,
+        "MetallicTextureHandle": 0,
+        "RoughnessTextureHandle": 0,
+        "NormalTextureHandle": 0,
+        "OcclusionTextureHandle": 0,
+        "GPUData": {
+            "BaseColorFactor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EmissiveFactor": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ],
+            "MetallicFactor": 0.0,
+            "RoughnessFactor": 1.0,
+            "OcclusionStrength": 1.0,
+            "BaseWeight": 1.0,
+            "SpecularWeight": 1.0,
+            "SpecularIOR": 1.5,
+            "SpecularColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "CoatWeight": 0.0,
+            "CoatColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "CoatRoughness": 0.0,
+            "CoatIOR": 1.600000023841858,
+            "CoatDarkening": 1.0,
+            "SpecularAnisotropy": 0.0,
+            "SubsurfaceWeight": 0.0,
+            "SubsurfaceScale": 1.0,
+            "SubsurfaceColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "SubsurfaceRadius": [
+                1.0,
+                0.20000000298023224,
+                0.10000000149011612,
+                0.0
+            ],
+            "TransmissionWeight": 0.0,
+            "TransmissionDepth": 0.0,
+            "TransmissionColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "FuzzWeight": 0.0,
+            "FuzzRoughness": 0.5,
+            "FuzzColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "UseMultiScatter": 1.0,
+            "EmissionLuminance": 1.0,
+            "MetallicChannel": 2,
+            "RoughnessChannel": 1,
+            "TilingFactorX": 1.0,
+            "TilingFactorY": 1.0
+        }
+    }
+}

@@ -4,6 +4,7 @@
 #include <ignite/core/logger.hpp>
 #include <ignite/scene/scene_manager.hpp>
 #include <ignite/asset/asset_manager.hpp>
+#include <ignite/serializer/scene_serializer.hpp>
 
 #include <iostream>
 #include <thread>
@@ -95,6 +96,37 @@ namespace ignite
             }
         }
 
+        if (!m_Config.scenePath.empty())
+        {
+            std::filesystem::path resolvedScenePath = m_Config.scenePath;
+            if (!std::filesystem::exists(resolvedScenePath) && m_Project)
+            {
+                const std::filesystem::path candidate = m_Project->GetAssetDirectory() / resolvedScenePath;
+                if (std::filesystem::exists(candidate))
+                    resolvedScenePath = candidate;
+                else
+                {
+                    const std::filesystem::path projCandidate = m_Project->GetDirectory() / resolvedScenePath;
+                    if (std::filesystem::exists(projCandidate))
+                        resolvedScenePath = projCandidate;
+                }
+            }
+
+            if (std::filesystem::exists(resolvedScenePath))
+            {
+                if (Ref<Scene> loadedScene = SceneSerializer::Deserialize(resolvedScenePath, m_Project.get()))
+                {
+                    m_Scene = loadedScene;
+                    if (m_Project)
+                        m_Project->SetActiveScene(m_Scene);
+                }
+            }
+            else
+            {
+                LOG_WARN("[ServerApp] Scene file '{}' not found", m_Config.scenePath);
+            }
+        }
+
         if (!m_Scene)
         {
             m_Scene = Scene::Create(m_Project.get());
@@ -174,38 +206,49 @@ namespace ignite
             // 1. Pump network events
             m_ServerSystem->Tick();
 
-            // 2. Apply queued client inputs to character controllers
-            m_ServerSystem->ForEachClient([this](NetServerSystem::RemoteClient &client) {
+            // 2. Apply all queued client inputs to player entities
+            m_ServerSystem->ForEachClient([this, tickDt](NetServerSystem::RemoteClient &client) {
                 auto inputs = m_ServerSystem->DrainInputs(client.clientId);
                 if (inputs.empty())
                     return;
 
-                // Find this client's player entity
-                auto view = m_Scene->registry->view<NetworkIdentityComponent, CharacterControllerComponent>();
+                auto view = m_Scene->registry->view<NetworkIdentityComponent>();
                 for (entt::entity e : view)
                 {
-                    const auto &[netComp, cc] = view.get<NetworkIdentityComponent, CharacterControllerComponent>(e);
-                    if (netComp.ownerClient == client.clientId)
+                    const auto &netComp = view.get<NetworkIdentityComponent>(e);
+                    if (netComp.ownerClient != client.clientId)
+                        continue;
+
+                    Entity entity{ e, m_Scene.get() };
+                    for (const auto &cmd : inputs)
                     {
-                        // Apply newest input movement
-                        const auto &latest = inputs.back();
-                        const glm::vec3 moveDir(latest.move.x, 0.0f, latest.move.y);
                         constexpr float speed = 5.0f;
-                        cc.linearVelocity.x = moveDir.x * speed;
-                        cc.linearVelocity.z = moveDir.z * speed;
-                        if (auto charActor = cc.character.lock())
+                        if (entity.HasComponent<CharacterControllerComponent>())
                         {
-                            if ((latest.buttons & netproto::InputButton_Jump) && charActor->IsOnGround())
+                            auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                            const glm::vec3 moveDir(cmd.move.x, 0.0f, cmd.move.y);
+                            cc.linearVelocity.x = moveDir.x * speed;
+                            cc.linearVelocity.z = moveDir.z * speed;
+                            if (auto charActor = cc.character.lock())
+                            {
+                                if ((cmd.buttons & netproto::InputButton_Jump) && charActor->IsOnGround())
+                                {
+                                    cc.linearVelocity.y = 5.0f;
+                                }
+                            }
+                            else if (cmd.buttons & netproto::InputButton_Jump)
                             {
                                 cc.linearVelocity.y = 5.0f;
                             }
                         }
-                        else if (latest.buttons & netproto::InputButton_Jump)
+                        else if (entity.HasComponent<TransformComponent>())
                         {
-                            cc.linearVelocity.y = 5.0f;
+                            auto &tc = entity.GetComponent<TransformComponent>();
+                            tc.local.translation += glm::vec3(cmd.move.x, 0.0f, cmd.move.y) * speed * tickDt;
+                            tc.dirty = true;
                         }
-                        break;
                     }
+                    break;
                 }
             });
 
@@ -213,10 +256,11 @@ namespace ignite
             m_Scene->OnFixedUpdateRuntimeSimulate();
             m_Scene->OnUpdateRuntimeSimulate(tickDt);
 
-            // 4. Periodically broadcast world snapshots
+            // 4. Periodically broadcast world snapshots and dirty components
             if (m_ServerSystem->GetTick() % ticksPerSnapshot == 0)
             {
                 m_Replication->BroadcastSnapshots();
+                m_Replication->BroadcastDirtyComponents();
             }
 
             // 5. High-resolution sleep to next tick

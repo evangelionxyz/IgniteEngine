@@ -57,6 +57,9 @@ namespace ignite
         bool ReadbackBackBuffer(void *outPixels, size_t bufferSize) override;
 
         const char *GetRendererString() const override;
+        bool IsDepthClampSupported() const override { return m_DepthClampSupported; }
+        bool IsMultiViewportSupported() const override { return m_MultiViewportSupported; }
+
         bool IsVulkanInstanceExtensionEnabled(const char *extensionName) const override;
         bool IsVulkanDeviceExtensionEnabled(const char *extensionName) const override;
         bool IsVulkanLayerEnabled(const char *layerName) const override;
@@ -163,6 +166,8 @@ namespace ignite
         vk::DescriptorPool m_DescriptorPool;
 
         bool m_SwapChainMutableFormatSupported = false;
+        bool m_DepthClampSupported = false;
+        bool m_MultiViewportSupported = false;
 
         // Swapchain images
         std::vector<vk::Image> m_SwapchainImages;

@@ -235,6 +235,7 @@ public static class ComponentNativeAPI
         public IntPtr CharacterControllerComponent_GetLinearVelocity;
         public IntPtr CharacterControllerComponent_SetLinearVelocity;
         public IntPtr CharacterControllerComponent_IsOnGround;
+        public IntPtr CharacterControllerComponent_IsSupported;
         public IntPtr CharacterControllerComponent_GetGroundNormal;
         public IntPtr CharacterControllerComponent_Move;
         public IntPtr CharacterControllerComponent_GetPosition;

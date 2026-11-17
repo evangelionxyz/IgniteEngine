@@ -26,21 +26,21 @@ float3 ReconstructViewPos(float2 uv, float depth)
     return view.xyz / max(view.w, 1e-6f);
 }
 
-float3 ReconstructNormal(float2 uv, float centerDepth, float3 centerVS)
+float3 LoadDepthViewPos(int2 px, int2 depthMax, float2 depthTexel, out float outDepth)
 {
-    uint w, h;
-    u_Target.GetDimensions(w, h);
-    float2 texel = 1.0f / float2(w, h);
+    int2 clampedPx = clamp(px, int2(0, 0), depthMax);
+    outDepth = t_Depth.Load(int3(clampedPx, 0)).r;
+    float2 exactUV = (float2(clampedPx) + 0.5f) * depthTexel;
+    return ReconstructViewPos(exactUV, outDepth);
+}
 
-    float dL = t_Depth.SampleLevel(s_Clamp, uv - float2(texel.x, 0.0f), 0.0f).r;
-    float dR = t_Depth.SampleLevel(s_Clamp, uv + float2(texel.x, 0.0f), 0.0f).r;
-    float dU = t_Depth.SampleLevel(s_Clamp, uv - float2(0.0f, texel.y), 0.0f).r;
-    float dD = t_Depth.SampleLevel(s_Clamp, uv + float2(0.0f, texel.y), 0.0f).r;
-
-    float3 pL = ReconstructViewPos(uv - float2(texel.x, 0.0f), dL);
-    float3 pR = ReconstructViewPos(uv + float2(texel.x, 0.0f), dR);
-    float3 pU = ReconstructViewPos(uv - float2(0.0f, texel.y), dU);
-    float3 pD = ReconstructViewPos(uv + float2(0.0f, texel.y), dD);
+float3 ReconstructNormal(int2 centerPx, int2 depthMax, float2 depthTexel, float3 centerVS)
+{
+    float dL, dR, dU, dD;
+    float3 pL = LoadDepthViewPos(centerPx + int2(-1,  0), depthMax, depthTexel, dL);
+    float3 pR = LoadDepthViewPos(centerPx + int2( 1,  0), depthMax, depthTexel, dR);
+    float3 pU = LoadDepthViewPos(centerPx + int2( 0, -1), depthMax, depthTexel, dU);
+    float3 pD = LoadDepthViewPos(centerPx + int2( 0,  1), depthMax, depthTexel, dD);
 
     float3 dxL = centerVS - pL;
     float3 dxR = pR - centerVS;
@@ -76,21 +76,29 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (DTid.x >= w || DTid.y >= h)
         return;
 
+    uint depthW, depthH;
+    t_Depth.GetDimensions(depthW, depthH);
+    int2 depthMax = int2(max(int(depthW) - 1, 0), max(int(depthH) - 1, 0));
+    float2 depthSize = float2(max(depthW, 1u), max(depthH, 1u));
+    float2 depthTexel = 1.0f / depthSize;
+
     float2 texel = 1.0f / float2(w, h);
     float2 uv = (float2(DTid.xy) + 0.5f) * texel;
+    int2 centerPx = clamp(int2(uv * depthSize), int2(0, 0), depthMax);
+    float2 centerUV = (float2(centerPx) + 0.5f) * depthTexel;
 
-    float depth = t_Depth.SampleLevel(s_Clamp, uv, 0.0f).r;
+    float depth;
+    float3 posVS = LoadDepthViewPos(centerPx, depthMax, depthTexel, depth);
     if (depth >= 0.99999f || depth <= 0.00001f)
     {
         u_Target[DTid.xy] = 1.0f;
         return;
     }
 
-    float3 posVS = ReconstructViewPos(uv, depth);
-    float3 normalVS = ReconstructNormal(uv, depth, posVS);
+    float3 normalVS = ReconstructNormal(centerPx, depthMax, depthTexel, posVS);
 
     float radius = max(u_Params.x, 0.05f);
-    float userBias = max(u_Params.y, 0.05f);
+    float userBias = max(u_Params.y, 0.01f);
     float power = max(u_Params.z, 0.1f);
 
     // View direction vector (from surface to camera)
@@ -100,7 +108,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // Slope-dependent tangent bias: automatically scales with surface obliqueness relative to camera
     // Prevents self-occlusion artifacts/lines at steep camera angles
     float slope = sqrt(saturate(1.0f - NdotV_view * NdotV_view)) / NdotV_view;
-    float effectiveBias = max(userBias, slope * 0.12f);
+    float effectiveBias = max(userBias, slope * 0.04f);
 
     float viewZ = max(abs(posVS.z), 0.1f);
     float radiusPixels = clamp(radius * abs(u_Projection[1][1]) * float(h) * 0.5f / viewZ, 3.0f, 64.0f);
@@ -108,7 +116,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     static const int kDirections = 8;
     static const int kSteps = 4;
 
-    float randomAngle = HashAngle(uv);
+    float randomAngle = HashAngle(centerUV);
     float totalOcclusion = 0.0f;
     float weightSum = 0.0f;
 
@@ -124,16 +132,19 @@ void main(uint3 DTid : SV_DispatchThreadID)
         for (int stepIndex = 1; stepIndex <= kSteps; ++stepIndex)
         {
             float stepFrac = (float(stepIndex) - 0.25f) / float(kSteps);
-            float2 suv = uv + dir * texel * radiusPixels * stepFrac;
+            float2 suv = centerUV + dir * texel * radiusPixels * stepFrac;
 
-            if (any(suv < 0.0f) || any(suv > 1.0f))
+            if (any(suv < 0.0f) || any(suv >= 1.0f))
                 continue;
 
-            float sampleDepth = t_Depth.SampleLevel(s_Clamp, suv, 0.0f).r;
+            int2 spx = clamp(int2(suv * depthSize), int2(0, 0), depthMax);
+            if (all(spx == centerPx))
+                continue;
+
+            float sampleDepth;
+            float3 sampleVS = LoadDepthViewPos(spx, depthMax, depthTexel, sampleDepth);
             if (sampleDepth >= 0.99999f || sampleDepth <= 0.00001f)
                 continue;
-
-            float3 sampleVS = ReconstructViewPos(suv, sampleDepth);
             float3 delta = sampleVS - posVS;
             float dist = length(delta);
 

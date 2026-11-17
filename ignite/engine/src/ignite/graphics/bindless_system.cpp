@@ -62,11 +62,21 @@ namespace ignite
             LOG_ASSERT(res == nri::Result::SUCCESS && s_DescriptorPool, "[BindlessSystem] Failed to create descriptor pool");
 
             // 2. Create pipeline layout describing the bindless array at space 2 (matches -fvk-bind-resource-heap 0 2)
+            nri::StageBits effectiveShaderStages = nri::StageBits::VERTEX_SHADER
+                                                  | nri::StageBits::TESSELLATION_SHADERS
+                                                  | nri::StageBits::GEOMETRY_SHADER
+                                                  | nri::StageBits::FRAGMENT_SHADER
+                                                  | nri::StageBits::COMPUTE_SHADER;
+            if (dm && dm->GetDeviceParameters().enableRayTracingExtensions)
+            {
+                effectiveShaderStages |= nri::StageBits::RAY_TRACING_SHADERS;
+            }
+
             s_BindlessRange = {};
             s_BindlessRange.baseRegisterIndex = 0;
             s_BindlessRange.descriptorNum = 16384;
             s_BindlessRange.descriptorType = nri::DescriptorType::MUTABLE;
-            s_BindlessRange.shaderStages = nri::StageBits::ALL;
+            s_BindlessRange.shaderStages = effectiveShaderStages;
             s_BindlessRange.flags = nri::DescriptorRangeBits::PARTIALLY_BOUND
                 | nri::DescriptorRangeBits::ARRAY
                 | nri::DescriptorRangeBits::ALLOW_UPDATE_AFTER_SET;
@@ -79,7 +89,7 @@ namespace ignite
             nri::PipelineLayoutDesc layoutDesc = {};
             layoutDesc.descriptorSets = &s_BindlessSetDesc;
             layoutDesc.descriptorSetNum = 1;
-            layoutDesc.shaderStages = nri::StageBits::ALL;
+            layoutDesc.shaderStages = effectiveShaderStages;
             layoutDesc.flags = nri::PipelineLayoutBits::RESOURCE_HEAP_DIRECTLY_INDEXED;
 
             res = nri.CreatePipelineLayout(*s_Device, layoutDesc, s_PipelineLayout);

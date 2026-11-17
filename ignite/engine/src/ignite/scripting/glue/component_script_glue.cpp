@@ -3362,6 +3362,7 @@ namespace ignite
             {
                 auto &cc = entity.GetComponent<CharacterControllerComponent>();
                 cc.linearVelocity = *value;
+                cc.desiredVelocity = *value;
                 if (auto charCtrl = cc.character.lock())
                     charCtrl->SetLinearVelocity(*value);
             }
@@ -3377,6 +3378,19 @@ namespace ignite
                 auto &cc = entity.GetComponent<CharacterControllerComponent>();
                 if (auto charCtrl = cc.character.lock())
                     *result = charCtrl->IsOnGround();
+            }
+        }
+
+        static void CharacterControllerComponent_IsSupported(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto charCtrl = cc.character.lock())
+                    *result = charCtrl->IsSupported();
             }
         }
 
@@ -3969,6 +3983,7 @@ namespace ignite
             &CharacterControllerComponent_GetLinearVelocity,
             &CharacterControllerComponent_SetLinearVelocity,
             &CharacterControllerComponent_IsOnGround,
+            &CharacterControllerComponent_IsSupported,
             &CharacterControllerComponent_GetGroundNormal,
             &CharacterControllerComponent_Move,
             &CharacterControllerComponent_GetPosition,

@@ -27,8 +27,8 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
-#include "ignite/scripting/lua_script.hpp"
-#include "ignite/scripting/lua_script_runtime.hpp"
+#include "ignite/scripting/lua/lua_script.hpp"
+#include "ignite/scripting/lua/lua_script_runtime.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -406,6 +406,27 @@ namespace ignite
 
         if (ImGui::BeginMenu("3D"))
         {
+            if (ImGui::BeginMenu("Primitives"))
+            {
+                if (ImGui::MenuItem("Cube"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CUBE, "Cube"));
+                if (ImGui::MenuItem("Sphere"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::SPHERE, "Sphere"));
+                if (ImGui::MenuItem("Icosphere"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::ICOSPHERE, "Icosphere"));
+                if (ImGui::MenuItem("Capsule"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CAPSULE, "Capsule"));
+                if (ImGui::MenuItem("Cylinder"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CYLINDER, "Cylinder"));
+                if (ImGui::MenuItem("Plane"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::PLANE, "Plane"));
+                if (ImGui::MenuItem("Cone"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CONE, "Cone"));
+                if (ImGui::MenuItem("Torus"))
+                    entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::TORUS, "Torus"));
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("Skeletal Mesh"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Skeletal Mesh"));
@@ -820,56 +841,6 @@ namespace ignite
             {
                 auto &comp = selectedEntity.GetComponent<NetworkIdentityComponent>();
 
-                // Net ID (editable U64 with Gen button)
-                ImGui::PushID("NetID_Control");
-                ImGui::BeginColumns("NetID_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
-                ImGui::SetColumnWidth(0, UI::defColWidth);
-                ImGui::Text("Net ID");
-                ImGui::NextColumn();
-
-                float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-                float genBtnWidth = ImGui::CalcTextSize("Gen").x + GImGui->Style.FramePadding.x * 2.0f;
-                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - genBtnWidth - GImGui->Style.ItemSpacing.x);
-
-                uint64_t currentNetId = comp.netId;
-                if (ImGui::InputScalar("##net_id_input", ImGuiDataType_U64, &currentNetId))
-                {
-                    if (currentNetId != comp.netId)
-                    {
-                        if (m_Scene)
-                            m_Scene->UnregisterNetEntity(comp.netId);
-                        comp.netId = currentNetId;
-                        if (m_Scene)
-                            m_Scene->RegisterNetEntity(comp.netId, selectedEntity);
-                    }
-                }
-                ImGui::PopItemWidth();
-
-                ImGui::SameLine();
-                if (ImGui::Button("Gen", ImVec2(genBtnWidth, lineHeight)))
-                {
-                    if (m_Scene)
-                        m_Scene->UnregisterNetEntity(comp.netId);
-                    static uint64_t s_LocalGenCounter = 1000;
-                    comp.netId = ++s_LocalGenCounter;
-                    if (m_Scene)
-                        m_Scene->RegisterNetEntity(comp.netId, selectedEntity);
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("Generate a new local Net ID");
-                }
-
-                ImGui::EndColumns();
-                ImGui::PopID();
-
-                // Owner Client (editable int control: 0 = Server, 1+ = Client ID)
-                int owner = static_cast<int>(comp.ownerClient);
-                if (UI::DrawIntControl("Owner Client", &owner, 1.0f, 0, 65535, 0))
-                {
-                    comp.ownerClient = static_cast<uint32_t>(std::max(0, owner));
-                }
-
                 // Prefab / Template Identifier
                 ImGui::PushID("NetPrefab_Control");
                 ImGui::BeginColumns("NetPrefab_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
@@ -1073,8 +1044,9 @@ namespace ignite
                     c.dirtyEnvironment = true;
                 }
 
-                UI::DrawFloatControl("Exposure", &c.exposure, 0.025f, 0.0f, FLT_MAX);
-                UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 0.0f, FLT_MAX);
+                UI::DrawCheckbox("IBL Environment Lighting", &c.enableIBL);
+                UI::DrawFloatControl("Exposure", &c.exposure, 0.025f, 0.1f, 4.0f);
+                UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 1.4f, 2.8f);
                 UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
 
                 // Fog
@@ -1177,8 +1149,9 @@ namespace ignite
                 ImGui::SeparatorText("Shadow");
                 UI::DrawCheckbox("Cascade Shadow", &c.cascadeShadow);
 
-                if (c.cascadeShadow)
+                ImGui::BeginDisabled(!c.cascadeShadow);
                 {
+                    UI::DrawCheckbox("Soft Shadow Maps", &c.softShadows);
                     UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
                     UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
                     UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
@@ -1206,6 +1179,7 @@ namespace ignite
                     //     }
                     // }
                 }
+                ImGui::EndDisabled();
             });
 
             RenderComponent<PointLightComponent>("Point Light", selectedEntity, [&]()
@@ -1918,7 +1892,7 @@ namespace ignite
                         // Tonemapping & Color correction
                         if (ImGui::TreeNodeEx("Color Correction", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "Filmic" };
+                            const char *tonemapModes[] = { "Reinhard", "Uncharted 2", "ACES Filmic" };
                             int currentTonemap = static_cast<int>(pp.tonemapMode);
                             if (UI::DrawComboBox("Tonemap Mode", tonemapModes, std::size(tonemapModes), &currentTonemap))
                             {
@@ -1934,7 +1908,7 @@ namespace ignite
 
                         // Depth of Field
                         c.dirty |= UI::DrawCheckbox("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
-                        if (c.camera.lens.enabledDOF)
+                        ImGui::BeginDisabled(!c.camera.lens.enabledDOF);
                         {
                             c.dirty |= UI::DrawFloatControl("Focal Length", &c.camera.lens.focalLength, 0.1f, 0.0f, FLT_MAX).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Focal Distance", &c.camera.lens.focalDistance, 0.05f, 0.0f, FLT_MAX).isItemEdited;
@@ -1942,10 +1916,11 @@ namespace ignite
                             c.dirty |= UI::DrawFloatControl("Focus Range", &c.camera.lens.focusRange, 0.05f, 0.0f, FLT_MAX).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Blur Amount", &c.camera.lens.blurAmount, 0.05f, 0.0f, FLT_MAX).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         // Bloom
                         c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
-                        if (pp.enableBloom)
+                        ImGui::BeginDisabled(!pp.enableBloom);
                         {
                             c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
@@ -1953,34 +1928,36 @@ namespace ignite
                             c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
                             c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         // Vignette
                         c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
-                        if (pp.enableVignette)
+                        ImGui::BeginDisabled(!pp.enableVignette);
                         {
                             c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         // Chromatic Aberration
                         c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
-                        if (pp.enableChromAb)
+                        ImGui::BeginDisabled(!pp.enableChromAb);
                         {
                             c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         // SSAO
-                        c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
-                        if (pp.enableSSAO)
+                        c.dirty |= UI::DrawCheckbox("SSAO (Hemisphere + Bilateral Blur)", &pp.enableSSAO).isItemEdited;
+                        ImGui::BeginDisabled(!pp.enableSSAO);
                         {
-                            c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.0f, 5.0f).isItemEdited;
-                            c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 1.0f).isItemEdited;
-                            c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 5.0f).isItemEdited;
-                            c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.05f, 0.0f, 5.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("SSAO Radius", &pp.aoRadius, 0.01f, 0.1f, 2.5f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("SSAO Intensity", &pp.aoIntensity, 0.05f, 0.2f, 3.0f).isItemEdited;
                         }
+                        ImGui::EndDisabled();
 
                         ImGui::TreePop();
                     }
@@ -2373,27 +2350,32 @@ namespace ignite
                     c.dirty |= UI::DrawFloatControl("Min Distance", &d.minDistance, 0.025f, 0.0f, 10000.0f);
                     c.dirty |= UI::DrawFloatControl("Max Distance (-1 = Auto)", &d.maxDistance, 0.025f, -1.0f, 10000.0f, -1.0f);
                     c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
-                    if (d.enableSpring)
+                    ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
                         c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
                     }
+                    ImGui::EndDisabled();
                 }
                 else if (d.type == physics::JointType::Hinge)
                 {
                     ImGui::SeparatorText("Hinge Limits & Spring");
+
                     c.dirty |= UI::DrawCheckbox("Enable Limits", &d.enableLimits);
-                    if (d.enableLimits)
+                    ImGui::BeginDisabled(!d.enableLimits);
                     {
                         c.dirty |= UI::DrawFloatControl("Min Angle (deg)", &d.limitsMin, 0.5f, -180.0f, 0.0f, -45.0f);
                         c.dirty |= UI::DrawFloatControl("Max Angle (deg)", &d.limitsMax, 0.5f, 0.0f, 180.0f, 45.0f);
                     }
+                    ImGui::EndDisabled();
+
                     c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
-                    if (d.enableSpring)
+                    ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
                         c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
                     }
+                    ImGui::EndDisabled();
                     c.dirty |= UI::DrawFloatControl("Max Friction Torque", &d.maxFriction, 0.1f, 0.0f, 100000.0f);
 
                     ImGui::SeparatorText("Hinge Motor");
@@ -2422,18 +2404,23 @@ namespace ignite
                 else if (d.type == physics::JointType::Slider)
                 {
                     ImGui::SeparatorText("Slider Limits & Spring");
+
                     c.dirty |= UI::DrawCheckbox("Enable Limits", &d.enableLimits);
-                    if (d.enableLimits)
+                    ImGui::BeginDisabled(!d.enableLimits);
                     {
                         c.dirty |= UI::DrawFloatControl("Min Limit (m)", &d.limitsMin, 0.05f, -10000.0f, 0.0f, -1.0f);
                         c.dirty |= UI::DrawFloatControl("Max Limit (m)", &d.limitsMax, 0.05f, 0.0f, 10000.0f, 1.0f);
                     }
+                    ImGui::EndDisabled();
+
                     c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
-                    if (d.enableSpring)
+                    ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
                         c.dirty |= UI::DrawFloatControl("Spring Damping", &d.springDamping, 0.025f, 0.0f, 50.0f, 0.5f);
                     }
+                    ImGui::EndDisabled();
+
                     c.dirty |= UI::DrawFloatControl("Max Friction Force", &d.maxFriction, 0.1f, 0.0f, 100000.0f);
 
                     ImGui::SeparatorText("Slider Motor");
@@ -2538,9 +2525,12 @@ namespace ignite
                 }
 
                 UI::DrawColorVec4("Color", c.color);
+                UI::DrawFloatControl("Font Size", &c.fontSize, 0.25f, 4.0f, 256.0f);
                 UI::DrawFloatControl("Kerning", &c.kerning, 0.001f, -10.0f, 10.0f);
                 UI::DrawFloatControl("Line Spacing", &c.lineSpacing, 0.001f, -10.0f, 10.0f);
                 UI::DrawCheckbox("Screen Space", &c.screenSpace);
+                UI::DrawCheckbox("Billboard", &c.billboard);
+                UI::DrawCheckbox("Center Align", &c.centerAlign);
             });
 
             RenderComponent<AudioSourceComponent>("Audio Source", selectedEntity, [&]()
@@ -3374,7 +3364,8 @@ namespace ignite
                 const bool isRunning = m_Scene && m_Scene->IsRunning();
 
                 std::string label = "Drag Lua Script Here";
-                if (component.scriptHandle != AssetHandle(0))
+                const bool isLoaded = component.scriptHandle != AssetHandle(0);
+                if (isLoaded)
                 {
                     std::string assetName = assetManager->GetAssetDisplayName(component.scriptHandle);
                     if (!assetName.empty())
@@ -3412,6 +3403,22 @@ namespace ignite
                         }
                         ImGui::EndDragDropTarget();
                     }
+
+                    if (isLoaded)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X"))
+                        {
+                            component.scriptHandle = AssetHandle(0);
+                            component.scriptPath.clear();
+                            m_Scene->SetDirtyFlag(true);
+
+                            if (isRunning && m_Scene->GetLuaScriptRuntime())
+                            {
+                                m_Scene->GetLuaScriptRuntime()->DestroyInstance(selectedEntity.GetUUID());
+                            }
+                        }
+                    }
                 });
 
                 if (component.scriptHandle != AssetHandle(0))
@@ -3422,60 +3429,8 @@ namespace ignite
                 {
                     ImGui::TextDisabled("Path: %s", component.scriptPath.generic_string().c_str());
                 }
-
-                if (ImGui::Button("Browse..."))
-                {
-#ifdef PLATFORM_WINDOWS
-                    static const char filter[] = "Lua Script\0*.lua\0All Files\0*.*\0\0";
-#else
-                    static const char filter[] = "Lua Script | *.lua";
-#endif
-                    const std::string selectedPath = FileDialogs::OpenFile(filter);
-                    if (!selectedPath.empty())
-                    {
-                        const std::filesystem::path absolutePath(selectedPath);
-                        const std::filesystem::path path = m_Scene && m_Scene->GetProject()
-                            ? m_Scene->GetProject()->GetProjectRelativeFilepath(absolutePath)
-                            : absolutePath;
-                        if (m_Scene && m_Scene->GetProject() && path.is_absolute())
-                        {
-                            LOG_WARN("Lua scripts must be inside the project directory: {}", absolutePath.generic_string());
-                        }
-                        else
-                        {
-                            component.scriptPath = path;
-                            if (assetManager)
-                            {
-                                AssetHandle handle = assetManager->GetAssetHandle(path);
-                                if (handle == AssetHandle(0))
-                                {
-                                    handle = assetManager->ImportAsset(path);
-                                }
-                                component.scriptHandle = handle;
-                            }
-                            m_Scene->SetDirtyFlag(true);
-
-                            if (isRunning && m_Scene->GetLuaScriptRuntime())
-                            {
-                                m_Scene->GetLuaScriptRuntime()->CreateInstance(selectedEntity.GetUUID(), component.scriptPath, component.scriptHandle);
-                            }
-                        }
-                    }
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Clear"))
-                {
-                    component.scriptHandle = AssetHandle(0);
-                    component.scriptPath.clear();
-                    m_Scene->SetDirtyFlag(true);
-
-                    if (isRunning && m_Scene->GetLuaScriptRuntime())
-                    {
-                        m_Scene->GetLuaScriptRuntime()->DestroyInstance(selectedEntity.GetUUID());
-                    }
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Reload"))
+                
+                if (ImGui::Button("Reload", {-1.0, 0.0f}))
                 {
                     if (isRunning && m_Scene->GetLuaScriptRuntime())
                     {
@@ -3483,8 +3438,9 @@ namespace ignite
                     }
                     else if (component.scriptHandle != AssetHandle(0) && assetManager)
                     {
-                        auto script = assetManager->GetAsset<LuaScript>(component.scriptHandle);
-                        if (script) script->Reload();
+                        auto script = assetManager->GetAsset<lua::Script>(component.scriptHandle);
+                        if (script)
+                            script->Reload();
                     }
                 }
             });

@@ -5,6 +5,7 @@
 #include "renderer.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 namespace ignite
 {
@@ -28,9 +29,27 @@ namespace ignite
         std::vector<nri::RootConstantDesc> rootConstants;
         nri::PipelineLayoutBits flags = nri::PipelineLayoutBits::NONE;
 
+        nri::StageBits effectiveShaderStages = shaderStages;
+        if (effectiveShaderStages == nri::StageBits::ALL)
+        {
+            // Only include stages that are supported on standard desktop graphics devices without optional extensions (no mesh/task or RT unless enabled)
+            effectiveShaderStages = nri::StageBits::VERTEX_SHADER
+                                  | nri::StageBits::TESSELLATION_SHADERS
+                                  | nri::StageBits::GEOMETRY_SHADER
+                                  | nri::StageBits::FRAGMENT_SHADER
+                                  | nri::StageBits::COMPUTE_SHADER;
+            if (dm && dm->GetDeviceParameters().enableRayTracingExtensions)
+            {
+                effectiveShaderStages |= nri::StageBits::RAY_TRACING_SHADERS;
+            }
+        }
+
         setDescs.reserve(processedLayouts.size());
         for (auto &layout : processedLayouts)
         {
+            if (layout.visibility == nri::StageBits::ALL)
+                layout.SetVisibility(effectiveShaderStages);
+
             if (!layout.bindings.empty())
             {
                 layout.ranges.clear();
@@ -40,6 +59,7 @@ namespace ignite
                     layout.AddItem(item);
                 }
             }
+
             if (!layout.ranges.empty())
             {
                 nri::DescriptorSetDesc setDesc = {};
@@ -48,10 +68,12 @@ namespace ignite
                 setDesc.rangeNum = static_cast<uint32_t>(layout.ranges.size());
                 setDescs.push_back(setDesc);
             }
+
             for (const auto &rc : layout.rootConstants)
             {
                 rootConstants.push_back(rc);
             }
+
             if (layout.isBindless)
             {
                 flags |= nri::PipelineLayoutBits::RESOURCE_HEAP_DIRECTLY_INDEXED;
@@ -63,7 +85,7 @@ namespace ignite
         pipelineLayoutDesc.descriptorSetNum = static_cast<uint32_t>(setDescs.size());
         pipelineLayoutDesc.rootConstants = rootConstants.empty() ? nullptr : rootConstants.data();
         pipelineLayoutDesc.rootConstantNum = static_cast<uint32_t>(rootConstants.size());
-        pipelineLayoutDesc.shaderStages = shaderStages;
+        pipelineLayoutDesc.shaderStages = effectiveShaderStages;
         pipelineLayoutDesc.flags = flags;
 
         nri::PipelineLayout *pipelineLayout = nullptr;
@@ -121,7 +143,14 @@ namespace ignite
             m_Handle = AllocateAndUpdate(m_PipelineLayout, m_SetIndex, desc);
             return;
         }
-        Update(m_Handle, desc);
+        if (m_Handle)
+        {
+            if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+            }
+            Update(m_Handle, desc);
+        }
     }
 
     nri::DescriptorSet *BindingSet::AllocateAndUpdate(nri::PipelineLayout *pipelineLayout, uint32_t setIndex, const BindingSetDesc &desc)

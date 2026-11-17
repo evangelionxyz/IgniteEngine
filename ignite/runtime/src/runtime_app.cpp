@@ -34,9 +34,19 @@ namespace ignite
 
         for (int i = 1; i < args.count; i++)
         {
-            if (std::string_view(args[i]) == "--nogui")
+            const std::string_view arg(args[i]);
+            if (arg == "--nogui" || arg == "--headless")
             {
                 createInfo.useGui = false;
+                createInfo.offscreen = true;
+            }
+            else if (arg == "--offscreen")
+            {
+                createInfo.offscreen = true;
+            }
+            else if (arg == "--windowed")
+            {
+                createInfo.maximized = false;
             }
         }
 

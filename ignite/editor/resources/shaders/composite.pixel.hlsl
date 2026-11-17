@@ -132,53 +132,48 @@ float4 main(VSOutput input) : SV_Target
 
         if (coc >= 0.1f)
         {
-            float4 accum = float4(0.0f, 0.0f, 0.0f, 0.0f);
-            float totalWeight = 0.0f;
-            int samples = 9; // balance quality/perf
+            static const float2 k_PoissonDof[12] =
+            {
+                float2(-0.326212f, -0.405810f),
+                float2(-0.840144f, -0.073580f),
+                float2(-0.695914f,  0.457137f),
+                float2(-0.203345f,  0.620716f),
+                float2( 0.962340f, -0.194983f),
+                float2( 0.473434f, -0.480026f),
+                float2( 0.519456f,  0.767022f),
+                float2( 0.185461f, -0.893124f),
+                float2( 0.507431f,  0.064425f),
+                float2( 0.896420f,  0.412458f),
+                float2(-0.321940f, -0.932615f),
+                float2(-0.791559f, -0.597710f)
+            };
+
             float2 texSize;
             sceneTexture.GetDimensions(texSize.x, texSize.y);
-            
-            for (int i = -samples/2; i <= samples/2; ++i)
-            {
-                for (int j = -samples/2; j <= samples/2; ++j)
-                {
-                    float2 offset = float2(i, j) * coc / texSize;
-                    float2 suv = input.uv + offset;
-                    if (all(suv >= 0.0f) && all(suv <= 1.0f))
-                    {
-                        float3 sampleColor = SampleSceneWithChromAb(suv);
-                        
-                        if (hasSSAO)
-                        {
-                            float ao = ssaoTexture.SampleLevel(linearSampler, suv, 0.0f).r;
-                            sampleColor *= lerp(1.0f, ao, chromAbParams.z);
-                        }
+            float2 radius = (coc * 2.5f) / max(texSize, float2(1.0f, 1.0f));
 
-                        if (hasFog)
-                        {
-                            float sampleDepth = depthTexture.SampleLevel(linearSampler, suv, 0.0f).r;
-                            float sampleDist = CalculateViewDistance(sampleDepth, suv);
-                            sampleColor = ApplyFogWithDistance(sampleColor, sampleDist, suv);
-                        }
-                        accum += float4(sampleColor, 1.0f);
-                        totalWeight += 1.0f;
-                    }
-                }
+            float3 accum = sceneColor;
+            float totalWeight = 1.0f;
+
+            [unroll]
+            for (int i = 0; i < 12; ++i)
+            {
+                float2 suv = saturate(input.uv + k_PoissonDof[i] * radius);
+                float3 sampleColor = sceneTexture.SampleLevel(linearSampler, suv, 0.0f).rgb;
+                accum += sampleColor;
+                totalWeight += 1.0f;
             }
-            if (totalWeight > 0.0f)
-                sceneColor = accum.rgb / totalWeight;
+            sceneColor = accum / totalWeight;
         }
-        else
+
+        if (hasSSAO)
         {
-            if (hasSSAO)
-            {
-                float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-                sceneColor *= lerp(1.0f, ao, chromAbParams.z);
-            }
-            if (hasFog)
-            {
-                sceneColor = ApplyFogWithDistance(sceneColor, dist, input.uv);
-            }
+            float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
+            sceneColor *= saturate(pow(max(ao, 1e-4f), max(chromAbParams.z, 0.0f)));
+        }
+        if (hasFog)
+        {
+            sceneColor = ApplyFogWithDistance(sceneColor, dist, input.uv);
         }
     }
     else
@@ -186,7 +181,7 @@ float4 main(VSOutput input) : SV_Target
         if (hasSSAO)
         {
             float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-            sceneColor *= lerp(1.0f, ao, chromAbParams.z);
+            sceneColor *= saturate(pow(max(ao, 1e-4f), max(chromAbParams.z, 0.0f)));
         }
         if (hasFog)
         {

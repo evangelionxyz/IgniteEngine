@@ -31,6 +31,63 @@ namespace ignite
     static constexpr uint32_t s_BatchShrinkThresholdPercent = 30;
     static constexpr uint32_t s_BatchShrinkFrameThreshold = 300;
 
+    struct RetiredVertexBuffer
+    {
+        uint64_t retiredFrame = 0;
+        Ref<VertexBuffer> buffer;
+    };
+
+    struct RetiredIndexBuffer
+    {
+        uint64_t retiredFrame = 0;
+        Ref<IndexBuffer> buffer;
+    };
+
+    static std::vector<RetiredVertexBuffer> s_RetiredVertexBuffers;
+    static std::vector<RetiredIndexBuffer> s_RetiredIndexBuffers;
+    static std::mutex s_RetiredBuffersMutex;
+    static std::atomic<uint64_t> s_CurrentFrameIndex{ 0 };
+
+    void Renderer2D::ClearRetiredBuffers(uint64_t currentFrame, bool forceAll)
+    {
+        std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
+        if (currentFrame > 0)
+        {
+            s_CurrentFrameIndex.store(currentFrame);
+        }
+        else
+        {
+            currentFrame = s_CurrentFrameIndex.load();
+        }
+
+        if (forceAll)
+        {
+            s_RetiredVertexBuffers.clear();
+            s_RetiredIndexBuffers.clear();
+            return;
+        }
+
+        // Keep retired buffers alive for at least 4 frames so GPU finishes drawing
+        // all in-flight frames before their vertex/index buffers are freed.
+        constexpr uint64_t kRetireDelayFrames = 4;
+
+        s_RetiredVertexBuffers.erase(
+            std::remove_if(s_RetiredVertexBuffers.begin(), s_RetiredVertexBuffers.end(),
+                [currentFrame](const RetiredVertexBuffer &entry)
+                {
+                    return currentFrame >= entry.retiredFrame + kRetireDelayFrames;
+                }),
+            s_RetiredVertexBuffers.end());
+
+        s_RetiredIndexBuffers.erase(
+            std::remove_if(s_RetiredIndexBuffers.begin(), s_RetiredIndexBuffers.end(),
+                [currentFrame](const RetiredIndexBuffer &entry)
+                {
+                    return currentFrame >= entry.retiredFrame + kRetireDelayFrames;
+                }),
+            s_RetiredIndexBuffers.end());
+    }
+
     template<typename VertexType>
     static void ResizeBatch(BatchRender<VertexType> &batch, uint32_t newMaxCount, bool recreateIndexBuffer, nri::CommandBuffer *)
     {
@@ -57,6 +114,18 @@ namespace ignite
 
         const size_t verticesAllocSize = static_cast<size_t>(batch.maxVertices) * sizeof(VertexType);
         const size_t indicesAllocSize = static_cast<size_t>(batch.maxIndices) * sizeof(uint32_t);
+
+        const uint64_t curFrame = s_CurrentFrameIndex.load();
+        if (batch.vertexBuffer)
+        {
+            std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
+            s_RetiredVertexBuffers.push_back({ curFrame, batch.vertexBuffer });
+        }
+        if (batch.indexBuffer && recreateIndexBuffer && batch.indicesPerObject > 0)
+        {
+            std::lock_guard<std::mutex> lock(s_RetiredBuffersMutex);
+            s_RetiredIndexBuffers.push_back({ curFrame, batch.indexBuffer });
+        }
 
         batch.vertexBuffer = VertexBuffer::Create(verticesAllocSize);
 
@@ -312,7 +381,7 @@ namespace ignite
         {
             m_TextBatch.vertexBuffer->SetData(Buffer(m_PreRenderCache->textVertices.data(), m_PreRenderCache->textVertices.size() * sizeof(VertexText)));
 
-            Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
+            Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode, true);
             Ref<BindingSet> bindingSet = GetTextBindingSet(gp->GetPipelineLayout(), m_PreRenderCache->textTextureSlots,
                 cameraBuffer, m_Material2DLightingBuffer.GetDescriptor());
 
@@ -365,7 +434,7 @@ namespace ignite
 
     void Renderer2D::InitQuadData()
     {
-        m_QuadBatch.minCount = 32;
+        m_QuadBatch.minCount = 4096;
         m_QuadBatch.maxCount = m_QuadBatch.minCount;
         m_QuadBatch.verticesPerObject = 4;
         m_QuadBatch.indicesPerObject = 6;
@@ -413,7 +482,7 @@ namespace ignite
 
     void Renderer2D::InitLineData()
     {
-        m_LineBatch.minCount = 32;
+        m_LineBatch.minCount = 8192;
         m_LineBatch.maxCount = m_LineBatch.minCount;
         m_LineBatch.verticesPerObject = 24;
         m_LineBatch.indicesPerObject = 0;
@@ -429,7 +498,7 @@ namespace ignite
 
     void Renderer2D::InitCircleData()
     {
-        m_CircleBatch.minCount = 32;
+        m_CircleBatch.minCount = 1024;
         m_CircleBatch.maxCount = m_CircleBatch.minCount;
         m_CircleBatch.verticesPerObject = 4;
         m_CircleBatch.indicesPerObject = 6;
@@ -467,7 +536,7 @@ namespace ignite
 
     void Renderer2D::InitTextData()
     {
-        m_TextBatch.minCount = 32;
+        m_TextBatch.minCount = 8192;
         m_TextBatch.maxCount = m_TextBatch.minCount;
         m_TextBatch.verticesPerObject = 4;
         m_TextBatch.indicesPerObject = 6;
@@ -509,10 +578,13 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
+        ClearRetiredBuffers(0, true);
+
         m_LinePSOCache.clear();
         m_QuadPSOCache.clear();
         m_CirclePSOCache.clear();
         m_TextPSOCache.clear();
+        m_TextOverlayPSOCache.clear();
 
         m_QuadSelectPSOCache.clear();
         m_CircleSelectPSOCache.clear();
@@ -559,7 +631,7 @@ namespace ignite
         m_Cmd = cmd;
     }
 
-    void Renderer2D::Flush(RenderTarget *framebuffer, nri::Descriptor *cameraBuffer)
+    void Renderer2D::Flush(RenderTarget *framebuffer, nri::Descriptor *cameraBuffer, bool depthTest)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -676,7 +748,7 @@ namespace ignite
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferBase);
             m_TextBatch.vertexBuffer->SetData(Buffer(m_TextBatch.vertexBufferBase, bufferSize));
 
-            Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
+            Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode, depthTest);
             Ref<BindingSet> bindingSet = GetTextBindingSet(gp->GetPipelineLayout(), m_TextBatch.textureSlots,
                 cameraBuffer, m_Material2DLightingBuffer.GetDescriptor());
 
@@ -1142,15 +1214,15 @@ namespace ignite
         }
     }
 
-    void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID)
+    void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID, bool flipY, bool centerAlign)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!font)
+        if (!font || str.empty())
             return;
 
         Ref<Texture> fontAtlasTexture = font->GetAtlasTexture();
-        if (!font || !font->IsReady())
+        if (!fontAtlasTexture || !font->IsReady())
             return;
 
         const auto &fontGeometry = font->GetGeometry();
@@ -1158,13 +1230,21 @@ namespace ignite
 
         uint32_t texIndex = GetOrInsertFontTexture(fontAtlasTexture);
 
-        double x = 0.0;
-        double y = 0.0;
+        double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
+        const auto *spaceGlyph = fontGeometry.getGlyph(' ');
+        const double spaceGlypAdvance = spaceGlyph ? spaceGlyph->getAdvance() : 0.25;
+
+        double startX = 0.0;
+        if (centerAlign)
+        {
+            const glm::vec2 measured = font->MeasureString(str, kerning, linespacing);
+            startX = -static_cast<double>(measured.x) * 0.5;
+        }
+
+        double x = startX;
+        double y = flipY ? (fsScale * metrics.ascenderY) : 0.0;
         double maxX = 0.0;
         double minY = 0.0;
-
-        double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
-        const double spaceGlypAdvance = fontGeometry.getGlyph(' ')->getAdvance();
 
         for (size_t i = 0; i < str.size(); ++i)
         {
@@ -1176,10 +1256,13 @@ namespace ignite
 
             if (character == '\n')
             {
-                maxX= std::max(maxX, x);
+                maxX = std::max(maxX, x);
 
-                x = 0.0;
-                y -= fsScale * metrics.lineHeight + linespacing;
+                x = startX;
+                if (flipY)
+                    y += fsScale * metrics.lineHeight + linespacing;
+                else
+                    y -= fsScale * metrics.lineHeight + linespacing;
                 continue;
             }
 
@@ -1209,6 +1292,10 @@ namespace ignite
             {
                 glyph = fontGeometry.getGlyph('?');
             }
+            if (!glyph)
+            {
+                continue;
+            }
 
             double atlasLeft, atlasBottom, atlasRight, atlasTop;
             glyph->getQuadAtlasBounds(atlasLeft, atlasBottom, atlasRight, atlasTop);
@@ -1222,6 +1309,12 @@ namespace ignite
 
             quadMin *= fsScale;
             quadMax *= fsScale;
+
+            if (flipY)
+            {
+                quadMin.y = -quadMin.y;
+                quadMax.y = -quadMax.y;
+            }
 
             quadMin += glm::vec2{ x, y };
             quadMax += glm::vec2{ x, y };
@@ -1315,9 +1408,6 @@ namespace ignite
         if (it != m_QuadPSOCache.end())
             return it->second;
 
-        m_QuadPSOCache.clear();
-        m_QuadBindingSetCache.clear();
-
         bool hasDepthAttachment = framebuffer->HasDepthAttachment();
 
         GraphicsPipelineParams params;
@@ -1350,28 +1440,26 @@ namespace ignite
         return gp;
     }
 
-    Ref<GraphicsPipeline> Renderer2D::GetTextPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode)
+    Ref<GraphicsPipeline> Renderer2D::GetTextPipelineForFB(RenderTarget *framebuffer, nri::FillMode fillMode, bool depthTest)
     {
         IGN_PROFILE_FUNCTION();
 
+        auto &cache = depthTest ? m_TextPSOCache : m_TextOverlayPSOCache;
         auto key = MakeFramebufferKey(framebuffer, fillMode);
-        auto it = m_TextPSOCache.find(key);
-        if (it != m_TextPSOCache.end())
+        auto it = cache.find(key);
+        if (it != cache.end())
             return it->second;
 
-        m_TextPSOCache.clear();
-        m_TextBindingSetCache.clear();
-
-        bool hasDepthAttachment = framebuffer->HasDepthAttachment();
+        const bool useDepth = depthTest && framebuffer->HasDepthAttachment();
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
-        params.enableDepthWrite = hasDepthAttachment;
-        params.enableDepthTest = hasDepthAttachment;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = useDepth;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
         params.cullMode = nri::CullMode::NONE;
-        params.depthFunc = nri::CompareOp::LESS_EQUAL;
+        params.depthFunc = useDepth ? nri::CompareOp::LESS_EQUAL : nri::CompareOp::ALWAYS;
 
         // create binding layout
         BindingLayoutDesc bindingLayoutDesc;
@@ -1380,16 +1468,20 @@ namespace ignite
         bindingLayoutDesc.AddItem(BindingLayoutItem::VolatileConstantBuffer(1)); // lighting buffer - volatile
         bindingLayoutDesc.AddItem(BindingLayoutItem::Sampler(0));
 
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+        const char *pixelShaderPath = framebuffer->GetColorAttachmentCount() > 1
+            ? "resources/shaders/msdf_font.pixel.hlsl"
+            : "resources/shaders/msdf_font_color_only.pixel.hlsl";
 
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Text Pipeline");
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+        Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
+
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create(depthTest ? "2D Batch Text Pipeline" : "2D Batch Text Overlay Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayoutDesc)
             .AddBindingLayout(BindlessSystem::GetBindingLayout())
             .Build(framebuffer, params);
 
-        m_TextPSOCache.emplace(key, gp);
+        cache.emplace(key, gp);
 
         return gp;
     }
@@ -1402,9 +1494,6 @@ namespace ignite
         auto it = m_CirclePSOCache.find(key);
         if (it != m_CirclePSOCache.end())
             return it->second;
-
-        m_CirclePSOCache.clear();
-        m_CircleBindingSetCache.clear();
 
         bool hasDepthAttachment = framebuffer->HasDepthAttachment();
 
@@ -1498,8 +1587,12 @@ namespace ignite
         bindingLayoutDesc.AddItem(BindingLayoutItem::VolatileConstantBuffer(1)); // lighting buffer - volatile
         bindingLayoutDesc.AddItem(BindingLayoutItem::Sampler(0));
 
+        const char *pixelShaderPath = framebuffer->GetColorAttachmentCount() > 1
+            ? "resources/shaders/msdf_font.pixel.hlsl"
+            : "resources/shaders/msdf_font_color_only.pixel.hlsl";
+
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+        Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
 
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("2D Batch Text Select Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })
@@ -1557,9 +1650,6 @@ namespace ignite
         auto it = m_LinePSOCache.find(key);
         if (it != m_LinePSOCache.end())
             return it->second;
-
-        m_LinePSOCache.clear();
-        m_LineBindingSetCache.clear();
 
         bool hasDepthAttachment = framebuffer->HasDepthAttachment();
 

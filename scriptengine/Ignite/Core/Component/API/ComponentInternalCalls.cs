@@ -230,6 +230,7 @@ public static class ComponentInternalCalls
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetLinearVelocity;
     private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_CharacterControllerSetLinearVelocity;
     private static CoreNativeAPI.Funcs.GetBoolFn? s_CharacterControllerIsOnGround;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_CharacterControllerIsSupported;
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetGroundNormal;
     private static ComponentNativeAPI.Funcs.CharacterControllerMoveFn? s_CharacterControllerMove;
     private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_CharacterControllerGetPosition;
@@ -478,6 +479,7 @@ public static class ComponentInternalCalls
         s_CharacterControllerGetLinearVelocity = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetLinearVelocity);
         s_CharacterControllerSetLinearVelocity = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.CharacterControllerComponent_SetLinearVelocity);
         s_CharacterControllerIsOnGround = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.CharacterControllerComponent_IsOnGround);
+        s_CharacterControllerIsSupported = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.GetBoolFn>(api.CharacterControllerComponent_IsSupported);
         s_CharacterControllerGetGroundNormal = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetGroundNormal);
         s_CharacterControllerMove = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.CharacterControllerMoveFn>(api.CharacterControllerComponent_Move);
         s_CharacterControllerGetPosition = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.CharacterControllerComponent_GetPosition);
@@ -1958,6 +1960,12 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         s_CharacterControllerIsOnGround!(entityID, out result);
+    }
+
+    internal static void CharacterControllerComponent_IsSupported(ulong entityID, out bool result)
+    {
+        EnsureInitialized();
+        s_CharacterControllerIsSupported!(entityID, out result);
     }
 
     internal static void CharacterControllerComponent_GetGroundNormal(ulong entityID, out Mathf.Vector3 result)

@@ -1,0 +1,87 @@
+﻿{
+    "Material":  {
+                     "NormalTextureHandle":  0,
+                     "Type":  0,
+                     "MetallicTextureHandle":  0,
+                     "Version":  4096,
+                     "GPUData":  {
+                                     "SpecularColor":  [
+                                                           1,
+                                                           1,
+                                                           1,
+                                                           1
+                                                       ],
+                                     "FuzzColor":  [
+                                                       1,
+                                                       1,
+                                                       1,
+                                                       1
+                                                   ],
+                                     "SpecularIOR":  1.5,
+                                     "SubsurfaceWeight":  0,
+                                     "TransmissionDepth":  0,
+                                     "RoughnessChannel":  1,
+                                     "CoatWeight":  0,
+                                     "RoughnessFactor":  0.18,
+                                     "SpecularWeight":  1,
+                                     "TilingFactorX":  1,
+                                     "CoatRoughness":  0,
+                                     "BaseColorFactor":  [
+                                                             0.88,
+                                                             0.22,
+                                                             0.28,
+                                                             1
+                                                         ],
+                                     "FuzzWeight":  0,
+                                     "MetallicFactor":  0.7,
+                                     "SpecularAnisotropy":  0,
+                                     "EmissionLuminance":  1,
+                                     "EmissiveFactor":  [
+                                                            0,
+                                                            0,
+                                                            0,
+                                                            1
+                                                        ],
+                                     "MetallicChannel":  2,
+                                     "CoatColor":  [
+                                                       1,
+                                                       1,
+                                                       1,
+                                                       1
+                                                   ],
+                                     "SubsurfaceRadius":  [
+                                                              1,
+                                                              0.2,
+                                                              0.1,
+                                                              0
+                                                          ],
+                                     "SubsurfaceScale":  1,
+                                     "BaseWeight":  1,
+                                     "TransmissionWeight":  0,
+                                     "SubsurfaceColor":  [
+                                                             1,
+                                                             1,
+                                                             1,
+                                                             1
+                                                         ],
+                                     "CoatIOR":  1.6,
+                                     "UseMultiScatter":  1,
+                                     "TilingFactorY":  1,
+                                     "FuzzRoughness":  0.5,
+                                     "OcclusionStrength":  1,
+                                     "CoatDarkening":  1,
+                                     "TransmissionColor":  [
+                                                               1,
+                                                               1,
+                                                               1,
+                                                               1
+                                                           ]
+                                 },
+                     "OcclusionTextureHandle":  0,
+                     "BaseColorTextureHandle":  0,
+                     "Name":  "Mat_Sphere",
+                     "CullMode":  1,
+                     "EmissiveTextureHandle":  0,
+                     "RoughnessTextureHandle":  0
+                 }
+}

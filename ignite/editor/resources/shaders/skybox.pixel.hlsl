@@ -79,8 +79,9 @@ PSOutput main(PSInput input)
 
     if (scene.skyType == 1) // Procedural Sky
     {
-        // 6360.0km default planet radius, 0.001km (1m) altitude default for skybox view lookup
-        float2 uv = SkyViewZenithAzimuthToUV(dir, 6360.0, max(0.001f, camera.position.y * 0.001f));
+        // 6360.0km default planet radius
+        float cameraAltitudeKm = max(0.001f, camera.position.y * 0.001f);
+        float2 uv = SkyViewZenithAzimuthToUV(dir, 6360.0, cameraAltitudeKm);
 
         color = texture0.Sample(sampler0, uv).rgb;
 
@@ -95,12 +96,21 @@ PSOutput main(PSInput input)
 
             if (cosAngle > cosRadius)
             {
-                float angularDistance = acos(clamp(cosAngle, -1.0f, 1.0f));
-                float diskT = saturate(angularDistance / radius);
-                float limbDarkening = sqrt(max(0.0, 1.0 - diskT * diskT));
-                float sunMask = 1.0f - smoothstep(radius, radius * 1.35f, angularDistance);
-                float3 sunLuminance = scene.lightColor.rgb * max(1.0, scene.lightColor.a) * sunMask * (0.5f + 0.5f * limbDarkening);
-                color += sunLuminance;
+                // Only render sun disk if looking above the planet horizon
+                float r = 6360.0f + cameraAltitudeKm;
+                float horizonAngle = asin(clamp(6360.0f / r, 0.0f, 1.0f));
+                float viewZenith = acos(clamp(dir.y, -1.0f, 1.0f));
+                if (viewZenith < horizonAngle + radius)
+                {
+                    float horizonMask = saturate((horizonAngle + radius - viewZenith) / max(1e-4f, radius));
+                    float angularDistance = acos(clamp(cosAngle, -1.0f, 1.0f));
+                    float diskT = saturate(angularDistance / radius);
+                    float limbDarkening = sqrt(max(0.0, 1.0 - diskT * diskT));
+                    float sunMask = 1.0f - smoothstep(radius * 0.95f, radius * 1.15f, angularDistance);
+                    // Boost luminance so the sun disc punches through HDR and tonemapping as a bright star
+                    float3 sunLuminance = scene.lightColor.rgb * max(1.0, scene.lightColor.a) * 12.0f * sunMask * horizonMask * (0.4f + 0.6f * limbDarkening);
+                    color += sunLuminance;
+                }
             }
         }
     }

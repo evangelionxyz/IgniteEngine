@@ -32,7 +32,9 @@ namespace ignite
     private:
         nri::Buffer *m_Handle = nullptr;
         nri::Descriptor *m_Descriptor = nullptr;
+        uint8_t *m_MappedMemory = nullptr;
         size_t m_ByteSize = 0;
+        size_t m_AlignedSize = 0;
     };
 }
 

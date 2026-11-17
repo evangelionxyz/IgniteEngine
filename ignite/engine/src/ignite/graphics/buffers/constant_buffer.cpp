@@ -23,18 +23,24 @@ namespace ignite
 
         // Uniform buffer allocations should align to 256 bytes for hardware compatibility
         uint64_t alignedSize = (size + 255) & ~255ULL;
+        m_AlignedSize = static_cast<size_t>(alignedSize);
 
         nri::BufferDesc cbDesc = {};
         cbDesc.size = alignedSize;
         cbDesc.usage = nri::BufferUsageBits::CONSTANT;
 
-        nri::Result result = nri.CreateCommittedBuffer(*device, nri::MemoryLocation::HOST_UPLOAD, 1.0f, cbDesc, m_Handle);
+        nri::Result result = nri.CreateCommittedBuffer(*device, nri::MemoryLocation::DEVICE_UPLOAD, 1.0f, cbDesc, m_Handle);
+        if (result != nri::Result::SUCCESS || !m_Handle)
+        {
+            result = nri.CreateCommittedBuffer(*device, nri::MemoryLocation::HOST_UPLOAD, 1.0f, cbDesc, m_Handle);
+        }
         LOG_ASSERT(result == nri::Result::SUCCESS && m_Handle, "Failed to create constant buffer!");
         if (m_Handle)
         {
             nri.SetDebugName((nri::Object*)m_Handle, debugName.c_str());
             IGN_PROFILE_ALLOC_N(m_Handle, size, "GPU Constant Buffer");
             Renderer::Stats.gpuConstantBufferBytes += size;
+            m_MappedMemory = static_cast<uint8_t *>(nri.MapBuffer(*m_Handle, 0, alignedSize));
 
             nri::BufferViewDesc viewDesc = {};
             viewDesc.buffer = m_Handle;
@@ -63,6 +69,11 @@ namespace ignite
             Renderer::Stats.gpuConstantBufferBytes -= m_ByteSize;
             if (deviceManager)
             {
+                if (m_MappedMemory)
+                {
+                    deviceManager->GetCoreInterface().UnmapBuffer(*m_Handle);
+                    m_MappedMemory = nullptr;
+                }
                 deviceManager->GetCoreInterface().DestroyBuffer(m_Handle);
             }
             m_Handle = nullptr;
@@ -71,7 +82,13 @@ namespace ignite
 
     void ConstantBuffer::SetData(const void *data, size_t dataSize, const size_t offset)
     {
-        if (!m_Handle || !data || dataSize == 0) return;
+        if (!m_Handle || !data || dataSize == 0 || offset + dataSize > m_AlignedSize) return;
+
+        if (m_MappedMemory)
+        {
+            std::memcpy(m_MappedMemory + offset, data, dataSize);
+            return;
+        }
 
         auto *deviceManager = DeviceManager::GetInstance();
         const auto &nri = deviceManager->GetCoreInterface();

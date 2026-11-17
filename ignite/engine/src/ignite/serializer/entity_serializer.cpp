@@ -231,6 +231,7 @@ namespace ignite
                     sr.AddKeyValue("ShadowDistance", comp.shadowDistance);
                     sr.AddKeyValue("ShadowResolution", comp.shadowResolution);
                     sr.AddKeyValue("CascadeShadow", comp.cascadeShadow);
+                    sr.AddKeyValue("SoftShadows", comp.softShadows);
                 }
                 sr.EndMap();
             }
@@ -778,6 +779,7 @@ namespace ignite
                 {
                     sr.AddKeyValue("SkyType", static_cast<uint32_t>(comp.skyType));
                     sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
+                    sr.AddKeyValue("EnableIBL", comp.enableIBL);
                     sr.AddKeyValue("Exposure", comp.exposure);
                     sr.AddKeyValue("Gamma", comp.gamma);
                     sr.AddKeyValue("Ambient", comp.ambient);
@@ -811,7 +813,10 @@ namespace ignite
                     sr.AddKeyValue("Color", comp.color);
                     sr.AddKeyValue("Kerning", comp.kerning);
                     sr.AddKeyValue("LineSpacing", comp.lineSpacing);
+                    sr.AddKeyValue("FontSize", comp.fontSize);
                     sr.AddKeyValue("ScreenSpace", comp.screenSpace);
+                    sr.AddKeyValue("Billboard", comp.billboard);
+                    sr.AddKeyValue("CenterAlign", comp.centerAlign);
                 }
                 sr.EndMap();
             }
@@ -884,9 +889,9 @@ namespace ignite
                 const auto &comp = entity.GetComponent<NetworkIdentityComponent>();
                 sr.BeginMap("NetworkIdentityComponent");
                 {
-                    sr.AddKeyValue("NetId", comp.netId);
-                    sr.AddKeyValue("OwnerClient", comp.ownerClient);
+                    sr.AddKeyValue("IsLocalPlayer", comp.isLocalPlayer);
                     sr.AddKeyValue("Replicate", comp.replicate);
+                    sr.AddKeyValue("SyncComponentsMask", comp.syncComponentsMask);
                     sr.AddKeyValue("Prefab", comp.prefab);
                 }
                 sr.EndMap();
@@ -1031,6 +1036,7 @@ namespace ignite
             if (auto n = node["ShadowDistance"]) comp.shadowDistance = n.as<float>();
             if (auto n = node["ShadowResolution"]) comp.shadowResolution = n.as<uint32_t>();
             if (auto n = node["CascadeShadow"]) comp.cascadeShadow = n.as<bool>();
+            if (auto n = node["SoftShadows"]) comp.softShadows = n.as<bool>();
         }
 
         // Point Light
@@ -1456,6 +1462,7 @@ namespace ignite
             auto &comp = desEntity.AddComponent<WorldEnvironment>();
             if (auto n = node["SkyType"]) comp.skyType = static_cast<SkyType>(n.as<uint32_t>());
             if (auto n = node["HDRHandle"]) comp.hdrHandle = AssetHandle(n.as<uint64_t>());
+            if (auto n = node["EnableIBL"]) comp.enableIBL = n.as<bool>();
             if (auto n = node["Exposure"]) comp.exposure = n.as<float>();
             if (auto n = node["Gamma"]) comp.gamma = n.as<float>();
             if (auto n = node["Ambient"]) comp.ambient = n.as<float>();
@@ -1485,7 +1492,10 @@ namespace ignite
             if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
             if (auto n = node["Kerning"]) comp.kerning = n.as<float>();
             if (auto n = node["LineSpacing"]) comp.lineSpacing = n.as<float>();
+            if (auto n = node["FontSize"]) comp.fontSize = n.as<float>();
             if (auto n = node["ScreenSpace"]) comp.screenSpace = n.as<bool>();
+            if (auto n = node["Billboard"]) comp.billboard = n.as<bool>();
+            if (auto n = node["CenterAlign"]) comp.centerAlign = n.as<bool>();
         }
 
         // Widget Component
@@ -1546,18 +1556,15 @@ namespace ignite
             if (auto n = node["PrefabEntityUUID"]) comp.prefabEntityUUID = UUID(n.as<uint64_t>());
         }
 
-        if (JsonNode node = entityNode["NetworkIdentityComponent"])
+        JsonNode netNode = entityNode["NetworkIdentityComponent"];
+        if (!netNode) netNode = entityNode["NetworkIdentity"];
+        if (netNode)
         {
             auto &comp = desEntity.AddComponent<NetworkIdentityComponent>();
-            if (auto n = node["NetId"]) comp.netId = n.as<uint64_t>();
-            if (auto n = node["OwnerClient"]) comp.ownerClient = n.as<uint32_t>();
-            if (auto n = node["Replicate"]) comp.replicate = n.as<bool>();
-            if (auto n = node["Prefab"]) comp.prefab = n.as<std::string>();
-
-            if (scene && comp.netId != 0)
-            {
-                scene->RegisterNetEntity(comp.netId, desEntity);
-            }
+            if (auto n = netNode["IsLocalPlayer"]) comp.isLocalPlayer = n.as<bool>();
+            if (auto n = netNode["Replicate"]) comp.replicate = n.as<bool>();
+            if (auto n = netNode["SyncComponentsMask"]) comp.syncComponentsMask = n.as<uint32_t>();
+            if (auto n = netNode["Prefab"]) comp.prefab = n.as<std::string>();
         }
 
         // Particle System Component

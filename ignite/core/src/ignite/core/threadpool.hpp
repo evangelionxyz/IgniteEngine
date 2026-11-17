@@ -46,13 +46,23 @@ namespace ignite
         ThreadPool &operator=(ThreadPool &&) = delete;
 
         template <typename F, typename... Args>
-        auto Enqueue(F &&f, Args &&... args) -> std::future<std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>>
+        auto Enqueue(F &&f, Args &&... args)
+            -> std::future<std::invoke_result_t<
+                std::decay_t<F>,
+                std::decay_t<Args>...>>
         {
-            using return_type = std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>;
+            using return_type = std::invoke_result_t<
+                std::decay_t<F>,
+                std::decay_t<Args>...>;
+
             auto task = std::make_shared<std::packaged_task<return_type()>>(
-                [func = std::forward<F>(f), ...capturedArgs = std::forward<Args>(args)]() mutable
+                [func = std::forward<F>(f),
+                ...capturedArgs = std::forward<Args>(args)]() mutable
                 {
-                    return std::invoke(std::forward<F>(func), std::forward<Args>(capturedArgs)...);
+                    return std::invoke(
+                        std::move<F>(func),
+                        std::move<Args>(capturedArgs)...
+                    );
                 }
             );
 

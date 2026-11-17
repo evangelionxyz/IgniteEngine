@@ -2,14 +2,18 @@
 
 #include <gtest/gtest.h>
 
-#include "ignite/scripting/lua_script_runtime.hpp"
-#include "ignite/scripting/lua_script.hpp"
+#include "ignite/scripting/lua/lua_script_runtime.hpp"
+#include "ignite/scripting/lua/lua_script.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/asset/asset_types.hpp"
+#include "ignite/project/project.hpp"
+#include "ignite/serializer/scene_serializer.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
+#include "ignite/animation/skeleton.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -67,7 +71,7 @@ TEST(LuaScriptRuntime, LifecycleAndIsolatedEnvironments)
     failing.AddComponent<LuaScriptComponent>().scriptPath = errorScriptPath;
 
     {
-        LuaScriptRuntime runtime(&scene);
+        lua::ScriptRuntime runtime(&scene);
         runtime.CreateInstance(first.GetUUID(), scriptPath);
         runtime.CreateInstance(second.GetUUID(), scriptPath);
         runtime.CreateInstance(failing.GetUUID(), errorScriptPath);
@@ -134,7 +138,7 @@ TEST(LuaScriptRuntime, ComponentAccessAndMutations)
     entity.AddComponent<AudioSourceComponent>();
 
     {
-        LuaScriptRuntime runtime(&scene);
+        lua::ScriptRuntime runtime(&scene);
         runtime.CreateInstance(entity.GetUUID(), scriptPath);
 
         // Verify Transform
@@ -173,6 +177,43 @@ TEST(LuaScriptRuntime, ComponentAccessAndMutations)
     std::filesystem::remove(scriptPath);
 }
 
+TEST(LuaScriptRuntime, NetworkInputCallbackReceivesOwnedEntityAndInput)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_network_input", R"lua(
+        local script = {}
+        function script.on_network_client_joined(entity, client_id, client_name)
+            entity:get_component("Transform").position = { x = client_id, y = 0, z = 0 }
+        end
+        function script.on_network_input(entity, client_id, move_x, move_y, buttons, yaw, dt)
+            local transform = entity:get_component("Transform")
+            transform.position = {
+                x = move_x + client_id,
+                y = buttons,
+                z = move_y + yaw + dt
+            }
+        end
+        return script
+    )lua");
+
+    Scene scene;
+    Entity player = SceneManager::CreateEntity(&scene, "NetworkPlayer", EntityType_Node);
+    player.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
+
+    {
+        lua::ScriptRuntime runtime(&scene);
+        runtime.InvokeNetworkEvent("on_network_client_joined", 7, "ClientSeven");
+        EXPECT_FLOAT_EQ(player.GetTransform().local.translation.x, 7.0f);
+        runtime.InvokeNetworkInput(player.GetUUID(), 3, 0.25f, -0.5f, 2, 45.0f, 1.0f / 60.0f);
+
+        const glm::vec3 position = player.GetTransform().local.translation;
+        EXPECT_FLOAT_EQ(position.x, 3.25f);
+        EXPECT_FLOAT_EQ(position.y, 2.0f);
+        EXPECT_NEAR(position.z, 44.516666f, 1e-4f);
+    }
+
+    std::filesystem::remove(scriptPath);
+}
+
 TEST(LuaScriptRuntime, EntityQueriesAndLog)
 {
     const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_queries", R"lua(
@@ -198,7 +239,7 @@ TEST(LuaScriptRuntime, EntityQueriesAndLog)
     runner.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
 
     {
-        LuaScriptRuntime runtime(&scene);
+        lua::ScriptRuntime runtime(&scene);
         runtime.CreateInstance(runner.GetUUID(), scriptPath);
 
         const auto &targetT = target.GetComponent<TransformComponent>().local;
@@ -215,14 +256,18 @@ TEST(LuaScriptRuntime, HotReloadAndErrorResilience)
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path scriptPath = std::filesystem::temp_directory_path() / std::format("ignite_hot_reload_{}.lua", unique);
 
-    // Initial version v1: sets position.x = 10
+    // Initial version v1: captures script-local state during initialization.
     {
         std::ofstream script(scriptPath);
         script << R"lua(
             local script = {}
+            local offset = {}
+            function script.on_create(entity)
+                offset = entity:get_transform().position
+            end
             function script.on_update(entity, dt)
                 local t = entity:get_transform()
-                t.position = { x = 10, y = 0, z = 0 }
+                t.position = { x = 10 + offset.x, y = 0, z = 0 }
             end
             return script
         )lua";
@@ -233,20 +278,24 @@ TEST(LuaScriptRuntime, HotReloadAndErrorResilience)
     entity.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
 
     {
-        LuaScriptRuntime runtime(&scene);
+        lua::ScriptRuntime runtime(&scene);
         runtime.CreateInstance(entity.GetUUID(), scriptPath);
 
         runtime.Update(0.016f);
         EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 10.0f);
 
-        // Update script on disk to v2: sets position.x = 25
+        // Update script on disk to v2: its local state must be initialized again.
         {
             std::ofstream script(scriptPath, std::ios::trunc);
             script << R"lua(
                 local script = {}
+                local offset = {}
+                function script.on_create(entity)
+                    offset = entity:get_transform().position
+                end
                 function script.on_update(entity, dt)
                     local t = entity:get_transform()
-                    t.position = { x = 25, y = 0, z = 0 }
+                    t.position = { x = 25 + offset.x, y = 0, z = 0 }
                 end
                 function script.on_reload(entity)
                     local t = entity:get_transform()
@@ -261,7 +310,7 @@ TEST(LuaScriptRuntime, HotReloadAndErrorResilience)
         EXPECT_FLOAT_EQ(entity.GetTransform().local.scale.x, 7.0f);
 
         runtime.Update(0.016f);
-        EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 25.0f);
+        EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 35.0f);
 
         // Overwrite with syntax error
         {
@@ -274,7 +323,7 @@ TEST(LuaScriptRuntime, HotReloadAndErrorResilience)
 
         // Subsequent update should continue with old valid callbacks without crashing
         runtime.Update(0.016f);
-        EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 25.0f);
+        EXPECT_FLOAT_EQ(entity.GetTransform().local.translation.x, 35.0f);
     }
 
     std::filesystem::remove(scriptPath);
@@ -289,7 +338,7 @@ TEST(LuaScriptAsset, AssetManagerAndAssetHandleIntegration)
 
     const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_asset", "-- Hello Lua Asset\nreturn {}");
 
-    Ref<LuaScript> scriptAsset = LuaScript::Create(scriptPath);
+    Ref<lua::Script> scriptAsset = lua::Script::Create(scriptPath);
     ASSERT_NE(scriptAsset, nullptr);
     EXPECT_EQ(scriptAsset->GetAssetType(), AssetType::LuaScript);
     EXPECT_EQ(scriptAsset->GetFilepath(), scriptPath);
@@ -306,5 +355,169 @@ TEST(LuaScriptAsset, AssetManagerAndAssetHandleIntegration)
     EXPECT_EQ(component.scriptPath, scriptPath);
 
     std::filesystem::remove(scriptPath);
+}
+
+TEST(LuaScriptRuntime, TextAndDebugOverlayBindingsAndSerialization)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_text_debug", R"lua(
+        local script = {}
+        function script.on_create(entity)
+            local tx = entity:get_component("Text")
+            tx.text = "World Sign Label"
+            tx.font_size = 32.0
+            tx.billboard = true
+            tx.center_align = true
+            tx.screen_space = true
+            tx.kerning = 1.5
+            tx.line_spacing = 1.25
+            tx.color = Ignite.Vec4(0.2, 0.8, 1.0, 0.9)
+
+            Ignite.Debug.SetShowEntityNames(true)
+            Ignite.Debug.DrawTextWorld(Ignite.Vec3(1.0, 2.0, 3.0), entity:get_name(), Ignite.Vec4(1, 1, 0, 1), 0.35, true, true)
+            Ignite.Debug.DrawTextScreen(40.0, 80.0, "Screen Telemetry", Ignite.Vec4(0, 1, 0.5, 1), 20.0, true)
+            Ignite.Debug.DrawLine(Ignite.Vec3(0, 0, 0), Ignite.Vec3(0, 5, 0), Ignite.Vec4(1, 0, 0, 1))
+        end
+        return script
+    )lua");
+
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "IgniteLuaTextSerializeTest";
+    std::error_code ec;
+    std::filesystem::remove_all(tempDir, ec);
+    std::filesystem::create_directories(tempDir, ec);
+
+    {
+        ProjectInfo info;
+        info.name = "TextSerializeTest";
+        info.rootDirectory = tempDir;
+        info.filepath = tempDir / "Test.ixproj";
+        info.assetDirectory = "Assets";
+        Ref<Project> proj = Project::Create(info);
+        Ref<Scene> scene = CreateRef<Scene>(proj.get());
+
+        Entity label = SceneManager::CreateEntity(scene.get(), "SignEntity", EntityType_Node);
+        label.AddComponent<TextComponent>();
+        label.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
+
+        {
+            lua::ScriptRuntime runtime(scene.get());
+            runtime.CreateInstance(label.GetUUID(), scriptPath);
+
+            const auto &tx = label.GetComponent<TextComponent>();
+            EXPECT_EQ(tx.text, "World Sign Label");
+            EXPECT_FLOAT_EQ(tx.fontSize, 32.0f);
+            EXPECT_TRUE(tx.billboard);
+            EXPECT_TRUE(tx.centerAlign);
+            EXPECT_TRUE(tx.screenSpace);
+            EXPECT_FLOAT_EQ(tx.kerning, 1.5f);
+            EXPECT_FLOAT_EQ(tx.lineSpacing, 1.25f);
+            EXPECT_FLOAT_EQ(tx.color.r, 0.2f);
+            EXPECT_FLOAT_EQ(tx.color.g, 0.8f);
+            EXPECT_FLOAT_EQ(tx.color.b, 1.0f);
+            EXPECT_FLOAT_EQ(tx.color.a, 0.9f);
+
+            EXPECT_TRUE(scene->showDebugEntityNames);
+            ASSERT_EQ(scene->GetDebugWorldTexts().size(), 1u);
+            EXPECT_EQ(scene->GetDebugWorldTexts()[0].text, "SignEntity");
+            EXPECT_TRUE(scene->GetDebugWorldTexts()[0].billboard);
+            EXPECT_TRUE(scene->GetDebugWorldTexts()[0].center);
+            ASSERT_EQ(scene->GetDebugScreenTexts().size(), 1u);
+            EXPECT_EQ(scene->GetDebugScreenTexts()[0].text, "Screen Telemetry");
+            EXPECT_FLOAT_EQ(scene->GetDebugScreenTexts()[0].fontSize, 20.0f);
+            EXPECT_TRUE(scene->GetDebugScreenTexts()[0].center);
+            ASSERT_EQ(scene->GetDebugLines().size(), 1u);
+
+            scene->ClearDebugDraw();
+            EXPECT_TRUE(scene->GetDebugWorldTexts().empty());
+            EXPECT_TRUE(scene->GetDebugScreenTexts().empty());
+            EXPECT_TRUE(scene->GetDebugLines().empty());
+        }
+
+        const std::filesystem::path scenePath = tempDir / "TextTest.ixscene";
+        SceneSerializer serializer(scene, proj.get());
+        ASSERT_TRUE(serializer.Serialize(scenePath));
+
+        Ref<Scene> loaded = SceneSerializer::Deserialize(scenePath, proj.get());
+        ASSERT_NE(loaded, nullptr);
+        Entity found;
+        auto view = loaded->registry->view<IDComponent>();
+        for (entt::entity e : view)
+        {
+            if (view.get<IDComponent>(e).name == "SignEntity")
+            {
+                found = Entity{ e, loaded.get() };
+                break;
+            }
+        }
+        ASSERT_TRUE(found.IsValid());
+        ASSERT_TRUE(found.HasComponent<TextComponent>());
+        const auto &loadedTx = found.GetComponent<TextComponent>();
+        EXPECT_EQ(loadedTx.text, "World Sign Label");
+        EXPECT_FLOAT_EQ(loadedTx.fontSize, 32.0f);
+        EXPECT_TRUE(loadedTx.billboard);
+        EXPECT_TRUE(loadedTx.centerAlign);
+        EXPECT_TRUE(loadedTx.screenSpace);
+    }
+
+    std::filesystem::remove(scriptPath, ec);
+    std::filesystem::remove_all(tempDir, ec);
+}
+
+TEST(LuaScriptRuntime, SkeletalAnimatorAndCharacterRotationBindings)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_skel_cc", R"lua(
+        local script = {}
+        function script.on_create(entity)
+            local cc = entity:get_component("CharacterController")
+            cc:set_rotation(Ignite.Vec3(0.0, 90.0, 0.0))
+
+            local skel = entity:get_component("SkeletalMesh")
+            skel.unique_animator = true
+            skel:set_float("Speed", 8.5)
+            skel:set_bool("IsGrounded", false)
+            skel:set_int("EmoteId", 2)
+            skel:play_state("Jump")
+
+            assert(math.abs(skel:get_float("Speed") - 8.5) < 0.001)
+            assert(skel:get_bool("IsGrounded") == false)
+            assert(skel:get_int("EmoteId") == 2)
+            assert(skel.current_state == "Jump")
+        end
+        return script
+    )lua");
+
+    Scene scene;
+    Entity bot = SceneManager::CreateEntity(&scene, "AnimBot", EntityType_Node);
+    bot.AddComponent<CharacterControllerComponent>();
+    auto &smc = bot.AddComponent<SkeletalMeshComponent>();
+    smc.uniqueAnimator = true;
+    smc.currentStateName = "Idle";
+
+    bot.AddComponent<LuaScriptComponent>().scriptPath = scriptPath;
+
+    {
+        lua::ScriptRuntime runtime(&scene);
+        runtime.CreateInstance(bot.GetUUID(), scriptPath);
+
+        // Verify CharacterController rotation update fell through to transform
+        const glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(bot.GetComponent<TransformComponent>().local.rotation));
+        EXPECT_NEAR(eulerDeg.y, 90.0f, 1.0f);
+
+        // Verify SkeletalMeshComponent runtimeParams and current state triggered by Lua
+        const auto *speedParam = Animator::FindAnimParam(smc.runtimeParams, "Speed");
+        ASSERT_NE(speedParam, nullptr);
+        EXPECT_FLOAT_EQ(speedParam->floatVal, 8.5f);
+        const auto *groundedParam = Animator::FindAnimParam(smc.runtimeParams, "IsGrounded");
+        ASSERT_NE(groundedParam, nullptr);
+        EXPECT_FALSE(groundedParam->boolVal);
+        const auto *emoteParam = Animator::FindAnimParam(smc.runtimeParams, "EmoteId");
+        ASSERT_NE(emoteParam, nullptr);
+        EXPECT_EQ(emoteParam->intVal, 2);
+
+        EXPECT_EQ(smc.currentStateName, "Jump");
+        EXPECT_FALSE(smc.isTransitioning);
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(scriptPath, ec);
 }
 

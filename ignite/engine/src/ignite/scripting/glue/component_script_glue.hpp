@@ -241,6 +241,7 @@ namespace ignite
         void (*CharacterControllerComponent_GetLinearVelocity)(uint64_t entityID, glm::vec3 *result);
         void (*CharacterControllerComponent_SetLinearVelocity)(uint64_t entityID, const glm::vec3 *value);
         void (*CharacterControllerComponent_IsOnGround)(uint64_t entityID, bool *result);
+        void (*CharacterControllerComponent_IsSupported)(uint64_t entityID, bool *result);
         void (*CharacterControllerComponent_GetGroundNormal)(uint64_t entityID, glm::vec3 *result);
         void (*CharacterControllerComponent_Move)(uint64_t entityID, const glm::vec3 *displacement, float deltaTime);
         void (*CharacterControllerComponent_GetPosition)(uint64_t entityID, glm::vec3 *result);

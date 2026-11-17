@@ -63,6 +63,7 @@ namespace ignite
                 texCI.sampleCount = m_CreateInfo.sampleCount;
                 texCI.sampleQuality = m_CreateInfo.sampleQuality;
                 texCI.initialAccess = nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE;
+                texCI.initialStages = nri::StageBits::DEPTH_STENCIL_ATTACHMENT;
                 texCI.initialLayout = attachment.state != nri::Layout::UNDEFINED
                     ? attachment.state
                     : nri::Layout::DEPTH_STENCIL_ATTACHMENT;
@@ -74,6 +75,10 @@ namespace ignite
                 texCI.nativeObjectPtr = attachment.nativeObjectPtr;
 
                 m_DepthAttachment = Texture::Create(texCI, attachment.name);
+                if (m_DepthAttachment && attachment.isNativeObject)
+                {
+                    m_DepthAttachment->SetCurrentState(nri::Layout::UNDEFINED, nri::AccessBits::NONE, nri::StageBits::NONE);
+                }
             }
 
             if (isColorAttachment)
@@ -91,7 +96,12 @@ namespace ignite
                     texCI.isRenderTarget = isRenderTarget;
                     texCI.format = attachment.format;
                     texCI.isUAV = false;
-                    texCI.initialAccess = nri::AccessBits::COLOR_ATTACHMENT;
+                    texCI.initialAccess = attachment.state == nri::Layout::PRESENT
+                        ? nri::AccessBits::NONE
+                        : nri::AccessBits::COLOR_ATTACHMENT;
+                    texCI.initialStages = attachment.state == nri::Layout::PRESENT
+                        ? nri::StageBits::NONE
+                        : nri::StageBits::COLOR_ATTACHMENT;
                     texCI.initialLayout = attachment.state != nri::Layout::UNDEFINED
                         ? attachment.state
                         : nri::Layout::COLOR_ATTACHMENT;
@@ -105,6 +115,10 @@ namespace ignite
                     texCI.arraySize = std::max(attachment.arrayLayers, 1u);
 
                     m_ColorAttachments.emplace_back(Texture::Create(texCI, attachment.name));
+                    if (m_ColorAttachments.back() && attachment.isNativeObject)
+                    {
+                        m_ColorAttachments.back()->SetCurrentState(nri::Layout::UNDEFINED, nri::AccessBits::NONE, nri::StageBits::NONE);
+                    }
                 }
             }
         }
@@ -194,6 +208,7 @@ namespace ignite
             dsvDesc.mipNum = 1;
             dsvDesc.layerOffset = static_cast<nri::Dim_t>(depthBaseLayer);
             dsvDesc.layerNum = static_cast<nri::Dim_t>(depthLayerCount);
+            dsvDesc.layout = nri::Layout::DEPTH_STENCIL_ATTACHMENT;
             dsvDesc.planes = HasStencilComponent(dsvDesc.format)
                 ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL)
                 : nri::PlaneBits::DEPTH;
@@ -221,6 +236,7 @@ namespace ignite
             rtvDesc.mipNum = 1;
             rtvDesc.layerOffset = static_cast<nri::Dim_t>(baseLayer);
             rtvDesc.layerNum = static_cast<nri::Dim_t>(layerCount);
+            rtvDesc.layout = nri::Layout::COLOR_ATTACHMENT;
             rtvDesc.planes = nri::PlaneBits::ALL;
 
             nri::Result res = nri.CreateTextureView(rtvDesc, m_ColorAttachmentViews[i]);

@@ -369,8 +369,13 @@ namespace ignite
         m_RuntimeMaterial->roughnessTextureHandle = m_SourceMaterial->roughnessTextureHandle;
         m_RuntimeMaterial->normalTextureHandle    = m_SourceMaterial->normalTextureHandle;
         m_RuntimeMaterial->occlusionTextureHandle = m_SourceMaterial->occlusionTextureHandle;
+        m_RuntimeMaterial->SetType(m_SourceMaterial->GetType());
+        m_RuntimeMaterial->SetCullMode(m_SourceMaterial->GetCullMode());
         m_RuntimeMaterial->SetDirtyFlag(m_SourceMaterial->IsDirty());
-        m_RuntimeMaterial->InvalidateBindingSet();
+        if (!m_RuntimeMaterial->GetBindingSet())
+        {
+            m_RuntimeMaterial->InvalidateBindingSet();
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -404,7 +409,6 @@ namespace ignite
                 .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT))
                 .Build(rt, params);
 
-            m_EnvironmentPipelineCache.clear();
             m_EnvironmentPipelineCache[rt] = envPipeline;
         }
 
@@ -560,7 +564,6 @@ namespace ignite
                     .AddBindingLayout(BindlessSystem::GetBindingLayout())
                     .Build(rt, params);
 
-                pipelineCache.clear();
                 pipelineCache[rt] = geopPipeline;
             }
 
@@ -751,7 +754,6 @@ namespace ignite
                 .AddBindingLayout(m_CompositeBindingLayout)
                 .Build(rt, params);
 
-            m_CompositePipelineCache.clear();
             m_CompositePipelineCache[rt] = pipeline;
         }
 

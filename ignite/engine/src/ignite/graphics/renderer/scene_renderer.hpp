@@ -8,6 +8,7 @@
 #include "iscene_renderer.hpp"
 #include "ignite/graphics/hash_keys.hpp"
 #include "batch_builder.hpp"
+#include "frame_packet.hpp"
 #include "ignite/terrain/terrain_renderer.hpp"
 #include "ignite/scene/icamera.hpp"
 #include <entt/entt.hpp>
@@ -34,6 +35,7 @@ namespace ignite
         bool hasEnvironment = false;
         bool hasParticles = false;
         bool hasWidgets = false;
+        bool hasScreenText = false;
         bool hasActiveShadows = false;
         bool requiresObjectId = false;
         bool requiresDebugOverlay = false;
@@ -50,7 +52,7 @@ namespace ignite
 
         bool IsEmptyScene() const
         {
-            return !HasRenderables() && !hasWidgets && !requiresDebugOverlay && !requiresObjectId;
+            return !HasRenderables() && !hasWidgets && !hasScreenText && !requiresDebugOverlay && !requiresObjectId;
         }
     };
 
@@ -108,8 +110,12 @@ namespace ignite
         Ref<CameraRenderTarget> GetRenderTarget(ICamera *camera);
 
         void PreallocateGPUData(nri::CommandBuffer *cmd, FrameContext *frameContext);
+        const FramePacket &GetLastFramePacket() const { return m_FramePacket; }
 
     private:
+        void ClearResources();
+        void CollectSceneLighting(FrameContext *frameContext);
+
         RenderPlan BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera);
         void EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
         void EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
@@ -146,7 +152,6 @@ namespace ignite
             bool isSkeletal = false;
             Mesh_GPUData gpuData;
             Ref<MeshInstance> meshInstance;
-            glm::mat4 bones[MAX_BONES];
             nri::CullMode cullMode = nri::CullMode::NONE;
         };
 
@@ -199,6 +204,9 @@ namespace ignite
 
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
+        Ref<Renderer2D> m_ScreenTextRenderer2D;
+        Ref<Renderer2D> m_DebugRenderer2D;
+        Ref<ConstantBuffer> m_ScreenCameraBuffer;
 
         std::unordered_map<ICamera *, Ref<CameraRenderTarget>> m_RenderTargets;
         std::unordered_map<ICamera *, std::vector<Ref<Bloom>>> m_Blooms;
@@ -253,6 +261,7 @@ namespace ignite
         // -----------------------------------------------------------------------
         BatchBuilder m_OpaqueBatchBuilder;   // Color pass opaque static meshes
         BatchBuilder m_ShadowBatchBuilder;   // Shadow pass (CSM) static meshes
+        FramePacket m_FramePacket;
     };
 }
 

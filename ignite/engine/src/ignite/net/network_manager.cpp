@@ -7,6 +7,7 @@
 #include <ignite/scene/entity.hpp>
 #include <ignite/scene/component.hpp>
 #include <ignite/project/project.hpp>
+#include <ignite/scripting/lua/lua_script_runtime.hpp>
 
 #include <steam/steamnetworkingsockets.h>
 #include <steam/isteamnetworkingutils.h>
@@ -92,6 +93,21 @@ namespace ignite
         });
 
         m_ClientReplication = std::make_unique<NetClientReplication>(m_ActiveScene, m_ClientSystem.get());
+
+        m_ClientSystem->onConnected = [this]() {
+            if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
+            {
+                m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
+                    "on_network_connected", GetClientId(), "");
+            }
+        };
+        m_ClientSystem->onDisconnected = [this]() {
+            if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
+            {
+                m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
+                    "on_network_disconnected", GetClientId(), "");
+            }
+        };
 
         m_ClientSystem->onChat = [this](const netproto::ChatMsg &msg) {
             NetChatMessage chatMsg;
@@ -203,8 +219,11 @@ namespace ignite
             if (m_ServerReplication)
             {
                 m_ServerReplication->SyncWorldToClient(client.clientId);
-                // Automatically spawn a player entity for this client
-                m_ServerReplication->SpawnEntity("Player_" + client.name, glm::vec3(0.0f, 1.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), client.clientId);
+                if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
+                {
+                    m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
+                        "on_network_client_joined", client.clientId, client.name);
+                }
             }
             if (m_ClientJoinedCallback)
             {
@@ -229,6 +248,11 @@ namespace ignite
                 {
                     m_ServerReplication->DespawnEntity(netId);
                 }
+            }
+            if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
+            {
+                m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
+                    "on_network_client_left", client.clientId, client.name);
             }
             if (m_ClientLeftCallback)
             {
@@ -339,42 +363,27 @@ namespace ignite
                 m_ServerTickAccumulator -= tickInterval;
                 m_ServerSystem->Tick();
 
-                // Consume player input commands
-                m_ServerSystem->ForEachClient([this](NetServerSystem::RemoteClient &client) {
+                // Consume all queued player input commands for this tick
+                m_ServerSystem->ForEachClient([this, tickInterval](NetServerSystem::RemoteClient &client) {
                     auto inputs = m_ServerSystem->DrainInputs(client.clientId);
                     if (inputs.empty() || !m_ActiveScene)
                         return;
 
-                    const auto &latest = inputs.back();
                     auto view = m_ActiveScene->registry->view<NetworkIdentityComponent>();
                     for (entt::entity e : view)
                     {
                         const auto &netComp = view.get<NetworkIdentityComponent>(e);
-                        if (netComp.ownerClient == client.clientId)
+                        if (netComp.ownerClient != client.clientId)
+                            continue;
+
+                        Entity entity{ e, m_ActiveScene };
+                        for (const auto &cmd : inputs)
                         {
-                            Entity entity{ e, m_ActiveScene };
-                            if (entity.HasComponent<CharacterControllerComponent>())
-                            {
-                                auto &cc = entity.GetComponent<CharacterControllerComponent>();
-                                const glm::vec3 moveDir(latest.move.x, 0.0f, latest.move.y);
-                                constexpr float speed = 5.0f;
-                                cc.linearVelocity.x = moveDir.x * speed;
-                                cc.linearVelocity.z = moveDir.z * speed;
-                                if (auto charActor = cc.character.lock())
-                                {
-                                    if ((latest.buttons & netproto::InputButton_Jump) && charActor->IsOnGround())
-                                    {
-                                        cc.linearVelocity.y = 5.0f;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                auto &tr = entity.GetTransform();
-                                tr.local.translation += glm::vec3(latest.move.x, 0.0f, latest.move.y) * 5.0f * (1.0f / 60.0f);
-                            }
-                            break;
+                            if (auto *runtime = m_ActiveScene->GetLuaScriptRuntime())
+                                runtime->InvokeNetworkInput(entity.GetUUID(), client.clientId, cmd.move.x, cmd.move.y,
+                                    cmd.buttons, cmd.yaw, tickInterval);
                         }
+                        break;
                     }
                 });
 
@@ -416,22 +425,24 @@ namespace ignite
         if (m_ClientReplication)
         {
             Entity localPlayer = m_ClientReplication->GetLocalPlayerEntity();
-            if (localPlayer.IsValid())
+            if (localPlayer.IsValid() && !localPlayer.HasComponent<CharacterControllerComponent>())
             {
-                auto &tr = localPlayer.GetTransform();
-                glm::vec3 predictedPos = tr.local.translation;
-                glm::quat predictedRot = tr.local.rotation;
+                auto &tc = localPlayer.GetComponent<TransformComponent>();
+                glm::vec3 predictedPos = tc.local.translation;
+                glm::quat predictedRot = tc.local.rotation;
 
-                predictedPos += glm::vec3(cmd.move.x, 0.0f, cmd.move.y) * 5.0f * (1.0f / 60.0f);
+                const float tickDt = 1.0f / static_cast<float>(std::max(1, m_UiTickRate));
+                predictedPos += glm::vec3(cmd.move.x, 0.0f, cmd.move.y) * m_ClientReplication->GetPrediction().GetDefaultSpeed() * tickDt;
 
                 m_ClientReplication->GetPrediction().Record(
                     cmd.seq, m_ClientSystem->GetServerTick(),
                     predictedPos, predictedRot, cmd);
 
-                tr.local.translation = predictedPos;
-                tr.local.rotation = predictedRot;
-                tr.world.translation = predictedPos;
-                tr.world.rotation = predictedRot;
+                tc.local.translation = predictedPos;
+                tc.local.rotation = predictedRot;
+                tc.world.translation = predictedPos;
+                tc.world.rotation = predictedRot;
+                tc.dirty = true;
             }
         }
 
@@ -484,6 +495,58 @@ namespace ignite
             SteamNetworkingUtils()->SetGlobalConfigValueFloat(k_ESteamNetworkingConfig_FakePacketLoss_Send, m_SimPacketLoss);
             SteamNetworkingUtils()->SetGlobalConfigValueFloat(k_ESteamNetworkingConfig_FakePacketLoss_Recv, m_SimPacketLoss);
         }
+    }
+
+    void NetworkManager::SyncFromProject(Project *project)
+    {
+        Ref<Project> active = Project::GetActive();
+        Project *target = project ? project : active.get();
+        if (!target)
+            return;
+
+        m_LastSyncedProject = (target == active.get()) ? active : nullptr;
+        SetServerSettings(target->GetServerSettings());
+    }
+
+    void NetworkManager::SyncToProject(Project *project)
+    {
+        Ref<Project> active = Project::GetActive();
+        Project *target = project ? project : active.get();
+        if (!target)
+            return;
+
+        target->GetServerSettings() = GetServerSettings();
+        m_LastSyncedServerSettings = target->GetServerSettings();
+    }
+
+    ServerSettings NetworkManager::GetServerSettings() const
+    {
+        ServerSettings settings;
+        settings.port = static_cast<uint16_t>(std::clamp(m_UiPort, 1, 65535));
+        settings.tickRate = static_cast<uint16_t>(std::max(1, m_UiTickRate));
+        settings.snapshotRate = static_cast<uint16_t>(std::max(1, m_UiSnapshotRate));
+        settings.maxClients = static_cast<uint32_t>(std::max(1, m_UiMaxClients));
+        settings.handshakeTimeoutSec = static_cast<double>(std::max(0.5f, m_UiHandshakeTimeout));
+        settings.chatMinIntervalSec = static_cast<double>(std::max(0.0f, m_UiChatInterval));
+        settings.autoStart = m_UiAutoStart;
+        return settings;
+    }
+
+    void NetworkManager::SetServerSettings(const ServerSettings &settings)
+    {
+        m_UiPort = static_cast<int>(settings.port);
+        m_UiTickRate = static_cast<int>(settings.tickRate);
+        m_UiSnapshotRate = static_cast<int>(settings.snapshotRate);
+        m_UiMaxClients = static_cast<int>(settings.maxClients);
+        m_UiHandshakeTimeout = static_cast<float>(settings.handshakeTimeoutSec);
+        m_UiChatInterval = static_cast<float>(settings.chatMinIntervalSec);
+        m_UiAutoStart = settings.autoStart;
+        m_LastSyncedServerSettings = settings;
+    }
+
+    void NetworkManager::SetServerPort(uint16_t port)
+    {
+        m_UiPort = static_cast<int>(port);
     }
 
     NetStats NetworkManager::GetStats() const

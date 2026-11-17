@@ -57,7 +57,7 @@ struct Scene
     int numPointLights;
     int numSpotLights;
     int skyType;
-    float _pad2;
+    int enableIBL;
     float4 sunDirection;
 };
 

@@ -67,19 +67,36 @@ namespace ignite
         desc.addItem(BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetDescriptor()));
 
         Ref<Texture> environmentTexture = envMap;
-        if (!environmentTexture)
+        if (!environmentTexture || !environmentTexture->GetShaderResourceView())
             environmentTexture = Renderer::GetWhiteTexture();
 
         Ref<Texture> shadowTexture = shadowMap;
-        if (!shadowTexture)
+        if (!shadowTexture || !shadowTexture->GetShaderResourceView())
             shadowTexture = Renderer::GetWhiteTexture();
 
-        desc.addItem(BindingSetItem::TextureSRV(0, environmentTexture->GetShaderResourceView()));
-        desc.addItem(BindingSetItem::TextureSRV(1, shadowTexture->GetShaderResourceView()));
+        nri::Descriptor *environmentView = environmentTexture ? environmentTexture->GetShaderResourceView() : nullptr;
+        nri::Descriptor *shadowView = shadowTexture ? shadowTexture->GetShaderResourceView() : nullptr;
+        if (!environmentView || !shadowView)
+        {
+            LOG_ERROR("[Material] Cannot create binding set: fallback texture SRV is unavailable");
+            return false;
+        }
+
+        desc.addItem(BindingSetItem::TextureSRV(0, environmentView));
+        desc.addItem(BindingSetItem::TextureSRV(1, shadowView));
 
         // Sampler
+        nri::Descriptor *shadowSampler = shadowTexture ? shadowTexture->GetSampler() : nullptr;
+        if (!shadowSampler)
+            shadowSampler = sampler;
+        if (!sampler || !shadowSampler)
+        {
+            LOG_ERROR("[Material] Cannot create binding set: sampler is unavailable");
+            return false;
+        }
+
         desc.addItem(BindingSetItem::Sampler(0, sampler));
-        desc.addItem(BindingSetItem::Sampler(1, shadowMap ? shadowMap->GetSampler() : sampler));
+        desc.addItem(BindingSetItem::Sampler(1, shadowSampler));
 
         nri::PipelineLayout *materialPipelineLayout = Renderer::GetPipelineLayout(EBindingLayout::MATERIAL);
         Ref<BindingSet> newBindingSet = BindingSet::Create("Material", materialPipelineLayout, 0, desc);
@@ -124,7 +141,12 @@ namespace ignite
         gpuData.normalTextureIndex = static_cast<int>(getBindlessIndex(normalTextureHandle, static_cast<uint32_t>(-1)));
         gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);
 
-        m_GPUDataBuffer->SetData(&gpuData, sizeof(Material_GPUData));
+        if (!m_HasUploadedGpuData || std::memcmp(&gpuData, &m_LastUploadedGpuData, sizeof(Material_GPUData)) != 0)
+        {
+            m_GPUDataBuffer->SetData(&gpuData, sizeof(Material_GPUData));
+            m_LastUploadedGpuData = gpuData;
+            m_HasUploadedGpuData = true;
+        }
     }
 
     void Material::SetSamplerDesc(const nri::SamplerDesc &desc)

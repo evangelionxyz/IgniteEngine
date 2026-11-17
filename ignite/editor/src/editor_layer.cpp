@@ -11,11 +11,13 @@
 #include "ignite/asset/asset_worker.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
+#include "ignite/core/agent_controller.hpp"
 #include "ignite/core/command.hpp"
 #include "ignite/core/input/input_system.hpp"
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/time.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/project/game_packager.hpp"
 #include "ignite/scene/prefab.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
@@ -45,15 +47,21 @@ namespace ignite
 {
     namespace
     {
-        void BindSharedImGuiContext()
+        bool BindSharedImGuiContext()
         {
+            if (auto *app = Application::GetInstance(); app && !app->GetCreateInfo().useGui)
+            {
+                return false;
+            }
+
             ImGuiContext *sharedContext = Application::GetImGuiContext();
             LOG_ASSERT(sharedContext, "Engine ImGui context has not been created");
 
-            if (ImGui::GetCurrentContext() != sharedContext)
+            if (sharedContext && ImGui::GetCurrentContext() != sharedContext)
             {
                 ImGui::SetCurrentContext(sharedContext);
             }
+            return sharedContext != nullptr;
         }
 
         const SDL_DialogFileFilter kSceneFileFilters[] =
@@ -131,19 +139,25 @@ namespace ignite
         m_SceneRenderer = CreateRef<SceneRenderer>();
 
         const auto &cmdArgs = Application::GetInstance()->GetCreateInfo().cmdLineArgs;
-        for (int i = 0; i < cmdArgs.count; ++i)
+        AgentController::Get().InitializeFromArgs(cmdArgs);
+        for (int i = 1; i < cmdArgs.count; ++i)
         {
-            std::string args = cmdArgs[i];
-
-            char projectArgs[] = "--project=";
-            if (args.find(projectArgs) != std::string::npos)
+            const std::string_view arg(cmdArgs[i]);
+            constexpr std::string_view kProjectPrefix = "--project=";
+            if (arg.starts_with(kProjectPrefix))
             {
-                std::string projectFilepath = args.substr(std::size(projectArgs) - 1, args.size() - std::size(projectArgs) + 1);
-                OpenProject(projectFilepath);
+                OpenProject(std::string(arg.substr(kProjectPrefix.size())));
+            }
+            else if (arg == "--project" && i + 1 < cmdArgs.count)
+            {
+                OpenProject(cmdArgs[++i]);
             }
         }
 
-        Application::GetInstance()->GetWindow()->Show();
+        if (Application::GetInstance()->GetCreateInfo().useGui && Application::GetInstance()->GetWindow())
+        {
+            Application::GetInstance()->GetWindow()->Show();
+        }
     }
 
     void EditorLayer::OnDetach()
@@ -296,12 +310,22 @@ namespace ignite
                 case ESceneState::Simulate:
                 case ESceneState::Play:
                 {
-                    m_ActiveScene->OnFixedUpdateRuntimeSimulate();
+                    constexpr float kFixedStep = 1.0f / 60.0f;
+                    constexpr int kMaxSubsteps = 8;
+                    m_FixedAccumulator += std::min(std::max(deltaTime, 0.0f), 0.25f);
+                    int substeps = 0;
+                    while (m_FixedAccumulator >= kFixedStep && substeps < kMaxSubsteps)
+                    {
+                        m_ActiveScene->OnFixedUpdateRuntimeSimulate();
+                        m_FixedAccumulator -= kFixedStep;
+                        ++substeps;
+                    }
                     m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
                     break;
                 }
                 case ESceneState::Stop:
                 {
+                    m_FixedAccumulator = 0.0f;
                     m_ActiveScene->OnFixedUpdateEdit();
                     m_ActiveScene->OnUpdateEdit(deltaTime);
                     break;
@@ -309,6 +333,31 @@ namespace ignite
             }
 
             m_ScenePanel->OnUpdate(deltaTime);
+        }
+
+        if (!m_State.isLoading)
+        {
+            AgentExecutionContext agentCtx;
+            agentCtx.scene = m_ActiveScene.get();
+            agentCtx.project = m_ActiveProject.get();
+            agentCtx.sceneRenderer = m_SceneRenderer.get();
+            if (m_ActiveScene && m_ActiveScene->IsPlaying())
+            {
+                agentCtx.camera = &m_EditorPlayCamera;
+            }
+            else if (m_ScenePanel)
+            {
+                agentCtx.camera = &m_ScenePanel->GetViewportCamera();
+            }
+            agentCtx.onSceneReplaced = [this](const Ref<Scene> &newScene)
+            {
+                m_EditorScene = newScene;
+                SetActiveScene(newScene);
+            };
+            agentCtx.onPlay = [this]() { OnScenePlay(); };
+            agentCtx.onStop = [this]() { OnSceneStop(); };
+            agentCtx.onSimulate = [this]() { OnSceneSimulate(); };
+            AgentController::Get().Update(deltaTime, agentCtx);
         }
     }
 
@@ -693,6 +742,15 @@ namespace ignite
                 else if (ImGui::MenuItem("Close Project", nullptr, false, m_ActiveProject != nullptr))
                 {
                     CloseCurrentProject();
+                }
+
+                ImGui::Separator();
+
+                if (ImGui::MenuItem("Package Game...", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    SDL_ShowOpenFolderDialog(OnPackageFolderSelected, this,
+                        Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                        m_ActiveProject->GetDirectory().string().c_str(), false);
                 }
 
                 ImGui::EndMenu();
@@ -1178,7 +1236,12 @@ namespace ignite
 
         m_CurrentSceneFilePath.clear();
 
-        m_CurrentSceneHandle = AssetHandle(0);
+        // Unload current scene from RAM, so we can load directly from filepath (JSON)
+        if (m_CurrentSceneHandle != AssetHandle(0))
+        {
+            AssetManager::GetInstance()->UnloadAsset(m_CurrentSceneHandle);
+            m_CurrentSceneHandle = AssetHandle(0);
+        }
 
         // Clear active scene first to release references in renderer and panels
         SetActiveScene(nullptr);
@@ -1306,6 +1369,12 @@ namespace ignite
             return;
         }
 
+        // Unload current scene from RAM, so we can load directly from filepath (JSON)
+        if (m_CurrentSceneHandle != AssetHandle(0))
+        {
+            AssetManager::GetInstance()->UnloadAsset(m_CurrentSceneHandle);
+        }
+
         m_CurrentSceneHandle = sceneHandle;
 
         // Submit heavy I/O work to asset worker
@@ -1314,7 +1383,7 @@ namespace ignite
             AssetWorker::ReportStatus(std::format("Loading scene {}...", filepath.filename().string()), 0.5f);
 
             // Load scene on worker thread (I/O happens here)
-            Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
+            Ref<Scene> loadedScene = AssetManager::GetInstance()->GetAssetImmediate<Scene>(sceneHandle);
             if (loadedScene)
             {
                 // Submit UI update back to main thread
@@ -1444,16 +1513,21 @@ namespace ignite
         {
             if (const Ref<Project> openedProject = Project::Open(filepath))
             {
-                m_ActiveProject = openedProject;
-                m_CurrentProjectFilepath = filepath;
-
-                Application::SubmitToMainThread([this]()
+                Application::SubmitToMainThread([this, openedProject, filepath]()
                 {
+                    m_ActiveProject = openedProject;
+                    m_CurrentProjectFilepath = filepath;
                     OnOpenProject();
                 });
             }
-
-            LOG_ASSERT(m_ActiveProject, "Failed to open project!");
+            else
+            {
+                Application::SubmitToMainThread([this]()
+                {
+                    m_State.isLoading = false;
+                });
+                LOG_ASSERT(false, "Failed to open project!");
+            }
         });
     }
 
@@ -1466,9 +1540,19 @@ namespace ignite
     {
         OnSceneStop();
 
+        if (!m_EditorScene)
+        {
+            LOG_WARN("[EditorLayer] Cannot play: m_EditorScene is null");
+            return;
+        }
+
         // copy initial components to new scene
-        SetActiveScene(SceneManager::Copy(m_EditorScene));
-        m_ActiveScene->OnStart(ESceneState::Play);
+        Ref<Scene> playScene = SceneManager::Copy(m_EditorScene);
+        if (playScene)
+        {
+            SetActiveScene(playScene);
+            m_ActiveScene->OnStart(ESceneState::Play);
+        }
     }
 
     void EditorLayer::OnSceneStop()
@@ -1489,9 +1573,19 @@ namespace ignite
 
         OnSceneStop();
 
+        if (!m_EditorScene)
+        {
+            LOG_WARN("[EditorLayer] Cannot simulate: m_EditorScene is null");
+            return;
+        }
+
         // copy initial components to new scene
-        SetActiveScene(SceneManager::Copy(m_EditorScene));
-        m_ActiveScene->OnStart(ESceneState::Simulate);
+        Ref<Scene> simScene = SceneManager::Copy(m_EditorScene);
+        if (simScene)
+        {
+            SetActiveScene(simScene);
+            m_ActiveScene->OnStart(ESceneState::Simulate);
+        }
     }
 
     void EditorLayer::OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter)
@@ -1685,6 +1779,36 @@ namespace ignite
             auto *editor = static_cast<EditorLayer *>(userData);
             editor->m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
         }
+    }
+
+    void EditorLayer::OnPackageFolderSelected(void *userData, const char *const *filelist, int filter)
+    {
+        if (filelist == nullptr || *filelist == nullptr) return;
+
+        const std::string filepath = filelist[0];
+        if (filepath.empty()) return;
+
+        auto *editor = static_cast<EditorLayer *>(userData);
+        if (!editor || !editor->m_ActiveProject) return;
+
+        AssetWorker::SubmitJob([editor, f = filepath]()
+        {
+            PackageBuildConfig config;
+            config.outputDirectory = std::filesystem::path(f);
+            config.includeDedicatedServer = true;
+
+            const PackageBuildResult result = GamePackager::PackageProject(editor->m_ActiveProject.get(), config);
+            if (result.success)
+            {
+                editor->SetStatusText("Packaged game to " + result.outputDirectory.string());
+                LOG_INFO("[Editor] Game packaged successfully: {}", result.executablePath.string());
+            }
+            else
+            {
+                editor->SetStatusText("Package failed: " + result.errorMessage);
+                LOG_ERROR("[Editor] Package failed: {}", result.errorMessage);
+            }
+        });
     }
 
     void EditorLayer::OnOpenProject()
@@ -2547,6 +2671,7 @@ namespace ignite
             {
                 UI::DrawCheckbox("Bounding Box", &renderSettings.showBoundingBox);
                 UI::DrawCheckbox("Physics Collider", &renderSettings.showPhysicsCollider);
+                UI::DrawCheckbox("Entity Names", &renderSettings.showEntityNames);
                 ImGui::TreePop();
             }
 
@@ -2593,7 +2718,7 @@ namespace ignite
                 {
                     static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness", "Subsurface", "Transmission", "Coat", "Fuzz" };
                     static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
-                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "Filmic" };
+                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "ACES Filmic" };
                     static const char *fillModeLabels[]{ "Solid", "Wireframe" };
 
                     int fillMode = static_cast<int>(renderSettings.fillMode);

@@ -216,13 +216,20 @@ namespace ignite
         const auto &nri = deviceManager->GetCoreInterface();
         nri.EndCommandBuffer(*cmd);
 
-        const uint64_t signalValue = m_NextFenceValue++;
-        for (auto &slot : m_CommandSlots)
+        const uint64_t signalValue = m_NextFenceValue;
+        if (m_CommandFence)
         {
-            if (slot.commandBuffer == cmd)
+            const uint64_t currentFenceValue = nri.GetFenceValue(*m_CommandFence);
+            if (currentFenceValue == std::numeric_limits<uint64_t>::max())
             {
-                slot.fenceValue = signalValue;
-                break;
+                LOG_ERROR("[ImGui] Command fence returned UINT64_MAX; skipping queue submission");
+                return;
+            }
+            if (signalValue <= currentFenceValue)
+            {
+                m_NextFenceValue = currentFenceValue + 1;
+                LOG_ERROR("[ImGui] Corrected non-increasing fence signal value {} to {}", signalValue, m_NextFenceValue);
+                return;
             }
         }
 
@@ -242,7 +249,22 @@ namespace ignite
 
         {
             std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
-            nri.QueueSubmit(*deviceManager->GetGraphicsQueue(), submitDesc);
+            const nri::Result result = nri.QueueSubmit(*deviceManager->GetGraphicsQueue(), submitDesc);
+            if (result != nri::Result::SUCCESS)
+            {
+                LOG_ERROR("[ImGui] QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
+                return;
+            }
+        }
+
+        ++m_NextFenceValue;
+        for (auto &slot : m_CommandSlots)
+        {
+            if (slot.commandBuffer == cmd)
+            {
+                slot.fenceValue = signalValue;
+                break;
+            }
         }
     }
 
@@ -645,10 +667,15 @@ namespace ignite
         }
         m_GraphicsPipelines.clear();
         m_BindingLayoutDesc.reset();
-        m_PipelineLayout = nullptr;
+
+        auto *deviceManager = DeviceManager::GetInstance();
+        if (deviceManager && deviceManager->GetDevice() && m_PipelineLayout)
+        {
+            deviceManager->GetCoreInterface().DestroyPipelineLayout(m_PipelineLayout);
+            m_PipelineLayout = nullptr;
+        }
 
         m_FontTexture = nullptr;
-        auto *deviceManager = DeviceManager::GetInstance();
         if (deviceManager && m_FontSampler)
         {
             deviceManager->GetCoreInterface().DestroyDescriptor(m_FontSampler);
@@ -781,6 +808,7 @@ namespace ignite
             static_cast<uint32_t>(deviceManager.m_GraphicsQueueFamily),
             static_cast<uint32_t>(deviceManager.m_PresentQueueFamily)
         };
+
         std::vector<uint32_t> queueFamilies(uniqueQueues.begin(), uniqueQueues.end());
         const bool sharedSwapChain = queueFamilies.size() > 1;
 
@@ -991,8 +1019,8 @@ namespace ignite
         if (size.x <= 0.0f || size.y <= 0.0f)
             return;
 
-        const uint32_t requestedWidth = static_cast<uint32_t>(size.x);
-        const uint32_t requestedHeight = static_cast<uint32_t>(size.y);
+        const auto requestedWidth = static_cast<uint32_t>(size.x);
+        const auto requestedHeight = static_cast<uint32_t>(size.y);
 
         if (viewportData->hasPendingResize
             && viewportData->pendingWidth == requestedWidth
@@ -1044,12 +1072,8 @@ namespace ignite
         }
 
         const vk::Result resetFencesResult = deviceManager->m_VulkanDevice.resetFences(1, &viewportData->acquireFence);
-        const vk::Result acquireResult = deviceManager->m_VulkanDevice.acquireNextImageKHR(
-            viewportData->swapChain,
-            0,
-            vk::Semaphore(),
-            viewportData->acquireFence,
-            &viewportData->currentImageIndex);
+        const vk::Result acquireResult = deviceManager->m_VulkanDevice.acquireNextImageKHR(viewportData->swapChain,
+            0, vk::Semaphore(), viewportData->acquireFence, &viewportData->currentImageIndex);
 
         viewportData->hasAcquiredImage = false;
 
@@ -1079,6 +1103,7 @@ namespace ignite
     {
         auto *renderer = static_cast<ImGui_NRI *>(ImGui::GetIO().BackendRendererUserData);
         auto *viewportData = GetViewportDataVK(viewport);
+
         DeviceManager_VK *deviceManager = DeviceManager_VK::GetInstance();
         if (!renderer || !viewportData || !viewportData->swapChain || !deviceManager)
             return;
@@ -1147,6 +1172,7 @@ namespace ignite
             if (tex)
                 nri.DestroyTexture(tex);
         }
+
         viewportData->nriTextures.clear();
         viewportData->renderTargets.clear();
         viewportData->backBuffers.clear();

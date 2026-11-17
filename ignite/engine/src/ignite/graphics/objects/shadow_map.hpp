@@ -4,6 +4,7 @@
 #ifndef IGN_SHADOW_MAP_HPP
 #define IGN_SHADOW_MAP_HPP
 
+#include "ignite/core/base.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/render_target.hpp"
@@ -27,7 +28,7 @@ namespace ignite
         COUNT
     };
 
-    class CascadedShadowMap
+    class IGN_API CascadedShadowMap
     {
     public:
         CascadedShadowMap(ShadowMapQuality quality = ShadowMapQuality::MEDIUM);

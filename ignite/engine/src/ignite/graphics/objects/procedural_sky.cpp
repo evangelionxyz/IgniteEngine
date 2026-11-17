@@ -211,9 +211,16 @@ namespace ignite
             tex->SetCurrentState(layout, access, stages);
         };
 
+        if (m_Params.HasAtmosphereChanged(m_PreviousAtmosphereParams))
+        {
+            m_DirtyAtmosphere = true;
+            m_PreviousAtmosphereParams = m_Params;
+        }
+
+        const float altitudeKm = std::max(0.001f, cameraPos.y / 1000.0f);
         m_Params.sunDirectionAndIntensity  = glm::vec4(sunDir, sunIntensity);
         m_Params.sunColorAndRadius         = glm::vec4(sunColor, sunAngularRadius);
-        m_Params.cameraPositionAndAltitude = glm::vec4(cameraPos, cameraPos.y / 1000.0f);
+        m_Params.cameraPositionAndAltitude = glm::vec4(cameraPos, altitudeKm);
 
         m_AtmosphereBuffer->SetData(&m_Params, sizeof(AtmosphereParams));
 

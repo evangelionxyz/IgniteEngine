@@ -12,6 +12,7 @@
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/physics/3d/physics_3d.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/core/agent_controller.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/core/input/input_system.hpp"
 #include "ignite/core/signal_bus.hpp"
@@ -84,6 +85,8 @@ namespace ignite
         nri.CreateSampler(*m_Device, compositeSamplerDesc, m_CompositeSampler);
 
         m_Renderer2D = Renderer2D::Create();
+        m_ScreenTextRenderer2D = Renderer2D::Create();
+        m_DebugRenderer2D = Renderer2D::Create();
         m_OutlineJFA = OutlineJFA::Create();
         m_OutlineJFA->CreatePipeline();
 
@@ -99,28 +102,13 @@ namespace ignite
         m_WidgetRenderer = nullptr;
         m_WorldEnvironment = nullptr;
 
-        m_AnimatedPSOCache.clear();
-        m_TransparentAnimatedPSOCache.clear();
-        m_AnimatedCSMPSOCache.clear();
-        m_StaticPSOCache.clear();
-        m_TransparentStaticPSOCache.clear();
-        m_StaticCSMPSOCache.clear();
-        m_SelectStaticPSOCache.clear();
-        m_SelectAnimatedPSOCache.clear();
-        m_EnvironmentPSOCache.clear();
-        m_CompositePSOCache.clear();
-        m_FXAAPSOCache.clear();
-        m_DebugGridPSOCache.clear();
-        m_CompositeBindingSetCache.clear();
-        m_DebugGridBindingSetCache.clear();
-        m_FXAABindingSetCache.clear();
-        m_RenderTargets.clear();
-        ImGui_NRI::ClearTextureCache();
-        m_Blooms.clear();
-        m_SSAOs.clear();
+        GPUUploadSync::DeviceWaitIdle(m_Device);
 
-        m_ResolvedAssetsCache.clear();
+        ClearResources();
         m_RuntimeMaterial.reset();
+        m_ScreenCameraBuffer.reset();
+        m_ScreenTextRenderer2D.reset();
+        m_DebugRenderer2D.reset();
         m_TerrainRenderer.reset();
 
         if (m_Scene)
@@ -137,16 +125,9 @@ namespace ignite
             return;
         }
 
-        // The current frame may still reference scene textures, cached descriptor
-        // sets, environment maps, and pipelines. Retire that work before releasing
-        // any of those objects during a scene transition.
         if (m_Scene)
         {
             GPUUploadSync::DeviceWaitIdle(m_Device);
-        }
-
-        if (m_Scene)
-        {
             m_Scene->SetSceneRenderer(nullptr);
         }
 
@@ -159,39 +140,9 @@ namespace ignite
             m_WorldEnvironment = nullptr;
         }
 
-        m_SelectedEntities.clear();
-        m_Has2DPreRenderCache = false;
-
-        m_ResolvedAssetsCache.clear();
-
         m_Scene = scene;
-        m_AnimatedPSOCache.clear();
-        m_TransparentAnimatedPSOCache.clear();
-        m_AnimatedCSMPSOCache.clear();
-        m_StaticPSOCache.clear();
-        m_TransparentStaticPSOCache.clear();
-        m_StaticCSMPSOCache.clear();
-        m_SelectStaticPSOCache.clear();
-        m_SelectAnimatedPSOCache.clear();
-        m_EnvironmentPSOCache.clear();
-        m_CompositePSOCache.clear();
-        m_FXAAPSOCache.clear();
-        m_DebugGridPSOCache.clear();
-        m_CompositeBindingSetCache.clear();
-        m_DebugGridBindingSetCache.clear();
-        m_FXAABindingSetCache.clear();
 
-        m_RenderTargets.clear();
-        ImGui_NRI::ClearTextureCache();
-        m_EntityObjectIndexCache.clear();
-        m_EntityBoneOffsetCache.clear();
-        m_SocketObjectIndexCache.clear();
-
-        m_Blooms.clear();
-        m_SSAOs.clear();
-
-        BindingCache::Clear();
-        WidgetRenderer::ClearCache();
+        ClearResources();
 
         if (m_RuntimeMaterial)
         {
@@ -201,6 +152,14 @@ namespace ignite
         if (m_Renderer2D)
         {
             m_Renderer2D->InvalidatePreRenderCache();
+        }
+        if (m_ScreenTextRenderer2D)
+        {
+            m_ScreenTextRenderer2D->InvalidatePreRenderCache();
+        }
+        if (m_DebugRenderer2D)
+        {
+            m_DebugRenderer2D->InvalidatePreRenderCache();
         }
 
         if (m_Scene)
@@ -217,6 +176,56 @@ namespace ignite
         {
             m_Renderer2D->InvalidatePreRenderCache();
         }
+        if (m_ScreenTextRenderer2D)
+        {
+            m_ScreenTextRenderer2D->InvalidatePreRenderCache();
+        }
+        if (m_DebugRenderer2D)
+        {
+            m_DebugRenderer2D->InvalidatePreRenderCache();
+        }
+    }
+
+    void SceneRenderer::ClearResources()
+    {
+        m_SelectedEntities.clear();
+        m_Has2DPreRenderCache = false;
+
+        m_AnimatedPSOCache.clear();
+        m_TransparentAnimatedPSOCache.clear();
+        m_AnimatedCSMPSOCache.clear();
+        m_StaticPSOCache.clear();
+        m_TransparentStaticPSOCache.clear();
+        m_StaticCSMPSOCache.clear();
+        m_SelectStaticPSOCache.clear();
+        m_SelectAnimatedPSOCache.clear();
+        m_EnvironmentPSOCache.clear();
+        m_CompositePSOCache.clear();
+        m_FXAAPSOCache.clear();
+        m_DebugGridPSOCache.clear();
+        m_CompositeBindingSetCache.clear();
+        m_DebugGridBindingSetCache.clear();
+        m_FXAABindingSetCache.clear();
+        m_RenderTargets.clear();
+
+        ImGui_NRI::ClearTextureCache();
+
+        m_EntityObjectIndexCache.clear();
+        m_EntityBoneOffsetCache.clear();
+        m_SocketObjectIndexCache.clear();
+
+        m_Blooms.clear();
+        m_SSAOs.clear();
+
+        m_ResolvedAssetsCache.clear();
+        m_FramePacket.Clear();
+        m_ScreenCameraBuffer.reset();
+
+        if (m_RuntimeMaterial)
+            m_RuntimeMaterial->InvalidateBindingSet();
+
+        BindingCache::Clear();
+        WidgetRenderer::ClearCache();
     }
 
     RenderPlan SceneRenderer::BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera)
@@ -290,7 +299,7 @@ namespace ignite
                 for (entt::entity e : textView)
                 {
                     const auto &[tr, rc, text] = registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
-                    if (rc.visible && !text.text.empty() && text.fontHandle != AssetHandle(0))
+                    if (rc.visible && !text.text.empty() && !text.screenSpace)
                     {
                         plan.has2D = true;
                         break;
@@ -333,10 +342,28 @@ namespace ignite
             plan.hasEnvironment = true;
         }
 
-        // 5. Check for Widgets
+        // 5. Check for Widgets & Screen Space Text
         if (m_Scene->GetRootWidget() != nullptr)
         {
             plan.hasWidgets = true;
+        }
+
+        if (!m_Scene->GetDebugScreenTexts().empty())
+        {
+            plan.hasScreenText = true;
+        }
+        else
+        {
+            auto textView = registry->view<TransformComponent, RenderingComponent, TextComponent>();
+            for (entt::entity e : textView)
+            {
+                const auto &[tr, rc, text] = registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                if (rc.visible && !text.text.empty() && text.screenSpace)
+                {
+                    plan.hasScreenText = true;
+                    break;
+                }
+            }
         }
 
         // 6. Check for Active Directional Light with Cascaded Shadows
@@ -357,7 +384,9 @@ namespace ignite
         plan.requiresObjectId = !isGameCamera || !m_SelectedEntities.empty();
 
         // 8. Check for Debug Overlays
-        if (drawDebug && (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider))
+        const bool wantsEntityNames = (drawDebug && sceneRenderSettings.showEntityNames) || m_Scene->showDebugEntityNames;
+        const bool hasQueuedDebug = !m_Scene->GetDebugWorldTexts().empty() || !m_Scene->GetDebugLines().empty();
+        if ((drawDebug && (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider)) || wantsEntityNames || hasQueuedDebug)
         {
             plan.requiresDebugOverlay = true;
         }
@@ -505,7 +534,7 @@ namespace ignite
                     target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
 
-                if (target->previousPlan.hasWidgets && target->widgetRT)
+                if ((target->previousPlan.hasWidgets || target->previousPlan.hasScreenText) && target->widgetRT)
                 {
                     target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
@@ -524,6 +553,8 @@ namespace ignite
             }
 
             // Full render path
+            CollectSceneLighting(frameContext);
+
             CameraBufferData cameraData = { projection, camera->GetView(), glm::vec4(camera->position, 1.0f) };
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::WriteFrameData");
@@ -531,9 +562,20 @@ namespace ignite
                 frameContext->sceneBuffer.SetData(&m_SceneGPUData, sizeof(m_SceneGPUData));
             }
 
+            m_FramePacket.view = camera->GetView();
+            m_FramePacket.projection = projection;
+            m_FramePacket.viewProjection = projection * m_FramePacket.view;
+            m_FramePacket.cameraPosition = camera->position;
+            m_FramePacket.isGameCamera = isGameCamera;
+            m_FramePacket.drawDebug = drawDebug;
+
             if (plan.hasMeshes || plan.hasTerrain)
             {
                 PreallocateGPUData(cmd, frameContext);
+            }
+            else
+            {
+                m_FramePacket.Clear();
             }
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
@@ -563,13 +605,13 @@ namespace ignite
                     target->selectionRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
 
-                if (plan.hasWidgets)
+                if (plan.hasWidgets || plan.hasScreenText)
                 {
                     EnsureWidgetRT(target, width, height);
                     target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
-                else if (target->previousPlan.hasWidgets && target->widgetRT)
+                else if ((target->previousPlan.hasWidgets || target->previousPlan.hasScreenText) && target->widgetRT)
                 {
                     target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
@@ -617,7 +659,7 @@ namespace ignite
                 : nullptr;
             ColorPass(cmd, camera, frameContext, sceneFramebuffer, selectionFramebuffer, drawDebug);
 
-            if (plan.hasWidgets && target->widgetRT)
+            if ((plan.hasWidgets || plan.hasScreenText) && target->widgetRT)
             {
                 UIPass(cmd, camera, target->widgetRT->GetFramebuffer(), frameContext);
             }
@@ -739,17 +781,28 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
                 RenderTarget *finalCompositeFB = targetFramebuffer ? targetFramebuffer : target->compositeRT->GetFramebuffer();
-                
+                const bool mirrorCompositeForAgent = targetFramebuffer && target->compositeRT
+                    && targetFramebuffer != target->compositeRT->GetFramebuffer()
+                    && AgentController::IsAutomationActive();
+
                 if (sceneRenderSettings.enableFXAA && target->postProcessRT)
                 {
                     CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, target->postProcessRT->GetFramebuffer());
                     
                     IGN_PROFILE_SCOPE("SceneRenderer::FXAAPass");
                     FXAAPass(cmd, finalCompositeFB, target->postProcessRT->GetColorAttachment(0));
+                    if (mirrorCompositeForAgent)
+                    {
+                        FXAAPass(cmd, target->compositeRT->GetFramebuffer(), target->postProcessRT->GetColorAttachment(0));
+                    }
                 }
                 else
                 {
                     CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, finalCompositeFB);
+                    if (mirrorCompositeForAgent)
+                    {
+                        CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, target->compositeRT->GetFramebuffer());
+                    }
                 }
             }
 
@@ -811,6 +864,134 @@ namespace ignite
         SubmitCommandBuffer(cmd);
     }
 
+    void SceneRenderer::CollectSceneLighting(FrameContext *frameContext)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!m_Scene || !m_Scene->registry)
+            return;
+
+        m_SceneGPUData.enableIBL = 1;
+        auto worldEnvView = m_Scene->registry->view<WorldEnvironment>();
+        for (entt::entity e : worldEnvView)
+        {
+            WorldEnvironment &world = worldEnvView.get<WorldEnvironment>(e);
+            m_SceneGPUData.exposure = world.exposure;
+            m_SceneGPUData.gamma = world.gamma;
+            m_SceneGPUData.ambient = world.ambient;
+            m_SceneGPUData.skyType = static_cast<int>(world.skyType);
+            m_SceneGPUData.enableIBL = world.enableIBL ? 1 : 0;
+            break;
+        }
+
+        // Collect point lights
+        {
+            PointLightBufferData &pointLightData = m_FramePacket.pointLights;
+            pointLightData = {};
+            int pointLightCount = 0;
+
+            auto pointLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, PointLightComponent>();
+            for (entt::entity e : pointLightView)
+            {
+                if (pointLightCount >= MAX_POINT_LIGHTS)
+                    break;
+
+                const auto &[tr, rc, light] = pointLightView.get<TransformComponent, RenderingComponent, PointLightComponent>(e);
+                if (!rc.visible || !light.enabled)
+                    continue;
+
+                PointLight_GPUData &gpu = pointLightData.lights[pointLightCount];
+                gpu.positionAndRange = glm::vec4(tr.world.translation, std::max(light.range, 0.001f));
+                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+                gpu.attenuation = glm::vec4(std::max(light.constantAttenuation, 0.001f), light.linearAttenuation, light.quadraticAttenuation, 0.0f);
+                ++pointLightCount;
+            }
+
+            m_SceneGPUData.numPointLights = pointLightCount;
+            m_FramePacket.stats.pointLightCount = static_cast<uint32_t>(pointLightCount);
+            frameContext->pointLightBuffer.SetData(&pointLightData, sizeof(pointLightData));
+        }
+
+        // Collect spot lights
+        {
+            SpotLightBufferData &spotLightData = m_FramePacket.spotLights;
+            spotLightData = {};
+            int spotLightCount = 0;
+
+            auto spotLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, SpotLightComponent>();
+            for (entt::entity e : spotLightView)
+            {
+                if (spotLightCount >= MAX_SPOT_LIGHTS)
+                    break;
+
+                const auto &[tr, rc, light] = spotLightView.get<TransformComponent, RenderingComponent, SpotLightComponent>(e);
+                if (!rc.visible || !light.enabled)
+                    continue;
+
+                const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+
+                SpotLight_GPUData &gpu = spotLightData.lights[spotLightCount];
+                gpu.positionAndRange = glm::vec4(tr.world.translation, std::max(light.range, 0.001f));
+                gpu.directionAndAngle = glm::vec4(forward, glm::cos(glm::radians(light.outerConeAngle)));
+                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+                gpu.attenuation = glm::vec4(std::max(light.constantAttenuation, 0.001f), light.linearAttenuation, light.quadraticAttenuation,
+                    glm::cos(glm::radians(light.innerConeAngle)));
+                ++spotLightCount;
+            }
+
+            m_SceneGPUData.numSpotLights = spotLightCount;
+            m_FramePacket.stats.spotLightCount = static_cast<uint32_t>(spotLightCount);
+            frameContext->spotLightBuffer.SetData(&spotLightData, sizeof(spotLightData));
+        }
+
+        glm::vec3 sunDirection =
+        {
+            glm::cos(m_SceneGPUData.sungAngles.y) * glm::sin(m_SceneGPUData.sungAngles.x),
+            glm::sin(m_SceneGPUData.sungAngles.y),
+            glm::cos(m_SceneGPUData.sungAngles.y) * glm::cos(m_SceneGPUData.sungAngles.x)
+        };
+
+        bool cascadeShadow = false;
+        float shadowDist = 200.0f;
+        auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
+        for (entt::entity e : lightView)
+        {
+            const TransformComponent &tr = lightView.get<TransformComponent>(e);
+            const DirectionalLightComponent &light = lightView.get<DirectionalLightComponent>(e);
+
+            sunDirection = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            cascadeShadow = light.cascadeShadow;
+
+            auto &csmData = m_CascadedShadowMap->GetGPUData();
+            csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
+            csmData.minBias = std::min(light.shadowMinBias, light.shadowMaxBias);
+            csmData.maxBias = std::max(light.shadowMinBias, light.shadowMaxBias);
+            csmData.pcfRadius = light.pcfRadius;
+            csmData.softShadows = light.softShadows ? 1 : 0;
+            shadowDist = light.shadowDistance;
+
+            m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+            m_SceneGPUData.sungAngles.x = std::atan2(sunDirection.x, sunDirection.z);
+            m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
+            m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
+            m_SceneGPUData.sunDirection = glm::vec4(sunDirection, 0.0f);
+
+            const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
+            if (m_CascadedShadowMap->GetQuality() != quality)
+            {
+                m_CascadedShadowMap->Resize(quality);
+                Application::SubmitToMainThread([]() { SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment }); });
+            }
+
+            break;
+        }
+
+        m_FramePacket.sunDirection = sunDirection;
+        m_FramePacket.shadowDistance = shadowDist;
+        m_FramePacket.cascadeShadow = cascadeShadow;
+        m_FramePacket.stats.hasDirectionalShadow = cascadeShadow;
+    }
+
     void SceneRenderer::PreallocateGPUData(nri::CommandBuffer *cmd, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
@@ -818,6 +999,8 @@ namespace ignite
         m_EntityObjectIndexCache.clear();
         m_EntityBoneOffsetCache.clear();
         m_SocketObjectIndexCache.clear();
+        m_FramePacket.Clear();
+        m_FramePacket.Reserve();
 
         // 1. Preallocate and upload Skeletal Meshes (including bone data)
         auto skeletalMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
@@ -877,6 +1060,17 @@ namespace ignite
                 indices.push_back(objectIndex);
             }
             m_EntityObjectIndexCache[e] = indices;
+
+            SkeletalMeshPacketItem skelItem;
+            skelItem.entity = e;
+            skelItem.objectID = objectID;
+            skelItem.worldMatrix = tr.world.GetMatrix();
+            skelItem.normalMatrix = smc.normalMatrix;
+            skelItem.mesh = skeletalMesh.get();
+            skelItem.component = &smc;
+            skelItem.boneOffset = boneOffset;
+            m_FramePacket.skeletalMeshes.push_back(skelItem);
+            m_FramePacket.skeletalMeshAABBs.push_back(smc.worldAABB);
 
             // Handle socket attachments
             if (skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
@@ -973,6 +1167,7 @@ namespace ignite
                 }
             }
         }
+        m_FramePacket.stats.totalSkeletalMeshes = static_cast<uint32_t>(m_FramePacket.skeletalMeshes.size());
 
         // 2. Preallocate and upload Static Meshes
         auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
@@ -987,6 +1182,7 @@ namespace ignite
                 continue;
 
             const auto &instances = staticMesh->GetMeshInstances();
+            const uint32_t firstObjectOffset = static_cast<uint32_t>(m_FramePacket.staticMeshObjectIndices.size());
             std::vector<uint32_t> indices;
             indices.reserve(instances.size());
 
@@ -1017,9 +1213,23 @@ namespace ignite
 
                 uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
                 indices.push_back(objectIndex);
+                m_FramePacket.staticMeshObjectIndices.push_back(objectIndex);
             }
             m_EntityObjectIndexCache[e] = indices;
+
+            StaticMeshPacketItem staticItem;
+            staticItem.entity = e;
+            staticItem.objectID = objectID;
+            staticItem.worldMatrix = tr.world.GetMatrix();
+            staticItem.normalMatrix = smc.normalMatrix;
+            staticItem.mesh = staticMesh.get();
+            staticItem.component = &smc;
+            staticItem.firstObjectIndexOffset = firstObjectOffset;
+            staticItem.instanceCount = static_cast<uint32_t>(instances.size());
+            m_FramePacket.staticMeshes.push_back(staticItem);
+            m_FramePacket.staticMeshAABBs.push_back(smc.worldAABB);
         }
+        m_FramePacket.stats.totalStaticMeshes = static_cast<uint32_t>(m_FramePacket.staticMeshes.size());
 
         // 3. Preallocate and upload Terrain Meshes
         auto terrainView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
@@ -1029,7 +1239,7 @@ namespace ignite
             if (!rc.visible)
                 continue;
 
-            if (!tc.gpuInitialized || tc.chunks.empty())
+            if ((!tc.gpuInitialized || tc.chunks.empty()) && m_TerrainRenderer)
             {
                 m_TerrainRenderer->RebuildMesh(cmd, tc, tr.world.GetMatrix());
             }
@@ -1039,11 +1249,14 @@ namespace ignite
             std::vector<uint32_t> indices;
             indices.reserve(tc.chunks.size());
 
+            const glm::mat4 worldMat = tr.world.GetMatrix();
+            const glm::mat4 normalMat = glm::transpose(glm::inverse(glm::mat3(worldMat)));
+
             for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
             {
                 Mesh_GPUData gpuData;
-                gpuData.transformation = tr.world.GetMatrix();
-                gpuData.normal = glm::transpose(glm::inverse(glm::mat3(tr.world.GetMatrix())));
+                gpuData.transformation = worldMat;
+                gpuData.normal = normalMat;
                 gpuData.objectID = objectID;
                 gpuData.boneOffset = 0;
 
@@ -1051,247 +1264,26 @@ namespace ignite
                 indices.push_back(objectIndex);
             }
             m_EntityObjectIndexCache[e] = indices;
+
+            TerrainPacketItem terrainItem;
+            terrainItem.entity = e;
+            terrainItem.objectID = objectID;
+            terrainItem.worldMatrix = worldMat;
+            terrainItem.normalMatrix = normalMat;
+            terrainItem.component = &tc;
+            Ref<Material> mat = ResolveAsset<Material>(tc.materialHandle);
+            terrainItem.material = mat ? mat.get() : nullptr;
+            m_FramePacket.terrains.push_back(terrainItem);
         }
-    }
-
-    void SceneRenderer::ResizeFramebuffer(ICamera *camera, uint32_t width, uint32_t height)
-    {
-        IGN_PROFILE_FUNCTION();
-        if (!camera || width == 0 || height == 0)
-            return;
-
-        // Descriptor sets cached for the old attachment views must not be reused
-        // after those views are destroyed. Wait once for this camera resize, then
-        // recreate all of its render targets without one device-wide stall per RT.
-        if (!m_ResizeWaitedThisFrame)
-        {
-            GPUUploadSync::DeviceWaitIdle(m_Device);
-            BindingCache::Clear();
-            m_ResizeWaitedThisFrame = true;
-        }
-
-        ISceneRenderer::ResizeFramebuffer(camera, width, height);
-
-        // Differentiate resizing between edit-viewport and game-viewport post-processing instances
-        bool isGameCamera = false;
-        if (m_Scene)
-        {
-            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
-            {
-                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                if (camera == &cc.camera)
-                {
-                    isGameCamera = true;
-                }
-            }
-        }
-
-        PostProcessing postProcessing = camera ? camera->postProcessing : PostProcessing{};
-        if (isGameCamera && m_Scene)
-        {
-            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
-            {
-                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                postProcessing = cc.camera.postProcessing;
-            }
-        }
-        postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
-
-        const uint32_t renderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(width) * postProcessing.renderScale)));
-        const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(height) * postProcessing.renderScale)));
-
-        m_CompositeBindingSetCache.clear();
-        m_DebugGridBindingSetCache.clear();
-        m_FXAABindingSetCache.clear();
-
-        // Resize Bloom and SSAO instances for the specific camera
-        {
-            auto it = m_Blooms.find(camera);
-            if (it != m_Blooms.end())
-            {
-                for (auto &bloom : it->second)
-                {
-                    if (bloom)
-                        bloom->Resize(renderWidth, renderHeight);
-                }
-            }
-        }
-
-        {
-            auto it = m_SSAOs.find(camera);
-            if (it != m_SSAOs.end())
-            {
-                for (auto &ssao : it->second)
-                {
-                    if (ssao)
-                        ssao->Resize(renderWidth, renderHeight);
-                }
-            }
-        }
-
-        {
-            // Render targets
-            auto it = m_RenderTargets.find(camera);
-            if (it == m_RenderTargets.end() && camera)
-            {
-                GetOrCreateRenderTarget(camera);
-                it = m_RenderTargets.find(camera);
-            }
-
-            if (it != m_RenderTargets.end())
-            {
-                auto &target = it->second;
-
-                if (target->sceneRT)
-                    target->sceneRT->Resize(renderWidth, renderHeight, false);
-                if (target->selectionRT)
-                    target->selectionRT->Resize(renderWidth, renderHeight, false);
-                if (target->sceneResolvedRT)
-                    target->sceneResolvedRT->Resize(renderWidth, renderHeight, false);
-                if (target->widgetRT)
-                    target->widgetRT->Resize(width, height, false);
-                if (target->compositeRT)
-                    target->compositeRT->Resize(width, height, false);
-                if (target->postProcessRT)
-                    target->postProcessRT->Resize(width, height, false);
-                for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
-                {
-                    if (historyRT)
-                        historyRT->Resize(width, height, false);
-                }
-                target->taaHistoryValid = false;
-
-                if (target->debugRT)
-                {
-                    target->debugRT->GetCreateInfo().depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
-                    target->debugRT->Resize(renderWidth, renderHeight, false);
-                }
-            }
-        }
+        m_FramePacket.stats.totalTerrains = static_cast<uint32_t>(m_FramePacket.terrains.size());
     }
 
     void SceneRenderer::ShadowPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
 
-        // Static
-        Ref<GraphicsPipeline> staticCSMPSO = GetStaticCSMPSO();
-
-        // Animated
-        Ref<GraphicsPipeline> animatedCSMPSO = GetAnimatedCSMPSO();
-
-        auto worldEnvView = m_Scene->registry->view<WorldEnvironment>();
-        for (entt::entity e : worldEnvView)
-        {
-            WorldEnvironment &world = worldEnvView.get<WorldEnvironment>(e);
-            m_SceneGPUData.exposure = world.exposure;
-            m_SceneGPUData.gamma = world.gamma;
-            m_SceneGPUData.ambient = world.ambient;
-            m_SceneGPUData.skyType = static_cast<int>(world.skyType);
-            break;
-        }
-
-        // Collect point lights
-        {
-            PointLightBufferData pointLightData = {};
-            int pointLightCount = 0;
-
-            auto pointLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, PointLightComponent>();
-            for (entt::entity e : pointLightView)
-            {
-                if (pointLightCount >= MAX_POINT_LIGHTS)
-                    break;
-
-                const auto &[tr, rc, light] = pointLightView.get<TransformComponent, RenderingComponent, PointLightComponent>(e);
-                if (!rc.visible || !light.enabled)
-                    continue;
-
-                PointLight_GPUData &gpu = pointLightData.lights[pointLightCount];
-                gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
-                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation, 0.0f);
-                ++pointLightCount;
-            }
-
-            m_SceneGPUData.numPointLights = pointLightCount;
-            frameContext->pointLightBuffer.SetData(&pointLightData, sizeof(pointLightData));
-        }
-
-        // Collect spot lights
-        {
-            SpotLightBufferData spotLightData = {};
-            int spotLightCount = 0;
-
-            auto spotLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, SpotLightComponent>();
-            for (entt::entity e : spotLightView)
-            {
-                if (spotLightCount >= MAX_SPOT_LIGHTS)
-                    break;
-
-                const auto &[tr, rc, light] = spotLightView.get<TransformComponent, RenderingComponent, SpotLightComponent>(e);
-                if (!rc.visible || !light.enabled)
-                    continue;
-
-                const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-
-                SpotLight_GPUData &gpu = spotLightData.lights[spotLightCount];
-                gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
-                gpu.directionAndAngle = glm::vec4(forward, glm::cos(glm::radians(light.outerConeAngle)));
-                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation,
-                    glm::cos(glm::radians(light.innerConeAngle)));
-                ++spotLightCount;
-            }
-
-            m_SceneGPUData.numSpotLights = spotLightCount;
-            frameContext->spotLightBuffer.SetData(&spotLightData, sizeof(spotLightData));
-        }
-
-        glm::vec3 sunDirection =
-        {
-            glm::cos(m_SceneGPUData.sungAngles.y) * glm::sin(m_SceneGPUData.sungAngles.x),
-            glm::sin(m_SceneGPUData.sungAngles.y),
-            glm::cos(m_SceneGPUData.sungAngles.y) * glm::cos(m_SceneGPUData.sungAngles.x)
-        };
-
-        bool cascadeShadow = false;
-        float shadowDist = 200.0f; // default if no directional light found
-        auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
-        for (entt::entity e : lightView)
-        {
-            const TransformComponent &tr = lightView.get<TransformComponent>(e);
-            const DirectionalLightComponent &light = lightView.get<DirectionalLightComponent>(e);
-
-            sunDirection = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-
-            cascadeShadow = light.cascadeShadow;
-
-            auto &csmData = m_CascadedShadowMap->GetGPUData();
-            csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
-            csmData.minBias = light.shadowMinBias;
-            csmData.maxBias = light.shadowMaxBias;
-            csmData.pcfRadius = light.pcfRadius;
-            shadowDist = light.shadowDistance;
-
-            m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-            m_SceneGPUData.sungAngles.x = std::atan2(sunDirection.x, sunDirection.z);
-            m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
-            m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
-            m_SceneGPUData.sunDirection = glm::vec4(sunDirection, 0.0f);
-
-            const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
-            if (m_CascadedShadowMap->GetQuality() != quality)
-            {
-                m_CascadedShadowMap->Resize(quality);
-
-                Application::SubmitToMainThread([]() { SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment }); });
-            }
-
-            break;
-        }
-
         // If no directional light has cascaded shadows enabled, write default disabled CSM buffer and return immediately
-        if (!cascadeShadow)
+        if (!m_FramePacket.cascadeShadow)
         {
             CSM_GPUData sceneCascadeData = {};
             sceneCascadeData.cascadeIndex = -1;
@@ -1299,9 +1291,15 @@ namespace ignite
             frameContext->csmBuffer.SetData(&sceneCascadeData, sizeof(sceneCascadeData));
             return;
         }
-        
+
+        // Static
+        Ref<GraphicsPipeline> staticCSMPSO = GetStaticCSMPSO();
+
+        // Animated
+        Ref<GraphicsPipeline> animatedCSMPSO = GetAnimatedCSMPSO();
+
         {
-            m_CascadedShadowMap->ComputeMatrices(camera, sunDirection, shadowDist);
+            m_CascadedShadowMap->ComputeMatrices(camera, m_FramePacket.sunDirection, m_FramePacket.shadowDistance);
 
             // Share cascade data with the main scene pass (cascadeIndex is unused there)
             CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
@@ -1327,57 +1325,36 @@ namespace ignite
 
                 Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
 
-                // Static Mesh Shadows — batch instanced
+                // Static Mesh Shadows â€” batch instanced from pre-extracted FramePacket
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshShadow::BatchCollect");
 
                     m_ShadowBatchBuilder.Clear();
 
-                    auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
-                    std::vector<entt::entity> candidateEntities;
-                    std::vector<AABB> candidateAABBs;
-
-                    for (entt::entity e : staticMeshView)
+                    const size_t staticCount = m_FramePacket.staticMeshes.size();
+                    if (staticCount > 0)
                     {
-                        const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
-                        if (!rc.visible || smc.handle == AssetHandle(0))
-                            continue;
+                        m_FramePacket.visibilityScratch.resize(staticCount);
+                        cascadeFrustum.IsAABBVisibleBatch(m_FramePacket.staticMeshAABBs.data(), staticCount, m_FramePacket.visibilityScratch.data());
 
-                        candidateEntities.push_back(e);
-                        candidateAABBs.push_back(smc.worldAABB);
-                    }
-
-                    if (!candidateEntities.empty())
-                    {
-                        std::vector<uint8_t> visibility(candidateEntities.size());
-                        cascadeFrustum.IsAABBVisibleBatch(candidateAABBs.data(), candidateAABBs.size(), visibility.data());
-
-                        for (size_t cIdx = 0; cIdx < candidateEntities.size(); ++cIdx)
+                        for (size_t cIdx = 0; cIdx < staticCount; ++cIdx)
                         {
-                            if (!visibility[cIdx])
+                            if (!m_FramePacket.visibilityScratch[cIdx])
                                 continue;
 
-                            entt::entity e = candidateEntities[cIdx];
-                            StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-                            auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
-                            if (!staticMesh)
+                            const StaticMeshPacketItem &item = m_FramePacket.staticMeshes[cIdx];
+                            if (!item.mesh)
                                 continue;
 
-                            const auto &instances = staticMesh->GetMeshInstances();
-                            for (size_t idx = 0; idx < instances.size(); ++idx)
+                            const auto &instances = item.mesh->GetMeshInstances();
+                            for (size_t idx = 0; idx < instances.size() && idx < item.instanceCount; ++idx)
                             {
                                 auto &meshInstance = instances[idx];
                                 auto &primitive = meshInstance->GetPrimitive();
-                                if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                                {
-                                    primitive->WriteBuffer(cmd);
-                                }
-
-                                auto cacheIt = m_EntityObjectIndexCache.find(e);
-                                if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                                if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                                     continue;
 
-                                const uint32_t objectIndex = cacheIt->second[idx];
+                                const uint32_t objectIndex = m_FramePacket.staticMeshObjectIndices[item.firstObjectIndexOffset + idx];
 
                                 BatchKey key;
                                 key.vertexBuffer = *primitive->vertexBuffer;
@@ -1394,28 +1371,27 @@ namespace ignite
                         }
                     }
 
-                    // Terrain Shadows
-                    auto terrainShadowView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
-                    for (entt::entity e : terrainShadowView)
+                    // Terrain Shadows from FramePacket
+                    for (const TerrainPacketItem &tItem : m_FramePacket.terrains)
                     {
-                        auto [tr, rc, tc] = terrainShadowView.get<TransformComponent, RenderingComponent, TerrainComponent>(e);
-                        if (!rc.visible)
+                        if (!tItem.component)
                             continue;
 
-                        auto cacheIt = m_EntityObjectIndexCache.find(e);
+                        auto cacheIt = m_EntityObjectIndexCache.find(tItem.entity);
                         if (cacheIt == m_EntityObjectIndexCache.end())
                             continue;
 
-                        for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
+                        const auto &chunks = tItem.component->chunks;
+                        for (size_t idx = 0; idx < chunks.size(); ++idx)
                         {
                             if (idx >= cacheIt->second.size())
                                 break;
 
-                            auto &chunk = tc.chunks[idx];
+                            const auto &chunk = chunks[idx];
                             if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
                                 continue;
 
-                            AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
+                            AABB worldBounds = chunk.bounds.Transform(tItem.worldMatrix);
                             if (!cascadeFrustum.IsAABBVisible(worldBounds))
                                 continue;
 
@@ -1439,51 +1415,43 @@ namespace ignite
                     FlushShadowBatches(cmd, frameContext, static_cast<uint32_t>(i));
                 }
 
-                // Skeletal Mesh
+                // Skeletal Mesh Shadows from FramePacket
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshShadow");
 
-                    auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
-                    std::vector<entt::entity> candidateSkelEntities;
-                    std::vector<AABB> candidateSkelAABBs;
-
-                    for (entt::entity e : skelMeshView)
+                    const size_t skelCount = m_FramePacket.skeletalMeshes.size();
+                    if (skelCount > 0)
                     {
-                        const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
-                        if (!rc.visible || smc.handle == AssetHandle(0))
-                            continue;
+                        m_FramePacket.visibilityScratch.resize(skelCount);
+                        cascadeFrustum.IsAABBVisibleBatch(m_FramePacket.skeletalMeshAABBs.data(), skelCount, m_FramePacket.visibilityScratch.data());
 
-                        candidateSkelEntities.push_back(e);
-                        candidateSkelAABBs.push_back(smc.worldAABB);
-                    }
+                        const bool startedSkelShadowPass = !csmFramebuffer->IsRendering();
+                        if (startedSkelShadowPass)
+                            csmFramebuffer->BeginRendering(cmd, false, false);
 
-                    if (!candidateSkelEntities.empty())
-                    {
-                        std::vector<uint8_t> visibility(candidateSkelEntities.size());
-                        cascadeFrustum.IsAABBVisibleBatch(candidateSkelAABBs.data(), candidateSkelAABBs.size(), visibility.data());
-
-                        for (size_t cIdx = 0; cIdx < candidateSkelEntities.size(); ++cIdx)
+                        for (size_t cIdx = 0; cIdx < skelCount; ++cIdx)
                         {
-                            if (!visibility[cIdx])
+                            if (!m_FramePacket.visibilityScratch[cIdx])
                                 continue;
 
-                            entt::entity e = candidateSkelEntities[cIdx];
-                            const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
-                            auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+                            const SkeletalMeshPacketItem &item = m_FramePacket.skeletalMeshes[cIdx];
+                            if (!item.mesh || !item.component)
+                                continue;
+
+                            Ref<SkeletalMesh> skeletalMesh = ResolveAsset<SkeletalMesh>(item.component->handle);
                             if (!skeletalMesh)
                                 continue;
 
-                            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                                smc.finalBoneTransforms, smc.cachedInstanceTransforms, animatedCSMPSO, i, e);
+                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, skeletalMesh, item.worldMatrix, item.normalMatrix, item.objectID,
+                                item.component->finalBoneTransforms, item.component->cachedInstanceTransforms, animatedCSMPSO, i, item.entity);
 
                             // --- SOCKET SYSTEM: Render attached meshes for Shadows ---
-                            if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+                            if (skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
                             {
                                 Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
                                 if (skeleton)
                                 {
-                                    for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                                    for (const auto &[socketName, attachedMeshHandle] : item.component->socketAttachments)
                                     {
                                         if (attachedMeshHandle == AssetHandle(0))
                                             continue;
@@ -1492,25 +1460,28 @@ namespace ignite
                                         if (!attachedMeshAsset)
                                             continue;
 
-                                        glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                                        glm::mat4 socketWorld = item.component->GetSocketWorldTransform(item.worldMatrix, *skeleton, socketName);
                                         glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
 
                                         if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
                                         {
                                             auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-                                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                                smc.finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedCSMPSO, i, e, socketName);
+                                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
+                                                item.component->finalBoneTransforms, std::vector<Mesh_GPUData>(), animatedCSMPSO, i, item.entity, socketName);
                                         }
                                         else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
                                         {
                                             auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
-                                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                                std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticCSMPSO, i, e, socketName);
+                                            DrawMeshShadow(cmd, frameContext, csmFramebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
+                                                std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(), staticCSMPSO, i, item.entity, socketName);
                                         }
                                     }
                                 }
                             }
                         }
+
+                        if (startedSkelShadowPass && csmFramebuffer->IsRendering())
+                            csmFramebuffer->EndRendering(cmd);
                     }
                 }
             }
@@ -1540,69 +1511,47 @@ namespace ignite
 
         std::vector<TransparentDrawCall> transparentDrawCalls;
 
-        // Static Meshes — collected into the batch builder for instanced dispatch
+        // Static Meshes â€” collected from pre-extracted FramePacket into the batch builder for instanced dispatch
         {
             IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshColor::BatchCollect");
 
             m_OpaqueBatchBuilder.Clear();
 
-            auto staticMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
-            std::vector<entt::entity> candidateStaticEntities;
-            std::vector<AABB> candidateStaticAABBs;
-
-            for (entt::entity e : staticMeshView)
+            const size_t staticCount = m_FramePacket.staticMeshes.size();
+            if (staticCount > 0)
             {
-                const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
-                if (!rc.visible || smc.handle == AssetHandle(0))
-                    continue;
+                m_FramePacket.visibilityScratch.resize(staticCount);
+                frustum.IsAABBVisibleBatch(m_FramePacket.staticMeshAABBs.data(), staticCount, m_FramePacket.visibilityScratch.data());
 
-                candidateStaticEntities.push_back(e);
-                candidateStaticAABBs.push_back(smc.worldAABB);
-            }
-
-            if (!candidateStaticEntities.empty())
-            {
-                std::vector<uint8_t> visibility(candidateStaticEntities.size());
-                frustum.IsAABBVisibleBatch(candidateStaticAABBs.data(), candidateStaticAABBs.size(), visibility.data());
-
-                for (size_t cIdx = 0; cIdx < candidateStaticEntities.size(); ++cIdx)
+                for (size_t cIdx = 0; cIdx < staticCount; ++cIdx)
                 {
-                    if (!visibility[cIdx])
+                    if (!m_FramePacket.visibilityScratch[cIdx])
                         continue;
 
-                    entt::entity e = candidateStaticEntities[cIdx];
-                    const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
-                    auto staticMesh = ResolveAsset<StaticMesh>(smc.handle);
-                    if (!staticMesh)
+                    const StaticMeshPacketItem &item = m_FramePacket.staticMeshes[cIdx];
+                    if (!item.mesh || !item.component)
                         continue;
 
-                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                    m_FramePacket.stats.visibleStaticMeshes++;
 
                     // For each sub-mesh primitive, look up the pre-allocated object index and submit to batch builder
-                    const auto &instances = staticMesh->GetMeshInstances();
-                    for (size_t idx = 0; idx < instances.size(); ++idx)
+                    const auto &instances = item.mesh->GetMeshInstances();
+                    for (size_t idx = 0; idx < instances.size() && idx < item.instanceCount; ++idx)
                     {
                         auto &meshInstance = instances[idx];
                         auto &primitive = meshInstance->GetPrimitive();
-                        if (!primitive->vertexBuffer || !primitive->indexBuffer)
-                        {
-                            primitive->WriteBuffer(cmd);
-                        }
-
-                        // Look up pre-allocated object index from PreallocateGPUData
-                        auto cacheIt = m_EntityObjectIndexCache.find(e);
-                        if (cacheIt == m_EntityObjectIndexCache.end() || idx >= cacheIt->second.size())
+                        if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                             continue;
 
-                        const uint32_t objectIndex = cacheIt->second[idx];
+                        const uint32_t objectIndex = m_FramePacket.staticMeshObjectIndices[item.firstObjectIndexOffset + idx];
 
-                        Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                        Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), item.component->overrideMaterials, meshInstance->GetMaterialAssetHandle());
                         if (material)
                         {
                             if (uploadedMaterialsThisPass.insert(material.get()).second)
                                 material->UploadToGpu(cmd);
                         }
-                        else
+                        else if (m_RuntimeMaterial)
                         {
                             if (uploadedMaterialsThisPass.insert(m_RuntimeMaterial.get()).second)
                                 m_RuntimeMaterial->UploadToGpu(cmd);
@@ -1610,12 +1559,12 @@ namespace ignite
 
                         const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
                             ? material->GetBindingSet()
-                            : m_RuntimeMaterial->GetBindingSet();
+                            : (m_RuntimeMaterial ? m_RuntimeMaterial->GetBindingSet() : nullptr);
 
                         if (!materialBindingSet)
                             continue;
 
-                        MaterialType matType = material ? material->GetType() : m_RuntimeMaterial->GetType();
+                        MaterialType matType = material ? material->GetType() : (m_RuntimeMaterial ? m_RuntimeMaterial->GetType() : MaterialType::Opaque);
                         nri::CullMode matCullMode = material ? material->GetCullMode() : nri::CullMode::FRONT;
 
                         if (matType == MaterialType::Transparent)
@@ -1629,14 +1578,14 @@ namespace ignite
                             dc.pushConstants_ObjectIndex = objectIndex;
 
                             AABB localAABB = meshInstance->localAABB;
-                            AABB worldAABB = localAABB.Transform(tr.world.GetMatrix());
+                            AABB worldAABB = localAABB.Transform(item.worldMatrix);
                             glm::vec3 worldCenter = worldAABB.GetCenter();
                             dc.distanceToCamera = glm::dot(worldCenter - camera->position, camera->GetForwardDirection());
 
                             dc.isSkeletal = false;
-                            dc.gpuData.transformation = tr.world.GetMatrix();
-                            dc.gpuData.normal = smc.normalMatrix;
-                            dc.gpuData.objectID = objectID;
+                            dc.gpuData.transformation = item.worldMatrix;
+                            dc.gpuData.normal = item.normalMatrix;
+                            dc.gpuData.objectID = item.objectID;
                             dc.meshInstance = meshInstance;
                             dc.cullMode = matCullMode;
                             transparentDrawCalls.push_back(dc);
@@ -1662,65 +1611,57 @@ namespace ignite
                 }
             }
 
-            // Terrain Meshes
+            // Terrain Meshes from FramePacket
+            for (const TerrainPacketItem &tItem : m_FramePacket.terrains)
             {
-                auto terrainView = m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>();
-                for (entt::entity e : terrainView)
+                if (!tItem.component)
+                    continue;
+
+                auto cacheIt = m_EntityObjectIndexCache.find(tItem.entity);
+                if (cacheIt == m_EntityObjectIndexCache.end())
+                    continue;
+
+                Material *material = tItem.material;
+                if (material && uploadedMaterialsThisPass.insert(material).second)
+                    material->UploadToGpu(cmd);
+
+                if (material && !material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
+                    continue;
+
+                const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
+                    ? material->GetBindingSet() : (m_RuntimeMaterial ? m_RuntimeMaterial->GetBindingSet() : nullptr);
+
+                if (!materialBindingSet)
+                    continue;
+
+                const auto &chunks = tItem.component->chunks;
+                for (size_t idx = 0; idx < chunks.size(); ++idx)
                 {
-                    auto [tr, rc, tc] = terrainView.get<TransformComponent, RenderingComponent, TerrainComponent>(e);
-                    if (!rc.visible)
+                    if (idx >= cacheIt->second.size())
+                        break;
+
+                    const auto &chunk = chunks[idx];
+                    if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
                         continue;
 
-                    if (!tc.gpuInitialized || tc.chunks.empty())
-                    {
-                        m_TerrainRenderer->RebuildMesh(cmd, tc, tr.world.GetMatrix());
-                    }
-
-                    auto cacheIt = m_EntityObjectIndexCache.find(e);
-                    if (cacheIt == m_EntityObjectIndexCache.end())
+                    AABB worldBounds = chunk.bounds.Transform(tItem.worldMatrix);
+                    if (!frustum.IsAABBVisible(worldBounds))
                         continue;
 
-                    Ref<Material> material = ResolveAsset<Material>(tc.materialHandle);
-                    if (material && uploadedMaterialsThisPass.insert(material.get()).second)
-                        material->UploadToGpu(cmd);
+                    const uint32_t objectIndex = cacheIt->second[idx];
 
-                    if (material && !material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
-                        continue;
+                    BatchKey key;
+                    key.vertexBuffer = *chunk.primitive->vertexBuffer;
+                    key.indexBuffer = *chunk.primitive->indexBuffer;
+                    key.meshBindingSet = frameContext->staticMeshBindingSet->GetHandle();
+                    key.materialBindingSet = materialBindingSet->GetHandle();
+                    key.pipeline = staticPSO ? staticPSO->GetHandle() : nullptr;
 
-                    const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
-                        ? material->GetBindingSet() : m_RuntimeMaterial->GetBindingSet();
-
-                    if (!materialBindingSet)
-                        continue;
-
-                    for (size_t idx = 0; idx < tc.chunks.size(); ++idx)
-                    {
-                        if (idx >= cacheIt->second.size())
-                            break;
-
-                        auto &chunk = tc.chunks[idx];
-                        if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
-                            continue;
-
-                        AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
-                        if (!frustum.IsAABBVisible(worldBounds))
-                            continue;
-
-                        const uint32_t objectIndex = cacheIt->second[idx];
-
-                        BatchKey key;
-                        key.vertexBuffer = *chunk.primitive->vertexBuffer;
-                        key.indexBuffer = *chunk.primitive->indexBuffer;
-                        key.meshBindingSet = frameContext->staticMeshBindingSet->GetHandle();
-                        key.materialBindingSet = materialBindingSet->GetHandle();
-                        key.pipeline = staticPSO ? staticPSO->GetHandle() : nullptr;
-
-                        m_OpaqueBatchBuilder.Submit(
-                            key, *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
-                            frameContext->staticMeshBindingSet,
-                            materialBindingSet, staticPSO,
-                            chunk.primitive->indexBuffer->GetCount(), objectIndex);
-                    }
+                    m_OpaqueBatchBuilder.Submit(
+                        key, *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
+                        frameContext->staticMeshBindingSet,
+                        materialBindingSet, staticPSO,
+                        chunk.primitive->indexBuffer->GetCount(), objectIndex);
                 }
             }
 
@@ -1728,53 +1669,47 @@ namespace ignite
             FlushOpaqueBatches(cmd, frameContext, framebuffer);
         }
 
-        // Skeletal Meshes
+        // Skeletal Meshes from FramePacket
         {
             IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshColor");
 
-            auto skelMeshView = m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
-            std::vector<entt::entity> candidateSkelColorEntities;
-            std::vector<AABB> candidateSkelColorAABBs;
-
-            for (entt::entity e : skelMeshView)
+            const size_t skelCount = m_FramePacket.skeletalMeshes.size();
+            if (skelCount > 0)
             {
-                const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
-                if (!rc.visible || smc.handle == AssetHandle(0))
-                    continue;
+                m_FramePacket.visibilityScratch.resize(skelCount);
+                frustum.IsAABBVisibleBatch(m_FramePacket.skeletalMeshAABBs.data(), skelCount, m_FramePacket.visibilityScratch.data());
 
-                candidateSkelColorEntities.push_back(e);
-                candidateSkelColorAABBs.push_back(smc.worldAABB);
-            }
+                const bool startedSkelColorPass = framebuffer && !framebuffer->IsRendering();
+                if (startedSkelColorPass)
+                    framebuffer->BeginRendering(cmd, false, false);
 
-            if (!candidateSkelColorEntities.empty())
-            {
-                std::vector<uint8_t> visibility(candidateSkelColorEntities.size());
-                frustum.IsAABBVisibleBatch(candidateSkelColorAABBs.data(), candidateSkelColorAABBs.size(), visibility.data());
-
-                for (size_t cIdx = 0; cIdx < candidateSkelColorEntities.size(); ++cIdx)
+                for (size_t cIdx = 0; cIdx < skelCount; ++cIdx)
                 {
-                    if (!visibility[cIdx])
+                    if (!m_FramePacket.visibilityScratch[cIdx])
                         continue;
 
-                    entt::entity e = candidateSkelColorEntities[cIdx];
-                    const auto &[tr, rc, smc] = skelMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
-                    auto skeletalMesh = ResolveAsset<SkeletalMesh>(smc.handle);
+                    const SkeletalMeshPacketItem &item = m_FramePacket.skeletalMeshes[cIdx];
+                    if (!item.mesh || !item.component)
+                        continue;
+
+                    Ref<SkeletalMesh> skeletalMesh = ResolveAsset<SkeletalMesh>(item.component->handle);
                     if (!skeletalMesh)
                         continue;
 
-                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                    DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, tr.world.GetMatrix(), smc.normalMatrix, objectID,
-                        smc.overrideMaterials, smc.finalBoneTransforms, smc.cachedInstanceTransforms,
-                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e);
+                    m_FramePacket.stats.visibleSkeletalMeshes++;
+
+                    DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, item.worldMatrix, item.normalMatrix, item.objectID,
+                        item.component->overrideMaterials, item.component->finalBoneTransforms, item.component->cachedInstanceTransforms,
+                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity);
                     Renderer::Stats.skeletalMeshCount++;
 
                     // --- SOCKET SYSTEM: Render attached meshes ---
-                    if (skeletalMesh && skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
+                    if (skeletalMesh->GetSkeletonHandle() != AssetHandle(0))
                     {
                         Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(skeletalMesh->GetSkeletonHandle());
                         if (skeleton)
                         {
-                            for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                            for (const auto &[socketName, attachedMeshHandle] : item.component->socketAttachments)
                             {
                                 if (attachedMeshHandle == AssetHandle(0))
                                     continue;
@@ -1783,27 +1718,30 @@ namespace ignite
                                 if (!attachedMeshAsset)
                                     continue;
 
-                                glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                                glm::mat4 socketWorld = item.component->GetSocketWorldTransform(item.worldMatrix, *skeleton, socketName);
                                 glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
 
                                 if (attachedMeshAsset->GetAssetType() == AssetType::SkeletalMesh)
                                 {
                                     auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
-                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
-                                        std::unordered_map<int, AssetHandle>(), smc.finalBoneTransforms, std::vector<Mesh_GPUData>(),
-                                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
+                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
+                                        std::unordered_map<int, AssetHandle>(), item.component->finalBoneTransforms, std::vector<Mesh_GPUData>(),
+                                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity, socketName);
                                 }
                                 else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
                                 {
                                     auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
-                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, objectID,
+                                    DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
                                         std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(),
-                                        camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, e, socketName);
+                                        camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity, socketName);
                                 }
                             }
                         }
                     }
                 }
+
+                if (startedSkelColorPass && framebuffer->IsRendering())
+                    framebuffer->EndRendering(cmd);
             }
         }
 
@@ -1971,7 +1909,7 @@ namespace ignite
                         std::swap(uv0.x, uv1.x);
                     }
 
-                    // Find material if available (use frame cache — avoids repeated AssetManager map lookups)
+                    // Find material if available (use frame cache â€” avoids repeated AssetManager map lookups)
                     Ref<Material2D> mat2d = ResolveAsset<Material2D>(sprite.materialHandle);
 
                     // Render with Material2D
@@ -1995,16 +1933,25 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::2DPass::TextView");
 
+                const glm::mat4 camView = camera ? camera->GetView() : glm::mat4(1.0f);
+                const glm::vec3 camRight(camView[0][0], camView[1][0], camView[2][0]);
+                const glm::vec3 camUp(camView[0][1], camView[1][1], camView[2][1]);
+                const glm::vec3 camFwd = glm::cross(camRight, camUp);
+                glm::mat4 billboardRot(1.0f);
+                billboardRot[0] = glm::vec4(camRight, 0.0f);
+                billboardRot[1] = glm::vec4(camUp, 0.0f);
+                billboardRot[2] = glm::vec4(camFwd, 0.0f);
+
                 auto textView = m_Scene->registry->view<TransformComponent, RenderingComponent, TextComponent>();
                 for (entt::entity e : textView)
                 {
                     const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
-                    if (!rc.visible || text.fontHandle == AssetHandle(0) || text.text.empty())
+                    if (!rc.visible || text.screenSpace || text.text.empty())
                         continue;
 
                     const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
-                    auto font = ResolveAsset<Font>(text.fontHandle);
+                    Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
                     if (!font)
                         continue;
 
@@ -2021,7 +1968,11 @@ namespace ignite
                         }
                     }
 
-                    m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(), text.kerning, text.lineSpacing, objectID);
+                    const glm::mat4 worldMat = text.billboard
+                        ? (glm::translate(glm::mat4(1.0f), tr.world.translation) * billboardRot * glm::scale(glm::mat4(1.0f), tr.world.scale))
+                        : tr.world.GetMatrix();
+
+                    m_Renderer2D->DrawString(text.text, font, textColor, worldMat, text.kerning, text.lineSpacing, objectID, false, text.centerAlign);
                 }
             }
 
@@ -2045,81 +1996,163 @@ namespace ignite
         if (!m_Scene || !framebuffer)
             return;
 
-        // Set root widget
-        auto rootWidget = m_Scene->GetRootWidget();
-        if (!rootWidget)
-            return;
-
-        m_WidgetRenderer->SetActiveWidget(rootWidget);
-
         const uint32_t width = std::max(1u, framebuffer->GetWidth());
         const uint32_t height = std::max(1u, framebuffer->GetHeight());
-        if (m_WidgetRenderer->GetWidth() != width || m_WidgetRenderer->GetHeight() != height)
-        {
-            m_WidgetRenderer->Resize(width, height);
-        }
 
-        uint32_t mouseX = 0;
-        uint32_t mouseY = 0;
-        bool isHovered = false;
-        bool useOverride = false;
+        // Set root widget
+        if (auto rootWidget = m_Scene->GetRootWidget())
+        {
+            m_WidgetRenderer->SetActiveWidget(rootWidget);
 
-        // Check per-camera input map first
-        auto it = m_CameraInputStates.find(camera);
-        if (it != m_CameraInputStates.end() && it->second.useOverride)
-        {
-            mouseX = it->second.mouseX;
-            mouseY = it->second.mouseY;
-            isHovered = it->second.hovered;
-            useOverride = true;
-        }
-        else
-        {
-            // Fallback to legacy Editor/Gameplay mouse state
-            bool isGameCamera = false;
-            if (m_Scene)
+            if (m_WidgetRenderer->GetWidth() != width || m_WidgetRenderer->GetHeight() != height)
             {
-                if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+                m_WidgetRenderer->Resize(width, height);
+            }
+
+            uint32_t mouseX = 0;
+            uint32_t mouseY = 0;
+            bool isHovered = false;
+            bool useOverride = false;
+
+            // Check per-camera input map first
+            auto it = m_CameraInputStates.find(camera);
+            if (it != m_CameraInputStates.end() && it->second.useOverride)
+            {
+                mouseX = it->second.mouseX;
+                mouseY = it->second.mouseY;
+                isHovered = it->second.hovered;
+                useOverride = true;
+            }
+            else
+            {
+                // Fallback to legacy Editor/Gameplay mouse state
+                bool isGameCamera = false;
+                if (m_Scene)
                 {
-                    const auto &cc = primaryCamera.GetComponent<CameraComponent>();
-                    if (camera == &cc.camera)
+                    if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
                     {
-                        isGameCamera = true;
+                        const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                        if (camera == &cc.camera)
+                        {
+                            isGameCamera = true;
+                        }
+                    }
+                }
+
+                useOverride = isGameCamera ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
+                if (useOverride)
+                {
+                    mouseX = isGameCamera ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
+                    mouseY = isGameCamera ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
+                    isHovered = isGameCamera ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
+                }
+            }
+
+            if (useOverride)
+            {
+                if (isHovered)
+                {
+                    m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
+                }
+                else
+                {
+                    const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+                    m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
+                }
+            }
+            else
+            {
+                const glm::ivec2 mousePos = InputSystem::GetMousePosition();
+                m_WidgetRenderer->SetMousePosition(
+                    static_cast<uint32_t>(std::max(mousePos.x, 0)),
+                    static_cast<uint32_t>(std::max(mousePos.y, 0)));
+            }
+
+            m_WidgetRenderer->Update(0.0f);
+            m_WidgetRenderer->Render(cmd, framebuffer);
+        }
+
+        // Screen-space TextComponents and queued debug screen texts
+        if (m_ScreenTextRenderer2D && m_Scene->registry)
+        {
+            bool hasScreenItems = !m_Scene->GetDebugScreenTexts().empty();
+            if (!hasScreenItems)
+            {
+                auto textView = m_Scene->registry->view<TransformComponent, RenderingComponent, TextComponent>();
+                for (entt::entity e : textView)
+                {
+                    const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                    if (rc.visible && text.screenSpace && !text.text.empty())
+                    {
+                        hasScreenItems = true;
+                        break;
                     }
                 }
             }
 
-            useOverride = isGameCamera ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
-            if (useOverride)
+            if (hasScreenItems)
             {
-                mouseX = isGameCamera ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
-                mouseY = isGameCamera ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
-                isHovered = isGameCamera ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
-            }
-        }
+                if (!m_ScreenCameraBuffer)
+                {
+                    m_ScreenCameraBuffer = ConstantBuffer::Create(sizeof(CameraBufferData), false, 1, "[SceneRenderer] Screen Text Camera");
+                }
 
-        if (useOverride)
-        {
-            if (isHovered)
-            {
-                m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
-            }
-            else
-            {
-                const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
-                m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
-            }
-        }
-        else
-        {
-            const glm::ivec2 mousePos = InputSystem::GetMousePosition();
-            m_WidgetRenderer->SetMousePosition(
-                static_cast<uint32_t>(std::max(mousePos.x, 0)),
-                static_cast<uint32_t>(std::max(mousePos.y, 0)));
-        }
+                CameraBufferData screenCamData;
+                screenCamData.viewProjection = glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, -1.0f, 1.0f);
+                screenCamData.view = glm::mat4(1.0f);
+                screenCamData.position = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+                m_ScreenCameraBuffer->SetData(&screenCamData, sizeof(screenCamData));
 
-        m_WidgetRenderer->Update(0.0f);
-        m_WidgetRenderer->Render(cmd, framebuffer);
+                m_ScreenTextRenderer2D->Begin(cmd);
+
+                auto textView = m_Scene->registry->view<TransformComponent, RenderingComponent, TextComponent>();
+                for (entt::entity e : textView)
+                {
+                    const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                    if (!rc.visible || !text.screenSpace || text.text.empty())
+                        continue;
+
+                    Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
+                    if (!font || !font->GetAtlasTexture() || !font->GetAtlasTexture()->IsReady())
+                        continue;
+
+                    glm::vec4 textColor = text.color;
+                    if (text.material2dHandle != AssetHandle(0))
+                    {
+                        if (auto material2d = ResolveAsset<Material2D>(text.material2dHandle))
+                        {
+                            textColor = text.color + material2d->data.baseColor;
+                        }
+                    }
+
+                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                    const float pxSize = std::max(text.fontSize, 1.0f);
+                    const glm::mat4 screenTransform = glm::translate(glm::mat4(1.0f), glm::vec3(tr.world.translation.x, tr.world.translation.y, 0.0f))
+                        * glm::toMat4(tr.world.rotation)
+                        * glm::scale(glm::mat4(1.0f), glm::vec3(pxSize * tr.world.scale.x, pxSize * tr.world.scale.y, 1.0f));
+
+                    m_ScreenTextRenderer2D->DrawString(text.text, font, textColor, screenTransform, text.kerning, text.lineSpacing, objectID, true, text.centerAlign);
+                }
+
+                if (Ref<Font> debugFont = Renderer::GetDefaultFont(); debugFont && debugFont->GetAtlasTexture() && debugFont->GetAtlasTexture()->IsReady())
+                {
+                    for (const auto &item : m_Scene->GetDebugScreenTexts())
+                    {
+                        if (item.text.empty())
+                            continue;
+
+                        const float pxSize = std::max(item.fontSize, 4.0f);
+                        const glm::mat4 screenTransform = glm::translate(glm::mat4(1.0f), glm::vec3(item.position.x, item.position.y, 0.0f))
+                            * glm::scale(glm::mat4(1.0f), glm::vec3(pxSize, pxSize, 1.0f));
+
+                        m_ScreenTextRenderer2D->DrawString(item.text, debugFont, item.color, screenTransform, 0.0f, 0.0f, 0xFFFFFFFFu, true, item.center);
+                    }
+                }
+
+                m_ScreenTextRenderer2D->Flush(framebuffer, m_ScreenCameraBuffer->GetDescriptor(), false);
+                m_ScreenTextRenderer2D->End();
+            }
+        }
     }
 
     void SceneRenderer::DebugPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext)
@@ -2212,17 +2245,17 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!framebuffer)
+        if (!framebuffer || !m_DebugRenderer2D)
             return;
 
-        m_Renderer2D->Begin(cmd);
+        m_DebugRenderer2D->Begin(cmd);
 
         // 2D Physics debug draw
         const glm::vec4 kPhysicsDebugColor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
         constexpr int kCircleDebugSegments = 24;
         constexpr float kTwoPi = 6.28318530718f;
 
-        if (sceneRenderSettings.showPhysicsCollider)
+        if (m_FramePacket.drawDebug && sceneRenderSettings.showPhysicsCollider)
         {
             auto boxCollider2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, BoxCollider2DComponent>();
             for (entt::entity e : boxCollider2DView)
@@ -2242,10 +2275,10 @@ namespace ignite
                 const glm::vec4 c2 = world * glm::vec4(offset.x + halfExtents.x, offset.y + halfExtents.y, 0.0f, 1.0f);
                 const glm::vec4 c3 = world * glm::vec4(offset.x - halfExtents.x, offset.y + halfExtents.y, 0.0f, 1.0f);
 
-                m_Renderer2D->DrawLine(glm::vec3(c0), glm::vec3(c1), kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(glm::vec3(c1), glm::vec3(c2), kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(glm::vec3(c2), glm::vec3(c3), kPhysicsDebugColor);
-                m_Renderer2D->DrawLine(glm::vec3(c3), glm::vec3(c0), kPhysicsDebugColor);
+                m_DebugRenderer2D->DrawLine(glm::vec3(c0), glm::vec3(c1), kPhysicsDebugColor);
+                m_DebugRenderer2D->DrawLine(glm::vec3(c1), glm::vec3(c2), kPhysicsDebugColor);
+                m_DebugRenderer2D->DrawLine(glm::vec3(c2), glm::vec3(c3), kPhysicsDebugColor);
+                m_DebugRenderer2D->DrawLine(glm::vec3(c3), glm::vec3(c0), kPhysicsDebugColor);
             }
 
             auto circleCollider2DView = m_Scene->registry->view<TransformComponent, RenderingComponent, CircleCollider2DComponent>();
@@ -2271,19 +2304,19 @@ namespace ignite
                     const glm::vec3 p0 = centerWorld + glm::vec3(std::cos(t0) * scaledRadius, std::sin(t0) * scaledRadius, 0.0f);
                     const glm::vec3 p1 = centerWorld + glm::vec3(std::cos(t1) * scaledRadius, std::sin(t1) * scaledRadius, 0.0f);
 
-                    m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
+                    m_DebugRenderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
                 }
             }
         }
-        m_Renderer2D->Flush(framebuffer, frameContext->cameraBuffer);
-        m_Renderer2D->End();
+        m_DebugRenderer2D->Flush(framebuffer, frameContext->cameraBuffer);
+        m_DebugRenderer2D->End();
     }
 
     void SceneRenderer::DrawDebug3D(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!framebuffer || !m_Scene || !m_Scene->registry)
+        if (!framebuffer || !m_DebugRenderer2D || !m_Scene || !m_Scene->registry)
             return;
 
         const glm::vec4 kPhysicsDebugColor = glm::vec4(0.5f, 1.0f, 1.0f, 1.0f);
@@ -2300,7 +2333,7 @@ namespace ignite
 
                     const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
                     const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                    m_Renderer2D->DrawLine(p0, p1, color);
+                    m_DebugRenderer2D->DrawLine(p0, p1, color);
                 }
             };
 
@@ -2313,19 +2346,23 @@ namespace ignite
 
                     const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
                     const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                    m_Renderer2D->DrawLine(p0, p1, color);
+                    m_DebugRenderer2D->DrawLine(p0, p1, color);
                 }
             };
 
         const glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
         const glm::vec4 boundsColor(0.7f, 0.2f, 0.8f, 1.0f);
 
-        if (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider)
+        const bool drawWireDebug = m_FramePacket.drawDebug && (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider);
+        const bool drawEntityNames = (m_FramePacket.drawDebug && sceneRenderSettings.showEntityNames) || m_Scene->showDebugEntityNames;
+        const bool hasQueuedDebug = !m_Scene->GetDebugWorldTexts().empty() || !m_Scene->GetDebugLines().empty();
+
+        if (drawWireDebug || drawEntityNames || hasQueuedDebug)
         {
-            m_Renderer2D->Begin(cmd);
+            m_DebugRenderer2D->Begin(cmd);
         }
 
-        if (sceneRenderSettings.showBoundingBox)
+        if (m_FramePacket.drawDebug && sceneRenderSettings.showBoundingBox)
         {
             // Draw bounding boxes
             for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>())
@@ -2333,7 +2370,7 @@ namespace ignite
                 const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
                 if (!rc.visible || smc.handle == AssetHandle(0))
                     continue;
-                m_Renderer2D->DrawAABB(smc.worldAABB, boundsColor);
+                m_DebugRenderer2D->DrawAABB(smc.worldAABB, boundsColor);
             }
 
             for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>())
@@ -2341,7 +2378,7 @@ namespace ignite
                 const auto &[tr, rc, smc] = m_Scene->registry->get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
                 if (!rc.visible || smc.handle == AssetHandle(0))
                     continue;
-                m_Renderer2D->DrawAABB(smc.worldAABB, boundsColor);
+                m_DebugRenderer2D->DrawAABB(smc.worldAABB, boundsColor);
             }
 
             for (entt::entity e : m_Scene->registry->view<TransformComponent, RenderingComponent, TerrainComponent>())
@@ -2361,14 +2398,14 @@ namespace ignite
                     AABB worldBounds = chunk.bounds.Transform(tr.world.GetMatrix());
                     minPos = glm::min(minPos, worldBounds.min);
                     maxPos = glm::max(maxPos, worldBounds.max);
-                    m_Renderer2D->DrawAABB(worldBounds, { 0.9f, 0.9f, 0.9, 0.5f });
+                    m_DebugRenderer2D->DrawAABB(worldBounds, { 0.9f, 0.9f, 0.9, 0.5f });
                 }
 
-                m_Renderer2D->DrawAABB(AABB::FromMinMax(minPos, maxPos), boundsColor);
+                m_DebugRenderer2D->DrawAABB(AABB::FromMinMax(minPos, maxPos), boundsColor);
             }
         }
 
-        if (sceneRenderSettings.showPhysicsCollider)
+        if (m_FramePacket.drawDebug && sceneRenderSettings.showPhysicsCollider)
         {
             // Box Colliders
             for (entt::entity e : m_Scene->registry->view<TransformComponent, BoxColliderComponent>())
@@ -2382,7 +2419,7 @@ namespace ignite
                 const glm::mat4 boxTransform = glm::translate(glm::mat4(1.0f), centerWorld)
                     * glm::toMat4(tr.world.rotation)
                     * glm::scale(glm::mat4(1.0f), sizeWorld);
-                m_Renderer2D->DrawBox(boxTransform, colliderColor);
+                m_DebugRenderer2D->DrawBox(boxTransform, colliderColor);
             }
 
             // Sphere Colliders
@@ -2430,10 +2467,10 @@ namespace ignite
                 DrawCircleRing(bottomCenter, right, forward, kCircleSegments, colliderColor);
 
                 // Draw connecting lines between the top and bottom circles
-                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, colliderColor);
-                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, colliderColor);
-                m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, colliderColor);
-                m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter + forward, bottomCenter + forward, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter - forward, bottomCenter - forward, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter + right, bottomCenter + right, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter - right, bottomCenter - right, colliderColor);
 
                 // Draw arcs to represent the rounded ends of the capsule
                 DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, colliderColor);
@@ -2467,10 +2504,10 @@ namespace ignite
                 DrawCircleRing(bottomCenter, right, forward, kCircleSegments, colliderColor);
 
                 // Draw connecting lines between the top and bottom circles
-                m_Renderer2D->DrawLine(topCenter + forward, bottomCenter + forward, colliderColor);
-                m_Renderer2D->DrawLine(topCenter - forward, bottomCenter - forward, colliderColor);
-                m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, colliderColor);
-                m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter + forward, bottomCenter + forward, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter - forward, bottomCenter - forward, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter + right, bottomCenter + right, colliderColor);
+                m_DebugRenderer2D->DrawLine(topCenter - right, bottomCenter - right, colliderColor);
 
                 // Draw arcs to represent the rounded ends of the capsule
                 DrawArc(topCenter, forward, upRadius, kCircleSegments / 2, colliderColor);
@@ -2495,14 +2532,14 @@ namespace ignite
                 glm::vec3 p2 = glm::vec3(planeMat * glm::vec4(0.5f * scaleWorld.x, 0.0f, 0.5f * scaleWorld.z, 1.0f));
                 glm::vec3 p3 = glm::vec3(planeMat * glm::vec4(-0.5f * scaleWorld.x, 0.0f, 0.5f * scaleWorld.z, 1.0f));
 
-                m_Renderer2D->DrawLine(p0, p1, colliderColor);
-                m_Renderer2D->DrawLine(p1, p2, colliderColor);
-                m_Renderer2D->DrawLine(p2, p3, colliderColor);
-                m_Renderer2D->DrawLine(p3, p0, colliderColor);
+                m_DebugRenderer2D->DrawLine(p0, p1, colliderColor);
+                m_DebugRenderer2D->DrawLine(p1, p2, colliderColor);
+                m_DebugRenderer2D->DrawLine(p2, p3, colliderColor);
+                m_DebugRenderer2D->DrawLine(p3, p0, colliderColor);
 
                 glm::vec3 normStart = centerWorld;
                 glm::vec3 normEnd = centerWorld + (tr.world.rotation * glm::vec3(0.0f, 1.0f, 0.0f));
-                m_Renderer2D->DrawLine(normStart, normEnd, colliderColor);
+                m_DebugRenderer2D->DrawLine(normStart, normEnd, colliderColor);
             }
 
             // Mesh Colliders
@@ -2525,14 +2562,14 @@ namespace ignite
                         glm::vec3 v1 = glm::vec3(meshMat * glm::vec4(mc.vertices[mc.indices[i + 1]], 1.0f));
                         glm::vec3 v2 = glm::vec3(meshMat * glm::vec4(mc.vertices[mc.indices[i + 2]], 1.0f));
 
-                        m_Renderer2D->DrawLine(v0, v1, colliderColor);
-                        m_Renderer2D->DrawLine(v1, v2, colliderColor);
-                        m_Renderer2D->DrawLine(v2, v0, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v0, v1, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v1, v2, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v2, v0, colliderColor);
                     }
                 }
                 else
                 {
-                    m_Renderer2D->DrawBox(meshMat, colliderColor);
+                    m_DebugRenderer2D->DrawBox(meshMat, colliderColor);
                 }
             }
 
@@ -2566,11 +2603,11 @@ namespace ignite
                         glm::vec3 v01 = getPos(x, nextZ);
                         glm::vec3 v11 = getPos(nextX, nextZ);
 
-                        m_Renderer2D->DrawLine(v00, v10, colliderColor);
-                        m_Renderer2D->DrawLine(v00, v01, colliderColor);
-                        m_Renderer2D->DrawLine(v10, v01, colliderColor);
-                        m_Renderer2D->DrawLine(v10, v11, colliderColor);
-                        m_Renderer2D->DrawLine(v01, v11, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v00, v10, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v00, v01, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v10, v01, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v10, v11, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v01, v11, colliderColor);
                     }
                 }
             }
@@ -2608,11 +2645,11 @@ namespace ignite
                         glm::vec3 v01 = getPos(x, nextZ);
                         glm::vec3 v11 = getPos(nextX, nextZ);
 
-                        m_Renderer2D->DrawLine(v00, v10, colliderColor);
-                        m_Renderer2D->DrawLine(v00, v01, colliderColor);
-                        m_Renderer2D->DrawLine(v10, v01, colliderColor);
-                        m_Renderer2D->DrawLine(v10, v11, colliderColor);
-                        m_Renderer2D->DrawLine(v01, v11, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v00, v10, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v00, v01, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v10, v01, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v10, v11, colliderColor);
+                        m_DebugRenderer2D->DrawLine(v01, v11, colliderColor);
                     }
                 }
             }
@@ -2658,12 +2695,12 @@ namespace ignite
 
                 // Draw marker at anchorA
                 constexpr float markerSize = 0.12f;
-                m_Renderer2D->DrawLine(anchorA - glm::vec3(markerSize, 0.0f, 0.0f), anchorA + glm::vec3(markerSize, 0.0f, 0.0f), jointColor);
-                m_Renderer2D->DrawLine(anchorA - glm::vec3(0.0f, markerSize, 0.0f), anchorA + glm::vec3(0.0f, markerSize, 0.0f), jointColor);
-                m_Renderer2D->DrawLine(anchorA - glm::vec3(0.0f, 0.0f, markerSize), anchorA + glm::vec3(0.0f, 0.0f, markerSize), jointColor);
+                m_DebugRenderer2D->DrawLine(anchorA - glm::vec3(markerSize, 0.0f, 0.0f), anchorA + glm::vec3(markerSize, 0.0f, 0.0f), jointColor);
+                m_DebugRenderer2D->DrawLine(anchorA - glm::vec3(0.0f, markerSize, 0.0f), anchorA + glm::vec3(0.0f, markerSize, 0.0f), jointColor);
+                m_DebugRenderer2D->DrawLine(anchorA - glm::vec3(0.0f, 0.0f, markerSize), anchorA + glm::vec3(0.0f, 0.0f, markerSize), jointColor);
 
                 // Line from entity A origin to anchor A
-                m_Renderer2D->DrawLine(trA.world.translation, anchorA, jointColor);
+                m_DebugRenderer2D->DrawLine(trA.world.translation, anchorA, jointColor);
 
                 // Connected entity visualization
                 if (jointComp.connectedEntity != UUID(0))
@@ -2680,22 +2717,22 @@ namespace ignite
                                 : d.localAnchorB;
                         }
 
-                        m_Renderer2D->DrawLine(anchorA, anchorB, linkColor);
-                        m_Renderer2D->DrawLine(anchorB, trB.world.translation, linkColor);
+                        m_DebugRenderer2D->DrawLine(anchorA, anchorB, linkColor);
+                        m_DebugRenderer2D->DrawLine(anchorB, trB.world.translation, linkColor);
                     }
                 }
 
                 // Joint-type specific gizmos
                 if (d.type == physics::JointType::Hinge)
                 {
-                    m_Renderer2D->DrawLine(anchorA - axisA * 0.35f, anchorA + axisA * 0.35f, axisColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + normalA * 0.3f, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA - axisA * 0.35f, anchorA + axisA * 0.35f, axisColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + normalA * 0.3f, jointColor);
                     if (d.enableLimits)
                     {
                         const glm::vec3 minDir = glm::angleAxis(glm::radians(d.limitsMin), axisA) * normalA;
                         const glm::vec3 maxDir = glm::angleAxis(glm::radians(d.limitsMax), axisA) * normalA;
-                        m_Renderer2D->DrawLine(anchorA, anchorA + minDir * 0.3f, linkColor);
-                        m_Renderer2D->DrawLine(anchorA, anchorA + maxDir * 0.3f, linkColor);
+                        m_DebugRenderer2D->DrawLine(anchorA, anchorA + minDir * 0.3f, linkColor);
+                        m_DebugRenderer2D->DrawLine(anchorA, anchorA + maxDir * 0.3f, linkColor);
                     }
                 }
                 else if (d.type == physics::JointType::Slider)
@@ -2704,9 +2741,9 @@ namespace ignite
                     const float maxLim = d.enableLimits ? d.limitsMax : 0.5f;
                     const glm::vec3 pMin = anchorA + axisA * minLim;
                     const glm::vec3 pMax = anchorA + axisA * maxLim;
-                    m_Renderer2D->DrawLine(pMin, pMax, axisColor);
-                    m_Renderer2D->DrawLine(pMin - normalA * 0.1f, pMin + normalA * 0.1f, jointColor);
-                    m_Renderer2D->DrawLine(pMax - normalA * 0.1f, pMax + normalA * 0.1f, jointColor);
+                    m_DebugRenderer2D->DrawLine(pMin, pMax, axisColor);
+                    m_DebugRenderer2D->DrawLine(pMin - normalA * 0.1f, pMin + normalA * 0.1f, jointColor);
+                    m_DebugRenderer2D->DrawLine(pMax - normalA * 0.1f, pMax + normalA * 0.1f, jointColor);
                 }
                 else if (d.type == physics::JointType::Cone)
                 {
@@ -2717,19 +2754,103 @@ namespace ignite
                     const glm::vec3 r1 = glm::angleAxis(-halfAngleRad, normalA) * axisA;
                     const glm::vec3 r2 = glm::angleAxis(halfAngleRad, biNormalA) * axisA;
                     const glm::vec3 r3 = glm::angleAxis(-halfAngleRad, biNormalA) * axisA;
-                    m_Renderer2D->DrawLine(anchorA, anchorA + axisA * coneLen, axisColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + r0 * coneLen, jointColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + r1 * coneLen, jointColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + r2 * coneLen, jointColor);
-                    m_Renderer2D->DrawLine(anchorA, anchorA + r3 * coneLen, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + axisA * coneLen, axisColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + r0 * coneLen, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + r1 * coneLen, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + r2 * coneLen, jointColor);
+                    m_DebugRenderer2D->DrawLine(anchorA, anchorA + r3 * coneLen, jointColor);
                 }
             }
         }
 
-        if (sceneRenderSettings.showBoundingBox || sceneRenderSettings.showPhysicsCollider)
+        for (const auto &line : m_Scene->GetDebugLines())
         {
-            m_Renderer2D->Flush(framebuffer, frameContext->cameraBuffer);
-            m_Renderer2D->End();
+            m_DebugRenderer2D->DrawLine(line.p0, line.p1, line.color);
+        }
+
+        if (drawEntityNames || !m_Scene->GetDebugWorldTexts().empty())
+        {
+            Ref<Font> debugFont = Renderer::GetDefaultFont();
+            if (debugFont && debugFont->GetAtlasTexture() && debugFont->GetAtlasTexture()->IsReady())
+            {
+                const glm::mat4 camView = camera ? camera->GetView() : glm::mat4(1.0f);
+                const glm::vec3 camRight(camView[0][0], camView[1][0], camView[2][0]);
+                const glm::vec3 camUp(camView[0][1], camView[1][1], camView[2][1]);
+                const glm::vec3 camFwd = glm::cross(camRight, camUp);
+                glm::mat4 billboardRot(1.0f);
+                billboardRot[0] = glm::vec4(camRight, 0.0f);
+                billboardRot[1] = glm::vec4(camUp, 0.0f);
+                billboardRot[2] = glm::vec4(camFwd, 0.0f);
+                const glm::vec3 camPos = camera ? camera->position : glm::vec3(0.0f);
+
+                if (drawEntityNames)
+                {
+                    for (entt::entity e : m_Scene->registry->view<IDComponent, TransformComponent>())
+                    {
+                        if (const auto *rc = m_Scene->registry->try_get<RenderingComponent>(e); rc && !rc->visible)
+                            continue;
+                        if (const auto *cam = m_Scene->registry->try_get<CameraComponent>(e); cam && cam->primary)
+                            continue;
+                        if (m_Scene->registry->any_of<TextComponent>(e))
+                            continue;
+
+                        const auto &[id, tr] = m_Scene->registry->get<IDComponent, TransformComponent>(e);
+                        if (id.name.empty())
+                            continue;
+
+                        glm::vec3 labelPos = tr.world.translation + glm::vec3(0.0f, 0.5f, 0.0f);
+                        glm::vec4 labelColor(0.92f, 0.94f, 0.98f, 0.95f);
+
+                        if (const auto *smc = m_Scene->registry->try_get<StaticMeshComponent>(e); smc && smc->handle != AssetHandle(0))
+                        {
+                            labelPos = glm::vec3((smc->worldAABB.min.x + smc->worldAABB.max.x) * 0.5f, smc->worldAABB.max.y + 0.3f, (smc->worldAABB.min.z + smc->worldAABB.max.z) * 0.5f);
+                        }
+                        if (const auto *skc = m_Scene->registry->try_get<SkeletalMeshComponent>(e); skc && skc->handle != AssetHandle(0))
+                        {
+                            labelPos = glm::vec3((skc->worldAABB.min.x + skc->worldAABB.max.x) * 0.5f, skc->worldAABB.max.y + 0.35f, (skc->worldAABB.min.z + skc->worldAABB.max.z) * 0.5f);
+                            labelColor = glm::vec4(1.0f, 0.86f, 0.35f, 1.0f);
+                        }
+                        if (const auto *cc = m_Scene->registry->try_get<CharacterControllerComponent>(e))
+                        {
+                            labelPos = tr.world.translation + glm::vec3(0.0f, cc->height * 0.5f + 0.55f, 0.0f);
+                            labelColor = glm::vec4(0.35f, 0.95f, 1.0f, 1.0f);
+                        }
+                        else if (const auto *rb = m_Scene->registry->try_get<RigidbodyComponent>(e); rb && rb->bodyType == physics::BodyType::Dynamic)
+                        {
+                            labelColor = glm::vec4(0.45f, 1.0f, 0.55f, 1.0f);
+                        }
+
+                        const float dist = glm::distance(camPos, labelPos);
+                        if (dist > 60.0f)
+                            continue;
+
+                        const float textScale = glm::clamp(dist * 0.03f, 0.24f, 0.85f);
+                        const glm::mat4 mat = glm::translate(glm::mat4(1.0f), labelPos)
+                            * billboardRot
+                            * glm::scale(glm::mat4(1.0f), glm::vec3(textScale));
+
+                        m_DebugRenderer2D->DrawString(id.name, debugFont, labelColor, mat, 0.0f, 0.0f, 0xFFFFFFFFu, false, true);
+                    }
+                }
+
+                for (const auto &item : m_Scene->GetDebugWorldTexts())
+                {
+                    if (item.text.empty())
+                        continue;
+
+                    const glm::mat4 mat = item.billboard
+                        ? (glm::translate(glm::mat4(1.0f), item.position) * billboardRot * glm::scale(glm::mat4(1.0f), glm::vec3(item.scale)))
+                        : (glm::translate(glm::mat4(1.0f), item.position) * glm::scale(glm::mat4(1.0f), glm::vec3(item.scale)));
+
+                    m_DebugRenderer2D->DrawString(item.text, debugFont, item.color, mat, 0.0f, 0.0f, 0xFFFFFFFFu, false, item.center);
+                }
+            }
+        }
+
+        if (drawWireDebug || drawEntityNames || hasQueuedDebug)
+        {
+            m_DebugRenderer2D->Flush(framebuffer, frameContext->cameraBuffer, true);
+            m_DebugRenderer2D->End();
         }
     }
 
@@ -2793,8 +2914,7 @@ namespace ignite
             }
             else
             {
-                m_PostProcessingData.tonemapMode = 0; // Reinhard
-                m_PostProcessingData.exposure = 1.1f;
+                m_PostProcessingData.exposure = 1.0f;
                 m_PostProcessingData.gamma = 2.2f;
                 m_PostProcessingData.fogDensity = 0.0f;
             }
@@ -3023,7 +3143,6 @@ namespace ignite
             .AddBindingLayout(bindingLayoutDesc)
             .Build(framebuffer, params);
 
-        m_DebugGridPSOCache.clear();
         m_DebugGridPSOCache.emplace(key, gp);
         return gp;
     }
@@ -3140,7 +3259,6 @@ namespace ignite
 
         if (pipeline)
         {
-            cache.clear();
             cache.emplace(key, pipeline);
         }
 
@@ -3212,7 +3330,6 @@ namespace ignite
             .AddBindingLayout(BindlessSystem::GetBindingLayout())
             .Build(framebuffer, params);
 
-        cache.clear();
         cache.emplace(key, gp);
         return gp;
     }
@@ -3653,10 +3770,10 @@ namespace ignite
                     continue;
 
                 const auto &[tr, rc, text] = m_Scene->registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
-                if (!rc.visible || text.fontHandle == AssetHandle(0) || text.text.empty())
+                if (!rc.visible || text.screenSpace || text.text.empty())
                     continue;
 
-                auto font = ResolveAsset<Font>(text.fontHandle);
+                Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
                 if (!font)
                     continue;
 
@@ -3730,7 +3847,6 @@ namespace ignite
             .AddBindingLayout(Renderer::GetBindingLayout(EBindingLayout::ENVIRONMENT))
             .Build(framebuffer, params);
 
-        m_EnvironmentPSOCache.clear();
         m_EnvironmentPSOCache.emplace(key, gp);
         return gp;
     }
@@ -3738,7 +3854,7 @@ namespace ignite
     // Helper to build a composite pipeline per framebuffer (once)
     Ref<GraphicsPipeline> SceneRenderer::GetCompositePSO(RenderTarget *framebuffer, nri::FillMode fillMode)
     {
-        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto key = MakeFramebufferKey(framebuffer, fillMode, nri::CullMode::NONE);
         auto it = m_CompositePSOCache.find(key);
 
         if (it != m_CompositePSOCache.end())
@@ -3790,7 +3906,7 @@ namespace ignite
 
     Ref<GraphicsPipeline> SceneRenderer::GetFXAAPSO(RenderTarget *framebuffer)
     {
-        auto key = MakeFramebufferKey(framebuffer, nri::FillMode::SOLID);
+        auto key = MakeFramebufferKey(framebuffer, nri::FillMode::SOLID, nri::CullMode::NONE);
         auto it = m_FXAAPSOCache.find(key);
         if (it != m_FXAAPSOCache.end())
             return it->second;
@@ -3948,265 +4064,7 @@ namespace ignite
         return bindingSet;
     }
 
-    void SceneRenderer::EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
-    {
-        if (!target->widgetRT)
-        {
-            RenderTargetCreateInfo widgetRTCreateInfo = {};
-            widgetRTCreateInfo.width = width;
-            widgetRTCreateInfo.height = height;
-            widgetRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
-                FramebufferAttachments{ "[Scene ColorAttachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT },
-            };
-            target->widgetRT = RenderTarget::Create(widgetRTCreateInfo, "[Scene Renderer] Widget RT");
-        }
-        else if (target->widgetRT->GetWidth() != width || target->widgetRT->GetHeight() != height)
-        {
-            target->widgetRT->Resize(width, height);
-        }
-    }
-
-    void SceneRenderer::EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight)
-    {
-        if (!target->debugRT)
-        {
-            RenderTargetCreateInfo debugRTCreateInfo = {};
-            debugRTCreateInfo.width = renderWidth;
-            debugRTCreateInfo.height = renderHeight;
-            debugRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene DebugAttachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT },
-                FramebufferAttachments{ "[Scene DebugObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT },
-                FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT }
-            };
-            debugRTCreateInfo.depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
-            target->debugRT = RenderTarget::Create(debugRTCreateInfo, "[Scene Renderer] Debug RT");
-        }
-        else if (target->debugRT->GetWidth() != renderWidth || target->debugRT->GetHeight() != renderHeight)
-        {
-            target->debugRT->GetCreateInfo().depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
-            target->debugRT->Resize(renderWidth, renderHeight);
-        }
-    }
-
-    void SceneRenderer::EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
-    {
-        if (!target->taaHistoryRT[0])
-        {
-            RenderTargetCreateInfo taaHistoryRTCreateInfo = {};
-            taaHistoryRTCreateInfo.width = width;
-            taaHistoryRTCreateInfo.height = height;
-            taaHistoryRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[TAA History Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::SHADER_RESOURCE }
-            };
-            for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
-            {
-                historyRT = RenderTarget::Create(taaHistoryRTCreateInfo, "[Scene Renderer] TAA History RT");
-            }
-        }
-        else if (target->taaHistoryRT[0]->GetWidth() != width || target->taaHistoryRT[0]->GetHeight() != height)
-        {
-            for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
-            {
-                if (historyRT)
-                    historyRT->Resize(width, height);
-            }
-        }
-    }
-
-    void SceneRenderer::EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight)
-    {
-        if (!target)
-            return;
-
-        const bool sampleCountChanged = (target->msaaSampleCount != desiredSampleCount);
-        const bool needsResolveRT = (desiredSampleCount > 1);
-        const bool resolveRTMissing = needsResolveRT && (!target->sceneResolvedRT);
-
-        if (!sampleCountChanged && !resolveRTMissing)
-            return;
-
-        target->msaaSampleCount = desiredSampleCount;
-
-        // Recreate sceneRT with the desired sample count
-        RenderTargetCreateInfo sceneRTCreateInfo = {};
-        sceneRTCreateInfo.width = renderWidth;
-        sceneRTCreateInfo.height = renderHeight;
-        sceneRTCreateInfo.sampleCount = desiredSampleCount;
-        sceneRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
-            FramebufferAttachments{ "[Scene ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
-        };
-        target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
-
-        // Manage resolved target
-        if (desiredSampleCount > 1)
-        {
-            RenderTargetCreateInfo resolvedRTCreateInfo = {};
-            resolvedRTCreateInfo.width = renderWidth;
-            resolvedRTCreateInfo.height = renderHeight;
-            resolvedRTCreateInfo.sampleCount = 1;
-            resolvedRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::SHADER_RESOURCE },
-                FramebufferAttachments{ "[Scene Resolved ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::SHADER_RESOURCE }
-            };
-            target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
-        }
-        else
-        {
-            target->sceneResolvedRT = nullptr;
-        }
-
-        // Invalidate debugRT so EnsureDebugRT recreates it with matching depth attachment or separate depth attachment
-        target->debugRT = nullptr;
-
-        m_CompositeBindingSetCache.clear();
-    }
-
-    Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
-    {
-        auto it = m_RenderTargets.find(camera);
-        if (it != m_RenderTargets.end())
-            return it->second;
-
-        Ref<CameraRenderTarget> target = CreateRef<CameraRenderTarget>();
-
-        // Determine MSAA sample count from camera or scene settings
-        const PostProcessing &pp = camera ? camera->postProcessing : PostProcessing{};
-        bool msaaEnabled = false;
-        int sampleCount = 1;
-        if (sceneRenderSettings.sampleMethod == SampleMethod::MSAA)
-        {
-            msaaEnabled = true;
-            sampleCount = sceneRenderSettings.msaaProperties.sampleCount;
-        }
-        else if (sceneRenderSettings.sampleMethod == SampleMethod::NONE || sceneRenderSettings.sampleMethod == SampleMethod::FXAA || sceneRenderSettings.sampleMethod == SampleMethod::TAA)
-        {
-            msaaEnabled = false;
-            sampleCount = 1;
-        }
-        else
-        {
-            msaaEnabled = pp.msaaProperties.enable;
-            sampleCount = pp.msaaProperties.sampleCount;
-        }
-
-        if (sampleCount <= 1) sampleCount = 1;
-        else if (sampleCount <= 2) sampleCount = 2;
-        else if (sampleCount <= 4) sampleCount = 4;
-        else sampleCount = 8;
-        target->msaaSampleCount = sampleCount;
-
-        // =========================================
-        // Create Render Targets
-        RenderTargetCreateInfo sceneRTCreateInfo = {};
-        sceneRTCreateInfo.sampleCount = sampleCount;
-        sceneRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT }, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT }, // HDR Main Color
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT } // Object ID
-        };
-
-        target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
-
-        // Selection IDs are rendered into a separate single-sample mask. This pass intentionally
-        // ignores scene depth so selected objects remain outlineable through occluders, without
-        // modifying the scene ID buffer consumed by PickEntity.
-        RenderTargetCreateInfo selectionRTCreateInfo = {};
-        selectionRTCreateInfo.sampleCount = 1;
-        selectionRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Selection Mask ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
-            FramebufferAttachments{ "[Selection Mask ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
-        };
-        target->selectionRT = RenderTarget::Create(selectionRTCreateInfo, "[Scene Renderer] Selection Mask RT");
-
-        // If MSAA is active, create a single-sample resolve target that downstream passes (bloom, composite) read from
-        if (sampleCount > 1)
-        {
-            RenderTargetCreateInfo resolvedRTCreateInfo = {};
-            resolvedRTCreateInfo.sampleCount = 1;
-            resolvedRTCreateInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::SHADER_RESOURCE },
-                FramebufferAttachments{ "[Scene Resolved ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::SHADER_RESOURCE }
-            };
-            target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
-        }
-
-        // Composite RT (always needed for final output)
-        RenderTargetCreateInfo compositeRTCreateInfo = {};
-        compositeRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Composite Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT } // Main Color
-        };
-        target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
-        target->postProcessRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Post Process RT");
-
-        if (!m_WidgetRenderer)
-        {
-            m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
-        }
-
-        m_RenderTargets.emplace(camera, target);
-
-        const glm::uvec2 vpSize = camera ? camera->GetViewportSize() : glm::uvec2(0);
-        if (vpSize.x > 0 && vpSize.y > 0)
-        {
-            ResizeFramebuffer(camera, vpSize.x, vpSize.y);
-        }
-
-        return target;
-    }
-
-    std::vector<Ref<Bloom>> SceneRenderer::GetOrCreateBlooms(ICamera *camera)
-    {
-        constexpr uint32_t resolution = 1080;
-
-        auto it = m_Blooms.find(camera);
-        if (it != m_Blooms.end())
-            return it->second;
-
-        const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
-        std::vector<Ref<Bloom>> blooms(maxFrame);
-        for (uint32_t i = 0; i < maxFrame; ++i)
-        {
-            Ref<Bloom> bloom = CreateRef<Bloom>(resolution, resolution);
-            blooms[i] = bloom;
-        }
-
-        m_Blooms.emplace(camera, blooms);
-        return blooms;
-    }
-
-    std::vector<Ref<SSAO>> SceneRenderer::GetOrCreateSSAOs(nri::CommandBuffer *cmd, ICamera *camera)
-    {
-        constexpr uint32_t resolution = 1080;
-
-        auto it = m_SSAOs.find(camera);
-        if (it != m_SSAOs.end())
-            return it->second;
-
-        const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
-        std::vector<Ref<SSAO>> SSAOs(maxFrame);
-        for (uint32_t i = 0; i < maxFrame; ++i)
-        {
-            Ref<SSAO> ssao = CreateRef<SSAO>(cmd, resolution, resolution);
-            SSAOs[i] = ssao;
-        }
-
-        m_SSAOs.emplace(camera, SSAOs);
-        return SSAOs;
-    }
-
-    // FlushOpaqueBatches — dispatch all opaque static mesh batches as instanced draws.
+    // FlushOpaqueBatches â€” dispatch all opaque static mesh batches as instanced draws.
     // Each DrawBatch contains N instances sharing the same vertex buffer, index buffer,
     // material binding set, and PSO. The object indices are uploaded to the
     // InstanceIndexBuffer and referenced via push constant base offset.
@@ -4288,7 +4146,7 @@ namespace ignite
     }
 
     // ---------------------------------------------------------------------------
-    // FlushShadowBatches — dispatch all CSM shadow batches as instanced draws.
+    // FlushShadowBatches â€” dispatch all CSM shadow batches as instanced draws.
     // Similar to FlushOpaqueBatches but uses the CSM framebuffer and no material
     // binding set (shadow pass only writes depth).
     // ---------------------------------------------------------------------------

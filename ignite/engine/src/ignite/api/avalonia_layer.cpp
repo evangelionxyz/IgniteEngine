@@ -439,15 +439,33 @@ namespace ignite
     void AvaloniaLayer::ScenePlay()
     {
         SceneStop();
-        SetActiveScene(SceneManager::Copy(m_EditorScene));
-        m_ActiveScene->OnStart(ESceneState::Play);
+        if (!m_EditorScene)
+        {
+            LOG_WARN("[AvaloniaLayer] Cannot play: m_EditorScene is null");
+            return;
+        }
+        Ref<Scene> playScene = SceneManager::Copy(m_EditorScene);
+        if (playScene)
+        {
+            SetActiveScene(playScene);
+            m_ActiveScene->OnStart(ESceneState::Play);
+        }
     }
 
     void AvaloniaLayer::SceneSimulate()
     {
         SceneStop();
-        SetActiveScene(SceneManager::Copy(m_EditorScene));
-        m_ActiveScene->OnStart(ESceneState::Simulate);
+        if (!m_EditorScene)
+        {
+            LOG_WARN("[AvaloniaLayer] Cannot simulate: m_EditorScene is null");
+            return;
+        }
+        Ref<Scene> simScene = SceneManager::Copy(m_EditorScene);
+        if (simScene)
+        {
+            SetActiveScene(simScene);
+            m_ActiveScene->OnStart(ESceneState::Simulate);
+        }
     }
 
     void AvaloniaLayer::SceneStop()

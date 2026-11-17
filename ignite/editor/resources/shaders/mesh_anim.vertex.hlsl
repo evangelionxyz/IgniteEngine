@@ -57,9 +57,24 @@ PixelVertexInput main(VertexMeshAnim input)
     pixelInput.position     = mul(mul(camera.projection, camera.view), worldPos);
     // Use normal matrix for correct inverse-transpose transform of direction vectors
     float3x3 N = (float3x3)g_ObjectBuffer[objectIndex].normalMatrix;
-    pixelInput.normal       = normalize(mul(N, normalL));
-    pixelInput.tangent      = normalize(mul(N, tangentL));
-    pixelInput.bitangent    = normalize(mul(N, bitangentL));
+    float3 worldN = mul(N, normalL);
+    pixelInput.normal       = dot(worldN, worldN) > 1e-8f ? normalize(worldN) : float3(0.0f, 1.0f, 0.0f);
+
+    float3 worldT = mul(N, tangentL);
+    worldT = worldT - pixelInput.normal * dot(pixelInput.normal, worldT);
+    if (dot(worldT, worldT) > 1e-8f)
+    {
+        pixelInput.tangent  = normalize(worldT);
+    }
+    else
+    {
+        float3 fallbackAxis = abs(pixelInput.normal.y) < 0.999f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
+        pixelInput.tangent  = normalize(cross(fallbackAxis, pixelInput.normal));
+    }
+
+    float3 worldB = mul(N, bitangentL);
+    float3 computedB = cross(pixelInput.normal, pixelInput.tangent);
+    pixelInput.bitangent    = (dot(worldB, worldB) > 1e-8f && dot(computedB, worldB) < 0.0f) ? -computedB : computedB;
     pixelInput.worldPos     = worldPos.xyz;
     pixelInput.uv           = input.uv;
     pixelInput.color        = input.color;

@@ -60,7 +60,7 @@ namespace ignite
         bool enableVignette = false;
         bool enableChromAb = false;
         bool enableBloom = false;
-        bool enableSSAO = false; // HBAO-compatible ambient occlusion toggle
+        bool enableSSAO = true; // HBAO-compatible ambient occlusion toggle
         bool debugSSAO = false; // Visualize raw AO buffer
         bool enableFXAA = false; // Fast Approximate Anti-Aliasing
 
@@ -82,10 +82,10 @@ namespace ignite
         float chromAbRadial = 0.1f;
 
         // HBAO params
-        float aoRadius = 1.3f;      // view-space horizon radius in world units
-        float aoBias = 0.75f;       // tangent bias to reduce self-occlusion
-        float aoIntensity = 2.0f;   // blend strength when applied in post (1.0 = natural)
-        float aoPower = 5.0f;      // curve/power for contrast
+        float aoRadius = 0.65f;     // view-space horizon radius in world units
+        float aoBias = 0.025f;      // tangent bias to reduce self-occlusion
+        float aoIntensity = 1.35f;  // blend strength when applied in post
+        float aoPower = 1.0f;       // curve/power for contrast
 
 		// Anti-aliasing
 		TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
@@ -93,7 +93,7 @@ namespace ignite
 		float renderScale = 1.0f;      // Internal scene resolution scale, composite remains native size
 
 		// Tonemapping
-		TonemapMode tonemapMode = TonemapMode::Reinhard;
+		TonemapMode tonemapMode = TonemapMode::Filmic;
     };
 
     struct CameraLens
@@ -103,8 +103,8 @@ namespace ignite
         float fStop = 1.4f;
         float focusRange = 5.0f;
         float blurAmount = 1.0f;
-        float exposure = 1.1f;
-        float gamma = 1.1f;
+        float exposure = 1.0f;
+        float gamma = 2.2f;
         bool enabledDOF = false;
     };
 

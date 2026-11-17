@@ -86,8 +86,11 @@ namespace ignite
         NetClientSystem *m_Client = nullptr;
         ClientPrediction m_Prediction;
         std::unordered_map<uint64_t, NetworkTransformInterpolator> m_Interpolators;
+        std::unordered_map<uint64_t, glm::vec3> m_PreviousInterpolatedPositions;
         EntityCustomSpawner m_CustomSpawner;
         double m_CurrentTime = 0.0;
+        Entity m_LocalTemplate;
+        bool m_LocalClaimed = false;
     };
 }
 

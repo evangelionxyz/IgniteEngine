@@ -13,6 +13,7 @@
 namespace ignite
 {
     class Prefab;
+    enum class EMeshType;
 
     class IGN_API SceneManager
     {
@@ -24,6 +25,7 @@ namespace ignite
         static Entity CreatePointLight2D(Scene *scene, const std::string &name, UUID uuid = UUID());
 
         static Entity CreateMesh(Scene *scene, const std::string &name, UUID uuid = UUID());
+        static Entity CreatePrimitive(Scene *scene, EMeshType type, const std::string &name = "", UUID uuid = UUID());
         static Entity CreateCamera(Scene *scene, const std::string &name, UUID uuid = UUID());
         static Entity CreateWorldEnvironment(Scene *scene, const std::string &name, UUID uuid = UUID());
         static Entity CreateEmptyEntity(Scene *scene, const std::string &name, UUID uuid = UUID());

@@ -1,0 +1,4096 @@
+{
+    "Scene": {
+        "Version": 4096,
+        "Entities": [
+            {
+                "ID": 13246766463252389608,
+                "Name": "BouncePad_01",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -5.199999809265137,
+                        4.5,
+                        29.5
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        2.5999999046325684,
+                        0.4000000059604645,
+                        2.5999999046325684
+                    ],
+                    "LocalTranslation": [
+                        -5.199999809265137,
+                        4.5,
+                        29.5
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        2.5999999046325684,
+                        0.4000000059604645,
+                        2.5999999046325684
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444492,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100013
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/bounce_pad.lua"
+                }
+            },
+            {
+                "ID": 1555555555555555006,
+                "Name": "Brazier_Torch_01",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -3.0,
+                        1.0,
+                        -1.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.4000000059604645,
+                        1.0,
+                        0.4000000059604645
+                    ],
+                    "LocalTranslation": [
+                        -3.0,
+                        1.0,
+                        -1.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.4000000059604645,
+                        1.0,
+                        0.4000000059604645
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "PointLight": {
+                    "Color": [
+                        1.0,
+                        0.6000000238418579,
+                        0.20000000298023224,
+                        1.0
+                    ],
+                    "Intensity": 20.0,
+                    "Range": 10.0,
+                    "Enabled": true,
+                    "ConstantAttenuation": 1.0,
+                    "LinearAttenuation": 0.09000000357627869,
+                    "QuadraticAttenuation": 0.03200000151991844
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444492,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100014
+                        }
+                    ]
+                },
+                "ParticleSystem": {
+                    "IsPlaying": true,
+                    "EmitterType": 0,
+                    "BlendMode": 1,
+                    "MaxParticles": 500,
+                    "EmissionRate": 30.0,
+                    "LifetimeMin": 0.30000001192092896,
+                    "LifetimeMax": 0.699999988079071,
+                    "VelocityMin": [
+                        -0.20000000298023224,
+                        1.2000000476837158,
+                        -0.20000000298023224
+                    ],
+                    "VelocityMax": [
+                        0.20000000298023224,
+                        2.5,
+                        0.20000000298023224
+                    ],
+                    "Acceleration": [
+                        0.0,
+                        0.5,
+                        0.0
+                    ],
+                    "Drag": 0.10000000149011612,
+                    "StartColor": [
+                        1.0,
+                        0.699999988079071,
+                        0.20000000298023224,
+                        1.0
+                    ],
+                    "EndColor": [
+                        0.800000011920929,
+                        0.10000000149011612,
+                        0.0,
+                        0.0
+                    ],
+                    "StartSize": [
+                        0.30000001192092896,
+                        0.30000001192092896
+                    ],
+                    "EndSize": [
+                        0.05000000074505806,
+                        0.05000000074505806
+                    ],
+                    "RotationSpeedMin": -1.0,
+                    "RotationSpeedMax": 1.0,
+                    "SpawnRadius": 0.15000000596046448,
+                    "VelocityAlignment": 0.0,
+                    "TextureHandle": 0
+                }
+            },
+            {
+                "ID": 1555555555555555007,
+                "Name": "Brazier_Torch_02",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        3.0,
+                        1.0,
+                        -1.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.4000000059604645,
+                        1.0,
+                        0.4000000059604645
+                    ],
+                    "LocalTranslation": [
+                        3.0,
+                        1.0,
+                        -1.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.4000000059604645,
+                        1.0,
+                        0.4000000059604645
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "PointLight": {
+                    "Color": [
+                        1.0,
+                        0.6000000238418579,
+                        0.20000000298023224,
+                        1.0
+                    ],
+                    "Intensity": 20.0,
+                    "Range": 10.0,
+                    "Enabled": true,
+                    "ConstantAttenuation": 1.0,
+                    "LinearAttenuation": 0.09000000357627869,
+                    "QuadraticAttenuation": 0.03200000151991844
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444492,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100014
+                        }
+                    ]
+                },
+                "ParticleSystem": {
+                    "IsPlaying": true,
+                    "EmitterType": 0,
+                    "BlendMode": 1,
+                    "MaxParticles": 500,
+                    "EmissionRate": 30.0,
+                    "LifetimeMin": 0.30000001192092896,
+                    "LifetimeMax": 0.699999988079071,
+                    "VelocityMin": [
+                        -0.20000000298023224,
+                        1.2000000476837158,
+                        -0.20000000298023224
+                    ],
+                    "VelocityMax": [
+                        0.20000000298023224,
+                        2.5,
+                        0.20000000298023224
+                    ],
+                    "Acceleration": [
+                        0.0,
+                        0.5,
+                        0.0
+                    ],
+                    "Drag": 0.10000000149011612,
+                    "StartColor": [
+                        1.0,
+                        0.699999988079071,
+                        0.20000000298023224,
+                        1.0
+                    ],
+                    "EndColor": [
+                        0.800000011920929,
+                        0.10000000149011612,
+                        0.0,
+                        0.0
+                    ],
+                    "StartSize": [
+                        0.30000001192092896,
+                        0.30000001192092896
+                    ],
+                    "EndSize": [
+                        0.05000000074505806,
+                        0.05000000074505806
+                    ],
+                    "RotationSpeedMin": -1.0,
+                    "RotationSpeedMax": 1.0,
+                    "SpawnRadius": 0.15000000596046448,
+                    "VelocityAlignment": 0.0,
+                    "TextureHandle": 0
+                }
+            },
+            {
+                "ID": 12262836902848470314,
+                "Name": "Collectible_01",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        2.200000047683716,
+                        13.5
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        2.200000047683716,
+                        13.5
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100016
+                        }
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/collectible.lua"
+                }
+            },
+            {
+                "ID": 2757696292296314822,
+                "Name": "Collectible_02",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        5.199999809265137,
+                        3.4000000953674316,
+                        18.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071
+                    ],
+                    "LocalTranslation": [
+                        5.199999809265137,
+                        3.4000000953674316,
+                        18.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100016
+                        }
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/collectible.lua"
+                }
+            },
+            {
+                "ID": 11394051380603222325,
+                "Name": "Collectible_03",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        5.5,
+                        29.5
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        5.5,
+                        29.5
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100016
+                        }
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/collectible.lua"
+                }
+            },
+            {
+                "ID": 6605961224395151921,
+                "Name": "Collectible_04",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -5.199999809265137,
+                        10.600000381469727,
+                        35.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071
+                    ],
+                    "LocalTranslation": [
+                        -5.199999809265137,
+                        10.600000381469727,
+                        35.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100016
+                        }
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/collectible.lua"
+                }
+            },
+            {
+                "ID": 14444343172021335399,
+                "Name": "CompanionBot",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        6.5,
+                        0.0,
+                        4.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.9537169933319092,
+                        0.0,
+                        -0.30070579051971436
+                    ],
+                    "WorldScale": [
+                        0.47999995946884155,
+                        0.47999998927116394,
+                        0.47999995946884155
+                    ],
+                    "LocalTranslation": [
+                        6.5,
+                        0.0,
+                        4.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        -0.9537169337272644,
+                        0.0,
+                        0.30070582032203674
+                    ],
+                    "LocalScale": [
+                        0.47999998927116394,
+                        0.47999998927116394,
+                        0.47999998927116394
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "SkeletalMesh": {
+                    "Handle": 12136098296841181153,
+                    "AnimatorHandle": 100020,
+                    "UniqueAnimator": true,
+                    "OverrideMaterials": [],
+                    "SocketAttachments": []
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/companion_emote.lua"
+                }
+            },
+            {
+                "ID": 11870773769240143963,
+                "Name": "DemoHUD",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/debug_hud.lua"
+                }
+            },
+            {
+                "ID": 1555555555555555005,
+                "Name": "EffectsManager",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/effects_manager.lua"
+                },
+                "ParticleSystem": {
+                    "IsPlaying": false,
+                    "EmitterType": 0,
+                    "BlendMode": 1,
+                    "MaxParticles": 3000,
+                    "EmissionRate": 0.0,
+                    "LifetimeMin": 0.4000000059604645,
+                    "LifetimeMax": 1.2000000476837158,
+                    "VelocityMin": [
+                        -3.0,
+                        1.0,
+                        -3.0
+                    ],
+                    "VelocityMax": [
+                        3.0,
+                        6.0,
+                        3.0
+                    ],
+                    "Acceleration": [
+                        0.0,
+                        -6.0,
+                        0.0
+                    ],
+                    "Drag": 0.10000000149011612,
+                    "StartColor": [
+                        1.0,
+                        0.800000011920929,
+                        0.20000000298023224,
+                        1.0
+                    ],
+                    "EndColor": [
+                        1.0,
+                        0.20000000298023224,
+                        0.0,
+                        0.0
+                    ],
+                    "StartSize": [
+                        0.20000000298023224,
+                        0.20000000298023224
+                    ],
+                    "EndSize": [
+                        0.05000000074505806,
+                        0.05000000074505806
+                    ],
+                    "RotationSpeedMin": -2.0,
+                    "RotationSpeedMax": 2.0,
+                    "SpawnRadius": 0.30000001192092896,
+                    "VelocityAlignment": 0.0,
+                    "TextureHandle": 0
+                }
+            },
+            {
+                "ID": 6997881942247439185,
+                "Name": "Fire Particle",
+                "Type": "Node",
+                "Parent": 14444343172021335399,
+                "Transform": {
+                    "WorldTranslation": [
+                        6.5,
+                        2.250000238418579,
+                        3.999999761581421
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.9537169933319092,
+                        0.0,
+                        -0.30070579051971436
+                    ],
+                    "WorldScale": [
+                        0.47999995946884155,
+                        0.47999998927116394,
+                        0.47999995946884155
+                    ],
+                    "LocalTranslation": [
+                        -4.76837158203125e-07,
+                        4.687500476837158,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        -1.4901161193847656e-08,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "ParticleSystem": {
+                    "IsPlaying": true,
+                    "EmitterType": 1,
+                    "BlendMode": 1,
+                    "MaxParticles": 5000,
+                    "EmissionRate": 120.0,
+                    "LifetimeMin": 0.4000000059604645,
+                    "LifetimeMax": 0.8999999761581421,
+                    "VelocityMin": [
+                        -0.30000001192092896,
+                        2.0,
+                        -0.30000001192092896
+                    ],
+                    "VelocityMax": [
+                        0.30000001192092896,
+                        3.799999952316284,
+                        0.30000001192092896
+                    ],
+                    "Acceleration": [
+                        0.0,
+                        1.5,
+                        0.0
+                    ],
+                    "Drag": 0.10000000149011612,
+                    "StartColor": [
+                        1.0,
+                        0.8999999761581421,
+                        0.30000001192092896,
+                        1.0
+                    ],
+                    "EndColor": [
+                        0.8999999761581421,
+                        0.15000000596046448,
+                        0.0,
+                        0.0
+                    ],
+                    "StartSize": [
+                        0.3499999940395355,
+                        0.3499999940395355
+                    ],
+                    "EndSize": [
+                        0.07999999821186066,
+                        0.07999999821186066
+                    ],
+                    "RotationSpeedMin": -1.5,
+                    "RotationSpeedMax": 1.5,
+                    "SpawnRadius": 0.11999999731779099,
+                    "VelocityAlignment": 0.0,
+                    "TextureHandle": 0
+                }
+            },
+            {
+                "ID": 4911428948895326181,
+                "Name": "Goal_Trophy",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        8.0,
+                        15.600000381469727,
+                        43.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.8500000238418579,
+                        0.8500000238418579,
+                        0.8500000238418579
+                    ],
+                    "LocalTranslation": [
+                        8.0,
+                        15.600000381469727,
+                        43.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.8500000238418579,
+                        0.8500000238418579,
+                        0.8500000238418579
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 13669646693628099575,
+                    "OverrideMaterials": []
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/collectible.lua"
+                }
+            },
+            {
+                "ID": 2017554950397013410,
+                "Name": "HUD_Banner",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        24.0,
+                        18.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        24.0,
+                        18.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "TextComponent": {
+                    "FontHandle": 100002,
+                    "Material2DHandle": 0,
+                    "Text": "IGNITE LUA DEMO",
+                    "Color": [
+                        1.0,
+                        0.949999988079071,
+                        0.7200000286102295,
+                        1.0
+                    ],
+                    "Kerning": 0.0,
+                    "LineSpacing": -0.02500000037252903,
+                    "FontSize": 24.0,
+                    "ScreenSpace": true,
+                    "Billboard": false,
+                    "CenterAlign": false
+                }
+            },
+            {
+                "ID": 6965563114654451325,
+                "Name": "HighLedge",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -5.199999809265137,
+                        9.199999809265137,
+                        35.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        5.0,
+                        0.6000000238418579,
+                        5.0
+                    ],
+                    "LocalTranslation": [
+                        -5.199999809265137,
+                        9.199999809265137,
+                        35.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        5.0,
+                        0.6000000238418579,
+                        5.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100011
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 5748035092996689700,
+                "Name": "MainCamera",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        5.5,
+                        -10.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        5.5,
+                        -10.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "Camera": {
+                    "ProjectionType": 1,
+                    "AspectRatioPreset": 0,
+                    "OrthoSize": 10.0,
+                    "NearClip": 0.10000000149011612,
+                    "FarClip": 500.0,
+                    "Fov": 60.0,
+                    "Primary": true,
+                    "Lens": {
+                        "EnabledDOF": false,
+                        "FocalLength": 120.0,
+                        "FocalDistance": 5.5,
+                        "FStop": 1.399999976158142,
+                        "FocusRange": 5.0,
+                        "BlurAmount": 1.0
+                    },
+                    "PostProcessing": {
+                        "EnableVignette": false,
+                        "EnableChromAb": false,
+                        "EnableBloom": false,
+                        "EnableSSAO": true,
+                        "DebugSSAO": false,
+                        "BloomIntensity": 1.5,
+                        "BloomThreshold": 0.8500000238418579,
+                        "BloomKnee": 0.5,
+                        "BloomRadius": 1.0,
+                        "BloomIterations": 6,
+                        "VignetteRadius": 1.100000023841858,
+                        "VignetteSoftness": 0.699999988079071,
+                        "VignetteIntensity": 0.800000011920929,
+                        "VignetteColor": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "ChromAbAmount": 0.0010000000474974513,
+                        "ChromAbRadial": 0.10000000149011612,
+                        "AoRadius": 0.6499999761581421,
+                        "AoBias": 0.02500000037252903,
+                        "AoIntensity": 1.350000023841858,
+                        "AoPower": 1.0,
+                        "TAA": false,
+                        "TAABlendFactor": 0.07999999821186066,
+                        "MSAA": false,
+                        "MSAASampleCount": 4,
+                        "TonemapMode": 2
+                    }
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/follow_camera.lua"
+                }
+            },
+            {
+                "ID": 8709241661728855963,
+                "Name": "MainPlaza",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        -0.5,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        30.0,
+                        1.0,
+                        22.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        -0.5,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        30.0,
+                        1.0,
+                        22.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100010
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.699999988079071,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 8172293649183721123,
+                "Name": "NetworkServer",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/server_manager.lua"
+                }
+            },
+            {
+                "ID": 1555555555555555001,
+                "Name": "Pendulum_Anchor",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        9.0,
+                        18.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.2000000476837158,
+                        0.4000000059604645,
+                        1.2000000476837158
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        9.0,
+                        18.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.2000000476837158,
+                        0.4000000059604645,
+                        1.2000000476837158
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100011
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": false,
+                    "RotateX": false,
+                    "RotateY": false,
+                    "RotateZ": false,
+                    "MoveX": false,
+                    "MoveY": false,
+                    "MoveZ": false,
+                    "Mass": 0.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 50.0,
+                    "Restitution": 0.20000000298023224,
+                    "Friction": 0.5,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": false,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 0.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.6000000238418579,
+                        0.20000000298023224,
+                        0.6000000238418579
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 1555555555555555002,
+                "Name": "Pendulum_Ball",
+                "Type": "Node | Joint",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        2.5,
+                        5.0,
+                        18.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.399999976158142,
+                        1.399999976158142,
+                        1.399999976158142
+                    ],
+                    "LocalTranslation": [
+                        2.5,
+                        5.0,
+                        18.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.399999976158142,
+                        1.399999976158142,
+                        1.399999976158142
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100015
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 1,
+                    "BodyType": 2,
+                    "Layer": 1,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 25.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.004999999888241291,
+                    "MaxLinearVelocity": 80.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.009999999776482582,
+                    "MaxAngularVelocity": 50.0,
+                    "Restitution": 0.4000000059604645,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": false,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "SphereCollider": {
+                    "Radius": 0.699999988079071,
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "PhysicsJoint": {
+                    "ConnectedEntity": 1555555555555555001,
+                    "Type": "Point",
+                    "Space": "World",
+                    "Enabled": true,
+                    "AutoConfigureConnected": true,
+                    "LocalAnchorA": [
+                        0.0,
+                        9.0,
+                        18.0
+                    ],
+                    "LocalAxisA": [
+                        1.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalNormalA": [
+                        0.0,
+                        1.0,
+                        0.0
+                    ],
+                    "LocalAnchorB": [
+                        0.0,
+                        9.0,
+                        18.0
+                    ],
+                    "LocalAxisB": [
+                        1.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalNormalB": [
+                        0.0,
+                        1.0,
+                        0.0
+                    ],
+                    "BreakForce": 0.0,
+                    "BreakTorque": 0.0,
+                    "MinDistance": 0.0,
+                    "MaxDistance": -1.0,
+                    "EnableLimits": false,
+                    "LimitsMin": -45.0,
+                    "LimitsMax": 45.0,
+                    "EnableSpring": false,
+                    "SpringFrequency": 2.0,
+                    "SpringDamping": 0.5,
+                    "MaxFriction": 0.0,
+                    "MotorState": "Off",
+                    "MotorTargetVelocity": 0.0,
+                    "MotorTargetPosition": 0.0,
+                    "MaxMotorForce": 1000.0,
+                    "MotorFrequency": 2.0,
+                    "MotorDamping": 1.0,
+                    "HalfConeAngle": 45.0
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/joint_hazard.lua"
+                }
+            },
+            {
+                "ID": 5066173202359751377,
+                "Name": "PhysCrate_01",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -8.5,
+                        0.550000011920929,
+                        4.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        -8.5,
+                        0.550000011920929,
+                        4.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 2829210534807985551,
+                    "OverrideMaterials": []
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 2.5,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.15000000596046448,
+                    "Friction": 0.6000000238418579,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 11322926190446249757,
+                "Name": "PhysCrate_02",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -7.300000190734863,
+                        0.550000011920929,
+                        4.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        -7.300000190734863,
+                        0.550000011920929,
+                        4.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 2829210534807985551,
+                    "OverrideMaterials": []
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 2.5,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.15000000596046448,
+                    "Friction": 0.6000000238418579,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 2251515275256232894,
+                "Name": "PhysCrate_03",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -6.099999904632568,
+                        0.550000011920929,
+                        4.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        -6.099999904632568,
+                        0.550000011920929,
+                        4.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 2829210534807985551,
+                    "OverrideMaterials": []
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 2.5,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.15000000596046448,
+                    "Friction": 0.6000000238418579,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 7878442323109019721,
+                "Name": "PhysCrate_04",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -7.900000095367432,
+                        1.600000023841858,
+                        4.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        -7.900000095367432,
+                        1.600000023841858,
+                        4.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 2829210534807985551,
+                    "OverrideMaterials": []
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 2.5,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.15000000596046448,
+                    "Friction": 0.6000000238418579,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 16545479189483783675,
+                "Name": "PhysCrate_05",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -6.699999809265137,
+                        1.600000023841858,
+                        4.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        -6.699999809265137,
+                        1.600000023841858,
+                        4.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 2829210534807985551,
+                    "OverrideMaterials": []
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 2.5,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.15000000596046448,
+                    "Friction": 0.6000000238418579,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 1474311234651846771,
+                "Name": "PhysCrate_06",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -7.300000190734863,
+                        2.6500000953674316,
+                        4.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        -7.300000190734863,
+                        2.6500000953674316,
+                        4.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 2829210534807985551,
+                    "OverrideMaterials": []
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 2.5,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.15000000596046448,
+                    "Friction": 0.6000000238418579,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 18408914091270587295,
+                "Name": "PhysSphere_01",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -7.300000190734863,
+                        4.199999809265137,
+                        -6.199999809265137
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.100000023841858,
+                        1.100000023841858,
+                        1.100000023841858
+                    ],
+                    "LocalTranslation": [
+                        -7.300000190734863,
+                        4.199999809265137,
+                        -6.199999809265137
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.100000023841858,
+                        1.100000023841858,
+                        1.100000023841858
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100015
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 5.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.7200000286102295,
+                    "Friction": 0.30000001192092896,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "SphereCollider": {
+                    "Radius": 0.5,
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 1402520580079043445,
+                "Name": "PhysSphere_02",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -8.399999618530273,
+                        5.199999809265137,
+                        -5.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.8999999761581421,
+                        0.8999999761581421,
+                        0.8999999761581421
+                    ],
+                    "LocalTranslation": [
+                        -8.399999618530273,
+                        5.199999809265137,
+                        -5.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.8999999761581421,
+                        0.8999999761581421,
+                        0.8999999761581421
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100015
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 3.5,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.7799999713897705,
+                    "Friction": 0.30000001192092896,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "SphereCollider": {
+                    "Radius": 0.5,
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 18328600275956218275,
+                "Name": "PhysicsArenaController",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/physics_playground.lua"
+                }
+            },
+            {
+                "ID": 3571860140571675020,
+                "Name": "Physics_Ramp",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -7.300000190734863,
+                        1.399999976158142,
+                        -4.5
+                    ],
+                    "WorldRotation": [
+                        0.15643447637557983,
+                        0.0,
+                        0.0,
+                        0.9876883029937744
+                    ],
+                    "WorldScale": [
+                        4.199999809265137,
+                        0.4000000059604645,
+                        7.499999523162842
+                    ],
+                    "LocalTranslation": [
+                        -7.300000190734863,
+                        1.399999976158142,
+                        -4.5
+                    ],
+                    "LocalRotation": [
+                        0.15643447637557983,
+                        0.0,
+                        0.0,
+                        0.9876883625984192
+                    ],
+                    "LocalScale": [
+                        4.199999809265137,
+                        0.4000000059604645,
+                        7.5
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100011
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 13511055505150959405,
+                "Name": "Platform_Elevator",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -5.199999809265137,
+                        12.0,
+                        41.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        4.0,
+                        0.6000000238418579,
+                        4.0
+                    ],
+                    "LocalTranslation": [
+                        -5.199999809265137,
+                        12.0,
+                        41.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        4.0,
+                        0.6000000238418579,
+                        4.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100012
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 1,
+                    "Layer": 0,
+                    "UseGravity": false,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/moving_platform.lua"
+                },
+                "NetworkIdentityComponent": {
+                    "IsLocalPlayer": false,
+                    "Replicate": true,
+                    "SyncComponentsMask": 0,
+                    "Prefab": "Platform_Elevator"
+                }
+            },
+            {
+                "ID": 1322274339802153549,
+                "Name": "Platform_Shuttle_A",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        5.199999809265137,
+                        3.200000047683716,
+                        24.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        4.0,
+                        0.6000000238418579,
+                        4.0
+                    ],
+                    "LocalTranslation": [
+                        5.199999809265137,
+                        3.200000047683716,
+                        24.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        4.0,
+                        0.6000000238418579,
+                        4.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100012
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 1,
+                    "Layer": 0,
+                    "UseGravity": false,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/moving_platform.lua"
+                },
+                "NetworkIdentityComponent": {
+                    "IsLocalPlayer": false,
+                    "Replicate": true,
+                    "SyncComponentsMask": 0,
+                    "Prefab": "Platform_Shuttle_A"
+                }
+            },
+            {
+                "ID": 16354689177919737555,
+                "Name": "Platform_Shuttle_B",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        1.0,
+                        14.199999809265137,
+                        43.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        4.0,
+                        0.6000000238418579,
+                        4.0
+                    ],
+                    "LocalTranslation": [
+                        1.0,
+                        14.199999809265137,
+                        43.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        4.0,
+                        0.6000000238418579,
+                        4.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100012
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 1,
+                    "Layer": 0,
+                    "UseGravity": false,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/moving_platform.lua"
+                },
+                "NetworkIdentityComponent": {
+                    "IsLocalPlayer": false,
+                    "Replicate": true,
+                    "SyncComponentsMask": 0,
+                    "Prefab": "Platform_Shuttle_B"
+                }
+            },
+            {
+                "ID": 17960878075388470197,
+                "Name": "PlayerRobot",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        1.350000023841858,
+                        -3.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.47999998927116394,
+                        0.47999998927116394,
+                        0.47999998927116394
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        1.350000023841858,
+                        -3.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.47999998927116394,
+                        0.47999998927116394,
+                        0.47999998927116394
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "SkeletalMesh": {
+                    "Handle": 12136098296841181153,
+                    "AnimatorHandle": 100020,
+                    "UniqueAnimator": true,
+                    "OverrideMaterials": [],
+                    "SocketAttachments": []
+                },
+                "CharacterController": {
+                    "Radius": 0.8999999761581421,
+                    "Height": 4.0,
+                    "MaxStepHeight": 0.44999998807907104,
+                    "MaxSlopeAngle": 45.0,
+                    "Mass": 80.0,
+                    "Friction": 0.20000000298023224,
+                    "GravityFactor": 2.240000009536743,
+                    "Center": [
+                        0.0,
+                        2.0,
+                        0.0
+                    ],
+                    "Up": [
+                        0.0,
+                        1.0,
+                        0.0
+                    ],
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/player_controller.lua"
+                },
+                "NetworkIdentityComponent": {
+                    "IsLocalPlayer": true,
+                    "Replicate": true,
+                    "SyncComponentsMask": 4294967295,
+                    "Prefab": "PlayerRobot"
+                }
+            },
+            {
+                "ID": 8853095302832566999,
+                "Name": "Smoke Particle",
+                "Type": "Node",
+                "Parent": 17960878075388470197,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        3.3000006675720215,
+                        -3.000000476837158
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.47999998927116394,
+                        0.47999998927116394,
+                        0.47999998927116394
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        4.062501430511475,
+                        -9.5367431640625e-07
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "ParticleSystem": {
+                    "IsPlaying": true,
+                    "EmitterType": 0,
+                    "BlendMode": 0,
+                    "MaxParticles": 3000,
+                    "EmissionRate": 45.0,
+                    "LifetimeMin": 2.0,
+                    "LifetimeMax": 3.5,
+                    "VelocityMin": [
+                        -0.4000000059604645,
+                        1.2000000476837158,
+                        -0.4000000059604645
+                    ],
+                    "VelocityMax": [
+                        0.4000000059604645,
+                        2.200000047683716,
+                        0.4000000059604645
+                    ],
+                    "Acceleration": [
+                        0.0,
+                        0.20000000298023224,
+                        0.0
+                    ],
+                    "Drag": 0.25,
+                    "StartColor": [
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.699999988079071,
+                        0.6000000238418579
+                    ],
+                    "EndColor": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.0
+                    ],
+                    "StartSize": [
+                        0.25,
+                        0.25
+                    ],
+                    "EndSize": [
+                        1.5,
+                        1.5
+                    ],
+                    "RotationSpeedMin": -0.5,
+                    "RotationSpeedMax": 0.5,
+                    "SpawnRadius": 0.15000000596046448,
+                    "VelocityAlignment": 0.0,
+                    "TextureHandle": 0
+                }
+            },
+            {
+                "ID": 996625649180446451,
+                "Name": "Step_01",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.8999999761581421,
+                        13.5
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        4.199999809265137,
+                        0.6000000238418579,
+                        4.199999809265137
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.8999999761581421,
+                        13.5
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        4.199999809265137,
+                        0.6000000238418579,
+                        4.199999809265137
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100011
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 12449872891782708702,
+                "Name": "Step_02",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        5.199999809265137,
+                        2.0999999046325684,
+                        18.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        3.799999952316284,
+                        0.6000000238418579,
+                        3.799999952316284
+                    ],
+                    "LocalTranslation": [
+                        5.199999809265137,
+                        2.0999999046325684,
+                        18.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        3.799999952316284,
+                        0.6000000238418579,
+                        3.799999952316284
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100011
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 13629986111061855697,
+                "Name": "Step_03",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        4.199999809265137,
+                        29.5
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        4.5,
+                        0.6000000238418579,
+                        4.5
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        4.199999809265137,
+                        29.5
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        4.5,
+                        0.6000000238418579,
+                        4.5
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100011
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 5669371280870612167,
+                "Name": "SummitGoalPlatform",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        8.0,
+                        15.0,
+                        43.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        7.0,
+                        0.800000011920929,
+                        7.0
+                    ],
+                    "LocalTranslation": [
+                        8.0,
+                        15.0,
+                        43.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        7.0,
+                        0.800000011920929,
+                        7.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100017
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": true,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 1.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 47.1238899230957,
+                    "Restitution": 0.0,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": true,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 1.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 11933167161327930418,
+                "Name": "SunLight",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        1.174448013305664,
+                        1.749999761581421,
+                        0.25929659605026245
+                    ],
+                    "WorldRotation": [
+                        -0.13576287031173706,
+                        0.8509860634803772,
+                        0.430575966835022,
+                        0.2683197557926178
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        1.174448013305664,
+                        1.749999761581421,
+                        0.25929659605026245
+                    ],
+                    "LocalRotation": [
+                        0.13576287031173706,
+                        -0.8509860634803772,
+                        -0.430575966835022,
+                        -0.2683197557926178
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "DirectionalLight": {
+                    "Color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "Intensity": 25.0,
+                    "AngularRadius": 1.5549999475479126,
+                    "ShadowStrength": 1.0,
+                    "ShadowMinBias": 0.00019999999494757503,
+                    "ShadowMaxBias": 0.0020000000949949026,
+                    "PCFRadius": 1.5,
+                    "ShadowDistance": 120.0,
+                    "ShadowResolution": 2,
+                    "CascadeShadow": true,
+                    "SoftShadows": true
+                }
+            },
+            {
+                "ID": 1555555555555555004,
+                "Name": "Sweeper_Arm",
+                "Type": "Node | Joint",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -12.0,
+                        1.5,
+                        6.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        6.0,
+                        0.4000000059604645,
+                        0.5
+                    ],
+                    "LocalTranslation": [
+                        -12.0,
+                        1.5,
+                        6.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        6.0,
+                        0.4000000059604645,
+                        0.5
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100013
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 2,
+                    "Layer": 1,
+                    "UseGravity": false,
+                    "RotateX": true,
+                    "RotateY": true,
+                    "RotateZ": true,
+                    "MoveX": true,
+                    "MoveY": true,
+                    "MoveZ": true,
+                    "Mass": 50.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.0,
+                    "MaxAngularVelocity": 50.0,
+                    "Restitution": 0.6000000238418579,
+                    "Friction": 0.20000000298023224,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": false,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 0.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "PhysicsJoint": {
+                    "ConnectedEntity": 1555555555555555003,
+                    "Type": "Hinge",
+                    "Space": "World",
+                    "Enabled": true,
+                    "AutoConfigureConnected": true,
+                    "LocalAnchorA": [
+                        -12.0,
+                        1.5,
+                        6.0
+                    ],
+                    "LocalAxisA": [
+                        0.0,
+                        1.0,
+                        0.0
+                    ],
+                    "LocalNormalA": [
+                        1.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalAnchorB": [
+                        -12.0,
+                        1.5,
+                        6.0
+                    ],
+                    "LocalAxisB": [
+                        0.0,
+                        1.0,
+                        0.0
+                    ],
+                    "LocalNormalB": [
+                        1.0,
+                        0.0,
+                        0.0
+                    ],
+                    "BreakForce": 0.0,
+                    "BreakTorque": 0.0,
+                    "MinDistance": 0.0,
+                    "MaxDistance": -1.0,
+                    "EnableLimits": false,
+                    "LimitsMin": -45.0,
+                    "LimitsMax": 45.0,
+                    "EnableSpring": false,
+                    "SpringFrequency": 2.0,
+                    "SpringDamping": 0.5,
+                    "MaxFriction": 0.0,
+                    "MotorState": "Velocity",
+                    "MotorTargetVelocity": 45.0,
+                    "MotorTargetPosition": 0.0,
+                    "MaxMotorForce": 10000.0,
+                    "MotorFrequency": 2.0,
+                    "MotorDamping": 1.0,
+                    "HalfConeAngle": 45.0
+                },
+                "LuaScript": {
+                    "ScriptHandle": 0,
+                    "ScriptPath": "Scripts/joint_hazard.lua"
+                }
+            },
+            {
+                "ID": 1555555555555555003,
+                "Name": "Sweeper_Pillar",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -12.0,
+                        1.5,
+                        6.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.800000011920929,
+                        1.5,
+                        0.800000011920929
+                    ],
+                    "LocalTranslation": [
+                        -12.0,
+                        1.5,
+                        6.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.800000011920929,
+                        1.5,
+                        0.800000011920929
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444492,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 100011
+                        }
+                    ]
+                },
+                "Rigidbody": {
+                    "MotionQuality": 0,
+                    "BodyType": 0,
+                    "Layer": 0,
+                    "UseGravity": false,
+                    "RotateX": false,
+                    "RotateY": false,
+                    "RotateZ": false,
+                    "MoveX": false,
+                    "MoveY": false,
+                    "MoveZ": false,
+                    "Mass": 0.0,
+                    "LinearVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LinearDamping": 0.0,
+                    "MaxLinearVelocity": 500.0,
+                    "AngularVelocity": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "AngularDamping": 0.05000000074505806,
+                    "MaxAngularVelocity": 50.0,
+                    "Restitution": 0.20000000298023224,
+                    "Friction": 0.5,
+                    "ApplyGyroscopicForce": false,
+                    "AllowSleeping": false,
+                    "IsSensor": false,
+                    "RetainAcceleration": false,
+                    "GravityFactor": 0.0,
+                    "CenterMass": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "BoxCollider": {
+                    "Scale": [
+                        0.5,
+                        0.5,
+                        0.4000000059604645
+                    ],
+                    "Center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            {
+                "ID": 16765598167397349080,
+                "Name": "WorldEnv",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "WorldEnvironment": {
+                    "SkyType": 1,
+                    "HDRHandle": 0,
+                    "EnableIBL": true,
+                    "Exposure": 0.23999999463558197,
+                    "Gamma": 2.200000047683716,
+                    "Ambient": 0.18000000715255737,
+                    "FogDensity": 0.0,
+                    "FogColor": [
+                        0.5,
+                        0.6000000238418579,
+                        0.699999988079071,
+                        1.0
+                    ],
+                    "FogStart": 10.0,
+                    "FogEnd": 100.0,
+                    "RayleighScattering": [
+                        0.005801999941468239,
+                        0.013558000326156616,
+                        0.03310000151395798
+                    ],
+                    "RayleighDensityH": 8.0,
+                    "MieScattering": [
+                        0.003996000159531832,
+                        0.003996000159531832,
+                        0.003996000159531832
+                    ],
+                    "MieDensityH": 1.2000000476837158,
+                    "MieG": 0.800000011920929,
+                    "OzoneAbsorption": [
+                        0.0006500000017695129,
+                        0.0018810000037774444,
+                        8.499999967170879e-05
+                    ],
+                    "PlanetRadius": 6360.0,
+                    "AtmosphereRadius": 6460.0,
+                    "GroundAlbedo": [
+                        0.10000000149011612,
+                        0.10000000149011612,
+                        0.10000000149011612
+                    ]
+                }
+            },
+            {
+                "ID": 12588241238579771730,
+                "Name": "WorldSign_Fixed3D",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        6.5,
+                        2.799999952316284,
+                        4.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        1.0,
+                        0.0,
+                        -4.371138828673793e-08
+                    ],
+                    "WorldScale": [
+                        0.30000001192092896,
+                        0.30000001192092896,
+                        0.30000001192092896
+                    ],
+                    "LocalTranslation": [
+                        6.5,
+                        2.799999952316284,
+                        4.0
+                    ],
+                    "LocalRotation": [
+                        -0.0,
+                        1.0,
+                        -0.0,
+                        -4.371138828673793e-08
+                    ],
+                    "LocalScale": [
+                        0.30000001192092896,
+                        0.30000001192092896,
+                        0.30000001192092896
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "TextComponent": {
+                    "FontHandle": 100002,
+                    "Material2DHandle": 0,
+                    "Text": "Skeletal Animation (GLTF)",
+                    "Color": [
+                        1.0,
+                        0.949999988079071,
+                        0.5,
+                        1.0
+                    ],
+                    "Kerning": 0.0,
+                    "LineSpacing": -0.02500000037252903,
+                    "FontSize": 24.0,
+                    "ScreenSpace": false,
+                    "Billboard": false,
+                    "CenterAlign": true
+                }
+            },
+            {
+                "ID": 552535092654303221,
+                "Name": "WorldSign_Physics",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -7.5,
+                        3.799999952316284,
+                        3.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.36000001430511475,
+                        0.36000001430511475,
+                        0.36000001430511475
+                    ],
+                    "LocalTranslation": [
+                        -7.5,
+                        3.799999952316284,
+                        3.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.36000001430511475,
+                        0.36000001430511475,
+                        0.36000001430511475
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "TextComponent": {
+                    "FontHandle": 100002,
+                    "Material2DHandle": 0,
+                    "Text": "JOLT 3D PHYSICS ARENA\n[E] Impulse/Spawn | [R] Reset",
+                    "Color": [
+                        1.0,
+                        0.7799999713897705,
+                        0.30000001192092896,
+                        1.0
+                    ],
+                    "Kerning": 0.0,
+                    "LineSpacing": -0.02500000037252903,
+                    "FontSize": 24.0,
+                    "ScreenSpace": false,
+                    "Billboard": true,
+                    "CenterAlign": true
+                }
+            },
+            {
+                "ID": 9231954841096906747,
+                "Name": "WorldSign_Start",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        2.799999952316284,
+                        5.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.3799999952316284,
+                        0.3799999952316284,
+                        0.3799999952316284
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        2.799999952316284,
+                        5.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.3799999952316284,
+                        0.3799999952316284,
+                        0.3799999952316284
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "TextComponent": {
+                    "FontHandle": 100002,
+                    "Material2DHandle": 0,
+                    "Text": "3D PLATFORMER COURSE ->",
+                    "Color": [
+                        0.4000000059604645,
+                        0.949999988079071,
+                        1.0,
+                        1.0
+                    ],
+                    "Kerning": 0.0,
+                    "LineSpacing": -0.02500000037252903,
+                    "FontSize": 24.0,
+                    "ScreenSpace": false,
+                    "Billboard": true,
+                    "CenterAlign": true
+                }
+            },
+            {
+                "ID": 892199859866640490,
+                "Name": "WorldSign_Summit",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        8.0,
+                        19.600000381469727,
+                        43.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.550000011920929,
+                        0.550000011920929,
+                        0.550000011920929
+                    ],
+                    "LocalTranslation": [
+                        8.0,
+                        19.600000381469727,
+                        43.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.550000011920929,
+                        0.550000011920929,
+                        0.550000011920929
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "TextComponent": {
+                    "FontHandle": 100002,
+                    "Material2DHandle": 0,
+                    "Text": "SUMMIT GOAL!",
+                    "Color": [
+                        1.0,
+                        0.8799999952316284,
+                        0.25,
+                        1.0
+                    ],
+                    "Kerning": 0.0,
+                    "LineSpacing": -0.02500000037252903,
+                    "FontSize": 24.0,
+                    "ScreenSpace": false,
+                    "Billboard": true,
+                    "CenterAlign": true
+                }
+            }
+        ]
+    }
+}

@@ -17,9 +17,14 @@ namespace ignite
 {
     namespace
     {
-        void TransitionTexture(nri::CommandBuffer *cmd, nri::Texture *texture, nri::Layout beforeLayout, nri::Layout afterLayout)
+        void TransitionTexture(nri::CommandBuffer *cmd, const Ref<Texture> &texture, nri::Layout beforeLayout, nri::Layout afterLayout)
         {
-            if (!cmd || !texture || beforeLayout == afterLayout)
+            if (!cmd || !texture || !texture->GetHandle())
+                return;
+
+            beforeLayout = texture->GetCurrentLayout();
+
+            if (beforeLayout == afterLayout)
                 return;
 
             nri::AccessBits beforeAccess = nri::AccessBits::NONE;
@@ -33,6 +38,11 @@ namespace ignite
             {
                 beforeAccess = nri::AccessBits::SHADER_RESOURCE_STORAGE;
                 beforeStages = nri::StageBits::COMPUTE_SHADER;
+            }
+            else if (beforeLayout == nri::Layout::DEPTH_STENCIL_ATTACHMENT)
+            {
+                beforeAccess = nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE;
+                beforeStages = nri::StageBits::DEPTH_STENCIL_ATTACHMENT;
             }
 
             nri::AccessBits afterAccess = nri::AccessBits::NONE;
@@ -49,16 +59,22 @@ namespace ignite
             }
 
             nri::TextureBarrierDesc barrier = {};
-            barrier.texture = texture;
+            barrier.texture = texture->GetHandle();
             barrier.before = { beforeAccess, beforeLayout, beforeStages };
             barrier.after = { afterAccess, afterLayout, afterStages };
             barrier.layerNum = 1;
             barrier.mipNum = 1;
+            const nri::Format fmt = texture->GetFormat();
+            if (fmt == nri::Format::D16_UNORM || fmt == nri::Format::D32_SFLOAT)
+                barrier.planes = nri::PlaneBits::DEPTH;
+            else if (fmt == nri::Format::D24_UNORM_S8_UINT || fmt == nri::Format::D32_SFLOAT_S8_UINT)
+                barrier.planes = nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL;
 
             nri::BarrierDesc barrierGroup = {};
             barrierGroup.textures = &barrier;
             barrierGroup.textureNum = 1;
             DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, barrierGroup);
+            texture->SetCurrentState(afterLayout, afterAccess, afterStages);
         }
     }
 
@@ -287,7 +303,11 @@ namespace ignite
 
         m_SSAOParamsBuffer->SetData(cmd, &params, sizeof(params));
 
-        TransitionTexture(cmd, m_AOTex->GetHandle(), nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
+        if (depthTexture->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
+        {
+            TransitionTexture(cmd, depthTexture, depthTexture->GetCurrentLayout(), nri::Layout::SHADER_RESOURCE);
+        }
+        TransitionTexture(cmd, m_AOTex, nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
 
         BindingSetDesc aoDesc;
         aoDesc.AddItem(BindingSetItem::TextureSRV(0, depthTexture->GetShaderResourceView()));
@@ -323,8 +343,8 @@ namespace ignite
             blurParams.depthSharpness = 10.0f;
             m_BlurHorizontalParamsBuffer->SetData(cmd, &blurParams, sizeof(blurParams));
 
-            TransitionTexture(cmd, m_AOTex->GetHandle(), nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
-            TransitionTexture(cmd, m_BlurTex->GetHandle(), nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
+            TransitionTexture(cmd, m_AOTex, nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
+            TransitionTexture(cmd, m_BlurTex, nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
 
             BindingSetDesc blurDesc;
             blurDesc.AddItem(BindingSetItem::TextureSRV(0, m_AOTex->GetShaderResourceView()));
@@ -358,8 +378,8 @@ namespace ignite
             blurParams.depthSharpness = 10.0f;
             m_BlurVerticalParamsBuffer->SetData(cmd, &blurParams, sizeof(blurParams));
 
-            TransitionTexture(cmd, m_BlurTex->GetHandle(), nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
-            TransitionTexture(cmd, m_AOTex->GetHandle(), nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
+            TransitionTexture(cmd, m_BlurTex, nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
+            TransitionTexture(cmd, m_AOTex, nri::Layout::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE_STORAGE);
 
             BindingSetDesc blurDesc;
             blurDesc.AddItem(BindingSetItem::TextureSRV(0, m_BlurTex->GetShaderResourceView()));
@@ -383,7 +403,7 @@ namespace ignite
         }
 
         // Final result is in m_AOTex — transition to SRV for composite pass
-        TransitionTexture(cmd, m_AOTex->GetHandle(), nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
+        TransitionTexture(cmd, m_AOTex, nri::Layout::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE);
     }
 
     void SSAO::Resize(uint32_t width, uint32_t height)

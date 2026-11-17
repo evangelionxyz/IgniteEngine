@@ -19,7 +19,7 @@ namespace ignite
 			m_View = glm::inverse(m_View);
 			break;
 		case ProjectionType::Orthographic:
-			m_View = glm::translate(glm::mat4(1.0f), position);
+			m_View = glm::translate(glm::mat4(1.0f), position) * glm::toMat4(glm::quat({ -pitch, -yaw, 0.0f }));
 			m_View = glm::inverse(m_View);
 			break;
 		}

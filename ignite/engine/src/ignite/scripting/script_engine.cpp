@@ -728,26 +728,44 @@ namespace ignite
             });
         };
 
-        if (!waitForBuild)
+        auto modulePath = scriptEngineData->project->GetScriptModulePath();
+        const bool depsUpToDate = scriptEngineData->project->IsCoreDependenciesUpToDate();
+        bool scriptsModifiedAfterDll = false;
+        if (std::filesystem::exists(modulePath))
         {
-            auto modulePath = scriptEngineData->project->GetScriptModulePath();
-            if (std::filesystem::exists(modulePath))
+            std::error_code ec;
+            const auto dllTime = std::filesystem::last_write_time(modulePath, ec);
+            const auto scriptsDir = scriptEngineData->project->GetScriptsDirectory();
+            if (!ec && std::filesystem::exists(scriptsDir, ec))
             {
-                subscribeBuildSignal();
-
-                // Load App Assembly immediately (we may be on a worker thread)
-                scriptEngineData->appAssemblyLoaded = LoadAppAssembly(modulePath);
-                return FileStatus::Success;
+                for (const auto &entry : std::filesystem::recursive_directory_iterator(scriptsDir, ec))
+                {
+                    if (entry.is_regular_file(ec) && entry.path().extension() == ".cs")
+                    {
+                        if (entry.last_write_time(ec) > dllTime)
+                        {
+                            scriptsModifiedAfterDll = true;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
-        // Build path (forced at project open/create, or when DLL does not exist):
+        if (std::filesystem::exists(modulePath) && depsUpToDate && !scriptsModifiedAfterDll)
+        {
+            subscribeBuildSignal();
+            scriptEngineData->appAssemblyLoaded = LoadAppAssembly(modulePath);
+            return FileStatus::Success;
+        }
+
+        // Build path (when DLL does not exist, dependencies updated, or scripts modified):
         subscribeBuildSignal();
 
         // Run the build and load the App Assembly if success
         LOG_DEBUG("Building Visual Studio Solution...");
 
-        const bool forceRebuild = waitForBuild || (scriptEngineData->project->IsCoreDependenciesUpToDate() == false);
+        const bool forceRebuild = waitForBuild || !depsUpToDate || scriptsModifiedAfterDll;
         scriptEngineData->project->BuildSolution(forceRebuild);
         return FileStatus::Pending;
     }

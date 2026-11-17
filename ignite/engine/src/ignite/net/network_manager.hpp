@@ -121,7 +121,7 @@ namespace ignite
         void SetServerSettings(const ServerSettings &settings);
 
         uint16_t GetPort() const { return static_cast<uint16_t>(m_UiPort); }
-        void SetPort(uint16_t port);
+        void SetServerPort(uint16_t port);
 
         // ---------------------------------------------------------------------
         // Diagnostics & ImGui UI

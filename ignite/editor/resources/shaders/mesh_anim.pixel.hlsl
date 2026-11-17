@@ -67,7 +67,7 @@ PSOutput main(PixelVertexInput input)
     Texture2D roughnessTex = ResourceDescriptorHeap[material.roughnessTextureIndex];
     Texture2D occlusionTex = ResourceDescriptorHeap[material.occlusionTextureIndex];
 
-    float3 emissiveColor = emissiveTex.Sample(sampler0, tiledUV).rgb * material.emissiveFactor.rgb;
+    float3 emissiveColor = SRGBToLinear(emissiveTex.Sample(sampler0, tiledUV).rgb) * material.emissiveFactor.rgb;
     float4 metallicColor = metallicTex.Sample(sampler0, tiledUV);
     float4 roughnessColor = roughnessTex.Sample(sampler0, tiledUV);
     float occlusionSample = occlusionTex.Sample(sampler0, tiledUV).r;
@@ -76,8 +76,9 @@ PSOutput main(PixelVertexInput input)
     float metallic = clamp(SelectChannel(metallicColor, material.metallicChannel) * material.metallicFactor, 0.0f, 1.0f);
     float roughness = clamp(SelectChannel(roughnessColor, material.roughnessChannel) * material.roughnessFactor, 0.0f, 1.0f);
 
-    // Sample base color with alpha for transparency support
-    float4 baseColorSample = baseColorTex.Sample(sampler0, tiledUV) * input.color;
+    // Sample base color with sRGB-to-linear conversion and alpha for transparency support
+    float4 rawBaseColor = baseColorTex.Sample(sampler0, tiledUV);
+    float4 baseColorSample = float4(SRGBToLinear(rawBaseColor.rgb), rawBaseColor.a) * input.color;
     float finalAlpha = baseColorSample.a * material.baseColorFactor.a;
 
     // Discard nearly transparent fragments in transparent mode, or below cutoff in masked mode
@@ -86,18 +87,25 @@ PSOutput main(PixelVertexInput input)
         discard;
     }
 
-    // Tangent space normal mapping. normalTextureIndex < 0 means the material has no normal map.
+    // Tangent space normal mapping with safe orthonormal basis fallback
     float3 finalNormal = N;
-    float3 T = normalize(input.tangent);
-    float3 B = normalize(input.bitangent);
+    float3 T = input.tangent - N * dot(N, input.tangent);
+    float tLenSq = dot(T, T);
+    if (tLenSq > 1e-6f)
+    {
+        T *= rsqrt(tLenSq);
+    }
+    else
+    {
+        float3 bFallback;
+        BuildOrthonormalBasis(N, T, bFallback);
+    }
+    float3 bitangent = cross(N, T);
+    float3 B = dot(bitangent, input.bitangent) < 0.0f ? -bitangent : bitangent;
     if (material.normalTextureIndex >= 0)
     {
         Texture2D normalMapTex = ResourceDescriptorHeap[material.normalTextureIndex];
         float3 tangentNormal = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
-
-        T = normalize(T - N * dot(N, T));
-        float3 bitangent = cross(N, T);
-        B = dot(bitangent, B) < 0.0f ? -bitangent : bitangent;
         finalNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
     }
 
@@ -132,9 +140,13 @@ PSOutput main(PixelVertexInput input)
 
         float3 reflectDirection = reflect(-viewDirection, finalNormal);
         const float cameraAltitudeKm = camera.position.y * 0.001f;
-        float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, cameraAltitudeKm);
-        float3 blurredReflectRadiance = SampleEnvironmentIrradiance(environmentMapTexture, sampler0, reflectDirection, scene.skyType, cameraAltitudeKm);
-        float3 reflectedSpecular = OpenPBREnvironment(surface, finalNormal, viewDirection, reflectRadiance, blurredReflectRadiance);
+        float3 reflectedSpecular = float3(0.0f, 0.0f, 0.0f);
+        if (scene.enableIBL != 0)
+        {
+            float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, cameraAltitudeKm);
+            float3 blurredReflectRadiance = SampleRoughEnvironmentSpecular(environmentMapTexture, sampler0, reflectDirection, surface.specularRoughness, scene.skyType, cameraAltitudeKm);
+            reflectedSpecular = OpenPBREnvironment(surface, finalNormal, viewDirection, reflectRadiance, blurredReflectRadiance);
+        }
 
         float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
         float3 directLighting = OpenPBRDirect(surface, finalNormal, lightDirection, viewDirection, T, B, irradiance);
@@ -148,7 +160,7 @@ PSOutput main(PixelVertexInput input)
         for (int pi = 0; pi < scene.numPointLights; ++pi)
         {
             float3 lightPos = pointLights[pi].positionAndRange.xyz;
-            float range = pointLights[pi].positionAndRange.w;
+            float range = max(pointLights[pi].positionAndRange.w, 1e-4f);
             float3 color = pointLights[pi].color.rgb;
             float intensity = pointLights[pi].color.a;
             float constAtt = pointLights[pi].attenuation.x;
@@ -157,10 +169,10 @@ PSOutput main(PixelVertexInput input)
 
             float3 lightVec = lightPos - input.worldPos;
             float d = length(lightVec);
-            if (d > range) continue;
+            if (d > range || d < 1e-5f) continue;
 
-            float3 toLight = normalize(lightVec);
-            float atten = 1.0f / (constAtt + linAtt * d + quadAtt * (d * d));
+            float3 toLight = lightVec / d;
+            float atten = 1.0f / max(constAtt + linAtt * d + quadAtt * (d * d), 1e-4f);
             atten *= saturate(1.0f - (d / range));
 
             float3 ptIrradiance = color * intensity * atten;
@@ -171,7 +183,7 @@ PSOutput main(PixelVertexInput input)
         for (int si = 0; si < scene.numSpotLights; ++si)
         {
             float3 lightPos = spotLights[si].positionAndRange.xyz;
-            float range = spotLights[si].positionAndRange.w;
+            float range = max(spotLights[si].positionAndRange.w, 1e-4f);
             float3 spotDir = spotLights[si].directionAndAngle.xyz;
             float cosOuter = spotLights[si].directionAndAngle.w;
             float3 color = spotLights[si].color.rgb;
@@ -183,13 +195,13 @@ PSOutput main(PixelVertexInput input)
 
             float3 lightVec = lightPos - input.worldPos;
             float d = length(lightVec);
-            if (d > range) continue;
+            if (d > range || d < 1e-5f) continue;
 
-            float3 toLight = normalize(lightVec);
+            float3 toLight = lightVec / d;
             float theta = dot(-toLight, spotDir);
             if (theta < cosOuter) continue;
 
-            float atten = 1.0f / (constAtt + linAtt * d + quadAtt * (d * d));
+            float atten = 1.0f / max(constAtt + linAtt * d + quadAtt * (d * d), 1e-4f);
             atten *= saturate(1.0f - (d / range));
 
             float coneFactor = saturate((theta - cosOuter) / max(0.0001f, cosInner - cosOuter));
@@ -200,14 +212,16 @@ PSOutput main(PixelVertexInput input)
         }
 
         // Diffuse ambient from the (cosine convolved) environment. Not affected by the sun shadow.
-        float3 diffuseIrradiance = SampleEnvironmentIrradiance(environmentMapTexture, sampler0, finalNormal, scene.skyType, cameraAltitudeKm);
+        float3 ambient = float3(0.0f, 0.0f, 0.0f);
+        if (scene.enableIBL != 0)
+        {
+            float3 diffuseIrradiance = SampleEnvironmentIrradiance(environmentMapTexture, sampler0, finalNormal, scene.skyType, cameraAltitudeKm);
+            float3 kS = OpenPBRBaseSpecularAlbedo(surface, saturate(dot(finalNormal, viewDirection)));
+            float3 kD = (1.0f - kS) * (1.0f - surface.metalness);
 
-        float3 kS = OpenPBRBaseSpecularAlbedo(surface, saturate(dot(finalNormal, viewDirection)));
-        float3 kD = (1.0f - kS) * (1.0f - surface.metalness);
-
-        float3 ambient = kD * surface.baseWeight * surface.baseColor * diffuseIrradiance * ao;
-
-        reflectedSpecular *= ao;
+            ambient = kD * surface.baseWeight * surface.baseColor * diffuseIrradiance * ao;
+            reflectedSpecular *= ao;
+        }
 
         float3 finalColor = directLighting + ambient + reflectedSpecular;
 

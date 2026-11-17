@@ -50,8 +50,26 @@ float2 GetTransmittanceUV(float r, float cosZenith)
 
 float3 SampleTransmittance(float r, float cosZenith)
 {
+    float sinHorizonSq = (PlanetRadius * PlanetRadius) / (r * r);
+    if (cosZenith < 0.0 && (1.0 - cosZenith * cosZenith) < sinHorizonSq)
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
     float2 uv = GetTransmittanceUV(r, cosZenith);
     return transmittanceLUT.SampleLevel(linearSampler, uv, 0).rgb;
+}
+
+float RayleighPhase(float cosTheta)
+{
+    return (3.0 / (16.0 * 3.14159265359)) * (1.0 + cosTheta * cosTheta);
+}
+
+float CornetteShanksPhase(float cosTheta, float g)
+{
+    float g2 = g * g;
+    float num = 3.0 * (1.0 - g2) * (1.0 + cosTheta * cosTheta);
+    float denom = (8.0 * 3.14159265359) * (2.0 + g2) * pow(max(1e-4, 1.0 + g2 - 2.0 * g * cosTheta), 1.5);
+    return num / denom;
 }
 
 [numthreads(8, 8, 1)]
@@ -61,8 +79,8 @@ void main(uint3 id : SV_DispatchThreadID)
     multiScatteringLUT.GetDimensions(w, h);
     if (id.x >= w || id.y >= h) return;
 
-    float uvX = (id.x + 0.5) / w;
-    float uvY = (id.y + 0.5) / h;
+    float uvX = (float(id.x) + 0.5) / float(w);
+    float uvY = (float(id.y) + 0.5) / float(h);
 
     float cosSunZenith = uvX * 2.0 - 1.0;
     float r = uvY * (AtmosphereRadius - PlanetRadius) + PlanetRadius;
@@ -74,33 +92,37 @@ void main(uint3 id : SV_DispatchThreadID)
     const int sqrtSamples = 8;
     const int numSamples = sqrtSamples * sqrtSamples;
 
-    float3 L2ndOrder = float3(0, 0, 0);
-    float3 Fms       = float3(0, 0, 0);
+    float3 L2ndOrder = float3(0.0, 0.0, 0.0);
+    float3 Fms       = float3(0.0, 0.0, 0.0);
 
     for (int i = 0; i < sqrtSamples; i++)
     {
         for (int j = 0; j < sqrtSamples; j++)
         {
-            float theta = (i + 0.5) / float(sqrtSamples) * 3.14159265;
-            float phi   = (j + 0.5) / float(sqrtSamples) * 2.0 * 3.14159265;
+            float theta = (float(i) + 0.5) / float(sqrtSamples) * 3.14159265359;
+            float phi   = (float(j) + 0.5) / float(sqrtSamples) * 2.0 * 3.14159265359;
 
             float cosTheta = cos(theta);
             float sinTheta = sin(theta);
             float3 dir = float3(sinTheta * cos(phi), cosTheta, sinTheta * sin(phi));
 
-            float2 hit = RayIntersectSphere(pos, dir, AtmosphereRadius);
-            float tMax = hit.y;
+            float2 planetHit = RayIntersectSphere(pos, dir, PlanetRadius);
+            float2 atmoHit   = RayIntersectSphere(pos, dir, AtmosphereRadius);
+
+            bool hitsGround = planetHit.x > 0.0;
+            float tMax = hitsGround ? planetHit.x : atmoHit.y;
 
             if (tMax > 0.0)
             {
                 const int steps = 16;
-                float dt = tMax / steps;
-                float3 rayL = float3(0, 0, 0);
-                float3 rayF = float3(0, 0, 0);
+                float dt = tMax / float(steps);
+                float3 rayL = float3(0.0, 0.0, 0.0);
+                float3 rayF = float3(0.0, 0.0, 0.0);
+                float3 rayTrans = float3(1.0, 1.0, 1.0);
 
                 for (int s = 0; s < steps; s++)
                 {
-                    float3 p = pos + dir * (dt * (s + 0.5));
+                    float3 p = pos + dir * (dt * (float(s) + 0.5));
                     float pLen = length(p);
                     float pHeight = max(0.0, pLen - PlanetRadius);
 
@@ -108,15 +130,37 @@ void main(uint3 id : SV_DispatchThreadID)
                     float mieDensity      = exp(-pHeight / max(0.001, MieDensityH));
                     float ozoneDensity    = max(0.0, 1.0 - abs(pHeight - 25.0) / 15.0);
 
-                    float3 scattering = RayleighScattering * rayleighDensity + MieScattering * mieDensity;
-                    float3 extinction = RayleighScattering * rayleighDensity + MieExtinction * mieDensity + OzoneAbsorption * ozoneDensity;
+                    float3 sRayleigh  = RayleighScattering * rayleighDensity;
+                    float3 sMie       = MieScattering * mieDensity;
+                    float3 scattering = sRayleigh + sMie;
+                    float3 extinction = sRayleigh + MieExtinction * mieDensity + OzoneAbsorption * ozoneDensity;
 
-                    float cosSunZenithAtP = dot(normalize(p), sunDir);
-                    float3 transCamToP = SampleTransmittance(pLen, dot(normalize(p), dir));
-                    float3 transPToSun = cosSunZenithAtP > 0.0 ? SampleTransmittance(pLen, cosSunZenithAtP) : float3(0, 0, 0);
+                    float3 sampleTrans = exp(-extinction * dt);
 
-                    rayL += transCamToP * transPToSun * scattering * dt;
-                    rayF += transCamToP * scattering * dt;
+                    float cosSunAtP = dot(normalize(p), sunDir);
+                    float3 sunTrans = SampleTransmittance(pLen, cosSunAtP);
+
+                    float cosViewSun = dot(dir, sunDir);
+                    float rP = RayleighPhase(cosViewSun);
+                    float mP = CornetteShanksPhase(cosViewSun, MieG);
+
+                    float3 stepScat = (sRayleigh * rP + sMie * mP) * sunTrans;
+                    float3 stepInScat = (stepScat - stepScat * sampleTrans) / max(float3(1e-5, 1e-5, 1e-5), extinction);
+                    float3 stepF = (scattering - scattering * sampleTrans) / max(float3(1e-5, 1e-5, 1e-5), extinction);
+
+                    rayL += rayTrans * stepInScat;
+                    rayF += rayTrans * stepF;
+                    rayTrans *= sampleTrans;
+                }
+
+                if (hitsGround)
+                {
+                    float3 groundPos = pos + dir * planetHit.x;
+                    float3 groundNorm = normalize(groundPos);
+                    float NdotS = max(0.0, dot(groundNorm, sunDir));
+                    float3 groundSunTrans = SampleTransmittance(PlanetRadius, NdotS);
+                    float3 groundRadiance = (GroundAlbedo / 3.14159265359) * groundSunTrans * NdotS;
+                    rayL += rayTrans * groundRadiance;
                 }
 
                 L2ndOrder += rayL * sinTheta;
@@ -125,11 +169,13 @@ void main(uint3 id : SV_DispatchThreadID)
         }
     }
 
-    L2ndOrder *= (2.0 * 3.14159265 * 3.14159265) / float(numSamples);
-    Fms       *= (2.0 * 3.14159265 * 3.14159265) / float(numSamples);
+    // Average over the unit sphere (factor 2 * pi^2 / (4 * pi * numSamples) = pi / (2 * numSamples))
+    float sphereNorm = 3.14159265359 / (2.0 * float(numSamples));
+    L2ndOrder *= sphereNorm;
+    Fms       *= sphereNorm;
 
-    float msEnergy = dot(Fms, float3(0.33333334, 0.33333334, 0.33333334));
-    float msGain = 1.0 / max(1.0, 1.0 + msEnergy);
-    float3 multiScatFactor = max(float3(0.0, 0.0, 0.0), L2ndOrder * msGain);
+    // Geometric series sum of multiple scattering orders: Psi = L2ndOrder / (1.0 - Fms)
+    float3 msFactor = 1.0 / max(float3(1e-3, 1e-3, 1e-3), float3(1.0, 1.0, 1.0) - Fms);
+    float3 multiScatFactor = max(float3(0.0, 0.0, 0.0), L2ndOrder * msFactor);
     multiScatteringLUT[id.xy] = float4(multiScatFactor, 1.0);
 }

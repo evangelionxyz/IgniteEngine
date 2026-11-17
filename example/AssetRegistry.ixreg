@@ -1,0 +1,261 @@
+{
+    "AssetRegistry": {
+        "Assets": [
+            {
+                "Handle": 100001,
+                "Type": "Scene",
+                "Filepath": "Assets/Scenes/MainDemo.ixscene"
+            },
+            {
+                "Handle": 100002,
+                "Type": "Font",
+                "Filepath": "Assets/Fonts/JetBrainsMono-Bold.ttf"
+            },
+            {
+                "Handle": 100010,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/Mat_Ground.ixmat"
+            },
+            {
+                "Handle": 100011,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/Mat_Platform.ixmat"
+            },
+            {
+                "Handle": 100012,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/Mat_MovingPlatform.ixmat"
+            },
+            {
+                "Handle": 100013,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/Mat_BouncePad.ixmat"
+            },
+            {
+                "Handle": 100014,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/Mat_Crate.ixmat"
+            },
+            {
+                "Handle": 100015,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/Mat_Sphere.ixmat"
+            },
+            {
+                "Handle": 100016,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/Mat_Gold.ixmat"
+            },
+            {
+                "Handle": 100017,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/Mat_GoalPad.ixmat"
+            },
+            {
+                "Handle": 100020,
+                "Type": "AnimatorController",
+                "Filepath": "Assets/Characters/RobotExpressive/RobotAnimator.ac"
+            },
+            {
+                "Handle": 100030,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/player_controller.lua"
+            },
+            {
+                "Handle": 100031,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/follow_camera.lua"
+            },
+            {
+                "Handle": 100032,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/moving_platform.lua"
+            },
+            {
+                "Handle": 100033,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/bounce_pad.lua"
+            },
+            {
+                "Handle": 100034,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/collectible.lua"
+            },
+            {
+                "Handle": 100035,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/physics_playground.lua"
+            },
+            {
+                "Handle": 100036,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/debug_hud.lua"
+            },
+            {
+                "Handle": 100037,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/companion_emote.lua"
+            },
+            {
+                "Handle": 49980650083911860,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/No.ixanim"
+            },
+            {
+                "Handle": 247795413042560131,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Wave.ixanim"
+            },
+            {
+                "Handle": 796275172331220433,
+                "Type": "Material",
+                "Filepath": "Assets/Characters/RobotExpressive/Black.ixmat"
+            },
+            {
+                "Handle": 1161697820125101614,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/Duck.glb"
+            },
+            {
+                "Handle": 1486087688009903763,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Yes.ixanim"
+            },
+            {
+                "Handle": 2180521936609524435,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/server_manager.lua"
+            },
+            {
+                "Handle": 2380540141902232948,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/remote_player.lua"
+            },
+            {
+                "Handle": 2606434827778452165,
+                "Type": "Texture",
+                "Filepath": "play_verify.png"
+            },
+            {
+                "Handle": 2829210534807985551,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/BoxTextured.mesh"
+            },
+            {
+                "Handle": 3116501098474714171,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Running.ixanim"
+            },
+            {
+                "Handle": 4194491018363911388,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Sitting.ixanim"
+            },
+            {
+                "Handle": 5805619208508732074,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Standing.ixanim"
+            },
+            {
+                "Handle": 6624530890808932250,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Jump.ixanim"
+            },
+            {
+                "Handle": 6970606114947867429,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Dance.ixanim"
+            },
+            {
+                "Handle": 7058554600036747221,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/effects_manager.lua"
+            },
+            {
+                "Handle": 7740477268739284241,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Punch.ixanim"
+            },
+            {
+                "Handle": 9172818322886732462,
+                "Type": "Material",
+                "Filepath": "Assets/Characters/RobotExpressive/Grey.ixmat"
+            },
+            {
+                "Handle": 9807310980490264862,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/joint_hazard.lua"
+            },
+            {
+                "Handle": 11195833070019743305,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Idle.ixanim"
+            },
+            {
+                "Handle": 11233258005906903096,
+                "Type": "Material",
+                "Filepath": "Assets/Props/Texture.ixmat"
+            },
+            {
+                "Handle": 12136098296841181153,
+                "Type": "SkeletalMesh",
+                "Filepath": "Assets/Characters/RobotExpressive/RobotExpressive.skmesh"
+            },
+            {
+                "Handle": 13669646693628099575,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/Duck.mesh"
+            },
+            {
+                "Handle": 13706518437926054881,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/ThumbsUp.ixanim"
+            },
+            {
+                "Handle": 13798299963633127977,
+                "Type": "Material",
+                "Filepath": "Assets/Characters/RobotExpressive/Main.ixmat"
+            },
+            {
+                "Handle": 13952465026886948373,
+                "Type": "Mesh",
+                "Filepath": "Assets/Characters/RobotExpressive/RobotExpressive.glb"
+            },
+            {
+                "Handle": 14001440461023133063,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/embedded_texture_0.png"
+            },
+            {
+                "Handle": 14026181933728809512,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Death.ixanim"
+            },
+            {
+                "Handle": 14857031018264438332,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/BoxTextured.glb"
+            },
+            {
+                "Handle": 15341683802629369554,
+                "Type": "Skeleton",
+                "Filepath": "Assets/Characters/RobotExpressive/RobotExpressive.ixskel"
+            },
+            {
+                "Handle": 15540490380851235589,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/WalkJump.ixanim"
+            },
+            {
+                "Handle": 15726826690600203939,
+                "Type": "SkeletalAnimation",
+                "Filepath": "Assets/Characters/RobotExpressive/Walking.ixanim"
+            },
+            {
+                "Handle": 16762444080478458413,
+                "Type": "Material",
+                "Filepath": "Assets/Props/blinn3-fx.ixmat"
+            }
+        ]
+    }
+}

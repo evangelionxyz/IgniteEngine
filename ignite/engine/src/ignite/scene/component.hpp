@@ -305,17 +305,18 @@ namespace ignite
         DirectionalLightComponent() = default;
 
         glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        float intensity = 0.5f;
+        float intensity = 3.0f;
         float angularRadius = 45.0f; // degrees
 
         // Shadow
-        float shadowStrength = 0.5f;
-        float shadowMinBias = 0.05f;
-        float shadowMaxBias = 0.001f;
-        float pcfRadius = 0.3f;
+        float shadowStrength = 1.0f;
+        float shadowMinBias = 0.0002f;
+        float shadowMaxBias = 0.002f;
+        float pcfRadius = 1.5f;
         float shadowDistance = 200.0f; // max distance (world units) from camera at which shadows are rendered
         int shadowResolution = 2; // 0=Low, 1=Medium, 2=High, 3=Ultra
         bool cascadeShadow = true;
+        bool softShadows = true;
 
         COMPONENT_CLASS_TYPE(CompType_DirectionalLight)
     };
@@ -369,9 +370,10 @@ namespace ignite
         SkyType skyType = SkyType::HDRI;
         AtmosphereParams atmosphereParams;
 
-        float exposure = 1.1f;
+        float exposure = 1.0f;
         float gamma = 2.2f;
         float ambient = 0.5f;
+        bool enableIBL = true;
 
         // Fog
         float fogDensity = 0.0f;
@@ -435,7 +437,10 @@ namespace ignite
         glm::vec4 color = glm::vec4(1.0f);
         float kerning = 0.0f;
         float lineSpacing = -0.025f;
+        float fontSize = 24.0f; // pixel size when screenSpace is true
         bool screenSpace = false;
+        bool billboard = false;
+        bool centerAlign = false;
 
         TextComponent() = default;
 
@@ -479,6 +484,10 @@ namespace ignite
         std::string currentStateName;
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
+        bool isTransitioning = false;
+        std::string transitionTargetState;
+        float transitionDuration = 0.0f;
+        float transitionElapsed = 0.0f;
         glm::vec2 blendSpaceSmoothedInput = glm::vec2(0.0f);
         glm::vec2 blendSpaceVelocity = glm::vec2(0.0f);
         AssetHandle runtimeAnimatorHandle = AssetHandle(0);
@@ -503,6 +512,10 @@ namespace ignite
 			this->currentStateName.clear();
 			this->stateElapsed = 0.0f;
 			this->stateNormalized = 0.0f;
+			this->isTransitioning = false;
+			this->transitionTargetState.clear();
+			this->transitionDuration = 0.0f;
+			this->transitionElapsed = 0.0f;
 			this->blendSpaceSmoothedInput = glm::vec2(0.0f);
 			this->blendSpaceVelocity = glm::vec2(0.0f);
         }
@@ -715,6 +728,7 @@ namespace ignite
 
         glm::vec3 up = { 0.0f, 1.0f, 0.0f };
         glm::vec3 linearVelocity = { 0.0f, 0.0f, 0.0f };
+        glm::vec3 desiredVelocity = { 0.0f, 0.0f, 0.0f };
 
         WeakRef<physics::PhysicsCharacterController> character;
 
@@ -730,6 +744,7 @@ namespace ignite
             , gravityFactor(other.gravityFactor)
             , up(other.up)
             , linearVelocity(other.linearVelocity)
+            , desiredVelocity(other.desiredVelocity)
             , character(other.character)
         {
         }
@@ -748,6 +763,7 @@ namespace ignite
                 gravityFactor = other.gravityFactor;
                 up = other.up;
                 linearVelocity = other.linearVelocity;
+                desiredVelocity = other.desiredVelocity;
                 character = other.character;
             }
             return *this;
@@ -998,6 +1014,8 @@ namespace ignite
         bool isLocalPlayer = false; // true if controlled locally by this client
         bool replicate = true;      // whether this entity replicates state
         std::string prefab;         // prefab/template identifier for spawning
+        float replicatedMovementSpeed = 0.0f;
+        bool replicatedIsGrounded = false;
 
         uint32_t syncComponentsMask = NetComp_All;
         uint32_t dirtyComponentsMask = 0;

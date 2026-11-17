@@ -40,6 +40,20 @@ namespace ignite
         glm::vec4 sunDirectionAndIntensity = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);    // xyz = direction, w = intensity
         glm::vec4 sunColorAndRadius        = glm::vec4(1.0f, 1.0f, 1.0f, 0.00935f);  // rgb = color, a = angular radius
         glm::vec4 cameraPositionAndAltitude = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);   // xyz = camera pos (meters), w = altitude (km)
+
+        bool HasAtmosphereChanged(const AtmosphereParams &other) const
+        {
+            return rayleighScattering != other.rayleighScattering ||
+                   rayleighDensityH   != other.rayleighDensityH ||
+                   mieScattering      != other.mieScattering ||
+                   mieDensityH        != other.mieDensityH ||
+                   mieExtinction      != other.mieExtinction ||
+                   mieG               != other.mieG ||
+                   ozoneAbsorption    != other.ozoneAbsorption ||
+                   planetRadius       != other.planetRadius ||
+                   atmosphereRadius   != other.atmosphereRadius ||
+                   groundAlbedo       != other.groundAlbedo;
+        }
     };
 
     class IGN_API ProceduralSky
@@ -64,6 +78,7 @@ namespace ignite
         void CreatePipelines();
 
         AtmosphereParams m_Params;
+        AtmosphereParams m_PreviousAtmosphereParams;
         bool m_DirtyAtmosphere = true;
         bool m_Initialized = false;
 

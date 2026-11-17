@@ -8,7 +8,7 @@
 #include "ignite/project/project.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
-#include "ignite/scripting/lua_script_runtime.hpp"
+#include "ignite/scripting/lua/lua_script_runtime.hpp"
 #include "ignite/core/vfs/vfs.hpp"
 #include "ignite/core/signals/signals.hpp"
 #include "ignite/core/signal_bus.hpp"

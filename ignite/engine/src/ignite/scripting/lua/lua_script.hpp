@@ -7,13 +7,13 @@
 #include <filesystem>
 #include <string>
 
-namespace ignite
+namespace ignite::lua
 {
-    class IGN_API LuaScript : public Asset
+    class IGN_API Script : public Asset
     {
     public:
-        LuaScript() = default;
-        explicit LuaScript(const std::filesystem::path &filepath);
+        Script() = default;
+        explicit Script(const std::filesystem::path &filepath);
 
         virtual AssetType GetAssetType() override { return AssetType::LuaScript; }
 
@@ -26,7 +26,7 @@ namespace ignite
         bool LoadFromFile(const std::filesystem::path &filepath);
         bool Reload();
 
-        static Ref<LuaScript> Create(const std::filesystem::path &filepath);
+        static Ref<Script> Create(const std::filesystem::path &filepath);
 
     private:
         std::filesystem::path m_Filepath;

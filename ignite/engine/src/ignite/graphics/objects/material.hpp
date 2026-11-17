@@ -49,7 +49,7 @@ namespace ignite
         nri::CullMode GetCullMode() const { return m_CullMode; }
 
         bool IsNeedToInvalidate() const;
-        void InvalidateBindingSet() { m_BindingSetDirty = true; m_BindingSet = nullptr; m_BindingSets.clear(); }
+        void InvalidateBindingSet() { m_BindingSetDirty = true; m_HasUploadedGpuData = false; m_BindingSet = nullptr; m_BindingSets.clear(); }
         bool IsBindingSetDirty() const { return m_BindingSetDirty; }
         void SetBindingSetClean() { m_BindingSetDirty = false; }
 
@@ -75,6 +75,8 @@ namespace ignite
         Ref<BindingSet> m_BindingSet;
         std::map<std::pair<Texture*, Texture*>, Ref<BindingSet>> m_BindingSets;
         nri::SamplerDesc m_SamplerDesc{};
+        Material_GPUData m_LastUploadedGpuData{};
+        bool m_HasUploadedGpuData = false;
         bool m_BindingSetDirty = true;
         bool m_HasSamplerDesc = false;
     };

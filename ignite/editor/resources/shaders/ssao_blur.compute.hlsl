@@ -62,9 +62,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float ao = t_Src.SampleLevel(s_Clamp, suv, 0.0f).r;
             float d  = LinearizeDepth(t_Depth.SampleLevel(s_Clamp, suv, 0.0f).r);
 
-            // Bilateral weight: exponential decay based on depth difference.
-            // Large depth jumps (edges) get near-zero weight → edge preserved.
-            float depthW = exp(-abs(d - centerDepth) * u_DepthSharpness);
+            // Bilateral weight: exponential decay based on relative depth difference.
+            // Normalizing by centerDepth makes edge preservation scale-independent.
+            float relDepthDiff = abs(d - centerDepth) / max(centerDepth * 0.05f, 0.01f);
+            float depthW = exp(-relDepthDiff * u_DepthSharpness);
             float finalW = kGauss[i] * depthW;
             sum  += ao * finalW;
             wsum += finalW;
@@ -76,7 +77,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float ao = t_Src.SampleLevel(s_Clamp, suv, 0.0f).r;
             float d  = LinearizeDepth(t_Depth.SampleLevel(s_Clamp, suv, 0.0f).r);
 
-            float depthW = exp(-abs(d - centerDepth) * u_DepthSharpness);
+            float relDepthDiff = abs(d - centerDepth) / max(centerDepth * 0.05f, 0.01f);
+            float depthW = exp(-relDepthDiff * u_DepthSharpness);
             float finalW = kGauss[i] * depthW;
             sum  += ao * finalW;
             wsum += finalW;

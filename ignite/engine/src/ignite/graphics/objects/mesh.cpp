@@ -979,10 +979,11 @@ namespace ignite
             }
             else if (normals)
             {
-                // Generate tangent space if not provided
-                // Simple approach: assume UV-aligned tangent
-                vertex.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
-                vertex.bitangent = glm::cross(vertex.normal, vertex.tangent);
+                // Generate safe orthonormal tangent basis when glTF omits tangents
+                const glm::vec3 n = glm::normalize(vertex.normal);
+                const glm::vec3 helper = (std::abs(n.x) < 0.9f) ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+                vertex.tangent = glm::normalize(helper - n * glm::dot(n, helper));
+                vertex.bitangent = glm::normalize(glm::cross(n, vertex.tangent));
             }
 
             if (texCoords)
@@ -1155,7 +1156,8 @@ namespace ignite
         }
 
         // pre-load textures and samplers
-        const auto textures = LoadTextures(gltfModel);
+        const std::filesystem::path baseDir = std::filesystem::path(filename).parent_path();
+        const auto textures = LoadTextures(gltfModel, baseDir);
         const auto samplers = GetSamplers(gltfModel);
 
         // preserve nodes
@@ -1225,6 +1227,9 @@ namespace ignite
         }
 
         // Load GLTF Skeleton & Animations
+        int skeletonAncestorCount = 0;
+        std::unordered_map<int, int32_t> skeletonNodeToJoint;
+        std::vector<glm::mat4> rawInvBindPose;
         if constexpr (SkeletalMeshVertex<VertexType_T>)
         {
             if (!gltfModel.skins.empty())
@@ -1244,16 +1249,40 @@ namespace ignite
                     }
                 }
 
-                skeleton->joints.resize(skin.joints.size());
-                std::unordered_map<int, int32_t> nodeToJoint;
-                for (int i = 0; i < (int)skin.joints.size(); ++i)
+                // Collect non-joint ancestor nodes above root skin joints so armature transforms (e.g. -90X / scale 100)
+                // are preserved in the skeleton hierarchy.
+                std::unordered_set<int> skinJointSet(skin.joints.begin(), skin.joints.end());
+                std::unordered_set<int> visitedAncestors;
+                std::vector<int> ancestorNodes;
+                std::function<void(int)> collectNonJointAncestors = [&](int nodeIdx)
                 {
-                    nodeToJoint[skin.joints[i]] = i;
+                    if (nodeIdx < 0 || visitedAncestors.contains(nodeIdx) || skinJointSet.contains(nodeIdx))
+                        return;
+                    visitedAncestors.insert(nodeIdx);
+                    collectNonJointAncestors(outScene.nodes[nodeIdx].parent);
+                    ancestorNodes.push_back(nodeIdx);
+                };
+                for (int jointNodeIdx : skin.joints)
+                {
+                    collectNonJointAncestors(outScene.nodes[jointNodeIdx].parent);
                 }
 
-                for (int i = 0; i < (int)skin.joints.size(); ++i)
+                skeletonAncestorCount = static_cast<int>(ancestorNodes.size());
+                std::vector<int> orderedJointNodes;
+                orderedJointNodes.reserve(ancestorNodes.size() + skin.joints.size());
+                orderedJointNodes.insert(orderedJointNodes.end(), ancestorNodes.begin(), ancestorNodes.end());
+                orderedJointNodes.insert(orderedJointNodes.end(), skin.joints.begin(), skin.joints.end());
+
+                skeleton->joints.resize(orderedJointNodes.size());
+                for (int i = 0; i < static_cast<int>(orderedJointNodes.size()); ++i)
                 {
-                    int nodeIdx = skin.joints[i];
+                    skeletonNodeToJoint[orderedJointNodes[i]] = i;
+                }
+
+                rawInvBindPose.assign(orderedJointNodes.size(), glm::mat4(1.0f));
+                for (int i = 0; i < static_cast<int>(orderedJointNodes.size()); ++i)
+                {
+                    int nodeIdx = orderedJointNodes[i];
                     const tinygltf::Node &gltfNode = gltfModel.nodes[nodeIdx];
                     Joint &joint = skeleton->joints[i];
                     joint.id = i;
@@ -1261,25 +1290,33 @@ namespace ignite
 
                     joint.parentJointId = -1;
                     int parentNodeIdx = outScene.nodes[nodeIdx].parent;
-                    if (parentNodeIdx >= 0 && nodeToJoint.contains(parentNodeIdx))
+                    if (parentNodeIdx >= 0 && skeletonNodeToJoint.contains(parentNodeIdx))
                     {
-                        joint.parentJointId = nodeToJoint[parentNodeIdx];
+                        joint.parentJointId = skeletonNodeToJoint[parentNodeIdx];
                     }
 
                     joint.localTransform = BuildNodeLocalMatrix(gltfNode);
                     Transform::Decompose(joint.localTransform, joint.defaultTransform);
 
                     joint.globalTransform = glm::mat4(1.0f);
-                    if (i < (int)invBindPose.size())
+                    // Default inverseBindPose to inverse(nodeGlobal) so unskinned meshes baked to model space
+                    // transform cleanly around this joint in bind pose.
+                    joint.inverseBindPose = glm::inverse(outScene.nodes[nodeIdx].global);
+
+                    const int skinLocalIdx = i - skeletonAncestorCount;
+                    if (skinLocalIdx >= 0 && skinLocalIdx < static_cast<int>(invBindPose.size()))
                     {
-                        joint.inverseBindPose = invBindPose[i];
+                        rawInvBindPose[i] = invBindPose[skinLocalIdx];
                     }
                     else
                     {
-                        joint.inverseBindPose = glm::mat4(1.0f);
+                        rawInvBindPose[i] = joint.inverseBindPose;
                     }
 
-                    skeleton->nameToJointMap[joint.name] = joint.id;
+                    if (!skeleton->nameToJointMap.contains(joint.name))
+                    {
+                        skeleton->nameToJointMap[joint.name] = joint.id;
+                    }
                 }
                 outScene.skeleton = skeleton;
 
@@ -1308,9 +1345,9 @@ namespace ignite
                     animation->duration = maxTimeSec * animation->ticksPerSeconds;
 
                     bool hasChannelData = false;
-                    for (int i = 0; i < (int)skin.joints.size(); ++i)
+                    for (int i = 0; i < static_cast<int>(orderedJointNodes.size()); ++i)
                     {
-                        int nodeIdx = skin.joints[i];
+                        int nodeIdx = orderedJointNodes[i];
                         AnimationChannel channel{};
                         bool jointHasKeys = false;
 
@@ -1393,6 +1430,9 @@ namespace ignite
             }
         }
 
+        std::vector<bool> jointUsedBySkin(outScene.skeleton ? outScene.skeleton->joints.size() : 0, false);
+        std::vector<glm::mat4> jointSkinnedMeshGlobal(outScene.skeleton ? outScene.skeleton->joints.size() : 0, glm::mat4(1.0f));
+
         // load meshes referenced by nodes
         for (size_t i = 0; i < gltfModel.nodes.size(); ++i)
         {
@@ -1411,6 +1451,29 @@ namespace ignite
                 // get vertices and indices
                 LoadVertexData(vertices, gltfPrim, gltfModel);
                 LoadIndicesData(indices, gltfPrim, gltfModel);
+
+                const bool isSkinned = gltfPrim.attributes.contains("JOINTS_0");
+                if constexpr (SkeletalMeshVertex<VertexType_T>)
+                {
+                    if (isSkinned && outScene.skeleton)
+                    {
+                        for (auto &vertex : vertices)
+                        {
+                            for (size_t b = 0; b < VERTEX_MAX_BONES; ++b)
+                            {
+                                if (vertex.weights[b] > 0.0f)
+                                {
+                                    vertex.boneIDs[b] += static_cast<uint32_t>(skeletonAncestorCount);
+                                    if (vertex.boneIDs[b] < jointUsedBySkin.size())
+                                    {
+                                        jointUsedBySkin[vertex.boneIDs[b]] = true;
+                                        jointSkinnedMeshGlobal[vertex.boneIDs[b]] = meshNode.global;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 if (!vertices.empty() && !indices.empty())
                 {
@@ -1446,33 +1509,27 @@ namespace ignite
                 {
                     meshInstance = MeshInstanceFor<VertexType_T>::Create(instanceNode, primitive);
 
-                    // Link unskinned meshes to matching joint if skeletal scene
-                    const bool isSkinned = gltfPrim.attributes.contains("JOINTS_0");
+                    // Link unskinned meshes to matching joint in the glTF node tree
                     if (!isSkinned && outScene.skeleton && !outScene.skeleton->joints.empty())
                     {
                         int32_t linkedJointIdx = -1;
-                        auto &nameMap = outScene.skeleton->nameToJointMap;
-                        if (nameMap.contains(meshNode.name))
+                        int walkIdx = static_cast<int>(i);
+                        while (walkIdx >= 0)
                         {
-                            linkedJointIdx = nameMap.at(meshNode.name);
+                            if (skeletonNodeToJoint.contains(walkIdx))
+                            {
+                                linkedJointIdx = skeletonNodeToJoint.at(walkIdx);
+                                break;
+                            }
+                            walkIdx = outScene.nodes[walkIdx].parent;
                         }
-                        else
+                        if (linkedJointIdx < 0)
                         {
-                            int parentWalkIdx = meshNode.parent;
-                            while (parentWalkIdx >= 0)
-                            {
-                                const std::string &pName = outScene.nodes[parentWalkIdx].name;
-                                if (nameMap.contains(pName))
-                                {
-                                    linkedJointIdx = nameMap.at(pName);
-                                    break;
-                                }
-                                parentWalkIdx = outScene.nodes[parentWalkIdx].parent;
-                            }
-                            if (linkedJointIdx < 0)
-                            {
+                            auto &nameMap = outScene.skeleton->nameToJointMap;
+                            if (nameMap.contains(meshNode.name))
+                                linkedJointIdx = nameMap.at(meshNode.name);
+                            else
                                 linkedJointIdx = 0;
-                            }
                         }
                         meshInstance->linkedJointIndex = linkedJointIdx;
                     }
@@ -1490,6 +1547,20 @@ namespace ignite
 
                 // Assign Mesh and Material Index
                 outScene.materialMap[static_cast<int>(outScene.flatMeshes.size()) - 1] = sceneMaterialIndex;
+            }
+        }
+
+        if constexpr (SkeletalMeshVertex<VertexType_T>)
+        {
+            if (outScene.skeleton)
+            {
+                for (size_t ji = 0; ji < outScene.skeleton->joints.size(); ++ji)
+                {
+                    if (jointUsedBySkin[ji] && ji < rawInvBindPose.size())
+                    {
+                        outScene.skeleton->joints[ji].inverseBindPose = rawInvBindPose[ji] * glm::inverse(jointSkinnedMeshGlobal[ji]);
+                    }
+                }
             }
         }
 
@@ -1516,7 +1587,7 @@ namespace ignite
         }
     }
 
-    std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTextures(const tinygltf::Model &model)
+    std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTextures(const tinygltf::Model &model, const std::filesystem::path &baseDir)
     {
         std::vector<std::pair<std::string, Ref<Texture>>> gltfTextures;
         gltfTextures.resize(model.textures.size(), { "", nullptr });
@@ -1600,7 +1671,20 @@ namespace ignite
                     }
                     else if (!image.uri.empty())
                     {
-                        LOG_ASSERT(false, "Not implemented yet!");
+                        std::filesystem::path uriPath = baseDir.empty() ? std::filesystem::path(image.uri) : (baseDir / image.uri);
+                        if (std::filesystem::exists(uriPath))
+                        {
+                            texture = Texture::Create(uriPath, createInfo, nullptr);
+                            if (texture)
+                            {
+                                texture->PrepareUploadData(4);
+                                Texture::SubmitAsyncUpload(texture);
+                            }
+                        }
+                        else
+                        {
+                            LOG_WARN("[GLTF Loader] External texture URI not found: {}", uriPath.string());
+                        }
                     }
 
                     loadedImages[gltfTexture.source] = texture;

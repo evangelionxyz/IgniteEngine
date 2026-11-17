@@ -2,9 +2,12 @@
 
 #include "pch.hpp"
 
+#include <ignite/asset/asset_manager.hpp>
+#include <ignite/core/agent_controller.hpp>
 #include <ignite/core/application.hpp>
 #include <ignite/core/input/input_system.hpp>
 
+#include <ignite/graphics/renderer.hpp>
 #include <ignite/graphics/renderer/scene_renderer.hpp>
 #include <ignite/graphics/window.hpp>
 #include <ignite/graphics/ui/game_ui_system.hpp>
@@ -18,22 +21,84 @@
 #include <ignite/scene/component.hpp>
 
 #include <ignite/net/network_manager.hpp>
+#include <SDL3/SDL_mouse.h>
 #include <imgui.h>
 #include "runtime_layer.hpp"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
 
 namespace ignite
 {
     namespace
     {
-        void BindSharedImGuiContext()
+        std::filesystem::path GetExecutableDirectory()
         {
+#ifdef _WIN32
+            wchar_t buffer[MAX_PATH]{};
+            const DWORD len = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+            if (len > 0 && len < MAX_PATH)
+            {
+                return std::filesystem::path(buffer).parent_path();
+            }
+#endif
+            return std::filesystem::current_path();
+        }
+
+        std::filesystem::path FindProjectInDirectory(const std::filesystem::path &dir)
+        {
+            std::error_code ec;
+            if (dir.empty() || !std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
+                return {};
+
+            for (const auto &entry : std::filesystem::directory_iterator(dir, ec))
+            {
+                if (!ec && entry.is_regular_file(ec) && entry.path().extension() == ".ixproj")
+                {
+                    return entry.path();
+                }
+            }
+            return {};
+        }
+
+        std::filesystem::path DiscoverProjectPath(const std::filesystem::path &explicitPath)
+        {
+            std::error_code ec;
+            if (!explicitPath.empty() && std::filesystem::exists(explicitPath, ec))
+                return explicitPath;
+
+            if (auto found = FindProjectInDirectory(std::filesystem::current_path(ec)); !found.empty())
+                return found;
+
+            if (auto found = FindProjectInDirectory(GetExecutableDirectory()); !found.empty())
+                return found;
+
+            const std::filesystem::path devFallback = "D:/Dev/IgniteProject/Hello/Hello.ixproj";
+            if (std::filesystem::exists(devFallback, ec))
+                return devFallback;
+
+            return {};
+        }
+
+        bool BindSharedImGuiContext()
+        {
+            if (auto *app = Application::GetInstance(); app && !app->GetCreateInfo().useGui)
+            {
+                return false;
+            }
+
             ImGuiContext *sharedContext = Application::GetImGuiContext();
             LOG_ASSERT(sharedContext, "Engine ImGui context has not been created");
 
-            if (ImGui::GetCurrentContext() != sharedContext)
+            if (sharedContext && ImGui::GetCurrentContext() != sharedContext)
             {
                 ImGui::SetCurrentContext(sharedContext);
             }
+            return sharedContext != nullptr;
         }
     }
 
@@ -43,18 +108,19 @@ namespace ignite
         auto *app = Application::GetInstance();
 
         ParseCommandLineArgs(args);
+        AgentController::Get().InitializeFromArgs(args);
 
         m_SceneRenderer = CreateRef<SceneRenderer>();
-        if (!m_InitialProjectPath.empty() && std::filesystem::exists(m_InitialProjectPath))
+        const std::filesystem::path projectPath = DiscoverProjectPath(m_InitialProjectPath);
+        if (!projectPath.empty())
         {
-            OpenProject(m_InitialProjectPath);
-        }
-        else if (std::filesystem::exists("D:/Dev/IgniteProject/Hello/Hello.ixproj"))
-        {
-            OpenProject("D:/Dev/IgniteProject/Hello/Hello.ixproj");
+            OpenProject(projectPath);
         }
 
-        app->GetWindow()->Show();
+        if (app && app->GetWindow() && app->GetCreateInfo().useGui)
+        {
+            app->GetWindow()->Show();
+        }
 
         if (m_AutoConnect)
         {
@@ -79,17 +145,106 @@ namespace ignite
         CloseCurrentProject();
     }
 
-    void RuntimeLayer::OnUpdate(float deltaTime)
+    void RuntimeLayer::SyncActiveSceneFromProject()
     {
-        if (!m_ActiveScene || !m_ActiveProject)
+        if (!m_ActiveProject)
             return;
 
-        m_ActiveScene->OnFixedUpdateRuntimeSimulate();
-        m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
+        Ref<Scene> projectScene = m_ActiveProject->LockActiveScene();
+        if (!projectScene || projectScene == m_ActiveScene)
+            return;
+
+        m_ActiveScene = projectScene;
+        if (m_SceneRenderer)
+        {
+            m_SceneRenderer->SetActiveScene(m_ActiveScene);
+        }
+        GameUISystem::SetSceneContext(m_ActiveScene.get());
+        if (!m_ActiveScene->IsPlaying() && !m_ActiveScene->IsSimulating())
+        {
+            m_ActiveScene->OnStart(ESceneState::Play);
+        }
+        if (auto *net = NetworkManager::GetInstance())
+        {
+            net->SetActiveScene(m_ActiveScene.get());
+        }
+        m_FixedAccumulator = 0.0f;
+    }
+
+    void RuntimeLayer::OnUpdate(float deltaTime)
+    {
+        if (auto *assetManager = AssetManager::GetInstance())
+        {
+            assetManager->OnUpdate(deltaTime);
+        }
+
+        SyncActiveSceneFromProject();
+
+        ICamera *activeCamera = nullptr;
+        if (m_ActiveScene && m_ActiveProject)
+        {
+            float mouseX = 0.0f;
+            float mouseY = 0.0f;
+            SDL_GetMouseState(&mouseX, &mouseY);
+            InputSystem::SetGameplayMousePosition(mouseX, mouseY, true);
+
+            constexpr float kFixedStep = 1.0f / 60.0f;
+            constexpr int kMaxSubsteps = 8;
+            m_FixedAccumulator += std::min(std::max(deltaTime, 0.0f), 0.25f);
+            int substeps = 0;
+            while (m_FixedAccumulator >= kFixedStep && substeps < kMaxSubsteps)
+            {
+                m_ActiveScene->OnFixedUpdateRuntimeSimulate();
+                m_FixedAccumulator -= kFixedStep;
+                ++substeps;
+            }
+
+            m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
+            SyncActiveSceneFromProject();
+
+            if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera(); primaryCam && primaryCam.HasComponent<CameraComponent>())
+            {
+                activeCamera = reinterpret_cast<ICamera *>(&primaryCam.GetComponent<CameraComponent>().camera);
+            }
+        }
+
+        AgentExecutionContext agentCtx;
+        agentCtx.scene = m_ActiveScene.get();
+        agentCtx.project = m_ActiveProject.get();
+        agentCtx.sceneRenderer = m_SceneRenderer.get();
+        agentCtx.camera = activeCamera;
+        agentCtx.onSceneReplaced = [this](const Ref<Scene> &newScene)
+        {
+            if (m_ActiveScene && m_ActiveScene != newScene)
+            {
+                m_ActiveScene->OnStop();
+            }
+            m_ActiveScene = newScene;
+            if (m_ActiveProject)
+            {
+                m_ActiveProject->SetActiveScene(m_ActiveScene);
+            }
+            if (m_SceneRenderer)
+            {
+                m_SceneRenderer->SetActiveScene(m_ActiveScene);
+            }
+            GameUISystem::SetSceneContext(m_ActiveScene.get());
+            if (m_ActiveScene && !m_ActiveScene->IsPlaying())
+            {
+                m_ActiveScene->OnStart(ESceneState::Play);
+            }
+            if (auto *net = NetworkManager::GetInstance())
+            {
+                net->SetActiveScene(m_ActiveScene.get());
+            }
+            m_FixedAccumulator = 0.0f;
+        };
+        AgentController::Get().Update(deltaTime, agentCtx);
     }
 
     void RuntimeLayer::OnRender(RenderTarget *framebuffer)
     {
+        SyncActiveSceneFromProject();
         if (!m_ActiveScene || !m_ActiveProject)
             return;
 
@@ -252,27 +407,45 @@ namespace ignite
 
     void RuntimeLayer::ParseCommandLineArgs(const ApplicationCommandLineArgs &args)
     {
+        auto parseConnect = [this](const std::string &connStr)
+        {
+            const auto colonPos = connStr.find(':');
+            if (colonPos != std::string::npos)
+            {
+                strncpy(m_HostAddress, connStr.substr(0, colonPos).c_str(), sizeof(m_HostAddress) - 1);
+                m_HostAddress[sizeof(m_HostAddress) - 1] = '\0';
+                m_HostPort = std::stoi(connStr.substr(colonPos + 1));
+            }
+            else
+            {
+                strncpy(m_HostAddress, connStr.c_str(), sizeof(m_HostAddress) - 1);
+                m_HostAddress[sizeof(m_HostAddress) - 1] = '\0';
+            }
+            m_AutoConnect = true;
+            if (!m_HideOverlay)
+            {
+                m_ShowNetworkOverlay = true;
+            }
+        };
+
         for (int i = 1; i < args.count; i++)
         {
-            std::string_view arg(args[i]);
+            const std::string_view arg(args[i]);
             if (arg == "--project" && i + 1 < args.count)
             {
                 m_InitialProjectPath = args[++i];
             }
+            else if (arg.starts_with("--project="))
+            {
+                m_InitialProjectPath = std::string(arg.substr(10));
+            }
             else if (arg == "--connect" && i + 1 < args.count)
             {
-                std::string connStr = args[++i];
-                auto colonPos = connStr.find(':');
-                if (colonPos != std::string::npos)
-                {
-                    strncpy(m_HostAddress, connStr.substr(0, colonPos).c_str(), sizeof(m_HostAddress) - 1);
-                    m_HostPort = std::stoi(connStr.substr(colonPos + 1));
-                }
-                else
-                {
-                    strncpy(m_HostAddress, connStr.c_str(), sizeof(m_HostAddress) - 1);
-                }
-                m_AutoConnect = true;
+                parseConnect(args[++i]);
+            }
+            else if (arg.starts_with("--connect="))
+            {
+                parseConnect(std::string(arg.substr(10)));
             }
             else if (arg == "--port" && i + 1 < args.count)
             {
@@ -281,6 +454,17 @@ namespace ignite
             else if (arg == "--host" && i + 1 < args.count)
             {
                 strncpy(m_HostAddress, args[++i], sizeof(m_HostAddress) - 1);
+                m_HostAddress[sizeof(m_HostAddress) - 1] = '\0';
+            }
+            else if (arg == "--hide-overlay")
+            {
+                m_HideOverlay = true;
+                m_ShowNetworkOverlay = false;
+            }
+            else if (arg == "--show-overlay")
+            {
+                m_HideOverlay = false;
+                m_ShowNetworkOverlay = true;
             }
         }
     }
@@ -288,6 +472,9 @@ namespace ignite
     void RuntimeLayer::OnGuiRender()
     {
         BindSharedImGuiContext();
+
+        if (m_HideOverlay)
+            return;
 
         if (m_DiagnosticsOpen)
         {

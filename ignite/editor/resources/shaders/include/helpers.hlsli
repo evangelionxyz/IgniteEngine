@@ -40,29 +40,33 @@ static float3 Reinhard2Tonemap(float3 color, float exposure, float gamma) {
     float3 mappedColor = Reinhard2Tonemap(color * exposure);
     
     float3 whiteScale = 1.0f / Reinhard2Tonemap(float3(11.2f, 11.2f, 11.2f));
-    mappedColor *= mappedColor;
+    mappedColor *= whiteScale;
     
     // Gamma correction
-    float3 gammaCorrected = pow(mappedColor.rgb, 1.0f / gamma);
+    float3 gammaCorrected = pow(max(mappedColor.rgb, 0.0f), 1.0f / max(gamma, 0.001f));
     return gammaCorrected.rgb;
 }
 
 static float3 FilmicTonemap(float3 color)
 {
-    float3 X = max(float3(0.0f, 0.0f, 0.0f), color - 0.004);
-    float3 result = (X * (6.2 * X + 0.5)) / (X * (6.2 * X + 1.7) + 0.06);
-    return pow(result, float3(2.2f, 2.2f, 2.2f));
+    // Narkowicz ACES Filmic approximation in linear space
+    const float a = 2.51f;
+    const float b = 0.03f;
+    const float c = 2.43f;
+    const float d = 0.59f;
+    const float e = 0.14f;
+    return saturate((color * (a * color + b)) / (color * (c * color + d) + e));
 }
 
 static float3 FilmicTonemap(float3 color, float exposure, float gamma)
 {
-    float3 mappedColor = FilmicTonemap(color * exposure);
+    float3 mappedColor = FilmicTonemap(max(color * exposure, 0.0f));
     
-    float3 whiteScale = 1.0f / FilmicTonemap(float3(11.2f, 11.2f, 11.2f));
-    mappedColor *= mappedColor;
+    float3 whiteScale = 1.0f / max(FilmicTonemap(float3(11.2f, 11.2f, 11.2f)), 1e-4f);
+    mappedColor = saturate(mappedColor * whiteScale);
     
     // Gamma correction
-    float3 gammaCorrected = pow(mappedColor.rgb, 1.0f / gamma);
+    float3 gammaCorrected = pow(max(mappedColor.rgb, 0.0f), 1.0f / max(gamma, 0.001f));
     return gammaCorrected.rgb;
 }
 
@@ -91,9 +95,9 @@ static float3 SampleSphericalMap(Texture2D tex, SamplerState samp, float3 dir)
 {
     dir = normalize(dir);
     float2 uv;
-    uv.x = atan2(dir.z, dir.x) / (2.0f * 3.14159265f) + 0.5f;
-    uv.y = asin(clamp(dir.y, -1.0f, 1.0f)) / 3.14159265f + 0.5f;
-    return tex.Sample(samp, uv).rgb;
+    uv.x = atan2(dir.z, dir.x) * 0.15915494f + 0.5f;
+    uv.y = asin(clamp(dir.y, -1.0f, 1.0f)) * 0.31830988f + 0.5f;
+    return tex.SampleLevel(samp, uv, 0.0f).rgb;
 }
 
 static float3 SampleEnvironmentMap(Texture2D tex, SamplerState samp, float3 dir, int skyType, float cameraAltitudeKm)
@@ -121,38 +125,69 @@ static float3 SampleEnvironmentMap(Texture2D tex, SamplerState samp, float3 dir,
             float coord = sqrt(clamp((zenith - horizonAngle) / max(1e-4f, 3.14159265359f - horizonAngle), 0.0f, 1.0f));
             v = 0.5f * (1.0f - coord);
         }
-        return tex.Sample(samp, float2(u, clamp(v, 0.0f, 1.0f))).rgb;
+        return tex.SampleLevel(samp, float2(u, clamp(v, 0.0f, 1.0f)), 0.0f).rgb;
     }
     return SampleSphericalMap(tex, samp, dir);
 }
 
-// Diffuse irradiance (already divided by PI, so it can be multiplied directly with albedo).
-// The environment map has a single mip, so it can't be blurred by sampling a high LOD.
-// Instead, project the environment onto the cosine lobe (SH bands 0..2) using a fixed set of
-// well distributed directions. Result is smooth and independent of the pixel position.
+static void BuildOrthonormalBasis(float3 n, out float3 t, out float3 b)
+{
+    float s = (n.z >= 0.0f) ? 1.0f : -1.0f;
+    float a = -1.0f / (s + n.z);
+    float d = n.x * n.y * a;
+    t = float3(1.0f + s * n.x * n.x * a, s * d, -s * n.x);
+    b = float3(d, s + n.y * n.y * a, -n.y);
+}
+
+// Fast 8-tap precomputed Fibonacci sphere SH cosine lobe projection for diffuse irradiance.
+// Avoids 32 runtime trig pairs per call while producing smooth hemisphere irradiance.
+static const float3 k_IrradianceDirs[8] =
+{
+    float3( 0.000000f,  0.875000f,  0.484123f),
+    float3(-0.562322f,  0.625000f, -0.541449f),
+    float3( 0.145039f,  0.375000f,  0.915602f),
+    float3( 0.677611f,  0.125000f, -0.724722f),
+    float3(-0.968246f, -0.125000f,  0.216506f),
+    float3( 0.779658f, -0.375000f,  0.501431f),
+    float3(-0.226681f, -0.625000f, -0.747010f),
+    float3(-0.341893f, -0.875000f,  0.342764f)
+};
+
 static float3 SampleEnvironmentIrradiance(Texture2D tex, SamplerState samp, float3 normal, int skyType, float cameraAltitudeKm)
 {
-    static const int SAMPLE_COUNT = 32;
-    static const float GOLDEN_ANGLE = 2.39996323f;
-    static const float MAX_RADIANCE = 16.0f; // avoid the sun disc dominating the ambient term
+    static const int SAMPLE_COUNT = 8;
+    static const float MAX_RADIANCE = 16.0f;
 
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     [unroll]
     for (int i = 0; i < SAMPLE_COUNT; ++i)
     {
-        float y = 1.0f - 2.0f * (float(i) + 0.5f) / float(SAMPLE_COUNT);
-        float r = sqrt(max(1.0f - y * y, 0.0f));
-        float phi = GOLDEN_ANGLE * float(i);
-        float3 dir = float3(cos(phi) * r, y, sin(phi) * r);
-
-        // cosine lobe truncated to SH bands 0..2: 0.375 + 2c + 1.875c^2 (averages to 1 over the sphere)
+        float3 dir = k_IrradianceDirs[i];
         float c = dot(normal, dir);
-        float kernel = 0.375f + 2.0f * c + 1.875f * c * c;
-
+        float kernel = max(0.375f + 2.0f * c + 1.875f * c * c, 0.0f);
         float3 radiance = min(SampleEnvironmentMap(tex, samp, dir, skyType, cameraAltitudeKm), MAX_RADIANCE);
         sum += radiance * kernel;
     }
     return max(sum / float(SAMPLE_COUNT), 0.0f);
+}
+
+static float3 SampleRoughEnvironmentSpecular(Texture2D tex, SamplerState samp, float3 reflectDir, float roughness, int skyType, float cameraAltitudeKm)
+{
+    static const float MAX_RADIANCE = 24.0f;
+    float3 T, B;
+    BuildOrthonormalBasis(reflectDir, T, B);
+    float spread = clamp(roughness * roughness * 0.65f, 0.02f, 0.65f);
+
+    float3 d0 = normalize(reflectDir + spread * ( T + B));
+    float3 d1 = normalize(reflectDir + spread * (-T + B));
+    float3 d2 = normalize(reflectDir + spread * ( T - B));
+    float3 d3 = normalize(reflectDir + spread * (-T - B));
+
+    float3 sum = min(SampleEnvironmentMap(tex, samp, d0, skyType, cameraAltitudeKm), MAX_RADIANCE)
+               + min(SampleEnvironmentMap(tex, samp, d1, skyType, cameraAltitudeKm), MAX_RADIANCE)
+               + min(SampleEnvironmentMap(tex, samp, d2, skyType, cameraAltitudeKm), MAX_RADIANCE)
+               + min(SampleEnvironmentMap(tex, samp, d3, skyType, cameraAltitudeKm), MAX_RADIANCE);
+    return sum * 0.25f;
 }
 
 // Convert RGB to Luminance 

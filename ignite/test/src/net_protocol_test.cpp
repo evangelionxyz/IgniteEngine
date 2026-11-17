@@ -186,6 +186,10 @@ TEST(NetProtocol, InputBatchingAndSequenceRoundtrip)
         cmd.move = glm::vec2(float(i) * 0.15f, -float(i) * 0.1f);
         cmd.yaw = 1.57f * float(i);
         cmd.buttons = netproto::InputButton_Jump | (i % 2 == 0 ? netproto::InputButton_Sprint : 0);
+        if (i == 1)
+            cmd.buttons |= netproto::InputButton_Respawn;
+        if (i == 2)
+            cmd.buttons |= netproto::InputButton_Bounce;
         in.cmds.push_back(cmd);
     }
 
@@ -226,6 +230,8 @@ TEST(NetProtocol, SnapshotMsgSerializationRoundtrip)
         st.position = glm::vec3(float(i) * 2.0f, -float(i) * 0.5f, 10.0f);
         st.rotation = glm::angleAxis(0.05f * float(i), glm::vec3(0, 1, 0));
         st.scale = glm::vec3(1.0f + float(i) * 0.01f, 1.0f, 1.0f);
+        st.movementSpeed = float(i) * 0.5f;
+        st.isGrounded = i % 2 == 0;
         in.entities.push_back(st);
     }
 
@@ -250,6 +256,8 @@ TEST(NetProtocol, SnapshotMsgSerializationRoundtrip)
         EXPECT_NEAR(out.entities[i].position.z, in.entities[i].position.z, 0.005f);
         EXPECT_LT(QuatAngleDeg(out.entities[i].rotation, in.entities[i].rotation), 0.5f);
         EXPECT_NEAR(out.entities[i].scale.x, in.entities[i].scale.x, 0.001f);
+        EXPECT_NEAR(out.entities[i].movementSpeed, in.entities[i].movementSpeed, 0.001f);
+        EXPECT_EQ(out.entities[i].isGrounded, in.entities[i].isGrounded);
     }
 }
 

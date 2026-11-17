@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include <gtest/gtest.h>
 #include <filesystem>
@@ -204,6 +204,88 @@ TEST(CharacterController, PhysicsMethodsAndMovement)
     // Test movement
     charActor->Move(glm::vec3(2.0f, 0.0f, 0.0f), 1.0f / 60.0f);
     EXPECT_FALSE(cc.character.expired());
+
+    scene->OnStop();
+}
+
+TEST(CharacterController, AppliesConfiguredGravityFactorWhileFalling)
+{
+    Ref<Project> project = CreateTestProject("CCGravityProject");
+    ASSERT_NE(project, nullptr);
+
+    Ref<Scene> scene = CreateRef<Scene>(project.get());
+    Entity entity = SceneManager::CreateEntity(scene.get(), "FallingCharacter", EntityType_Node);
+    auto &cc = entity.AddComponent<CharacterControllerComponent>();
+    cc.gravityFactor = 2.24f;
+
+    auto &tr = entity.GetTransform();
+    tr.local.translation = glm::vec3(0.0f, 100.0f, 0.0f);
+    tr.world.translation = glm::vec3(0.0f, 100.0f, 0.0f);
+
+    scene->OnStart(ESceneState::Play);
+    auto character = cc.character.lock();
+    ASSERT_NE(character, nullptr);
+
+    constexpr float deltaTime = 1.0f / 60.0f;
+    constexpr int frameCount = 30;
+    for (int i = 0; i < frameCount; ++i)
+        scene->OnUpdateRuntimeSimulate(deltaTime);
+
+    const float expectedVelocity = -9.81f * 2.24f * deltaTime * frameCount;
+    EXPECT_NEAR(character->GetLinearVelocity().y, expectedVelocity, 0.03f);
+
+    scene->OnStop();
+}
+
+TEST(CharacterController, FollowsTranslatingKinematicGround)
+{
+    Ref<Project> project = CreateTestProject("CCMovingPlatformProject");
+    ASSERT_NE(project, nullptr);
+
+    Ref<Scene> scene = CreateRef<Scene>(project.get());
+    Entity platform = SceneManager::CreateEntity(scene.get(), "MovingPlatform", EntityType_Node);
+    auto &platformBody = platform.AddComponent<RigidbodyComponent>();
+    platformBody.bodyType = physics::BodyType::Kinematic;
+    platformBody.useGravity = false;
+    auto &platformCollider = platform.AddComponent<BoxColliderComponent>();
+    platformCollider.scale = glm::vec3(5.0f, 0.5f, 5.0f);
+
+    Entity player = SceneManager::CreateEntity(scene.get(), "PlatformCharacter", EntityType_Node);
+    auto &cc = player.AddComponent<CharacterControllerComponent>();
+    auto &playerTransform = player.GetTransform();
+    playerTransform.local.translation = glm::vec3(0.0f, 1.5f, 0.0f);
+    playerTransform.world.translation = playerTransform.local.translation;
+
+    scene->OnStart(ESceneState::Play);
+    auto character = cc.character.lock();
+    auto kinematicBody = platformBody.dynamicActor.lock();
+    ASSERT_NE(character, nullptr);
+    ASSERT_NE(kinematicBody, nullptr);
+
+    constexpr float deltaTime = 1.0f / 60.0f;
+    for (int i = 0; i < 12; ++i)
+        scene->OnUpdateRuntimeSimulate(deltaTime);
+    ASSERT_TRUE(character->IsOnGround());
+    EXPECT_TRUE(character->IsSupported());
+
+    const float startingX = character->GetPosition().x;
+    kinematicBody->SetLinearVelocity(glm::vec3(1.0f, 0.0f, 0.0f));
+    for (int i = 0; i < 60; ++i)
+        scene->OnUpdateRuntimeSimulate(deltaTime);
+
+    EXPECT_TRUE(character->IsOnGround());
+    EXPECT_TRUE(character->IsSupported());
+    EXPECT_NEAR(character->GetGroundVelocity().x, 1.0f, 0.05f);
+    EXPECT_GT(character->GetPosition().x, startingX + 0.8f);
+
+    const float startingY = character->GetPosition().y;
+    kinematicBody->SetLinearVelocity(glm::vec3(0.0f, 0.5f, 0.0f));
+    for (int i = 0; i < 60; ++i)
+        scene->OnUpdateRuntimeSimulate(deltaTime);
+
+    EXPECT_TRUE(character->IsOnGround());
+    EXPECT_NEAR(character->GetGroundVelocity().y, 0.5f, 0.05f);
+    EXPECT_GT(character->GetPosition().y, startingY + 0.4f);
 
     scene->OnStop();
 }

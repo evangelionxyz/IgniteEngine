@@ -38,7 +38,7 @@
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/graphics/font.hpp"
 #include "ignite/scripting/scriptable_object.hpp"
-#include "ignite/scripting/lua_script.hpp"
+#include "ignite/scripting/lua/lua_script.hpp"
 
 namespace ignite
 {
@@ -879,7 +879,7 @@ namespace ignite
         return so;
     }
 
-    Ref<LuaScript> AssetImporter::ImportLuaScript(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    Ref<lua::Script> AssetImporter::ImportLuaScript(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
         if (!std::filesystem::exists(metadata.filepath))
         {
@@ -887,7 +887,7 @@ namespace ignite
             return nullptr;
         }
 
-        Ref<LuaScript> script = CreateRef<LuaScript>(metadata.filepath);
+        Ref<lua::Script> script = CreateRef<lua::Script>(metadata.filepath);
         if (script)
         {
             script->handle = handle;

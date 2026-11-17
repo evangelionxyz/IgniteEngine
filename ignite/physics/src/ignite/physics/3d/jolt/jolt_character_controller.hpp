@@ -31,8 +31,10 @@ namespace ignite::physics
 
 		virtual void SetLinearVelocity(const glm::vec3 &velocity) override;
 		virtual glm::vec3 GetLinearVelocity() const override;
+		virtual glm::vec3 GetGroundVelocity() const override;
 
 		virtual bool IsOnGround() const override;
+		virtual bool IsSupported() const override;
 		virtual glm::vec3 GetGroundNormal() const override;
 
 		virtual uint64_t GetUserData() const override { return m_UserData; }
@@ -41,6 +43,7 @@ namespace ignite::physics
 
 	private:
 		uint64_t m_UserData;
+		float m_GravityFactor = 1.0f;
 		JPH::CharacterVirtual *m_Character = nullptr;
 		JPH::PhysicsSystem *m_PhysicsSystem = nullptr;
 		JPH::TempAllocator *m_TempAllocator = nullptr;
