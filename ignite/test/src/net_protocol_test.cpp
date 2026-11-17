@@ -534,3 +534,34 @@ TEST(NetProtocol, ComponentSyncMsgSerializationRoundtrip)
         EXPECT_EQ(outMsg.textComp.text, inMsg.textComp.text);
     }
 }
+
+TEST(NetProtocol, InputMsgCarriesOwnerPosition)
+{
+    uint8_t storage[1024];
+    net::Buffer buf(storage, sizeof(storage));
+
+    netproto::InputMsg in;
+    netproto::InputCmd a;
+    a.seq = 7;
+    a.buttons = netproto::InputButton_Jump;
+    netproto::InputCmd b;
+    b.seq = 8;
+    b.hasPosition = true;
+    b.position = { 1.5f, 3.25f, -4.0f };
+    b.velocity = { 0.0f, 9.5f, 2.0f };
+    in.cmds = { a, b };
+
+    net::BufferStreamWriter writer(buf);
+    in.Write(writer);
+
+    net::BufferStreamReader reader(buf);
+    ASSERT_EQ(netproto::ReadMsgType(reader), netproto::MsgType::Input);
+    netproto::InputMsg out;
+    ASSERT_TRUE(out.Read(reader));
+    ASSERT_EQ(out.cmds.size(), 2u);
+    EXPECT_FALSE(out.cmds[0].hasPosition);
+    EXPECT_EQ(out.cmds[0].buttons, netproto::InputButton_Jump);
+    EXPECT_TRUE(out.cmds[1].hasPosition);
+    EXPECT_FLOAT_EQ(out.cmds[1].position.y, 3.25f);
+    EXPECT_FLOAT_EQ(out.cmds[1].velocity.y, 9.5f);
+}

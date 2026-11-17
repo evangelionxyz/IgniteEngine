@@ -169,7 +169,8 @@ namespace ignite
         msg.position = position;
         msg.rotation = rotation;
 
-        m_Server->Broadcast([&](net::StreamWriter &w) {
+        m_Server->Broadcast([&](net::StreamWriter &w)
+        {
             msg.Write(w);
         }, true);
 
@@ -190,7 +191,8 @@ namespace ignite
 
         netproto::DespawnMsg msg;
         msg.netId = netId;
-        m_Server->Broadcast([&](net::StreamWriter &w) {
+        m_Server->Broadcast([&](net::StreamWriter &w)
+        {
             msg.Write(w);
         }, true);
     }
@@ -316,7 +318,8 @@ namespace ignite
         }
 
         // Each client receives the snapshot with its acknowledged input sequence
-        m_Server->ForEachClient([&](NetServerSystem::RemoteClient &client) {
+        m_Server->ForEachClient([&](NetServerSystem::RemoteClient &client)
+        {
             netproto::SnapshotMsg snap;
             snap.serverTick = m_Server->GetTick();
             snap.lastProcessedInputSeq = client.lastInputSeq;
@@ -555,7 +558,33 @@ namespace ignite
             {
                 // Physics character controllers are driven locally; don't fight them.
                 if (entity.HasComponent<CharacterControllerComponent>())
+                {
+                    // Owner-authoritative: only intervene on gross, persistent divergence
+                    // (rejected teleport, server-side respawn). Snapshots lag by RTT, so small
+                    // errors are expected while moving and must not be corrected.
+                    auto &controller = entity.GetComponent<CharacterControllerComponent>();
+                    auto character = controller.character.lock();
+                    if (!character)
+                        continue;
+
+                    const float err = glm::distance(character->GetPosition(), st.position);
+                    if (err > kHardCorrectionDistance)
+                    {
+                        if (m_HardErrorSince < 0.0)
+                            m_HardErrorSince = m_CurrentTime;
+                        if (m_CurrentTime - m_HardErrorSince >= kHardCorrectionHoldSec)
+                        {
+                            character->SetPosition(st.position);
+                            ApplyEntityTransform(m_Scene, entity, st.position, st.rotation, GetEntityWorldScale(entity));
+                            m_HardErrorSince = -1.0;
+                        }
+                    }
+                    else
+                    {
+                        m_HardErrorSince = -1.0;
+                    }
                     continue;
+                }
 
                 // Local player: reconcile prediction and retain smooth visual error offset
                 glm::vec3 correctedPos;
@@ -569,7 +598,16 @@ namespace ignite
             else
             {
                 // Remote entity: buffer into interpolator
-                m_Interpolators[st.netId].AddSnapshot(msg.serverTick, m_CurrentTime, st.position, st.rotation, st.scale);
+                const bool isNew = m_Interpolators.find(st.netId) == m_Interpolators.end();
+                auto &interp = m_Interpolators[st.netId];
+                if (isNew && entity.HasComponent<RigidbodyComponent>()
+                    && entity.GetComponent<RigidbodyComponent>().bodyType == physics::BodyType::Kinematic)
+                {
+                    // Kinematic platforms carry the local player: keep them close to server time.
+                    interp.SetInterpolationDelay(0.06);
+                    interp.SetMaxExtrapolation(0.1);
+                }
+                interp.AddSnapshot(msg.serverTick, m_CurrentTime, st.position, st.rotation, st.scale);
             }
         }
     }

@@ -33,6 +33,10 @@ namespace ignite
             uint32_t maxClients = 32;
             double handshakeTimeoutSec = 5.0;
             double chatMinIntervalSec = 0.25;
+            // Owner-authoritative character movement validation.
+            float ownerTeleportThreshold = 8.0f; // claims further than this from the server pos are rejected
+            float ownerSnapThreshold = 0.5f;     // above this error the server snaps fully to the claim
+            float ownerBlend = 0.5f;             // per-tick blend for small errors
         };
 
         struct RemoteClient
