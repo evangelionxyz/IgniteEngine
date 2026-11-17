@@ -24,7 +24,6 @@ project "Ignite.Core"
         "%{IncludeDir.BOX2D}",
         "%{IncludeDir.SPDLOG}",
         "%{IncludeDir.ENTT}",
-        "%{IncludeDir.NVRHI}",
         "%{IncludeDir.NRI}/Include",
         "%{IncludeDir.NRI}/Source",
         "%{IncludeDir.FILEWATCHER}",

@@ -10,9 +10,6 @@
 [submodule "thirdparty/YAML"]
 	path = thirdparty/YAML
 	url = https://github.com/jbeder/yaml-cpp.git
-[submodule "thirdparty/NVRHI"]
-	path = thirdparty/NVRHI
-	url = https://github.com/evangelionxyz/NVRHI.git
 [submodule "thirdparty/JOLT"]
 	path = thirdparty/JOLT
 	url = https://github.com/jrouwe/JoltPhysics.git
@@ -37,9 +34,6 @@
 [submodule "thirdparty/gtest"]
 	path = thirdparty/gtest
 	url = https://github.com/google/googletest.git
-[submodule "thirdparty/RmlUi"]
-	path = thirdparty/RmlUi
-	url = https://github.com/mikke89/RmlUi.git
 [submodule "thirdparty/Vulkan-Headers"]
 	path = thirdparty/Vulkan-Headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers.git
@@ -49,15 +43,9 @@
 [submodule "thirdparty/SDL3"]
 	path = thirdparty/SDL3
 	url = https://github.com/libsdl-org/SDL.git
-[submodule "thirdparty/Harmony"]
-	path = thirdparty/Harmony
-	url = https://github.com/pardeike/Harmony.git
 [submodule "thirdparty/FastNoise2"]
 	path = thirdparty/FastNoise2
 	url = https://github.com/Auburn/FastNoise2.git
-[submodule "thirdparty/cppcoro"]
-	path = thirdparty/cppcoro
-	url = https://github.com/evangelionxyz/cppcoro.git
 [submodule "thirdparty/lua"]
 	path = thirdparty/lua
 	url = https://github.com/lua/lua.git

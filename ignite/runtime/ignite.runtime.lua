@@ -35,7 +35,6 @@ project "Ignite.Runtime"
         "STB",
         "SPDLOG",
         "TINYGLTF",
-        "NVRHI",
         "NRI",
         "msdf-atlas-gen",
         "msdfgen",
@@ -64,7 +63,6 @@ project "Ignite.Runtime"
         "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.MONO}",
         "%{IncludeDir.SPDLOG}",
-        "%{IncludeDir.NVRHI}",
         "%{IncludeDir.NRI}/Include",
         "%{IncludeDir.NRI}/Source",
         "%{IncludeDir.STB}",
@@ -94,7 +92,6 @@ project "Ignite.Runtime"
     defines {
         "IMGUI_DEFINE_MATH_OPERATORS",
         "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
-        "NVRHI_SHARED_LIBRARY_INCLUDE",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",

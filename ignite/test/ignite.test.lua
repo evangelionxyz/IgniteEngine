@@ -20,7 +20,7 @@ project "Ignite.Test"
     links {
         "gtest",
         "Ignite.Engine",
-        "Ignite.Server", 
+        "Ignite.Server",
         "Ignite.Core",
         "Ignite.Physics",
         "Ignite.Server",
@@ -34,7 +34,6 @@ project "Ignite.Test"
         "STB",
         "SPDLOG",
         "TINYGLTF",
-        "NVRHI",
         "NRI",
         "msdf-atlas-gen",
         "msdfgen",
@@ -65,7 +64,6 @@ project "Ignite.Test"
         "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.MONO}",
         "%{IncludeDir.SPDLOG}",
-        "%{IncludeDir.NVRHI}",
         "%{IncludeDir.NRI}/Include",
         "%{IncludeDir.NRI}/Source",
         "%{IncludeDir.STB}",
@@ -94,7 +92,6 @@ project "Ignite.Test"
 
     defines {
         "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
-        "NVRHI_SHARED_LIBRARY_INCLUDE",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
