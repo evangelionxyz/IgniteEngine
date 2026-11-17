@@ -6,7 +6,9 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "ignite/scene/entity.hpp"
+#include "lua_field.hpp"
 
 struct lua_State;
 namespace ignite
@@ -19,6 +21,7 @@ namespace ignite::lua
     constexpr const char *kEntityMetatable = "Ignite.Entity";
     constexpr const char *kComponentMetatable = "Ignite.Component";
     constexpr const char *kVecMetatable = "Ignite.Vec";
+    constexpr const char *kFieldDescMetatable = "Ignite.FieldDesc";
 
     enum class ComponentType : uint8_t
     {
@@ -105,6 +108,10 @@ namespace ignite::lua
     int LuaInputIsMouseButtonPressed(lua_State *state);
     int LuaInputIsActionPressed(lua_State *state);
     int LuaInputGetMousePosition(lua_State *state);
+
+    bool ExtractFieldDescriptorsFromTable(lua_State *state, int tableIdx, std::vector<LuaFieldDesc> &outFields);
+    void PushLuaFieldValue(lua_State *state, Scene *scene, ScriptFieldType type, const LuaFieldValue &value);
+    bool ReadLuaFieldValue(lua_State *state, int idx, ScriptFieldType type, LuaFieldValue &outValue);
 
     void RegisterBindings(lua_State *state, Scene *scene);
 }

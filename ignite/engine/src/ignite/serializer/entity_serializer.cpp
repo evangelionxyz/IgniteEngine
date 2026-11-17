@@ -172,6 +172,112 @@ namespace ignite
         outField.field.Type = ScriptFieldTypeFromString(typeNode);
     }
 
+    static void SerializeLuaFieldEntry(Serializer &sr, const std::string &name, const LuaSerializedField &field)
+    {
+        sr.AddKeyValue("Name", name);
+        sr.AddKeyValue("Type", ScriptFieldTypeToString(field.type));
+        switch (field.type)
+        {
+            case ScriptFieldType::Bool:
+                sr.AddKeyValue("Value", std::holds_alternative<bool>(field.value) ? std::get<bool>(field.value) : false);
+                break;
+            case ScriptFieldType::Int:
+                sr.AddKeyValue("Value", std::holds_alternative<int32_t>(field.value) ? std::get<int32_t>(field.value) : int32_t(0));
+                break;
+            case ScriptFieldType::Float:
+                sr.AddKeyValue("Value", std::holds_alternative<float>(field.value) ? std::get<float>(field.value) : 0.0f);
+                break;
+            case ScriptFieldType::String:
+                sr.AddKeyValue("Value", std::holds_alternative<std::string>(field.value) ? std::get<std::string>(field.value) : std::string());
+                break;
+            case ScriptFieldType::Vector2:
+                sr.AddKeyValue("Value", std::holds_alternative<glm::vec2>(field.value) ? std::get<glm::vec2>(field.value) : glm::vec2(0.0f));
+                break;
+            case ScriptFieldType::Vector3:
+                sr.AddKeyValue("Value", std::holds_alternative<glm::vec3>(field.value) ? std::get<glm::vec3>(field.value) : glm::vec3(0.0f));
+                break;
+            case ScriptFieldType::Vector4:
+            case ScriptFieldType::Color:
+                sr.AddKeyValue("Value", std::holds_alternative<glm::vec4>(field.value) ? std::get<glm::vec4>(field.value) : glm::vec4(0.0f));
+                break;
+            case ScriptFieldType::Entity:
+            case ScriptFieldType::Asset:
+                sr.AddKeyValue("Value", std::holds_alternative<uint64_t>(field.value) ? std::get<uint64_t>(field.value) : uint64_t(0));
+                break;
+            case ScriptFieldType::Enum:
+                if (std::holds_alternative<std::string>(field.value))
+                    sr.AddKeyValue("Value", std::get<std::string>(field.value));
+                else if (std::holds_alternative<int32_t>(field.value))
+                    sr.AddKeyValue("Value", std::get<int32_t>(field.value));
+                else
+                    sr.AddKeyValue("Value", std::string());
+                break;
+            default:
+                break;
+        }
+    }
+
+    static bool DeserializeLuaFieldEntry(JsonNode fieldNode, std::string &outName, LuaSerializedField &outField)
+    {
+        JsonNode nameNode = fieldNode["Name"];
+        JsonNode typeNode = fieldNode["Type"];
+        JsonNode valueNode = fieldNode["Value"];
+        if (!nameNode || !typeNode)
+            return false;
+
+        outName = nameNode.as<std::string>();
+        outField.type = ScriptFieldTypeFromString(typeNode.as<std::string>());
+        if (outField.type == ScriptFieldType::Invalid)
+            return false;
+
+        try
+        {
+            switch (outField.type)
+            {
+                case ScriptFieldType::Bool:
+                    outField.value = valueNode.as<bool>();
+                    break;
+                case ScriptFieldType::Int:
+                    outField.value = valueNode.as<int32_t>();
+                    break;
+                case ScriptFieldType::Float:
+                    outField.value = valueNode.as<float>();
+                    break;
+                case ScriptFieldType::String:
+                    outField.value = valueNode.as<std::string>();
+                    break;
+                case ScriptFieldType::Vector2:
+                    outField.value = valueNode.as<glm::vec2>();
+                    break;
+                case ScriptFieldType::Vector3:
+                    outField.value = valueNode.as<glm::vec3>();
+                    break;
+                case ScriptFieldType::Vector4:
+                case ScriptFieldType::Color:
+                    outField.value = valueNode.as<glm::vec4>();
+                    break;
+                case ScriptFieldType::Entity:
+                case ScriptFieldType::Asset:
+                    outField.value = valueNode.as<uint64_t>();
+                    break;
+                case ScriptFieldType::Enum:
+                    if (valueNode.GetJson().is_string())
+                        outField.value = valueNode.as<std::string>();
+                    else
+                        outField.value = valueNode.as<int32_t>();
+                    break;
+                default:
+                    return false;
+            }
+        }
+        catch (...)
+        {
+            LOG_WARN("[EntitySerializer] Failed to deserialize Lua field '{}'", outName);
+            return false;
+        }
+        return true;
+    }
+
     void EntitySerializer::SerializeEntity(Serializer &sr, Entity entity)
     {
         if (!entity.IsValid())
@@ -870,6 +976,23 @@ namespace ignite
                 sr.BeginMap("LuaScript");
                 sr.AddKeyValue("ScriptHandle", static_cast<uint64_t>(comp.scriptHandle));
                 sr.AddKeyValue("ScriptPath", comp.scriptPath.generic_string());
+                if (!comp.fields.empty())
+                {
+                    std::vector<std::string> sortedNames;
+                    sortedNames.reserve(comp.fields.size());
+                    for (const auto &[fieldName, _] : comp.fields)
+                        sortedNames.push_back(fieldName);
+                    std::sort(sortedNames.begin(), sortedNames.end());
+
+                    sr.BeginSequence("Fields");
+                    for (const std::string &fieldName : sortedNames)
+                    {
+                        sr.BeginMap();
+                        SerializeLuaFieldEntry(sr, fieldName, comp.fields.at(fieldName));
+                        sr.EndMap();
+                    }
+                    sr.EndSequence();
+                }
                 sr.EndMap();
             }
 
@@ -1547,6 +1670,18 @@ namespace ignite
             auto &comp = desEntity.AddComponent<LuaScriptComponent>();
             if (auto h = node["ScriptHandle"]) comp.scriptHandle = AssetHandle(h.as<uint64_t>());
             if (auto path = node["ScriptPath"]) comp.scriptPath = path.as<std::string>();
+            if (JsonNode fieldsNode = node["Fields"])
+            {
+                for (JsonNode fieldNode : fieldsNode)
+                {
+                    std::string fieldName;
+                    LuaSerializedField field;
+                    if (DeserializeLuaFieldEntry(fieldNode, fieldName, field))
+                    {
+                        comp.fields[fieldName] = std::move(field);
+                    }
+                }
+            }
         }
 
         if (JsonNode node = entityNode["PrefabComponent"])

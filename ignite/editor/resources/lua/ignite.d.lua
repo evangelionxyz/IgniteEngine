@@ -315,6 +315,98 @@ function Ignite.GetEntitiesWith(...) end
 ---@return Entity?
 function Ignite.InstantiatePrefab(prefab, ...) end
 
+---@class LuaFieldDesc
+local LuaFieldDesc = {}
+---@param minValue number
+---@return LuaFieldDesc
+function LuaFieldDesc:min(minValue) end
+---@param maxValue number
+---@return LuaFieldDesc
+function LuaFieldDesc:max(maxValue) end
+---@param minValue number
+---@param maxValue number
+---@return LuaFieldDesc
+function LuaFieldDesc:range(minValue, maxValue) end
+---@param minValue? number
+---@param maxValue? number
+---@return LuaFieldDesc
+function LuaFieldDesc:slider(minValue, maxValue) end
+---@param step number
+---@return LuaFieldDesc
+function LuaFieldDesc:speed(step) end
+---@return LuaFieldDesc
+function LuaFieldDesc:color() end
+---@return LuaFieldDesc
+function LuaFieldDesc:entity() end
+---@param assetType? string
+---@return LuaFieldDesc
+function LuaFieldDesc:asset(assetType) end
+---@param options string[]
+---@return LuaFieldDesc
+function LuaFieldDesc:enum(options) end
+---@return LuaFieldDesc
+function LuaFieldDesc:int() end
+---@return LuaFieldDesc
+function LuaFieldDesc:float() end
+---@param text string
+---@return LuaFieldDesc
+function LuaFieldDesc:tooltip(text) end
+
+---@param defaultValue? any
+---@return LuaFieldDesc
+function Ignite.SerializeField(defaultValue) end
+---@return LuaFieldDesc
+function Ignite.EntityField() end
+---@param assetType? string
+---@return LuaFieldDesc
+function Ignite.AssetField(assetType) end
+---@param minValue number
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Min(minValue, field) end
+---@param maxValue number
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Max(maxValue, field) end
+---@param minValue number
+---@param maxValue number
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Range(minValue, maxValue, field) end
+---@param minValue? number|any
+---@param maxValue? number
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Slider(minValue, maxValue, field) end
+---@param step number
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Speed(step, field) end
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Color(field) end
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Entity(field) end
+---@param assetType? string|any
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Asset(assetType, field) end
+---@param options string[]
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Enum(options, field) end
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Int(field) end
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Float(field) end
+---@param text string
+---@param field? any
+---@return LuaFieldDesc | fun(field: any): LuaFieldDesc
+function Ignite.Tooltip(text, field) end
+
 ---@class IgniteMath
 Ignite.Math = {}
 ---@param a number

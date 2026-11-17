@@ -5,6 +5,7 @@
 #include "ignite/core/uuid.hpp"
 #include "ignite/asset/asset_types.hpp"
 #include "ignite/core/file_watcher.hpp"
+#include "lua_field.hpp"
 
 #include <glm/glm.hpp>
 #include <filesystem>
@@ -12,6 +13,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 struct lua_State;
 
@@ -45,6 +47,10 @@ namespace ignite::lua
 
         bool ExecuteSnippet(const std::string &code, std::string &outResult, std::string &outError);
 
+        bool SetFieldValue(UUID entityId, const std::string &fieldName, const LuaFieldValue &value);
+        bool GetFieldValue(UUID entityId, const std::string &fieldName, LuaFieldValue &outValue) const;
+        const std::vector<LuaFieldDesc> *GetInstanceFields(UUID entityId) const;
+
         void ProcessPendingReloads();
 
     private:
@@ -54,7 +60,10 @@ namespace ignite::lua
             std::filesystem::path path;
             int environmentRef = -2;
             int callbacksRef = -2;
+            std::vector<LuaFieldDesc> fields;
         };
+
+        void ApplyEntityFields(UUID entityId, Instance &instance);
 
         bool Invoke(UUID entityId, Instance &instance, const char *callback, float deltaTime, bool hasDeltaTime);
         void CreatePendingInstances();

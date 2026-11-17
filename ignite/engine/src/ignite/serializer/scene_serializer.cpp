@@ -921,6 +921,31 @@ namespace ignite
                 c["displayName"] = "Lua Script";
                 c["scriptHandle"] = static_cast<uint64_t>(comp.scriptHandle);
                 c["scriptPath"] = comp.scriptPath.generic_string();
+                if (!comp.fields.empty())
+                {
+                    json fieldsObj = json::object();
+                    for (const auto &[name, field] : comp.fields)
+                    {
+                        json fj;
+                        fj["type"] = ScriptFieldTypeToString(field.type);
+                        std::visit([&fj](const auto &v)
+                        {
+                            using T = std::decay_t<decltype(v)>;
+                            if constexpr (std::is_same_v<T, std::monostate>)
+                                fj["value"] = nullptr;
+                            else if constexpr (std::is_same_v<T, glm::vec2>)
+                                fj["value"] = { v.x, v.y };
+                            else if constexpr (std::is_same_v<T, glm::vec3>)
+                                fj["value"] = { v.x, v.y, v.z };
+                            else if constexpr (std::is_same_v<T, glm::vec4>)
+                                fj["value"] = { v.x, v.y, v.z, v.w };
+                            else
+                                fj["value"] = v;
+                        }, field.value);
+                        fieldsObj[name] = fj;
+                    }
+                    c["fields"] = fieldsObj;
+                }
                 entry.components.push_back(c);
             }
 

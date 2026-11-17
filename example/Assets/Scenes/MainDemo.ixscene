@@ -106,7 +106,14 @@
                 },
                 "LuaScript": {
                     "ScriptHandle": 0,
-                    "ScriptPath": "Scripts/bounce_pad.lua"
+                    "ScriptPath": "Scripts/bounce_pad.lua",
+                    "Fields": [
+                        {
+                            "Name": "bounce_speed",
+                            "Type": "Float",
+                            "Value": 35.0
+                        }
+                    ]
                 }
             },
             {

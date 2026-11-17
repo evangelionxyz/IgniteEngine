@@ -3392,6 +3392,7 @@ namespace ignite
                                 {
                                     component.scriptHandle = handle;
                                     component.scriptPath = metadata.filepath;
+                                    component.fields.clear();
                                     m_Scene->SetDirtyFlag(true);
 
                                     if (isRunning && m_Scene->GetLuaScriptRuntime())
@@ -3411,6 +3412,7 @@ namespace ignite
                         {
                             component.scriptHandle = AssetHandle(0);
                             component.scriptPath.clear();
+                            component.fields.clear();
                             m_Scene->SetDirtyFlag(true);
 
                             if (isRunning && m_Scene->GetLuaScriptRuntime())
@@ -3429,9 +3431,293 @@ namespace ignite
                 {
                     ImGui::TextDisabled("Path: %s", component.scriptPath.generic_string().c_str());
                 }
-                
+
+                // Resolve script filepath for metadata inspection
+                std::filesystem::path resolvedScriptPath = component.scriptPath;
+                if (component.scriptHandle != AssetHandle(0) && assetManager)
+                {
+                    const auto &meta = assetManager->GetMetaData(component.scriptHandle);
+                    if (!meta.filepath.empty())
+                        resolvedScriptPath = meta.filepath;
+                }
+                if (!resolvedScriptPath.empty() && !resolvedScriptPath.is_absolute() && m_Scene && m_Scene->GetProject())
+                {
+                    Project *proj = m_Scene->GetProject();
+                    const std::filesystem::path dirCandidate = (proj->GetDirectory() / resolvedScriptPath).lexically_normal();
+                    resolvedScriptPath = std::filesystem::exists(dirCandidate)
+                        ? dirCandidate
+                        : proj->GetProjectFilepath(resolvedScriptPath);
+                }
+
+                // Render exposed Lua fields (from runtime instance if playing, else cached Edit-mode inspection)
+                std::vector<LuaFieldDesc> inspectedFields;
+                const std::vector<LuaFieldDesc> *luaFieldsPtr = nullptr;
+                if (isRunning && m_Scene->GetLuaScriptRuntime())
+                {
+                    luaFieldsPtr = m_Scene->GetLuaScriptRuntime()->GetInstanceFields(selectedEntity.GetUUID());
+                }
+                if (!luaFieldsPtr && !resolvedScriptPath.empty())
+                {
+                    inspectedFields = lua::Script::GetOrInspectFields(resolvedScriptPath);
+                    luaFieldsPtr = &inspectedFields;
+                }
+
+                if (luaFieldsPtr && !luaFieldsPtr->empty())
+                {
+                    ImGui::SeparatorText("Fields");
+                    for (const LuaFieldDesc &desc : *luaFieldsPtr)
+                    {
+                        ImGui::PushID(desc.name.c_str());
+
+                        LuaFieldValue curValue = desc.defaultValue;
+                        if (auto it = component.fields.find(desc.name); it != component.fields.end())
+                        {
+                            if (IsLuaFieldValueCompatible(desc.type, it->second.value))
+                                curValue = it->second.value;
+                            else if (desc.type == ScriptFieldType::Float && std::holds_alternative<int32_t>(it->second.value))
+                                curValue = static_cast<float>(std::get<int32_t>(it->second.value));
+                            else if (desc.type == ScriptFieldType::Int && std::holds_alternative<float>(it->second.value))
+                                curValue = static_cast<int32_t>(std::get<float>(it->second.value));
+                        }
+                        if (isRunning && m_Scene->GetLuaScriptRuntime())
+                        {
+                            LuaFieldValue liveValue;
+                            if (m_Scene->GetLuaScriptRuntime()->GetFieldValue(selectedEntity.GetUUID(), desc.name, liveValue))
+                                curValue = liveValue;
+                        }
+                        curValue = ClampLuaFieldValue(desc, curValue);
+
+                        auto commitValue = [&](const LuaFieldValue &newValue)
+                        {
+                            const LuaFieldValue clamped = ClampLuaFieldValue(desc, newValue);
+                            component.fields[desc.name] = LuaSerializedField{ desc.type, clamped };
+                            m_Scene->SetDirtyFlag(true);
+                            if (isRunning && m_Scene->GetLuaScriptRuntime())
+                            {
+                                m_Scene->GetLuaScriptRuntime()->SetFieldValue(selectedEntity.GetUUID(), desc.name, clamped);
+                            }
+                        };
+
+                        switch (desc.type)
+                        {
+                            case ScriptFieldType::Bool:
+                            {
+                                bool data = std::holds_alternative<bool>(curValue) ? std::get<bool>(curValue) : false;
+                                if (UI::DrawCheckbox(desc.name.c_str(), &data))
+                                    commitValue(data);
+                                break;
+                            }
+                            case ScriptFieldType::Int:
+                            {
+                                int data = std::holds_alternative<int32_t>(curValue) ? std::get<int32_t>(curValue) : 0;
+                                const int minV = desc.hasMin ? static_cast<int>(desc.minValue) : INT_MIN;
+                                const int maxV = desc.hasMax ? static_cast<int>(desc.maxValue) : INT_MAX;
+                                const int defV = std::holds_alternative<int32_t>(desc.defaultValue) ? std::get<int32_t>(desc.defaultValue) : 0;
+                                bool changed = (desc.uiType == FieldUIType::Slider)
+                                    ? UI::DrawSliderInt(desc.name.c_str(), &data, desc.hasMin ? minV : 0, desc.hasMax ? maxV : 100)
+                                    : UI::DrawIntControl(desc.name.c_str(), &data, std::max(1.0f, desc.speed), minV, maxV, defV);
+                                if (changed)
+                                    commitValue(static_cast<int32_t>(data));
+                                break;
+                            }
+                            case ScriptFieldType::Float:
+                            {
+                                float data = std::holds_alternative<float>(curValue) ? std::get<float>(curValue) : 0.0f;
+                                const float minV = desc.hasMin ? desc.minValue : -FLT_MAX;
+                                const float maxV = desc.hasMax ? desc.maxValue : FLT_MAX;
+                                const float defV = std::holds_alternative<float>(desc.defaultValue) ? std::get<float>(desc.defaultValue) : 0.0f;
+                                bool changed = (desc.uiType == FieldUIType::Slider)
+                                    ? UI::DrawSliderFloat(desc.name.c_str(), &data, desc.hasMin ? minV : 0.0f, desc.hasMax ? maxV : 1.0f)
+                                    : UI::DrawFloatControl(desc.name.c_str(), &data, desc.speed, minV, maxV, defV);
+                                if (changed)
+                                    commitValue(data);
+                                break;
+                            }
+                            case ScriptFieldType::String:
+                            {
+                                std::string data = std::holds_alternative<std::string>(curValue) ? std::get<std::string>(curValue) : std::string();
+                                char buffer[512];
+                                memset(buffer, 0, sizeof(buffer));
+                                strncpy(buffer, data.c_str(), sizeof(buffer) - 1);
+
+                                ImGui::BeginColumns(desc.name.c_str(), 2);
+                                ImGui::SetColumnWidth(0, 100.0f);
+                                ImGui::Text("%s", desc.name.c_str());
+                                ImGui::NextColumn();
+                                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                                if (ImGui::InputText("##LuaStringControl", buffer, sizeof(buffer)))
+                                {
+                                    commitValue(std::string(buffer));
+                                }
+                                ImGui::PopItemWidth();
+                                ImGui::EndColumns();
+                                break;
+                            }
+                            case ScriptFieldType::Vector2:
+                            {
+                                glm::vec2 data = std::holds_alternative<glm::vec2>(curValue) ? std::get<glm::vec2>(curValue) : glm::vec2(0.0f);
+                                if (UI::DrawVec2Control(desc.name.c_str(), data, desc.speed))
+                                    commitValue(data);
+                                break;
+                            }
+                            case ScriptFieldType::Vector3:
+                            {
+                                glm::vec3 data = std::holds_alternative<glm::vec3>(curValue) ? std::get<glm::vec3>(curValue) : glm::vec3(0.0f);
+                                if (UI::DrawVec3Control(desc.name.c_str(), data, desc.speed))
+                                    commitValue(data);
+                                break;
+                            }
+                            case ScriptFieldType::Vector4:
+                            {
+                                glm::vec4 data = std::holds_alternative<glm::vec4>(curValue) ? std::get<glm::vec4>(curValue) : glm::vec4(0.0f);
+                                if (UI::DrawVec4Control(desc.name.c_str(), data, desc.speed))
+                                    commitValue(data);
+                                break;
+                            }
+                            case ScriptFieldType::Color:
+                            {
+                                glm::vec4 data = std::holds_alternative<glm::vec4>(curValue) ? std::get<glm::vec4>(curValue) : glm::vec4(1.0f);
+                                if (UI::DrawColorVec4(desc.name.c_str(), data))
+                                    commitValue(data);
+                                break;
+                            }
+                            case ScriptFieldType::Enum:
+                            {
+                                if (!desc.enumNames.empty())
+                                {
+                                    int selectedIndex = 0;
+                                    if (std::holds_alternative<std::string>(curValue))
+                                    {
+                                        const std::string &curStr = std::get<std::string>(curValue);
+                                        for (int i = 0; i < static_cast<int>(desc.enumNames.size()); ++i)
+                                        {
+                                            if (desc.enumNames[static_cast<size_t>(i)] == curStr)
+                                            {
+                                                selectedIndex = i;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    else if (std::holds_alternative<int32_t>(curValue))
+                                    {
+                                        const int idx = std::get<int32_t>(curValue) - 1;
+                                        if (idx >= 0 && idx < static_cast<int>(desc.enumNames.size()))
+                                            selectedIndex = idx;
+                                    }
+
+                                    std::vector<const char *> labels;
+                                    labels.reserve(desc.enumNames.size());
+                                    for (const auto &opt : desc.enumNames)
+                                        labels.push_back(opt.c_str());
+
+                                    if (UI::DrawComboBox(desc.name.c_str(), labels.data(), static_cast<int>(labels.size()), &selectedIndex))
+                                    {
+                                        if (std::holds_alternative<int32_t>(desc.defaultValue))
+                                            commitValue(static_cast<int32_t>(selectedIndex + 1));
+                                        else
+                                            commitValue(desc.enumNames[static_cast<size_t>(selectedIndex)]);
+                                    }
+                                }
+                                break;
+                            }
+                            case ScriptFieldType::Entity:
+                            case ScriptFieldType::Asset:
+                            {
+                                const uint64_t handle = std::holds_alternative<uint64_t>(curValue) ? std::get<uint64_t>(curValue) : 0ULL;
+                                std::string refLabel = desc.type == ScriptFieldType::Entity ? "Drag Entity Here" : "Drag Asset Here";
+                                if (handle != 0)
+                                {
+                                    if (desc.type == ScriptFieldType::Entity)
+                                    {
+                                        Entity refEntity = SceneManager::GetEntity(m_Scene, UUID(handle));
+                                        refLabel = refEntity ? refEntity.GetName() : "Missing Entity";
+                                    }
+                                    else if (assetManager)
+                                    {
+                                        refLabel = assetManager->GetAssetDisplayName(AssetHandle(handle));
+                                    }
+                                }
+
+                                UI::DrawButtonWithColumn(desc.name.c_str(), refLabel.c_str(), nullptr, [&]()
+                                {
+                                    if (ImGui::BeginDragDropTarget())
+                                    {
+                                        if (desc.type == ScriptFieldType::Entity)
+                                        {
+                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                                            {
+                                                const size_t count = payload->DataSize / sizeof(UUID);
+                                                auto *uuids = static_cast<const UUID *>(payload->Data);
+                                                if (count > 0)
+                                                {
+                                                    Entity src = SceneManager::GetEntity(m_Scene, uuids[0]);
+                                                    if (src)
+                                                        commitValue(static_cast<uint64_t>(src.GetUUID()));
+                                                }
+                                            }
+                                        }
+                                        else if (assetManager)
+                                        {
+                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                            {
+                                                if (payload->DataSize == sizeof(AssetHandle))
+                                                {
+                                                    const AssetHandle h = *static_cast<const AssetHandle *>(payload->Data);
+                                                    bool accept = true;
+                                                    if (!desc.assetTypeFilter.empty())
+                                                    {
+                                                        const AssetMetaData meta = assetManager->GetMetaData(h);
+                                                        const std::string actual = stringutils::ToLower(AssetTypeToString(meta.type));
+                                                        const std::string expected = stringutils::ToLower(desc.assetTypeFilter);
+                                                        accept = (actual == expected);
+                                                    }
+                                                    if (accept)
+                                                        commitValue(static_cast<uint64_t>(h));
+                                                }
+                                            }
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+
+                                    if (handle != 0)
+                                    {
+                                        ImGui::SameLine();
+                                        if (ImGui::Button("X"))
+                                            commitValue(uint64_t(0));
+                                    }
+                                });
+                                break;
+                            }
+                            default:
+                                break;
+                        }
+
+                        if (!desc.tooltip.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+                        {
+                            ImGui::SetTooltip("%s", desc.tooltip.c_str());
+                        }
+
+                        if (ImGui::BeginPopupContextItem("##LuaFieldResetCtx"))
+                        {
+                            if (ImGui::MenuItem("Reset to Default"))
+                            {
+                                component.fields.erase(desc.name);
+                                m_Scene->SetDirtyFlag(true);
+                                if (isRunning && m_Scene->GetLuaScriptRuntime())
+                                {
+                                    m_Scene->GetLuaScriptRuntime()->SetFieldValue(selectedEntity.GetUUID(), desc.name, desc.defaultValue);
+                                }
+                            }
+                            ImGui::EndPopup();
+                        }
+
+                        ImGui::PopID();
+                    }
+                }
+
                 if (ImGui::Button("Reload", {-1.0, 0.0f}))
                 {
+                    lua::Script::InvalidateFieldCache(resolvedScriptPath);
                     if (isRunning && m_Scene->GetLuaScriptRuntime())
                     {
                         m_Scene->GetLuaScriptRuntime()->ReloadInstance(selectedEntity.GetUUID());

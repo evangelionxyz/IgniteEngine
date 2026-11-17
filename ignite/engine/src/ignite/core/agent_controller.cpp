@@ -269,9 +269,26 @@ namespace ignite
             if (e.HasComponent<LuaScriptComponent>())
             {
                 const auto &ls = e.GetComponent<LuaScriptComponent>();
+                nlohmann::ordered_json fieldsJson = nlohmann::ordered_json::object();
+                for (const auto &[name, field] : ls.fields)
+                {
+                    nlohmann::ordered_json fj;
+                    fj["type"] = ScriptFieldTypeToString(field.type);
+                    std::visit([&fj](const auto &v)
+                    {
+                        using T = std::decay_t<decltype(v)>;
+                        if constexpr (std::is_same_v<T, std::monostate>) fj["value"] = nullptr;
+                        else if constexpr (std::is_same_v<T, glm::vec2>) fj["value"] = nlohmann::ordered_json::array({ v.x, v.y });
+                        else if constexpr (std::is_same_v<T, glm::vec3>) fj["value"] = Vec3ToJson(v);
+                        else if constexpr (std::is_same_v<T, glm::vec4>) fj["value"] = Vec4ToJson(v);
+                        else fj["value"] = v;
+                    }, field.value);
+                    fieldsJson[name] = fj;
+                }
                 j["LuaScript"] = {
                     { "script_handle", static_cast<uint64_t>(ls.scriptHandle) },
-                    { "script_path", ls.scriptPath.generic_string() }
+                    { "script_path", ls.scriptPath.generic_string() },
+                    { "fields", fieldsJson }
                 };
             }
 
@@ -608,6 +625,45 @@ namespace ignite
                     ls.scriptPath = props["script_path"].get<std::string>();
                 if (props.contains("script_handle"))
                     ls.scriptHandle = AssetHandle(props["script_handle"].get<uint64_t>());
+                if (props.contains("fields") && props["fields"].is_object())
+                {
+                    for (auto &[fname, fval] : props["fields"].items())
+                    {
+                        if (!fval.is_object() || !fval.contains("type") || !fval.contains("value"))
+                            continue;
+                        const ScriptFieldType ft = ScriptFieldTypeFromString(fval["type"].get<std::string>());
+                        const nlohmann::ordered_json &jv = fval["value"];
+                        LuaSerializedField sf;
+                        sf.type = ft;
+                        switch (ft)
+                        {
+                            case ScriptFieldType::Bool:    sf.value = jv.get<bool>(); break;
+                            case ScriptFieldType::Int:     sf.value = jv.get<int32_t>(); break;
+                            case ScriptFieldType::Float:   sf.value = jv.get<float>(); break;
+                            case ScriptFieldType::String:  sf.value = jv.get<std::string>(); break;
+                            case ScriptFieldType::Vector2:
+                                if (jv.is_array() && jv.size() >= 2)
+                                    sf.value = glm::vec2(jv[0].get<float>(), jv[1].get<float>());
+                                break;
+                            case ScriptFieldType::Vector3: sf.value = ReadJsonVec3(jv, glm::vec3(0.0f)); break;
+                            case ScriptFieldType::Vector4:
+                            case ScriptFieldType::Color:   sf.value = ReadJsonVec4(jv, glm::vec4(0.0f)); break;
+                            case ScriptFieldType::Entity:
+                            case ScriptFieldType::Asset:   sf.value = jv.get<uint64_t>(); break;
+                            case ScriptFieldType::Enum:
+                                if (jv.is_string()) sf.value = jv.get<std::string>();
+                                else if (jv.is_number_integer()) sf.value = jv.get<int32_t>();
+                                break;
+                            default: break;
+                        }
+                        if (IsLuaFieldValueCompatible(sf.type, sf.value))
+                        {
+                            ls.fields[fname] = sf;
+                            if (scene && scene->GetLuaScriptRuntime())
+                                scene->GetLuaScriptRuntime()->SetFieldValue(e.GetUUID(), fname, sf.value);
+                        }
+                    }
+                }
                 return true;
             }
 

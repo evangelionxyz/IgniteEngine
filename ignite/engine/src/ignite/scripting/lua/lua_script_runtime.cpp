@@ -14,6 +14,7 @@
 #include "ignite/asset/asset_manager.hpp"
 
 #include "lua.hpp"
+#include "lua_script.hpp"
 
 #include <glm/gtx/quaternion.hpp>
 #include <cstring>
@@ -184,6 +185,7 @@ namespace ignite::lua
         WatchScriptFile(absolutePath);
 
         auto it = m_Instances.find(entityId);
+        ApplyEntityFields(entityId, it->second);
         if (!Invoke(entityId, it->second, "on_create", 0.0f, false))
             DestroyInstance(entityId);
     }
@@ -235,6 +237,9 @@ namespace ignite::lua
 
         instance.callbacksRef = luaL_ref(m_State, LUA_REGISTRYINDEX);
         lua_settop(m_State, baseTop);
+
+        Script::InvalidateFieldCache(absolutePath);
+        ApplyEntityFields(entityId, instance);
 
         LOG_INFO("[Lua] Successfully reloaded script '{}' for entity {}",
                  instance.path.generic_string(), static_cast<uint64_t>(entityId));
@@ -585,5 +590,130 @@ namespace ignite::lua
 
         lua_settop(m_State, baseTop);
         return true;
+    }
+
+    void ScriptRuntime::ApplyEntityFields(UUID entityId, Instance &instance)
+    {
+        if (!m_State || instance.callbacksRef == LUA_NOREF || instance.callbacksRef == LUA_REFNIL)
+            return;
+
+        const int baseTop = lua_gettop(m_State);
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, instance.callbacksRef);
+        if (!lua_istable(m_State, -1))
+        {
+            lua_settop(m_State, baseTop);
+            return;
+        }
+
+        ExtractFieldDescriptorsFromTable(m_State, -1, instance.fields);
+
+        Entity entity = lua::ResolveEntity(m_Scene, static_cast<uint64_t>(entityId));
+        const LuaScriptComponent *comp = (entity && entity.HasComponent<LuaScriptComponent>())
+            ? &entity.GetComponent<LuaScriptComponent>()
+            : nullptr;
+
+        for (const auto &desc : instance.fields)
+        {
+            LuaFieldValue resolved = desc.defaultValue;
+            if (comp)
+            {
+                auto it = comp->fields.find(desc.name);
+                if (it != comp->fields.end())
+                {
+                    const LuaFieldValue &overrideVal = it->second.value;
+                    if (IsLuaFieldValueCompatible(desc.type, overrideVal))
+                    {
+                        resolved = ClampLuaFieldValue(desc, overrideVal);
+                    }
+                    else if (desc.type == ScriptFieldType::Float && std::holds_alternative<int32_t>(overrideVal))
+                    {
+                        resolved = ClampLuaFieldValue(desc, static_cast<float>(std::get<int32_t>(overrideVal)));
+                    }
+                    else if (desc.type == ScriptFieldType::Int && std::holds_alternative<float>(overrideVal))
+                    {
+                        resolved = ClampLuaFieldValue(desc, static_cast<int32_t>(std::get<float>(overrideVal)));
+                    }
+                }
+            }
+
+            PushLuaFieldValue(m_State, m_Scene, desc.type, resolved);
+            lua_setfield(m_State, -2, desc.name.c_str());
+        }
+
+        lua_settop(m_State, baseTop);
+    }
+
+    bool ScriptRuntime::SetFieldValue(UUID entityId, const std::string &fieldName, const LuaFieldValue &value)
+    {
+        if (!m_State)
+            return false;
+
+        auto it = m_Instances.find(entityId);
+        if (it == m_Instances.end() || it->second.callbacksRef == LUA_NOREF || it->second.callbacksRef == LUA_REFNIL)
+            return false;
+
+        const LuaFieldDesc *desc = nullptr;
+        for (const auto &f : it->second.fields)
+        {
+            if (f.name == fieldName)
+            {
+                desc = &f;
+                break;
+            }
+        }
+        if (!desc || !IsLuaFieldValueCompatible(desc->type, value))
+            return false;
+
+        const LuaFieldValue clamped = ClampLuaFieldValue(*desc, value);
+        const int baseTop = lua_gettop(m_State);
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, it->second.callbacksRef);
+        if (lua_istable(m_State, -1))
+        {
+            PushLuaFieldValue(m_State, m_Scene, desc->type, clamped);
+            lua_setfield(m_State, -2, fieldName.c_str());
+        }
+        lua_settop(m_State, baseTop);
+        return true;
+    }
+
+    bool ScriptRuntime::GetFieldValue(UUID entityId, const std::string &fieldName, LuaFieldValue &outValue) const
+    {
+        if (!m_State)
+            return false;
+
+        auto it = m_Instances.find(entityId);
+        if (it == m_Instances.end() || it->second.callbacksRef == LUA_NOREF || it->second.callbacksRef == LUA_REFNIL)
+            return false;
+
+        const LuaFieldDesc *desc = nullptr;
+        for (const auto &f : it->second.fields)
+        {
+            if (f.name == fieldName)
+            {
+                desc = &f;
+                break;
+            }
+        }
+        if (!desc)
+            return false;
+
+        const int baseTop = lua_gettop(m_State);
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, it->second.callbacksRef);
+        bool ok = false;
+        if (lua_istable(m_State, -1))
+        {
+            lua_getfield(m_State, -1, fieldName.c_str());
+            ok = ReadLuaFieldValue(m_State, -1, desc->type, outValue);
+        }
+        lua_settop(m_State, baseTop);
+        return ok;
+    }
+
+    const std::vector<LuaFieldDesc> *ScriptRuntime::GetInstanceFields(UUID entityId) const
+    {
+        auto it = m_Instances.find(entityId);
+        if (it == m_Instances.end())
+            return nullptr;
+        return &it->second.fields;
     }
 }

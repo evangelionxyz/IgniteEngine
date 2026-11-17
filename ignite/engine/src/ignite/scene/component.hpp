@@ -28,8 +28,10 @@
 #include "scene_camera.hpp"
 #include "ignite/core/string_utils.hpp"
 #include "ignite/physics/3d/physics_3d.hpp"
+#include "ignite/scripting/lua/lua_field.hpp"
 
 #include <string>
+#include <unordered_map>
 #include <glm/glm.hpp>
 #include <filesystem>
 
@@ -900,6 +902,7 @@ namespace ignite
     public:
         AssetHandle scriptHandle = AssetHandle(0);
         std::filesystem::path scriptPath;
+        std::unordered_map<std::string, LuaSerializedField> fields;
 
         LuaScriptComponent() = default;
         COMPONENT_CLASS_TYPE(CompType_LuaScript)

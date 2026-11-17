@@ -2799,6 +2799,1110 @@ namespace ignite::lua
         lua_setfield(state, -2, name);
     }
 
+    // =========================================================================
+    // Lua Field Descriptors & Decorators
+    // =========================================================================
+    namespace
+    {
+        enum class FieldDecoratorKind : int
+        {
+            Min = 0,
+            Max,
+            Range,
+            Slider,
+            Speed,
+            Color,
+            Entity,
+            Asset,
+            Enum,
+            Int,
+            Float,
+            Tooltip
+        };
+
+        uint32_t NextFieldOrder(lua_State *state)
+        {
+            lua_getfield(state, LUA_REGISTRYINDEX, "Ignite.FieldOrderCounter");
+            const lua_Integer next = lua_isinteger(state, -1) ? (lua_tointeger(state, -1) + 1) : 1;
+            lua_pop(state, 1);
+            lua_pushinteger(state, next);
+            lua_setfield(state, LUA_REGISTRYINDEX, "Ignite.FieldOrderCounter");
+            return static_cast<uint32_t>(next);
+        }
+
+        bool IsFieldDesc(lua_State *state, int index)
+        {
+            if (!lua_istable(state, index))
+                return false;
+            lua_getfield(state, index, "__ignite_field");
+            const bool isField = lua_toboolean(state, -1) != 0;
+            lua_pop(state, 1);
+            return isField;
+        }
+
+        void MaybePromoteIntToFloat(lua_State *state, int descIdx, bool argIsNonIntFloat)
+        {
+            if (!argIsNonIntFloat)
+                return;
+
+            lua_getfield(state, descIdx, "_explicit_type");
+            const bool explicitType = lua_toboolean(state, -1) != 0;
+            lua_pop(state, 1);
+            if (explicitType)
+                return;
+
+            lua_getfield(state, descIdx, "_type");
+            const char *t = lua_tostring(state, -1);
+            const bool isInt = (t && strcmp(t, "Int") == 0);
+            lua_pop(state, 1);
+
+            if (isInt)
+            {
+                lua_pushstring(state, "Float");
+                lua_setfield(state, descIdx, "_type");
+                lua_getfield(state, descIdx, "_default");
+                if (lua_isnumber(state, -1))
+                {
+                    const lua_Number v = lua_tonumber(state, -1);
+                    lua_pop(state, 1);
+                    lua_pushnumber(state, v);
+                    lua_setfield(state, descIdx, "_default");
+                }
+                else
+                {
+                    lua_pop(state, 1);
+                }
+            }
+        }
+
+        void CreateFieldDescFromValue(lua_State *state, int valIdx)
+        {
+            const int absVal = (valIdx != 0) ? lua_absindex(state, valIdx) : 0;
+
+            lua_newtable(state);
+            const int descIdx = lua_gettop(state);
+
+            lua_pushboolean(state, 1);
+            lua_setfield(state, descIdx, "__ignite_field");
+            lua_pushinteger(state, static_cast<lua_Integer>(NextFieldOrder(state)));
+            lua_setfield(state, descIdx, "_order");
+            lua_pushstring(state, "Default");
+            lua_setfield(state, descIdx, "_ui");
+            lua_pushnumber(state, 0.05);
+            lua_setfield(state, descIdx, "_speed");
+            lua_pushboolean(state, 0);
+            lua_setfield(state, descIdx, "_explicit_type");
+
+            const char *typeName = "Invalid";
+            if (absVal != 0 && !lua_isnoneornil(state, absVal))
+            {
+                const int ltype = lua_type(state, absVal);
+                if (ltype == LUA_TBOOLEAN)
+                {
+                    typeName = "Bool";
+                    lua_pushboolean(state, lua_toboolean(state, absVal));
+                    lua_setfield(state, descIdx, "_default");
+                }
+                else if (ltype == LUA_TNUMBER)
+                {
+                    if (lua_isinteger(state, absVal))
+                    {
+                        typeName = "Int";
+                        lua_pushinteger(state, lua_tointeger(state, absVal));
+                    }
+                    else
+                    {
+                        typeName = "Float";
+                        lua_pushnumber(state, lua_tonumber(state, absVal));
+                    }
+                    lua_setfield(state, descIdx, "_default");
+                }
+                else if (ltype == LUA_TSTRING)
+                {
+                    typeName = "String";
+                    lua_pushvalue(state, absVal);
+                    lua_setfield(state, descIdx, "_default");
+                }
+                else if (ltype == LUA_TTABLE)
+                {
+                    const int dim = DetectVecDim(state, absVal);
+                    if (dim == 2)
+                    {
+                        typeName = "Vector2";
+                        PushVector(state, ReadVec2(state, absVal));
+                        lua_setfield(state, descIdx, "_default");
+                    }
+                    else if (dim == 3)
+                    {
+                        typeName = "Vector3";
+                        PushVector(state, ReadVector(state, absVal));
+                        lua_setfield(state, descIdx, "_default");
+                    }
+                    else if (dim >= 4)
+                    {
+                        typeName = "Vector4";
+                        PushVector(state, ReadVec4(state, absVal));
+                        lua_setfield(state, descIdx, "_default");
+                    }
+                }
+            }
+
+            lua_pushstring(state, typeName);
+            lua_setfield(state, descIdx, "_type");
+
+            luaL_getmetatable(state, kFieldDescMetatable);
+            lua_setmetatable(state, descIdx);
+        }
+
+        void CloneFieldDesc(lua_State *state, int srcIdx)
+        {
+            const int absSrc = lua_absindex(state, srcIdx);
+            lua_newtable(state);
+            const int dstIdx = lua_gettop(state);
+
+            lua_pushnil(state);
+            while (lua_next(state, absSrc) != 0)
+            {
+                lua_pushvalue(state, -2); // key
+                if (lua_type(state, -1) == LUA_TSTRING && strcmp(lua_tostring(state, -1), "_enum_names") == 0 && lua_istable(state, -2))
+                {
+                    // Deep copy _enum_names array
+                    const int srcArr = lua_absindex(state, -2);
+                    lua_newtable(state);
+                    const int len = static_cast<int>(lua_rawlen(state, srcArr));
+                    for (int i = 1; i <= len; ++i)
+                    {
+                        lua_rawgeti(state, srcArr, i);
+                        lua_rawseti(state, -2, i);
+                    }
+                    lua_settable(state, dstIdx);
+                    lua_pop(state, 1); // pop original table value
+                }
+                else
+                {
+                    lua_pushvalue(state, -2); // value
+                    lua_settable(state, dstIdx);
+                    lua_pop(state, 1); // pop value, keep key
+                }
+            }
+
+            luaL_getmetatable(state, kFieldDescMetatable);
+            lua_setmetatable(state, dstIdx);
+        }
+
+        void CloneOrCreateFieldDesc(lua_State *state, int argIdx)
+        {
+            if (IsFieldDesc(state, argIdx))
+                CloneFieldDesc(state, argIdx);
+            else
+                CreateFieldDescFromValue(state, argIdx);
+        }
+
+        void ApplyMin(lua_State *state, int descIdx, lua_Number minVal, bool nonIntFloat)
+        {
+            MaybePromoteIntToFloat(state, descIdx, nonIntFloat);
+            lua_pushnumber(state, minVal);
+            lua_setfield(state, descIdx, "_min");
+        }
+
+        void ApplyMax(lua_State *state, int descIdx, lua_Number maxVal, bool nonIntFloat)
+        {
+            MaybePromoteIntToFloat(state, descIdx, nonIntFloat);
+            lua_pushnumber(state, maxVal);
+            lua_setfield(state, descIdx, "_max");
+        }
+
+        void ApplySlider(lua_State *state, int descIdx, bool hasMin, lua_Number minVal, bool hasMax, lua_Number maxVal, bool nonIntFloat)
+        {
+            MaybePromoteIntToFloat(state, descIdx, nonIntFloat);
+            lua_pushstring(state, "Slider");
+            lua_setfield(state, descIdx, "_ui");
+
+            if (hasMin)
+            {
+                lua_pushnumber(state, minVal);
+                lua_setfield(state, descIdx, "_min");
+            }
+            else
+            {
+                lua_getfield(state, descIdx, "_min");
+                const bool alreadyHasMin = lua_isnumber(state, -1);
+                lua_pop(state, 1);
+                if (!alreadyHasMin)
+                {
+                    lua_pushnumber(state, 0.0);
+                    lua_setfield(state, descIdx, "_min");
+                }
+            }
+
+            if (hasMax)
+            {
+                lua_pushnumber(state, maxVal);
+                lua_setfield(state, descIdx, "_max");
+            }
+            else
+            {
+                lua_getfield(state, descIdx, "_max");
+                const bool alreadyHasMax = lua_isnumber(state, -1);
+                lua_pop(state, 1);
+                if (!alreadyHasMax)
+                {
+                    lua_pushnumber(state, 1.0);
+                    lua_setfield(state, descIdx, "_max");
+                }
+            }
+        }
+
+        void ApplySpeed(lua_State *state, int descIdx, lua_Number speedVal, bool nonIntFloat)
+        {
+            MaybePromoteIntToFloat(state, descIdx, nonIntFloat);
+            lua_pushnumber(state, speedVal);
+            lua_setfield(state, descIdx, "_speed");
+        }
+
+        void ApplyColor(lua_State *state, int descIdx)
+        {
+            lua_pushstring(state, "Color");
+            lua_setfield(state, descIdx, "_type");
+            lua_pushboolean(state, 1);
+            lua_setfield(state, descIdx, "_explicit_type");
+
+            lua_getfield(state, descIdx, "_default");
+            const bool isTbl = lua_istable(state, -1);
+            const glm::vec4 col = isTbl ? ReadVec4(state, -1) : glm::vec4(1.0f);
+            lua_pop(state, 1);
+            PushVector(state, col);
+            lua_setfield(state, descIdx, "_default");
+        }
+
+        void ApplyEntity(lua_State *state, int descIdx)
+        {
+            lua_pushstring(state, "Entity");
+            lua_setfield(state, descIdx, "_type");
+            lua_pushboolean(state, 1);
+            lua_setfield(state, descIdx, "_explicit_type");
+
+            lua_getfield(state, descIdx, "_default");
+            if (!lua_isinteger(state, -1))
+            {
+                lua_pop(state, 1);
+                lua_pushinteger(state, 0);
+                lua_setfield(state, descIdx, "_default");
+            }
+            else
+            {
+                lua_pop(state, 1);
+            }
+        }
+
+        void ApplyAsset(lua_State *state, int descIdx, const char *assetType)
+        {
+            lua_pushstring(state, "Asset");
+            lua_setfield(state, descIdx, "_type");
+            lua_pushboolean(state, 1);
+            lua_setfield(state, descIdx, "_explicit_type");
+            if (assetType && assetType[0] != '\0')
+            {
+                lua_pushstring(state, assetType);
+                lua_setfield(state, descIdx, "_asset_type");
+            }
+
+            lua_getfield(state, descIdx, "_default");
+            if (!lua_isinteger(state, -1))
+            {
+                lua_pop(state, 1);
+                lua_pushinteger(state, 0);
+                lua_setfield(state, descIdx, "_default");
+            }
+            else
+            {
+                lua_pop(state, 1);
+            }
+        }
+
+        void ApplyEnum(lua_State *state, int descIdx, int optionsIdx)
+        {
+            const int absOpts = lua_absindex(state, optionsIdx);
+            luaL_checktype(state, absOpts, LUA_TTABLE);
+
+            lua_pushstring(state, "Enum");
+            lua_setfield(state, descIdx, "_type");
+            lua_pushboolean(state, 1);
+            lua_setfield(state, descIdx, "_explicit_type");
+
+            lua_newtable(state);
+            const int len = static_cast<int>(lua_rawlen(state, absOpts));
+            for (int i = 1; i <= len; ++i)
+            {
+                lua_rawgeti(state, absOpts, i);
+                const char *opt = luaL_checkstring(state, -1);
+                lua_pop(state, 1);
+                lua_pushstring(state, opt);
+                lua_rawseti(state, -2, i);
+            }
+            lua_setfield(state, descIdx, "_enum_names");
+
+            lua_getfield(state, descIdx, "_default");
+            if (lua_isnoneornil(state, -1))
+            {
+                lua_pop(state, 1);
+                if (len > 0)
+                    lua_rawgeti(state, absOpts, 1);
+                else
+                    lua_pushstring(state, "");
+                lua_setfield(state, descIdx, "_default");
+            }
+            else if (lua_isinteger(state, -1) && len > 0)
+            {
+                const lua_Integer idx = lua_tointeger(state, -1);
+                lua_pop(state, 1);
+                if (idx >= 1 && idx <= len)
+                    lua_rawgeti(state, absOpts, idx);
+                else
+                    lua_pushinteger(state, idx);
+                lua_setfield(state, descIdx, "_default");
+            }
+            else
+            {
+                lua_pop(state, 1);
+            }
+        }
+
+        void ApplyInt(lua_State *state, int descIdx)
+        {
+            lua_pushstring(state, "Int");
+            lua_setfield(state, descIdx, "_type");
+            lua_pushboolean(state, 1);
+            lua_setfield(state, descIdx, "_explicit_type");
+
+            lua_getfield(state, descIdx, "_default");
+            const lua_Integer v = lua_isnumber(state, -1) ? static_cast<lua_Integer>(lua_tonumber(state, -1)) : 0;
+            lua_pop(state, 1);
+            lua_pushinteger(state, v);
+            lua_setfield(state, descIdx, "_default");
+        }
+
+        void ApplyFloat(lua_State *state, int descIdx)
+        {
+            lua_pushstring(state, "Float");
+            lua_setfield(state, descIdx, "_type");
+            lua_pushboolean(state, 1);
+            lua_setfield(state, descIdx, "_explicit_type");
+
+            lua_getfield(state, descIdx, "_default");
+            const lua_Number v = lua_isnumber(state, -1) ? lua_tonumber(state, -1) : 0.0;
+            lua_pop(state, 1);
+            lua_pushnumber(state, v);
+            lua_setfield(state, descIdx, "_default");
+        }
+
+        void ApplyTooltip(lua_State *state, int descIdx, const char *tooltip)
+        {
+            lua_pushstring(state, tooltip ? tooltip : "");
+            lua_setfield(state, descIdx, "_tooltip");
+        }
+
+        int FieldDecoratorClosure(lua_State *state)
+        {
+            const auto kind = static_cast<FieldDecoratorKind>(lua_tointeger(state, lua_upvalueindex(1)));
+            CloneOrCreateFieldDesc(state, 1);
+            const int descIdx = lua_gettop(state);
+
+            switch (kind)
+            {
+                case FieldDecoratorKind::Min:
+                    ApplyMin(state, descIdx, lua_tonumber(state, lua_upvalueindex(2)), lua_toboolean(state, lua_upvalueindex(3)) != 0);
+                    break;
+                case FieldDecoratorKind::Max:
+                    ApplyMax(state, descIdx, lua_tonumber(state, lua_upvalueindex(2)), lua_toboolean(state, lua_upvalueindex(3)) != 0);
+                    break;
+                case FieldDecoratorKind::Range:
+                {
+                    const lua_Number lo = lua_tonumber(state, lua_upvalueindex(2));
+                    const lua_Number hi = lua_tonumber(state, lua_upvalueindex(3));
+                    const bool nonInt = lua_toboolean(state, lua_upvalueindex(4)) != 0;
+                    ApplyMin(state, descIdx, lo, nonInt);
+                    ApplyMax(state, descIdx, hi, nonInt);
+                    break;
+                }
+                case FieldDecoratorKind::Slider:
+                {
+                    const bool hasBounds = lua_toboolean(state, lua_upvalueindex(2)) != 0;
+                    const lua_Number lo = lua_tonumber(state, lua_upvalueindex(3));
+                    const lua_Number hi = lua_tonumber(state, lua_upvalueindex(4));
+                    const bool nonInt = lua_toboolean(state, lua_upvalueindex(5)) != 0;
+                    ApplySlider(state, descIdx, hasBounds, lo, hasBounds, hi, nonInt);
+                    break;
+                }
+                case FieldDecoratorKind::Speed:
+                    ApplySpeed(state, descIdx, lua_tonumber(state, lua_upvalueindex(2)), lua_toboolean(state, lua_upvalueindex(3)) != 0);
+                    break;
+                case FieldDecoratorKind::Color:
+                    ApplyColor(state, descIdx);
+                    break;
+                case FieldDecoratorKind::Entity:
+                    ApplyEntity(state, descIdx);
+                    break;
+                case FieldDecoratorKind::Asset:
+                    ApplyAsset(state, descIdx, lua_tostring(state, lua_upvalueindex(2)));
+                    break;
+                case FieldDecoratorKind::Enum:
+                    ApplyEnum(state, descIdx, lua_upvalueindex(2));
+                    break;
+                case FieldDecoratorKind::Int:
+                    ApplyInt(state, descIdx);
+                    break;
+                case FieldDecoratorKind::Float:
+                    ApplyFloat(state, descIdx);
+                    break;
+                case FieldDecoratorKind::Tooltip:
+                    ApplyTooltip(state, descIdx, lua_tostring(state, lua_upvalueindex(2)));
+                    break;
+            }
+            return 1;
+        }
+
+        // Fluent methods on FieldDesc metatable (__index)
+        int CheckFieldDescArg(lua_State *state)
+        {
+            if (!IsFieldDesc(state, 1))
+                luaL_argerror(state, 1, "expected Ignite.FieldDesc");
+            return 1;
+        }
+
+        int FieldMethodMin(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            const lua_Number v = luaL_checknumber(state, 2);
+            ApplyMin(state, 1, v, !lua_isinteger(state, 2));
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodMax(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            const lua_Number v = luaL_checknumber(state, 2);
+            ApplyMax(state, 1, v, !lua_isinteger(state, 2));
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodRange(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            const lua_Number lo = luaL_checknumber(state, 2);
+            const lua_Number hi = luaL_checknumber(state, 3);
+            const bool nonInt = !lua_isinteger(state, 2) || !lua_isinteger(state, 3);
+            ApplyMin(state, 1, lo, nonInt);
+            ApplyMax(state, 1, hi, nonInt);
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodSlider(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            const int top = lua_gettop(state);
+            if (top >= 3)
+            {
+                const lua_Number lo = luaL_checknumber(state, 2);
+                const lua_Number hi = luaL_checknumber(state, 3);
+                const bool nonInt = !lua_isinteger(state, 2) || !lua_isinteger(state, 3);
+                ApplySlider(state, 1, true, lo, true, hi, nonInt);
+            }
+            else
+            {
+                ApplySlider(state, 1, false, 0.0, false, 1.0, false);
+            }
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodSpeed(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            const lua_Number s = luaL_checknumber(state, 2);
+            ApplySpeed(state, 1, s, !lua_isinteger(state, 2));
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodColor(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            ApplyColor(state, 1);
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodEntity(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            ApplyEntity(state, 1);
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodAsset(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            ApplyAsset(state, 1, luaL_optstring(state, 2, ""));
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodEnum(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            ApplyEnum(state, 1, 2);
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodInt(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            ApplyInt(state, 1);
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodFloat(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            ApplyFloat(state, 1);
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        int FieldMethodTooltip(lua_State *state)
+        {
+            CheckFieldDescArg(state);
+            ApplyTooltip(state, 1, luaL_checkstring(state, 2));
+            lua_pushvalue(state, 1);
+            return 1;
+        }
+
+        // Top-level Ignite.* field constructors & decorators
+        int LuaSerializeField(lua_State *state)
+        {
+            if (lua_gettop(state) >= 1 && IsFieldDesc(state, 1))
+                CloneFieldDesc(state, 1);
+            else
+                CreateFieldDescFromValue(state, lua_gettop(state) >= 1 ? 1 : 0);
+            return 1;
+        }
+
+        int LuaEntityField(lua_State *state)
+        {
+            CreateFieldDescFromValue(state, 0);
+            ApplyEntity(state, lua_gettop(state));
+            return 1;
+        }
+
+        int LuaAssetField(lua_State *state)
+        {
+            CreateFieldDescFromValue(state, 0);
+            ApplyAsset(state, lua_gettop(state), luaL_optstring(state, 1, ""));
+            return 1;
+        }
+
+        int LuaDecoratorMin(lua_State *state)
+        {
+            const lua_Number v = luaL_checknumber(state, 1);
+            const bool nonInt = !lua_isinteger(state, 1);
+            if (lua_gettop(state) >= 2)
+            {
+                CloneOrCreateFieldDesc(state, 2);
+                ApplyMin(state, lua_gettop(state), v, nonInt);
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Min));
+            lua_pushnumber(state, v);
+            lua_pushboolean(state, nonInt ? 1 : 0);
+            lua_pushcclosure(state, FieldDecoratorClosure, 3);
+            return 1;
+        }
+
+        int LuaDecoratorMax(lua_State *state)
+        {
+            const lua_Number v = luaL_checknumber(state, 1);
+            const bool nonInt = !lua_isinteger(state, 1);
+            if (lua_gettop(state) >= 2)
+            {
+                CloneOrCreateFieldDesc(state, 2);
+                ApplyMax(state, lua_gettop(state), v, nonInt);
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Max));
+            lua_pushnumber(state, v);
+            lua_pushboolean(state, nonInt ? 1 : 0);
+            lua_pushcclosure(state, FieldDecoratorClosure, 3);
+            return 1;
+        }
+
+        int LuaDecoratorRange(lua_State *state)
+        {
+            const lua_Number lo = luaL_checknumber(state, 1);
+            const lua_Number hi = luaL_checknumber(state, 2);
+            const bool nonInt = !lua_isinteger(state, 1) || !lua_isinteger(state, 2);
+            if (lua_gettop(state) >= 3)
+            {
+                CloneOrCreateFieldDesc(state, 3);
+                const int descIdx = lua_gettop(state);
+                ApplyMin(state, descIdx, lo, nonInt);
+                ApplyMax(state, descIdx, hi, nonInt);
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Range));
+            lua_pushnumber(state, lo);
+            lua_pushnumber(state, hi);
+            lua_pushboolean(state, nonInt ? 1 : 0);
+            lua_pushcclosure(state, FieldDecoratorClosure, 4);
+            return 1;
+        }
+
+        int LuaDecoratorSlider(lua_State *state)
+        {
+            const int top = lua_gettop(state);
+            if (top == 0)
+            {
+                lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Slider));
+                lua_pushboolean(state, 0);
+                lua_pushnumber(state, 0.0);
+                lua_pushnumber(state, 1.0);
+                lua_pushboolean(state, 0);
+                lua_pushcclosure(state, FieldDecoratorClosure, 5);
+                return 1;
+            }
+            if (top == 1 && IsFieldDesc(state, 1))
+            {
+                CloneFieldDesc(state, 1);
+                ApplySlider(state, lua_gettop(state), false, 0.0, false, 1.0, false);
+                return 1;
+            }
+
+            const lua_Number lo = luaL_checknumber(state, 1);
+            const lua_Number hi = luaL_checknumber(state, 2);
+            const bool nonInt = !lua_isinteger(state, 1) || !lua_isinteger(state, 2);
+            if (top >= 3)
+            {
+                CloneOrCreateFieldDesc(state, 3);
+                ApplySlider(state, lua_gettop(state), true, lo, true, hi, nonInt);
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Slider));
+            lua_pushboolean(state, 1);
+            lua_pushnumber(state, lo);
+            lua_pushnumber(state, hi);
+            lua_pushboolean(state, nonInt ? 1 : 0);
+            lua_pushcclosure(state, FieldDecoratorClosure, 5);
+            return 1;
+        }
+
+        int LuaDecoratorSpeed(lua_State *state)
+        {
+            const lua_Number s = luaL_checknumber(state, 1);
+            const bool nonInt = !lua_isinteger(state, 1);
+            if (lua_gettop(state) >= 2)
+            {
+                CloneOrCreateFieldDesc(state, 2);
+                ApplySpeed(state, lua_gettop(state), s, nonInt);
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Speed));
+            lua_pushnumber(state, s);
+            lua_pushboolean(state, nonInt ? 1 : 0);
+            lua_pushcclosure(state, FieldDecoratorClosure, 3);
+            return 1;
+        }
+
+        int LuaDecoratorColor(lua_State *state)
+        {
+            if (lua_gettop(state) >= 1 && !lua_isnil(state, 1))
+            {
+                CloneOrCreateFieldDesc(state, 1);
+                ApplyColor(state, lua_gettop(state));
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Color));
+            lua_pushcclosure(state, FieldDecoratorClosure, 1);
+            return 1;
+        }
+
+        int LuaDecoratorEntity(lua_State *state)
+        {
+            if (lua_gettop(state) >= 1 && !lua_isnil(state, 1))
+            {
+                CloneOrCreateFieldDesc(state, 1);
+                ApplyEntity(state, lua_gettop(state));
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Entity));
+            lua_pushcclosure(state, FieldDecoratorClosure, 1);
+            return 1;
+        }
+
+        int LuaDecoratorAsset(lua_State *state)
+        {
+            const int top = lua_gettop(state);
+            if (top >= 2)
+            {
+                const char *assetType = luaL_optstring(state, 1, "");
+                CloneOrCreateFieldDesc(state, 2);
+                ApplyAsset(state, lua_gettop(state), assetType);
+                return 1;
+            }
+            if (top == 1 && IsFieldDesc(state, 1))
+            {
+                CloneFieldDesc(state, 1);
+                ApplyAsset(state, lua_gettop(state), "");
+                return 1;
+            }
+            const char *assetType = luaL_optstring(state, 1, "");
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Asset));
+            lua_pushstring(state, assetType);
+            lua_pushcclosure(state, FieldDecoratorClosure, 2);
+            return 1;
+        }
+
+        int LuaDecoratorEnum(lua_State *state)
+        {
+            luaL_checktype(state, 1, LUA_TTABLE);
+            if (lua_gettop(state) >= 2)
+            {
+                CloneOrCreateFieldDesc(state, 2);
+                ApplyEnum(state, lua_gettop(state), 1);
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Enum));
+            lua_pushvalue(state, 1);
+            lua_pushcclosure(state, FieldDecoratorClosure, 2);
+            return 1;
+        }
+
+        int LuaDecoratorInt(lua_State *state)
+        {
+            if (lua_gettop(state) >= 1 && !lua_isnil(state, 1))
+            {
+                CloneOrCreateFieldDesc(state, 1);
+                ApplyInt(state, lua_gettop(state));
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Int));
+            lua_pushcclosure(state, FieldDecoratorClosure, 1);
+            return 1;
+        }
+
+        int LuaDecoratorFloat(lua_State *state)
+        {
+            if (lua_gettop(state) >= 1 && !lua_isnil(state, 1))
+            {
+                CloneOrCreateFieldDesc(state, 1);
+                ApplyFloat(state, lua_gettop(state));
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Float));
+            lua_pushcclosure(state, FieldDecoratorClosure, 1);
+            return 1;
+        }
+
+        int LuaDecoratorTooltip(lua_State *state)
+        {
+            const char *tip = luaL_checkstring(state, 1);
+            if (lua_gettop(state) >= 2)
+            {
+                CloneOrCreateFieldDesc(state, 2);
+                ApplyTooltip(state, lua_gettop(state), tip);
+                return 1;
+            }
+            lua_pushinteger(state, static_cast<lua_Integer>(FieldDecoratorKind::Tooltip));
+            lua_pushstring(state, tip);
+            lua_pushcclosure(state, FieldDecoratorClosure, 2);
+            return 1;
+        }
+        void RegisterFieldDescMetatable(lua_State *state)
+        {
+            luaL_newmetatable(state, kFieldDescMetatable);
+            lua_newtable(state); // __index methods table
+            lua_pushcfunction(state, FieldMethodMin);     lua_setfield(state, -2, "min");
+            lua_pushcfunction(state, FieldMethodMax);     lua_setfield(state, -2, "max");
+            lua_pushcfunction(state, FieldMethodRange);   lua_setfield(state, -2, "range");
+            lua_pushcfunction(state, FieldMethodSlider);  lua_setfield(state, -2, "slider");
+            lua_pushcfunction(state, FieldMethodSpeed);   lua_setfield(state, -2, "speed");
+            lua_pushcfunction(state, FieldMethodColor);   lua_setfield(state, -2, "color");
+            lua_pushcfunction(state, FieldMethodEntity);  lua_setfield(state, -2, "entity");
+            lua_pushcfunction(state, FieldMethodAsset);   lua_setfield(state, -2, "asset");
+            lua_pushcfunction(state, FieldMethodEnum);    lua_setfield(state, -2, "enum");
+            lua_pushcfunction(state, FieldMethodInt);     lua_setfield(state, -2, "int");
+            lua_pushcfunction(state, FieldMethodFloat);   lua_setfield(state, -2, "float");
+            lua_pushcfunction(state, FieldMethodTooltip); lua_setfield(state, -2, "tooltip");
+            lua_setfield(state, -2, "__index");
+            lua_pop(state, 1);
+        }
+    }
+
+    void PushLuaFieldValue(lua_State *state, Scene *scene, ScriptFieldType type, const LuaFieldValue &value)
+    {
+        switch (type)
+        {
+            case ScriptFieldType::Bool:
+                lua_pushboolean(state, std::holds_alternative<bool>(value) && std::get<bool>(value) ? 1 : 0);
+                break;
+            case ScriptFieldType::Int:
+                lua_pushinteger(state, std::holds_alternative<int32_t>(value) ? std::get<int32_t>(value) : 0);
+                break;
+            case ScriptFieldType::Float:
+                lua_pushnumber(state, std::holds_alternative<float>(value) ? std::get<float>(value) : 0.0f);
+                break;
+            case ScriptFieldType::String:
+                if (std::holds_alternative<std::string>(value))
+                {
+                    const auto &s = std::get<std::string>(value);
+                    lua_pushlstring(state, s.data(), s.size());
+                }
+                else
+                {
+                    lua_pushstring(state, "");
+                }
+                break;
+            case ScriptFieldType::Vector2:
+                PushVector(state, std::holds_alternative<glm::vec2>(value) ? std::get<glm::vec2>(value) : glm::vec2(0.0f));
+                break;
+            case ScriptFieldType::Vector3:
+                PushVector(state, std::holds_alternative<glm::vec3>(value) ? std::get<glm::vec3>(value) : glm::vec3(0.0f));
+                break;
+            case ScriptFieldType::Vector4:
+            case ScriptFieldType::Color:
+                PushVector(state, std::holds_alternative<glm::vec4>(value) ? std::get<glm::vec4>(value)
+                    : (type == ScriptFieldType::Color ? glm::vec4(1.0f) : glm::vec4(0.0f)));
+                break;
+            case ScriptFieldType::Entity:
+            {
+                const uint64_t id = std::holds_alternative<uint64_t>(value) ? std::get<uint64_t>(value) : 0ULL;
+                if (id != 0 && scene && ResolveEntity(scene, id))
+                    PushEntity(state, scene, id);
+                else
+                    lua_pushnil(state);
+                break;
+            }
+            case ScriptFieldType::Asset:
+            {
+                const uint64_t handle = std::holds_alternative<uint64_t>(value) ? std::get<uint64_t>(value) : 0ULL;
+                lua_pushinteger(state, static_cast<lua_Integer>(handle));
+                break;
+            }
+            case ScriptFieldType::Enum:
+                if (std::holds_alternative<std::string>(value))
+                {
+                    const auto &s = std::get<std::string>(value);
+                    lua_pushlstring(state, s.data(), s.size());
+                }
+                else if (std::holds_alternative<int32_t>(value))
+                {
+                    lua_pushinteger(state, std::get<int32_t>(value));
+                }
+                else
+                {
+                    lua_pushstring(state, "");
+                }
+                break;
+            default:
+                lua_pushnil(state);
+                break;
+        }
+    }
+
+    bool ReadLuaFieldValue(lua_State *state, int idx, ScriptFieldType type, LuaFieldValue &outValue)
+    {
+        const int absIdx = lua_absindex(state, idx);
+        switch (type)
+        {
+            case ScriptFieldType::Bool:
+                outValue = (lua_toboolean(state, absIdx) != 0);
+                return true;
+            case ScriptFieldType::Int:
+                if (lua_isinteger(state, absIdx))
+                    outValue = static_cast<int32_t>(lua_tointeger(state, absIdx));
+                else if (lua_isnumber(state, absIdx))
+                    outValue = static_cast<int32_t>(lua_tonumber(state, absIdx));
+                else
+                    outValue = int32_t(0);
+                return true;
+            case ScriptFieldType::Float:
+                outValue = lua_isnumber(state, absIdx) ? static_cast<float>(lua_tonumber(state, absIdx)) : 0.0f;
+                return true;
+            case ScriptFieldType::String:
+            {
+                size_t len = 0;
+                const char *str = lua_tolstring(state, absIdx, &len);
+                outValue = str ? std::string(str, len) : std::string();
+                return true;
+            }
+            case ScriptFieldType::Vector2:
+                outValue = lua_istable(state, absIdx) ? ReadVec2(state, absIdx) : glm::vec2(0.0f);
+                return true;
+            case ScriptFieldType::Vector3:
+                outValue = lua_istable(state, absIdx) ? ReadVector(state, absIdx) : glm::vec3(0.0f);
+                return true;
+            case ScriptFieldType::Vector4:
+            case ScriptFieldType::Color:
+                outValue = lua_istable(state, absIdx) ? ReadVec4(state, absIdx)
+                    : (type == ScriptFieldType::Color ? glm::vec4(1.0f) : glm::vec4(0.0f));
+                return true;
+            case ScriptFieldType::Entity:
+                if (lua_isnoneornil(state, absIdx))
+                {
+                    outValue = uint64_t(0);
+                }
+                else if (auto *ref = static_cast<EntityRef *>(luaL_testudata(state, absIdx, kEntityMetatable)))
+                {
+                    outValue = ref->id;
+                }
+                else if (lua_isinteger(state, absIdx))
+                {
+                    outValue = static_cast<uint64_t>(lua_tointeger(state, absIdx));
+                }
+                else
+                {
+                    outValue = uint64_t(0);
+                }
+                return true;
+            case ScriptFieldType::Asset:
+                if (lua_isinteger(state, absIdx))
+                    outValue = static_cast<uint64_t>(lua_tointeger(state, absIdx));
+                else if (lua_isnumber(state, absIdx))
+                    outValue = static_cast<uint64_t>(lua_tonumber(state, absIdx));
+                else
+                    outValue = uint64_t(0);
+                return true;
+            case ScriptFieldType::Enum:
+                if (lua_type(state, absIdx) == LUA_TSTRING)
+                {
+                    size_t len = 0;
+                    const char *str = lua_tolstring(state, absIdx, &len);
+                    outValue = str ? std::string(str, len) : std::string();
+                }
+                else if (lua_isnumber(state, absIdx))
+                {
+                    outValue = static_cast<int32_t>(lua_tointeger(state, absIdx));
+                }
+                else
+                {
+                    outValue = std::string();
+                }
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    bool ExtractFieldDescriptorsFromTable(lua_State *state, int tableIdx, std::vector<LuaFieldDesc> &outFields)
+    {
+        outFields.clear();
+        const int absTbl = lua_absindex(state, tableIdx);
+        if (!lua_istable(state, absTbl))
+            return false;
+
+        lua_pushnil(state);
+        while (lua_next(state, absTbl) != 0)
+        {
+            if (lua_type(state, -2) == LUA_TSTRING && IsFieldDesc(state, -1))
+            {
+                const int descIdx = lua_gettop(state);
+                LuaFieldDesc desc;
+                desc.name = lua_tostring(state, -2);
+
+                lua_getfield(state, descIdx, "_type");
+                if (const char *typeStr = lua_tostring(state, -1))
+                    desc.type = ScriptFieldTypeFromString(typeStr);
+                lua_pop(state, 1);
+
+                if (desc.type == ScriptFieldType::Invalid)
+                {
+                    LOG_WARN("[Lua] Skipping SerializeField '{}' with unknown or nil type", desc.name);
+                    lua_pop(state, 1);
+                    continue;
+                }
+
+                lua_getfield(state, descIdx, "_order");
+                if (lua_isinteger(state, -1))
+                    desc.order = static_cast<uint32_t>(lua_tointeger(state, -1));
+                lua_pop(state, 1);
+
+                lua_getfield(state, descIdx, "_ui");
+                if (const char *uiStr = lua_tostring(state, -1))
+                {
+                    if (strcmp(uiStr, "Slider") == 0)
+                        desc.uiType = FieldUIType::Slider;
+                }
+                lua_pop(state, 1);
+
+                lua_getfield(state, descIdx, "_min");
+                if (lua_isnumber(state, -1))
+                {
+                    desc.hasMin = true;
+                    desc.minValue = static_cast<float>(lua_tonumber(state, -1));
+                }
+                lua_pop(state, 1);
+
+                lua_getfield(state, descIdx, "_max");
+                if (lua_isnumber(state, -1))
+                {
+                    desc.hasMax = true;
+                    desc.maxValue = static_cast<float>(lua_tonumber(state, -1));
+                }
+                lua_pop(state, 1);
+
+                lua_getfield(state, descIdx, "_speed");
+                if (lua_isnumber(state, -1))
+                    desc.speed = static_cast<float>(lua_tonumber(state, -1));
+                lua_pop(state, 1);
+
+                lua_getfield(state, descIdx, "_asset_type");
+                if (const char *at = lua_tostring(state, -1))
+                    desc.assetTypeFilter = at;
+                lua_pop(state, 1);
+
+                lua_getfield(state, descIdx, "_tooltip");
+                if (const char *tip = lua_tostring(state, -1))
+                    desc.tooltip = tip;
+                lua_pop(state, 1);
+
+                lua_getfield(state, descIdx, "_enum_names");
+                if (lua_istable(state, -1))
+                {
+                    const int len = static_cast<int>(lua_rawlen(state, -1));
+                    for (int i = 1; i <= len; ++i)
+                    {
+                        lua_rawgeti(state, -1, i);
+                        if (const char *opt = lua_tostring(state, -1))
+                            desc.enumNames.emplace_back(opt);
+                        lua_pop(state, 1);
+                    }
+                }
+                lua_pop(state, 1);
+
+                lua_getfield(state, descIdx, "_default");
+                ReadLuaFieldValue(state, -1, desc.type, desc.defaultValue);
+                lua_pop(state, 1);
+                desc.defaultValue = ClampLuaFieldValue(desc, desc.defaultValue);
+
+                outFields.push_back(std::move(desc));
+            }
+            lua_pop(state, 1);
+        }
+
+        std::sort(outFields.begin(), outFields.end(), [](const LuaFieldDesc &a, const LuaFieldDesc &b)
+        {
+            if (a.order != b.order)
+                return a.order < b.order;
+            return a.name < b.name;
+        });
+        return true;
+    }
+
     void RegisterBindings(lua_State *state, Scene *scene)
     {
         // Vec metatable
@@ -2827,6 +3931,9 @@ namespace ignite::lua
         lua_setfield(state, -2, "__newindex");
         lua_pop(state, 1);
 
+        // Field descriptor metatable
+        RegisterFieldDescMetatable(state);
+
         // Root Ignite table
         lua_newtable(state);
 
@@ -2837,6 +3944,22 @@ namespace ignite::lua
         lua_pushcfunction(state, LuaVec2); lua_setfield(state, -2, "Vec2");
         lua_pushcfunction(state, LuaVec3); lua_setfield(state, -2, "Vec3");
         lua_pushcfunction(state, LuaVec4); lua_setfield(state, -2, "Vec4");
+
+        lua_pushcfunction(state, LuaSerializeField);   lua_setfield(state, -2, "SerializeField");
+        lua_pushcfunction(state, LuaEntityField);      lua_setfield(state, -2, "EntityField");
+        lua_pushcfunction(state, LuaAssetField);       lua_setfield(state, -2, "AssetField");
+        lua_pushcfunction(state, LuaDecoratorMin);     lua_setfield(state, -2, "Min");
+        lua_pushcfunction(state, LuaDecoratorMax);     lua_setfield(state, -2, "Max");
+        lua_pushcfunction(state, LuaDecoratorRange);   lua_setfield(state, -2, "Range");
+        lua_pushcfunction(state, LuaDecoratorSlider);  lua_setfield(state, -2, "Slider");
+        lua_pushcfunction(state, LuaDecoratorSpeed);   lua_setfield(state, -2, "Speed");
+        lua_pushcfunction(state, LuaDecoratorColor);   lua_setfield(state, -2, "Color");
+        lua_pushcfunction(state, LuaDecoratorEntity);  lua_setfield(state, -2, "Entity");
+        lua_pushcfunction(state, LuaDecoratorAsset);   lua_setfield(state, -2, "Asset");
+        lua_pushcfunction(state, LuaDecoratorEnum);    lua_setfield(state, -2, "Enum");
+        lua_pushcfunction(state, LuaDecoratorInt);     lua_setfield(state, -2, "Int");
+        lua_pushcfunction(state, LuaDecoratorFloat);   lua_setfield(state, -2, "Float");
+        lua_pushcfunction(state, LuaDecoratorTooltip); lua_setfield(state, -2, "Tooltip");
 
         RegisterSceneClosure(state, scene, "FindEntity", IgniteFindEntity);
         RegisterSceneClosure(state, scene, "FindEntityByName", IgniteFindEntityByName);
