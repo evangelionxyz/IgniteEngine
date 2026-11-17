@@ -5,6 +5,8 @@
 
 #include <ignite/net/net_server_system.hpp>
 #include <ignite/net/net_replication.hpp>
+#include <ignite/net/network_manager.hpp>
+#include <ignite/asset/asset_manager.hpp>
 #include <ignite/scene/scene.hpp>
 #include <ignite/project/project.hpp>
 
@@ -19,6 +21,9 @@ namespace ignite
         int port = 8192;
         uint16_t tickRate = 60;
         uint16_t snapshotRate = 20;
+        bool hasExplicitPort = false;
+        bool hasExplicitTickRate = false;
+        bool hasExplicitSnapshotRate = false;
         std::string projectPath;
         std::string scenePath;
     };
@@ -34,17 +39,20 @@ namespace ignite
         void Stop();
 
         Scene *GetScene() { return m_Scene.get(); }
-        NetServerSystem *GetServerSystem() { return m_ServerSystem.get(); }
-        NetServerReplication *GetReplication() { return m_Replication.get(); }
+        NetServerSystem *GetServerSystem() { return m_NetworkManager ? m_NetworkManager->GetServerSystem() : nullptr; }
+        NetServerReplication *GetReplication() { return m_NetworkManager ? m_NetworkManager->GetServerReplication() : nullptr; }
+        NetworkManager *GetNetworkManager() { return m_NetworkManager.get(); }
 
     private:
+        std::string ResolveDefaultPlayerTemplate() const;
+
         ServerAppConfig m_Config;
         std::atomic<bool> m_Running{ false };
 
+        std::unique_ptr<AssetManager> m_AssetManager;
         Ref<Project> m_Project;
         Ref<Scene> m_Scene;
-        std::unique_ptr<NetServerSystem> m_ServerSystem;
-        std::unique_ptr<NetServerReplication> m_Replication;
+        std::unique_ptr<NetworkManager> m_NetworkManager;
     };
 
     ServerAppConfig ParseServerCommandLine(int argc, char **argv);

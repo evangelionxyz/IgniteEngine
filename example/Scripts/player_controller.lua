@@ -65,6 +65,12 @@ local server_jump_held = false
 local server_respawn_jump_grace = false
 local respawn_request_pending = false
 local bounce_request_pending = false
+local jump_send_latch = 0.0   -- keeps the jump bit set until it has been sent (and redundantly resent)
+local server_coyote = 0.0
+local server_jump_buffer = 0.0
+local SERVER_COYOTE_TIME = COYOTE_TIME + 0.08
+local SERVER_JUMP_BUFFER_TIME = JUMP_BUFFER_TIME + 0.08
+local NET_SEND_INTERVAL = 1.0 / 60.0
 
 function script.on_create(entity)
     local st = ensure_state()
@@ -88,6 +94,8 @@ function script.on_network_input(entity, client_id, move_x, move_y, buttons, yaw
         cc:set_rotation(Ignite.Vec3(0.0, yaw, 0.0))
         server_jump_held = false
         server_respawn_jump_grace = true
+        server_coyote = 0.0
+        server_jump_buffer = 0.0
         return
     end
 
@@ -105,9 +113,23 @@ function script.on_network_input(entity, client_id, move_x, move_y, buttons, yaw
     if (buttons & INPUT_BUTTON_BOUNCE) ~= 0 then
         vertical_velocity = BOUNCE_SPEED
         server_respawn_jump_grace = false
-    elseif jump_held and not server_jump_held and (grounded or server_respawn_jump_grace) then
-        vertical_velocity = JUMP_SPEED
-        server_respawn_jump_grace = false
+    else
+        if grounded then
+            server_coyote = SERVER_COYOTE_TIME
+        else
+            server_coyote = math.max(0.0, server_coyote - dt)
+        end
+        if jump_held and not server_jump_held then
+            server_jump_buffer = SERVER_JUMP_BUFFER_TIME
+        else
+            server_jump_buffer = math.max(0.0, server_jump_buffer - dt)
+        end
+        if server_jump_buffer > 0.0 and (server_coyote > 0.0 or server_respawn_jump_grace) then
+            vertical_velocity = JUMP_SPEED
+            server_jump_buffer = 0.0
+            server_coyote = 0.0
+            server_respawn_jump_grace = false
+        end
     end
     server_jump_held = jump_held
 
@@ -160,6 +182,7 @@ function script.on_update(entity, dt)
     local space_now = Ignite.Input.IsKeyPressed(Ignite.Key.Space)
     if space_now and not prev_space then
         jump_buffer = JUMP_BUFFER_TIME
+        jump_send_latch = math.max(jump_send_latch, 0.12)
     else
         jump_buffer = math.max(0.0, jump_buffer - dt)
     end
@@ -326,6 +349,7 @@ function script.on_update(entity, dt)
         vert_vel = JUMP_SPEED
         jump_buffer = 0.0
         coyote_timer = 0.0
+        jump_send_latch = math.max(jump_send_latch, 0.12)
         if _G.PlayParticleBurst then
             _G.PlayParticleBurst(pos + Ignite.Vec3(0.0, 0.1, 0.0), "Smoke", 220, 0.5)
         end
@@ -348,10 +372,11 @@ function script.on_update(entity, dt)
     -- Send networked client input when connected
     if Ignite.Net.IsConnected() then
         net_sync_timer = net_sync_timer + dt
-        if net_sync_timer >= (1.0 / 30.0) then
+        jump_send_latch = math.max(0.0, jump_send_latch - dt)
+        if net_sync_timer >= NET_SEND_INTERVAL then
             net_sync_timer = 0.0
             local buttons = 0
-            if jump_buffer > 0.0 or space_now then buttons = buttons + 1 end
+            if jump_send_latch > 0.0 or jump_buffer > 0.0 or space_now then buttons = buttons + 1 end
             if isSprinting then buttons = buttons + 2 end
             if respawn_request_pending then
                 buttons = buttons + INPUT_BUTTON_RESPAWN

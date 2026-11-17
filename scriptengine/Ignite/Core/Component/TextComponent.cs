@@ -46,4 +46,28 @@ public class TextComponent : IComponent
         }
         set => ComponentInternalCalls.TextComponent_SetLineSpacing(Entity!.ID, value);
     }
+
+    public float FontSize
+    {
+        get => ComponentInternalCalls.TextComponent_GetFontSize(Entity!.ID);
+        set => ComponentInternalCalls.TextComponent_SetFontSize(Entity!.ID, value);
+    }
+
+    public bool ScreenSpace
+    {
+        get => ComponentInternalCalls.TextComponent_GetScreenSpace(Entity!.ID);
+        set => ComponentInternalCalls.TextComponent_SetScreenSpace(Entity!.ID, value);
+    }
+
+    public bool Billboard
+    {
+        get => ComponentInternalCalls.TextComponent_GetBillboard(Entity!.ID);
+        set => ComponentInternalCalls.TextComponent_SetBillboard(Entity!.ID, value);
+    }
+
+    public bool CenterAlign
+    {
+        get => ComponentInternalCalls.TextComponent_GetCenterAlign(Entity!.ID);
+        set => ComponentInternalCalls.TextComponent_SetCenterAlign(Entity!.ID, value);
+    }
 }

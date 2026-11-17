@@ -90,7 +90,11 @@ namespace ignite
         EntityCustomSpawner m_CustomSpawner;
         double m_CurrentTime = 0.0;
         Entity m_LocalTemplate;
+        bool m_LocalTemplateInitialVisible = true;
         bool m_LocalClaimed = false;
+        double m_HardErrorSince = -1.0;
+        static constexpr float kHardCorrectionDistance = 5.0f;
+        static constexpr double kHardCorrectionHoldSec = 0.75;
     };
 }
 

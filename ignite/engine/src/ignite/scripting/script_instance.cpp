@@ -43,6 +43,13 @@ namespace ignite
         m_OnBodyActivatedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnBodyActivatedNative");
         m_OnBodyDeactivatedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnBodyDeactivatedNative");
 
+        // Bind internal network lifecycle callbacks
+        m_OnNetworkClientJoinedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnNetworkClientJoinedNative");
+        m_OnNetworkClientLeftMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnNetworkClientLeftNative");
+        m_OnNetworkConnectedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnNetworkConnectedNative");
+        m_OnNetworkDisconnectedMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnNetworkDisconnectedNative");
+        m_OnNetworkInputMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnNetworkInputNative");
+
         // Set Entity ID on managed instance if available
         if (const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID"))
         {
@@ -431,6 +438,78 @@ namespace ignite
                 LOG_ERROR("[Script Instance] OnBodyDeactivated invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
                 m_OnBodyDeactivatedMethodId = 0;
             }
+        }
+    }
+
+    void ScriptInstance::InvokeOnNetworkClientJoined(uint32_t clientId, const std::string &clientName)
+    {
+        IGN_PROFILE_FUNCTION();
+        if (!m_OnNetworkClientJoinedMethodId || !m_ScriptHost)
+            return;
+
+        uint64_t namePtr = reinterpret_cast<uint64_t>(clientName.c_str());
+        void *args[] = { &clientId, &namePtr };
+        if (!m_ScriptHost->Invoke(m_OnNetworkClientJoinedMethodId, args, 2, nullptr))
+        {
+            LOG_ERROR("[Script Instance] OnNetworkClientJoined invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+            m_OnNetworkClientJoinedMethodId = 0;
+        }
+    }
+
+    void ScriptInstance::InvokeOnNetworkClientLeft(uint32_t clientId, const std::string &clientName)
+    {
+        IGN_PROFILE_FUNCTION();
+        if (!m_OnNetworkClientLeftMethodId || !m_ScriptHost)
+            return;
+
+        uint64_t namePtr = reinterpret_cast<uint64_t>(clientName.c_str());
+        void *args[] = { &clientId, &namePtr };
+        if (!m_ScriptHost->Invoke(m_OnNetworkClientLeftMethodId, args, 2, nullptr))
+        {
+            LOG_ERROR("[Script Instance] OnNetworkClientLeft invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+            m_OnNetworkClientLeftMethodId = 0;
+        }
+    }
+
+    void ScriptInstance::InvokeOnNetworkConnected(uint32_t clientId)
+    {
+        IGN_PROFILE_FUNCTION();
+        if (!m_OnNetworkConnectedMethodId || !m_ScriptHost)
+            return;
+
+        void *args[] = { &clientId };
+        if (!m_ScriptHost->Invoke(m_OnNetworkConnectedMethodId, args, 1, nullptr))
+        {
+            LOG_ERROR("[Script Instance] OnNetworkConnected invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+            m_OnNetworkConnectedMethodId = 0;
+        }
+    }
+
+    void ScriptInstance::InvokeOnNetworkDisconnected(uint32_t clientId)
+    {
+        IGN_PROFILE_FUNCTION();
+        if (!m_OnNetworkDisconnectedMethodId || !m_ScriptHost)
+            return;
+
+        void *args[] = { &clientId };
+        if (!m_ScriptHost->Invoke(m_OnNetworkDisconnectedMethodId, args, 1, nullptr))
+        {
+            LOG_ERROR("[Script Instance] OnNetworkDisconnected invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+            m_OnNetworkDisconnectedMethodId = 0;
+        }
+    }
+
+    void ScriptInstance::InvokeOnNetworkInput(uint32_t clientId, float moveX, float moveY, uint16_t buttons, float yaw, float deltaTime)
+    {
+        IGN_PROFILE_FUNCTION();
+        if (!m_OnNetworkInputMethodId || !m_ScriptHost)
+            return;
+
+        void *args[] = { &clientId, &moveX, &moveY, &buttons, &yaw, &deltaTime };
+        if (!m_ScriptHost->Invoke(m_OnNetworkInputMethodId, args, 6, nullptr))
+        {
+            LOG_ERROR("[Script Instance] OnNetworkInput invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+            m_OnNetworkInputMethodId = 0;
         }
     }
 

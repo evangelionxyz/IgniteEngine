@@ -37,6 +37,30 @@ public static class CoreNativeAPI
         public IntPtr ScriptableObject_GetFieldValueString;
         public IntPtr ScriptableObject_GetClassName;
         public IntPtr Scene_TransitionTo;
+
+        // Networking (NetworkManager)
+        public IntPtr Net_IsConnected;
+        public IntPtr Net_IsServerRunning;
+        public IntPtr Net_IsConnecting;
+        public IntPtr Net_GetClientId;
+        public IntPtr Net_StartServer;
+        public IntPtr Net_StartServerDefault;
+        public IntPtr Net_StopServer;
+        public IntPtr Net_Connect;
+        public IntPtr Net_Disconnect;
+        public IntPtr Net_SpawnEntity;
+        public IntPtr Net_DespawnEntity;
+        public IntPtr Net_SendInput;
+        public IntPtr Net_SendChat;
+        public IntPtr Net_KickClient;
+        public IntPtr Net_GetStats;
+        public IntPtr Net_GetServerTick;
+        public IntPtr Net_GetClientServerTick;
+        public IntPtr Net_GetClientCount;
+        public IntPtr Net_GetConnectedClientAt;
+        public IntPtr Net_GetChatCount;
+        public IntPtr Net_GetChatAt;
+        public IntPtr Net_SetSimulationSettings;
     }
 
     public struct Funcs
@@ -169,5 +193,57 @@ public static class CoreNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void SceneLoadFn(ulong sceneAssetHandle);
+
+        // Networking delegates
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool NetBoolQueryFn();
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate uint NetUIntQueryFn();
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool NetStartServerFn(ushort port, ushort tickRate, ushort snapshotRate);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool NetStartServerDefaultFn();
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void NetActionFn();
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool NetConnectFn(IntPtr address, ushort port, IntPtr playerName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate ulong NetSpawnEntityFn(IntPtr templateOrPrefab, ref NativeObject.Vector3 position, ref NativeObject.Quaternion rotation, uint ownerClient);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void NetDespawnEntityFn(ulong netId);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void NetSendInputFn(ref NativeObject.Vector2 move, ushort buttons, float yaw);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void NetSendChatFn(IntPtr text);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void NetKickClientFn(uint clientId, IntPtr reason);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void NetGetStatsFn(out int outRttMs, out float outPacketLoss, out float outInKBps, out float outOutKBps, out uint outClientCount);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool NetGetConnectedClientAtFn(uint index, out uint outClientId, out IntPtr outName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool NetGetChatAtFn(uint index, out uint outSenderId, out IntPtr outSenderName, out IntPtr outText);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void NetSetSimulationSettingsFn(int lagMs, float lossPercent);
     }
 }

@@ -14,10 +14,10 @@ namespace ignite
     struct MipLevelData
     {
         std::vector<uint8_t> data;
-        uint32_t width;
-        uint32_t height;
-        uint32_t rowPitch;
-        uint32_t slicePitch;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        uint32_t rowPitch = 0;
+        uint32_t slicePitch = 0;
     };
 
     class CPUMipGenerator

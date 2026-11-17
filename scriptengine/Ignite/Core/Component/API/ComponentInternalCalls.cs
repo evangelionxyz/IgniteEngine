@@ -250,6 +250,171 @@ public static class ComponentInternalCalls
     private static ComponentNativeAPI.Funcs.AnimatorSetStateFn? s_AnimatorSetState;
     private static ComponentNativeAPI.Funcs.AnimatorGetCurrentStateNameFn? s_AnimatorGetCurrentStateName;
 
+    private static ComponentNativeAPI.Funcs.EntityAddComponentFn? s_EntityRemoveComponent;
+
+    // RenderingComponent
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_RenderingGetVisible;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_RenderingSetVisible;
+
+    // CameraComponent
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_CameraGetPrimary;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_CameraSetPrimary;
+    private static CoreNativeAPI.Funcs.GetIntFn? s_CameraGetProjectionType;
+    private static CoreNativeAPI.Funcs.SetIntFn? s_CameraSetProjectionType;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CameraGetFov;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CameraSetFov;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CameraGetOrthoSize;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CameraSetOrthoSize;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CameraGetNearClip;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CameraSetNearClip;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CameraGetFarClip;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CameraSetFarClip;
+    private static CoreNativeAPI.Funcs.GetIntFn? s_CameraGetAspectRatioPreset;
+    private static CoreNativeAPI.Funcs.SetIntFn? s_CameraSetAspectRatioPreset;
+
+    // DirectionalLightComponent
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_DirLightGetColor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_DirLightSetColor;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_DirLightGetIntensity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_DirLightSetIntensity;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_DirLightGetAngularRadius;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_DirLightSetAngularRadius;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_DirLightGetShadowStrength;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_DirLightSetShadowStrength;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_DirLightGetShadowDistance;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_DirLightSetShadowDistance;
+    private static CoreNativeAPI.Funcs.GetIntFn? s_DirLightGetShadowResolution;
+    private static CoreNativeAPI.Funcs.SetIntFn? s_DirLightSetShadowResolution;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_DirLightGetCascadeShadow;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_DirLightSetCascadeShadow;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_DirLightGetSoftShadows;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_DirLightSetSoftShadows;
+
+    // PointLightComponent
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_PointLightGetColor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_PointLightSetColor;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_PointLightGetIntensity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_PointLightSetIntensity;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_PointLightGetRange;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_PointLightSetRange;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_PointLightGetEnabled;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_PointLightSetEnabled;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_PointLightGetConstantAttenuation;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_PointLightSetConstantAttenuation;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_PointLightGetLinearAttenuation;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_PointLightSetLinearAttenuation;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_PointLightGetQuadraticAttenuation;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_PointLightSetQuadraticAttenuation;
+
+    // SpotLightComponent
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_SpotLightGetColor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_SpotLightSetColor;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_SpotLightGetIntensity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_SpotLightSetIntensity;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_SpotLightGetRange;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_SpotLightSetRange;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_SpotLightGetEnabled;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_SpotLightSetEnabled;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_SpotLightGetInnerConeAngle;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_SpotLightSetInnerConeAngle;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_SpotLightGetOuterConeAngle;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_SpotLightSetOuterConeAngle;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_SpotLightGetConstantAttenuation;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_SpotLightSetConstantAttenuation;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_SpotLightGetLinearAttenuation;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_SpotLightSetLinearAttenuation;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_SpotLightGetQuadraticAttenuation;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_SpotLightSetQuadraticAttenuation;
+
+    // PointLight2DComponent
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_PointLight2DGetColor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_PointLight2DSetColor;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_PointLight2DGetRadius;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_PointLight2DSetRadius;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_PointLight2DGetIntensity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_PointLight2DSetIntensity;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_PointLight2DGetEnabled;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_PointLight2DSetEnabled;
+
+    // StaticMeshComponent
+    private static ComponentNativeAPI.Funcs.GetUInt64Fn? s_StaticMeshGetMeshHandle;
+    private static ComponentNativeAPI.Funcs.SetUInt64Fn? s_StaticMeshSetMeshHandle;
+    private static ComponentNativeAPI.Funcs.StaticMeshSetOverrideMaterialFn? s_StaticMeshSetOverrideMaterial;
+    private static ComponentNativeAPI.Funcs.StaticMeshGetOverrideMaterialFn? s_StaticMeshGetOverrideMaterial;
+
+    // WorldEnvironmentComponent
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_WorldEnvGetExposure;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_WorldEnvSetExposure;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_WorldEnvGetGamma;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_WorldEnvSetGamma;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_WorldEnvGetAmbient;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_WorldEnvSetAmbient;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_WorldEnvGetEnableIBL;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_WorldEnvSetEnableIBL;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_WorldEnvGetFogDensity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_WorldEnvSetFogDensity;
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_WorldEnvGetFogColor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_WorldEnvSetFogColor;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_WorldEnvGetFogStart;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_WorldEnvSetFogStart;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_WorldEnvGetFogEnd;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_WorldEnvSetFogEnd;
+    private static ComponentNativeAPI.Funcs.RigidbodyActionFn? s_WorldEnvMarkDirty;
+
+    // ParticleSystemComponent
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_ParticleGetIsPlaying;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_ParticleSetIsPlaying;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_ParticleGetEmissionRate;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_ParticleSetEmissionRate;
+    private static CoreNativeAPI.Funcs.GetUInt32Fn? s_ParticleGetMaxParticles;
+    private static CoreNativeAPI.Funcs.SetUInt32Fn? s_ParticleSetMaxParticles;
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_ParticleGetStartColor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_ParticleSetStartColor;
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_ParticleGetEndColor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_ParticleSetEndColor;
+    private static CoreNativeAPI.Funcs.GetVector2Fn? s_ParticleGetStartSize;
+    private static CoreNativeAPI.Funcs.SetVector2Fn? s_ParticleSetStartSize;
+    private static CoreNativeAPI.Funcs.GetVector2Fn? s_ParticleGetEndSize;
+    private static CoreNativeAPI.Funcs.SetVector2Fn? s_ParticleSetEndSize;
+    private static ComponentNativeAPI.Funcs.RigidbodyActionFn? s_ParticlePlay;
+    private static ComponentNativeAPI.Funcs.RigidbodyActionFn? s_ParticleStop;
+    private static ComponentNativeAPI.Funcs.RigidbodyActionFn? s_ParticleRestart;
+    private static CoreNativeAPI.Funcs.SetIntFn? s_ParticleSetPreset;
+
+    // NetworkIdentityComponent
+    private static ComponentNativeAPI.Funcs.GetUInt64Fn? s_NetIdGetNetId;
+    private static CoreNativeAPI.Funcs.GetUInt32Fn? s_NetIdGetOwnerClient;
+    private static CoreNativeAPI.Funcs.SetUInt32Fn? s_NetIdSetOwnerClient;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_NetIdGetIsLocalPlayer;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_NetIdSetIsLocalPlayer;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_NetIdGetReplicate;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_NetIdSetReplicate;
+    private static CoreNativeAPI.Funcs.GetStringFn? s_NetIdGetPrefab;
+    private static CoreNativeAPI.Funcs.SetStringFn? s_NetIdSetPrefab;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_NetIdGetReplicatedMovementSpeed;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_NetIdSetReplicatedMovementSpeed;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_NetIdGetReplicatedIsGrounded;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_NetIdSetReplicatedIsGrounded;
+    private static CoreNativeAPI.Funcs.GetUInt32Fn? s_NetIdGetSyncComponentsMask;
+    private static CoreNativeAPI.Funcs.SetUInt32Fn? s_NetIdSetSyncComponentsMask;
+    private static CoreNativeAPI.Funcs.SetUInt32Fn? s_NetIdMarkDirty;
+
+    // PlaneColliderComponent
+    private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_PlaneColliderGetCenter;
+    private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_PlaneColliderSetCenter;
+    private static ComponentNativeAPI.Funcs.GetVector3VoidFn? s_PlaneColliderGetScale;
+    private static ComponentNativeAPI.Funcs.SetVector3VoidFn? s_PlaneColliderSetScale;
+
+    // TextComponent extensions
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_TextComponentGetFontSize;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_TextComponentSetFontSize;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_TextComponentGetScreenSpace;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_TextComponentSetScreenSpace;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_TextComponentGetBillboard;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_TextComponentSetBillboard;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_TextComponentGetCenterAlign;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_TextComponentSetCenterAlign;
+
     public static void Initialize(ulong apiPtr)
     {
         if (apiPtr == 0)
@@ -498,6 +663,162 @@ public static class ComponentInternalCalls
         s_AnimatorGetString = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorGetStringFn>(api.AnimatorComponent_GetString);
         s_AnimatorSetState = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorSetStateFn>(api.AnimatorComponent_SetState);
         s_AnimatorGetCurrentStateName = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.AnimatorGetCurrentStateNameFn>(api.AnimatorComponent_GetCurrentStateName);
+
+        static TDelegate? BindOpt<TDelegate>(IntPtr ptr) where TDelegate : Delegate
+            => ptr != IntPtr.Zero ? Marshal.GetDelegateForFunctionPointer<TDelegate>(ptr) : null;
+
+        s_EntityRemoveComponent = BindOpt<ComponentNativeAPI.Funcs.EntityAddComponentFn>(api.Entity_RemoveComponent);
+
+        s_RenderingGetVisible = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.RenderingComponent_GetVisible);
+        s_RenderingSetVisible = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.RenderingComponent_SetVisible);
+
+        s_CameraGetPrimary = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.CameraComponent_GetPrimary);
+        s_CameraSetPrimary = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.CameraComponent_SetPrimary);
+        s_CameraGetProjectionType = BindOpt<CoreNativeAPI.Funcs.GetIntFn>(api.CameraComponent_GetProjectionType);
+        s_CameraSetProjectionType = BindOpt<CoreNativeAPI.Funcs.SetIntFn>(api.CameraComponent_SetProjectionType);
+        s_CameraGetFov = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.CameraComponent_GetFov);
+        s_CameraSetFov = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.CameraComponent_SetFov);
+        s_CameraGetOrthoSize = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.CameraComponent_GetOrthoSize);
+        s_CameraSetOrthoSize = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.CameraComponent_SetOrthoSize);
+        s_CameraGetNearClip = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.CameraComponent_GetNearClip);
+        s_CameraSetNearClip = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.CameraComponent_SetNearClip);
+        s_CameraGetFarClip = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.CameraComponent_GetFarClip);
+        s_CameraSetFarClip = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.CameraComponent_SetFarClip);
+        s_CameraGetAspectRatioPreset = BindOpt<CoreNativeAPI.Funcs.GetIntFn>(api.CameraComponent_GetAspectRatioPreset);
+        s_CameraSetAspectRatioPreset = BindOpt<CoreNativeAPI.Funcs.SetIntFn>(api.CameraComponent_SetAspectRatioPreset);
+
+        s_DirLightGetColor = BindOpt<CoreNativeAPI.Funcs.GetVector4Fn>(api.DirectionalLightComponent_GetColor);
+        s_DirLightSetColor = BindOpt<CoreNativeAPI.Funcs.SetVector4Fn>(api.DirectionalLightComponent_SetColor);
+        s_DirLightGetIntensity = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.DirectionalLightComponent_GetIntensity);
+        s_DirLightSetIntensity = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.DirectionalLightComponent_SetIntensity);
+        s_DirLightGetAngularRadius = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.DirectionalLightComponent_GetAngularRadius);
+        s_DirLightSetAngularRadius = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.DirectionalLightComponent_SetAngularRadius);
+        s_DirLightGetShadowStrength = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.DirectionalLightComponent_GetShadowStrength);
+        s_DirLightSetShadowStrength = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.DirectionalLightComponent_SetShadowStrength);
+        s_DirLightGetShadowDistance = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.DirectionalLightComponent_GetShadowDistance);
+        s_DirLightSetShadowDistance = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.DirectionalLightComponent_SetShadowDistance);
+        s_DirLightGetShadowResolution = BindOpt<CoreNativeAPI.Funcs.GetIntFn>(api.DirectionalLightComponent_GetShadowResolution);
+        s_DirLightSetShadowResolution = BindOpt<CoreNativeAPI.Funcs.SetIntFn>(api.DirectionalLightComponent_SetShadowResolution);
+        s_DirLightGetCascadeShadow = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.DirectionalLightComponent_GetCascadeShadow);
+        s_DirLightSetCascadeShadow = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.DirectionalLightComponent_SetCascadeShadow);
+        s_DirLightGetSoftShadows = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.DirectionalLightComponent_GetSoftShadows);
+        s_DirLightSetSoftShadows = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.DirectionalLightComponent_SetSoftShadows);
+
+        s_PointLightGetColor = BindOpt<CoreNativeAPI.Funcs.GetVector4Fn>(api.PointLightComponent_GetColor);
+        s_PointLightSetColor = BindOpt<CoreNativeAPI.Funcs.SetVector4Fn>(api.PointLightComponent_SetColor);
+        s_PointLightGetIntensity = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.PointLightComponent_GetIntensity);
+        s_PointLightSetIntensity = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.PointLightComponent_SetIntensity);
+        s_PointLightGetRange = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.PointLightComponent_GetRange);
+        s_PointLightSetRange = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.PointLightComponent_SetRange);
+        s_PointLightGetEnabled = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.PointLightComponent_GetEnabled);
+        s_PointLightSetEnabled = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.PointLightComponent_SetEnabled);
+        s_PointLightGetConstantAttenuation = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.PointLightComponent_GetConstantAttenuation);
+        s_PointLightSetConstantAttenuation = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.PointLightComponent_SetConstantAttenuation);
+        s_PointLightGetLinearAttenuation = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.PointLightComponent_GetLinearAttenuation);
+        s_PointLightSetLinearAttenuation = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.PointLightComponent_SetLinearAttenuation);
+        s_PointLightGetQuadraticAttenuation = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.PointLightComponent_GetQuadraticAttenuation);
+        s_PointLightSetQuadraticAttenuation = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.PointLightComponent_SetQuadraticAttenuation);
+
+        s_SpotLightGetColor = BindOpt<CoreNativeAPI.Funcs.GetVector4Fn>(api.SpotLightComponent_GetColor);
+        s_SpotLightSetColor = BindOpt<CoreNativeAPI.Funcs.SetVector4Fn>(api.SpotLightComponent_SetColor);
+        s_SpotLightGetIntensity = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.SpotLightComponent_GetIntensity);
+        s_SpotLightSetIntensity = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.SpotLightComponent_SetIntensity);
+        s_SpotLightGetRange = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.SpotLightComponent_GetRange);
+        s_SpotLightSetRange = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.SpotLightComponent_SetRange);
+        s_SpotLightGetEnabled = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.SpotLightComponent_GetEnabled);
+        s_SpotLightSetEnabled = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.SpotLightComponent_SetEnabled);
+        s_SpotLightGetInnerConeAngle = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.SpotLightComponent_GetInnerConeAngle);
+        s_SpotLightSetInnerConeAngle = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.SpotLightComponent_SetInnerConeAngle);
+        s_SpotLightGetOuterConeAngle = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.SpotLightComponent_GetOuterConeAngle);
+        s_SpotLightSetOuterConeAngle = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.SpotLightComponent_SetOuterConeAngle);
+        s_SpotLightGetConstantAttenuation = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.SpotLightComponent_GetConstantAttenuation);
+        s_SpotLightSetConstantAttenuation = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.SpotLightComponent_SetConstantAttenuation);
+        s_SpotLightGetLinearAttenuation = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.SpotLightComponent_GetLinearAttenuation);
+        s_SpotLightSetLinearAttenuation = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.SpotLightComponent_SetLinearAttenuation);
+        s_SpotLightGetQuadraticAttenuation = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.SpotLightComponent_GetQuadraticAttenuation);
+        s_SpotLightSetQuadraticAttenuation = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.SpotLightComponent_SetQuadraticAttenuation);
+
+        s_PointLight2DGetColor = BindOpt<CoreNativeAPI.Funcs.GetVector4Fn>(api.PointLight2DComponent_GetColor);
+        s_PointLight2DSetColor = BindOpt<CoreNativeAPI.Funcs.SetVector4Fn>(api.PointLight2DComponent_SetColor);
+        s_PointLight2DGetRadius = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.PointLight2DComponent_GetRadius);
+        s_PointLight2DSetRadius = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.PointLight2DComponent_SetRadius);
+        s_PointLight2DGetIntensity = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.PointLight2DComponent_GetIntensity);
+        s_PointLight2DSetIntensity = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.PointLight2DComponent_SetIntensity);
+        s_PointLight2DGetEnabled = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.PointLight2DComponent_GetEnabled);
+        s_PointLight2DSetEnabled = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.PointLight2DComponent_SetEnabled);
+
+        s_StaticMeshGetMeshHandle = BindOpt<ComponentNativeAPI.Funcs.GetUInt64Fn>(api.StaticMeshComponent_GetMeshHandle);
+        s_StaticMeshSetMeshHandle = BindOpt<ComponentNativeAPI.Funcs.SetUInt64Fn>(api.StaticMeshComponent_SetMeshHandle);
+        s_StaticMeshSetOverrideMaterial = BindOpt<ComponentNativeAPI.Funcs.StaticMeshSetOverrideMaterialFn>(api.StaticMeshComponent_SetOverrideMaterial);
+        s_StaticMeshGetOverrideMaterial = BindOpt<ComponentNativeAPI.Funcs.StaticMeshGetOverrideMaterialFn>(api.StaticMeshComponent_GetOverrideMaterial);
+
+        s_WorldEnvGetExposure = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.WorldEnvironmentComponent_GetExposure);
+        s_WorldEnvSetExposure = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.WorldEnvironmentComponent_SetExposure);
+        s_WorldEnvGetGamma = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.WorldEnvironmentComponent_GetGamma);
+        s_WorldEnvSetGamma = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.WorldEnvironmentComponent_SetGamma);
+        s_WorldEnvGetAmbient = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.WorldEnvironmentComponent_GetAmbient);
+        s_WorldEnvSetAmbient = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.WorldEnvironmentComponent_SetAmbient);
+        s_WorldEnvGetEnableIBL = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.WorldEnvironmentComponent_GetEnableIBL);
+        s_WorldEnvSetEnableIBL = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.WorldEnvironmentComponent_SetEnableIBL);
+        s_WorldEnvGetFogDensity = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.WorldEnvironmentComponent_GetFogDensity);
+        s_WorldEnvSetFogDensity = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.WorldEnvironmentComponent_SetFogDensity);
+        s_WorldEnvGetFogColor = BindOpt<CoreNativeAPI.Funcs.GetVector4Fn>(api.WorldEnvironmentComponent_GetFogColor);
+        s_WorldEnvSetFogColor = BindOpt<CoreNativeAPI.Funcs.SetVector4Fn>(api.WorldEnvironmentComponent_SetFogColor);
+        s_WorldEnvGetFogStart = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.WorldEnvironmentComponent_GetFogStart);
+        s_WorldEnvSetFogStart = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.WorldEnvironmentComponent_SetFogStart);
+        s_WorldEnvGetFogEnd = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.WorldEnvironmentComponent_GetFogEnd);
+        s_WorldEnvSetFogEnd = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.WorldEnvironmentComponent_SetFogEnd);
+        s_WorldEnvMarkDirty = BindOpt<ComponentNativeAPI.Funcs.RigidbodyActionFn>(api.WorldEnvironmentComponent_MarkDirty);
+
+        s_ParticleGetIsPlaying = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.ParticleSystemComponent_GetIsPlaying);
+        s_ParticleSetIsPlaying = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.ParticleSystemComponent_SetIsPlaying);
+        s_ParticleGetEmissionRate = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.ParticleSystemComponent_GetEmissionRate);
+        s_ParticleSetEmissionRate = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.ParticleSystemComponent_SetEmissionRate);
+        s_ParticleGetMaxParticles = BindOpt<CoreNativeAPI.Funcs.GetUInt32Fn>(api.ParticleSystemComponent_GetMaxParticles);
+        s_ParticleSetMaxParticles = BindOpt<CoreNativeAPI.Funcs.SetUInt32Fn>(api.ParticleSystemComponent_SetMaxParticles);
+        s_ParticleGetStartColor = BindOpt<CoreNativeAPI.Funcs.GetVector4Fn>(api.ParticleSystemComponent_GetStartColor);
+        s_ParticleSetStartColor = BindOpt<CoreNativeAPI.Funcs.SetVector4Fn>(api.ParticleSystemComponent_SetStartColor);
+        s_ParticleGetEndColor = BindOpt<CoreNativeAPI.Funcs.GetVector4Fn>(api.ParticleSystemComponent_GetEndColor);
+        s_ParticleSetEndColor = BindOpt<CoreNativeAPI.Funcs.SetVector4Fn>(api.ParticleSystemComponent_SetEndColor);
+        s_ParticleGetStartSize = BindOpt<CoreNativeAPI.Funcs.GetVector2Fn>(api.ParticleSystemComponent_GetStartSize);
+        s_ParticleSetStartSize = BindOpt<CoreNativeAPI.Funcs.SetVector2Fn>(api.ParticleSystemComponent_SetStartSize);
+        s_ParticleGetEndSize = BindOpt<CoreNativeAPI.Funcs.GetVector2Fn>(api.ParticleSystemComponent_GetEndSize);
+        s_ParticleSetEndSize = BindOpt<CoreNativeAPI.Funcs.SetVector2Fn>(api.ParticleSystemComponent_SetEndSize);
+        s_ParticlePlay = BindOpt<ComponentNativeAPI.Funcs.RigidbodyActionFn>(api.ParticleSystemComponent_Play);
+        s_ParticleStop = BindOpt<ComponentNativeAPI.Funcs.RigidbodyActionFn>(api.ParticleSystemComponent_Stop);
+        s_ParticleRestart = BindOpt<ComponentNativeAPI.Funcs.RigidbodyActionFn>(api.ParticleSystemComponent_Restart);
+        s_ParticleSetPreset = BindOpt<CoreNativeAPI.Funcs.SetIntFn>(api.ParticleSystemComponent_SetPreset);
+
+        s_NetIdGetNetId = BindOpt<ComponentNativeAPI.Funcs.GetUInt64Fn>(api.NetworkIdentityComponent_GetNetId);
+        s_NetIdGetOwnerClient = BindOpt<CoreNativeAPI.Funcs.GetUInt32Fn>(api.NetworkIdentityComponent_GetOwnerClient);
+        s_NetIdSetOwnerClient = BindOpt<CoreNativeAPI.Funcs.SetUInt32Fn>(api.NetworkIdentityComponent_SetOwnerClient);
+        s_NetIdGetIsLocalPlayer = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.NetworkIdentityComponent_GetIsLocalPlayer);
+        s_NetIdSetIsLocalPlayer = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.NetworkIdentityComponent_SetIsLocalPlayer);
+        s_NetIdGetReplicate = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.NetworkIdentityComponent_GetReplicate);
+        s_NetIdSetReplicate = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.NetworkIdentityComponent_SetReplicate);
+        s_NetIdGetPrefab = BindOpt<CoreNativeAPI.Funcs.GetStringFn>(api.NetworkIdentityComponent_GetPrefab);
+        s_NetIdSetPrefab = BindOpt<CoreNativeAPI.Funcs.SetStringFn>(api.NetworkIdentityComponent_SetPrefab);
+        s_NetIdGetReplicatedMovementSpeed = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.NetworkIdentityComponent_GetReplicatedMovementSpeed);
+        s_NetIdSetReplicatedMovementSpeed = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.NetworkIdentityComponent_SetReplicatedMovementSpeed);
+        s_NetIdGetReplicatedIsGrounded = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.NetworkIdentityComponent_GetReplicatedIsGrounded);
+        s_NetIdSetReplicatedIsGrounded = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.NetworkIdentityComponent_SetReplicatedIsGrounded);
+        s_NetIdGetSyncComponentsMask = BindOpt<CoreNativeAPI.Funcs.GetUInt32Fn>(api.NetworkIdentityComponent_GetSyncComponentsMask);
+        s_NetIdSetSyncComponentsMask = BindOpt<CoreNativeAPI.Funcs.SetUInt32Fn>(api.NetworkIdentityComponent_SetSyncComponentsMask);
+        s_NetIdMarkDirty = BindOpt<CoreNativeAPI.Funcs.SetUInt32Fn>(api.NetworkIdentityComponent_MarkDirty);
+
+        s_PlaneColliderGetCenter = BindOpt<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.PlaneColliderComponent_GetCenter);
+        s_PlaneColliderSetCenter = BindOpt<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.PlaneColliderComponent_SetCenter);
+        s_PlaneColliderGetScale = BindOpt<ComponentNativeAPI.Funcs.GetVector3VoidFn>(api.PlaneColliderComponent_GetScale);
+        s_PlaneColliderSetScale = BindOpt<ComponentNativeAPI.Funcs.SetVector3VoidFn>(api.PlaneColliderComponent_SetScale);
+
+        s_TextComponentGetFontSize = BindOpt<CoreNativeAPI.Funcs.GetFloatFn>(api.TextComponent_GetFontSize);
+        s_TextComponentSetFontSize = BindOpt<CoreNativeAPI.Funcs.SetFloatFn>(api.TextComponent_SetFontSize);
+        s_TextComponentGetScreenSpace = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.TextComponent_GetScreenSpace);
+        s_TextComponentSetScreenSpace = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.TextComponent_SetScreenSpace);
+        s_TextComponentGetBillboard = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.TextComponent_GetBillboard);
+        s_TextComponentSetBillboard = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.TextComponent_SetBillboard);
+        s_TextComponentGetCenterAlign = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.TextComponent_GetCenterAlign);
+        s_TextComponentSetCenterAlign = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.TextComponent_SetCenterAlign);
 
         s_Initialized = true;
     }
@@ -2106,4 +2427,177 @@ public static class ComponentInternalCalls
         NativeObject.Vector3 nativeVal = NativeObject.ToNative(value);
         s_RigidbodySetAngularVelocity!(entityID, ref nativeVal);
     }
+
+    internal static void Entity_RemoveComponent(ulong entityID, Type componentType)
+    {
+        EnsureInitialized();
+        if (s_EntityRemoveComponent == null) return;
+        IntPtr typeNamePtr = NativeObject.StringToUtf8(componentType.FullName ?? componentType.Name);
+        try { s_EntityRemoveComponent(entityID, typeNamePtr); }
+        finally { Marshal.FreeCoTaskMem(typeNamePtr); }
+    }
+
+    internal static bool RenderingComponent_GetVisible(ulong id) { EnsureInitialized(); bool r = true; s_RenderingGetVisible?.Invoke(id, out r); return r; }
+    internal static void RenderingComponent_SetVisible(ulong id, bool v) { EnsureInitialized(); s_RenderingSetVisible?.Invoke(id, v); }
+
+    internal static bool CameraComponent_GetPrimary(ulong id) { EnsureInitialized(); bool r = false; s_CameraGetPrimary?.Invoke(id, out r); return r; }
+    internal static void CameraComponent_SetPrimary(ulong id, bool v) { EnsureInitialized(); s_CameraSetPrimary?.Invoke(id, v); }
+    internal static int CameraComponent_GetProjectionType(ulong id) { EnsureInitialized(); int r = 1; s_CameraGetProjectionType?.Invoke(id, out r); return r; }
+    internal static void CameraComponent_SetProjectionType(ulong id, int v) { EnsureInitialized(); s_CameraSetProjectionType?.Invoke(id, v); }
+    internal static float CameraComponent_GetFov(ulong id) { EnsureInitialized(); float r = 45f; s_CameraGetFov?.Invoke(id, out r); return r; }
+    internal static void CameraComponent_SetFov(ulong id, float v) { EnsureInitialized(); s_CameraSetFov?.Invoke(id, v); }
+    internal static float CameraComponent_GetOrthoSize(ulong id) { EnsureInitialized(); float r = 10f; s_CameraGetOrthoSize?.Invoke(id, out r); return r; }
+    internal static void CameraComponent_SetOrthoSize(ulong id, float v) { EnsureInitialized(); s_CameraSetOrthoSize?.Invoke(id, v); }
+    internal static float CameraComponent_GetNearClip(ulong id) { EnsureInitialized(); float r = 0.1f; s_CameraGetNearClip?.Invoke(id, out r); return r; }
+    internal static void CameraComponent_SetNearClip(ulong id, float v) { EnsureInitialized(); s_CameraSetNearClip?.Invoke(id, v); }
+    internal static float CameraComponent_GetFarClip(ulong id) { EnsureInitialized(); float r = 500f; s_CameraGetFarClip?.Invoke(id, out r); return r; }
+    internal static void CameraComponent_SetFarClip(ulong id, float v) { EnsureInitialized(); s_CameraSetFarClip?.Invoke(id, v); }
+    internal static int CameraComponent_GetAspectRatioPreset(ulong id) { EnsureInitialized(); int r = 0; s_CameraGetAspectRatioPreset?.Invoke(id, out r); return r; }
+    internal static void CameraComponent_SetAspectRatioPreset(ulong id, int v) { EnsureInitialized(); s_CameraSetAspectRatioPreset?.Invoke(id, v); }
+
+    internal static Mathf.Vector4 DirectionalLightComponent_GetColor(ulong id) { EnsureInitialized(); NativeObject.Vector4 n = default; s_DirLightGetColor?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void DirectionalLightComponent_SetColor(ulong id, Mathf.Vector4 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_DirLightSetColor?.Invoke(id, ref n); }
+    internal static float DirectionalLightComponent_GetIntensity(ulong id) { EnsureInitialized(); float r = 0; s_DirLightGetIntensity?.Invoke(id, out r); return r; }
+    internal static void DirectionalLightComponent_SetIntensity(ulong id, float v) { EnsureInitialized(); s_DirLightSetIntensity?.Invoke(id, v); }
+    internal static float DirectionalLightComponent_GetAngularRadius(ulong id) { EnsureInitialized(); float r = 0; s_DirLightGetAngularRadius?.Invoke(id, out r); return r; }
+    internal static void DirectionalLightComponent_SetAngularRadius(ulong id, float v) { EnsureInitialized(); s_DirLightSetAngularRadius?.Invoke(id, v); }
+    internal static float DirectionalLightComponent_GetShadowStrength(ulong id) { EnsureInitialized(); float r = 0; s_DirLightGetShadowStrength?.Invoke(id, out r); return r; }
+    internal static void DirectionalLightComponent_SetShadowStrength(ulong id, float v) { EnsureInitialized(); s_DirLightSetShadowStrength?.Invoke(id, v); }
+    internal static float DirectionalLightComponent_GetShadowDistance(ulong id) { EnsureInitialized(); float r = 0; s_DirLightGetShadowDistance?.Invoke(id, out r); return r; }
+    internal static void DirectionalLightComponent_SetShadowDistance(ulong id, float v) { EnsureInitialized(); s_DirLightSetShadowDistance?.Invoke(id, v); }
+    internal static int DirectionalLightComponent_GetShadowResolution(ulong id) { EnsureInitialized(); int r = 0; s_DirLightGetShadowResolution?.Invoke(id, out r); return r; }
+    internal static void DirectionalLightComponent_SetShadowResolution(ulong id, int v) { EnsureInitialized(); s_DirLightSetShadowResolution?.Invoke(id, v); }
+    internal static bool DirectionalLightComponent_GetCascadeShadow(ulong id) { EnsureInitialized(); bool r = false; s_DirLightGetCascadeShadow?.Invoke(id, out r); return r; }
+    internal static void DirectionalLightComponent_SetCascadeShadow(ulong id, bool v) { EnsureInitialized(); s_DirLightSetCascadeShadow?.Invoke(id, v); }
+    internal static bool DirectionalLightComponent_GetSoftShadows(ulong id) { EnsureInitialized(); bool r = false; s_DirLightGetSoftShadows?.Invoke(id, out r); return r; }
+    internal static void DirectionalLightComponent_SetSoftShadows(ulong id, bool v) { EnsureInitialized(); s_DirLightSetSoftShadows?.Invoke(id, v); }
+
+    internal static Mathf.Vector4 PointLightComponent_GetColor(ulong id) { EnsureInitialized(); NativeObject.Vector4 n = default; s_PointLightGetColor?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void PointLightComponent_SetColor(ulong id, Mathf.Vector4 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_PointLightSetColor?.Invoke(id, ref n); }
+    internal static float PointLightComponent_GetIntensity(ulong id) { EnsureInitialized(); float r = 0; s_PointLightGetIntensity?.Invoke(id, out r); return r; }
+    internal static void PointLightComponent_SetIntensity(ulong id, float v) { EnsureInitialized(); s_PointLightSetIntensity?.Invoke(id, v); }
+    internal static float PointLightComponent_GetRange(ulong id) { EnsureInitialized(); float r = 0; s_PointLightGetRange?.Invoke(id, out r); return r; }
+    internal static void PointLightComponent_SetRange(ulong id, float v) { EnsureInitialized(); s_PointLightSetRange?.Invoke(id, v); }
+    internal static bool PointLightComponent_GetEnabled(ulong id) { EnsureInitialized(); bool r = false; s_PointLightGetEnabled?.Invoke(id, out r); return r; }
+    internal static void PointLightComponent_SetEnabled(ulong id, bool v) { EnsureInitialized(); s_PointLightSetEnabled?.Invoke(id, v); }
+    internal static float PointLightComponent_GetConstantAttenuation(ulong id) { EnsureInitialized(); float r = 0; s_PointLightGetConstantAttenuation?.Invoke(id, out r); return r; }
+    internal static void PointLightComponent_SetConstantAttenuation(ulong id, float v) { EnsureInitialized(); s_PointLightSetConstantAttenuation?.Invoke(id, v); }
+    internal static float PointLightComponent_GetLinearAttenuation(ulong id) { EnsureInitialized(); float r = 0; s_PointLightGetLinearAttenuation?.Invoke(id, out r); return r; }
+    internal static void PointLightComponent_SetLinearAttenuation(ulong id, float v) { EnsureInitialized(); s_PointLightSetLinearAttenuation?.Invoke(id, v); }
+    internal static float PointLightComponent_GetQuadraticAttenuation(ulong id) { EnsureInitialized(); float r = 0; s_PointLightGetQuadraticAttenuation?.Invoke(id, out r); return r; }
+    internal static void PointLightComponent_SetQuadraticAttenuation(ulong id, float v) { EnsureInitialized(); s_PointLightSetQuadraticAttenuation?.Invoke(id, v); }
+
+    internal static Mathf.Vector4 SpotLightComponent_GetColor(ulong id) { EnsureInitialized(); NativeObject.Vector4 n = default; s_SpotLightGetColor?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void SpotLightComponent_SetColor(ulong id, Mathf.Vector4 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_SpotLightSetColor?.Invoke(id, ref n); }
+    internal static float SpotLightComponent_GetIntensity(ulong id) { EnsureInitialized(); float r = 0; s_SpotLightGetIntensity?.Invoke(id, out r); return r; }
+    internal static void SpotLightComponent_SetIntensity(ulong id, float v) { EnsureInitialized(); s_SpotLightSetIntensity?.Invoke(id, v); }
+    internal static float SpotLightComponent_GetRange(ulong id) { EnsureInitialized(); float r = 0; s_SpotLightGetRange?.Invoke(id, out r); return r; }
+    internal static void SpotLightComponent_SetRange(ulong id, float v) { EnsureInitialized(); s_SpotLightSetRange?.Invoke(id, v); }
+    internal static bool SpotLightComponent_GetEnabled(ulong id) { EnsureInitialized(); bool r = false; s_SpotLightGetEnabled?.Invoke(id, out r); return r; }
+    internal static void SpotLightComponent_SetEnabled(ulong id, bool v) { EnsureInitialized(); s_SpotLightSetEnabled?.Invoke(id, v); }
+    internal static float SpotLightComponent_GetInnerConeAngle(ulong id) { EnsureInitialized(); float r = 0; s_SpotLightGetInnerConeAngle?.Invoke(id, out r); return r; }
+    internal static void SpotLightComponent_SetInnerConeAngle(ulong id, float v) { EnsureInitialized(); s_SpotLightSetInnerConeAngle?.Invoke(id, v); }
+    internal static float SpotLightComponent_GetOuterConeAngle(ulong id) { EnsureInitialized(); float r = 0; s_SpotLightGetOuterConeAngle?.Invoke(id, out r); return r; }
+    internal static void SpotLightComponent_SetOuterConeAngle(ulong id, float v) { EnsureInitialized(); s_SpotLightSetOuterConeAngle?.Invoke(id, v); }
+    internal static float SpotLightComponent_GetConstantAttenuation(ulong id) { EnsureInitialized(); float r = 0; s_SpotLightGetConstantAttenuation?.Invoke(id, out r); return r; }
+    internal static void SpotLightComponent_SetConstantAttenuation(ulong id, float v) { EnsureInitialized(); s_SpotLightSetConstantAttenuation?.Invoke(id, v); }
+    internal static float SpotLightComponent_GetLinearAttenuation(ulong id) { EnsureInitialized(); float r = 0; s_SpotLightGetLinearAttenuation?.Invoke(id, out r); return r; }
+    internal static void SpotLightComponent_SetLinearAttenuation(ulong id, float v) { EnsureInitialized(); s_SpotLightSetLinearAttenuation?.Invoke(id, v); }
+    internal static float SpotLightComponent_GetQuadraticAttenuation(ulong id) { EnsureInitialized(); float r = 0; s_SpotLightGetQuadraticAttenuation?.Invoke(id, out r); return r; }
+    internal static void SpotLightComponent_SetQuadraticAttenuation(ulong id, float v) { EnsureInitialized(); s_SpotLightSetQuadraticAttenuation?.Invoke(id, v); }
+
+    internal static Mathf.Vector4 PointLight2DComponent_GetColor(ulong id) { EnsureInitialized(); NativeObject.Vector4 n = default; s_PointLight2DGetColor?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void PointLight2DComponent_SetColor(ulong id, Mathf.Vector4 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_PointLight2DSetColor?.Invoke(id, ref n); }
+    internal static float PointLight2DComponent_GetRadius(ulong id) { EnsureInitialized(); float r = 0; s_PointLight2DGetRadius?.Invoke(id, out r); return r; }
+    internal static void PointLight2DComponent_SetRadius(ulong id, float v) { EnsureInitialized(); s_PointLight2DSetRadius?.Invoke(id, v); }
+    internal static float PointLight2DComponent_GetIntensity(ulong id) { EnsureInitialized(); float r = 0; s_PointLight2DGetIntensity?.Invoke(id, out r); return r; }
+    internal static void PointLight2DComponent_SetIntensity(ulong id, float v) { EnsureInitialized(); s_PointLight2DSetIntensity?.Invoke(id, v); }
+    internal static bool PointLight2DComponent_GetEnabled(ulong id) { EnsureInitialized(); bool r = false; s_PointLight2DGetEnabled?.Invoke(id, out r); return r; }
+    internal static void PointLight2DComponent_SetEnabled(ulong id, bool v) { EnsureInitialized(); s_PointLight2DSetEnabled?.Invoke(id, v); }
+
+    internal static ulong StaticMeshComponent_GetMeshHandle(ulong id) { EnsureInitialized(); ulong r = 0; s_StaticMeshGetMeshHandle?.Invoke(id, out r); return r; }
+    internal static void StaticMeshComponent_SetMeshHandle(ulong id, ulong handle) { EnsureInitialized(); s_StaticMeshSetMeshHandle?.Invoke(id, handle); }
+    internal static void StaticMeshComponent_SetOverrideMaterial(ulong id, int slot, ulong matHandle) { EnsureInitialized(); s_StaticMeshSetOverrideMaterial?.Invoke(id, slot, matHandle); }
+    internal static ulong StaticMeshComponent_GetOverrideMaterial(ulong id, int slot) { EnsureInitialized(); ulong r = 0; s_StaticMeshGetOverrideMaterial?.Invoke(id, slot, out r); return r; }
+
+    internal static float WorldEnvironmentComponent_GetExposure(ulong id) { EnsureInitialized(); float r = 1f; s_WorldEnvGetExposure?.Invoke(id, out r); return r; }
+    internal static void WorldEnvironmentComponent_SetExposure(ulong id, float v) { EnsureInitialized(); s_WorldEnvSetExposure?.Invoke(id, v); }
+    internal static float WorldEnvironmentComponent_GetGamma(ulong id) { EnsureInitialized(); float r = 2.2f; s_WorldEnvGetGamma?.Invoke(id, out r); return r; }
+    internal static void WorldEnvironmentComponent_SetGamma(ulong id, float v) { EnsureInitialized(); s_WorldEnvSetGamma?.Invoke(id, v); }
+    internal static float WorldEnvironmentComponent_GetAmbient(ulong id) { EnsureInitialized(); float r = 0.5f; s_WorldEnvGetAmbient?.Invoke(id, out r); return r; }
+    internal static void WorldEnvironmentComponent_SetAmbient(ulong id, float v) { EnsureInitialized(); s_WorldEnvSetAmbient?.Invoke(id, v); }
+    internal static bool WorldEnvironmentComponent_GetEnableIBL(ulong id) { EnsureInitialized(); bool r = true; s_WorldEnvGetEnableIBL?.Invoke(id, out r); return r; }
+    internal static void WorldEnvironmentComponent_SetEnableIBL(ulong id, bool v) { EnsureInitialized(); s_WorldEnvSetEnableIBL?.Invoke(id, v); }
+    internal static float WorldEnvironmentComponent_GetFogDensity(ulong id) { EnsureInitialized(); float r = 0f; s_WorldEnvGetFogDensity?.Invoke(id, out r); return r; }
+    internal static void WorldEnvironmentComponent_SetFogDensity(ulong id, float v) { EnsureInitialized(); s_WorldEnvSetFogDensity?.Invoke(id, v); }
+    internal static Mathf.Vector4 WorldEnvironmentComponent_GetFogColor(ulong id) { EnsureInitialized(); NativeObject.Vector4 n = default; s_WorldEnvGetFogColor?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void WorldEnvironmentComponent_SetFogColor(ulong id, Mathf.Vector4 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_WorldEnvSetFogColor?.Invoke(id, ref n); }
+    internal static float WorldEnvironmentComponent_GetFogStart(ulong id) { EnsureInitialized(); float r = 10f; s_WorldEnvGetFogStart?.Invoke(id, out r); return r; }
+    internal static void WorldEnvironmentComponent_SetFogStart(ulong id, float v) { EnsureInitialized(); s_WorldEnvSetFogStart?.Invoke(id, v); }
+    internal static float WorldEnvironmentComponent_GetFogEnd(ulong id) { EnsureInitialized(); float r = 100f; s_WorldEnvGetFogEnd?.Invoke(id, out r); return r; }
+    internal static void WorldEnvironmentComponent_SetFogEnd(ulong id, float v) { EnsureInitialized(); s_WorldEnvSetFogEnd?.Invoke(id, v); }
+    internal static void WorldEnvironmentComponent_MarkDirty(ulong id) { EnsureInitialized(); s_WorldEnvMarkDirty?.Invoke(id); }
+
+    internal static bool ParticleSystemComponent_GetIsPlaying(ulong id) { EnsureInitialized(); bool r = false; s_ParticleGetIsPlaying?.Invoke(id, out r); return r; }
+    internal static void ParticleSystemComponent_SetIsPlaying(ulong id, bool v) { EnsureInitialized(); s_ParticleSetIsPlaying?.Invoke(id, v); }
+    internal static float ParticleSystemComponent_GetEmissionRate(ulong id) { EnsureInitialized(); float r = 0f; s_ParticleGetEmissionRate?.Invoke(id, out r); return r; }
+    internal static void ParticleSystemComponent_SetEmissionRate(ulong id, float v) { EnsureInitialized(); s_ParticleSetEmissionRate?.Invoke(id, v); }
+    internal static uint ParticleSystemComponent_GetMaxParticles(ulong id) { EnsureInitialized(); uint r = 0; s_ParticleGetMaxParticles?.Invoke(id, out r); return r; }
+    internal static void ParticleSystemComponent_SetMaxParticles(ulong id, uint v) { EnsureInitialized(); s_ParticleSetMaxParticles?.Invoke(id, v); }
+    internal static Mathf.Vector4 ParticleSystemComponent_GetStartColor(ulong id) { EnsureInitialized(); NativeObject.Vector4 n = default; s_ParticleGetStartColor?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void ParticleSystemComponent_SetStartColor(ulong id, Mathf.Vector4 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_ParticleSetStartColor?.Invoke(id, ref n); }
+    internal static Mathf.Vector4 ParticleSystemComponent_GetEndColor(ulong id) { EnsureInitialized(); NativeObject.Vector4 n = default; s_ParticleGetEndColor?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void ParticleSystemComponent_SetEndColor(ulong id, Mathf.Vector4 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_ParticleSetEndColor?.Invoke(id, ref n); }
+    internal static Mathf.Vector2 ParticleSystemComponent_GetStartSize(ulong id) { EnsureInitialized(); NativeObject.Vector2 n = default; s_ParticleGetStartSize?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void ParticleSystemComponent_SetStartSize(ulong id, Mathf.Vector2 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_ParticleSetStartSize?.Invoke(id, ref n); }
+    internal static Mathf.Vector2 ParticleSystemComponent_GetEndSize(ulong id) { EnsureInitialized(); NativeObject.Vector2 n = default; s_ParticleGetEndSize?.Invoke(id, out n); return NativeObject.ToManaged(n); }
+    internal static void ParticleSystemComponent_SetEndSize(ulong id, Mathf.Vector2 v) { EnsureInitialized(); var n = NativeObject.ToNative(v); s_ParticleSetEndSize?.Invoke(id, ref n); }
+    internal static void ParticleSystemComponent_Play(ulong id) { EnsureInitialized(); s_ParticlePlay?.Invoke(id); }
+    internal static void ParticleSystemComponent_Stop(ulong id) { EnsureInitialized(); s_ParticleStop?.Invoke(id); }
+    internal static void ParticleSystemComponent_Restart(ulong id) { EnsureInitialized(); s_ParticleRestart?.Invoke(id); }
+    internal static void ParticleSystemComponent_SetPreset(ulong id, int preset) { EnsureInitialized(); s_ParticleSetPreset?.Invoke(id, preset); }
+
+    internal static ulong NetworkIdentityComponent_GetNetId(ulong id) { EnsureInitialized(); ulong r = 0; s_NetIdGetNetId?.Invoke(id, out r); return r; }
+    internal static uint NetworkIdentityComponent_GetOwnerClient(ulong id) { EnsureInitialized(); uint r = 0; s_NetIdGetOwnerClient?.Invoke(id, out r); return r; }
+    internal static void NetworkIdentityComponent_SetOwnerClient(ulong id, uint v) { EnsureInitialized(); s_NetIdSetOwnerClient?.Invoke(id, v); }
+    internal static bool NetworkIdentityComponent_GetIsLocalPlayer(ulong id) { EnsureInitialized(); bool r = false; s_NetIdGetIsLocalPlayer?.Invoke(id, out r); return r; }
+    internal static void NetworkIdentityComponent_SetIsLocalPlayer(ulong id, bool v) { EnsureInitialized(); s_NetIdSetIsLocalPlayer?.Invoke(id, v); }
+    internal static bool NetworkIdentityComponent_GetReplicate(ulong id) { EnsureInitialized(); bool r = false; s_NetIdGetReplicate?.Invoke(id, out r); return r; }
+    internal static void NetworkIdentityComponent_SetReplicate(ulong id, bool v) { EnsureInitialized(); s_NetIdSetReplicate?.Invoke(id, v); }
+    internal static string NetworkIdentityComponent_GetPrefab(ulong id)
+    {
+        EnsureInitialized();
+        if (s_NetIdGetPrefab == null) return string.Empty;
+        s_NetIdGetPrefab(id, out IntPtr ptr);
+        return NativeObject.Utf8ToString(ptr) ?? string.Empty;
+    }
+    internal static void NetworkIdentityComponent_SetPrefab(ulong id, string value)
+    {
+        EnsureInitialized();
+        if (s_NetIdSetPrefab == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(value);
+        try { s_NetIdSetPrefab(id, ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+    internal static float NetworkIdentityComponent_GetReplicatedMovementSpeed(ulong id) { EnsureInitialized(); float r = 0f; s_NetIdGetReplicatedMovementSpeed?.Invoke(id, out r); return r; }
+    internal static void NetworkIdentityComponent_SetReplicatedMovementSpeed(ulong id, float v) { EnsureInitialized(); s_NetIdSetReplicatedMovementSpeed?.Invoke(id, v); }
+    internal static bool NetworkIdentityComponent_GetReplicatedIsGrounded(ulong id) { EnsureInitialized(); bool r = false; s_NetIdGetReplicatedIsGrounded?.Invoke(id, out r); return r; }
+    internal static void NetworkIdentityComponent_SetReplicatedIsGrounded(ulong id, bool v) { EnsureInitialized(); s_NetIdSetReplicatedIsGrounded?.Invoke(id, v); }
+    internal static uint NetworkIdentityComponent_GetSyncComponentsMask(ulong id) { EnsureInitialized(); uint r = 0; s_NetIdGetSyncComponentsMask?.Invoke(id, out r); return r; }
+    internal static void NetworkIdentityComponent_SetSyncComponentsMask(ulong id, uint v) { EnsureInitialized(); s_NetIdSetSyncComponentsMask?.Invoke(id, v); }
+    internal static void NetworkIdentityComponent_MarkDirty(ulong id, uint flags) { EnsureInitialized(); s_NetIdMarkDirty?.Invoke(id, flags); }
+
+    internal static void PlaneColliderComponent_GetCenter(ulong id, out Mathf.Vector3 result) { EnsureInitialized(); NativeObject.Vector3 n = default; s_PlaneColliderGetCenter?.Invoke(id, out n); result = NativeObject.ToManaged(n); }
+    internal static void PlaneColliderComponent_SetCenter(ulong id, Mathf.Vector3 value) { EnsureInitialized(); var n = NativeObject.ToNative(value); s_PlaneColliderSetCenter?.Invoke(id, ref n); }
+    internal static void PlaneColliderComponent_GetScale(ulong id, out Mathf.Vector3 result) { EnsureInitialized(); NativeObject.Vector3 n = default; s_PlaneColliderGetScale?.Invoke(id, out n); result = NativeObject.ToManaged(n); }
+    internal static void PlaneColliderComponent_SetScale(ulong id, Mathf.Vector3 value) { EnsureInitialized(); var n = NativeObject.ToNative(value); s_PlaneColliderSetScale?.Invoke(id, ref n); }
+
+    internal static float TextComponent_GetFontSize(ulong id) { EnsureInitialized(); float r = 24f; s_TextComponentGetFontSize?.Invoke(id, out r); return r; }
+    internal static void TextComponent_SetFontSize(ulong id, float v) { EnsureInitialized(); s_TextComponentSetFontSize?.Invoke(id, v); }
+    internal static bool TextComponent_GetScreenSpace(ulong id) { EnsureInitialized(); bool r = false; s_TextComponentGetScreenSpace?.Invoke(id, out r); return r; }
+    internal static void TextComponent_SetScreenSpace(ulong id, bool v) { EnsureInitialized(); s_TextComponentSetScreenSpace?.Invoke(id, v); }
+    internal static bool TextComponent_GetBillboard(ulong id) { EnsureInitialized(); bool r = false; s_TextComponentGetBillboard?.Invoke(id, out r); return r; }
+    internal static void TextComponent_SetBillboard(ulong id, bool v) { EnsureInitialized(); s_TextComponentSetBillboard?.Invoke(id, v); }
+    internal static bool TextComponent_GetCenterAlign(ulong id) { EnsureInitialized(); bool r = false; s_TextComponentGetCenterAlign?.Invoke(id, out r); return r; }
+    internal static void TextComponent_SetCenterAlign(ulong id, bool v) { EnsureInitialized(); s_TextComponentSetCenterAlign?.Invoke(id, v); }
 }

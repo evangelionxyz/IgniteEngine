@@ -40,6 +40,13 @@ namespace ignite
         void InvokeOnBodyActivated();
         void InvokeOnBodyDeactivated();
 
+        // Network lifecycle callbacks
+        void InvokeOnNetworkClientJoined(uint32_t clientId, const std::string &clientName);
+        void InvokeOnNetworkClientLeft(uint32_t clientId, const std::string &clientName);
+        void InvokeOnNetworkConnected(uint32_t clientId);
+        void InvokeOnNetworkDisconnected(uint32_t clientId);
+        void InvokeOnNetworkInput(uint32_t clientId, float moveX, float moveY, uint16_t buttons, float yaw, float deltaTime);
+
         const Ref<ScriptClass> &GetScriptClass() const { return m_ScriptClass; }
         ScriptInstanceID GetInstanceId() const { return m_InstanceId; }
 
@@ -136,6 +143,12 @@ namespace ignite
 
         int m_OnBodyActivatedMethodId = 0;
         int m_OnBodyDeactivatedMethodId = 0;
+
+        int m_OnNetworkClientJoinedMethodId = 0;
+        int m_OnNetworkClientLeftMethodId = 0;
+        int m_OnNetworkConnectedMethodId = 0;
+        int m_OnNetworkDisconnectedMethodId = 0;
+        int m_OnNetworkInputMethodId = 0;
 
         inline static char s_FieldValueBuffer[64];
         friend class ScriptEngine;

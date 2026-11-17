@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "*.lua": "lua"
+    },
+    "Lua.runtime.version": "Lua 5.4",
+    "Lua.workspace.library": [
+        ".ignite/lua"
+    ],
+    "Lua.workspace.checkThirdParty": false,
+    "Lua.diagnostics.globals": [
+        "Ignite"
+    ]
+}

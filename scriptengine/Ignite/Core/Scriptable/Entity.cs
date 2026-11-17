@@ -81,6 +81,12 @@ public class Entity : IgniteObject
         return ComponentInternalCalls.Entity_HasComponent(ID, componentType);
     }
 
+    public void RemoveComponent<T>() where T : IComponent, new()
+    {
+        Type componentType = typeof(T);
+        ComponentInternalCalls.Entity_RemoveComponent(ID, componentType);
+    }
+
     public T GetComponent<T>() where T : IComponent, new()
     {
         if (!HasComponent<T>())
@@ -156,6 +162,12 @@ public class Entity : IgniteObject
     public virtual void OnBodyActivated() { }
     public virtual void OnBodyDeactivated() { }
 
+    public virtual void OnNetworkClientJoined(uint clientId, string clientName) { }
+    public virtual void OnNetworkClientLeft(uint clientId, string clientName) { }
+    public virtual void OnNetworkConnected(uint clientId) { }
+    public virtual void OnNetworkDisconnected(uint clientId) { }
+    public virtual void OnNetworkInput(uint clientId, float moveX, float moveY, ushort buttons, float yaw, float deltaTime) { }
+
     // Internal entry-points called by ScriptInstance::InvokeOnCollision*
     // Named distinctly to avoid overload ambiguity with the public virtual methods.
     internal void Internal_OnCollisionEnterNative(ulong otherID) => OnCollisionEnter(new Collision(new Entity(otherID)));
@@ -166,4 +178,16 @@ public class Entity : IgniteObject
     // Named distinctly to avoid overload ambiguity with the public virtual methods.
     internal void Internal_OnBodyActivatedNative() => OnBodyActivated();
     internal void Internal_OnBodyDeactivatedNative() => OnBodyDeactivated();
+
+    // Internal entry-points called by ScriptInstance::InvokeOnNetwork*
+    internal void Internal_OnNetworkClientJoinedNative(uint clientId, ulong clientNameUtf8Ptr)
+        => OnNetworkClientJoined(clientId, Ignite.Core.NativeObject.Utf8ToString((IntPtr)(long)clientNameUtf8Ptr) ?? string.Empty);
+
+    internal void Internal_OnNetworkClientLeftNative(uint clientId, ulong clientNameUtf8Ptr)
+        => OnNetworkClientLeft(clientId, Ignite.Core.NativeObject.Utf8ToString((IntPtr)(long)clientNameUtf8Ptr) ?? string.Empty);
+
+    internal void Internal_OnNetworkConnectedNative(uint clientId) => OnNetworkConnected(clientId);
+    internal void Internal_OnNetworkDisconnectedNative(uint clientId) => OnNetworkDisconnected(clientId);
+    internal void Internal_OnNetworkInputNative(uint clientId, float moveX, float moveY, ushort buttons, float yaw, float deltaTime)
+        => OnNetworkInput(clientId, moveX, moveY, buttons, yaw, deltaTime);
 }

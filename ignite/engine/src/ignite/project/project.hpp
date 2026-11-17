@@ -77,12 +77,15 @@ namespace ignite
 
         void SetActiveScene(const Ref<Scene> &scene);
         void SetDefaultScene(AssetHandle handle);
-        void BuildSolution(bool forceRebuild = false) const;
+        bool BuildSolution(bool forceRebuild = false) const;
 
         void CreateCSharpScript(const std::filesystem::path &filepath);
         void CreateLuaScript(const std::filesystem::path &filepath);
         void CreateScriptableObject(const std::string &className, const std::string &fileName, const std::filesystem::path &targetDirectory);
         void RegenerateCSharpProject() const;
+        void SyncLuaTooling() const;
+
+        static const char *ConfigurationToString(ProjectConfiguration config);
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 

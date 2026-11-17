@@ -37,7 +37,7 @@ namespace ignite::netproto
     };
 #endif
 
-    constexpr uint16_t PROTOCOL_VERSION = 2;
+    constexpr uint16_t PROTOCOL_VERSION = 3;
     constexpr uint32_t MAX_SNAPSHOT_ENTITIES = 4096;
 
     // Wire message types. The first byte of every packet.
@@ -253,6 +253,10 @@ namespace ignite::netproto
         glm::vec2 move{ 0.0f }; // clamped to [-1, 1]
         float yaw = 0.0f;
         uint16_t buttons = 0;
+        // Owner-claimed character state (owner-authoritative movement, validated by the server).
+        bool hasPosition = false;
+        glm::vec3 position{ 0.0f };
+        glm::vec3 velocity{ 0.0f };
 
         void Write(net::StreamWriter &w) const
         {
@@ -261,6 +265,12 @@ namespace ignite::netproto
             w.WriteRaw(static_cast<int8_t>(std::lround(std::clamp(move.y, -1.0f, 1.0f) * 127.0f)));
             w.WriteRaw(yaw);
             w.WriteRaw(buttons);
+            w.WriteRaw(static_cast<uint8_t>(hasPosition));
+            if (hasPosition)
+            {
+                w.WriteRaw(position.x); w.WriteRaw(position.y); w.WriteRaw(position.z);
+                w.WriteRaw(velocity.x); w.WriteRaw(velocity.y); w.WriteRaw(velocity.z);
+            }
         }
 
         bool Read(net::StreamReader &r)
@@ -272,6 +282,19 @@ namespace ignite::netproto
             move = { static_cast<float>(mx) / 127.0f, static_cast<float>(my) / 127.0f };
             if (!std::isfinite(yaw))
                 yaw = 0.0f;
+
+            uint8_t hasPos = 0;
+            if (!r.ReadRaw(hasPos) || hasPos > 1)
+                return false;
+            hasPosition = hasPos != 0;
+            if (hasPosition)
+            {
+                if (!(r.ReadRaw(position.x) && r.ReadRaw(position.y) && r.ReadRaw(position.z)
+                    && r.ReadRaw(velocity.x) && r.ReadRaw(velocity.y) && r.ReadRaw(velocity.z)))
+                    return false;
+                if (!std::isfinite(position.x + position.y + position.z + velocity.x + velocity.y + velocity.z))
+                    hasPosition = false;
+            }
             return true;
         }
     };

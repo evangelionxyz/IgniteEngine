@@ -8,6 +8,7 @@
 #include <ignite/scene/component.hpp>
 #include <ignite/project/project.hpp>
 #include <ignite/scripting/lua/lua_script_runtime.hpp>
+#include <ignite/scripting/script_engine.hpp>
 
 #include <steam/steamnetworkingsockets.h>
 #include <steam/isteamnetworkingutils.h>
@@ -100,6 +101,7 @@ namespace ignite
                 m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
                     "on_network_connected", GetClientId(), "");
             }
+            ScriptEngine::InvokeNetworkEvent("OnNetworkConnected", GetClientId());
         };
         m_ClientSystem->onDisconnected = [this]() {
             if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
@@ -107,6 +109,7 @@ namespace ignite
                 m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
                     "on_network_disconnected", GetClientId(), "");
             }
+            ScriptEngine::InvokeNetworkEvent("OnNetworkDisconnected", GetClientId());
         };
 
         m_ClientSystem->onChat = [this](const netproto::ChatMsg &msg) {
@@ -224,6 +227,7 @@ namespace ignite
                     m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
                         "on_network_client_joined", client.clientId, client.name);
                 }
+                ScriptEngine::InvokeNetworkEvent("OnNetworkClientJoined", client.clientId, client.name);
             }
             if (m_ClientJoinedCallback)
             {
@@ -254,6 +258,7 @@ namespace ignite
                 m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
                     "on_network_client_left", client.clientId, client.name);
             }
+            ScriptEngine::InvokeNetworkEvent("OnNetworkClientLeft", client.clientId, client.name);
             if (m_ClientLeftCallback)
             {
                 m_ClientLeftCallback(client.clientId, client.name);
@@ -377,11 +382,45 @@ namespace ignite
                             continue;
 
                         Entity entity{ e, m_ActiveScene };
+                        constexpr uint16_t kEdgeMask = netproto::InputButton_Jump | netproto::InputButton_Respawn | netproto::InputButton_Bounce;
+                        uint16_t edgeBits = 0;
+                        bool respawned = false;
+                        const netproto::InputCmd *claim = nullptr;
                         for (const auto &cmd : inputs)
                         {
-                            if (auto *runtime = m_ActiveScene->GetLuaScriptRuntime())
-                                runtime->InvokeNetworkInput(entity.GetUUID(), client.clientId, cmd.move.x, cmd.move.y,
-                                    cmd.buttons, cmd.yaw, tickInterval);
+                            edgeBits |= cmd.buttons & kEdgeMask;
+                            if (cmd.buttons & netproto::InputButton_Respawn)
+                                respawned = true;
+                            if (cmd.hasPosition)
+                                claim = &cmd;
+                        }
+
+                        // Movement uses the newest command; one-shot buttons from skipped commands are merged
+                        // in so a jump/bounce/respawn edge is never lost when several inputs drain in one tick.
+                        const auto &latest = inputs.back();
+                        const uint16_t mergedButtons = static_cast<uint16_t>((latest.buttons & ~kEdgeMask) | edgeBits);
+                        if (auto *runtime = m_ActiveScene->GetLuaScriptRuntime())
+                            runtime->InvokeNetworkInput(entity.GetUUID(), client.clientId, latest.move.x, latest.move.y,
+                                mergedButtons, latest.yaw, tickInterval);
+                        ScriptEngine::InvokeNetworkInput(entity.GetUUID(), client.clientId, latest.move.x, latest.move.y,
+                            mergedButtons, latest.yaw, tickInterval);
+
+                        // Owner-authoritative movement: follow the owner's claimed position within limits.
+                        if (claim && !respawned && entity.HasComponent<CharacterControllerComponent>())
+                        {
+                            auto &controller = entity.GetComponent<CharacterControllerComponent>();
+                            if (auto character = controller.character.lock())
+                            {
+                                const auto &cfg = m_ServerSystem->GetConfig();
+                                const glm::vec3 serverPos = character->GetPosition();
+                                const glm::vec3 err = claim->position - serverPos;
+                                const float dist = glm::length(err);
+                                if (dist > 0.01f && dist <= cfg.ownerTeleportThreshold)
+                                {
+                                    const float blend = dist > cfg.ownerSnapThreshold ? 1.0f : cfg.ownerBlend;
+                                    character->SetPosition(serverPos + err * blend);
+                                }
+                            }
                         }
                         break;
                     }
@@ -416,10 +455,28 @@ namespace ignite
         SendInput(cmd);
     }
 
-    void NetworkManager::SendInput(const netproto::InputCmd &cmd)
+    void NetworkManager::SendInput(const netproto::InputCmd &inCmd)
     {
         if (!m_ClientSystem || !m_ClientSystem->IsConnected())
             return;
+
+        netproto::InputCmd cmd = inCmd;
+
+        // Owner-authoritative character: attach the locally simulated state for the server to follow.
+        if (m_ClientReplication)
+        {
+            Entity localPlayer = m_ClientReplication->GetLocalPlayerEntity();
+            if (localPlayer.IsValid() && localPlayer.HasComponent<CharacterControllerComponent>())
+            {
+                const auto &controller = localPlayer.GetComponent<CharacterControllerComponent>();
+                if (auto character = controller.character.lock())
+                {
+                    cmd.hasPosition = true;
+                    cmd.position = character->GetPosition();
+                    cmd.velocity = character->GetLinearVelocity();
+                }
+            }
+        }
 
         // Predict local player movement
         if (m_ClientReplication)

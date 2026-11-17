@@ -254,6 +254,178 @@ public static class ComponentNativeAPI
         public IntPtr AnimatorComponent_GetString;
         public IntPtr AnimatorComponent_SetState;
         public IntPtr AnimatorComponent_GetCurrentStateName;
+
+        // AnimationMontage (present in native ComponentScriptGlueAPI before trailing extensions)
+        public IntPtr AnimationMontage_GetNotifyCallbackCount;
+        public IntPtr AnimationMontage_GetNotifyCallbackAt;
+        public IntPtr AnimationMontage_AddNotifyCallback;
+        public IntPtr AnimationMontage_RemoveNotifyCallback;
+
+        // Entity removal
+        public IntPtr Entity_RemoveComponent;
+
+        // RenderingComponent
+        public IntPtr RenderingComponent_GetVisible;
+        public IntPtr RenderingComponent_SetVisible;
+
+        // CameraComponent
+        public IntPtr CameraComponent_GetPrimary;
+        public IntPtr CameraComponent_SetPrimary;
+        public IntPtr CameraComponent_GetProjectionType;
+        public IntPtr CameraComponent_SetProjectionType;
+        public IntPtr CameraComponent_GetFov;
+        public IntPtr CameraComponent_SetFov;
+        public IntPtr CameraComponent_GetOrthoSize;
+        public IntPtr CameraComponent_SetOrthoSize;
+        public IntPtr CameraComponent_GetNearClip;
+        public IntPtr CameraComponent_SetNearClip;
+        public IntPtr CameraComponent_GetFarClip;
+        public IntPtr CameraComponent_SetFarClip;
+        public IntPtr CameraComponent_GetAspectRatioPreset;
+        public IntPtr CameraComponent_SetAspectRatioPreset;
+
+        // DirectionalLightComponent
+        public IntPtr DirectionalLightComponent_GetColor;
+        public IntPtr DirectionalLightComponent_SetColor;
+        public IntPtr DirectionalLightComponent_GetIntensity;
+        public IntPtr DirectionalLightComponent_SetIntensity;
+        public IntPtr DirectionalLightComponent_GetAngularRadius;
+        public IntPtr DirectionalLightComponent_SetAngularRadius;
+        public IntPtr DirectionalLightComponent_GetShadowStrength;
+        public IntPtr DirectionalLightComponent_SetShadowStrength;
+        public IntPtr DirectionalLightComponent_GetShadowDistance;
+        public IntPtr DirectionalLightComponent_SetShadowDistance;
+        public IntPtr DirectionalLightComponent_GetShadowResolution;
+        public IntPtr DirectionalLightComponent_SetShadowResolution;
+        public IntPtr DirectionalLightComponent_GetCascadeShadow;
+        public IntPtr DirectionalLightComponent_SetCascadeShadow;
+        public IntPtr DirectionalLightComponent_GetSoftShadows;
+        public IntPtr DirectionalLightComponent_SetSoftShadows;
+
+        // PointLightComponent
+        public IntPtr PointLightComponent_GetColor;
+        public IntPtr PointLightComponent_SetColor;
+        public IntPtr PointLightComponent_GetIntensity;
+        public IntPtr PointLightComponent_SetIntensity;
+        public IntPtr PointLightComponent_GetRange;
+        public IntPtr PointLightComponent_SetRange;
+        public IntPtr PointLightComponent_GetEnabled;
+        public IntPtr PointLightComponent_SetEnabled;
+        public IntPtr PointLightComponent_GetConstantAttenuation;
+        public IntPtr PointLightComponent_SetConstantAttenuation;
+        public IntPtr PointLightComponent_GetLinearAttenuation;
+        public IntPtr PointLightComponent_SetLinearAttenuation;
+        public IntPtr PointLightComponent_GetQuadraticAttenuation;
+        public IntPtr PointLightComponent_SetQuadraticAttenuation;
+
+        // SpotLightComponent
+        public IntPtr SpotLightComponent_GetColor;
+        public IntPtr SpotLightComponent_SetColor;
+        public IntPtr SpotLightComponent_GetIntensity;
+        public IntPtr SpotLightComponent_SetIntensity;
+        public IntPtr SpotLightComponent_GetRange;
+        public IntPtr SpotLightComponent_SetRange;
+        public IntPtr SpotLightComponent_GetEnabled;
+        public IntPtr SpotLightComponent_SetEnabled;
+        public IntPtr SpotLightComponent_GetInnerConeAngle;
+        public IntPtr SpotLightComponent_SetInnerConeAngle;
+        public IntPtr SpotLightComponent_GetOuterConeAngle;
+        public IntPtr SpotLightComponent_SetOuterConeAngle;
+        public IntPtr SpotLightComponent_GetConstantAttenuation;
+        public IntPtr SpotLightComponent_SetConstantAttenuation;
+        public IntPtr SpotLightComponent_GetLinearAttenuation;
+        public IntPtr SpotLightComponent_SetLinearAttenuation;
+        public IntPtr SpotLightComponent_GetQuadraticAttenuation;
+        public IntPtr SpotLightComponent_SetQuadraticAttenuation;
+
+        // PointLight2DComponent
+        public IntPtr PointLight2DComponent_GetColor;
+        public IntPtr PointLight2DComponent_SetColor;
+        public IntPtr PointLight2DComponent_GetRadius;
+        public IntPtr PointLight2DComponent_SetRadius;
+        public IntPtr PointLight2DComponent_GetIntensity;
+        public IntPtr PointLight2DComponent_SetIntensity;
+        public IntPtr PointLight2DComponent_GetEnabled;
+        public IntPtr PointLight2DComponent_SetEnabled;
+
+        // StaticMeshComponent
+        public IntPtr StaticMeshComponent_GetMeshHandle;
+        public IntPtr StaticMeshComponent_SetMeshHandle;
+        public IntPtr StaticMeshComponent_SetOverrideMaterial;
+        public IntPtr StaticMeshComponent_GetOverrideMaterial;
+
+        // WorldEnvironmentComponent
+        public IntPtr WorldEnvironmentComponent_GetExposure;
+        public IntPtr WorldEnvironmentComponent_SetExposure;
+        public IntPtr WorldEnvironmentComponent_GetGamma;
+        public IntPtr WorldEnvironmentComponent_SetGamma;
+        public IntPtr WorldEnvironmentComponent_GetAmbient;
+        public IntPtr WorldEnvironmentComponent_SetAmbient;
+        public IntPtr WorldEnvironmentComponent_GetEnableIBL;
+        public IntPtr WorldEnvironmentComponent_SetEnableIBL;
+        public IntPtr WorldEnvironmentComponent_GetFogDensity;
+        public IntPtr WorldEnvironmentComponent_SetFogDensity;
+        public IntPtr WorldEnvironmentComponent_GetFogColor;
+        public IntPtr WorldEnvironmentComponent_SetFogColor;
+        public IntPtr WorldEnvironmentComponent_GetFogStart;
+        public IntPtr WorldEnvironmentComponent_SetFogStart;
+        public IntPtr WorldEnvironmentComponent_GetFogEnd;
+        public IntPtr WorldEnvironmentComponent_SetFogEnd;
+        public IntPtr WorldEnvironmentComponent_MarkDirty;
+
+        // ParticleSystemComponent
+        public IntPtr ParticleSystemComponent_GetIsPlaying;
+        public IntPtr ParticleSystemComponent_SetIsPlaying;
+        public IntPtr ParticleSystemComponent_GetEmissionRate;
+        public IntPtr ParticleSystemComponent_SetEmissionRate;
+        public IntPtr ParticleSystemComponent_GetMaxParticles;
+        public IntPtr ParticleSystemComponent_SetMaxParticles;
+        public IntPtr ParticleSystemComponent_GetStartColor;
+        public IntPtr ParticleSystemComponent_SetStartColor;
+        public IntPtr ParticleSystemComponent_GetEndColor;
+        public IntPtr ParticleSystemComponent_SetEndColor;
+        public IntPtr ParticleSystemComponent_GetStartSize;
+        public IntPtr ParticleSystemComponent_SetStartSize;
+        public IntPtr ParticleSystemComponent_GetEndSize;
+        public IntPtr ParticleSystemComponent_SetEndSize;
+        public IntPtr ParticleSystemComponent_Play;
+        public IntPtr ParticleSystemComponent_Stop;
+        public IntPtr ParticleSystemComponent_Restart;
+        public IntPtr ParticleSystemComponent_SetPreset;
+
+        // NetworkIdentityComponent
+        public IntPtr NetworkIdentityComponent_GetNetId;
+        public IntPtr NetworkIdentityComponent_GetOwnerClient;
+        public IntPtr NetworkIdentityComponent_SetOwnerClient;
+        public IntPtr NetworkIdentityComponent_GetIsLocalPlayer;
+        public IntPtr NetworkIdentityComponent_SetIsLocalPlayer;
+        public IntPtr NetworkIdentityComponent_GetReplicate;
+        public IntPtr NetworkIdentityComponent_SetReplicate;
+        public IntPtr NetworkIdentityComponent_GetPrefab;
+        public IntPtr NetworkIdentityComponent_SetPrefab;
+        public IntPtr NetworkIdentityComponent_GetReplicatedMovementSpeed;
+        public IntPtr NetworkIdentityComponent_SetReplicatedMovementSpeed;
+        public IntPtr NetworkIdentityComponent_GetReplicatedIsGrounded;
+        public IntPtr NetworkIdentityComponent_SetReplicatedIsGrounded;
+        public IntPtr NetworkIdentityComponent_GetSyncComponentsMask;
+        public IntPtr NetworkIdentityComponent_SetSyncComponentsMask;
+        public IntPtr NetworkIdentityComponent_MarkDirty;
+
+        // PlaneColliderComponent
+        public IntPtr PlaneColliderComponent_GetCenter;
+        public IntPtr PlaneColliderComponent_SetCenter;
+        public IntPtr PlaneColliderComponent_GetScale;
+        public IntPtr PlaneColliderComponent_SetScale;
+
+        // TextComponent extensions
+        public IntPtr TextComponent_GetFontSize;
+        public IntPtr TextComponent_SetFontSize;
+        public IntPtr TextComponent_GetScreenSpace;
+        public IntPtr TextComponent_SetScreenSpace;
+        public IntPtr TextComponent_GetBillboard;
+        public IntPtr TextComponent_SetBillboard;
+        public IntPtr TextComponent_GetCenterAlign;
+        public IntPtr TextComponent_SetCenterAlign;
     }
 
     public struct Funcs
@@ -465,5 +637,17 @@ public static class ComponentNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void AnimatorGetCurrentStateNameFn(ulong entityID, out IntPtr result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void GetUInt64Fn(ulong entityID, out ulong result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void SetUInt64Fn(ulong entityID, ulong value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void StaticMeshSetOverrideMaterialFn(ulong entityID, int slot, ulong materialHandle);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void StaticMeshGetOverrideMaterialFn(ulong entityID, int slot, out ulong result);
     }
 }

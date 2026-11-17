@@ -17,7 +17,6 @@ public class Game : Entity
 
     public override void OnUpdate(float deltaTime)
     {
-        // Update loop
     }
 
     public override void OnFixedUpdate()

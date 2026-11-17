@@ -521,3 +521,257 @@ TEST(LuaScriptRuntime, SkeletalAnimatorAndCharacterRotationBindings)
     std::filesystem::remove(scriptPath, ec);
 }
 
+TEST(LuaScriptRuntime, FieldDecoratorsExtractionOrderingAndCustomDecorators)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_decorators", R"lua(
+        local script = {}
+
+        local function Percent(defaultVal)
+            return Ignite.Slider(0.0, 1.0)(Ignite.SerializeField(defaultVal or 0.5))
+        end
+
+        script.enabled      = Ignite.SerializeField(true)
+        script.lives        = Ignite.SerializeField(3):min(1):max(9):speed(1):tooltip("Starting lives")
+        script.walk_speed   = Ignite.Min(0.5)(Ignite.Max(25.0)(Ignite.SerializeField(6.5)))
+        script.jump_force   = Ignite.SerializeField(10.0):slider(2.0, 30.0):speed(0.25):tooltip("Jump impulse")
+        script.opacity      = Percent(0.75)
+        script.title        = Ignite.SerializeField("Runner")
+        script.offset       = Ignite.SerializeField(Ignite.Vec3(1.0, 2.0, 3.0))
+        script.tint         = Ignite.Color()(Ignite.SerializeField(Ignite.Vec4(0.2, 0.4, 0.8, 1.0)))
+        script.target       = Ignite.EntityField()
+        script.clip         = Ignite.AssetField("Audio")
+        script.mode         = Ignite.SerializeField("Walk"):enum({ "Walk", "Run", "Glide" })
+        script.raw_slider   = Ignite.Slider(0, 10, 4)
+
+        return script
+    )lua");
+
+    const std::vector<LuaFieldDesc> fields = lua::Script::GetOrInspectFields(scriptPath);
+    ASSERT_EQ(fields.size(), 12u);
+
+    // Declaration order preserved
+    EXPECT_EQ(fields[0].name, "enabled");
+    EXPECT_EQ(fields[0].type, ScriptFieldType::Bool);
+    EXPECT_TRUE(std::get<bool>(fields[0].defaultValue));
+
+    EXPECT_EQ(fields[1].name, "lives");
+    EXPECT_EQ(fields[1].type, ScriptFieldType::Int);
+    EXPECT_EQ(std::get<int32_t>(fields[1].defaultValue), 3);
+    EXPECT_TRUE(fields[1].hasMin);
+    EXPECT_TRUE(fields[1].hasMax);
+    EXPECT_FLOAT_EQ(fields[1].minValue, 1.0f);
+    EXPECT_FLOAT_EQ(fields[1].maxValue, 9.0f);
+    EXPECT_EQ(fields[1].uiType, FieldUIType::Default);
+
+    EXPECT_EQ(fields[2].name, "walk_speed");
+    EXPECT_EQ(fields[2].type, ScriptFieldType::Float);
+    EXPECT_FLOAT_EQ(std::get<float>(fields[2].defaultValue), 6.5f);
+    EXPECT_FLOAT_EQ(fields[2].minValue, 0.5f);
+    EXPECT_FLOAT_EQ(fields[2].maxValue, 25.0f);
+
+    EXPECT_EQ(fields[3].name, "jump_force");
+    EXPECT_EQ(fields[3].type, ScriptFieldType::Float);
+    EXPECT_EQ(fields[3].uiType, FieldUIType::Slider);
+    EXPECT_FLOAT_EQ(fields[3].minValue, 2.0f);
+    EXPECT_FLOAT_EQ(fields[3].maxValue, 30.0f);
+    EXPECT_EQ(fields[3].tooltip, "Jump impulse");
+
+    EXPECT_EQ(fields[4].name, "opacity");
+    EXPECT_EQ(fields[4].type, ScriptFieldType::Float);
+    EXPECT_EQ(fields[4].uiType, FieldUIType::Slider);
+    EXPECT_FLOAT_EQ(std::get<float>(fields[4].defaultValue), 0.75f);
+    EXPECT_FLOAT_EQ(fields[4].minValue, 0.0f);
+    EXPECT_FLOAT_EQ(fields[4].maxValue, 1.0f);
+
+    EXPECT_EQ(fields[5].name, "title");
+    EXPECT_EQ(fields[5].type, ScriptFieldType::String);
+    EXPECT_EQ(std::get<std::string>(fields[5].defaultValue), "Runner");
+
+    EXPECT_EQ(fields[6].name, "offset");
+    EXPECT_EQ(fields[6].type, ScriptFieldType::Vector3);
+    EXPECT_FLOAT_EQ(std::get<glm::vec3>(fields[6].defaultValue).y, 2.0f);
+
+    EXPECT_EQ(fields[7].name, "tint");
+    EXPECT_EQ(fields[7].type, ScriptFieldType::Color);
+    EXPECT_FLOAT_EQ(std::get<glm::vec4>(fields[7].defaultValue).b, 0.8f);
+
+    EXPECT_EQ(fields[8].name, "target");
+    EXPECT_EQ(fields[8].type, ScriptFieldType::Entity);
+    EXPECT_EQ(std::get<uint64_t>(fields[8].defaultValue), 0ULL);
+
+    EXPECT_EQ(fields[9].name, "clip");
+    EXPECT_EQ(fields[9].type, ScriptFieldType::Asset);
+    EXPECT_EQ(fields[9].assetTypeFilter, "Audio");
+
+    EXPECT_EQ(fields[10].name, "mode");
+    EXPECT_EQ(fields[10].type, ScriptFieldType::Enum);
+    ASSERT_EQ(fields[10].enumNames.size(), 3u);
+    EXPECT_EQ(fields[10].enumNames[1], "Run");
+    EXPECT_EQ(std::get<std::string>(fields[10].defaultValue), "Walk");
+
+    EXPECT_EQ(fields[11].name, "raw_slider");
+    EXPECT_EQ(fields[11].type, ScriptFieldType::Int);
+    EXPECT_EQ(fields[11].uiType, FieldUIType::Slider);
+    EXPECT_EQ(std::get<int32_t>(fields[11].defaultValue), 4);
+
+    std::error_code ec;
+    std::filesystem::remove(scriptPath, ec);
+}
+
+TEST(LuaScriptRuntime, DecoratedFieldsRuntimeInjectionLiveUpdateAndReload)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_field_runtime", R"lua(
+        local script = {}
+
+        script.speed = Ignite.SerializeField(5.0):min(0.0):max(20.0)
+        script.target = Ignite.EntityField()
+        script.label = Ignite.SerializeField("Default")
+
+        function script.on_create(entity)
+            local tr = entity:get_component("Transform")
+            tr.position = Ignite.Vec3(script.speed, 0.0, 0.0)
+            if script.target and script.target:is_valid() then
+                entity:get_component("Text").text = script.label .. ":" .. script.target:get_name()
+            end
+        end
+
+        function script.on_update(entity, dt)
+            local tr = entity:get_component("Transform")
+            tr.position = Ignite.Vec3(script.speed, 1.0, 0.0)
+        end
+
+        return script
+    )lua");
+
+    Scene scene;
+    Entity target = SceneManager::CreateEntity(&scene, "GoalMarker", EntityType_Node);
+    Entity runner = SceneManager::CreateEntity(&scene, "Runner", EntityType_Node);
+    runner.AddComponent<TextComponent>();
+
+    auto &lsc = runner.AddComponent<LuaScriptComponent>();
+    lsc.scriptPath = scriptPath;
+    lsc.fields["speed"] = LuaSerializedField{ ScriptFieldType::Float, 12.5f };
+    lsc.fields["label"] = LuaSerializedField{ ScriptFieldType::String, std::string("GoTo") };
+    lsc.fields["target"] = LuaSerializedField{ ScriptFieldType::Entity, static_cast<uint64_t>(target.GetUUID()) };
+
+    {
+        lua::ScriptRuntime runtime(&scene);
+        runtime.CreateInstance(runner.GetUUID(), scriptPath);
+
+        EXPECT_FLOAT_EQ(runner.GetTransform().local.translation.x, 12.5f);
+        EXPECT_EQ(runner.GetComponent<TextComponent>().text, "GoTo:GoalMarker");
+
+        // Live field edit during Play mode (also checks clamping to max 20.0)
+        EXPECT_TRUE(runtime.SetFieldValue(runner.GetUUID(), "speed", 25.0f));
+        LuaFieldValue liveSpeed;
+        ASSERT_TRUE(runtime.GetFieldValue(runner.GetUUID(), "speed", liveSpeed));
+        EXPECT_FLOAT_EQ(std::get<float>(liveSpeed), 20.0f);
+
+        runtime.Update(1.0f / 60.0f);
+        EXPECT_FLOAT_EQ(runner.GetTransform().local.translation.x, 20.0f);
+
+        // Hot-reload preserves component overrides from LuaScriptComponent::fields
+        EXPECT_TRUE(runtime.ReloadInstance(runner.GetUUID()));
+        EXPECT_FLOAT_EQ(runner.GetTransform().local.translation.x, 12.5f);
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(scriptPath, ec);
+}
+
+TEST(LuaScriptRuntime, DecoratedFieldsSceneSerializationRoundtrip)
+{
+    const std::filesystem::path scriptPath = CreateTempScript("ignite_lua_field_serialize", R"lua(
+        local script = {}
+        script.flag   = Ignite.SerializeField(false)
+        script.count  = Ignite.SerializeField(1):min(0):max(100)
+        script.speed  = Ignite.SerializeField(5.0):slider(0.0, 20.0)
+        script.title  = Ignite.SerializeField("Init")
+        script.pos2   = Ignite.SerializeField(Ignite.Vec2(0, 0))
+        script.pos3   = Ignite.SerializeField(Ignite.Vec3(0, 0, 0))
+        script.tint   = Ignite.SerializeField(Ignite.Vec4(1, 1, 1, 1)):color()
+        script.target = Ignite.EntityField()
+        script.asset  = Ignite.AssetField("Audio")
+        script.mode   = Ignite.SerializeField("Walk"):enum({ "Walk", "Run" })
+
+        function script.on_create(entity)
+            local tr = entity:get_component("Transform")
+            tr.position = Ignite.Vec3(script.speed, script.count, 0.0)
+        end
+        return script
+    )lua");
+
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "IgniteLuaFieldSerializeTest";
+    std::error_code ec;
+    std::filesystem::remove_all(tempDir, ec);
+    std::filesystem::create_directories(tempDir, ec);
+
+    {
+        ProjectInfo info;
+        info.name = "LuaFieldSerializeTest";
+        info.rootDirectory = tempDir;
+        Project project(info);
+
+        const std::filesystem::path sceneFile = tempDir / "test_lua_fields.ixscene";
+        ignite::UUID savedEntityId(0);
+        ignite::UUID savedTargetId(0);
+
+        {
+            Ref<Scene> scene = Scene::Create(&project);
+            Entity target = SceneManager::CreateEntity(scene.get(), "TargetNode", EntityType_Node);
+            savedTargetId = target.GetUUID();
+
+            Entity actor = SceneManager::CreateEntity(scene.get(), "ActorNode", EntityType_Node);
+            savedEntityId = actor.GetUUID();
+
+            auto &lsc = actor.AddComponent<LuaScriptComponent>();
+            lsc.scriptHandle = AssetHandle(424242ULL);
+            lsc.scriptPath = scriptPath;
+            lsc.fields["flag"]   = { ScriptFieldType::Bool, true };
+            lsc.fields["count"]  = { ScriptFieldType::Int, int32_t(42) };
+            lsc.fields["speed"]  = { ScriptFieldType::Float, 14.25f };
+            lsc.fields["title"]  = { ScriptFieldType::String, std::string("Customized long string value beyond sixty four characters to verify no truncation occurs") };
+            lsc.fields["pos2"]   = { ScriptFieldType::Vector2, glm::vec2(3.5f, -1.25f) };
+            lsc.fields["pos3"]   = { ScriptFieldType::Vector3, glm::vec3(1.0f, 2.0f, 3.0f) };
+            lsc.fields["tint"]   = { ScriptFieldType::Color, glm::vec4(0.1f, 0.2f, 0.3f, 0.9f) };
+            lsc.fields["target"] = { ScriptFieldType::Entity, static_cast<uint64_t>(savedTargetId) };
+            lsc.fields["asset"]  = { ScriptFieldType::Asset, uint64_t(987654321ULL) };
+            lsc.fields["mode"]   = { ScriptFieldType::Enum, std::string("Run") };
+
+            SceneSerializer serializer(scene, &project);
+            ASSERT_TRUE(serializer.Serialize(sceneFile));
+        }
+
+        {
+            Ref<Scene> loaded = SceneSerializer::Deserialize(sceneFile, &project);
+            ASSERT_NE(loaded, nullptr);
+
+            Entity actor = SceneManager::GetEntity(loaded.get(), savedEntityId);
+            ASSERT_TRUE(static_cast<bool>(actor));
+            ASSERT_TRUE(actor.HasComponent<LuaScriptComponent>());
+
+            const auto &lsc = actor.GetComponent<LuaScriptComponent>();
+            EXPECT_EQ(static_cast<uint64_t>(lsc.scriptHandle), 424242ULL);
+            EXPECT_EQ(lsc.fields.size(), 10u);
+            EXPECT_TRUE(std::get<bool>(lsc.fields.at("flag").value));
+            EXPECT_EQ(std::get<int32_t>(lsc.fields.at("count").value), 42);
+            EXPECT_FLOAT_EQ(std::get<float>(lsc.fields.at("speed").value), 14.25f);
+            EXPECT_EQ(std::get<std::string>(lsc.fields.at("title").value), "Customized long string value beyond sixty four characters to verify no truncation occurs");
+            EXPECT_FLOAT_EQ(std::get<glm::vec2>(lsc.fields.at("pos2").value).y, -1.25f);
+            EXPECT_FLOAT_EQ(std::get<glm::vec3>(lsc.fields.at("pos3").value).z, 3.0f);
+            EXPECT_FLOAT_EQ(std::get<glm::vec4>(lsc.fields.at("tint").value).a, 0.9f);
+            EXPECT_EQ(std::get<uint64_t>(lsc.fields.at("target").value), static_cast<uint64_t>(savedTargetId));
+            EXPECT_EQ(std::get<uint64_t>(lsc.fields.at("asset").value), 987654321ULL);
+            EXPECT_EQ(std::get<std::string>(lsc.fields.at("mode").value), "Run");
+
+            lua::ScriptRuntime runtime(loaded.get());
+            runtime.CreateInstance(actor.GetUUID(), lsc.scriptPath, lsc.scriptHandle);
+            EXPECT_FLOAT_EQ(actor.GetTransform().local.translation.x, 14.25f);
+            EXPECT_FLOAT_EQ(actor.GetTransform().local.translation.y, 42.0f);
+        }
+    }
+
+    std::filesystem::remove(scriptPath, ec);
+    std::filesystem::remove_all(tempDir, ec);
+}
+

@@ -36,9 +36,14 @@ namespace ignite
 
     void AssetManager::VerifyNotRenderThread()
     {
+        if (!Application::IsRenderThreadRunning())
+        {
+            return;
+        }
+
         auto *app = Application::GetInstance();
         const std::thread *renderThread = app ? app->GetRenderThread() : nullptr;
-        if (renderThread && Application::IsRenderThreadRunning() && std::this_thread::get_id() == renderThread->get_id())
+        if (renderThread && std::this_thread::get_id() == renderThread->get_id())
         {
             LOG_ASSERT(false, "[Asset Manager] GetAssetImmediate called on the Render Thread! This will cause stuttering and deadlocks!");
         }
@@ -116,9 +121,12 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        if (auto *device = DeviceManager::GetInstance()->GetDevice())
+        if (auto *dm = DeviceManager::GetInstance())
         {
-            GPUUploadSync::DeviceWaitIdle(device);
+            if (auto *device = dm->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(device);
+            }
         }
 
         decltype(m_LoadedAssets) oldLoadedAssets;
@@ -783,9 +791,12 @@ namespace ignite
             lock.unlock();
 
             // Wait for GPU to ensure asset is not in use (outside lock)
-            if (auto *device = DeviceManager::GetInstance()->GetDevice())
+            if (auto *dm = DeviceManager::GetInstance())
             {
-                GPUUploadSync::DeviceWaitIdle(device);
+                if (auto *device = dm->GetDevice())
+                {
+                    GPUUploadSync::DeviceWaitIdle(device);
+                }
             }
 
             if (record)

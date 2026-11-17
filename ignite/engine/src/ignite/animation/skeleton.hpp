@@ -33,9 +33,9 @@ namespace ignite
         Transform defaultTransform;
 
         // on runtime calculation
-        glm::mat4 inverseBindPose; // inverse bind pose matrix
-        glm::mat4 localTransform; // current local transform
-        glm::mat4 globalTransform; // current global transform
+        glm::mat4 inverseBindPose = glm::mat4(1.0f); // inverse bind pose matrix
+        glm::mat4 localTransform = glm::mat4(1.0f); // current local transform
+        glm::mat4 globalTransform = glm::mat4(1.0f); // current global transform
     };
 
     struct IGN_API JointSocket

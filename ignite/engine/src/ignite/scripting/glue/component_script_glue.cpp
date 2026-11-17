@@ -249,6 +249,7 @@ namespace ignite
 
         static std::unordered_map<std::string, std::function<bool(Entity)>> s_EntityHasComponentFuncs;
         static std::unordered_map<std::string, std::function<void(Entity)>> s_EntityAddComponentFuncs;
+        static std::unordered_map<std::string, std::function<void(Entity)>> s_EntityRemoveComponentFuncs;
 
         enum class WidgetButtonEventType : int32_t
         {
@@ -379,12 +380,22 @@ namespace ignite
 
                 const auto hasComponentFunc = [](Entity entity) { return entity.HasComponent<Component>(); };
                 const auto addComponentFunc = [](Entity entity) { entity.AddOrReplaceComponent<Component>(); };
+                const auto removeComponentFunc = [](Entity entity)
+                {
+                    if constexpr (!std::is_same_v<Component, IDComponent> && !std::is_same_v<Component, TransformComponent>)
+                    {
+                        if (entity.HasComponent<Component>())
+                            entity.RemoveComponent<Component>();
+                    }
+                };
 
                 s_EntityHasComponentFuncs[managedTypeName] = hasComponentFunc;
                 s_EntityAddComponentFuncs[managedTypeName] = addComponentFunc;
+                s_EntityRemoveComponentFuncs[managedTypeName] = removeComponentFunc;
 
                 s_EntityHasComponentFuncs[nativeTypeName] = hasComponentFunc;
                 s_EntityAddComponentFuncs[nativeTypeName] = addComponentFunc;
+                s_EntityRemoveComponentFuncs[nativeTypeName] = removeComponentFunc;
 
                 if (nativeTypeName == "SkeletalMeshComponent")
                 {
@@ -394,6 +405,18 @@ namespace ignite
                     s_EntityAddComponentFuncs["AnimatorComponent"] = addComponentFunc;
                     s_EntityAddComponentFuncs["Ignite.AnimatorComponent"] = addComponentFunc;
                     s_EntityAddComponentFuncs["Animator"] = addComponentFunc;
+                    s_EntityRemoveComponentFuncs["AnimatorComponent"] = removeComponentFunc;
+                    s_EntityRemoveComponentFuncs["Ignite.AnimatorComponent"] = removeComponentFunc;
+                    s_EntityRemoveComponentFuncs["Animator"] = removeComponentFunc;
+                }
+                else if (nativeTypeName == "WorldEnvironment")
+                {
+                    s_EntityHasComponentFuncs["WorldEnvironmentComponent"] = hasComponentFunc;
+                    s_EntityHasComponentFuncs["Ignite.WorldEnvironmentComponent"] = hasComponentFunc;
+                    s_EntityAddComponentFuncs["WorldEnvironmentComponent"] = addComponentFunc;
+                    s_EntityAddComponentFuncs["Ignite.WorldEnvironmentComponent"] = addComponentFunc;
+                    s_EntityRemoveComponentFuncs["WorldEnvironmentComponent"] = removeComponentFunc;
+                    s_EntityRemoveComponentFuncs["Ignite.WorldEnvironmentComponent"] = removeComponentFunc;
                 }
             }()), ...);
         }
@@ -588,6 +611,23 @@ namespace ignite
             }
 
             addComponentIt->second(entity);
+        }
+
+        static void Entity_RemoveComponent(uint64_t entityID, const char *componentTypeName)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+                return;
+
+            const std::string typeName = NormalizeManagedTypeName(componentTypeName);
+            if (typeName.empty())
+                return;
+
+            const auto removeIt = s_EntityRemoveComponentFuncs.find(typeName);
+            if (removeIt == s_EntityRemoveComponentFuncs.end())
+                return;
+
+            removeIt->second(entity);
         }
 
         static uint64_t Entity_FindEntityByName(const char *name)
@@ -3759,6 +3799,929 @@ namespace ignite
             }
         }
 
+        // =========================================================================
+        // RenderingComponent
+        // =========================================================================
+        static void RenderingComponent_GetVisible(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = true;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<RenderingComponent>())
+                *result = entity.GetComponent<RenderingComponent>().visible;
+        }
+
+        static void RenderingComponent_SetVisible(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<RenderingComponent>())
+                entity.GetComponent<RenderingComponent>().visible = value;
+        }
+
+        // =========================================================================
+        // CameraComponent
+        // =========================================================================
+        static void CameraComponent_GetPrimary(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                *result = entity.GetComponent<CameraComponent>().primary;
+        }
+
+        static void CameraComponent_SetPrimary(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                entity.GetComponent<CameraComponent>().primary = value;
+        }
+
+        static void CameraComponent_GetProjectionType(uint64_t entityID, int32_t *result)
+        {
+            if (!result) return;
+            *result = static_cast<int32_t>(ProjectionType::Perspective);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                *result = static_cast<int32_t>(entity.GetComponent<CameraComponent>().camera.projectionType);
+        }
+
+        static void CameraComponent_SetProjectionType(uint64_t entityID, int32_t value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+            {
+                auto &cam = entity.GetComponent<CameraComponent>().camera;
+                cam.projectionType = static_cast<ProjectionType>(value);
+                const auto vp = cam.GetViewportSize();
+                cam.UpdateProjection(vp.x > 0 ? vp.x : 1280, vp.y > 0 ? vp.y : 720);
+            }
+        }
+
+        static void CameraComponent_GetFov(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 45.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                *result = entity.GetComponent<CameraComponent>().camera.fov;
+        }
+
+        static void CameraComponent_SetFov(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+            {
+                auto &cam = entity.GetComponent<CameraComponent>().camera;
+                cam.fov = value;
+                const auto vp = cam.GetViewportSize();
+                cam.UpdateProjection(vp.x > 0 ? vp.x : 1280, vp.y > 0 ? vp.y : 720);
+            }
+        }
+
+        static void CameraComponent_GetOrthoSize(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 10.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                *result = entity.GetComponent<CameraComponent>().camera.orthoSize;
+        }
+
+        static void CameraComponent_SetOrthoSize(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+            {
+                auto &cam = entity.GetComponent<CameraComponent>().camera;
+                cam.orthoSize = value;
+                const auto vp = cam.GetViewportSize();
+                cam.UpdateProjection(vp.x > 0 ? vp.x : 1280, vp.y > 0 ? vp.y : 720);
+            }
+        }
+
+        static void CameraComponent_GetNearClip(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.1f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                *result = entity.GetComponent<CameraComponent>().camera.nearPlane;
+        }
+
+        static void CameraComponent_SetNearClip(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+            {
+                auto &cam = entity.GetComponent<CameraComponent>().camera;
+                cam.nearPlane = value;
+                const auto vp = cam.GetViewportSize();
+                cam.UpdateProjection(vp.x > 0 ? vp.x : 1280, vp.y > 0 ? vp.y : 720);
+            }
+        }
+
+        static void CameraComponent_GetFarClip(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 500.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                *result = entity.GetComponent<CameraComponent>().camera.farPlane;
+        }
+
+        static void CameraComponent_SetFarClip(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+            {
+                auto &cam = entity.GetComponent<CameraComponent>().camera;
+                cam.farPlane = value;
+                const auto vp = cam.GetViewportSize();
+                cam.UpdateProjection(vp.x > 0 ? vp.x : 1280, vp.y > 0 ? vp.y : 720);
+            }
+        }
+
+        static void CameraComponent_GetAspectRatioPreset(uint64_t entityID, int32_t *result)
+        {
+            if (!result) return;
+            *result = 0;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                *result = static_cast<int32_t>(entity.GetComponent<CameraComponent>().camera.GetAspectRatioPreset());
+        }
+
+        static void CameraComponent_SetAspectRatioPreset(uint64_t entityID, int32_t value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CameraComponent>())
+                entity.GetComponent<CameraComponent>().camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(value));
+        }
+
+        // =========================================================================
+        // DirectionalLightComponent
+        // =========================================================================
+        static void DirectionalLightComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) *result = e.GetComponent<DirectionalLightComponent>().color;
+        }
+        static void DirectionalLightComponent_SetColor(uint64_t entityID, const glm::vec4 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) e.GetComponent<DirectionalLightComponent>().color = *value;
+        }
+        static void DirectionalLightComponent_GetIntensity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) *result = e.GetComponent<DirectionalLightComponent>().intensity;
+        }
+        static void DirectionalLightComponent_SetIntensity(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) e.GetComponent<DirectionalLightComponent>().intensity = value;
+        }
+        static void DirectionalLightComponent_GetAngularRadius(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) *result = e.GetComponent<DirectionalLightComponent>().angularRadius;
+        }
+        static void DirectionalLightComponent_SetAngularRadius(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) e.GetComponent<DirectionalLightComponent>().angularRadius = value;
+        }
+        static void DirectionalLightComponent_GetShadowStrength(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) *result = e.GetComponent<DirectionalLightComponent>().shadowStrength;
+        }
+        static void DirectionalLightComponent_SetShadowStrength(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) e.GetComponent<DirectionalLightComponent>().shadowStrength = value;
+        }
+        static void DirectionalLightComponent_GetShadowDistance(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) *result = e.GetComponent<DirectionalLightComponent>().shadowDistance;
+        }
+        static void DirectionalLightComponent_SetShadowDistance(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) e.GetComponent<DirectionalLightComponent>().shadowDistance = value;
+        }
+        static void DirectionalLightComponent_GetShadowResolution(uint64_t entityID, int32_t *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) *result = e.GetComponent<DirectionalLightComponent>().shadowResolution;
+        }
+        static void DirectionalLightComponent_SetShadowResolution(uint64_t entityID, int32_t value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) e.GetComponent<DirectionalLightComponent>().shadowResolution = value;
+        }
+        static void DirectionalLightComponent_GetCascadeShadow(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) *result = e.GetComponent<DirectionalLightComponent>().cascadeShadow;
+        }
+        static void DirectionalLightComponent_SetCascadeShadow(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) e.GetComponent<DirectionalLightComponent>().cascadeShadow = value;
+        }
+        static void DirectionalLightComponent_GetSoftShadows(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) *result = e.GetComponent<DirectionalLightComponent>().softShadows;
+        }
+        static void DirectionalLightComponent_SetSoftShadows(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<DirectionalLightComponent>()) e.GetComponent<DirectionalLightComponent>().softShadows = value;
+        }
+
+        // =========================================================================
+        // PointLightComponent
+        // =========================================================================
+        static void PointLightComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) *result = e.GetComponent<PointLightComponent>().color;
+        }
+        static void PointLightComponent_SetColor(uint64_t entityID, const glm::vec4 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) e.GetComponent<PointLightComponent>().color = *value;
+        }
+        static void PointLightComponent_GetIntensity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) *result = e.GetComponent<PointLightComponent>().intensity;
+        }
+        static void PointLightComponent_SetIntensity(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) e.GetComponent<PointLightComponent>().intensity = value;
+        }
+        static void PointLightComponent_GetRange(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) *result = e.GetComponent<PointLightComponent>().range;
+        }
+        static void PointLightComponent_SetRange(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) e.GetComponent<PointLightComponent>().range = value;
+        }
+        static void PointLightComponent_GetEnabled(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) *result = e.GetComponent<PointLightComponent>().enabled;
+        }
+        static void PointLightComponent_SetEnabled(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) e.GetComponent<PointLightComponent>().enabled = value;
+        }
+        static void PointLightComponent_GetConstantAttenuation(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) *result = e.GetComponent<PointLightComponent>().constantAttenuation;
+        }
+        static void PointLightComponent_SetConstantAttenuation(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) e.GetComponent<PointLightComponent>().constantAttenuation = value;
+        }
+        static void PointLightComponent_GetLinearAttenuation(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) *result = e.GetComponent<PointLightComponent>().linearAttenuation;
+        }
+        static void PointLightComponent_SetLinearAttenuation(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) e.GetComponent<PointLightComponent>().linearAttenuation = value;
+        }
+        static void PointLightComponent_GetQuadraticAttenuation(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) *result = e.GetComponent<PointLightComponent>().quadraticAttenuation;
+        }
+        static void PointLightComponent_SetQuadraticAttenuation(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLightComponent>()) e.GetComponent<PointLightComponent>().quadraticAttenuation = value;
+        }
+
+        // =========================================================================
+        // SpotLightComponent
+        // =========================================================================
+        static void SpotLightComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().color;
+        }
+        static void SpotLightComponent_SetColor(uint64_t entityID, const glm::vec4 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().color = *value;
+        }
+        static void SpotLightComponent_GetIntensity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().intensity;
+        }
+        static void SpotLightComponent_SetIntensity(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().intensity = value;
+        }
+        static void SpotLightComponent_GetRange(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().range;
+        }
+        static void SpotLightComponent_SetRange(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().range = value;
+        }
+        static void SpotLightComponent_GetEnabled(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().enabled;
+        }
+        static void SpotLightComponent_SetEnabled(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().enabled = value;
+        }
+        static void SpotLightComponent_GetInnerConeAngle(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().innerConeAngle;
+        }
+        static void SpotLightComponent_SetInnerConeAngle(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().innerConeAngle = value;
+        }
+        static void SpotLightComponent_GetOuterConeAngle(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().outerConeAngle;
+        }
+        static void SpotLightComponent_SetOuterConeAngle(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().outerConeAngle = value;
+        }
+        static void SpotLightComponent_GetConstantAttenuation(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().constantAttenuation;
+        }
+        static void SpotLightComponent_SetConstantAttenuation(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().constantAttenuation = value;
+        }
+        static void SpotLightComponent_GetLinearAttenuation(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().linearAttenuation;
+        }
+        static void SpotLightComponent_SetLinearAttenuation(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().linearAttenuation = value;
+        }
+        static void SpotLightComponent_GetQuadraticAttenuation(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) *result = e.GetComponent<SpotLightComponent>().quadraticAttenuation;
+        }
+        static void SpotLightComponent_SetQuadraticAttenuation(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<SpotLightComponent>()) e.GetComponent<SpotLightComponent>().quadraticAttenuation = value;
+        }
+
+        // =========================================================================
+        // PointLight2DComponent
+        // =========================================================================
+        static void PointLight2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLight2DComponent>()) *result = e.GetComponent<PointLight2DComponent>().color;
+        }
+        static void PointLight2DComponent_SetColor(uint64_t entityID, const glm::vec4 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLight2DComponent>()) e.GetComponent<PointLight2DComponent>().color = *value;
+        }
+        static void PointLight2DComponent_GetRadius(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLight2DComponent>()) *result = e.GetComponent<PointLight2DComponent>().radius;
+        }
+        static void PointLight2DComponent_SetRadius(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLight2DComponent>()) e.GetComponent<PointLight2DComponent>().radius = value;
+        }
+        static void PointLight2DComponent_GetIntensity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLight2DComponent>()) *result = e.GetComponent<PointLight2DComponent>().intensity;
+        }
+        static void PointLight2DComponent_SetIntensity(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLight2DComponent>()) e.GetComponent<PointLight2DComponent>().intensity = value;
+        }
+        static void PointLight2DComponent_GetEnabled(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLight2DComponent>()) *result = e.GetComponent<PointLight2DComponent>().enabled;
+        }
+        static void PointLight2DComponent_SetEnabled(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PointLight2DComponent>()) e.GetComponent<PointLight2DComponent>().enabled = value;
+        }
+
+        // =========================================================================
+        // StaticMeshComponent
+        // =========================================================================
+        static void StaticMeshComponent_GetMeshHandle(uint64_t entityID, uint64_t *result)
+        {
+            if (!result) return;
+            *result = 0;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<StaticMeshComponent>())
+                *result = static_cast<uint64_t>(e.GetComponent<StaticMeshComponent>().handle);
+        }
+        static void StaticMeshComponent_SetMeshHandle(uint64_t entityID, uint64_t handle)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<StaticMeshComponent>())
+                e.GetComponent<StaticMeshComponent>().handle = AssetHandle(handle);
+        }
+        static void StaticMeshComponent_SetOverrideMaterial(uint64_t entityID, int32_t slot, uint64_t materialHandle)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<StaticMeshComponent>())
+                e.GetComponent<StaticMeshComponent>().overrideMaterials[slot] = AssetHandle(materialHandle);
+        }
+        static void StaticMeshComponent_GetOverrideMaterial(uint64_t entityID, int32_t slot, uint64_t *result)
+        {
+            if (!result) return;
+            *result = 0;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<StaticMeshComponent>())
+            {
+                const auto &mats = e.GetComponent<StaticMeshComponent>().overrideMaterials;
+                if (auto it = mats.find(slot); it != mats.end())
+                    *result = static_cast<uint64_t>(it->second);
+            }
+        }
+
+        // =========================================================================
+        // WorldEnvironmentComponent
+        // =========================================================================
+        static void WorldEnvironmentComponent_GetExposure(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) *result = e.GetComponent<WorldEnvironment>().exposure;
+        }
+        static void WorldEnvironmentComponent_SetExposure(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().exposure = value;
+        }
+        static void WorldEnvironmentComponent_GetGamma(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) *result = e.GetComponent<WorldEnvironment>().gamma;
+        }
+        static void WorldEnvironmentComponent_SetGamma(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().gamma = value;
+        }
+        static void WorldEnvironmentComponent_GetAmbient(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) *result = e.GetComponent<WorldEnvironment>().ambient;
+        }
+        static void WorldEnvironmentComponent_SetAmbient(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().ambient = value;
+        }
+        static void WorldEnvironmentComponent_GetEnableIBL(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) *result = e.GetComponent<WorldEnvironment>().enableIBL;
+        }
+        static void WorldEnvironmentComponent_SetEnableIBL(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().enableIBL = value;
+        }
+        static void WorldEnvironmentComponent_GetFogDensity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) *result = e.GetComponent<WorldEnvironment>().fogDensity;
+        }
+        static void WorldEnvironmentComponent_SetFogDensity(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().fogDensity = value;
+        }
+        static void WorldEnvironmentComponent_GetFogColor(uint64_t entityID, glm::vec4 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) *result = e.GetComponent<WorldEnvironment>().fogColor;
+        }
+        static void WorldEnvironmentComponent_SetFogColor(uint64_t entityID, const glm::vec4 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().fogColor = *value;
+        }
+        static void WorldEnvironmentComponent_GetFogStart(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) *result = e.GetComponent<WorldEnvironment>().fogStart;
+        }
+        static void WorldEnvironmentComponent_SetFogStart(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().fogStart = value;
+        }
+        static void WorldEnvironmentComponent_GetFogEnd(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) *result = e.GetComponent<WorldEnvironment>().fogEnd;
+        }
+        static void WorldEnvironmentComponent_SetFogEnd(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().fogEnd = value;
+        }
+        static void WorldEnvironmentComponent_MarkDirty(uint64_t entityID)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<WorldEnvironment>()) e.GetComponent<WorldEnvironment>().dirtyEnvironment = true;
+        }
+
+        // =========================================================================
+        // ParticleSystemComponent
+        // =========================================================================
+        static void ParticleSystemComponent_GetIsPlaying(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) *result = e.GetComponent<ParticleSystemComponent>().isPlaying;
+        }
+        static void ParticleSystemComponent_SetIsPlaying(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().isPlaying = value;
+        }
+        static void ParticleSystemComponent_GetEmissionRate(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) *result = e.GetComponent<ParticleSystemComponent>().settings.emissionRate;
+        }
+        static void ParticleSystemComponent_SetEmissionRate(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().settings.emissionRate = value;
+        }
+        static void ParticleSystemComponent_GetMaxParticles(uint64_t entityID, uint32_t *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) *result = e.GetComponent<ParticleSystemComponent>().settings.maxParticles;
+        }
+        static void ParticleSystemComponent_SetMaxParticles(uint64_t entityID, uint32_t value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().settings.maxParticles = value;
+        }
+        static void ParticleSystemComponent_GetStartColor(uint64_t entityID, glm::vec4 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) *result = e.GetComponent<ParticleSystemComponent>().settings.startColor;
+        }
+        static void ParticleSystemComponent_SetStartColor(uint64_t entityID, const glm::vec4 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().settings.startColor = *value;
+        }
+        static void ParticleSystemComponent_GetEndColor(uint64_t entityID, glm::vec4 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) *result = e.GetComponent<ParticleSystemComponent>().settings.endColor;
+        }
+        static void ParticleSystemComponent_SetEndColor(uint64_t entityID, const glm::vec4 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().settings.endColor = *value;
+        }
+        static void ParticleSystemComponent_GetStartSize(uint64_t entityID, glm::vec2 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) *result = e.GetComponent<ParticleSystemComponent>().settings.startSize;
+        }
+        static void ParticleSystemComponent_SetStartSize(uint64_t entityID, const glm::vec2 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().settings.startSize = *value;
+        }
+        static void ParticleSystemComponent_GetEndSize(uint64_t entityID, glm::vec2 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) *result = e.GetComponent<ParticleSystemComponent>().settings.endSize;
+        }
+        static void ParticleSystemComponent_SetEndSize(uint64_t entityID, const glm::vec2 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().settings.endSize = *value;
+        }
+        static void ParticleSystemComponent_Play(uint64_t entityID)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().isPlaying = true;
+        }
+        static void ParticleSystemComponent_Stop(uint64_t entityID)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>()) e.GetComponent<ParticleSystemComponent>().isPlaying = false;
+        }
+        static void ParticleSystemComponent_Restart(uint64_t entityID)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>())
+            {
+                auto &ps = e.GetComponent<ParticleSystemComponent>();
+                ps.system.reset();
+                ps.isPlaying = true;
+            }
+        }
+        static void ParticleSystemComponent_SetPreset(uint64_t entityID, int32_t preset)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<ParticleSystemComponent>())
+            {
+                auto &ps = e.GetComponent<ParticleSystemComponent>();
+                switch (static_cast<ParticleEmitterType>(preset))
+                {
+                    case ParticleEmitterType::Fire:  ps.settings = ParticleEmitterSettings::CreateFire(); break;
+                    case ParticleEmitterType::Spark: ps.settings = ParticleEmitterSettings::CreateSpark(); break;
+                    case ParticleEmitterType::Smoke:
+                    default:                         ps.settings = ParticleEmitterSettings::CreateSmoke(); break;
+                }
+            }
+        }
+
+        // =========================================================================
+        // NetworkIdentityComponent
+        // =========================================================================
+        static std::string s_NetPrefabBuffer;
+        static void NetworkIdentityComponent_GetNetId(uint64_t entityID, uint64_t *result)
+        {
+            if (!result) return;
+            *result = 0;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) *result = e.GetComponent<NetworkIdentityComponent>().netId;
+        }
+        static void NetworkIdentityComponent_GetOwnerClient(uint64_t entityID, uint32_t *result)
+        {
+            if (!result) return;
+            *result = 0;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) *result = e.GetComponent<NetworkIdentityComponent>().ownerClient;
+        }
+        static void NetworkIdentityComponent_SetOwnerClient(uint64_t entityID, uint32_t value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) e.GetComponent<NetworkIdentityComponent>().ownerClient = value;
+        }
+        static void NetworkIdentityComponent_GetIsLocalPlayer(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = false;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) *result = e.GetComponent<NetworkIdentityComponent>().isLocalPlayer;
+        }
+        static void NetworkIdentityComponent_SetIsLocalPlayer(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) e.GetComponent<NetworkIdentityComponent>().isLocalPlayer = value;
+        }
+        static void NetworkIdentityComponent_GetReplicate(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = false;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) *result = e.GetComponent<NetworkIdentityComponent>().replicate;
+        }
+        static void NetworkIdentityComponent_SetReplicate(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) e.GetComponent<NetworkIdentityComponent>().replicate = value;
+        }
+        static void NetworkIdentityComponent_GetPrefab(uint64_t entityID, const char **result)
+        {
+            if (!result) return;
+            *result = "";
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>())
+            {
+                s_NetPrefabBuffer = e.GetComponent<NetworkIdentityComponent>().prefab;
+                *result = s_NetPrefabBuffer.c_str();
+            }
+        }
+        static void NetworkIdentityComponent_SetPrefab(uint64_t entityID, const char *value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>())
+                e.GetComponent<NetworkIdentityComponent>().prefab = value ? value : "";
+        }
+        static void NetworkIdentityComponent_GetReplicatedMovementSpeed(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.0f;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) *result = e.GetComponent<NetworkIdentityComponent>().replicatedMovementSpeed;
+        }
+        static void NetworkIdentityComponent_SetReplicatedMovementSpeed(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) e.GetComponent<NetworkIdentityComponent>().replicatedMovementSpeed = value;
+        }
+        static void NetworkIdentityComponent_GetReplicatedIsGrounded(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = false;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) *result = e.GetComponent<NetworkIdentityComponent>().replicatedIsGrounded;
+        }
+        static void NetworkIdentityComponent_SetReplicatedIsGrounded(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) e.GetComponent<NetworkIdentityComponent>().replicatedIsGrounded = value;
+        }
+        static void NetworkIdentityComponent_GetSyncComponentsMask(uint64_t entityID, uint32_t *result)
+        {
+            if (!result) return;
+            *result = 0;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) *result = e.GetComponent<NetworkIdentityComponent>().syncComponentsMask;
+        }
+        static void NetworkIdentityComponent_SetSyncComponentsMask(uint64_t entityID, uint32_t value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) e.GetComponent<NetworkIdentityComponent>().syncComponentsMask = value;
+        }
+        static void NetworkIdentityComponent_MarkDirty(uint64_t entityID, uint32_t flags)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<NetworkIdentityComponent>()) e.GetComponent<NetworkIdentityComponent>().MarkDirty(flags);
+        }
+
+        // =========================================================================
+        // PlaneColliderComponent
+        // =========================================================================
+        static void PlaneColliderComponent_GetCenter(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PlaneColliderComponent>()) *result = e.GetComponent<PlaneColliderComponent>().center;
+        }
+        static void PlaneColliderComponent_SetCenter(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PlaneColliderComponent>()) e.GetComponent<PlaneColliderComponent>().center = *value;
+        }
+        static void PlaneColliderComponent_GetScale(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PlaneColliderComponent>()) *result = e.GetComponent<PlaneColliderComponent>().scale;
+        }
+        static void PlaneColliderComponent_SetScale(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<PlaneColliderComponent>()) e.GetComponent<PlaneColliderComponent>().scale = *value;
+        }
+
+        // =========================================================================
+        // TextComponent extensions
+        // =========================================================================
+        static void TextComponent_GetFontSize(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<TextComponent>()) *result = e.GetComponent<TextComponent>().fontSize;
+        }
+        static void TextComponent_SetFontSize(uint64_t entityID, float value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<TextComponent>()) e.GetComponent<TextComponent>().fontSize = value;
+        }
+        static void TextComponent_GetScreenSpace(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<TextComponent>()) *result = e.GetComponent<TextComponent>().screenSpace;
+        }
+        static void TextComponent_SetScreenSpace(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<TextComponent>()) e.GetComponent<TextComponent>().screenSpace = value;
+        }
+        static void TextComponent_GetBillboard(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<TextComponent>()) *result = e.GetComponent<TextComponent>().billboard;
+        }
+        static void TextComponent_SetBillboard(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<TextComponent>()) e.GetComponent<TextComponent>().billboard = value;
+        }
+        static void TextComponent_GetCenterAlign(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<TextComponent>()) *result = e.GetComponent<TextComponent>().centerAlign;
+        }
+        static void TextComponent_SetCenterAlign(uint64_t entityID, bool value)
+        {
+            Entity e = GetEntityByID(entityID);
+            if (e.IsValid() && e.HasComponent<TextComponent>()) e.GetComponent<TextComponent>().centerAlign = value;
+        }
+
         static const ComponentScriptGlueAPI s_ComponentScriptGlueAPI =
         {
             &Scene_GetScreenToWorldRay,
@@ -4005,7 +4968,160 @@ namespace ignite
             &AnimationMontage_GetNotifyCallbackCount,
             &AnimationMontage_GetNotifyCallbackAt,
             &AnimationMontage_AddNotifyCallback,
-            &AnimationMontage_RemoveNotifyCallback
+            &AnimationMontage_RemoveNotifyCallback,
+
+            &Entity_RemoveComponent,
+
+            &RenderingComponent_GetVisible,
+            &RenderingComponent_SetVisible,
+
+            &CameraComponent_GetPrimary,
+            &CameraComponent_SetPrimary,
+            &CameraComponent_GetProjectionType,
+            &CameraComponent_SetProjectionType,
+            &CameraComponent_GetFov,
+            &CameraComponent_SetFov,
+            &CameraComponent_GetOrthoSize,
+            &CameraComponent_SetOrthoSize,
+            &CameraComponent_GetNearClip,
+            &CameraComponent_SetNearClip,
+            &CameraComponent_GetFarClip,
+            &CameraComponent_SetFarClip,
+            &CameraComponent_GetAspectRatioPreset,
+            &CameraComponent_SetAspectRatioPreset,
+
+            &DirectionalLightComponent_GetColor,
+            &DirectionalLightComponent_SetColor,
+            &DirectionalLightComponent_GetIntensity,
+            &DirectionalLightComponent_SetIntensity,
+            &DirectionalLightComponent_GetAngularRadius,
+            &DirectionalLightComponent_SetAngularRadius,
+            &DirectionalLightComponent_GetShadowStrength,
+            &DirectionalLightComponent_SetShadowStrength,
+            &DirectionalLightComponent_GetShadowDistance,
+            &DirectionalLightComponent_SetShadowDistance,
+            &DirectionalLightComponent_GetShadowResolution,
+            &DirectionalLightComponent_SetShadowResolution,
+            &DirectionalLightComponent_GetCascadeShadow,
+            &DirectionalLightComponent_SetCascadeShadow,
+            &DirectionalLightComponent_GetSoftShadows,
+            &DirectionalLightComponent_SetSoftShadows,
+
+            &PointLightComponent_GetColor,
+            &PointLightComponent_SetColor,
+            &PointLightComponent_GetIntensity,
+            &PointLightComponent_SetIntensity,
+            &PointLightComponent_GetRange,
+            &PointLightComponent_SetRange,
+            &PointLightComponent_GetEnabled,
+            &PointLightComponent_SetEnabled,
+            &PointLightComponent_GetConstantAttenuation,
+            &PointLightComponent_SetConstantAttenuation,
+            &PointLightComponent_GetLinearAttenuation,
+            &PointLightComponent_SetLinearAttenuation,
+            &PointLightComponent_GetQuadraticAttenuation,
+            &PointLightComponent_SetQuadraticAttenuation,
+
+            &SpotLightComponent_GetColor,
+            &SpotLightComponent_SetColor,
+            &SpotLightComponent_GetIntensity,
+            &SpotLightComponent_SetIntensity,
+            &SpotLightComponent_GetRange,
+            &SpotLightComponent_SetRange,
+            &SpotLightComponent_GetEnabled,
+            &SpotLightComponent_SetEnabled,
+            &SpotLightComponent_GetInnerConeAngle,
+            &SpotLightComponent_SetInnerConeAngle,
+            &SpotLightComponent_GetOuterConeAngle,
+            &SpotLightComponent_SetOuterConeAngle,
+            &SpotLightComponent_GetConstantAttenuation,
+            &SpotLightComponent_SetConstantAttenuation,
+            &SpotLightComponent_GetLinearAttenuation,
+            &SpotLightComponent_SetLinearAttenuation,
+            &SpotLightComponent_GetQuadraticAttenuation,
+            &SpotLightComponent_SetQuadraticAttenuation,
+
+            &PointLight2DComponent_GetColor,
+            &PointLight2DComponent_SetColor,
+            &PointLight2DComponent_GetRadius,
+            &PointLight2DComponent_SetRadius,
+            &PointLight2DComponent_GetIntensity,
+            &PointLight2DComponent_SetIntensity,
+            &PointLight2DComponent_GetEnabled,
+            &PointLight2DComponent_SetEnabled,
+
+            &StaticMeshComponent_GetMeshHandle,
+            &StaticMeshComponent_SetMeshHandle,
+            &StaticMeshComponent_SetOverrideMaterial,
+            &StaticMeshComponent_GetOverrideMaterial,
+
+            &WorldEnvironmentComponent_GetExposure,
+            &WorldEnvironmentComponent_SetExposure,
+            &WorldEnvironmentComponent_GetGamma,
+            &WorldEnvironmentComponent_SetGamma,
+            &WorldEnvironmentComponent_GetAmbient,
+            &WorldEnvironmentComponent_SetAmbient,
+            &WorldEnvironmentComponent_GetEnableIBL,
+            &WorldEnvironmentComponent_SetEnableIBL,
+            &WorldEnvironmentComponent_GetFogDensity,
+            &WorldEnvironmentComponent_SetFogDensity,
+            &WorldEnvironmentComponent_GetFogColor,
+            &WorldEnvironmentComponent_SetFogColor,
+            &WorldEnvironmentComponent_GetFogStart,
+            &WorldEnvironmentComponent_SetFogStart,
+            &WorldEnvironmentComponent_GetFogEnd,
+            &WorldEnvironmentComponent_SetFogEnd,
+            &WorldEnvironmentComponent_MarkDirty,
+
+            &ParticleSystemComponent_GetIsPlaying,
+            &ParticleSystemComponent_SetIsPlaying,
+            &ParticleSystemComponent_GetEmissionRate,
+            &ParticleSystemComponent_SetEmissionRate,
+            &ParticleSystemComponent_GetMaxParticles,
+            &ParticleSystemComponent_SetMaxParticles,
+            &ParticleSystemComponent_GetStartColor,
+            &ParticleSystemComponent_SetStartColor,
+            &ParticleSystemComponent_GetEndColor,
+            &ParticleSystemComponent_SetEndColor,
+            &ParticleSystemComponent_GetStartSize,
+            &ParticleSystemComponent_SetStartSize,
+            &ParticleSystemComponent_GetEndSize,
+            &ParticleSystemComponent_SetEndSize,
+            &ParticleSystemComponent_Play,
+            &ParticleSystemComponent_Stop,
+            &ParticleSystemComponent_Restart,
+            &ParticleSystemComponent_SetPreset,
+
+            &NetworkIdentityComponent_GetNetId,
+            &NetworkIdentityComponent_GetOwnerClient,
+            &NetworkIdentityComponent_SetOwnerClient,
+            &NetworkIdentityComponent_GetIsLocalPlayer,
+            &NetworkIdentityComponent_SetIsLocalPlayer,
+            &NetworkIdentityComponent_GetReplicate,
+            &NetworkIdentityComponent_SetReplicate,
+            &NetworkIdentityComponent_GetPrefab,
+            &NetworkIdentityComponent_SetPrefab,
+            &NetworkIdentityComponent_GetReplicatedMovementSpeed,
+            &NetworkIdentityComponent_SetReplicatedMovementSpeed,
+            &NetworkIdentityComponent_GetReplicatedIsGrounded,
+            &NetworkIdentityComponent_SetReplicatedIsGrounded,
+            &NetworkIdentityComponent_GetSyncComponentsMask,
+            &NetworkIdentityComponent_SetSyncComponentsMask,
+            &NetworkIdentityComponent_MarkDirty,
+
+            &PlaneColliderComponent_GetCenter,
+            &PlaneColliderComponent_SetCenter,
+            &PlaneColliderComponent_GetScale,
+            &PlaneColliderComponent_SetScale,
+
+            &TextComponent_GetFontSize,
+            &TextComponent_SetFontSize,
+            &TextComponent_GetScreenSpace,
+            &TextComponent_SetScreenSpace,
+            &TextComponent_GetBillboard,
+            &TextComponent_SetBillboard,
+            &TextComponent_GetCenterAlign,
+            &TextComponent_SetCenterAlign
         };
     }
 
@@ -4018,6 +5134,7 @@ namespace ignite
     {
         s_EntityHasComponentFuncs.clear();
         s_EntityAddComponentFuncs.clear();
+        s_EntityRemoveComponentFuncs.clear();
         s_WidgetButtonEventBindings.clear();
         RegisterComponent(AllComponents {});
 
