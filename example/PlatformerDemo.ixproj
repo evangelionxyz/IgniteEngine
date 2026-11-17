@@ -5,7 +5,7 @@
         "AssetPath": "Assets",
         "AssetRegistry": "AssetRegistry.ixreg",
         "DefaultSceneHandle": 100001,
-        "Configuration": "Debug",
+        "Configuration": "Release",
         "Physics": {
             "Gravity": [
                 0.0,

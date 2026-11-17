@@ -33,6 +33,29 @@ public static class CoreInternalCalls
     private static CoreNativeAPI.Funcs.AssetManagerLoadFn? s_AssetManagerLoadAssetImmediate;
     private static CoreNativeAPI.Funcs.SceneLoadFn? s_SceneLoad;
 
+    private static CoreNativeAPI.Funcs.NetBoolQueryFn? s_NetIsConnected;
+    private static CoreNativeAPI.Funcs.NetBoolQueryFn? s_NetIsServerRunning;
+    private static CoreNativeAPI.Funcs.NetBoolQueryFn? s_NetIsConnecting;
+    private static CoreNativeAPI.Funcs.NetUIntQueryFn? s_NetGetClientId;
+    private static CoreNativeAPI.Funcs.NetStartServerFn? s_NetStartServer;
+    private static CoreNativeAPI.Funcs.NetStartServerDefaultFn? s_NetStartServerDefault;
+    private static CoreNativeAPI.Funcs.NetActionFn? s_NetStopServer;
+    private static CoreNativeAPI.Funcs.NetConnectFn? s_NetConnect;
+    private static CoreNativeAPI.Funcs.NetActionFn? s_NetDisconnect;
+    private static CoreNativeAPI.Funcs.NetSpawnEntityFn? s_NetSpawnEntity;
+    private static CoreNativeAPI.Funcs.NetDespawnEntityFn? s_NetDespawnEntity;
+    private static CoreNativeAPI.Funcs.NetSendInputFn? s_NetSendInput;
+    private static CoreNativeAPI.Funcs.NetSendChatFn? s_NetSendChat;
+    private static CoreNativeAPI.Funcs.NetKickClientFn? s_NetKickClient;
+    private static CoreNativeAPI.Funcs.NetGetStatsFn? s_NetGetStats;
+    private static CoreNativeAPI.Funcs.NetUIntQueryFn? s_NetGetServerTick;
+    private static CoreNativeAPI.Funcs.NetUIntQueryFn? s_NetGetClientServerTick;
+    private static CoreNativeAPI.Funcs.NetUIntQueryFn? s_NetGetClientCount;
+    private static CoreNativeAPI.Funcs.NetGetConnectedClientAtFn? s_NetGetConnectedClientAt;
+    private static CoreNativeAPI.Funcs.NetUIntQueryFn? s_NetGetChatCount;
+    private static CoreNativeAPI.Funcs.NetGetChatAtFn? s_NetGetChatAt;
+    private static CoreNativeAPI.Funcs.NetSetSimulationSettingsFn? s_NetSetSimulationSettings;
+
     public static void Initialize(ulong apiPtr)
     {
         if (apiPtr == 0)
@@ -67,6 +90,51 @@ public static class CoreInternalCalls
         {
             if (api.Scene_TransitionTo != IntPtr.Zero)
                 s_SceneLoad = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SceneLoadFn>(api.Scene_TransitionTo);
+
+            if (api.Net_IsConnected != IntPtr.Zero)
+                s_NetIsConnected = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetBoolQueryFn>(api.Net_IsConnected);
+            if (api.Net_IsServerRunning != IntPtr.Zero)
+                s_NetIsServerRunning = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetBoolQueryFn>(api.Net_IsServerRunning);
+            if (api.Net_IsConnecting != IntPtr.Zero)
+                s_NetIsConnecting = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetBoolQueryFn>(api.Net_IsConnecting);
+            if (api.Net_GetClientId != IntPtr.Zero)
+                s_NetGetClientId = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetUIntQueryFn>(api.Net_GetClientId);
+            if (api.Net_StartServer != IntPtr.Zero)
+                s_NetStartServer = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetStartServerFn>(api.Net_StartServer);
+            if (api.Net_StartServerDefault != IntPtr.Zero)
+                s_NetStartServerDefault = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetStartServerDefaultFn>(api.Net_StartServerDefault);
+            if (api.Net_StopServer != IntPtr.Zero)
+                s_NetStopServer = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetActionFn>(api.Net_StopServer);
+            if (api.Net_Connect != IntPtr.Zero)
+                s_NetConnect = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetConnectFn>(api.Net_Connect);
+            if (api.Net_Disconnect != IntPtr.Zero)
+                s_NetDisconnect = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetActionFn>(api.Net_Disconnect);
+            if (api.Net_SpawnEntity != IntPtr.Zero)
+                s_NetSpawnEntity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetSpawnEntityFn>(api.Net_SpawnEntity);
+            if (api.Net_DespawnEntity != IntPtr.Zero)
+                s_NetDespawnEntity = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetDespawnEntityFn>(api.Net_DespawnEntity);
+            if (api.Net_SendInput != IntPtr.Zero)
+                s_NetSendInput = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetSendInputFn>(api.Net_SendInput);
+            if (api.Net_SendChat != IntPtr.Zero)
+                s_NetSendChat = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetSendChatFn>(api.Net_SendChat);
+            if (api.Net_KickClient != IntPtr.Zero)
+                s_NetKickClient = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetKickClientFn>(api.Net_KickClient);
+            if (api.Net_GetStats != IntPtr.Zero)
+                s_NetGetStats = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetGetStatsFn>(api.Net_GetStats);
+            if (api.Net_GetServerTick != IntPtr.Zero)
+                s_NetGetServerTick = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetUIntQueryFn>(api.Net_GetServerTick);
+            if (api.Net_GetClientServerTick != IntPtr.Zero)
+                s_NetGetClientServerTick = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetUIntQueryFn>(api.Net_GetClientServerTick);
+            if (api.Net_GetClientCount != IntPtr.Zero)
+                s_NetGetClientCount = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetUIntQueryFn>(api.Net_GetClientCount);
+            if (api.Net_GetConnectedClientAt != IntPtr.Zero)
+                s_NetGetConnectedClientAt = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetGetConnectedClientAtFn>(api.Net_GetConnectedClientAt);
+            if (api.Net_GetChatCount != IntPtr.Zero)
+                s_NetGetChatCount = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetUIntQueryFn>(api.Net_GetChatCount);
+            if (api.Net_GetChatAt != IntPtr.Zero)
+                s_NetGetChatAt = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetGetChatAtFn>(api.Net_GetChatAt);
+            if (api.Net_SetSimulationSettings != IntPtr.Zero)
+                s_NetSetSimulationSettings = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetSetSimulationSettingsFn>(api.Net_SetSimulationSettings);
         }
         catch { /* optional binding */ }
 
@@ -287,5 +355,200 @@ public static class CoreInternalCalls
         if (s_SceneLoad == null)
             throw new InvalidOperationException("Scene transition native call is not bound.");
         s_SceneLoad(handle);
+    }
+
+    internal static bool Net_IsConnected()
+    {
+        EnsureInitialized();
+        return s_NetIsConnected != null && s_NetIsConnected();
+    }
+
+    internal static bool Net_IsServerRunning()
+    {
+        EnsureInitialized();
+        return s_NetIsServerRunning != null && s_NetIsServerRunning();
+    }
+
+    internal static bool Net_IsConnecting()
+    {
+        EnsureInitialized();
+        return s_NetIsConnecting != null && s_NetIsConnecting();
+    }
+
+    internal static uint Net_GetClientId()
+    {
+        EnsureInitialized();
+        return s_NetGetClientId != null ? s_NetGetClientId() : 0u;
+    }
+
+    internal static bool Net_StartServer()
+    {
+        EnsureInitialized();
+        return s_NetStartServerDefault != null && s_NetStartServerDefault();
+    }
+
+    internal static bool Net_StartServer(ushort port, ushort tickRate, ushort snapshotRate)
+    {
+        EnsureInitialized();
+        return s_NetStartServer != null && s_NetStartServer(port, tickRate, snapshotRate);
+    }
+
+    internal static void Net_StopServer()
+    {
+        EnsureInitialized();
+        s_NetStopServer?.Invoke();
+    }
+
+    internal static bool Net_Connect(string address, ushort port, string playerName)
+    {
+        EnsureInitialized();
+        if (s_NetConnect == null) return false;
+        IntPtr addrPtr = NativeObject.StringToUtf8(address);
+        IntPtr namePtr = NativeObject.StringToUtf8(playerName);
+        try { return s_NetConnect(addrPtr, port, namePtr); }
+        finally
+        {
+            Marshal.FreeCoTaskMem(addrPtr);
+            Marshal.FreeCoTaskMem(namePtr);
+        }
+    }
+
+    internal static void Net_Disconnect()
+    {
+        EnsureInitialized();
+        s_NetDisconnect?.Invoke();
+    }
+
+    internal static ulong Net_SpawnEntity(string templateOrPrefab, Mathf.Vector3 position, Mathf.Quaternion rotation, uint ownerClient)
+    {
+        EnsureInitialized();
+        if (s_NetSpawnEntity == null) return 0;
+        NativeObject.Vector3 pos = NativeObject.ToNative(position);
+        NativeObject.Quaternion rot = NativeObject.ToNative(rotation);
+        IntPtr prefabPtr = NativeObject.StringToUtf8(templateOrPrefab);
+        try { return s_NetSpawnEntity(prefabPtr, ref pos, ref rot, ownerClient); }
+        finally { Marshal.FreeCoTaskMem(prefabPtr); }
+    }
+
+    internal static void Net_DespawnEntity(ulong netId)
+    {
+        EnsureInitialized();
+        s_NetDespawnEntity?.Invoke(netId);
+    }
+
+    internal static void Net_SendInput(Mathf.Vector2 move, ushort buttons, float yaw)
+    {
+        EnsureInitialized();
+        if (s_NetSendInput == null) return;
+        NativeObject.Vector2 m = NativeObject.ToNative(move);
+        s_NetSendInput(ref m, buttons, yaw);
+    }
+
+    internal static void Net_SendChat(string text)
+    {
+        EnsureInitialized();
+        if (s_NetSendChat == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(text);
+        try { s_NetSendChat(ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void Net_KickClient(uint clientId, string reason)
+    {
+        EnsureInitialized();
+        if (s_NetKickClient == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(reason);
+        try { s_NetKickClient(clientId, ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static NetStats Net_GetStats()
+    {
+        EnsureInitialized();
+        if (s_NetGetStats == null) return default;
+        s_NetGetStats(out int rtt, out float loss, out float inKBps, out float outKBps, out uint count);
+        return new NetStats
+        {
+            RttMs = rtt,
+            PacketLossPercent = loss,
+            InKBytesPerSec = inKBps,
+            OutKBytesPerSec = outKBps,
+            ClientCount = count
+        };
+    }
+
+    internal static uint Net_GetServerTick()
+    {
+        EnsureInitialized();
+        return s_NetGetServerTick != null ? s_NetGetServerTick() : 0u;
+    }
+
+    internal static uint Net_GetClientServerTick()
+    {
+        EnsureInitialized();
+        return s_NetGetClientServerTick != null ? s_NetGetClientServerTick() : 0u;
+    }
+
+    internal static uint Net_GetClientCount()
+    {
+        EnsureInitialized();
+        return s_NetGetClientCount != null ? s_NetGetClientCount() : 0u;
+    }
+
+    internal static NetConnectedClient[] Net_GetConnectedClients()
+    {
+        EnsureInitialized();
+        if (s_NetGetClientCount == null || s_NetGetConnectedClientAt == null)
+            return Array.Empty<NetConnectedClient>();
+
+        uint count = s_NetGetClientCount();
+        if (count == 0)
+            return Array.Empty<NetConnectedClient>();
+
+        var result = new NetConnectedClient[count];
+        for (uint i = 0; i < count; ++i)
+        {
+            if (s_NetGetConnectedClientAt(i, out uint clientId, out IntPtr namePtr))
+            {
+                result[i] = new NetConnectedClient
+                {
+                    ClientId = clientId,
+                    Name = NativeObject.Utf8ToString(namePtr) ?? string.Empty
+                };
+            }
+        }
+        return result;
+    }
+
+    internal static NetChatMessage[] Net_GetChatHistory()
+    {
+        EnsureInitialized();
+        if (s_NetGetChatCount == null || s_NetGetChatAt == null)
+            return Array.Empty<NetChatMessage>();
+
+        uint count = s_NetGetChatCount();
+        if (count == 0)
+            return Array.Empty<NetChatMessage>();
+
+        var result = new NetChatMessage[count];
+        for (uint i = 0; i < count; ++i)
+        {
+            if (s_NetGetChatAt(i, out uint senderId, out IntPtr senderNamePtr, out IntPtr textPtr))
+            {
+                result[i] = new NetChatMessage
+                {
+                    SenderId = senderId,
+                    SenderName = NativeObject.Utf8ToString(senderNamePtr) ?? string.Empty,
+                    Text = NativeObject.Utf8ToString(textPtr) ?? string.Empty
+                };
+            }
+        }
+        return result;
+    }
+
+    internal static void Net_SetSimulationSettings(int lagMs, float lossPercent)
+    {
+        EnsureInitialized();
+        s_NetSetSimulationSettings?.Invoke(lagMs, lossPercent);
     }
 }

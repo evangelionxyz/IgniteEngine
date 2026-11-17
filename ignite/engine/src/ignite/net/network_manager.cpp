@@ -8,6 +8,7 @@
 #include <ignite/scene/component.hpp>
 #include <ignite/project/project.hpp>
 #include <ignite/scripting/lua/lua_script_runtime.hpp>
+#include <ignite/scripting/script_engine.hpp>
 
 #include <steam/steamnetworkingsockets.h>
 #include <steam/isteamnetworkingutils.h>
@@ -100,6 +101,7 @@ namespace ignite
                 m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
                     "on_network_connected", GetClientId(), "");
             }
+            ScriptEngine::InvokeNetworkEvent("OnNetworkConnected", GetClientId());
         };
         m_ClientSystem->onDisconnected = [this]() {
             if (m_ActiveScene && m_ActiveScene->GetLuaScriptRuntime())
@@ -107,6 +109,7 @@ namespace ignite
                 m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
                     "on_network_disconnected", GetClientId(), "");
             }
+            ScriptEngine::InvokeNetworkEvent("OnNetworkDisconnected", GetClientId());
         };
 
         m_ClientSystem->onChat = [this](const netproto::ChatMsg &msg) {
@@ -224,6 +227,7 @@ namespace ignite
                     m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
                         "on_network_client_joined", client.clientId, client.name);
                 }
+                ScriptEngine::InvokeNetworkEvent("OnNetworkClientJoined", client.clientId, client.name);
             }
             if (m_ClientJoinedCallback)
             {
@@ -254,6 +258,7 @@ namespace ignite
                 m_ActiveScene->GetLuaScriptRuntime()->InvokeNetworkEvent(
                     "on_network_client_left", client.clientId, client.name);
             }
+            ScriptEngine::InvokeNetworkEvent("OnNetworkClientLeft", client.clientId, client.name);
             if (m_ClientLeftCallback)
             {
                 m_ClientLeftCallback(client.clientId, client.name);
@@ -393,9 +398,12 @@ namespace ignite
                         // Movement uses the newest command; one-shot buttons from skipped commands are merged
                         // in so a jump/bounce/respawn edge is never lost when several inputs drain in one tick.
                         const auto &latest = inputs.back();
+                        const uint16_t mergedButtons = static_cast<uint16_t>((latest.buttons & ~kEdgeMask) | edgeBits);
                         if (auto *runtime = m_ActiveScene->GetLuaScriptRuntime())
                             runtime->InvokeNetworkInput(entity.GetUUID(), client.clientId, latest.move.x, latest.move.y,
-                                static_cast<uint16_t>((latest.buttons & ~kEdgeMask) | edgeBits), latest.yaw, tickInterval);
+                                mergedButtons, latest.yaw, tickInterval);
+                        ScriptEngine::InvokeNetworkInput(entity.GetUUID(), client.clientId, latest.move.x, latest.move.y,
+                            mergedButtons, latest.yaw, tickInterval);
 
                         // Owner-authoritative movement: follow the owner's claimed position within limits.
                         if (claim && !respawned && entity.HasComponent<CharacterControllerComponent>())

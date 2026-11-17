@@ -42,6 +42,98 @@ namespace ignite
             return s;
         }
 
+        bool CaseInsensitiveEqual(std::string_view a, std::string_view b)
+        {
+            if (a.size() != b.size())
+                return false;
+            for (size_t i = 0; i < a.size(); ++i)
+            {
+                if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i])))
+                    return false;
+            }
+            return true;
+        }
+
+        std::filesystem::path NormalizePathForComparison(const std::filesystem::path &p)
+        {
+            std::error_code ec;
+            std::filesystem::path norm = std::filesystem::weakly_canonical(p, ec);
+            if (ec || norm.empty())
+                norm = std::filesystem::absolute(p, ec);
+            return norm.lexically_normal();
+        }
+
+        bool PathsEqualCrossPlatform(const std::filesystem::path &a, const std::filesystem::path &b)
+        {
+            const std::filesystem::path na = NormalizePathForComparison(a);
+            const std::filesystem::path nb = NormalizePathForComparison(b);
+            std::error_code ec;
+            if (std::filesystem::exists(na, ec) && std::filesystem::exists(nb, ec))
+            {
+                const bool eq = std::filesystem::equivalent(na, nb, ec);
+                if (!ec)
+                    return eq;
+            }
+#ifdef _WIN32
+            return CaseInsensitiveEqual(na.generic_string(), nb.generic_string());
+#else
+            return na == nb;
+#endif
+        }
+
+        std::filesystem::path FindRepoSolutionUpwards(const std::filesystem::path &startDir)
+        {
+            std::error_code ec;
+            std::filesystem::path cur = startDir;
+            for (int i = 0; i < 6 && !cur.empty(); ++i)
+            {
+                const std::filesystem::path slnx = cur / "IGN.slnx";
+                if (std::filesystem::exists(slnx, ec))
+                    return slnx;
+                cur = cur.parent_path();
+            }
+            return {};
+        }
+
+        std::filesystem::path FindMSBuildExecutable()
+        {
+#ifdef _WIN32
+            std::error_code ec;
+            static constexpr std::array<const char *, 4> kCandidatePaths = {
+                "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe",
+                "C:/Program Files/Microsoft Visual Studio/18/Professional/MSBuild/Current/Bin/amd64/MSBuild.exe",
+                "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe",
+                "C:/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/amd64/MSBuild.exe"
+            };
+            for (const char *p : kCandidatePaths)
+            {
+                if (std::filesystem::exists(p, ec))
+                    return std::filesystem::path(p);
+            }
+
+            const std::filesystem::path vswhere = "C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe";
+            if (std::filesystem::exists(vswhere, ec))
+            {
+                FILE *pipe = _popen("\"C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe\" -latest -prerelease -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe", "r");
+                if (pipe)
+                {
+                    char line[1024]{};
+                    std::string found;
+                    if (fgets(line, sizeof(line), pipe) != nullptr)
+                    {
+                        found = line;
+                        while (!found.empty() && (found.back() == '\n' || found.back() == '\r'))
+                            found.pop_back();
+                    }
+                    _pclose(pipe);
+                    if (!found.empty() && std::filesystem::exists(found, ec))
+                        return std::filesystem::path(found);
+                }
+            }
+#endif
+            return {};
+        }
+
         bool IsExcludedEditorFile(const std::filesystem::path &filePath, bool includePdbs)
         {
             const std::string filename = ToLowerCopy(filePath.filename().string());
@@ -139,7 +231,7 @@ namespace ignite
                     break;
 
                 const std::filesystem::path canonEntry = std::filesystem::weakly_canonical(entry.path(), canonEc);
-                if (!canonDstRoot.empty() && canonEntry == canonDstRoot)
+                if (!canonDstRoot.empty() && GamePackager::IsPathEqualOrSubdir(canonEntry, canonDstRoot))
                     continue;
 
                 const std::filesystem::path rel = std::filesystem::relative(entry.path(), srcDir, ec);
@@ -173,21 +265,77 @@ namespace ignite
         return out.empty() ? std::string("IgniteGame") : out;
     }
 
+    bool GamePackager::IsPathEqualOrSubdir(const std::filesystem::path &candidate, const std::filesystem::path &base)
+    {
+        if (candidate.empty() || base.empty())
+            return false;
+
+        const std::filesystem::path normCand = NormalizePathForComparison(candidate);
+        const std::filesystem::path normBase = NormalizePathForComparison(base);
+
+#ifdef _WIN32
+        const std::string candRoot = normCand.root_name().string();
+        const std::string baseRoot = normBase.root_name().string();
+        if (!CaseInsensitiveEqual(candRoot, baseRoot))
+            return false;
+#else
+        if (normCand.root_name() != normBase.root_name())
+            return false;
+#endif
+
+        if (PathsEqualCrossPlatform(normCand, normBase))
+            return true;
+
+        std::error_code ec;
+        const std::filesystem::path rel = std::filesystem::relative(normCand, normBase, ec);
+        if (ec || rel.empty())
+            return false;
+
+        if (rel == ".")
+            return true;
+
+        const std::string firstSeg = rel.begin()->string();
+        return firstSeg != ".." && !rel.is_absolute();
+    }
+
     std::filesystem::path GamePackager::FindRuntimeBinaryDirectory(const std::filesystem::path &hintDir)
     {
+        return FindRuntimeBinaryDirectory(hintDir, ProjectConfiguration::Debug);
+    }
+
+    std::filesystem::path GamePackager::FindRuntimeBinaryDirectory(const std::filesystem::path &hintDir, ProjectConfiguration configuration)
+    {
+        std::error_code ec;
+        const std::string configStr = Project::ConfigurationToString(configuration);
         std::vector<std::filesystem::path> candidates;
+
         if (!hintDir.empty())
             candidates.push_back(hintDir);
 
         const std::filesystem::path exeDir = GetCurrentExecutableDirectory();
-        candidates.push_back(exeDir);
-        candidates.push_back(std::filesystem::current_path());
-        candidates.push_back(std::filesystem::current_path() / "bin" / "Debug");
-        candidates.push_back(std::filesystem::current_path() / "bin" / "Release");
-        candidates.push_back(exeDir.parent_path().parent_path() / "bin" / "Debug");
-        candidates.push_back(exeDir.parent_path().parent_path() / "bin" / "Release");
+        const std::filesystem::path cwd = std::filesystem::current_path(ec);
 
-        std::error_code ec;
+        auto addConfigCandidatesFrom = [&](const std::filesystem::path &start)
+        {
+            std::filesystem::path cur = start;
+            for (int i = 0; i < 6 && !cur.empty(); ++i)
+            {
+                candidates.push_back(cur / "bin" / configStr);
+                cur = cur.parent_path();
+            }
+        };
+        addConfigCandidatesFrom(exeDir);
+        addConfigCandidatesFrom(cwd);
+
+        const std::string exeDirName = exeDir.filename().string();
+        const bool isStandaloneLayout = !std::filesystem::exists(exeDir.parent_path() / "Debug", ec)
+            && !std::filesystem::exists(exeDir.parent_path() / "Release", ec)
+            && !std::filesystem::exists(exeDir.parent_path() / "Shipping", ec);
+        if (CaseInsensitiveEqual(exeDirName, configStr) || isStandaloneLayout)
+        {
+            candidates.push_back(exeDir);
+        }
+
         for (const auto &dir : candidates)
         {
             if (!dir.empty() && std::filesystem::exists(dir / "Ignite.Runtime.exe", ec))
@@ -214,28 +362,66 @@ namespace ignite
             return result;
         }
 
-        const std::filesystem::path binDir = FindRuntimeBinaryDirectory(config.runtimeBinaryDirectory);
+        const ProjectConfiguration targetConfig = project->GetConfiguration();
+        const std::string configStr = Project::ConfigurationToString(targetConfig);
+
+        std::filesystem::path binDir = FindRuntimeBinaryDirectory(config.runtimeBinaryDirectory, targetConfig);
+        if (binDir.empty() && config.autoBuildMissingRuntime && config.runtimeBinaryDirectory.empty())
+        {
+            std::filesystem::path slnxPath = FindRepoSolutionUpwards(GetCurrentExecutableDirectory());
+            if (slnxPath.empty())
+                slnxPath = FindRepoSolutionUpwards(std::filesystem::current_path());
+
+            const std::filesystem::path msbuildExe = FindMSBuildExecutable();
+            if (!slnxPath.empty() && !msbuildExe.empty())
+            {
+                const std::string buildCmd = std::format("\"{}\" \"{}\" /p:Configuration={} /p:Platform=x64 /m /v:minimal",
+                    msbuildExe.string(), slnxPath.string(), configStr);
+                LOG_INFO("[GamePackager] Building '{}' native runtime binaries via MSBuild...", configStr);
+                std::system(buildCmd.c_str());
+                binDir = FindRuntimeBinaryDirectory(config.runtimeBinaryDirectory, targetConfig);
+            }
+        }
+
         if (binDir.empty())
         {
-            result.errorMessage = "Could not locate Ignite.Runtime.exe in binary directory.";
+            result.errorMessage = std::format("Could not locate Ignite.Runtime.exe for '{}' configuration.", configStr);
             return result;
         }
 
         std::error_code ec;
-        const std::filesystem::path outDir = std::filesystem::weakly_canonical(config.outputDirectory, ec);
+        const std::filesystem::path outDir = NormalizePathForComparison(config.outputDirectory);
         if (outDir.empty())
         {
             result.errorMessage = "Failed to resolve package output directory.";
             return result;
         }
 
-        // Prevent packaging inside project Assets or Scripts folders
-        const std::filesystem::path canonProjDir = std::filesystem::weakly_canonical(project->GetDirectory(), ec);
-        const std::filesystem::path relToProj = std::filesystem::relative(outDir, canonProjDir, ec);
-        if (!ec && (relToProj.empty() || relToProj == "."))
+        // Prevent packaging onto the project root or inside project Assets / Scripts / Bin folders
+        // Uses root-name-aware check so cross-drive destinations (e.g. D:\Proj -> C:\Out) succeed cleanly.
+        const std::filesystem::path canonProjDir = NormalizePathForComparison(project->GetDirectory());
+        if (PathsEqualCrossPlatform(outDir, canonProjDir))
         {
             result.errorMessage = "Output directory cannot be the project root directory itself.";
             return result;
+        }
+
+        if (IsPathEqualOrSubdir(outDir, project->GetAssetDirectory()) ||
+            IsPathEqualOrSubdir(outDir, project->GetScriptsDirectory()) ||
+            IsPathEqualOrSubdir(outDir, project->GetScriptBinDirectory()))
+        {
+            result.errorMessage = "Output directory cannot be inside the project's Assets, Scripts, or Bin directory.";
+            return result;
+        }
+
+        if (config.buildScriptAssembly && std::filesystem::exists(project->GetSolutionFilepath(), ec))
+        {
+            project->IsCoreDependenciesUpToDate();
+            if (!project->BuildSolution(false) || !std::filesystem::exists(project->GetScriptModulePath(), ec))
+            {
+                result.errorMessage = std::format("Failed to build C# script assembly for '{}' configuration.", configStr);
+                return result;
+            }
         }
 
         result.outputDirectory = outDir;
@@ -304,6 +490,17 @@ namespace ignite
             CopyDirectoryFiltered(resourcesSrc, outDir / "resources", outDir, result, ec);
         }
 
+        // Also ensure latest authoritative HLSL/HLSLI shaders are synced if running from repo layout
+        const std::filesystem::path slnxPath = FindRepoSolutionUpwards(binDir);
+        if (!slnxPath.empty())
+        {
+            const std::filesystem::path repoShaders = slnxPath.parent_path() / "ignite" / "editor" / "resources" / "shaders";
+            if (std::filesystem::exists(repoShaders, ec))
+            {
+                CopyDirectoryFiltered(repoShaders, outDir / "resources" / "shaders", outDir, result, ec);
+            }
+        }
+
         // 4. Copy project manifest, asset registry, assets, Lua scripts, and compiled C# scripts
         const std::filesystem::path projFilepath = project->GetFilepath();
         project->Serialize(projFilepath);
@@ -322,9 +519,26 @@ namespace ignite
             CopyDirectoryFiltered(project->GetScriptsDirectory(), outDir / info.scriptsDirectory, outDir, result, ec);
         }
 
-        if (std::filesystem::exists(project->GetScriptBinDirectory(), ec))
+        const std::filesystem::path scriptBinDir = project->GetScriptBinDirectory();
+        if (std::filesystem::exists(scriptBinDir, ec))
         {
-            CopyDirectoryFiltered(project->GetScriptBinDirectory(), outDir / "Bin", outDir, result, ec);
+            // Copy top-level core script engine dependencies
+            for (const auto &entry : std::filesystem::directory_iterator(scriptBinDir, ec))
+            {
+                if (ec) break;
+                if (!entry.is_regular_file())
+                    continue;
+                if (!config.includePdbs && CaseInsensitiveEqual(entry.path().extension().string(), ".pdb"))
+                    continue;
+                CopySingleFile(entry.path(), outDir / "Bin" / entry.path().filename(), result, ec);
+            }
+
+            // Copy compiled script assembly for the active configuration (plus Bin/ root dll fallback if present)
+            const std::filesystem::path configScriptBin = scriptBinDir / configStr;
+            if (std::filesystem::exists(configScriptBin, ec))
+            {
+                CopyDirectoryFiltered(configScriptBin, outDir / "Bin" / configStr, outDir, result, ec);
+            }
         }
 
         result.success = std::filesystem::exists(dstExe, ec);

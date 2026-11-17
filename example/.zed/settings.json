@@ -1,0 +1,27 @@
+{
+    "lsp": {
+        "lua-language-server": {
+            "settings": {
+                "Lua": {
+                    "runtime": {
+                        "version": "Lua 5.4"
+                    },
+                    "workspace": {
+                        "library": [
+                            ".ignite/lua"
+                        ],
+                        "checkThirdParty": false
+                    },
+                    "diagnostics": {
+                        "globals": [
+                            "Ignite"
+                        ],
+                        "disable": [
+                            "lowercase-global"
+                        ]
+                    }
+                }
+            }
+        }
+    }
+}

@@ -46,6 +46,10 @@ namespace ignite
         static Ref<ScriptInstance> GetEntityScriptInstance(ScriptInstanceID instanceId);
         static const std::vector<std::string> &GetEntityScriptClassStorage();
 
+        // Network callbacks dispatched to active managed entity script instances
+        static void InvokeNetworkEvent(const char *callbackName, uint32_t clientId, const std::string &clientName = {});
+        static void InvokeNetworkInput(UUID entityId, uint32_t clientId, float moveX, float moveY, uint16_t buttons, float yaw, float deltaTime);
+
         // Scriptable Object script
         static bool IsScriptableObjectClassExists(const std::string &fullClassName);
         static Ref<ScriptClass> GetScriptableObjectClassByName(const std::string &name);

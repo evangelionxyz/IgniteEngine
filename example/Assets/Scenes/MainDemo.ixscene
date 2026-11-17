@@ -3774,6 +3774,52 @@
                 }
             },
             {
+                "ID": 8858725330613511313,
+                "Name": "Test Script",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "Script": {
+                    "ClassName": "PlatformerDemo.Scripts.ServerManager"
+                }
+            },
+            {
                 "ID": 16765598167397349080,
                 "Name": "WorldEnv",
                 "Type": "Node",

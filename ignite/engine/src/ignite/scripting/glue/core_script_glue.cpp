@@ -14,6 +14,8 @@
 
 #include "ignite/core/application.hpp"
 #include "ignite/graphics/window.hpp"
+#include "ignite/net/network_manager.hpp"
+#include "ignite/net/net_replication.hpp"
 
 namespace ignite
 {
@@ -280,6 +282,186 @@ namespace ignite
             SceneManager::Transition(AssetHandle(sceneAssetHandle));
         }
 
+        // =========================================================================
+        // Networking (NetworkManager)
+        // =========================================================================
+        static bool Net_IsConnected()
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            return nm && nm->IsConnected();
+        }
+
+        static bool Net_IsServerRunning()
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            return nm && nm->IsServerRunning();
+        }
+
+        static bool Net_IsConnecting()
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            return nm && nm->IsConnecting();
+        }
+
+        static uint32_t Net_GetClientId()
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            return nm ? nm->GetClientId() : 0;
+        }
+
+        static bool Net_StartServer(uint16_t port, uint16_t tickRate, uint16_t snapshotRate)
+        {
+            auto *nm = NetworkManager::GetInstance();
+            if (!nm)
+                return false;
+            return nm->StartServer(port, tickRate, snapshotRate);
+        }
+
+        static bool Net_StartServerDefault()
+        {
+            auto *nm = NetworkManager::GetInstance();
+            return nm && nm->StartServer();
+        }
+
+        static void Net_StopServer()
+        {
+            if (auto *nm = NetworkManager::GetInstance())
+                nm->StopServer();
+        }
+
+        static bool Net_Connect(const char *address, uint16_t port, const char *playerName)
+        {
+            auto *nm = NetworkManager::GetInstance();
+            if (!nm)
+                return false;
+            return nm->Connect(address ? address : "127.0.0.1", port, playerName ? playerName : "Player");
+        }
+
+        static void Net_Disconnect()
+        {
+            if (auto *nm = NetworkManager::GetInstance())
+                nm->Disconnect();
+        }
+
+        static uint64_t Net_SpawnEntity(const char *templateOrPrefab, const glm::vec3 *position, const glm::quat *rotation, uint32_t ownerClient)
+        {
+            auto *nm = NetworkManager::GetInstance();
+            if (!nm || !nm->GetServerReplication())
+                return 0;
+
+            const glm::vec3 pos = position ? *position : glm::vec3(0.0f);
+            const glm::quat rot = rotation ? *rotation : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            Entity spawned = nm->GetServerReplication()->SpawnEntity(templateOrPrefab ? templateOrPrefab : "", pos, rot, ownerClient);
+            return spawned.IsValid() ? static_cast<uint64_t>(spawned.GetUUID()) : 0;
+        }
+
+        static void Net_DespawnEntity(uint64_t netId)
+        {
+            auto *nm = NetworkManager::GetInstance();
+            if (nm && nm->GetServerReplication())
+                nm->GetServerReplication()->DespawnEntity(netId);
+        }
+
+        static void Net_SendInput(const glm::vec2 *move, uint16_t buttons, float yaw)
+        {
+            if (auto *nm = NetworkManager::GetInstance())
+                nm->SendInput(move ? *move : glm::vec2(0.0f), buttons, yaw);
+        }
+
+        static void Net_SendChat(const char *text)
+        {
+            if (auto *nm = NetworkManager::GetInstance())
+                nm->SendChat(text ? text : "");
+        }
+
+        static void Net_KickClient(uint32_t clientId, const char *reason)
+        {
+            if (auto *nm = NetworkManager::GetInstance())
+                nm->KickClient(clientId, reason ? reason : "");
+        }
+
+        static void Net_GetStats(int32_t *outRttMs, float *outPacketLoss, float *outInKBps, float *outOutKBps, uint32_t *outClientCount)
+        {
+            NetStats stats{};
+            if (const auto *nm = NetworkManager::GetInstance())
+                stats = nm->GetStats();
+
+            if (outRttMs) *outRttMs = stats.rttMs;
+            if (outPacketLoss) *outPacketLoss = stats.packetLossPercent;
+            if (outInKBps) *outInKBps = stats.inKBytesPerSec;
+            if (outOutKBps) *outOutKBps = stats.outKBytesPerSec;
+            if (outClientCount) *outClientCount = stats.clientCount;
+        }
+
+        static uint32_t Net_GetServerTick()
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            return nm ? nm->GetServerTick() : 0;
+        }
+
+        static uint32_t Net_GetClientServerTick()
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            return nm ? nm->GetClientServerTick() : 0;
+        }
+
+        static uint32_t Net_GetClientCount()
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            return nm ? static_cast<uint32_t>(nm->GetClientCount()) : 0;
+        }
+
+        static std::string s_NetClientNameBuffer;
+        static bool Net_GetConnectedClientAt(uint32_t index, uint32_t *outClientId, const char **outName)
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            if (!nm)
+                return false;
+
+            const auto ids = nm->GetConnectedClientIds();
+            const auto names = nm->GetConnectedClientNames();
+            if (index >= ids.size())
+                return false;
+
+            if (outClientId) *outClientId = ids[index];
+            s_NetClientNameBuffer = index < names.size() ? names[index] : "";
+            if (outName) *outName = s_NetClientNameBuffer.c_str();
+            return true;
+        }
+
+        static uint32_t Net_GetChatCount()
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            return nm ? static_cast<uint32_t>(nm->GetChatHistory().size()) : 0;
+        }
+
+        static std::string s_NetChatSenderBuffer;
+        static std::string s_NetChatTextBuffer;
+        static bool Net_GetChatAt(uint32_t index, uint32_t *outSenderId, const char **outSenderName, const char **outText)
+        {
+            const auto *nm = NetworkManager::GetInstance();
+            if (!nm)
+                return false;
+
+            const auto &history = nm->GetChatHistory();
+            if (index >= history.size())
+                return false;
+
+            const auto &entry = history[index];
+            if (outSenderId) *outSenderId = entry.senderId;
+            s_NetChatSenderBuffer = entry.senderName;
+            s_NetChatTextBuffer = entry.text;
+            if (outSenderName) *outSenderName = s_NetChatSenderBuffer.c_str();
+            if (outText) *outText = s_NetChatTextBuffer.c_str();
+            return true;
+        }
+
+        static void Net_SetSimulationSettings(int32_t lagMs, float lossPercent)
+        {
+            if (auto *nm = NetworkManager::GetInstance())
+                nm->SetSimulationSettings(lagMs, lossPercent);
+        }
+
         static const CoreScriptGlueAPI s_CoreScriptGlueAPI =
         {
             &Debug_Log,
@@ -313,6 +495,30 @@ namespace ignite
             &ScriptableObject_GetClassName,
 
             &Scene_Load,
+
+            // Networking
+            &Net_IsConnected,
+            &Net_IsServerRunning,
+            &Net_IsConnecting,
+            &Net_GetClientId,
+            &Net_StartServer,
+            &Net_StartServerDefault,
+            &Net_StopServer,
+            &Net_Connect,
+            &Net_Disconnect,
+            &Net_SpawnEntity,
+            &Net_DespawnEntity,
+            &Net_SendInput,
+            &Net_SendChat,
+            &Net_KickClient,
+            &Net_GetStats,
+            &Net_GetServerTick,
+            &Net_GetClientServerTick,
+            &Net_GetClientCount,
+            &Net_GetConnectedClientAt,
+            &Net_GetChatCount,
+            &Net_GetChatAt,
+            &Net_SetSimulationSettings,
         };
     }
 

@@ -266,6 +266,172 @@ namespace ignite
         bool (*AnimationMontage_GetNotifyCallbackAt)(uint64_t montageHandle, int32_t index, float *outTimestep, uint8_t *outActionType, const char **outName);
         void (*AnimationMontage_AddNotifyCallback)(uint64_t montageHandle, float timestep, uint8_t actionType, const char *name);
         void (*AnimationMontage_RemoveNotifyCallback)(uint64_t montageHandle, int32_t index);
+
+        // Entity removal helper
+        void (*Entity_RemoveComponent)(uint64_t entityID, const char *componentTypeName);
+
+        // RenderingComponent
+        void (*RenderingComponent_GetVisible)(uint64_t entityID, bool *result);
+        void (*RenderingComponent_SetVisible)(uint64_t entityID, bool value);
+
+        // CameraComponent
+        void (*CameraComponent_GetPrimary)(uint64_t entityID, bool *result);
+        void (*CameraComponent_SetPrimary)(uint64_t entityID, bool value);
+        void (*CameraComponent_GetProjectionType)(uint64_t entityID, int32_t *result);
+        void (*CameraComponent_SetProjectionType)(uint64_t entityID, int32_t value);
+        void (*CameraComponent_GetFov)(uint64_t entityID, float *result);
+        void (*CameraComponent_SetFov)(uint64_t entityID, float value);
+        void (*CameraComponent_GetOrthoSize)(uint64_t entityID, float *result);
+        void (*CameraComponent_SetOrthoSize)(uint64_t entityID, float value);
+        void (*CameraComponent_GetNearClip)(uint64_t entityID, float *result);
+        void (*CameraComponent_SetNearClip)(uint64_t entityID, float value);
+        void (*CameraComponent_GetFarClip)(uint64_t entityID, float *result);
+        void (*CameraComponent_SetFarClip)(uint64_t entityID, float value);
+        void (*CameraComponent_GetAspectRatioPreset)(uint64_t entityID, int32_t *result);
+        void (*CameraComponent_SetAspectRatioPreset)(uint64_t entityID, int32_t value);
+
+        // DirectionalLightComponent
+        void (*DirectionalLightComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
+        void (*DirectionalLightComponent_SetColor)(uint64_t entityID, const glm::vec4 *value);
+        void (*DirectionalLightComponent_GetIntensity)(uint64_t entityID, float *result);
+        void (*DirectionalLightComponent_SetIntensity)(uint64_t entityID, float value);
+        void (*DirectionalLightComponent_GetAngularRadius)(uint64_t entityID, float *result);
+        void (*DirectionalLightComponent_SetAngularRadius)(uint64_t entityID, float value);
+        void (*DirectionalLightComponent_GetShadowStrength)(uint64_t entityID, float *result);
+        void (*DirectionalLightComponent_SetShadowStrength)(uint64_t entityID, float value);
+        void (*DirectionalLightComponent_GetShadowDistance)(uint64_t entityID, float *result);
+        void (*DirectionalLightComponent_SetShadowDistance)(uint64_t entityID, float value);
+        void (*DirectionalLightComponent_GetShadowResolution)(uint64_t entityID, int32_t *result);
+        void (*DirectionalLightComponent_SetShadowResolution)(uint64_t entityID, int32_t value);
+        void (*DirectionalLightComponent_GetCascadeShadow)(uint64_t entityID, bool *result);
+        void (*DirectionalLightComponent_SetCascadeShadow)(uint64_t entityID, bool value);
+        void (*DirectionalLightComponent_GetSoftShadows)(uint64_t entityID, bool *result);
+        void (*DirectionalLightComponent_SetSoftShadows)(uint64_t entityID, bool value);
+
+        // PointLightComponent
+        void (*PointLightComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
+        void (*PointLightComponent_SetColor)(uint64_t entityID, const glm::vec4 *value);
+        void (*PointLightComponent_GetIntensity)(uint64_t entityID, float *result);
+        void (*PointLightComponent_SetIntensity)(uint64_t entityID, float value);
+        void (*PointLightComponent_GetRange)(uint64_t entityID, float *result);
+        void (*PointLightComponent_SetRange)(uint64_t entityID, float value);
+        void (*PointLightComponent_GetEnabled)(uint64_t entityID, bool *result);
+        void (*PointLightComponent_SetEnabled)(uint64_t entityID, bool value);
+        void (*PointLightComponent_GetConstantAttenuation)(uint64_t entityID, float *result);
+        void (*PointLightComponent_SetConstantAttenuation)(uint64_t entityID, float value);
+        void (*PointLightComponent_GetLinearAttenuation)(uint64_t entityID, float *result);
+        void (*PointLightComponent_SetLinearAttenuation)(uint64_t entityID, float value);
+        void (*PointLightComponent_GetQuadraticAttenuation)(uint64_t entityID, float *result);
+        void (*PointLightComponent_SetQuadraticAttenuation)(uint64_t entityID, float value);
+
+        // SpotLightComponent
+        void (*SpotLightComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
+        void (*SpotLightComponent_SetColor)(uint64_t entityID, const glm::vec4 *value);
+        void (*SpotLightComponent_GetIntensity)(uint64_t entityID, float *result);
+        void (*SpotLightComponent_SetIntensity)(uint64_t entityID, float value);
+        void (*SpotLightComponent_GetRange)(uint64_t entityID, float *result);
+        void (*SpotLightComponent_SetRange)(uint64_t entityID, float value);
+        void (*SpotLightComponent_GetEnabled)(uint64_t entityID, bool *result);
+        void (*SpotLightComponent_SetEnabled)(uint64_t entityID, bool value);
+        void (*SpotLightComponent_GetInnerConeAngle)(uint64_t entityID, float *result);
+        void (*SpotLightComponent_SetInnerConeAngle)(uint64_t entityID, float value);
+        void (*SpotLightComponent_GetOuterConeAngle)(uint64_t entityID, float *result);
+        void (*SpotLightComponent_SetOuterConeAngle)(uint64_t entityID, float value);
+        void (*SpotLightComponent_GetConstantAttenuation)(uint64_t entityID, float *result);
+        void (*SpotLightComponent_SetConstantAttenuation)(uint64_t entityID, float value);
+        void (*SpotLightComponent_GetLinearAttenuation)(uint64_t entityID, float *result);
+        void (*SpotLightComponent_SetLinearAttenuation)(uint64_t entityID, float value);
+        void (*SpotLightComponent_GetQuadraticAttenuation)(uint64_t entityID, float *result);
+        void (*SpotLightComponent_SetQuadraticAttenuation)(uint64_t entityID, float value);
+
+        // PointLight2DComponent
+        void (*PointLight2DComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
+        void (*PointLight2DComponent_SetColor)(uint64_t entityID, const glm::vec4 *value);
+        void (*PointLight2DComponent_GetRadius)(uint64_t entityID, float *result);
+        void (*PointLight2DComponent_SetRadius)(uint64_t entityID, float value);
+        void (*PointLight2DComponent_GetIntensity)(uint64_t entityID, float *result);
+        void (*PointLight2DComponent_SetIntensity)(uint64_t entityID, float value);
+        void (*PointLight2DComponent_GetEnabled)(uint64_t entityID, bool *result);
+        void (*PointLight2DComponent_SetEnabled)(uint64_t entityID, bool value);
+
+        // StaticMeshComponent
+        void (*StaticMeshComponent_GetMeshHandle)(uint64_t entityID, uint64_t *result);
+        void (*StaticMeshComponent_SetMeshHandle)(uint64_t entityID, uint64_t handle);
+        void (*StaticMeshComponent_SetOverrideMaterial)(uint64_t entityID, int32_t slot, uint64_t materialHandle);
+        void (*StaticMeshComponent_GetOverrideMaterial)(uint64_t entityID, int32_t slot, uint64_t *result);
+
+        // WorldEnvironmentComponent
+        void (*WorldEnvironmentComponent_GetExposure)(uint64_t entityID, float *result);
+        void (*WorldEnvironmentComponent_SetExposure)(uint64_t entityID, float value);
+        void (*WorldEnvironmentComponent_GetGamma)(uint64_t entityID, float *result);
+        void (*WorldEnvironmentComponent_SetGamma)(uint64_t entityID, float value);
+        void (*WorldEnvironmentComponent_GetAmbient)(uint64_t entityID, float *result);
+        void (*WorldEnvironmentComponent_SetAmbient)(uint64_t entityID, float value);
+        void (*WorldEnvironmentComponent_GetEnableIBL)(uint64_t entityID, bool *result);
+        void (*WorldEnvironmentComponent_SetEnableIBL)(uint64_t entityID, bool value);
+        void (*WorldEnvironmentComponent_GetFogDensity)(uint64_t entityID, float *result);
+        void (*WorldEnvironmentComponent_SetFogDensity)(uint64_t entityID, float value);
+        void (*WorldEnvironmentComponent_GetFogColor)(uint64_t entityID, glm::vec4 *result);
+        void (*WorldEnvironmentComponent_SetFogColor)(uint64_t entityID, const glm::vec4 *value);
+        void (*WorldEnvironmentComponent_GetFogStart)(uint64_t entityID, float *result);
+        void (*WorldEnvironmentComponent_SetFogStart)(uint64_t entityID, float value);
+        void (*WorldEnvironmentComponent_GetFogEnd)(uint64_t entityID, float *result);
+        void (*WorldEnvironmentComponent_SetFogEnd)(uint64_t entityID, float value);
+        void (*WorldEnvironmentComponent_MarkDirty)(uint64_t entityID);
+
+        // ParticleSystemComponent
+        void (*ParticleSystemComponent_GetIsPlaying)(uint64_t entityID, bool *result);
+        void (*ParticleSystemComponent_SetIsPlaying)(uint64_t entityID, bool value);
+        void (*ParticleSystemComponent_GetEmissionRate)(uint64_t entityID, float *result);
+        void (*ParticleSystemComponent_SetEmissionRate)(uint64_t entityID, float value);
+        void (*ParticleSystemComponent_GetMaxParticles)(uint64_t entityID, uint32_t *result);
+        void (*ParticleSystemComponent_SetMaxParticles)(uint64_t entityID, uint32_t value);
+        void (*ParticleSystemComponent_GetStartColor)(uint64_t entityID, glm::vec4 *result);
+        void (*ParticleSystemComponent_SetStartColor)(uint64_t entityID, const glm::vec4 *value);
+        void (*ParticleSystemComponent_GetEndColor)(uint64_t entityID, glm::vec4 *result);
+        void (*ParticleSystemComponent_SetEndColor)(uint64_t entityID, const glm::vec4 *value);
+        void (*ParticleSystemComponent_GetStartSize)(uint64_t entityID, glm::vec2 *result);
+        void (*ParticleSystemComponent_SetStartSize)(uint64_t entityID, const glm::vec2 *value);
+        void (*ParticleSystemComponent_GetEndSize)(uint64_t entityID, glm::vec2 *result);
+        void (*ParticleSystemComponent_SetEndSize)(uint64_t entityID, const glm::vec2 *value);
+        void (*ParticleSystemComponent_Play)(uint64_t entityID);
+        void (*ParticleSystemComponent_Stop)(uint64_t entityID);
+        void (*ParticleSystemComponent_Restart)(uint64_t entityID);
+        void (*ParticleSystemComponent_SetPreset)(uint64_t entityID, int32_t preset);
+
+        // NetworkIdentityComponent
+        void (*NetworkIdentityComponent_GetNetId)(uint64_t entityID, uint64_t *result);
+        void (*NetworkIdentityComponent_GetOwnerClient)(uint64_t entityID, uint32_t *result);
+        void (*NetworkIdentityComponent_SetOwnerClient)(uint64_t entityID, uint32_t value);
+        void (*NetworkIdentityComponent_GetIsLocalPlayer)(uint64_t entityID, bool *result);
+        void (*NetworkIdentityComponent_SetIsLocalPlayer)(uint64_t entityID, bool value);
+        void (*NetworkIdentityComponent_GetReplicate)(uint64_t entityID, bool *result);
+        void (*NetworkIdentityComponent_SetReplicate)(uint64_t entityID, bool value);
+        void (*NetworkIdentityComponent_GetPrefab)(uint64_t entityID, const char **result);
+        void (*NetworkIdentityComponent_SetPrefab)(uint64_t entityID, const char *value);
+        void (*NetworkIdentityComponent_GetReplicatedMovementSpeed)(uint64_t entityID, float *result);
+        void (*NetworkIdentityComponent_SetReplicatedMovementSpeed)(uint64_t entityID, float value);
+        void (*NetworkIdentityComponent_GetReplicatedIsGrounded)(uint64_t entityID, bool *result);
+        void (*NetworkIdentityComponent_SetReplicatedIsGrounded)(uint64_t entityID, bool value);
+        void (*NetworkIdentityComponent_GetSyncComponentsMask)(uint64_t entityID, uint32_t *result);
+        void (*NetworkIdentityComponent_SetSyncComponentsMask)(uint64_t entityID, uint32_t value);
+        void (*NetworkIdentityComponent_MarkDirty)(uint64_t entityID, uint32_t flags);
+
+        // PlaneColliderComponent
+        void (*PlaneColliderComponent_GetCenter)(uint64_t entityID, glm::vec3 *result);
+        void (*PlaneColliderComponent_SetCenter)(uint64_t entityID, const glm::vec3 *value);
+        void (*PlaneColliderComponent_GetScale)(uint64_t entityID, glm::vec3 *result);
+        void (*PlaneColliderComponent_SetScale)(uint64_t entityID, const glm::vec3 *value);
+
+        // TextComponent extensions
+        void (*TextComponent_GetFontSize)(uint64_t entityID, float *result);
+        void (*TextComponent_SetFontSize)(uint64_t entityID, float value);
+        void (*TextComponent_GetScreenSpace)(uint64_t entityID, bool *result);
+        void (*TextComponent_SetScreenSpace)(uint64_t entityID, bool value);
+        void (*TextComponent_GetBillboard)(uint64_t entityID, bool *result);
+        void (*TextComponent_SetBillboard)(uint64_t entityID, bool value);
+        void (*TextComponent_GetCenterAlign)(uint64_t entityID, bool *result);
+        void (*TextComponent_SetCenterAlign)(uint64_t entityID, bool value);
     };
 
     class ComponentScriptGlue

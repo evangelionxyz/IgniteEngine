@@ -128,6 +128,18 @@ namespace ignite
         {
             scriptEngineData->project = project;
             scriptEngineData->scene = nullptr;
+            scriptEngineData->mochiSharpAssemblyFilepath = scriptEngineData->project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
+            scriptEngineData->coreAssemblyFilepath = scriptEngineData->project->GetScriptBinDirectory() / "Ignite.ScriptEngine.dll";
+            scriptEngineData->currentProjectConfig = scriptEngineData->project->GetConfiguration();
+            scriptEngineData->hasAppAssemblyLastWriteTime = false;
+            scriptEngineData->appAssemblyLastWriteTime = {};
+            scriptEngineData->appAssemblyFileWatcher.reset();
+            scriptEngineData->entityClasses.clear();
+            scriptEngineData->entityScriptClassStorage.clear();
+            scriptEngineData->scriptableObjectClasses.clear();
+            scriptEngineData->scriptableObjecClassStorage.clear();
+            scriptEngineData->scriptableObjectMenuEntries.clear();
+            scriptEngineData->capturedEntityListFields.clear();
 
             ReloadAssembly();
             return;
@@ -602,6 +614,57 @@ namespace ignite
         return scriptEngineData->entityScriptClassStorage;
     }
 
+    void ScriptEngine::InvokeNetworkEvent(const char *callbackName, uint32_t clientId, const std::string &clientName)
+    {
+        if (!scriptEngineData || !callbackName)
+            return;
+
+        std::vector<ScriptInstanceID> instanceIds;
+        instanceIds.reserve(scriptEngineData->entityScriptInstances.size());
+        for (const auto &kv : scriptEngineData->entityScriptInstances)
+        {
+            instanceIds.push_back(kv.first);
+        }
+
+        const std::string_view eventView(callbackName);
+        for (ScriptInstanceID id : instanceIds)
+        {
+            auto it = scriptEngineData->entityScriptInstances.find(id);
+            if (it == scriptEngineData->entityScriptInstances.end() || !it->second)
+                continue;
+
+            const Ref<ScriptInstance> &instance = it->second;
+            if (eventView == "OnNetworkClientJoined" || eventView == "on_network_client_joined")
+            {
+                instance->InvokeOnNetworkClientJoined(clientId, clientName);
+            }
+            else if (eventView == "OnNetworkClientLeft" || eventView == "on_network_client_left")
+            {
+                instance->InvokeOnNetworkClientLeft(clientId, clientName);
+            }
+            else if (eventView == "OnNetworkConnected" || eventView == "on_network_connected")
+            {
+                instance->InvokeOnNetworkConnected(clientId);
+            }
+            else if (eventView == "OnNetworkDisconnected" || eventView == "on_network_disconnected")
+            {
+                instance->InvokeOnNetworkDisconnected(clientId);
+            }
+        }
+    }
+
+    void ScriptEngine::InvokeNetworkInput(UUID entityId, uint32_t clientId, float moveX, float moveY, uint16_t buttons, float yaw, float deltaTime)
+    {
+        if (!scriptEngineData)
+            return;
+
+        const auto it = scriptEngineData->entityScriptInstances.find(static_cast<ScriptInstanceID>(entityId));
+        if (it != scriptEngineData->entityScriptInstances.end() && it->second)
+        {
+            it->second->InvokeOnNetworkInput(clientId, moveX, moveY, buttons, yaw, deltaTime);
+        }
+    }
+
     bool ScriptEngine::IsScriptableObjectClassExists(const std::string &fullClassName)
     {
         return scriptEngineData->scriptableObjectClasses.contains(fullClassName);
@@ -735,8 +798,14 @@ namespace ignite
         {
             std::error_code ec;
             const auto dllTime = std::filesystem::last_write_time(modulePath, ec);
+            const auto csprojPath = scriptEngineData->project->GetDirectory() / (scriptEngineData->project->GetInfo().name + ".csproj");
+            if (!ec && std::filesystem::exists(csprojPath, ec) && std::filesystem::last_write_time(csprojPath, ec) > dllTime)
+            {
+                scriptsModifiedAfterDll = true;
+            }
+
             const auto scriptsDir = scriptEngineData->project->GetScriptsDirectory();
-            if (!ec && std::filesystem::exists(scriptsDir, ec))
+            if (!scriptsModifiedAfterDll && !ec && std::filesystem::exists(scriptsDir, ec))
             {
                 for (const auto &entry : std::filesystem::recursive_directory_iterator(scriptsDir, ec))
                 {
@@ -762,11 +831,9 @@ namespace ignite
         // Build path (when DLL does not exist, dependencies updated, or scripts modified):
         subscribeBuildSignal();
 
-        // Run the build and load the App Assembly if success
-        LOG_DEBUG("Building Visual Studio Solution...");
-
-        const bool forceRebuild = waitForBuild || !depsUpToDate || scriptsModifiedAfterDll;
-        scriptEngineData->project->BuildSolution(forceRebuild);
+        // Run an incremental build (--no-restore when assets exist) and load App Assembly if successful.
+        LOG_DEBUG("Building Visual Studio Solution (incremental)...");
+        scriptEngineData->project->BuildSolution(false);
         return FileStatus::Pending;
     }
 

@@ -3,14 +3,17 @@
 #include <gtest/gtest.h>
 
 #include "ignite/core/agent_controller.hpp"
+#include "ignite/core/vfs/vfs.hpp"
 #include "ignite/project/game_packager.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 
 using namespace ignite;
 
@@ -224,5 +227,56 @@ TEST(AgentAndPackager, PackageProjectExportsSelfContainedDirectory)
     EXPECT_TRUE(std::filesystem::exists(outDir / "Scripts" / "main.lua"));
     EXPECT_FALSE(std::filesystem::exists(outDir / "Ignite.Editor.exe"));
 
+    std::filesystem::remove_all(baseDir, ec);
+}
+
+TEST(AgentAndPackager, CrossDrivePathGuardAndLuaToolingAndFastOpen)
+{
+    // 1. Cross-drive path containment checks must not confuse different roots with project root
+    EXPECT_FALSE(GamePackager::IsPathEqualOrSubdir("C:\\PackagedGame\\Out", "D:\\Dev\\Ignite\\example"));
+    EXPECT_FALSE(GamePackager::IsPathEqualOrSubdir("C:\\Dev\\Ignite\\example", "D:\\Dev\\Ignite\\example"));
+    EXPECT_TRUE(GamePackager::IsPathEqualOrSubdir("D:\\Dev\\Ignite\\example\\Assets\\Export", "D:\\Dev\\Ignite\\example\\Assets"));
+    EXPECT_FALSE(GamePackager::IsPathEqualOrSubdir("D:\\Dev\\Ignite\\example\\AssetsBackup", "D:\\Dev\\Ignite\\example\\Assets"));
+
+    // 2. Lua tooling sync + zero-recompile fast project open
+    const std::filesystem::path baseDir = vfs::GetExecutableDirectory() / "test-resources" / "temp" / "FastOpenLuaProject";
+    std::error_code ec;
+    std::filesystem::remove_all(baseDir, ec);
+    std::filesystem::create_directories(baseDir, ec);
+
+    ProjectInfo info;
+    info.name = "FastOpenLuaProject";
+    info.rootDirectory = baseDir;
+    info.filepath = baseDir / "FastOpenLuaProject.ixproj";
+
+    Ref<Project> created = Project::Create(info);
+    ASSERT_NE(created, nullptr);
+    created->Serialize(info.filepath);
+
+    // Lua tooling must be present inside the created project directory
+    EXPECT_TRUE(std::filesystem::exists(baseDir / ".luarc.json"));
+    EXPECT_TRUE(std::filesystem::exists(baseDir / ".vscode" / "extensions.json"));
+    EXPECT_TRUE(std::filesystem::exists(baseDir / ".vscode" / "settings.json"));
+    EXPECT_TRUE(std::filesystem::exists(baseDir / ".zed" / "settings.json"));
+    EXPECT_TRUE(std::filesystem::exists(baseDir / ".ignite" / "lua" / "ignite.d.lua"));
+
+    const std::filesystem::path dllPath = created->GetScriptModulePath();
+    ASSERT_TRUE(std::filesystem::exists(dllPath));
+    const auto dllTimeAfterBuild = std::filesystem::last_write_time(dllPath, ec);
+    ASSERT_FALSE(ec);
+
+    // Re-opening the existing project should preserve the compiled script DLL timestamp without rebuilding
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    Project::CloseActive();
+    Ref<Project> reopened = Project::Open(info.filepath);
+    ASSERT_NE(reopened, nullptr);
+    reopened->InitScriptEngine();
+    ASSERT_NE(reopened->GetScriptEngine(), nullptr);
+
+    const auto dllTimeAfterReopen = std::filesystem::last_write_time(dllPath, ec);
+    ASSERT_FALSE(ec);
+    EXPECT_EQ(dllTimeAfterBuild, dllTimeAfterReopen) << "Reopening project unexpectedly recompiled up-to-date C# assembly";
+
+    Project::CloseActive();
     std::filesystem::remove_all(baseDir, ec);
 }

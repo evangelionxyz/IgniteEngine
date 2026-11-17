@@ -14,6 +14,7 @@
 namespace ignite
 {
     class Project;
+    enum class ProjectConfiguration;
 
     struct IGN_API PackageBuildConfig
     {
@@ -22,6 +23,8 @@ namespace ignite
         bool overwriteExisting = true;
         bool includeDedicatedServer = false;
         bool includePdbs = false;
+        bool buildScriptAssembly = true;
+        bool autoBuildMissingRuntime = true;
         std::string executableName; // Defaults to sanitized project name
     };
 
@@ -40,6 +43,8 @@ namespace ignite
     {
     public:
         static std::filesystem::path FindRuntimeBinaryDirectory(const std::filesystem::path &hintDir = {});
+        static std::filesystem::path FindRuntimeBinaryDirectory(const std::filesystem::path &hintDir, ProjectConfiguration configuration);
+        static bool IsPathEqualOrSubdir(const std::filesystem::path &candidate, const std::filesystem::path &base);
         static std::string SanitizeExecutableName(const std::string &name);
         static PackageBuildResult PackageProject(Project *project, const PackageBuildConfig &config);
     };

@@ -40,6 +40,30 @@ namespace ignite
         const char *(*ScriptableObject_GetClassName)(uint64_t handle);
 
         void (*Scene_Load)(uint64_t sceneAssetHandle);
+
+        // Networking (NetworkManager)
+        bool (*Net_IsConnected)();
+        bool (*Net_IsServerRunning)();
+        bool (*Net_IsConnecting)();
+        uint32_t (*Net_GetClientId)();
+        bool (*Net_StartServer)(uint16_t port, uint16_t tickRate, uint16_t snapshotRate);
+        bool (*Net_StartServerDefault)();
+        void (*Net_StopServer)();
+        bool (*Net_Connect)(const char *address, uint16_t port, const char *playerName);
+        void (*Net_Disconnect)();
+        uint64_t (*Net_SpawnEntity)(const char *templateOrPrefab, const glm::vec3 *position, const glm::quat *rotation, uint32_t ownerClient);
+        void (*Net_DespawnEntity)(uint64_t netId);
+        void (*Net_SendInput)(const glm::vec2 *move, uint16_t buttons, float yaw);
+        void (*Net_SendChat)(const char *text);
+        void (*Net_KickClient)(uint32_t clientId, const char *reason);
+        void (*Net_GetStats)(int32_t *outRttMs, float *outPacketLoss, float *outInKBps, float *outOutKBps, uint32_t *outClientCount);
+        uint32_t (*Net_GetServerTick)();
+        uint32_t (*Net_GetClientServerTick)();
+        uint32_t (*Net_GetClientCount)();
+        bool (*Net_GetConnectedClientAt)(uint32_t index, uint32_t *outClientId, const char **outName);
+        uint32_t (*Net_GetChatCount)();
+        bool (*Net_GetChatAt)(uint32_t index, uint32_t *outSenderId, const char **outSenderName, const char **outText);
+        void (*Net_SetSimulationSettings)(int32_t lagMs, float lossPercent);
     };
 
     class CoreScriptGlue

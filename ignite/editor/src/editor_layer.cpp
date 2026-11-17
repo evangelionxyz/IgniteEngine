@@ -821,8 +821,15 @@ namespace ignite
                 {
                     AssetWorker::SubmitJob([this]()
                     {
-                        constexpr bool rebuild = true;
-                        m_ActiveProject->BuildSolution(rebuild);
+                        m_ActiveProject->BuildSolution(false);
+                    });
+                }
+
+                if (ImGui::MenuItem("Rebuild Solution"))
+                {
+                    AssetWorker::SubmitJob([this]()
+                    {
+                        m_ActiveProject->BuildSolution(true);
                     });
                 }
 
@@ -840,7 +847,7 @@ namespace ignite
                             AssetWorker::SubmitJob([this]()
                             {
                                 SaveProject();
-                                m_ActiveProject->BuildSolution(true);
+                                m_ActiveProject->BuildSolution(false);
                             });
                         }
                     }

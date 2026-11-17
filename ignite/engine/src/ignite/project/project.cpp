@@ -23,6 +23,108 @@
 
 namespace ignite
 {
+    static bool FilesHaveIdenticalContent(const std::filesystem::path &lhs, const std::filesystem::path &rhs)
+    {
+        std::error_code ec;
+        if (!std::filesystem::exists(lhs, ec) || !std::filesystem::exists(rhs, ec))
+            return false;
+
+        const auto lhsSize = std::filesystem::file_size(lhs, ec);
+        if (ec) return false;
+        const auto rhsSize = std::filesystem::file_size(rhs, ec);
+        if (ec || lhsSize != rhsSize)
+            return false;
+
+        std::ifstream a(lhs, std::ios::binary);
+        std::ifstream b(rhs, std::ios::binary);
+        if (!a.is_open() || !b.is_open())
+            return false;
+
+        std::array<char, 65536> bufA{};
+        std::array<char, 65536> bufB{};
+        while (a && b)
+        {
+            a.read(bufA.data(), static_cast<std::streamsize>(bufA.size()));
+            b.read(bufB.data(), static_cast<std::streamsize>(bufB.size()));
+            const std::streamsize countA = a.gcount();
+            const std::streamsize countB = b.gcount();
+            if (countA != countB)
+                return false;
+            if (countA > 0 && std::memcmp(bufA.data(), bufB.data(), static_cast<size_t>(countA)) != 0)
+                return false;
+        }
+        return a.eof() && b.eof();
+    }
+
+    static bool WriteTextFileIfDifferent(const std::filesystem::path &path, const std::string &content)
+    {
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec))
+        {
+            std::ifstream in(path, std::ios::binary);
+            if (in.is_open())
+            {
+                std::string existing((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+                if (existing == content)
+                    return true;
+            }
+        }
+
+        std::filesystem::create_directories(path.parent_path(), ec);
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        if (!out.is_open())
+            return false;
+
+        out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        return out.good();
+    }
+
+    static std::filesystem::path FindAuthoritativeLuaStubPath()
+    {
+        std::error_code ec;
+        std::vector<std::filesystem::path> candidates;
+
+        const std::filesystem::path exeDir = vfs::GetExecutableDirectory();
+        if (!exeDir.empty())
+        {
+            candidates.push_back(exeDir / "resources" / "lua" / "ignite.d.lua");
+            std::filesystem::path cur = exeDir;
+            for (int i = 0; i < 4 && !cur.empty(); ++i)
+            {
+                candidates.push_back(cur / "ignite" / "editor" / "resources" / "lua" / "ignite.d.lua");
+                cur = cur.parent_path();
+            }
+        }
+
+        std::filesystem::path cwd = std::filesystem::current_path(ec);
+        for (int i = 0; i < 4 && !cwd.empty(); ++i)
+        {
+            candidates.push_back(cwd / "resources" / "lua" / "ignite.d.lua");
+            candidates.push_back(cwd / "ignite" / "editor" / "resources" / "lua" / "ignite.d.lua");
+            cwd = cwd.parent_path();
+        }
+
+        for (const auto &candidate : candidates)
+        {
+            if (std::filesystem::exists(candidate, ec) && std::filesystem::is_regular_file(candidate, ec))
+            {
+                return candidate;
+            }
+        }
+        return {};
+    }
+
+    const char *Project::ConfigurationToString(ProjectConfiguration config)
+    {
+        switch (config)
+        {
+            case ProjectConfiguration::Release:  return "Release";
+            case ProjectConfiguration::Shipping: return "Shipping";
+            case ProjectConfiguration::Debug:
+            default:                             return "Debug";
+        }
+    }
+
     static std::string SanitizeCSharpIdentifier(std::string_view name)
     {
         std::string safe;
@@ -114,8 +216,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <DebugType>pdbonly</DebugType>
     <DebugSymbols>true</DebugSymbols>
     <Optimize>false</Optimize>
-    <OutputPath>Bin\</OutputPath>
-    <IntermediateOutputPath>Bin</IntermediateOutputPath>
+    <OutputPath>Bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>Bin\Objs\$(MSBuildProjectName)\</IntermediateOutputPath>
     <DefineConstants></DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -130,8 +232,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <Optimize>true</Optimize>
-    <OutputPath>Bin\</OutputPath>
-    <IntermediateOutputPath>Bin</IntermediateOutputPath>
+    <OutputPath>Bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>Bin\Objs\$(MSBuildProjectName)\</IntermediateOutputPath>
     <DefineConstants></DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -146,8 +248,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <Optimize>true</Optimize>
-    <OutputPath>Bin\</OutputPath>
-    <IntermediateOutputPath>Bin</IntermediateOutputPath>
+    <OutputPath>Bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>Bin\Objs\$(MSBuildProjectName)\</IntermediateOutputPath>
     <DefineConstants></DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -199,6 +301,11 @@ R"(<Project>
 
     Project::~Project()
     {
+        if (m_ScriptEngine)
+        {
+            delete m_ScriptEngine;
+            m_ScriptEngine = nullptr;
+        }
     }
 
     std::filesystem::path Project::GetProjectFilepath(const std::filesystem::path &filepath) const
@@ -740,25 +847,38 @@ R"(<Project>
             m_CoreDependenciesPending[dep] = true;
             if (!std::filesystem::exists(depFilename))
             {
+                const bool targetExists = std::filesystem::exists(targetDepFilename);
+                m_CoreDependencies[dep] = targetExists;
+                if (!targetExists)
+                    isUpToDate = false;
+                continue;
+            }
+
+            if (!std::filesystem::exists(targetDepFilename))
+            {
                 isUpToDate = false;
                 m_CoreDependencies[dep] = false;
                 continue;
             }
 
             const auto srcTime = std::filesystem::last_write_time(depFilename.string());
-            const auto dstTime = std::filesystem::exists(targetDepFilename.string())
-                ? std::filesystem::last_write_time(targetDepFilename.string()) : std::filesystem::file_time_type::min();
+            const auto dstTime = std::filesystem::last_write_time(targetDepFilename.string());
 
-            const bool newer = srcTime <= dstTime;
-            m_CoreDependencies[dep] = newer;
+            bool sameOrNewer = (srcTime <= dstTime);
+            if (!sameOrNewer)
+            {
+                // If an unrelated engine C++ build updated file timestamps without changing binary bytes,
+                // keep the project dependency intact so opening does not trigger an unnecessary C# rebuild.
+                sameOrNewer = FilesHaveIdenticalContent(depFilename, targetDepFilename);
+            }
 
-            // only set to false when not newer
-            if (newer == false)
+            m_CoreDependencies[dep] = sameOrNewer;
+            if (!sameOrNewer)
                 isUpToDate = false;
         }
 
         // copy if not up to date
-        if (isUpToDate == false)
+        if (!isUpToDate)
         {
             CopyCoreDependencies();
         }
@@ -767,29 +887,43 @@ R"(<Project>
         return isUpToDate;
     }
 
-    void Project::BuildSolution(bool forceRebuild) const
+    bool Project::BuildSolution(bool forceRebuild) const
     {
         const std::filesystem::path modulePath = GetScriptModulePath();
         const std::filesystem::path solutionPath = GetSolutionFilepath();
         bool buildSuccess = std::filesystem::exists(modulePath);
 
-        std::string_view verbosity = "/v:q /nologo";
-        std::string_view configStr = "Debug";
-        if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
-        else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
+        const char *configStr = ConfigurationToString(m_Info.configuration);
 
         if ((!buildSuccess || forceRebuild) && std::filesystem::exists(solutionPath))
         {
-            std::string_view msbuildCmd = "dotnet msbuild";
+            std::error_code ec;
+            const std::filesystem::path objAssets = GetDirectory() / "obj" / "project.assets.json";
+            const std::filesystem::path binObjAssets = GetDirectory() / "Bin" / "Objs" / m_Info.name / "project.assets.json";
+            const bool hasRestoredAssets = std::filesystem::exists(objAssets, ec) || std::filesystem::exists(binObjAssets, ec);
+
             AssetWorker::ReportStatus("Building Solution...", 0.6f);
-            std::string buildCommand = std::format("{} \"{}\" /restore /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                msbuildCmd, solutionPath.generic_string(), configStr, verbosity);
-            int rc = std::system(buildCommand.c_str());
+
+            int rc = -1;
+            if (!forceRebuild && hasRestoredAssets)
+            {
+                const std::string fastCmd = std::format("dotnet build \"{}\" -c \"{}\" --no-restore --nologo -v:q",
+                    solutionPath.generic_string(), configStr);
+                rc = std::system(fastCmd.c_str());
+            }
+
             if (rc != 0)
             {
-                // Fallback to standalone msbuild if dotnet msbuild failed
-                std::string fallbackCmd = std::format("msbuild \"{}\" /restore /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" {}",
-                    solutionPath.generic_string(), configStr, verbosity);
+                const std::string restoreBuildCmd = std::format("dotnet build \"{}\" -c \"{}\" {} --nologo -v:q",
+                    solutionPath.generic_string(), configStr, forceRebuild ? "--no-incremental" : "");
+                rc = std::system(restoreBuildCmd.c_str());
+            }
+
+            if (rc != 0)
+            {
+                // Fallback to standalone msbuild if dotnet build failed
+                const std::string fallbackCmd = std::format("msbuild \"{}\" /t:Build /p:Configuration=\"{}\" /p:Platform=\"x64\" /v:q /nologo",
+                    solutionPath.generic_string(), configStr);
                 std::system(fallbackCmd.c_str());
             }
         }
@@ -801,8 +935,11 @@ R"(<Project>
         SignalBus::Emit(SuccessResultSignal{ buildSuccess, SignalType::ScriptEngine });
         AssetWorker::ReportStatus("Ready", 1.0f);
 
-        // Validate .dll file
-        LOG_ASSERT(buildSuccess, "[Project] Failed to build Solution");
+        if (!buildSuccess)
+        {
+            LOG_ERROR("[Project] Failed to build Solution '{}' for configuration '{}'", solutionPath.generic_string(), configStr);
+        }
+        return buildSuccess;
     }
 
     void Project::CreateCSharpScript(const std::filesystem::path &filepath)
@@ -840,6 +977,8 @@ R"(<Project>
         {
             assetManager->ImportAsset(filepath);
         }
+
+        SyncLuaTooling();
     }
 
     void Project::CreateScriptableObject(const std::string &className, const std::string &fileName, const std::filesystem::path &targetDirectory)
@@ -1048,6 +1187,13 @@ R"(<Project>
             }
         }
 
+        if (FilesHaveIdenticalContent(sourcePath, targetPath))
+        {
+            std::lock_guard lock(m_CoreDependencyMutex);
+            m_CoreDependenciesPending[path] = true;
+            return;
+        }
+
         bool success = false;
         try
         {
@@ -1084,7 +1230,7 @@ R"(<Project>
         if (checkPendingDeps())
         {
             LOG_TRACE("[Project] Dependencies are up to date.");
-            BuildSolution(true);
+            BuildSolution(false);
         }
     }
 
@@ -1103,6 +1249,143 @@ R"(<Project>
                 [this](const std::string &path, const filewatch::Event eventType) {
                 OnCoreDependencyChanged(path, eventType);
             }));
+        }
+    }
+
+    void Project::SyncLuaTooling() const
+    {
+        if (m_Info.rootDirectory.empty())
+            return;
+
+        std::error_code ec;
+        const std::filesystem::path projectDir = GetDirectory();
+        if (!std::filesystem::exists(projectDir, ec))
+            return;
+
+        // Sync LuaCATS API definition stub into <ProjectDir>/.ignite/lua/ignite.d.lua
+        const std::filesystem::path stubSrc = FindAuthoritativeLuaStubPath();
+        const std::filesystem::path stubDstDir = projectDir / ".ignite" / "lua";
+        const std::filesystem::path stubDst = stubDstDir / "ignite.d.lua";
+        if (!stubSrc.empty())
+        {
+            std::filesystem::create_directories(stubDstDir, ec);
+            if (!FilesHaveIdenticalContent(stubSrc, stubDst))
+            {
+                std::filesystem::copy_file(stubSrc, stubDst, std::filesystem::copy_options::overwrite_existing, ec);
+            }
+        }
+
+        // .luarc.json for lua-language-server (VSCode sumneko.lua & Zed)
+        {
+            nlohmann::ordered_json luarc = nlohmann::ordered_json::object();
+            const std::filesystem::path luarcPath = projectDir / ".luarc.json";
+            if (std::filesystem::exists(luarcPath, ec))
+            {
+                try
+                {
+                    std::ifstream in(luarcPath);
+                    if (in.is_open())
+                        luarc = nlohmann::ordered_json::parse(in);
+                }
+                catch (...) { luarc = nlohmann::ordered_json::object(); }
+            }
+
+            if (!luarc.is_object())
+                luarc = nlohmann::ordered_json::object();
+
+            luarc["$schema"] = "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json";
+            luarc["runtime.version"] = "Lua 5.4";
+            luarc["workspace.library"] = nlohmann::ordered_json::array({ ".ignite/lua" });
+            luarc["workspace.checkThirdParty"] = false;
+            luarc["diagnostics.globals"] = nlohmann::ordered_json::array({ "Ignite" });
+            luarc["diagnostics.disable"] = nlohmann::ordered_json::array({ "lowercase-global" });
+            if (!luarc.contains("hint.enable"))
+                luarc["hint.enable"] = true;
+            if (!luarc.contains("completion.callSnippet"))
+                luarc["completion.callSnippet"] = "Replace";
+
+            WriteTextFileIfDifferent(luarcPath, luarc.dump(4) + "\n");
+        }
+
+        // .vscode/extensions.json & .vscode/settings.json
+        {
+            const std::filesystem::path vscodeDir = projectDir / ".vscode";
+            std::filesystem::create_directories(vscodeDir, ec);
+
+            const std::filesystem::path extPath = vscodeDir / "extensions.json";
+            if (!std::filesystem::exists(extPath, ec))
+            {
+                nlohmann::ordered_json ext = nlohmann::ordered_json::object();
+                ext["recommendations"] = nlohmann::ordered_json::array({ "sumneko.lua" });
+                WriteTextFileIfDifferent(extPath, ext.dump(4) + "\n");
+            }
+
+            const std::filesystem::path settingsPath = vscodeDir / "settings.json";
+            nlohmann::ordered_json settings = nlohmann::ordered_json::object();
+            if (std::filesystem::exists(settingsPath, ec))
+            {
+                try
+                {
+                    std::ifstream in(settingsPath);
+                    if (in.is_open())
+                        settings = nlohmann::ordered_json::parse(in);
+                }
+                catch (...) { settings = nlohmann::ordered_json::object(); }
+            }
+            if (!settings.is_object())
+                settings = nlohmann::ordered_json::object();
+
+            if (!settings.contains("files.associations") || !settings["files.associations"].is_object())
+                settings["files.associations"] = nlohmann::ordered_json::object();
+            settings["files.associations"]["*.lua"] = "lua";
+            settings["Lua.runtime.version"] = "Lua 5.4";
+            settings["Lua.workspace.library"] = nlohmann::ordered_json::array({ ".ignite/lua" });
+            settings["Lua.workspace.checkThirdParty"] = false;
+            settings["Lua.diagnostics.globals"] = nlohmann::ordered_json::array({ "Ignite" });
+
+            WriteTextFileIfDifferent(settingsPath, settings.dump(4) + "\n");
+        }
+
+        // .zed/settings.json
+        {
+            const std::filesystem::path zedDir = projectDir / ".zed";
+            std::filesystem::create_directories(zedDir, ec);
+
+            const std::filesystem::path zedPath = zedDir / "settings.json";
+            nlohmann::ordered_json zed = nlohmann::ordered_json::object();
+            if (std::filesystem::exists(zedPath, ec))
+            {
+                try
+                {
+                    std::ifstream in(zedPath);
+                    if (in.is_open())
+                        zed = nlohmann::ordered_json::parse(in);
+                }
+                catch (...) { zed = nlohmann::ordered_json::object(); }
+            }
+            if (!zed.is_object())
+                zed = nlohmann::ordered_json::object();
+
+            auto &lsp = zed["lsp"];
+            if (!lsp.is_object()) lsp = nlohmann::ordered_json::object();
+            auto &luaLs = lsp["lua-language-server"];
+            if (!luaLs.is_object()) luaLs = nlohmann::ordered_json::object();
+            auto &lsSettings = luaLs["settings"];
+            if (!lsSettings.is_object()) lsSettings = nlohmann::ordered_json::object();
+            auto &lua = lsSettings["Lua"];
+            if (!lua.is_object()) lua = nlohmann::ordered_json::object();
+
+            lua["runtime"] = nlohmann::ordered_json({ { "version", "Lua 5.4" } });
+            lua["workspace"] = nlohmann::ordered_json({
+                { "library", nlohmann::ordered_json::array({ ".ignite/lua" }) },
+                { "checkThirdParty", false }
+            });
+            lua["diagnostics"] = nlohmann::ordered_json({
+                { "globals", nlohmann::ordered_json::array({ "Ignite" }) },
+                { "disable", nlohmann::ordered_json::array({ "lowercase-global" }) }
+            });
+
+            WriteTextFileIfDifferent(zedPath, zed.dump(4) + "\n");
         }
     }
 
@@ -1228,8 +1511,14 @@ R"(<Project>
             }
         }
 
-        // Check the Dependencies, and auto build if not up-to-date
-        const bool shouldBuild = !IsCoreDependenciesUpToDate();
-        BuildSolution(shouldBuild);
+        SyncLuaTooling();
+
+        // Check core dependencies; only build here when script module is missing or a dependency actually changed.
+        // ScriptEngine::EnsureAppAssembly will still perform an incremental --no-restore build if any .cs file changed.
+        const bool depsUpToDate = IsCoreDependenciesUpToDate();
+        if (!std::filesystem::exists(GetScriptModulePath()) || !depsUpToDate)
+        {
+            BuildSolution(false);
+        }
     }
 }

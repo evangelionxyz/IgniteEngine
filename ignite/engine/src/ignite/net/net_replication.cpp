@@ -357,8 +357,9 @@ namespace ignite
                 if (netComp.isLocalPlayer && !m_LocalTemplate.IsValid())
                 {
                     m_LocalTemplate = Entity{ e, m_Scene };
-                    if (m_LocalTemplate.HasComponent<RenderingComponent>())
-                        m_LocalTemplate.GetComponent<RenderingComponent>().visible = false;
+                    m_LocalTemplateInitialVisible = m_LocalTemplate.HasComponent<RenderingComponent>()
+                        ? m_LocalTemplate.GetComponent<RenderingComponent>().visible
+                        : true;
                 }
             }
         }
@@ -374,6 +375,21 @@ namespace ignite
 
     NetClientReplication::~NetClientReplication()
     {
+        if (m_Scene && m_LocalTemplate.IsValid())
+        {
+            if (m_LocalTemplate.HasComponent<RenderingComponent>())
+                m_LocalTemplate.GetComponent<RenderingComponent>().visible = m_LocalTemplateInitialVisible;
+
+            if (m_LocalTemplate.HasComponent<NetworkIdentityComponent>())
+            {
+                auto &netComp = m_LocalTemplate.GetComponent<NetworkIdentityComponent>();
+                if (netComp.netId != 0)
+                    m_Scene->UnregisterNetEntity(netComp.netId);
+                netComp.netId = 0;
+                netComp.ownerClient = 0;
+                netComp.isLocalPlayer = true;
+            }
+        }
     }
 
     void NetClientReplication::OnSpawn(const netproto::SpawnMsg &msg)
@@ -443,9 +459,10 @@ namespace ignite
         {
             entity = m_CustomSpawner(m_Scene, msg);
         }
-        else if (isPlayerAvatar && isLocal && !m_LocalClaimed)
+        else if (isLocal && !m_LocalClaimed && m_LocalTemplate.IsValid()
+            && (isPlayerAvatar || msg.prefab.empty() || msg.prefab == "Player"))
         {
-            // Our own avatar: claim the scene's player entity (locally controlled).
+            // Our own avatar: claim the scene's local player entity.
             entity = m_LocalTemplate;
             m_LocalClaimed = true;
         }

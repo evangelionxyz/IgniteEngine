@@ -2,10 +2,12 @@
 
 #include "app.hpp"
 #include <ignite/core/logger.hpp>
+#include <ignite/core/vfs/vfs.hpp>
 #include <ignite/scene/scene_manager.hpp>
 #include <ignite/asset/asset_manager.hpp>
 #include <ignite/serializer/scene_serializer.hpp>
 
+#include <filesystem>
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -24,6 +26,21 @@ namespace ignite
         }
     }
 
+    static std::filesystem::path FindPackagedProjectInDirectory(const std::filesystem::path &dir)
+    {
+        std::error_code ec;
+        if (dir.empty() || !std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
+            return {};
+
+        for (const auto &entry : std::filesystem::directory_iterator(dir, ec))
+        {
+            if (ec) break;
+            if (entry.is_regular_file(ec) && entry.path().extension() == ".ixproj")
+                return entry.path();
+        }
+        return {};
+    }
+
     ServerAppConfig ParseServerCommandLine(int argc, char **argv)
     {
         ServerAppConfig cfg;
@@ -33,6 +50,7 @@ namespace ignite
             if ((arg == "--port" || arg == "-p") && i + 1 < argc)
             {
                 cfg.port = std::stoi(argv[++i]);
+                cfg.hasExplicitPort = true;
             }
             else if ((arg == "--project") && i + 1 < argc)
             {
@@ -45,10 +63,12 @@ namespace ignite
             else if ((arg == "--tickrate") && i + 1 < argc)
             {
                 cfg.tickRate = static_cast<uint16_t>(std::stoi(argv[++i]));
+                cfg.hasExplicitTickRate = true;
             }
             else if ((arg == "--snapshotrate") && i + 1 < argc)
             {
                 cfg.snapshotRate = static_cast<uint16_t>(std::stoi(argv[++i]));
+                cfg.hasExplicitSnapshotRate = true;
             }
         }
         return cfg;
@@ -67,23 +87,59 @@ namespace ignite
             s_AppInstance = nullptr;
     }
 
+    std::string ServerApp::ResolveDefaultPlayerTemplate() const
+    {
+        if (m_Scene && m_Scene->registry)
+        {
+            auto view = m_Scene->registry->view<NetworkIdentityComponent>();
+            for (entt::entity e : view)
+            {
+                const auto &idComp = view.get<NetworkIdentityComponent>(e);
+                if (!idComp.isLocalPlayer)
+                    continue;
+
+                if (!idComp.prefab.empty())
+                    return idComp.prefab;
+
+                Entity entity{ e, m_Scene.get() };
+                if (!entity.GetName().empty())
+                    return entity.GetName();
+            }
+        }
+        return "Player";
+    }
+
     bool ServerApp::Initialize()
     {
-        NetServerSystem::Config netCfg;
-        netCfg.port = m_Config.port;
-        netCfg.tickRate = m_Config.tickRate;
-        netCfg.snapshotRate = m_Config.snapshotRate;
+        std::error_code ec;
+        const std::filesystem::path exeDir = vfs::GetExecutableDirectory();
+        if (!exeDir.empty() && std::filesystem::exists(exeDir / "resources", ec))
+        {
+            std::filesystem::current_path(exeDir, ec);
+        }
 
-        m_ServerSystem = std::make_unique<NetServerSystem>(netCfg);
-        m_ServerSystem->SetLogCallback([](const std::string &msg) {
-            LOG_INFO("{}", msg);
-        });
+        if (m_Config.projectPath.empty())
+        {
+            std::filesystem::path discovered = FindPackagedProjectInDirectory(std::filesystem::current_path(ec));
+            if (discovered.empty())
+                discovered = FindPackagedProjectInDirectory(exeDir);
+            if (!discovered.empty())
+                m_Config.projectPath = discovered.string();
+        }
 
         if (!m_Config.projectPath.empty())
         {
             m_Project = Project::Open(m_Config.projectPath);
             if (m_Project)
             {
+                const auto &ss = m_Project->GetServerSettings();
+                if (!m_Config.hasExplicitPort)
+                    m_Config.port = static_cast<int>(ss.port);
+                if (!m_Config.hasExplicitTickRate)
+                    m_Config.tickRate = ss.tickRate;
+                if (!m_Config.hasExplicitSnapshotRate)
+                    m_Config.snapshotRate = ss.snapshotRate;
+
                 AssetHandle defSceneHandle = m_Project->GetInfo().defaultSceneHandle;
                 if (defSceneHandle != AssetHandle(0))
                 {
@@ -132,17 +188,41 @@ namespace ignite
             m_Scene = Scene::Create(m_Project.get());
         }
 
-        m_Replication = std::make_unique<NetServerReplication>(m_Scene.get(), m_ServerSystem.get());
+        if (m_Project)
+        {
+            m_Project->InitScriptEngine();
+        }
 
-        m_ServerSystem->SetClientJoinedCallback([this](NetServerSystem::RemoteClient &client) {
-            LOG_INFO("Spawn world for joined client {}", client.name);
-            m_Replication->SyncWorldToClient(client.clientId);
+        m_NetworkManager = std::make_unique<NetworkManager>();
+        m_NetworkManager->Init();
+        m_NetworkManager->SetActiveScene(m_Scene.get());
 
-            // Spawn player entity for this client
-            Entity player = m_Replication->SpawnEntity("Player", glm::vec3(0.0f, 1.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), client.clientId);
-            if (player.IsValid())
+        // Start runtime gameplay scripts (e.g. server_manager.lua / C# scripts) before accepting joins
+        m_Scene->OnStart(ESceneState::Play);
+
+        // Fallback spawner when scene scripts (on_network_client_joined / OnNetworkClientJoined) do not spawn an owned avatar
+        m_NetworkManager->SetClientJoinedCallback([this](uint32_t clientId, const std::string &clientName) {
+            if (!m_Scene || !m_NetworkManager || !m_NetworkManager->GetServerReplication())
+                return;
+
+            bool alreadyHasOwnedEntity = false;
+            auto view = m_Scene->registry->view<NetworkIdentityComponent>();
+            for (entt::entity e : view)
             {
-                if (!player.HasComponent<CharacterControllerComponent>())
+                if (view.get<NetworkIdentityComponent>(e).ownerClient == clientId)
+                {
+                    alreadyHasOwnedEntity = true;
+                    break;
+                }
+            }
+
+            if (!alreadyHasOwnedEntity)
+            {
+                const std::string templateName = ResolveDefaultPlayerTemplate();
+                LOG_INFO("[ServerApp] Auto-spawning template '{}' for joined client {} ({})", templateName, clientName, clientId);
+                Entity player = m_NetworkManager->GetServerReplication()->SpawnEntity(
+                    templateName, glm::vec3(0.0f, 1.35f, -3.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), clientId);
+                if (player.IsValid() && !player.HasComponent<CharacterControllerComponent>())
                 {
                     auto &cc = player.AddComponent<CharacterControllerComponent>();
                     cc.dirty = true;
@@ -150,52 +230,48 @@ namespace ignite
             }
         });
 
-        m_ServerSystem->SetClientLeftCallback([this](NetServerSystem::RemoteClient &client) {
-            LOG_INFO("Despawn player for client {}", client.name);
-            auto view = m_Scene->registry->view<NetworkIdentityComponent>();
-            for (entt::entity e : view)
-            {
-                const auto &netComp = view.get<NetworkIdentityComponent>(e);
-                if (netComp.ownerClient == client.clientId)
-                {
-                    m_Replication->DespawnEntity(netComp.netId);
-                    break;
-                }
-            }
-        });
+        NetServerSystem::Config netCfg;
+        netCfg.port = m_Config.port;
+        netCfg.tickRate = m_Config.tickRate;
+        netCfg.snapshotRate = m_Config.snapshotRate;
+        if (m_Project)
+        {
+            const auto &ss = m_Project->GetServerSettings();
+            netCfg.maxClients = ss.maxClients;
+            netCfg.handshakeTimeoutSec = ss.handshakeTimeoutSec;
+            netCfg.chatMinIntervalSec = ss.chatMinIntervalSec;
+        }
 
-        if (!m_ServerSystem->Start())
+        if (!m_NetworkManager->StartServer(netCfg))
         {
             LOG_ERROR("Failed to start net server on port {}", m_Config.port);
             return false;
         }
 
-        m_Scene->OnStart(ESceneState::Play);
         return true;
     }
 
     void ServerApp::Stop()
     {
         m_Running = false;
-        if (m_ServerSystem)
+        if (m_NetworkManager)
         {
-            m_ServerSystem->Stop();
+            m_NetworkManager->StopServer();
         }
-        if (m_Scene)
+        if (m_Scene && m_Scene->IsRunning())
         {
             m_Scene->OnStop();
         }
+        m_NetworkManager.reset();
     }
 
     void ServerApp::Run()
     {
         m_Running = true;
 
-        const float tickDt = 1.0f / static_cast<float>(m_Config.tickRate);
+        const float tickDt = 1.0f / static_cast<float>(std::max<uint16_t>(1, m_Config.tickRate));
         const auto tickDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::duration<double>(tickDt));
-
-        const uint32_t ticksPerSnapshot = std::max<uint32_t>(1, m_Config.tickRate / m_Config.snapshotRate);
 
         auto nextTick = std::chrono::steady_clock::now();
 
@@ -203,67 +279,16 @@ namespace ignite
 
         while (m_Running)
         {
-            // 1. Pump network events
-            m_ServerSystem->Tick();
-
-            // 2. Apply all queued client inputs to player entities
-            m_ServerSystem->ForEachClient([this, tickDt](NetServerSystem::RemoteClient &client) {
-                auto inputs = m_ServerSystem->DrainInputs(client.clientId);
-                if (inputs.empty())
-                    return;
-
-                auto view = m_Scene->registry->view<NetworkIdentityComponent>();
-                for (entt::entity e : view)
-                {
-                    const auto &netComp = view.get<NetworkIdentityComponent>(e);
-                    if (netComp.ownerClient != client.clientId)
-                        continue;
-
-                    Entity entity{ e, m_Scene.get() };
-                    for (const auto &cmd : inputs)
-                    {
-                        constexpr float speed = 5.0f;
-                        if (entity.HasComponent<CharacterControllerComponent>())
-                        {
-                            auto &cc = entity.GetComponent<CharacterControllerComponent>();
-                            const glm::vec3 moveDir(cmd.move.x, 0.0f, cmd.move.y);
-                            cc.linearVelocity.x = moveDir.x * speed;
-                            cc.linearVelocity.z = moveDir.z * speed;
-                            if (auto charActor = cc.character.lock())
-                            {
-                                if ((cmd.buttons & netproto::InputButton_Jump) && charActor->IsOnGround())
-                                {
-                                    cc.linearVelocity.y = 5.0f;
-                                }
-                            }
-                            else if (cmd.buttons & netproto::InputButton_Jump)
-                            {
-                                cc.linearVelocity.y = 5.0f;
-                            }
-                        }
-                        else if (entity.HasComponent<TransformComponent>())
-                        {
-                            auto &tc = entity.GetComponent<TransformComponent>();
-                            tc.local.translation += glm::vec3(cmd.move.x, 0.0f, cmd.move.y) * speed * tickDt;
-                            tc.dirty = true;
-                        }
-                    }
-                    break;
-                }
-            });
-
-            // 3. Step Scene physics & simulation
-            m_Scene->OnFixedUpdateRuntimeSimulate();
-            m_Scene->OnUpdateRuntimeSimulate(tickDt);
-
-            // 4. Periodically broadcast world snapshots and dirty components
-            if (m_ServerSystem->GetTick() % ticksPerSnapshot == 0)
+            if (m_NetworkManager)
             {
-                m_Replication->BroadcastSnapshots();
-                m_Replication->BroadcastDirtyComponents();
+                m_NetworkManager->Update(tickDt);
             }
 
-            // 5. High-resolution sleep to next tick
+            if (m_Scene && m_Scene->IsRunning())
+            {
+                m_Scene->OnUpdateRuntimeSimulate(tickDt);
+            }
+
             nextTick += tickDuration;
             const auto now = std::chrono::steady_clock::now();
             if (nextTick > now)
