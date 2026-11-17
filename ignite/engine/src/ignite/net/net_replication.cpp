@@ -305,7 +305,7 @@ namespace ignite
                 glm::vec3 groundVelocity(0.0f);
                 if (auto character = controller.character.lock())
                 {
-                    st.isGrounded = character->IsOnGround();
+                    st.isGrounded = character->IsSupported();
                     if (st.isGrounded)
                         groundVelocity = character->GetGroundVelocity();
                 }

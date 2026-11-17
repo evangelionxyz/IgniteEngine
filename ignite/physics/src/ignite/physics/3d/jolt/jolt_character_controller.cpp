@@ -135,6 +135,11 @@ namespace ignite::physics
 		return m_Character ? m_Character->GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround : false;
 	}
 
+	bool JoltCharacterController::IsSupported() const
+	{
+		return m_Character && m_Character->IsSupported();
+	}
+
 	glm::vec3 JoltCharacterController::GetGroundNormal() const
 	{
 		return m_Character ? JoltToGlmVec3(m_Character->GetGroundNormal()) : glm::vec3(0.0f, 1.0f, 0.0f);

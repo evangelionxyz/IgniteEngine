@@ -116,6 +116,15 @@ public sealed class CharacterControllerComponent : IComponent
         }
     }
 
+    public bool IsSupported
+    {
+        get
+        {
+            ComponentInternalCalls.CharacterControllerComponent_IsSupported(Entity!.ID, out bool result);
+            return result;
+        }
+    }
+
     public Vector3 GroundNormal
     {
         get

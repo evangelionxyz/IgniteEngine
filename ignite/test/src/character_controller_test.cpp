@@ -266,6 +266,7 @@ TEST(CharacterController, FollowsTranslatingKinematicGround)
     for (int i = 0; i < 12; ++i)
         scene->OnUpdateRuntimeSimulate(deltaTime);
     ASSERT_TRUE(character->IsOnGround());
+    EXPECT_TRUE(character->IsSupported());
 
     const float startingX = character->GetPosition().x;
     kinematicBody->SetLinearVelocity(glm::vec3(1.0f, 0.0f, 0.0f));
@@ -273,6 +274,7 @@ TEST(CharacterController, FollowsTranslatingKinematicGround)
         scene->OnUpdateRuntimeSimulate(deltaTime);
 
     EXPECT_TRUE(character->IsOnGround());
+    EXPECT_TRUE(character->IsSupported());
     EXPECT_NEAR(character->GetGroundVelocity().x, 1.0f, 0.05f);
     EXPECT_GT(character->GetPosition().x, startingX + 0.8f);
 

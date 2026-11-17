@@ -1,0 +1,10 @@
+{
+  "languages": {
+    "Lua": { "language_servers": ["lua-language-server", "..."] }
+  },
+  "lsp": {
+    "lua-language-server": {
+      "settings": { "Lua": { "runtime": { "version": "Lua 5.4" } } }
+    }
+  }
+}

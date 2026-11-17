@@ -126,10 +126,16 @@ function script.on_update(entity, dt)
 
     if net and not net.is_local_player then
         local remoteSpeed = net.replicated_movement_speed
+        local remoteGrounded = net.replicated_is_grounded
+        if Ignite.Net.IsServerRunning() then
+            local movementVelocity = cc.linear_velocity - cc.ground_velocity
+            remoteSpeed = math.sqrt(movementVelocity.x * movementVelocity.x + movementVelocity.z * movementVelocity.z)
+            remoteGrounded = cc.is_supported
+        end
 
         if skel then
             skel:set_float("Speed", remoteSpeed)
-            skel:set_bool("IsGrounded", net.replicated_is_grounded)
+            skel:set_bool("IsGrounded", remoteGrounded)
             skel:set_bool("IsDancing", false)
             skel:set_bool("IsWaving", remoteSpeed < 0.1)
         end
@@ -380,7 +386,7 @@ function script.on_update(entity, dt)
         local dancing = Ignite.Input.IsKeyPressed(Ignite.Key.F) or st.goalReached
         local waving = Ignite.Input.IsKeyPressed(Ignite.Key.G)
         skel:set_float("Speed", targetSpeed)
-        skel:set_bool("IsGrounded", grounded)
+        skel:set_bool("IsGrounded", cc.is_supported)
         skel:set_bool("IsDancing", dancing and moveLen < 0.05)
         skel:set_bool("IsWaving", waving and moveLen < 0.05)
         st.animState = skel.current_state

@@ -34,6 +34,7 @@ namespace ignite::physics
 		virtual glm::vec3 GetGroundVelocity() const override;
 
 		virtual bool IsOnGround() const override;
+		virtual bool IsSupported() const override;
 		virtual glm::vec3 GetGroundNormal() const override;
 
 		virtual uint64_t GetUserData() const override { return m_UserData; }

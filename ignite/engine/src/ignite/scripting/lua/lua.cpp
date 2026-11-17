@@ -2014,6 +2014,12 @@ namespace ignite::lua
                 lua_pushboolean(state, actor && actor->IsOnGround());
                 return 1;
             }
+            if (strcmp(key, "is_supported") == 0)
+            {
+                auto actor = c.character.lock();
+                lua_pushboolean(state, actor && actor->IsSupported());
+                return 1;
+            }
             if (strcmp(key, "ground_velocity") == 0)
             {
                 auto actor = c.character.lock();

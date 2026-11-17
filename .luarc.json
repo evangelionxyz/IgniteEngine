@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime": { "version": "Lua 5.4" },
+  "workspace": {
+    "library": ["ignite/editor/resources/lua"],
+    "checkThirdParty": false,
+    "ignoreDir": ["bin", "thirdparty", ".git", "crates"]
+  },
+  "diagnostics": {
+    "globals": ["Ignite"],
+    "disable": ["lowercase-global"]
+  },
+  "completion": { "callSnippet": "Replace" },
+  "hint": { "enable": true }
+}
+
