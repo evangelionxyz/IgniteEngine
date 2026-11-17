@@ -6,6 +6,7 @@
 #include <ignite/net/net_server_system.hpp>
 #include <ignite/net/net_replication.hpp>
 #include <ignite/net/network_manager.hpp>
+#include <ignite/asset/asset_manager.hpp>
 #include <ignite/scene/scene.hpp>
 #include <ignite/project/project.hpp>
 
@@ -48,6 +49,7 @@ namespace ignite
         ServerAppConfig m_Config;
         std::atomic<bool> m_Running{ false };
 
+        std::unique_ptr<AssetManager> m_AssetManager;
         Ref<Project> m_Project;
         Ref<Scene> m_Scene;
         std::unique_ptr<NetworkManager> m_NetworkManager;

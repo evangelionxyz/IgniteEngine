@@ -88,10 +88,13 @@ namespace ignite
                 {
                     const auto &cc = cameraEntity.GetComponent<CameraComponent>();
                     glm::vec2 viewportPosition = globals::GEditor::GameViewport.min;
-                    if (auto *window = Application::GetInstance()->GetWindow())
+                    if (auto *app = Application::GetInstance())
                     {
-                        glm::ivec2 winPos = window->GetPosition();
-                        viewportPosition -= glm::vec2(winPos.x, winPos.y);
+                        if (auto *window = app->GetWindow())
+                        {
+                            glm::ivec2 winPos = window->GetPosition();
+                            viewportPosition -= glm::vec2(winPos.x, winPos.y);
+                        }
                     }
                     absPos -= viewportPosition;
                 }

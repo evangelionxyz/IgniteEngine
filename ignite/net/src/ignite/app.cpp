@@ -47,27 +47,44 @@ namespace ignite
         for (int i = 1; i < argc; ++i)
         {
             std::string arg = argv[i];
-            if ((arg == "--port" || arg == "-p") && i + 1 < argc)
+            auto matchOption = [&](const char *flag, std::string &outValue) -> bool
             {
-                cfg.port = std::stoi(argv[++i]);
+                const std::string prefix = std::string(flag) + "=";
+                if (arg.rfind(prefix, 0) == 0)
+                {
+                    outValue = arg.substr(prefix.size());
+                    return true;
+                }
+                if (arg == flag && i + 1 < argc)
+                {
+                    outValue = argv[++i];
+                    return true;
+                }
+                return false;
+            };
+
+            std::string val;
+            if (matchOption("--port", val) || matchOption("-p", val))
+            {
+                cfg.port = std::stoi(val);
                 cfg.hasExplicitPort = true;
             }
-            else if ((arg == "--project") && i + 1 < argc)
+            else if (matchOption("--project", val))
             {
-                cfg.projectPath = argv[++i];
+                cfg.projectPath = val;
             }
-            else if ((arg == "--scene") && i + 1 < argc)
+            else if (matchOption("--scene", val))
             {
-                cfg.scenePath = argv[++i];
+                cfg.scenePath = val;
             }
-            else if ((arg == "--tickrate") && i + 1 < argc)
+            else if (matchOption("--tickrate", val))
             {
-                cfg.tickRate = static_cast<uint16_t>(std::stoi(argv[++i]));
+                cfg.tickRate = static_cast<uint16_t>(std::stoi(val));
                 cfg.hasExplicitTickRate = true;
             }
-            else if ((arg == "--snapshotrate") && i + 1 < argc)
+            else if (matchOption("--snapshotrate", val))
             {
-                cfg.snapshotRate = static_cast<uint16_t>(std::stoi(argv[++i]));
+                cfg.snapshotRate = static_cast<uint16_t>(std::stoi(val));
                 cfg.hasExplicitSnapshotRate = true;
             }
         }
@@ -118,6 +135,12 @@ namespace ignite
             std::filesystem::current_path(exeDir, ec);
         }
 
+        if (!m_AssetManager)
+        {
+            m_AssetManager = std::make_unique<AssetManager>();
+            m_AssetManager->Init();
+        }
+
         if (m_Config.projectPath.empty())
         {
             std::filesystem::path discovered = FindPackagedProjectInDirectory(std::filesystem::current_path(ec));
@@ -129,7 +152,8 @@ namespace ignite
 
         if (!m_Config.projectPath.empty())
         {
-            m_Project = Project::Open(m_Config.projectPath);
+            std::filesystem::path resolvedProj = std::filesystem::absolute(m_Config.projectPath, ec);
+            m_Project = Project::Open(ec ? std::filesystem::path(m_Config.projectPath) : resolvedProj);
             if (m_Project)
             {
                 const auto &ss = m_Project->GetServerSettings();
@@ -143,10 +167,13 @@ namespace ignite
                 AssetHandle defSceneHandle = m_Project->GetInfo().defaultSceneHandle;
                 if (defSceneHandle != AssetHandle(0))
                 {
-                    if (Ref<Scene> activeScene = AssetManager::GetInstance()->GetAssetImmediate<Scene>(defSceneHandle))
+                    if (AssetManager *am = AssetManager::GetInstance())
                     {
-                        m_Scene = SceneManager::Copy(activeScene);
-                        m_Project->SetActiveScene(m_Scene);
+                        if (Ref<Scene> activeScene = am->GetAssetImmediate<Scene>(defSceneHandle))
+                        {
+                            m_Scene = SceneManager::Copy(activeScene);
+                            m_Project->SetActiveScene(m_Scene);
+                        }
                     }
                 }
             }
@@ -262,7 +289,14 @@ namespace ignite
         {
             m_Scene->OnStop();
         }
+        m_Scene.reset();
+        m_Project.reset();
         m_NetworkManager.reset();
+        if (m_AssetManager)
+        {
+            m_AssetManager->Shutdown();
+            m_AssetManager.reset();
+        }
     }
 
     void ServerApp::Run()

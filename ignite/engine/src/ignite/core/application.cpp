@@ -239,7 +239,6 @@ namespace ignite
 
     Application *Application::GetInstance()
     {
-        LOG_ASSERT(s_AppInstance, "Application has not been created!");
         return s_AppInstance;
     }
 
@@ -1015,12 +1014,12 @@ namespace ignite
 
     bool Application::IsRenderThreadRunning()
     {
-        return GetInstance()->m_RenderThreadRunning.load();
+        return s_AppInstance && s_AppInstance->m_RenderThreadRunning.load();
     }
 
     std::thread::id Application::GetMainThreadId()
     {
-        return GetInstance()->m_MainThreadId;
+        return s_AppInstance ? s_AppInstance->m_MainThreadId : std::thread::id{};
     }
 
     ImGuiContext *Application::GetImGuiContext()

@@ -22,8 +22,15 @@ namespace ignite
 {
     Environment::Environment()
     {
-        auto &nri = DeviceManager::GetInstance()->GetNRI();
-        nri::Device *device = DeviceManager::GetInstance()->GetDevice();
+        auto *dm = DeviceManager::GetInstance();
+        nri::Device *device = dm ? dm->GetDevice() : nullptr;
+        if (!device)
+        {
+            m_SkyType = SkyType::HDRI;
+            return;
+        }
+
+        auto &nri = dm->GetNRI();
 
         CreateVerticesIndices();
 

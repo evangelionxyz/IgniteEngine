@@ -306,10 +306,14 @@ namespace ignite
 
     void Material::EnsureGpuResources()
     {
+        auto *dm = DeviceManager::GetInstance();
+        nri::Device *device = dm ? dm->GetDevice() : nullptr;
+        if (!device)
+            return;
+
         if (!sampler)
         {
-            auto &nri = DeviceManager::GetInstance()->GetNRI();
-            nri::Device *device = DeviceManager::GetInstance()->GetDevice();
+            auto &nri = dm->GetNRI();
             nri::SamplerDesc desc = m_HasSamplerDesc ? m_SamplerDesc : nri::SamplerDesc{};
             if (!m_HasSamplerDesc)
             {
