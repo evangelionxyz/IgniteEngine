@@ -34,6 +34,20 @@ namespace
             ASSERT_LT(idx, verts.size());
         }
 
+        for (size_t i = 0; i < indices.size(); i += 3)
+        {
+            const auto &v0 = verts[indices[i]];
+            const auto &v1 = verts[indices[i + 1]];
+            const auto &v2 = verts[indices[i + 2]];
+            const glm::vec3 faceCross = glm::cross(v1.position - v0.position, v2.position - v0.position);
+            const float areaSq = glm::dot(faceCross, faceCross);
+            if (areaSq > 1e-12f)
+            {
+                const glm::vec3 avgNormal = v0.normal + v1.normal + v2.normal;
+                EXPECT_GT(glm::dot(faceCross, avgNormal), 0.0f);
+            }
+        }
+
         for (const auto &v : verts)
         {
             EXPECT_TRUE(std::isfinite(v.position.x) && std::isfinite(v.position.y) && std::isfinite(v.position.z));

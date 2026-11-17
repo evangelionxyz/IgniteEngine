@@ -441,9 +441,9 @@ namespace ignite
                 const uint32_t i3 = (r + 1) * stride + s;
 
                 if (r != 0)
-                    mb.AddTriangle(i0, i2, i1);
+                    mb.AddTriangle(i0, i1, i2);
                 if (r != rings - 1)
-                    mb.AddTriangle(i0, i3, i2);
+                    mb.AddTriangle(i0, i2, i3);
             }
         }
 
@@ -532,8 +532,7 @@ namespace ignite
             const uint32_t i1 = s + 1;
             const uint32_t i2 = stride + s + 1;
             const uint32_t i3 = stride + s;
-            mb.AddTriangle(i0, i2, i1);
-            mb.AddTriangle(i0, i3, i2);
+            mb.AddQuad(i0, i1, i2, i3);
         }
 
         if (capped)
@@ -624,8 +623,7 @@ namespace ignite
                 const uint32_t i2 = (r + 1) * stride + (s + 1);
                 const uint32_t i3 = (r + 1) * stride + s;
 
-                mb.AddTriangle(i0, i2, i1);
-                mb.AddTriangle(i0, i3, i2);
+                mb.AddQuad(i0, i1, i2, i3);
             }
         }
 
