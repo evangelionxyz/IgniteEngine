@@ -249,8 +249,13 @@ namespace ignite
         if (!s_RendererInstance->m_DefaultFont)
         {
             static constexpr const char *kDefaultFontCandidates[] = {
+                "example/Assets/Fonts/JetBrainsMono-Bold.ttf",
+                "Assets/Fonts/JetBrainsMono-Bold.ttf",
                 "resources/fonts/segoeui.ttf",
-                "ignite/editor/resources/fonts/segoeui.ttf"
+                "ignite/editor/resources/fonts/segoeui.ttf",
+                "C:/Windows/Fonts/consolab.ttf",
+                "C:/Windows/Fonts/segoeuib.ttf",
+                "C:/Windows/Fonts/segoeui.ttf"
             };
 
             std::error_code ec;

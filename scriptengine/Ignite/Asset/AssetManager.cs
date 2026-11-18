@@ -46,4 +46,6 @@ public static class AssetManager
         if (!handle.IsValid) return;
         CoreInternalCalls.AssetManager_LoadAssetImmediate(handle.Value);
     }
+
+    public static AssetHandle GetHandle(string filepath) => CoreInternalCalls.AssetManager_GetAssetHandleByPath(filepath);
 }

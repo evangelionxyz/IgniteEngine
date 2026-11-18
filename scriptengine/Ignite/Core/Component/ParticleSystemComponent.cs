@@ -9,7 +9,11 @@ public enum ParticleEmitterPreset : int
 {
     Smoke = 0,
     Fire = 1,
-    Spark = 2
+    Spark = 2,
+    Custom = 3,
+    Plasma = 4,
+    MuzzleFlash = 5,
+    Shockwave = 6
 }
 
 public sealed class ParticleSystemComponent : IComponent
@@ -60,5 +64,6 @@ public sealed class ParticleSystemComponent : IComponent
     public void Stop() => ComponentInternalCalls.ParticleSystemComponent_Stop(Entity!.ID);
     public void Restart() => ComponentInternalCalls.ParticleSystemComponent_Restart(Entity!.ID);
     public void ApplyPreset(ParticleEmitterPreset preset) => ComponentInternalCalls.ParticleSystemComponent_SetPreset(Entity!.ID, (int)preset);
+    public void EmitBurst(uint count) => ComponentInternalCalls.ParticleSystemComponent_SetPreset(Entity!.ID, 1000 + (int)(count > 4000u ? 4000u : count));
 }
 

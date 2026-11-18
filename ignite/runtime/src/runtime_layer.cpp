@@ -138,6 +138,10 @@ namespace ignite
     void RuntimeLayer::OnAttach()
     {
         BindSharedImGuiContext();
+        if (auto *app = Application::GetInstance(); app && app->GetGameInputSystem())
+        {
+            InputSystem::SetActiveSystem(app->GetGameInputSystem());
+        }
     }
 
     void RuntimeLayer::OnDetach()
@@ -183,10 +187,43 @@ namespace ignite
         ICamera *activeCamera = nullptr;
         if (m_ActiveScene && m_ActiveProject)
         {
-            float mouseX = 0.0f;
-            float mouseY = 0.0f;
-            SDL_GetMouseState(&mouseX, &mouseY);
-            InputSystem::SetGameplayMousePosition(mouseX, mouseY, true);
+            float mappedMouseX = 0.0f;
+            float mappedMouseY = 0.0f;
+            if (InputSystem::IsSyntheticMouseOverrideActive())
+            {
+                const glm::vec2 syntheticPos = InputSystem::GetGameplayMousePosition();
+                mappedMouseX = syntheticPos.x;
+                mappedMouseY = syntheticPos.y;
+            }
+            else
+            {
+                float mouseX = 0.0f;
+                float mouseY = 0.0f;
+                SDL_GetMouseState(&mouseX, &mouseY);
+
+                mappedMouseX = mouseX;
+                mappedMouseY = mouseY;
+                if (auto *app = Application::GetInstance(); app && app->GetWindow())
+                {
+                    const glm::ivec2 winSize = app->GetWindow()->GetSize();
+                    if (winSize.x > 0 && winSize.y > 0 && m_FramebufferSize.x > 0 && m_FramebufferSize.y > 0)
+                    {
+                        mappedMouseX = mouseX * (static_cast<float>(m_FramebufferSize.x) / static_cast<float>(winSize.x));
+                        mappedMouseY = mouseY * (static_cast<float>(m_FramebufferSize.y) / static_cast<float>(winSize.y));
+                    }
+                }
+
+                InputSystem::SetGameplayMousePosition(mappedMouseX, mappedMouseY, true);
+            }
+
+            if (m_SceneRenderer)
+            {
+                const bool cursorEnabledForUI = InputSystem::GetCursorMode() != CursorMode::Disabled;
+                m_SceneRenderer->SetGameplayWidgetMousePosition(
+                    static_cast<uint32_t>(std::max(0.0f, mappedMouseX)),
+                    static_cast<uint32_t>(std::max(0.0f, mappedMouseY)),
+                    cursorEnabledForUI);
+            }
 
             constexpr float kFixedStep = 1.0f / 60.0f;
             constexpr int kMaxSubsteps = 8;

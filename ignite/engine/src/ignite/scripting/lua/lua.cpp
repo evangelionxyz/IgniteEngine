@@ -9,6 +9,11 @@
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/ui/game_ui_system.hpp"
+#include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_button.hpp"
+#include "ignite/graphics/ui/widget_canvas.hpp"
+#include "ignite/graphics/ui/widget_label.hpp"
 #include "ignite/net/network_manager.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
@@ -1113,6 +1118,12 @@ namespace ignite::lua
             return 0;
         }
 
+        int LuaSceneStop(lua_State *)
+        {
+            SceneManager::RequestStop();
+            return 0;
+        }
+
         int LuaSceneGetTime(lua_State *state)
         {
             Scene *scene = GetSceneUpvalue(state);
@@ -1475,6 +1486,210 @@ namespace ignite::lua
             if (auto *sys = InputSystem::GetActiveSystem())
                 sys->SetMousePosition(x, y);
             return 0;
+        }
+
+        int LuaInputSetCursorMode(lua_State *state)
+        {
+            CursorMode mode = CursorMode::Normal;
+            if (lua_type(state, 1) == LUA_TSTRING)
+            {
+                const char *s = lua_tostring(state, 1);
+                if (strcmp(s, "Hidden") == 0) mode = CursorMode::Hidden;
+                else if (strcmp(s, "Disabled") == 0) mode = CursorMode::Disabled;
+                else if (strcmp(s, "Captured") == 0) mode = CursorMode::Captured;
+            }
+            else
+            {
+                const int m = static_cast<int>(luaL_checkinteger(state, 1));
+                if (m >= 0 && m <= 3) mode = static_cast<CursorMode>(m);
+            }
+            InputSystem::SetCursorMode(mode);
+            return 0;
+        }
+
+        int LuaInputGetCursorMode(lua_State *state)
+        {
+            lua_pushinteger(state, static_cast<lua_Integer>(InputSystem::GetCursorMode()));
+            return 1;
+        }
+
+        int LuaInputIsMouseOverUI(lua_State *state)
+        {
+            glm::vec2 pos = InputSystem::IsGameplayMousePositionEnabled()
+                ? InputSystem::GetGameplayMousePosition()
+                : glm::vec2(InputSystem::GetMousePosition());
+            lua_pushboolean(state, GameUISystem::IsMouseOverUI(pos.x, pos.y));
+            return 1;
+        }
+
+        int LuaInputSetMouseToCenter(lua_State *state)
+        {
+            (void)state;
+            InputSystem::SetMouseToCenter();
+            return 0;
+        }
+
+        // WidgetComponent helpers & methods
+        Ref<WidgetCanvas> GetLuaWidgetCanvas(Scene *scene, Entity entity)
+        {
+            if (!scene || !scene->GetAssetManager() || !entity || !entity.HasComponent<WidgetComponent>())
+                return nullptr;
+            const auto &wc = entity.GetComponent<WidgetComponent>();
+            if (wc.widgetHandle == AssetHandle(0))
+                return nullptr;
+            return scene->GetAssetManager()->GetAsset<WidgetCanvas>(wc.widgetHandle);
+        }
+
+        Ref<IWidgetItem> FindLuaWidgetItem(const Ref<WidgetCanvas> &canvas, const char *name, Ref<WidgetCanvas> *outOwner = nullptr)
+        {
+            if (!canvas || !name || !*name)
+                return nullptr;
+            if (Ref<IWidgetItem> item = canvas->FindItemByName(name))
+            {
+                if (outOwner) *outOwner = canvas;
+                return item;
+            }
+            if (AssetManager *am = AssetManager::GetInstance())
+            {
+                for (const WidgetChildEntry &child : canvas->GetChildWidgets())
+                {
+                    if (child.handle == AssetHandle(0))
+                        continue;
+                    if (Ref<WidgetCanvas> cc = am->GetAsset<WidgetCanvas>(child.handle))
+                    {
+                        if (Ref<IWidgetItem> item = FindLuaWidgetItem(cc, name, outOwner))
+                            return item;
+                    }
+                }
+            }
+            return nullptr;
+        }
+
+        int WidgetSetVisible(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const bool visible = lua_toboolean(state, 3) != 0;
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            Ref<WidgetCanvas> canvas = GetLuaWidgetCanvas(ref->scene, entity);
+            Ref<WidgetCanvas> owner;
+            if (Ref<IWidgetItem> item = FindLuaWidgetItem(canvas, name, &owner))
+            {
+                item->SetVisible(visible);
+                if (owner && owner->GetRoot()) owner->GetRoot()->MarkLayoutDirty();
+            }
+            return 0;
+        }
+
+        int WidgetIsVisible(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            Ref<WidgetCanvas> canvas = GetLuaWidgetCanvas(ref->scene, entity);
+            Ref<IWidgetItem> item = FindLuaWidgetItem(canvas, name);
+            lua_pushboolean(state, item ? item->IsVisible() : 0);
+            return 1;
+        }
+
+        int WidgetSetText(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const char *text = luaL_checkstring(state, 3);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            Ref<WidgetCanvas> canvas = GetLuaWidgetCanvas(ref->scene, entity);
+            Ref<WidgetCanvas> owner;
+            if (Ref<IWidgetItem> item = FindLuaWidgetItem(canvas, name, &owner))
+            {
+                if (item->GetWidgetType() == WidgetType::Label)
+                {
+                    item->As<WidgetLabel>()->text = text;
+                }
+                else if (item->GetWidgetType() == WidgetType::Button)
+                {
+                    auto btn = item->As<WidgetButton>();
+                    if (btn->label) btn->label->text = text;
+                }
+                item->MarkLayoutDirty();
+                item->MarkPaintDirty();
+                if (owner && owner->GetRoot()) owner->GetRoot()->MarkLayoutDirty();
+            }
+            return 0;
+        }
+
+        int WidgetSetColor(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const glm::vec4 color = ReadVec4(state, 3);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            Ref<WidgetCanvas> canvas = GetLuaWidgetCanvas(ref->scene, entity);
+            Ref<WidgetCanvas> owner;
+            if (Ref<IWidgetItem> item = FindLuaWidgetItem(canvas, name, &owner))
+            {
+                if (item->GetWidgetType() == WidgetType::Label)
+                    item->As<WidgetLabel>()->style.color = color;
+                else
+                    item->baseStyle.backgroundColor = color;
+                item->MarkPaintDirty();
+                if (owner && owner->GetRoot()) owner->GetRoot()->MarkPaintDirty();
+            }
+            return 0;
+        }
+
+        int WidgetSetSize(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const glm::vec2 sz = ReadVec2(state, 3);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            Ref<WidgetCanvas> canvas = GetLuaWidgetCanvas(ref->scene, entity);
+            Ref<WidgetCanvas> owner;
+            if (Ref<IWidgetItem> item = FindLuaWidgetItem(canvas, name, &owner))
+            {
+                item->SetSize(sz);
+                if (owner && owner->GetRoot()) owner->GetRoot()->MarkLayoutDirty();
+            }
+            return 0;
+        }
+
+        int WidgetSetPosition(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const char *name = luaL_checkstring(state, 2);
+            const glm::vec2 pos = ReadVec2(state, 3);
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            Ref<WidgetCanvas> canvas = GetLuaWidgetCanvas(ref->scene, entity);
+            Ref<WidgetCanvas> owner;
+            if (Ref<IWidgetItem> item = FindLuaWidgetItem(canvas, name, &owner))
+            {
+                item->SetPosition(pos);
+                if (owner && owner->GetRoot()) owner->GetRoot()->MarkLayoutDirty();
+            }
+            return 0;
+        }
+
+        int WidgetSetCanvasEnabled(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            const bool enabled = lua_toboolean(state, 2) != 0;
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            if (Ref<WidgetCanvas> canvas = GetLuaWidgetCanvas(ref->scene, entity))
+            {
+                canvas->SetEnabled(enabled);
+                if (canvas->GetRoot()) canvas->GetRoot()->MarkLayoutDirty();
+            }
+            return 0;
+        }
+
+        int WidgetIsCanvasEnabled(lua_State *state)
+        {
+            auto *ref = static_cast<ComponentRef *>(luaL_checkudata(state, 1, kComponentMetatable));
+            Entity entity = ResolveEntity(ref->scene, ref->id);
+            Ref<WidgetCanvas> canvas = GetLuaWidgetCanvas(ref->scene, entity);
+            lua_pushboolean(state, canvas ? canvas->IsEnabled() : 0);
+            return 1;
         }
     }
 
@@ -2211,6 +2426,14 @@ namespace ignite::lua
         {
             auto &c = entity.GetComponent<WidgetComponent>();
             if (strcmp(key, "widget_handle") == 0) { lua_pushinteger(state, static_cast<lua_Integer>(static_cast<uint64_t>(c.widgetHandle))); return 1; }
+            if (strcmp(key, "set_visible") == 0) { lua_pushcfunction(state, WidgetSetVisible); return 1; }
+            if (strcmp(key, "is_visible") == 0) { lua_pushcfunction(state, WidgetIsVisible); return 1; }
+            if (strcmp(key, "set_text") == 0) { lua_pushcfunction(state, WidgetSetText); return 1; }
+            if (strcmp(key, "set_color") == 0) { lua_pushcfunction(state, WidgetSetColor); return 1; }
+            if (strcmp(key, "set_size") == 0) { lua_pushcfunction(state, WidgetSetSize); return 1; }
+            if (strcmp(key, "set_position") == 0) { lua_pushcfunction(state, WidgetSetPosition); return 1; }
+            if (strcmp(key, "set_canvas_enabled") == 0) { lua_pushcfunction(state, WidgetSetCanvasEnabled); return 1; }
+            if (strcmp(key, "is_canvas_enabled") == 0) { lua_pushcfunction(state, WidgetIsCanvasEnabled); return 1; }
             break;
         }
         case ComponentType::NetworkIdentity:
@@ -3988,6 +4211,7 @@ namespace ignite::lua
         // Ignite.Scene
         lua_newtable(state);
         RegisterSceneClosure(state, scene, "Load", LuaSceneLoad);
+        RegisterSceneClosure(state, scene, "Stop", LuaSceneStop);
         RegisterSceneClosure(state, scene, "GetTime", LuaSceneGetTime);
         RegisterSceneClosure(state, scene, "IsPlaying", LuaSceneIsPlaying);
         RegisterSceneClosure(state, scene, "IsSimulating", LuaSceneIsSimulating);
@@ -4036,6 +4260,10 @@ namespace ignite::lua
         lua_pushcfunction(state, LuaInputGetMousePosition); lua_setfield(state, -2, "GetMousePosition");
         lua_pushcfunction(state, LuaInputGetMouseDelta); lua_setfield(state, -2, "GetMouseDelta");
         lua_pushcfunction(state, LuaInputSetMousePosition); lua_setfield(state, -2, "SetMousePosition");
+        lua_pushcfunction(state, LuaInputSetCursorMode); lua_setfield(state, -2, "SetCursorMode");
+        lua_pushcfunction(state, LuaInputGetCursorMode); lua_setfield(state, -2, "GetCursorMode");
+        lua_pushcfunction(state, LuaInputIsMouseOverUI); lua_setfield(state, -2, "IsMouseOverUI");
+        lua_pushcfunction(state, LuaInputSetMouseToCenter); lua_setfield(state, -2, "SetMouseToCenter");
         lua_setfield(state, -2, "Input");
 
         // Ignite.Key

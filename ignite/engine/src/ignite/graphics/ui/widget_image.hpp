@@ -16,6 +16,9 @@ namespace ignite
 
         AssetHandle imageHandle = AssetHandle(0);
         Ref<Texture> image;
+        glm::vec4 tintColor = glm::vec4(1.0f);
+        glm::vec2 uv0 = glm::vec2(0.0f);
+        glm::vec2 uv1 = glm::vec2(1.0f);
 
         virtual void Arrange(const Rect &parentArea) override;
         virtual bool HitTest(int px, int py) override;

@@ -24,7 +24,7 @@ float Median(float3 value)
 
 float ScreenPxRange(uint texIndex, float2 uv)
 {
-    const float pxRange = 2.0f;
+    const float pxRange = 6.0f;
     uint width = 1u;
     uint height = 1u;
     Texture2D tex = ResourceDescriptorHeap[texIndex];
@@ -40,10 +40,11 @@ PSOutput main(PSInput input)
 {
     Texture2D tex = ResourceDescriptorHeap[input.texIndex];
     float3 msd = tex.Sample(samplerState, input.texCoord).rgb;
-    float screenPxDistance = ScreenPxRange(input.texIndex, input.texCoord) * (Median(msd) - 0.5f);
+    float sd = Median(msd) - 0.5f;
+    float screenPxDistance = ScreenPxRange(input.texIndex, input.texCoord) * sd;
     float opacity = saturate(screenPxDistance + 0.5f);
 
-    clip(opacity - 0.0001f);
+    clip(opacity - 0.002f);
 
     PSOutput result;
     result.color = float4(input.color.rgb, input.color.a * opacity);

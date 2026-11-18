@@ -11,6 +11,9 @@
 #include "ignite/core/application.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/asset/asset_manager.hpp"
+#include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/font.hpp"
+#include "ignite/graphics/texture.hpp"
 
 namespace ignite
 {
@@ -86,11 +89,26 @@ namespace ignite
             sr.AddKeyValue("FlexGap", item->layout.flex.gap);
 
             // UIStyle properties
+            sr.AddKeyValue("Interactable", item->interactable);
             sr.AddKeyValue("BackgroundColor", item->baseStyle.backgroundColor);
             sr.AddKeyValue("BorderColor", item->baseStyle.borderColor);
             sr.AddKeyValue("BorderWidth", item->baseStyle.borderWidth);
             sr.AddKeyValue("CornerRadius", item->baseStyle.cornerRadius);
             sr.AddKeyValue("Opacity", item->baseStyle.opacity);
+            sr.AddKeyValue("ShadowEnabled", item->baseStyle.shadowEnabled);
+            sr.AddKeyValue("ShadowColor", item->baseStyle.shadowColor);
+            sr.AddKeyValue("ShadowOffset", item->baseStyle.shadowOffset);
+            sr.AddKeyValue("ShadowSize", item->baseStyle.shadowSize);
+            sr.AddKeyValue("ShadowSoftness", item->baseStyle.shadowSoftness);
+
+            if (item->GetWidgetType() == WidgetType::BoxSizing)
+            {
+                if (const Ref<WidgetBoxSizing> boxSizing = item->As<WidgetBoxSizing>())
+                {
+                    sr.AddKeyValue("BoxMinSize", boxSizing->minSize);
+                    sr.AddKeyValue("BoxMaxSize", boxSizing->maxSize);
+                }
+            }
 
             if (item->GetWidgetType() == WidgetType::Button)
             {
@@ -100,6 +118,7 @@ namespace ignite
                     sr.AddKeyValue("NormalColor", button->style.color);
                     sr.AddKeyValue("HoverColor", button->style.hoverColor);
                     sr.AddKeyValue("PressedColor", button->style.pressedColor);
+                    sr.AddKeyValue("DisabledColor", button->style.disabledColor);
                     sr.AddKeyValue("BorderColor", button->style.borderColor);
                     sr.AddKeyValue("BorderWidth", button->style.borderWidth);
                     sr.AddKeyValue("CornerRadius", button->style.cornerRadius);
@@ -108,10 +127,13 @@ namespace ignite
                     {
                         sr.AddKeyValue("FontHandle", static_cast<uint64_t>(button->label->fontHandle));
                         sr.AddKeyValue("Text", button->label->text);
-                        sr.AddKeyValue("Color", button->label->style.color);
+                        sr.AddKeyValue("TextColor", button->label->style.color);
                         sr.AddKeyValue("FontSize", button->label->style.fontSize);
                         sr.AddKeyValue("Kerning", button->label->style.kerning);
                         sr.AddKeyValue("LineSpacing", button->label->style.lineSpacing);
+                        sr.AddKeyValue("TextShadowEnabled", button->label->style.shadowEnabled);
+                        sr.AddKeyValue("TextShadowColor", button->label->style.shadowColor);
+                        sr.AddKeyValue("TextShadowOffset", button->label->style.shadowOffset);
                     }
                 }
             }
@@ -126,6 +148,9 @@ namespace ignite
                     sr.AddKeyValue("FontSize", label->style.fontSize);
                     sr.AddKeyValue("Kerning", label->style.kerning);
                     sr.AddKeyValue("LineSpacing", label->style.lineSpacing);
+                    sr.AddKeyValue("TextShadowEnabled", label->style.shadowEnabled);
+                    sr.AddKeyValue("TextShadowColor", label->style.shadowColor);
+                    sr.AddKeyValue("TextShadowOffset", label->style.shadowOffset);
                 }
             }
 
@@ -134,6 +159,9 @@ namespace ignite
                 if (const Ref<WidgetImage> img = item->As<WidgetImage>())
                 {
                     sr.AddKeyValue("ImageHandle", static_cast<uint64_t>(img->imageHandle));
+                    sr.AddKeyValue("TintColor", img->tintColor);
+                    sr.AddKeyValue("UV0", img->uv0);
+                    sr.AddKeyValue("UV1", img->uv1);
                 }
             }
 
@@ -277,11 +305,57 @@ namespace ignite
                 else if (auto n = itemNode["Gap"]) item->layout.flex.gap = n.as<float>();
 
                 // UIStyle
+                if (auto n = itemNode["Interactable"]) item->interactable = n.as<bool>();
                 if (auto n = itemNode["BackgroundColor"]) item->baseStyle.backgroundColor = n.as<glm::vec4>();
                 if (auto n = itemNode["BorderColor"]) item->baseStyle.borderColor = n.as<glm::vec4>();
                 if (auto n = itemNode["BorderWidth"]) item->baseStyle.borderWidth = n.as<float>();
                 if (auto n = itemNode["CornerRadius"]) item->baseStyle.cornerRadius = n.as<float>();
                 if (auto n = itemNode["Opacity"]) item->baseStyle.opacity = n.as<float>();
+
+                if (auto n = itemNode["ShadowEnabled"])
+                {
+                    item->baseStyle.shadowEnabled = n.as<bool>();
+                }
+                else
+                {
+                    // Legacy fallback for existing .wdgt files without explicit ShadowEnabled
+                    if (type == WidgetType::Button)
+                    {
+                        item->baseStyle.shadowEnabled = true;
+                        item->baseStyle.shadowColor = glm::vec4(0.0f, 0.015f, 0.04f, 0.58f);
+                        item->baseStyle.shadowOffset = glm::vec2(1.0f, 5.0f);
+                        item->baseStyle.shadowSize = 6.0f;
+                        item->baseStyle.shadowSoftness = 0.34f;
+                    }
+                    else if (type == WidgetType::Container || type == WidgetType::BoxSizing || type == WidgetType::Overlay)
+                    {
+                        const bool isCard = (item->baseStyle.backgroundColor.a >= 0.25f)
+                            && (item->baseStyle.borderWidth > 0.0f || item->baseStyle.cornerRadius > 2.0f)
+                            && (item->layout.width >= 48.0f && item->layout.height >= 24.0f)
+                            && (item->layout.width < 1850.0f || item->layout.height < 1020.0f);
+                        if (isCard)
+                        {
+                            item->baseStyle.shadowEnabled = true;
+                            item->baseStyle.shadowColor = glm::vec4(0.0f, 0.01f, 0.03f, 0.62f);
+                            item->baseStyle.shadowOffset = glm::vec2(1.5f, 7.0f);
+                            item->baseStyle.shadowSize = 7.5f;
+                            item->baseStyle.shadowSoftness = 0.28f;
+                        }
+                    }
+                }
+                if (auto n = itemNode["ShadowColor"]) item->baseStyle.shadowColor = n.as<glm::vec4>();
+                if (auto n = itemNode["ShadowOffset"]) item->baseStyle.shadowOffset = n.as<glm::vec2>();
+                if (auto n = itemNode["ShadowSize"]) item->baseStyle.shadowSize = n.as<float>();
+                if (auto n = itemNode["ShadowSoftness"]) item->baseStyle.shadowSoftness = n.as<float>();
+
+                if (type == WidgetType::BoxSizing)
+                {
+                    if (Ref<WidgetBoxSizing> boxSizing = item->As<WidgetBoxSizing>())
+                    {
+                        if (auto n = itemNode["BoxMinSize"]) boxSizing->minSize = n.as<glm::vec2>();
+                        if (auto n = itemNode["BoxMaxSize"]) boxSizing->maxSize = n.as<glm::vec2>();
+                    }
+                }
 
                 if (type == WidgetType::Container)
                 {
@@ -309,6 +383,8 @@ namespace ignite
                         if (auto n = itemNode["NormalColor"]) button->style.color = n.as<glm::vec4>();
                         if (auto n = itemNode["HoverColor"]) button->style.hoverColor = n.as<glm::vec4>();
                         if (auto n = itemNode["PressedColor"]) button->style.pressedColor = n.as<glm::vec4>();
+                        if (auto n = itemNode["DisabledColor"]) button->style.disabledColor = n.as<glm::vec4>();
+                        if (auto n = itemNode["Interactable"]) button->interactable = n.as<bool>();
                         if (auto n = itemNode["BorderColor"]) button->style.borderColor = (n.as<glm::vec4>());
                         if (auto n = itemNode["BorderWidth"]) button->style.borderWidth = n.as<float>();
                         if (auto n = itemNode["CornerRadius"]) button->style.cornerRadius = n.as<float>();
@@ -319,9 +395,13 @@ namespace ignite
                             if (auto n = itemNode["FontHandle"]) button->label->fontHandle = AssetHandle(n.as<uint64_t>());
                             if (auto n = itemNode["Text"]) button->label->text = n.as<std::string>();
                             if (auto n = itemNode["TextColor"]) button->label->style.color = n.as<glm::vec4>();
+                            else if (auto n = itemNode["Color"]) button->label->style.color = n.as<glm::vec4>();
                             if (auto n = itemNode["FontSize"]) button->label->style.fontSize = n.as<float>();
                             if (auto n = itemNode["Kerning"]) button->label->style.kerning = n.as<float>();
                             if (auto n = itemNode["LineSpacing"]) button->label->style.lineSpacing = n.as<float>();
+                            if (auto n = itemNode["TextShadowEnabled"]) button->label->style.shadowEnabled = n.as<bool>();
+                            if (auto n = itemNode["TextShadowColor"]) button->label->style.shadowColor = n.as<glm::vec4>();
+                            if (auto n = itemNode["TextShadowOffset"]) button->label->style.shadowOffset = n.as<glm::vec2>();
                         }
                     }
                 }
@@ -332,9 +412,13 @@ namespace ignite
                         if (itemNode["FontHandle"]) text->fontHandle = AssetHandle(itemNode["FontHandle"].as<uint64_t>());
                         if (itemNode["Text"]) text->text = itemNode["Text"].as<std::string>();
                         if (itemNode["Color"]) text->style.color = itemNode["Color"].as<glm::vec4>();
+                        else if (itemNode["TextColor"]) text->style.color = itemNode["TextColor"].as<glm::vec4>();
                         if (itemNode["FontSize"]) text->style.fontSize = itemNode["FontSize"].as<float>();
                         if (itemNode["Kerning"]) text->style.kerning = itemNode["Kerning"].as<float>();
                         if (itemNode["LineSpacing"]) text->style.lineSpacing = itemNode["LineSpacing"].as<float>();
+                        if (auto n = itemNode["TextShadowEnabled"]) text->style.shadowEnabled = n.as<bool>();
+                        if (auto n = itemNode["TextShadowColor"]) text->style.shadowColor = n.as<glm::vec4>();
+                        if (auto n = itemNode["TextShadowOffset"]) text->style.shadowOffset = n.as<glm::vec2>();
                     }
                 }
 
@@ -343,6 +427,9 @@ namespace ignite
                     if (Ref<WidgetImage> img = item->As<WidgetImage>())
                     {
                         if (auto n = itemNode["ImageHandle"]) img->imageHandle = AssetHandle(n.as<uint64_t>());
+                        if (auto n = itemNode["TintColor"]) img->tintColor = n.as<glm::vec4>();
+                        if (auto n = itemNode["UV0"]) img->uv0 = n.as<glm::vec2>();
+                        if (auto n = itemNode["UV1"]) img->uv1 = n.as<glm::vec2>();
                     }
                 }
 
@@ -691,6 +778,93 @@ namespace ignite
         return false;
     }
 
+    namespace
+    {
+        static void ResolveCanvasAssetsRecursive(const Ref<IWidgetItem> &item, AssetManager *assetManager)
+        {
+            if (!item)
+                return;
+
+            if (Ref<WidgetButton> button = item->As<WidgetButton>())
+            {
+                if (assetManager)
+                {
+                    Ref<Texture> prevImg = button->image;
+                    button->image = (button->imageHandle != AssetHandle(0))
+                        ? assetManager->GetAsset<Texture>(button->imageHandle)
+                        : nullptr;
+                    if (prevImg != button->image)
+                        button->MarkLayoutDirty();
+                }
+
+                if (button->label)
+                {
+                    Ref<Font> prevFont = button->label->font;
+                    button->label->font = (assetManager && button->label->fontHandle != AssetHandle(0))
+                        ? assetManager->GetAsset<Font>(button->label->fontHandle)
+                        : nullptr;
+                    if (!button->label->font)
+                        button->label->font = Renderer::GetDefaultFont();
+                    if (prevFont != button->label->font)
+                        button->label->MarkLayoutDirty();
+                }
+            }
+            else if (Ref<WidgetLabel> label = item->As<WidgetLabel>())
+            {
+                Ref<Font> prevFont = label->font;
+                label->font = (assetManager && label->fontHandle != AssetHandle(0))
+                    ? assetManager->GetAsset<Font>(label->fontHandle)
+                    : nullptr;
+                if (!label->font)
+                    label->font = Renderer::GetDefaultFont();
+                if (prevFont != label->font)
+                    label->MarkLayoutDirty();
+            }
+            else if (Ref<WidgetImage> img = item->As<WidgetImage>())
+            {
+                if (assetManager)
+                {
+                    Ref<Texture> prevImg = img->image;
+                    img->image = (img->imageHandle != AssetHandle(0))
+                        ? assetManager->GetAsset<Texture>(img->imageHandle)
+                        : nullptr;
+                    if (prevImg != img->image)
+                        img->MarkLayoutDirty();
+                }
+            }
+
+            for (const Ref<IWidgetItem> &child : item->children)
+            {
+                ResolveCanvasAssetsRecursive(child, assetManager);
+            }
+        }
+
+        static void MeasureCanvasItemsRecursive(const Ref<IWidgetItem> &item)
+        {
+            if (!item || !item->IsVisible())
+                return;
+
+            for (const Ref<IWidgetItem> &child : item->children)
+            {
+                MeasureCanvasItemsRecursive(child);
+            }
+            item->Measure();
+        }
+
+        static void ClearCanvasDirtyRecursive(const Ref<IWidgetItem> &item)
+        {
+            if (!item)
+                return;
+
+            item->m_DirtyLayout = false;
+            item->m_DirtyPaint = false;
+            for (const Ref<IWidgetItem> &child : item->children)
+            {
+                ClearCanvasDirtyRecursive(child);
+            }
+        }
+    }
+
     WidgetContainer *WidgetCanvas::CreateRoot(uint32_t width, uint32_t height)
     {
         if (!m_Root)
@@ -706,6 +880,30 @@ namespace ignite
         }
 
         return m_Root.get();
+    }
+
+    void WidgetCanvas::UpdateLayout(uint32_t width, uint32_t height)
+    {
+        SetViewportSize(width, height);
+        WidgetContainer *root = GetRoot();
+        if (!root)
+        {
+            root = CreateRoot(width, height);
+        }
+        if (!root)
+        {
+            return;
+        }
+
+        Ref<IWidgetItem> rootItem = root->As<IWidgetItem>();
+        ResolveCanvasAssetsRecursive(rootItem, AssetManager::GetInstance());
+
+        if (root->m_DirtyLayout)
+        {
+            MeasureCanvasItemsRecursive(rootItem);
+            root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)));
+            ClearCanvasDirtyRecursive(rootItem);
+        }
     }
 
     bool WidgetCanvas::RemoveItem(WidgetID id)
@@ -765,5 +963,18 @@ namespace ignite
 
         SetDirtyFlag(true);
         return true;
+    }
+
+    Ref<IWidgetItem> WidgetCanvas::FindItemByName(const std::string &itemName) const
+    {
+        if (itemName.empty())
+            return nullptr;
+
+        for (const auto &[_, item] : m_WidgetItems)
+        {
+            if (item && item->name == itemName)
+                return item;
+        }
+        return nullptr;
     }
 }

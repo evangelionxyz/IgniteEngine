@@ -182,6 +182,12 @@ namespace ignite
         float borderWidth = 0.0f;
         float cornerRadius = 0.0f;
         float opacity = 1.0f;
+
+        bool shadowEnabled = false;
+        glm::vec4 shadowColor = glm::vec4(0.0f, 0.015f, 0.04f, 0.60f);
+        glm::vec2 shadowOffset = glm::vec2(1.5f, 6.0f);
+        float shadowSize = 7.0f;
+        float shadowSoftness = 0.32f;
     };
 
     enum class WidgetType : uint8_t
@@ -224,6 +230,7 @@ namespace ignite
 
         int zIndex = 0;
         Rect worldRect;
+        bool interactable = true;
 
         bool m_DirtyLayout = true;
         bool m_DirtyPaint = true;
@@ -288,6 +295,18 @@ namespace ignite
         bool IsVisible() const
         {
             return layout.visibility == VisibilityMode::Visible;
+        }
+
+        bool IsEffectivelyVisible() const
+        {
+            const IWidgetItem *curr = this;
+            while (curr)
+            {
+                if (!curr->IsVisible())
+                    return false;
+                curr = curr->parent;
+            }
+            return true;
         }
 
         bool IsCollapsed() const

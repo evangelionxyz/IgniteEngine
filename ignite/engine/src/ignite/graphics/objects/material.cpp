@@ -62,6 +62,11 @@ namespace ignite
         }
 
         EnsureGpuResources();
+        if (!m_GPUDataBuffer || !m_GPUDataBuffer->GetDescriptor())
+        {
+            LOG_ERROR("[Material] Cannot create binding set: material constant buffer is unavailable");
+            return false;
+        }
 
         BindingSetDesc desc = BindingSetDesc();
         desc.addItem(BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetDescriptor()));
@@ -118,6 +123,8 @@ namespace ignite
     void Material::UploadToGpu(nri::CommandBuffer *)
     {
         EnsureGpuResources();
+        if (!m_GPUDataBuffer)
+            return;
         // Sync blend mode from material type so the shader always has the correct value
         gpuData.blendMode = static_cast<int>(m_Type);
 

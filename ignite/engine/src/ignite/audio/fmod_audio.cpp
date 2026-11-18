@@ -12,18 +12,24 @@ namespace ignite {
 
     void FmodAudio::SetMasterVolume(const float volume)
     {
+        if (!s_FmodAudio || !s_FmodAudio->m_MasterGroup)
+            return;
         result = s_FmodAudio->m_MasterGroup->setVolume(volume); 
         FMOD_CHECK(result);
     }
 
     void FmodAudio::MuteMaster(const bool mute)
     {
+        if (!s_FmodAudio || !s_FmodAudio->m_MasterGroup)
+            return;
         result = s_FmodAudio->m_MasterGroup->setMute(mute);
         FMOD_CHECK(result);
     }
 
     void FmodAudio::Update()
     {
+        if (!s_FmodAudio || !s_FmodAudio->m_System)
+            return;
         s_FmodAudio->m_System->update();
     }
 
@@ -91,6 +97,8 @@ namespace ignite {
 
     FMOD::ChannelGroup* FmodAudio::CreateChannelGroup(const std::string &name)
     {
+        if (!s_FmodAudio || !s_FmodAudio->m_System)
+            return nullptr;
         FMOD::ChannelGroup* group = nullptr;
         s_FmodAudio->m_System->createChannelGroup(name.c_str(), &group);
         s_FmodAudio->m_ChannelGroups[name] = group;
@@ -99,12 +107,12 @@ namespace ignite {
     
     std::unordered_map<std::string, FMOD::ChannelGroup*> FmodAudio::GetChannelGroupMap()
     {
-        return s_FmodAudio->m_ChannelGroups;    
+        return s_FmodAudio ? s_FmodAudio->m_ChannelGroups : std::unordered_map<std::string, FMOD::ChannelGroup*>{};    
     }
 
     FMOD::ChannelGroup* FmodAudio::GetChannelGroup(const std::string& name)
     {
-        if (s_FmodAudio->m_ChannelGroups.contains(name))
+        if (s_FmodAudio && s_FmodAudio->m_ChannelGroups.contains(name))
             return s_FmodAudio->m_ChannelGroups[name];
         return nullptr;
     }
@@ -116,16 +124,18 @@ namespace ignite {
 
     FMOD::System* FmodAudio::GetFmodSystem()
     {
-        return s_FmodAudio->m_System;
+        return s_FmodAudio ? s_FmodAudio->m_System : nullptr;
     }
 
     FMOD::ChannelGroup* FmodAudio::GetMasterChannel()
     {
-        return s_FmodAudio->m_MasterGroup;
+        return s_FmodAudio ? s_FmodAudio->m_MasterGroup : nullptr;
     }
 
     float FmodAudio::GetMasterVolume()
     {
+        if (!s_FmodAudio || !s_FmodAudio->m_MasterGroup)
+            return 0.0f;
         float volume = 0.0f;
         s_FmodAudio->m_MasterGroup->getVolume(&volume);
         return volume;

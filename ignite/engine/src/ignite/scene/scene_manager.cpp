@@ -3,6 +3,7 @@
 #include "ignite_pch.hpp"
 #include "scene_manager.hpp"
 #include "ignite/scripting/lua/lua_script_runtime.hpp"
+#include "ignite/scripting/script_engine.hpp"
 #include "scene.hpp"
 #include "prefab.hpp"
 #include "ignite/core/application.hpp"
@@ -25,6 +26,8 @@
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/ui/game_ui_system.hpp"
+#include "ignite/net/network_manager.hpp"
 
 #include "ignite/math/math.hpp"
 
@@ -558,6 +561,11 @@ namespace ignite
             newEntity.GetComponent<PhysicsJointComponent>().runtimeJoint.reset();
         }
 
+        if (newEntity.HasComponent<ScriptComponent>())
+        {
+            newEntity.GetComponent<ScriptComponent>().runtimeScriptInstance = nullptr;
+        }
+
         if (scene->IsRunning())
         {
             // IMPORTANT!: Need to reset copied body from source
@@ -684,6 +692,34 @@ namespace ignite
             }
 
             scene->CreatePhysics2DBody(newEntity);
+
+            if (scene->IsPlaying())
+            {
+                if (newEntity.HasComponent<ScriptComponent>())
+                {
+                    auto &sc = newEntity.GetComponent<ScriptComponent>();
+                    if (!sc.className.empty() && sc.className != "EMPTY" && ScriptEngine::GetInstance())
+                    {
+                        sc.runtimeScriptInstance = ScriptEngine::GetInstance()->OnCreateEntityInstance(newEntity.GetUUID(), sc.className);
+                    }
+                }
+
+                if (newEntity.HasComponent<LuaScriptComponent>())
+                {
+                    if (lua::ScriptRuntime *luaRuntime = scene->GetLuaScriptRuntime())
+                    {
+                        const auto &luaScript = newEntity.GetComponent<LuaScriptComponent>();
+                        std::filesystem::path path = luaScript.scriptPath;
+                        if (luaScript.scriptHandle != AssetHandle(0) && scene->GetAssetManager())
+                        {
+                            const auto &meta = scene->GetAssetManager()->GetMetaData(luaScript.scriptHandle);
+                            if (!meta.filepath.empty())
+                                path = meta.filepath;
+                        }
+                        luaRuntime->CreateInstance(newEntity.GetUUID(), path, luaScript.scriptHandle);
+                    }
+                }
+            }
         }
 
         if (!scene->IsRunning())
@@ -876,6 +912,18 @@ namespace ignite
 
     bool SceneManager::s_TransitionPending = false;
     AssetHandle SceneManager::s_PendingSceneHandle = AssetHandle(0);
+    bool SceneManager::s_StopPending = false;
+    std::function<void()> SceneManager::s_StopCallback = nullptr;
+
+    void SceneManager::RequestStop()
+    {
+        s_StopPending = true;
+    }
+
+    void SceneManager::SetStopCallback(std::function<void()> callback)
+    {
+        s_StopCallback = std::move(callback);
+    }
 
     void SceneManager::Transition(AssetHandle nextSceneHandle)
     {
@@ -915,6 +963,23 @@ namespace ignite
 
     void SceneManager::ExecutePendingTransition()
     {
+        if (s_StopPending)
+        {
+            s_StopPending = false;
+            s_TransitionPending = false;
+            s_PendingSceneHandle = AssetHandle(0);
+
+            if (s_StopCallback)
+            {
+                s_StopCallback();
+            }
+            else if (Application *app = Application::GetInstance())
+            {
+                app->Shutdown();
+            }
+            return;
+        }
+
         if (!s_TransitionPending)
             return;
 
@@ -958,6 +1023,11 @@ namespace ignite
         }
 
         project->SetActiveScene(transitionScene);
+        GameUISystem::SetSceneContext(transitionScene.get());
+        if (auto *nm = NetworkManager::GetInstance())
+        {
+            nm->SetActiveScene(transitionScene.get());
+        }
         transitionScene->OnStart(previousState);
 
         assetManager->UnloadUnusedAssets();

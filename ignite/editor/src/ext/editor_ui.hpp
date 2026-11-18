@@ -312,7 +312,12 @@ namespace ignite::UI
         ImGui::SetColumnWidth(0, coloumnWidth);
         ImGui::Text("%s", label);
         ImGui::NextColumn();
-        ImGui::ColorEdit3("##Color", &v.x);
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::ColorEdit3("##Color", &v.x))
+        {
+            state.isItemEdited = true;
+        }
+        State::Check(state);
         ImGui::EndColumns();
         ImGui::PopID();
 
@@ -328,7 +333,12 @@ namespace ignite::UI
         ImGui::SetColumnWidth(0, coloumnWidth);
         ImGui::Text("%s", label);
         ImGui::NextColumn();
-        ImGui::ColorEdit4("##Color", &v.x);
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::ColorEdit4("##Color", &v.x))
+        {
+            state.isItemEdited = true;
+        }
+        State::Check(state);
         ImGui::EndColumns();
         ImGui::PopID();
 

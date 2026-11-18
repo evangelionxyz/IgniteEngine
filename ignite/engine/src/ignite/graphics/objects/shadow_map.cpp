@@ -91,6 +91,38 @@ namespace ignite
         }
     }
 
+    void CascadedShadowMap::EnsureShaderResourceLayout(nri::CommandBuffer *cmd, uint32_t frameIndex)
+    {
+        if (!cmd)
+            return;
+
+        Ref<Texture> depthTex = GetDepthTexture(frameIndex);
+        if (!depthTex || !depthTex->GetHandle())
+            return;
+
+        if (depthTex->GetCurrentLayout() == nri::Layout::SHADER_RESOURCE)
+            return;
+
+        nri::TextureBarrierDesc barrier = {};
+        barrier.texture = depthTex->GetHandle();
+        barrier.before = { depthTex->GetCurrentAccess(), depthTex->GetCurrentLayout(), depthTex->GetCurrentStages() };
+        if (barrier.before.layout == nri::Layout::UNDEFINED)
+            barrier.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+        barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER };
+        barrier.mipOffset = 0;
+        barrier.mipNum = nri::REMAINING;
+        barrier.layerOffset = 0;
+        barrier.layerNum = nri::REMAINING;
+        barrier.planes = nri::PlaneBits::DEPTH;
+
+        nri::BarrierDesc barrierDesc = {};
+        barrierDesc.textures = &barrier;
+        barrierDesc.textureNum = 1;
+        DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, barrierDesc);
+
+        depthTex->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER);
+    }
+
     Ref<Texture> CascadedShadowMap::GetDepthTexture(uint32_t frameIndex) const
     {
         if (frameIndex < m_DepthTextures.size())

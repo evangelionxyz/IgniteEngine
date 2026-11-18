@@ -49,6 +49,7 @@
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/imgui/imgui_nri.hpp"
 #include "ignite/imgui/gizmo.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
@@ -789,6 +790,7 @@ namespace ignite
                 sceneData.sceneRT->Resize(width, height);
                 sceneData.uiRT->Resize(width, height);
                 sceneData.compositeRT->Resize(width, height);
+                ImGui_NRI::ClearTextureCache();
             }
 
 			FrameContext *frameContext = Renderer::GetCurrentFrameContext();
@@ -916,9 +918,18 @@ namespace ignite
                 auto uiRT = std::move(assetData.sceneData.uiRT);
                 auto compositeRT = std::move(assetData.sceneData.compositeRT);
 
-                // YES it is empty, to bring the Ref count to end of render thread
-                Application::SubmitToRenderThread([sceneRenderer, sceneRT, uiRT, compositeRT]()
+                // Wait for GPU idle on the render thread before releasing the renderer and its render targets,
+                // so no VkFramebuffer is destroyed while still referenced by an in-flight command buffer.
+                Application::SubmitToRenderThread([sceneRenderer, sceneRT, uiRT, compositeRT]() mutable
                 {
+                    if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
+                    {
+                        GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+                    }
+                    sceneRenderer.reset();
+                    compositeRT.reset();
+                    uiRT.reset();
+                    sceneRT.reset();
                 });
             }
 
@@ -3000,7 +3011,7 @@ namespace ignite
                             assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
 
                             Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-                            if (previewTexture && previewTexture->GetShaderResourceView())
+                            if (previewTexture && previewTexture->GetShaderResourceView() && previewTexture->GetCurrentLayout() != nri::Layout::UNDEFINED)
                             {
                                 ImGui::Image(UI::GetTextureID(previewTexture), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                                 assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
@@ -3679,7 +3690,7 @@ namespace ignite
 							assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
 							assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
 							Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-							if (previewTexture && previewTexture->GetShaderResourceView())
+							if (previewTexture && previewTexture->GetShaderResourceView() && previewTexture->GetCurrentLayout() != nri::Layout::UNDEFINED)
 							{
 								ImGui::Image(UI::GetTextureID(previewTexture), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
 								assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
@@ -3893,7 +3904,7 @@ namespace ignite
                                 assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
 
                                 Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-                                if (previewTexture && previewTexture->GetShaderResourceView())
+                                if (previewTexture && previewTexture->GetShaderResourceView() && previewTexture->GetCurrentLayout() != nri::Layout::UNDEFINED)
                                 {
                                     const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
                                     ImGui::Image(UI::GetTextureID(previewTexture), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));

@@ -29,8 +29,8 @@ function script.on_update(entity, dt)
     if Ignite.Input.IsKeyPressed(Ignite.Key.U) then dist = math.max(MIN_DIST, dist - 8.0 * dt) end
     if Ignite.Input.IsKeyPressed(Ignite.Key.O) then dist = math.min(MAX_DIST, dist + 8.0 * dt) end
 
-    -- Right-mouse drag orbit
-    if Ignite.Input.IsMouseButtonPressed(Ignite.Mouse.Right) then
+    -- Mouse look when cursor is locked (Disabled == 2) or while right-mouse is held
+    if Ignite.Input.GetCursorMode() == 2 or Ignite.Input.IsMouseButtonPressed(Ignite.Mouse.Right) then
         local delta = Ignite.Input.GetMouseDelta()
         yaw = yaw - delta.x * MOUSE_SENS
         pitch = Ignite.Math.Clamp(pitch + delta.y * MOUSE_SENS, -5.0, 68.0)

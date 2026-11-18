@@ -285,6 +285,39 @@ namespace ignite
             SceneManager::Transition(AssetHandle(sceneAssetHandle));
         }
 
+        static uint64_t AssetManager_GetAssetHandleByPath(const char *filepath)
+        {
+            if (!filepath || !*filepath)
+                return 0;
+
+            if (AssetManager *am = AssetManager::GetInstance())
+            {
+                return static_cast<uint64_t>(am->GetAssetHandle(std::filesystem::path(filepath)));
+            }
+            return 0;
+        }
+
+        static void Scene_LoadByPath(const char *scenePath)
+        {
+            if (!scenePath || !*scenePath)
+                return;
+
+            const uint64_t handle = AssetManager_GetAssetHandleByPath(scenePath);
+            if (handle != 0)
+            {
+                SceneManager::Transition(AssetHandle(handle));
+            }
+            else
+            {
+                LOG_ERROR("[ScriptGlue] Scene_LoadByPath failed: '{}' not found in AssetRegistry", scenePath);
+            }
+        }
+
+        static void Scene_Stop()
+        {
+            SceneManager::RequestStop();
+        }
+
         // =========================================================================
         // Networking (NetworkManager)
         // =========================================================================
@@ -522,6 +555,10 @@ namespace ignite
             &Net_GetChatCount,
             &Net_GetChatAt,
             &Net_SetSimulationSettings,
+
+            &AssetManager_GetAssetHandleByPath,
+            &Scene_LoadByPath,
+            &Scene_Stop,
         };
     }
 

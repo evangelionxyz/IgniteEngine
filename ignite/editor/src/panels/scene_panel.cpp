@@ -237,7 +237,8 @@ namespace ignite
 
     void ScenePanel::OnUpdate(float deltaTime)
     {
-        if (m_Scene && !m_Scene->IsPlaying())
+        const bool hasSeparateGameplayView = m_EditorLayer && m_EditorLayer->GetState().gameplayViewportWindow && m_Data.sceneViewportGameplayVisible;
+        if (m_Scene && (!m_Scene->IsPlaying() || (hasSeparateGameplayView && !m_SceneFocused)))
         {
             UpdateCameraInput(deltaTime);
         }
@@ -4245,10 +4246,11 @@ namespace ignite
             {
                 activeSceneRenderer = m_Scene->GetSceneRenderer();
 
-                // During Play, render to the Editor Viewport using the EditorPlayCamera (mirror of game camera
-                // with an editor-viewport-sized projection). During Stop/Simulate, use the editor camera as usual.
+                // During Play (when no separate Game window is open), render to the Editor Viewport using the EditorPlayCamera.
+                // When the separate Game viewport is open or during Stop/Simulate, keep the Editor Viewport on the EditorCamera.
+                const bool hasSeparateGameplayView = m_EditorLayer && m_EditorLayer->GetState().gameplayViewportWindow && m_Data.sceneViewportGameplayVisible;
                 ICamera *editorViewCamera = nullptr;
-                if (m_Scene->IsPlaying())
+                if (m_Scene->IsPlaying() && !hasSeparateGameplayView)
                 {
                     editorViewCamera = m_EditorLayer->GetEditorPlayCamera();
                 }
@@ -4277,22 +4279,29 @@ namespace ignite
                 globals::GEditor::EditorViewport.min = { canvasPos.x, canvasPos.y };
                 globals::GEditor::EditorViewport.max = { canvasSize.x, canvasSize.y };
 
-                // When not playing/simulating, make sure we clear focus state and restore cursor
+                // When not playing/simulating, always clear focus state and restore OS cursor
                 const bool isPlayOrSimulate = m_Scene->IsRunning();
-                const bool mouseWantsFocus = (InputSystem::GetCursorMode() == CursorMode::Disabled || InputSystem::GetCursorMode() == CursorMode::Hidden);
+                const CursorMode activeCursorMode = InputSystem::GetCursorMode();
+                const CursorMode requestedCursorMode = InputSystem::GetRequestedCursorMode();
+                const bool cursorLockedOrHidden = (activeCursorMode == CursorMode::Disabled || activeCursorMode == CursorMode::Hidden);
+                const bool scriptWantsMouseControl = (requestedCursorMode == CursorMode::Disabled || requestedCursorMode == CursorMode::Hidden);
 
                 if (!isPlayOrSimulate)
                 {
-                    if (m_SceneFocused)
-                    {
-                        m_SceneFocused = false;
-                        InputSystem::SetCursorMode(CursorMode::Normal);
-                    }
+                    m_SceneFocused = false;
                     m_SceneFocusCooldown = 0;
+                    if (activeCursorMode != CursorMode::Normal || requestedCursorMode != CursorMode::Normal || InputSystem::IsCursorForceUnlocked())
+                    {
+                        InputSystem::ResetCursorState();
+                    }
                 }
-                else if (m_SceneFocusCooldown > 0)
+                else
                 {
-                    m_SceneFocusCooldown--;
+                    if (m_SceneFocusCooldown > 0)
+                    {
+                        m_SceneFocusCooldown--;
+                    }
+                    m_SceneFocused = cursorLockedOrHidden && !InputSystem::IsCursorForceUnlocked();
                 }
 
                 // Mouse position in screen space
@@ -4312,27 +4321,22 @@ namespace ignite
 
                 ImDrawList *drawList = ImGui::GetWindowDrawList();
 
-                // if (m_SceneFocused && mouseWantsFocus)
+                if (isPlayOrSimulate && cursorLockedOrHidden)
                 {
-                    const char *bannerText = "SCENE FOCUSED - LeftShift + F1 to release";
-                    const ImVec2 textSize = ImGui::CalcTextSize(bannerText);
-                    const ImVec2 bannerSize = ImVec2{ textSize.x + 24.0f, textSize.y + 8.0f };
-                    const ImVec2 bannerCursor = { canvasPos.x + (canvasSize.x - bannerSize.x) * 0.5f, canvasPos.y + 10.0f };
-                    //ImGui::SetCursorScreenPos(bannerCursor);
+                    const char *bannerText = "SCENE FOCUSED - Shift + F1 to release";
                     UI::DrawBannerText(bannerText, { 124.0f, 200.0f });
                 }
 
-                // Click inside the viewport to (re-)focus in Play or Simulate modes
-                // Only allow focusing if the scene is not already focused and the cooldown has expired
-                // This prevents accidental focus when clicking on the viewport immediately after starting Play/Simulate
-                if (!m_Data.sceneViewportGameplayVisible && isPlayOrSimulate && !m_SceneFocused && m_SceneFocusCooldown == 0)
+                // Click inside the viewport while playing/simulating to re-apply the game script's
+                // requested cursor lock/hide mode (if not scripted, do nothing).
+                if (!m_Data.sceneViewportGameplayVisible && isPlayOrSimulate && scriptWantsMouseControl
+                    && (InputSystem::IsCursorForceUnlocked() || !m_SceneFocused) && m_SceneFocusCooldown == 0)
                 {
                     if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                     {
                         m_SceneFocused = true;
                         m_SceneFocusCooldown = 10;
-                        InputSystem::SetCursorMode(CursorMode::Disabled);
-                        InputSystem::SetMouseToCenter();
+                        InputSystem::SetCursorForceUnlocked(false);
                     }
                 }
 
@@ -4449,19 +4453,6 @@ namespace ignite
                             drawList->AddLine(screenStart, screenEnd, col, 1.5f);
                         }
                     }
-                }
-
-                {
-                    constexpr float padding = 18.0f;
-                    float yPosition = 6.0f;
-
-                    const float fps = ImGui::GetIO().Framerate;
-                    std::string statusStr = std::format("FPS {:.7}", fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFF00FF00, statusStr.c_str());
-
-                    yPosition += padding;
-                    statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-                    drawList->AddText(ImVec2(canvasPos.x + 6.0f, canvasPos.y + yPosition), 0xFF00FF00, statusStr.c_str());
                 }
 
                 // UI Input
@@ -5058,15 +5049,18 @@ namespace ignite
                         {
                             {
 
-                                // Click inside the viewport to (re-)focus in Play or Simulate modes
-                                if (m_Scene->IsRunning() && !m_SceneFocused && m_SceneFocusCooldown == 0)
+                                // Click inside the gameplay viewport while playing/simulating to re-apply the game
+                                // script's requested cursor lock/hide mode (if not scripted, do nothing).
+                                const CursorMode requestedMode = InputSystem::GetRequestedCursorMode();
+                                const bool scriptWantsMouseControl = (requestedMode == CursorMode::Disabled || requestedMode == CursorMode::Hidden);
+                                if (m_Scene->IsRunning() && scriptWantsMouseControl
+                                    && (InputSystem::IsCursorForceUnlocked() || !m_SceneFocused) && m_SceneFocusCooldown == 0)
                                 {
                                     if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                                     {
                                         m_SceneFocused = true;
                                         m_SceneFocusCooldown = 10;
-                                        InputSystem::SetCursorMode(CursorMode::Disabled);
-                                        InputSystem::SetMouseToCenter();
+                                        InputSystem::SetCursorForceUnlocked(false);
                                     }
                                 }
 
@@ -5109,18 +5103,6 @@ namespace ignite
                             drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
                             drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
                             drawList->PopClipRect();
-                        }
-
-                        {
-                            constexpr float padding = 18.0f;
-                            float yPosition = 6.0f;
-                            const float fps = ImGui::GetIO().Framerate;
-                            std::string statusStr = std::format("FPS {:.7}", fps);
-                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFF00FF00, statusStr.c_str());
-
-                            yPosition += padding;
-                            statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFF00FF00, statusStr.c_str());
                         }
 
                         ImGui::SetCursorScreenPos(baseImagePos);
@@ -5620,16 +5602,17 @@ namespace ignite
 
     bool ScenePanel::OnKeyPressedEvent(KeyPressedEvent &event)
     {
-        if (m_SceneFocused)
+        const bool shiftPressed = InputSystem::IsModifierPressed(KeyMod::Shift)
+            || InputSystem::IsModifierPressed(KeyMod::LeftShift)
+            || InputSystem::IsModifierPressed(KeyMod::RightShift);
+
+        if (m_Scene && m_Scene->IsRunning() && event.GetKeyCode() == Key::F1 && shiftPressed)
         {
-            if (m_Scene && m_Scene->IsRunning() && event.GetKeyCode() == Key::F1 && InputSystem::IsModifierPressed(KeyMod::LeftShift))
-            {
-                m_SceneFocused = false;
-                m_SceneFocusCooldown = 10;
-                InputSystem::SetCursorMode(CursorMode::Normal);
-                LOG_INFO("Scene play/simulate focused state released");
-                return true;
-            }
+            m_SceneFocused = false;
+            m_SceneFocusCooldown = 10;
+            InputSystem::SetCursorForceUnlocked(true);
+            LOG_INFO("Scene play/simulate cursor force-unlocked (Shift + F1)");
+            return true;
         }
         return false;
     }

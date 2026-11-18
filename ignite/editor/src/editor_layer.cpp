@@ -154,6 +154,8 @@ namespace ignite
             }
         }
 
+        SceneManager::SetStopCallback([this]() { OnSceneStop(); });
+
         if (Application::GetInstance()->GetCreateInfo().useGui && Application::GetInstance()->GetWindow())
         {
             Application::GetInstance()->GetWindow()->Show();
@@ -163,6 +165,7 @@ namespace ignite
     void EditorLayer::OnDetach()
     {
         Layer::OnDetach();
+        SceneManager::SetStopCallback(nullptr);
 
         if (s_Instance == this)
         {
@@ -298,6 +301,8 @@ namespace ignite
         }
 
         AssetManager::GetInstance()->OnUpdate(deltaTime);
+
+        SyncActiveSceneFromProject();
 
         // update panels
         if (m_ActiveScene)
@@ -600,6 +605,7 @@ namespace ignite
         }
 
         FrameContext *frameContext = Renderer::GetCurrentFrameContext();
+        const bool hasSeparateGameplayView = m_State.gameplayViewportWindow && m_ScenePanel->m_Data.sceneViewportGameplayVisible;
 
         // Render to Edit Viewport
         if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
@@ -608,19 +614,23 @@ namespace ignite
             {
                 case ESceneState::Play:
                 {
-                    if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+                    if (!hasSeparateGameplayView)
                     {
-                        auto &cc = primaryCam.GetComponent<CameraComponent>();
-                        // Copy the live view matrix from the game camera into our editor-side mirror camera.
-                        // The projection is already sized to the Editor Viewport, so both viewports are independent.
-                        m_EditorPlayCamera.SetView(cc.camera.GetView());
-                        m_EditorPlayCamera.position = cc.camera.position;
+                        if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
                         {
-                            IGN_PROFILE_SCOPE("SceneRenderer::RenderPlayToEditorViewport");
-                            m_SceneRenderer->Render(&m_EditorPlayCamera, frameContext, false);
+                            auto &cc = primaryCam.GetComponent<CameraComponent>();
+                            // Copy the live view matrix from the game camera into our editor-side mirror camera.
+                            // The projection is already sized to the Editor Viewport, so both viewports are independent.
+                            m_EditorPlayCamera.SetView(cc.camera.GetView());
+                            m_EditorPlayCamera.position = cc.camera.position;
+                            {
+                                IGN_PROFILE_SCOPE("SceneRenderer::RenderPlayToEditorViewport");
+                                m_SceneRenderer->Render(&m_EditorPlayCamera, frameContext, false);
+                            }
+                            break;
                         }
-                        break;
                     }
+                    [[fallthrough]];
                 }
                 case ESceneState::Simulate:
                 case ESceneState::Stop:
@@ -1150,6 +1160,27 @@ namespace ignite
         GameUISystem::SetSceneContext(scene.get());
     }
 
+    void EditorLayer::SyncActiveSceneFromProject()
+    {
+        if (!m_ActiveProject)
+            return;
+
+        Ref<Scene> projectScene = m_ActiveProject->LockActiveScene();
+        if (!projectScene || projectScene == m_ActiveScene)
+            return;
+
+        // Only auto-sync when a runtime transition occurs while playing/simulating.
+        if (!m_ActiveScene || (!m_ActiveScene->IsRunning() && !projectScene->IsRunning()))
+            return;
+
+        SetActiveScene(projectScene);
+        if (m_ActiveScene && !m_ActiveScene->IsRunning())
+        {
+            m_ActiveScene->OnStart(ESceneState::Play);
+        }
+        m_FixedAccumulator = 0.0f;
+    }
+
     void EditorLayer::EnterPrefabIsolation(AssetHandle prefabHandle)
     {
         if (m_InPrefabIsolationMode)
@@ -1569,6 +1600,8 @@ namespace ignite
 
         if (m_ActiveScene)
             m_ActiveScene->OnStop();
+
+        InputSystem::ResetCursorState();
 
         SetActiveScene(m_EditorScene);
     }

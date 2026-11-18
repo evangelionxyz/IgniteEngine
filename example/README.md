@@ -1,3 +1,14 @@
+# Ignite Engine — Multiplayer PBR FPS + Lua/C# Hybrid Example
+
+> **New Default Experience (`Assets/Scenes/FPSMenu.ixscene` -> `Assets/Scenes/FPSArena.ixscene`)**:
+> Boots into a 3D interactive Main Menu (`FPS_MainMenu.wdgt` + C# `FPSMenuController`) with hover/click audio and a rotating Khronos PBR `DamagedHelmet`, then transitions via mouse UI input into the **Vanguard PBR Multiplayer Arena**:
+> - **Hybrid C# + Lua Scripting**: C# handles UI menus/HUD (`FPSMenuController`, `FPSHudController`), server lifecycle (`FPSServerManager`), and FPS movement/shooting (`FPSPlayerController`). Lua drives reactive dynamic targets (`Scripts/fps_target.lua`), rotating showcase props (`Scripts/fps_ambient_prop.lua`), and a 3D world scoreboard + diagnostics overlay (`Scripts/fps_lua_hud_bridge.lua`).
+> - **Dedicated Server (`Ignite.Network.exe`)**: Launch headless dedicated server on `127.0.0.1:8192` via `Ignite.Network.exe --port 8192 --project example/PlatformerDemo.ixproj --scene Assets/Scenes/FPSArena.ixscene --tickrate 60`.
+> - **Rough-to-Metallic PBR Gallery**: 10 calibrated materials from `Mat_RoughConcrete` (R=0.96, M=0.0) up to `Mat_MirrorChrome` (R=0.06, M=1.0), plus Khronos `DamagedHelmet`, `BoxTextured`, `Duck`, and `RobotExpressive`.
+> - **FPS Controls**: `WASD` Move | `Shift` Sprint | `Space` Jump | `LMB` Fire | `1/2` Switch Rifle / Plasma Carbine | `R` Reload | `Tab`/`Esc` Open Tactical Mouse UI Overlay | `F2` Connect/Disconnect Dedicated | `F5` Reset Targets | `F9` Toggle Lua Bridge Telemetry.
+
+---
+
 # Ignite Engine — Lua 3D Platformer, Multiplayer, Physics & Debug Font Feature Demo
 
 This example project demonstrates Ignite Engine's Lua 5.4 gameplay scripting, Jolt 3D physics simulation (including constraints and motorized joints), ENet-backed client-server multiplayer networking with live telemetry, GPU particle systems, rigged skeletal animation state machines, and both **World-Space** and **Screen-Space** MSDF font rendering (including live debug entity-name overlays).

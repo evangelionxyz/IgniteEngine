@@ -60,8 +60,10 @@ namespace ignite
 
     AssetSceneRenderer::~AssetSceneRenderer()
     {
-        m_StaticMeshBindingSets.clear();
-        m_AnimatedBindingSets.clear();
+        GPUUploadSync::DeviceWaitIdle(m_Device);
+        ClearRetainedCommandBufferAssets();
+
+        m_FrameUniforms.clear();
 
         m_StaticGeometryPipelineCache.clear();
         m_StaticTransparentPipelineCache.clear();
@@ -82,42 +84,43 @@ namespace ignite
         m_Has2DPreRenderCache = false;
     }
 
-    void AssetSceneRenderer::EnsureBindingSets(FrameContext *frameContext)
+    AssetSceneRenderer::PreviewFrameUniforms *AssetSceneRenderer::EnsureFrameUniforms(FrameContext *frameContext)
     {
         if (!frameContext)
-            return;
+            return nullptr;
 
-        if (m_StaticMeshBindingSets.find(frameContext) != m_StaticMeshBindingSets.end())
-            return;
+        if (auto it = m_FrameUniforms.find(frameContext); it != m_FrameUniforms.end())
+            return it->second.get();
 
-        if (frameContext->staticMeshBindingSet && frameContext->animatedBindingSet)
-        {
-            m_StaticMeshBindingSets[frameContext] = frameContext->staticMeshBindingSet;
-            m_AnimatedBindingSets[frameContext] = frameContext->animatedBindingSet;
-            return;
-        }
+        // Allocate per-FrameContext uniform buffers owned by this AssetSceneRenderer so preview
+        // rendering never overwrites the main SceneRenderer's in-flight camera/scene/lighting UBOs.
+        auto uniforms = CreateRef<PreviewFrameUniforms>();
 
         BindingSetDesc staticDesc;
         staticDesc.AddItem(BindingSetItem::PushConstants(0, sizeof(uint32_t)));
-        staticDesc.AddItem(BindingSetItem::ConstantBuffer(1, frameContext->cameraBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(1, uniforms->cameraBuffer.GetDescriptor()));
         staticDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(2, frameContext->objectBuffer.GetDescriptor()));
         staticDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(3, frameContext->instanceIndexBuffer.GetDescriptor()));
-        staticDesc.AddItem(BindingSetItem::ConstantBuffer(4, frameContext->sceneBuffer.GetDescriptor()));
-        staticDesc.AddItem(BindingSetItem::ConstantBuffer(5, frameContext->csmBuffer.GetDescriptor()));
-        staticDesc.AddItem(BindingSetItem::ConstantBuffer(6, frameContext->pointLightBuffer.GetDescriptor()));
-        staticDesc.AddItem(BindingSetItem::ConstantBuffer(7, frameContext->spotLightBuffer.GetDescriptor()));
-        m_StaticMeshBindingSets[frameContext] = BindingSet::Create(staticDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_STATIC), 0);
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(4, uniforms->sceneBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(5, uniforms->csmBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(6, uniforms->pointLightBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(7, uniforms->spotLightBuffer.GetDescriptor()));
+        uniforms->staticMeshBindingSet = BindingSet::Create(staticDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_STATIC), 0);
 
         BindingSetDesc animDesc;
         animDesc.AddItem(BindingSetItem::PushConstants(0, sizeof(uint32_t)));
-        animDesc.AddItem(BindingSetItem::ConstantBuffer(1, frameContext->cameraBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(1, uniforms->cameraBuffer.GetDescriptor()));
         animDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(2, frameContext->objectBuffer.GetDescriptor()));
         animDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(3, frameContext->boneBuffer.GetDescriptor()));
-        animDesc.AddItem(BindingSetItem::ConstantBuffer(4, frameContext->sceneBuffer.GetDescriptor()));
-        animDesc.AddItem(BindingSetItem::ConstantBuffer(5, frameContext->csmBuffer.GetDescriptor()));
-        animDesc.AddItem(BindingSetItem::ConstantBuffer(6, frameContext->pointLightBuffer.GetDescriptor()));
-        animDesc.AddItem(BindingSetItem::ConstantBuffer(7, frameContext->spotLightBuffer.GetDescriptor()));
-        m_AnimatedBindingSets[frameContext] = BindingSet::Create(animDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_ANIM), 0);
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(4, uniforms->sceneBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(5, uniforms->csmBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(6, uniforms->pointLightBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(7, uniforms->spotLightBuffer.GetDescriptor()));
+        uniforms->animatedBindingSet = BindingSet::Create(animDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_ANIM), 0);
+
+        PreviewFrameUniforms *ptr = uniforms.get();
+        m_FrameUniforms.emplace(frameContext, std::move(uniforms));
+        return ptr;
     }
 
     // ---------------------------------------------------------------------------
@@ -210,6 +213,14 @@ namespace ignite
         m_PreviewMouseHovered = hovered;
     }
 
+    void AssetSceneRenderer::SetPreviewCanvasTransform(uint32_t canvasWidth, uint32_t canvasHeight, const glm::vec2 &pan, float zoom)
+    {
+        m_PreviewCanvasWidth  = canvasWidth;
+        m_PreviewCanvasHeight = canvasHeight;
+        m_PreviewPan          = pan;
+        m_PreviewZoom         = std::max(zoom, 0.01f);
+    }
+
     void AssetSceneRenderer::Render(ICamera *camera, FrameContext *frameContext, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT)
     {
         SyncRuntimeMaterialFromSource();
@@ -224,6 +235,9 @@ namespace ignite
         }
 
         nri::CommandBuffer *cmd = BeginCommandBuffer();
+        RetainRenderTargetForCurrentCommandBuffer(sceneRT);
+        RetainRenderTargetForCurrentCommandBuffer(uiRT);
+        RetainRenderTargetForCurrentCommandBuffer(compositeRT);
 
         // Reload environment
         if (!m_EnvironmentTextureLoadAttempted && m_UseEnvironment)
@@ -266,22 +280,34 @@ namespace ignite
             }
         }
 
-        EnsureBindingSets(frameContext);
+        PreviewFrameUniforms *uniforms = EnsureFrameUniforms(frameContext);
+        if (!uniforms)
+        {
+            SubmitCommandBuffer(cmd);
+            return;
+        }
+
+        // Asset preview does not run a shadow pass; ensure the CSM depth array is in SHADER_RESOURCE
+        // layout before mesh shaders sample/bind it.
+        if (m_CascadedShadowMap)
+        {
+            m_CascadedShadowMap->EnsureShaderResourceLayout(cmd, 0);
+        }
 
         CameraBufferData cameraBufferData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-        frameContext->cameraBuffer.SetData(cmd, &cameraBufferData, sizeof(CameraBufferData));
-        frameContext->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(Scene_GPUData));
+        uniforms->cameraBuffer.SetData(cmd, &cameraBufferData, sizeof(CameraBufferData));
+        uniforms->sceneBuffer.SetData(cmd, &m_SceneGPUData, sizeof(Scene_GPUData));
         {
             // Cascaded Shadow Map — disabled in preview (shadowStrength = 0)
             CSM_GPUData csmGpuData = {};
             csmGpuData.cascadeIndex = -1;
             csmGpuData.shadowStrength = 0.0f;
-            frameContext->csmBuffer.SetData(cmd, &csmGpuData, sizeof(csmGpuData));
+            uniforms->csmBuffer.SetData(cmd, &csmGpuData, sizeof(csmGpuData));
 
             PointLightBufferData pointLightData = {};
             SpotLightBufferData spotLightData = {};
-            frameContext->pointLightBuffer.SetData(cmd, &pointLightData, sizeof(pointLightData));
-            frameContext->spotLightBuffer.SetData(cmd, &spotLightData, sizeof(spotLightData));
+            uniforms->pointLightBuffer.SetData(cmd, &pointLightData, sizeof(pointLightData));
+            uniforms->spotLightBuffer.SetData(cmd, &spotLightData, sizeof(spotLightData));
         }
 
         uiRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
@@ -292,15 +318,17 @@ namespace ignite
         sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
+        compositeRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+
         if (m_Environment && m_UseEnvironment)
         {
-            DrawEnvironment(cmd, camera, sceneRT.get(), frameContext);
+            DrawEnvironment(cmd, camera, sceneRT.get(), *uniforms);
         }
 
         if (hasMeshPreview)
         {
-            DrawPreviewStaticMesh(cmd, sceneRT.get(), frameContext);
-            DrawPreviewSkeletalMesh(cmd, sceneRT.get(), frameContext);
+            DrawPreviewStaticMesh(cmd, sceneRT.get(), frameContext, *uniforms);
+            DrawPreviewSkeletalMesh(cmd, sceneRT.get(), frameContext, *uniforms);
         }
 
         if (m_PreviewWidget)
@@ -313,6 +341,14 @@ namespace ignite
                 m_WidgetRenderer->Resize(width, height);
             }
 
+            const uint32_t canvasW = m_PreviewCanvasWidth > 0 ? m_PreviewCanvasWidth : width;
+            const uint32_t canvasH = m_PreviewCanvasHeight > 0 ? m_PreviewCanvasHeight : height;
+            m_WidgetRenderer->SetCanvasSize(canvasW, canvasH);
+
+            const glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(m_PreviewPan.x, m_PreviewPan.y, 0.0f))
+                * glm::scale(glm::mat4(1.0f), glm::vec3(m_PreviewZoom, m_PreviewZoom, 1.0f));
+            m_WidgetRenderer->SetViewMatrix(view);
+
             if (m_PreviewMouseHovered)
             {
                 m_WidgetRenderer->SetMousePosition(m_PreviewMouseX, m_PreviewMouseY);
@@ -323,15 +359,15 @@ namespace ignite
                 m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
             }
 
-            m_WidgetRenderer->Update(0.0f);
+            m_WidgetRenderer->Update(1.0f / 60.0f);
             m_WidgetRenderer->Render(cmd, uiRT.get());
         }
 
-        CompositePass(cmd, camera, compositeRT.get(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
+        CompositePass(cmd, camera, compositeRT.get(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), uniforms->compositePostProcessBuffer);
         SubmitCommandBuffer(cmd);
     }
 
-    Ref<Texture> AssetSceneRenderer::GetEnvironmentMapColorTexture() const
+    Ref<Texture> AssetSceneRenderer::GetEnvironmentMapColorTexture()
     {
         if (!m_Environment)
             return m_DefaultEnvTexture ? m_DefaultEnvTexture : nullptr;
@@ -381,7 +417,7 @@ namespace ignite
     // ---------------------------------------------------------------------------
     // DrawEnvironment
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawEnvironment(nri::CommandBuffer *cmd, [[maybe_unused]] ICamera *camera, RenderTarget *rt, FrameContext *frameContext)
+    void AssetSceneRenderer::DrawEnvironment(nri::CommandBuffer *cmd, [[maybe_unused]] ICamera *camera, RenderTarget *rt, PreviewFrameUniforms &uniforms)
     {
         Ref<GraphicsPipeline> envPipeline;
         if (auto it = m_EnvironmentPipelineCache.find(rt); it != m_EnvironmentPipelineCache.end())
@@ -422,7 +458,7 @@ namespace ignite
             }
         }
 
-        m_Environment->Draw(cmd, rt, envPipeline, frameContext->cameraBuffer, frameContext->sceneBuffer);
+        m_Environment->Draw(cmd, rt, envPipeline, uniforms.cameraBuffer, uniforms.sceneBuffer);
     }
 
     // ---------------------------------------------------------------------------
@@ -437,7 +473,8 @@ namespace ignite
     // no global state is shared between the two mesh types.
     // ---------------------------------------------------------------------------
     template<typename MeshT>
-    void AssetSceneRenderer::DrawPreviewMeshImpl(const Ref<MeshT> &mesh, nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext,
+    void AssetSceneRenderer::DrawPreviewMeshImpl(const Ref<MeshT> &mesh, nri::CommandBuffer *cmd, RenderTarget *rt,
+        FrameContext *frameContext, PreviewFrameUniforms &uniforms,
         const char *vertexShaderPath, const char *pixelShaderPath, EBindingLayout meshBindingLayout,
         std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> &opaqueCache,
         std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> &transparentCache)
@@ -456,6 +493,7 @@ namespace ignite
         if (!m_RuntimeMaterial->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
             return;
 
+        RetainAssetForCurrentCommandBuffer(m_RuntimeMaterial);
         m_RuntimeMaterial->UploadToGpu(cmd);
 
         for (auto &meshInstance : mesh->GetMeshInstances())
@@ -600,12 +638,10 @@ namespace ignite
                 baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &PushConstant_ObjectIndex, 1);
             }
 
-            EnsureBindingSets(frameContext);
-
-            Ref<BindingSet> meshBindingSet = m_StaticMeshBindingSets[frameContext];
+            Ref<BindingSet> meshBindingSet = uniforms.staticMeshBindingSet;
             if constexpr (isSkeletal)
             {
-                meshBindingSet = m_AnimatedBindingSets[frameContext];
+                meshBindingSet = uniforms.animatedBindingSet;
             }
 
             const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
@@ -658,9 +694,9 @@ namespace ignite
     // Uses the static-mesh shaders and its own pipeline cache pair so it never
     // collides with the skeletal-mesh pipeline cache.
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawPreviewStaticMesh(nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext)
+    void AssetSceneRenderer::DrawPreviewStaticMesh(nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext, PreviewFrameUniforms &uniforms)
     {
-        DrawPreviewMeshImpl(m_PreviewStaticMesh, cmd, rt, frameContext,
+        DrawPreviewMeshImpl(m_PreviewStaticMesh, cmd, rt, frameContext, uniforms,
             "resources/shaders/mesh_static.vertex.hlsl",
             "resources/shaders/mesh_static.pixel.hlsl",
             EBindingLayout::MESH_STATIC,
@@ -672,9 +708,9 @@ namespace ignite
     // DrawPreviewSkeletalMesh — delegates to the generic template.
     // Uses the animated-mesh shaders and its own pipeline cache pair.
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::DrawPreviewSkeletalMesh(nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext)
+    void AssetSceneRenderer::DrawPreviewSkeletalMesh(nri::CommandBuffer *cmd, RenderTarget *rt, FrameContext *frameContext, PreviewFrameUniforms &uniforms)
     {
-        DrawPreviewMeshImpl(m_PreviewSkeletalMesh, cmd, rt, frameContext,
+        DrawPreviewMeshImpl(m_PreviewSkeletalMesh, cmd, rt, frameContext, uniforms,
             "resources/shaders/mesh_anim.vertex.hlsl",
             "resources/shaders/mesh_anim.pixel.hlsl",
             EBindingLayout::MESH_ANIM,
@@ -685,7 +721,7 @@ namespace ignite
     // ---------------------------------------------------------------------------
     // CompositePass
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::CompositePass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
+    void AssetSceneRenderer::CompositePass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, ConstantBuffer &postProcessBuffer)
     {
         if (!cmd || !rt || !sceneTexture || !uiTexture)
             return;
@@ -715,7 +751,7 @@ namespace ignite
             m_PostProcessingData.blurAmount = camera->lens.blurAmount;
         }
 
-        m_CompositePostProcessBuffer.SetData(cmd, &m_PostProcessingData, sizeof(m_PostProcessingData));
+        postProcessBuffer.SetData(cmd, &m_PostProcessingData, sizeof(m_PostProcessingData));
 
         Ref<GraphicsPipeline> pipeline;
         if (auto it = m_CompositePipelineCache.find(rt); it != m_CompositePipelineCache.end())
@@ -767,7 +803,7 @@ namespace ignite
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(6, Renderer::GetBlackTexture()->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(7, Renderer::GetBlackUIntTexture()->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(8, Renderer::GetBlackTexture()->GetShaderResourceView()));
-        bindingSetDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_CompositePostProcessBuffer.GetDescriptor()));
+        bindingSetDesc.AddItem(BindingSetItem::ConstantBuffer(0, postProcessBuffer.GetDescriptor()));
         bindingSetDesc.AddItem(BindingSetItem::Sampler(0, m_CompositeSampler));
 
         Ref<BindingSet> bindingSet = BindingCache::GetOrCreateBindingSet(bindingSetDesc, pipeline->GetPipelineLayout(), 0);

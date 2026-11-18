@@ -186,12 +186,41 @@ void main(uint3 dispatchId : SV_DispatchThreadID)
                 }
                 else if (p.emitterType == 2) // Spark
                 {
-                    // Sparks glimmer near end of life
-                    if (t > 0.7)
+                    // Physical floor bounce in arena
+                    if (p.position.y < 0.04 && p.velocity.y < 0.0)
                     {
-                        float glitter = step(0.3, frac(sin(float(id) * 43758.5453 + p.lifetime * 50.0)));
-                        p.color.rgb *= (0.5 + 0.5 * glitter);
+                        p.position.y = 0.04;
+                        p.velocity.y = -p.velocity.y * 0.48;
+                        p.velocity.xz *= 0.82;
                     }
+
+                    // Sparks glimmer near end of life
+                    if (t > 0.65)
+                    {
+                        float glitter = step(0.28, frac(sin(float(id) * 43758.5453 + p.lifetime * 55.0)));
+                        p.color.rgb *= (0.55 + 0.65 * glitter);
+                    }
+                }
+                else if (p.emitterType == 4) // Plasma
+                {
+                    // Helical vortex turbulence
+                    float phase = p.lifetime * 18.0 + float(id % 31u) * 0.45;
+                    float3 swirl = float3(cos(phase), sin(phase * 0.7) * 0.4, sin(phase)) * 2.2;
+                    p.position += swirl * sim.deltaTime;
+                    p.color.rgb *= (1.0 + 0.25 * sin(phase * 2.0));
+                }
+                else if (p.emitterType == 5) // MuzzleFlash
+                {
+                    // Fast star expansion then pinch
+                    float flashCurve = sin(t * 3.14159265);
+                    p.size = lerp(p.endSize, p.startSize * 1.35, flashCurve);
+                    p.color.rgb *= (1.5 - 0.8 * t);
+                }
+                else if (p.emitterType == 6) // Shockwave
+                {
+                    float ringT = sqrt(t);
+                    p.size = lerp(p.startSize, p.endSize, ringT);
+                    p.color.a = p.startColor.a * pow(saturate(1.0 - t), 1.4);
                 }
             }
 

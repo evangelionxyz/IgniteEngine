@@ -16,6 +16,8 @@ namespace ignite
 {
 	InputSystem* InputSystem::s_ActiveSystem = nullptr;
 	Window* InputSystem::s_Window = nullptr;
+	static bool s_SyntheticMouseOverride = false;
+	static glm::vec2 s_SyntheticMousePos = { 0.0f, 0.0f };
 
 	void InputSystem::Init()
 	{
@@ -97,6 +99,10 @@ namespace ignite
 
 	glm::vec2 InputSystem::GetGameplayMousePosition()
 	{
+		if (s_SyntheticMouseOverride)
+		{
+			return s_SyntheticMousePos;
+		}
 		if (auto* gameSystem = dynamic_cast<GameInputSystem*>(s_ActiveSystem))
 		{
 			return gameSystem->GetGameplayMousePosition();
@@ -114,11 +120,34 @@ namespace ignite
 
 	bool InputSystem::IsGameplayMousePositionEnabled()
 	{
+		if (s_SyntheticMouseOverride)
+		{
+			return true;
+		}
 		if (auto* gameSystem = dynamic_cast<GameInputSystem*>(s_ActiveSystem))
 		{
 			return gameSystem->IsGameplayMousePositionEnabled();
 		}
 		return false;
+	}
+
+	void InputSystem::SetSyntheticMouseOverride(bool enabled, float x, float y)
+	{
+		s_SyntheticMouseOverride = enabled;
+		s_SyntheticMousePos = { x, y };
+		if (enabled)
+		{
+			SetGameplayMousePosition(x, y, true);
+			if (s_ActiveSystem)
+			{
+				s_ActiveSystem->SetMousePosition(static_cast<int>(x), static_cast<int>(y));
+			}
+		}
+	}
+
+	bool InputSystem::IsSyntheticMouseOverrideActive()
+	{
+		return s_SyntheticMouseOverride;
 	}
 
 	void InputSystem::SetActiveSystem(InputSystem* system)
@@ -164,6 +193,46 @@ namespace ignite
 			return s_ActiveSystem->m_CursorMode;
 		}
 		return CursorMode::Normal;
+	}
+
+	CursorMode InputSystem::GetRequestedCursorMode()
+	{
+		if (s_ActiveSystem)
+		{
+			return s_ActiveSystem->m_RequestedCursorMode;
+		}
+		return CursorMode::Normal;
+	}
+
+	void InputSystem::SetCursorForceUnlocked(bool forceUnlocked)
+	{
+		if (s_ActiveSystem)
+		{
+			s_ActiveSystem->SetCursorForceUnlockedImpl(forceUnlocked);
+		}
+	}
+
+	bool InputSystem::IsCursorForceUnlocked()
+	{
+		if (s_ActiveSystem)
+		{
+			return s_ActiveSystem->m_CursorForceUnlocked;
+		}
+		return false;
+	}
+
+	void InputSystem::ResetCursorState()
+	{
+		if (s_ActiveSystem)
+		{
+			s_ActiveSystem->ResetCursorStateImpl();
+		}
+		else if (s_Window)
+		{
+			SDL_SetWindowRelativeMouseMode(s_Window->GetWindowHandle(), false);
+			SDL_CaptureMouse(false);
+			SDL_ShowCursor();
+		}
 	}
 
 	bool InputSystem::IsKeyPressedImpl(KeyCode keycode) const
@@ -342,9 +411,9 @@ namespace ignite
 		m_MouseDelta = glm::vec2(0.0f);
 	}
 
-	void InputSystem::SetCursorModeImpl(CursorMode mode)
+	void InputSystem::ApplyCursorModeToWindow(CursorMode mode, bool forceApply)
 	{
-		if (m_CursorMode == mode)
+		if (!forceApply && m_CursorMode == mode)
 			return;
 
 		m_CursorMode = mode;
@@ -357,18 +426,21 @@ namespace ignite
 		case CursorMode::Normal:
 		{
 			SDL_SetWindowRelativeMouseMode(s_Window->GetWindowHandle(), false);
+			SDL_CaptureMouse(false);
 			SDL_ShowCursor();
 			break;
 		}
 		case CursorMode::Hidden:
 		{
 			SDL_SetWindowRelativeMouseMode(s_Window->GetWindowHandle(), false);
+			SDL_CaptureMouse(false);
 			SDL_HideCursor();
 			break;
 		}
 		case CursorMode::Disabled:
 		{
 			SDL_SetWindowRelativeMouseMode(s_Window->GetWindowHandle(), true);
+			SDL_HideCursor();
 			break;
 		}
 		case CursorMode::Captured:
@@ -381,6 +453,43 @@ namespace ignite
 		default:
 			break;
 		}
+	}
+
+	void InputSystem::SetCursorModeImpl(CursorMode mode)
+	{
+		m_RequestedCursorMode = mode;
+
+		if (m_CursorForceUnlocked && mode != CursorMode::Normal)
+		{
+			ApplyCursorModeToWindow(CursorMode::Normal);
+			return;
+		}
+
+		ApplyCursorModeToWindow(mode);
+	}
+
+	void InputSystem::SetCursorForceUnlockedImpl(bool forceUnlocked)
+	{
+		m_CursorForceUnlocked = forceUnlocked;
+		if (m_CursorForceUnlocked)
+		{
+			ApplyCursorModeToWindow(CursorMode::Normal, true);
+		}
+		else
+		{
+			ApplyCursorModeToWindow(m_RequestedCursorMode, true);
+			if (m_RequestedCursorMode == CursorMode::Disabled)
+			{
+				SetMouseToCenter();
+			}
+		}
+	}
+
+	void InputSystem::ResetCursorStateImpl()
+	{
+		m_RequestedCursorMode = CursorMode::Normal;
+		m_CursorForceUnlocked = false;
+		ApplyCursorModeToWindow(CursorMode::Normal, true);
 	}
 
 	void EditorInputSystem::ProcessEvent(SDL_Event* event)
@@ -396,7 +505,11 @@ namespace ignite
 			SetModifier(KeyMod::RightShift, event->key.mod & SDL_KMOD_RSHIFT);
 			SetModifier(KeyMod::LeftControl, event->key.mod & SDL_KMOD_LCTRL);
 			SetModifier(KeyMod::RightControl, event->key.mod & SDL_KMOD_RCTRL);
-			SetKey(event->key.key, true);
+			// Reserve Shift+F1 for editor cursor force-unlock so game input never receives it.
+			if (!(event->key.key == SDLK_F1 && (event->key.mod & SDL_KMOD_SHIFT)))
+			{
+				SetKey(event->key.key, true);
+			}
 			break;
 		case SDL_EVENT_KEY_UP:
 			SetModifier(KeyMod::Shift, event->key.mod & SDL_KMOD_SHIFT);
@@ -442,7 +555,11 @@ namespace ignite
 			SetModifier(KeyMod::RightShift, event->key.mod & SDL_KMOD_RSHIFT);
 			SetModifier(KeyMod::LeftControl, event->key.mod & SDL_KMOD_LCTRL);
 			SetModifier(KeyMod::RightControl, event->key.mod & SDL_KMOD_RCTRL);
-			SetKey(event->key.key, true);
+			// Reserve Shift+F1 for editor cursor force-unlock so game input never receives it.
+			if (!(event->key.key == SDLK_F1 && (event->key.mod & SDL_KMOD_SHIFT)))
+			{
+				SetKey(event->key.key, true);
+			}
 			break;
 		case SDL_EVENT_KEY_UP:
 			SetModifier(KeyMod::Shift, event->key.mod & SDL_KMOD_SHIFT);

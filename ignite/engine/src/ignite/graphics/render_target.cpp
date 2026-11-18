@@ -4,6 +4,7 @@
 
 #include "ignite/core/device/device_manager.hpp"
 #include "render_target.hpp"
+#include "binding_cache.hpp"
 #include "texture.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
@@ -304,6 +305,10 @@ namespace ignite
         m_ColorAttachments = std::move(newColorAttachments);
 
         CreateFramebuffer();
+
+        // Invalidate cached descriptor sets referencing destroyed attachment views so newly
+        // allocated descriptors at recycled heap addresses cannot hit stale VkDescriptorSets.
+        BindingCache::Clear();
     }
 
     Ref<Texture> RenderTarget::GetColorAttachment(uint32_t index) const

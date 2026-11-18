@@ -66,7 +66,8 @@ namespace ignite
     nri::CommandBuffer *ISceneRenderer::BeginCommandBuffer()
     {
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
-        auto &slot = m_CommandBufferSlots[m_CurrentSlotIndex];
+        m_ActiveSlotIndex = m_CurrentSlotIndex;
+        auto &slot = m_CommandBufferSlots[m_ActiveSlotIndex];
         m_CurrentSlotIndex = (m_CurrentSlotIndex + 1) % static_cast<uint32_t>(m_CommandBufferSlots.size());
 
         if (m_CommandFence && slot.fenceValue > 0 && nri.GetFenceValue(*m_CommandFence) < slot.fenceValue)
@@ -74,8 +75,14 @@ namespace ignite
             nri.Wait(*m_CommandFence, slot.fenceValue);
         }
 
+        // GPU has completed previous execution of this slot; safe to release retained assets.
+        slot.retainedAssets.clear();
+        slot.retainedAssetSet.clear();
+        slot.retainedRenderTargets.clear();
+
         nri.ResetCommandAllocator(*slot.allocator);
         nri.BeginCommandBuffer(*slot.commandBuffer, BindlessSystem::GetDescriptorPool());
+        m_IsCommandBufferRecording = true;
         return slot.commandBuffer;
     }
 
@@ -83,6 +90,8 @@ namespace ignite
     {
         if (!cmd)
             return;
+
+        m_IsCommandBufferRecording = false;
 
         auto *deviceManager = DeviceManager::GetInstance();
         const auto &nri = deviceManager->GetCoreInterface();
@@ -137,6 +146,53 @@ namespace ignite
                 slot.fenceValue = signalValue;
                 break;
             }
+        }
+    }
+
+    void ISceneRenderer::WaitForPreviousCommandBuffer()
+    {
+        if (!m_CommandFence || m_NextFenceValue <= 1)
+            return;
+
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        const uint64_t lastSubmittedFenceValue = m_NextFenceValue - 1;
+        if (nri.GetFenceValue(*m_CommandFence) < lastSubmittedFenceValue)
+        {
+            nri.Wait(*m_CommandFence, lastSubmittedFenceValue);
+        }
+    }
+
+    void ISceneRenderer::RetainAssetForCurrentCommandBuffer(const Ref<Asset> &asset)
+    {
+        if (!asset || !m_IsCommandBufferRecording)
+            return;
+
+        auto &slot = m_CommandBufferSlots[m_ActiveSlotIndex];
+        if (slot.retainedAssetSet.insert(asset.get()).second)
+        {
+            slot.retainedAssets.push_back(asset);
+        }
+    }
+
+    void ISceneRenderer::RetainRenderTargetForCurrentCommandBuffer(const Ref<RenderTarget> &renderTarget)
+    {
+        if (!renderTarget || !m_IsCommandBufferRecording)
+            return;
+
+        auto &slot = m_CommandBufferSlots[m_ActiveSlotIndex];
+        if (std::find(slot.retainedRenderTargets.begin(), slot.retainedRenderTargets.end(), renderTarget) == slot.retainedRenderTargets.end())
+        {
+            slot.retainedRenderTargets.push_back(renderTarget);
+        }
+    }
+
+    void ISceneRenderer::ClearRetainedCommandBufferAssets()
+    {
+        for (auto &slot : m_CommandBufferSlots)
+        {
+            slot.retainedAssets.clear();
+            slot.retainedAssetSet.clear();
+            slot.retainedRenderTargets.clear();
         }
     }
 
@@ -233,6 +289,7 @@ namespace ignite
 
         if (material)
         {
+            RetainAssetForCurrentCommandBuffer(material);
             if (!material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
             {
                 return nullptr;
@@ -245,6 +302,7 @@ namespace ignite
     ISceneRenderer::~ISceneRenderer()
     {
         GPUUploadSync::DeviceWaitIdle(m_Device);
+        ClearRetainedCommandBufferAssets();
 
         auto *deviceManager = DeviceManager::GetInstance();
         if (deviceManager)
@@ -317,12 +375,12 @@ namespace ignite
         m_Has2DPreRenderCache = false;
     }
 
-    Ref<Texture> ISceneRenderer::GetEnvironmentMapColorTexture() const
+    Ref<Texture> ISceneRenderer::GetEnvironmentMapColorTexture()
     {
         return nullptr;
     }
 
-    Ref<Texture> ISceneRenderer::GetCascadedShadowMapDepthTexture() const
+    Ref<Texture> ISceneRenderer::GetCascadedShadowMapDepthTexture()
     {
         return m_CascadedShadowMap ? m_CascadedShadowMap->GetDepthTexture() : nullptr;
     }

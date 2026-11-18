@@ -1,0 +1,1175 @@
+{
+    "Widget": {
+        "Version": 4096,
+        "Name": "FPS_MainMenu",
+        "Enabled": true,
+        "BlocksWidgetsBelow": false,
+        "Items": [
+            {
+                "Name": "Root",
+                "ID": 0,
+                "ParentID": 0,
+                "Type": 0,
+                "ZIndex": 0,
+                "Position": [
+                    0.0,
+                    0.0
+                ],
+                "WidthMode": 2,
+                "HeightMode": 2,
+                "Width": 1920.0,
+                "Height": 1080.0,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 3,
+                "HorizontalAlignment": 3,
+                "PositionType": 0,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426
+            },
+            {
+                "Name": "MainMenuCard",
+                "ID": 1,
+                "ParentID": 0,
+                "Type": 0,
+                "ZIndex": 2,
+                "Position": [
+                    54.0,
+                    -31.0
+                ],
+                "WidthMode": 1,
+                "HeightMode": 1,
+                "Width": 520.0,
+                "Height": 459.0,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 1,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.9200000166893005
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.9399999976158142
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": true,
+                "ShadowColor": [
+                    0.0,
+                    0.009999999776482582,
+                    0.029999999329447746,
+                    0.6200000047683716
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    7.0
+                ],
+                "ShadowSize": 7.5,
+                "ShadowSoftness": 0.2800000011920929
+            },
+            {
+                "Name": "MenuTitleLabel",
+                "ID": 3,
+                "ParentID": 1,
+                "Type": 2,
+                "ZIndex": 4,
+                "Position": [
+                    34.0,
+                    26.0
+                ],
+                "WidthMode": 0,
+                "HeightMode": 0,
+                "Width": 259.437255859375,
+                "Height": 20.752164840698242,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426,
+                "Text": "IGNITE // VANGUARD FPS",
+                "Color": [
+                    0.9599999785423279,
+                    0.9900000095367432,
+                    1.0,
+                    1.0
+                ],
+                "FontHandle": 100028,
+                "FontSize": 26.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
+                "Name": "MenuSubtitleLabel",
+                "ID": 4,
+                "ParentID": 1,
+                "Type": 2,
+                "ZIndex": 4,
+                "Position": [
+                    34.0,
+                    62.0
+                ],
+                "WidthMode": 0,
+                "HeightMode": 0,
+                "Width": 324.8951721191406,
+                "Height": 10.376082420349121,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426,
+                "Text": "COMPETITIVE ARENA  |  PBR SHOWCASE  |  ENET MULTIPLAYER",
+                "Color": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    0.9599999785423279
+                ],
+                "FontHandle": 100028,
+                "FontSize": 13.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
+                "Name": "MenuStatusLabel",
+                "ID": 5,
+                "ParentID": 1,
+                "Type": 2,
+                "ZIndex": 4,
+                "Position": [
+                    34.0,
+                    92.0
+                ],
+                "WidthMode": 0,
+                "HeightMode": 0,
+                "Width": 260.89544677734375,
+                "Height": 9.204544067382813,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426,
+                "Text": "STATUS: READY TO DEPLOY -> 127.0.0.1:8192",
+                "Color": [
+                    1.0,
+                    0.8399999737739563,
+                    0.30000001192092896,
+                    0.9800000190734863
+                ],
+                "FontHandle": 100028,
+                "FontSize": 14.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
+                "Name": "MenuPulseTrack",
+                "ID": 6,
+                "ParentID": 1,
+                "Type": 0,
+                "ZIndex": 3,
+                "Position": [
+                    34.0,
+                    120.0
+                ],
+                "WidthMode": 1,
+                "HeightMode": 1,
+                "Width": 452.0,
+                "Height": 6.0,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.2199999988079071,
+                    0.21881355345249176,
+                    0.08000001311302185,
+                    0.8999999761581421
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 3.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426
+            },
+            {
+                "Name": "MenuPulseFill",
+                "ID": 7,
+                "ParentID": 6,
+                "Type": 0,
+                "ZIndex": 4,
+                "Position": [
+                    0.0,
+                    0.0
+                ],
+                "WidthMode": 1,
+                "HeightMode": 1,
+                "Width": 180.0,
+                "Height": 6.0,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    1.0,
+                    0.7881355285644531,
+                    0.0,
+                    0.9800000190734863
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 3.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426
+            },
+            {
+                "Name": "EnterArenaButton",
+                "ID": 10,
+                "ParentID": 1,
+                "Type": 1,
+                "ZIndex": 5,
+                "Position": [
+                    34.0,
+                    150.0
+                ],
+                "WidthMode": 1,
+                "HeightMode": 1,
+                "Width": 452.0,
+                "Height": 54.0,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.48235294222831726,
+                    0.4313725531101227,
+                    0.10588235408067703,
+                    0.9490196108818054
+                ],
+                "BorderColor": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": true,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.5799999833106995
+                ],
+                "ShadowOffset": [
+                    1.0,
+                    5.0
+                ],
+                "ShadowSize": 6.0,
+                "ShadowSoftness": 0.3400000035762787,
+                "ImageHandle": 0,
+                "NormalColor": [
+                    0.48235294222831726,
+                    0.4313725531101227,
+                    0.10588235408067703,
+                    0.9490196108818054
+                ],
+                "HoverColor": [
+                    0.7923728823661804,
+                    0.7063294649124146,
+                    0.15780305862426758,
+                    1.0
+                ],
+                "PressedColor": [
+                    0.05000000074505806,
+                    0.1599999964237213,
+                    0.25999999046325684,
+                    1.0
+                ],
+                "DisabledColor": [
+                    0.1599999964237213,
+                    0.18000000715255737,
+                    0.2199999988079071,
+                    0.550000011920929
+                ],
+                "FontHandle": 100028,
+                "Text": "DEPLOY TO ARENA (CONNECT 127.0.0.1:8192)",
+                "TextColor": [
+                    0.9599999785423279,
+                    0.9900000095367432,
+                    1.0,
+                    1.0
+                ],
+                "FontSize": 15.5,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
+                "Name": "StartLocalMatchButton",
+                "ID": 11,
+                "ParentID": 1,
+                "Type": 1,
+                "ZIndex": 5,
+                "Position": [
+                    34.0,
+                    218.0
+                ],
+                "WidthMode": 1,
+                "HeightMode": 1,
+                "Width": 452.0,
+                "Height": 50.0,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.48235294222831726,
+                    0.4313725531101227,
+                    0.10588235408067703,
+                    0.9490196108818054
+                ],
+                "BorderColor": [
+                    1.0,
+                    0.7799999713897705,
+                    0.25,
+                    0.9200000166893005
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": true,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.5799999833106995
+                ],
+                "ShadowOffset": [
+                    1.0,
+                    5.0
+                ],
+                "ShadowSize": 6.0,
+                "ShadowSoftness": 0.3400000035762787,
+                "ImageHandle": 0,
+                "NormalColor": [
+                    0.48235294222831726,
+                    0.4313725531101227,
+                    0.10588235408067703,
+                    0.9490196108818054
+                ],
+                "HoverColor": [
+                    0.7921568751335144,
+                    0.7058823704719543,
+                    0.1568627506494522,
+                    1.0
+                ],
+                "PressedColor": [
+                    0.03999999910593033,
+                    0.07999999821186066,
+                    0.15000000596046448,
+                    1.0
+                ],
+                "DisabledColor": [
+                    0.1599999964237213,
+                    0.18000000715255737,
+                    0.2199999988079071,
+                    0.550000011920929
+                ],
+                "FontHandle": 100028,
+                "Text": "SOLO COMPETITIVE PRACTICE & PBR LAB",
+                "TextColor": [
+                    0.9599999785423279,
+                    0.9900000095367432,
+                    1.0,
+                    1.0
+                ],
+                "FontSize": 15.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
+                "Name": "InspectWeaponsButton",
+                "ID": 12,
+                "ParentID": 1,
+                "Type": 1,
+                "ZIndex": 5,
+                "Position": [
+                    34.0,
+                    282.0
+                ],
+                "WidthMode": 1,
+                "HeightMode": 1,
+                "Width": 452.0,
+                "Height": 50.0,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.48235294222831726,
+                    0.4313725531101227,
+                    0.10588235408067703,
+                    0.9490196108818054
+                ],
+                "BorderColor": [
+                    0.25999999046325684,
+                    0.9200000166893005,
+                    0.6800000071525574,
+                    0.8999999761581421
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": true,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.5799999833106995
+                ],
+                "ShadowOffset": [
+                    1.0,
+                    5.0
+                ],
+                "ShadowSize": 6.0,
+                "ShadowSoftness": 0.3400000035762787,
+                "ImageHandle": 0,
+                "NormalColor": [
+                    0.48235294222831726,
+                    0.4313725531101227,
+                    0.10588235408067703,
+                    0.9490196108818054
+                ],
+                "HoverColor": [
+                    0.7921568751335144,
+                    0.7058823704719543,
+                    0.1568627506494522,
+                    1.0
+                ],
+                "PressedColor": [
+                    0.03999999910593033,
+                    0.07999999821186066,
+                    0.15000000596046448,
+                    1.0
+                ],
+                "DisabledColor": [
+                    0.1599999964237213,
+                    0.18000000715255737,
+                    0.2199999988079071,
+                    0.550000011920929
+                ],
+                "FontHandle": 100028,
+                "Text": "CYCLE SHOWCASE LOADOUT & TELEMETRY",
+                "TextColor": [
+                    0.9599999785423279,
+                    0.9900000095367432,
+                    1.0,
+                    1.0
+                ],
+                "FontSize": 15.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
+                "Name": "QuitGameButton",
+                "ID": 13,
+                "ParentID": 1,
+                "Type": 1,
+                "ZIndex": 5,
+                "Position": [
+                    34.0,
+                    346.0
+                ],
+                "WidthMode": 1,
+                "HeightMode": 1,
+                "Width": 452.0,
+                "Height": 50.0,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.30084747076034546,
+                    0.30084747076034546,
+                    0.30084747076034546,
+                    0.949999988079071
+                ],
+                "BorderColor": [
+                    1.0,
+                    0.36000001430511475,
+                    0.36000001430511475,
+                    0.9200000166893005
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": true,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.5799999833106995
+                ],
+                "ShadowOffset": [
+                    1.0,
+                    5.0
+                ],
+                "ShadowSize": 6.0,
+                "ShadowSoftness": 0.3400000035762787,
+                "ImageHandle": 0,
+                "NormalColor": [
+                    0.30084747076034546,
+                    0.30084747076034546,
+                    0.30084747076034546,
+                    0.949999988079071
+                ],
+                "HoverColor": [
+                    0.3799999952316284,
+                    0.10000000149011612,
+                    0.14000000059604645,
+                    0.9900000095367432
+                ],
+                "PressedColor": [
+                    0.15000000596046448,
+                    0.03999999910593033,
+                    0.05999999865889549,
+                    1.0
+                ],
+                "DisabledColor": [
+                    0.1599999964237213,
+                    0.18000000715255737,
+                    0.2199999988079071,
+                    0.550000011920929
+                ],
+                "FontHandle": 100028,
+                "Text": "EXIT TO DESKTOP",
+                "TextColor": [
+                    0.9599999785423279,
+                    0.9900000095367432,
+                    1.0,
+                    1.0
+                ],
+                "FontSize": 15.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
+                "Name": "MenuControlsFooter",
+                "ID": 15,
+                "ParentID": 1,
+                "Type": 2,
+                "ZIndex": 4,
+                "Position": [
+                    34.0,
+                    416.0
+                ],
+                "WidthMode": 0,
+                "HeightMode": 0,
+                "Width": 457.6424255371094,
+                "Height": 13.640692710876465,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426,
+                "Text": "ENTER / SPACE: Deploy | WASD + SHIFT: Fast Movement | LMB: Fire",
+                "Color": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    0.9200000166893005
+                ],
+                "FontHandle": 100028,
+                "FontSize": 16.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            }
+        ],
+        "ChildWidgets": []
+    }
+}

@@ -108,6 +108,7 @@ namespace ignite
         void OpenProject(const std::filesystem::path &filepath);
 
         void SetActiveScene(const Ref<Scene> &scene);
+        void SyncActiveSceneFromProject();
 
         void EnterPrefabIsolation(AssetHandle prefabHandle);
         void ExitPrefabIsolation(bool save = true);

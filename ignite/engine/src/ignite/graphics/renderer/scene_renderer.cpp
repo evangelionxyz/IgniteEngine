@@ -171,6 +171,7 @@ namespace ignite
     void SceneRenderer::BeginFrame()
     {
         m_ResizeWaitedThisFrame = false;
+        m_ViewsRenderedThisFrame = 0;
         m_Has2DPreRenderCache = false;
         if (m_Renderer2D)
         {
@@ -218,6 +219,7 @@ namespace ignite
         m_SSAOs.clear();
 
         m_ResolvedAssetsCache.clear();
+        ClearRetainedCommandBufferAssets();
         m_FramePacket.Clear();
         m_ScreenCameraBuffer.reset();
 
@@ -342,26 +344,29 @@ namespace ignite
             plan.hasEnvironment = true;
         }
 
-        // 5. Check for Widgets & Screen Space Text
-        if (m_Scene->GetRootWidget() != nullptr)
+        // 5. Check for Widgets & Screen Space Text (only on non-debug / gameplay camera views)
+        if (!drawDebug)
         {
-            plan.hasWidgets = true;
-        }
-
-        if (!m_Scene->GetDebugScreenTexts().empty())
-        {
-            plan.hasScreenText = true;
-        }
-        else
-        {
-            auto textView = registry->view<TransformComponent, RenderingComponent, TextComponent>();
-            for (entt::entity e : textView)
+            if (m_Scene->GetRootWidget() != nullptr)
             {
-                const auto &[tr, rc, text] = registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
-                if (rc.visible && !text.text.empty() && text.screenSpace)
+                plan.hasWidgets = true;
+            }
+
+            if (!m_Scene->GetDebugScreenTexts().empty())
+            {
+                plan.hasScreenText = true;
+            }
+            else
+            {
+                auto textView = registry->view<TransformComponent, RenderingComponent, TextComponent>();
+                for (entt::entity e : textView)
                 {
-                    plan.hasScreenText = true;
-                    break;
+                    const auto &[tr, rc, text] = registry->get<TransformComponent, RenderingComponent, TextComponent>(e);
+                    if (rc.visible && !text.text.empty() && text.screenSpace)
+                    {
+                        plan.hasScreenText = true;
+                        break;
+                    }
                 }
             }
         }
@@ -418,6 +423,21 @@ namespace ignite
 
         if (!camera)
             return;
+
+        if (m_ViewsRenderedThisFrame > 0)
+        {
+            // When rendering multiple viewports in the same frame (e.g. Editor Viewport + Game Viewport),
+            // wait for the previous camera's command buffer to complete before modifying shared
+            // FrameContext constant buffers (cameraBuffer, csmBuffer, etc.) and shared CSM depth maps.
+            WaitForPreviousCommandBuffer();
+            if (frameContext)
+            {
+                frameContext->objectAllocator.BeginFrame();
+                frameContext->boneAllocator.BeginFrame();
+                frameContext->instanceIndexAllocator.BeginFrame();
+            }
+        }
+        ++m_ViewsRenderedThisFrame;
 
         Ref<CameraRenderTarget> target = GetOrCreateRenderTarget(camera);
         if (!target)
@@ -1289,6 +1309,12 @@ namespace ignite
             sceneCascadeData.cascadeIndex = -1;
             sceneCascadeData.shadowStrength = 0.0f;
             frameContext->csmBuffer.SetData(&sceneCascadeData, sizeof(sceneCascadeData));
+            if (m_CascadedShadowMap)
+            {
+                m_CascadedShadowMap->EnsureShaderResourceLayout(cmd, 0);
+                if (frameContext && frameContext->frameIndexInFlight != 0)
+                    m_CascadedShadowMap->EnsureShaderResourceLayout(cmd, frameContext->frameIndexInFlight);
+            }
             return;
         }
 
@@ -1498,6 +1524,7 @@ namespace ignite
 
         if (m_RuntimeMaterial)
         {
+            RetainAssetForCurrentCommandBuffer(m_RuntimeMaterial);
             m_RuntimeMaterial->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
         }
 
@@ -1840,7 +1867,10 @@ namespace ignite
                 }
 
                 const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                pc.system->Simulate(cmd, dt, tr.world.translation, pc.settings);
+                if (m_ViewsRenderedThisFrame <= 1)
+                {
+                    pc.system->Simulate(cmd, dt, tr.world.translation, pc.settings);
+                }
                 pc.system->Render(cmd, camera, framebuffer, pc.settings, objectID);
             }
         }
@@ -1951,7 +1981,9 @@ namespace ignite
 
                     const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
-                    Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
+                    Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : nullptr;
+                    if (!font)
+                        font = Renderer::GetDefaultFont();
                     if (!font)
                         continue;
 
@@ -2068,7 +2100,7 @@ namespace ignite
                     static_cast<uint32_t>(std::max(mousePos.y, 0)));
             }
 
-            m_WidgetRenderer->Update(0.0f);
+            m_WidgetRenderer->Update(Application::GetDeltaTime());
             m_WidgetRenderer->Render(cmd, framebuffer);
         }
 
@@ -2112,7 +2144,9 @@ namespace ignite
                     if (!rc.visible || !text.screenSpace || text.text.empty())
                         continue;
 
-                    Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
+                    Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : nullptr;
+                    if (!font)
+                        font = Renderer::GetDefaultFont();
                     if (!font || !font->GetAtlasTexture() || !font->GetAtlasTexture()->IsReady())
                         continue;
 
@@ -3016,7 +3050,7 @@ namespace ignite
             compositeFramebuffer->EndRendering(cmd);
     }
 
-    Ref<Texture> SceneRenderer::GetCascadedShadowMapDepthTexture() const
+    Ref<Texture> SceneRenderer::GetCascadedShadowMapDepthTexture()
     {
         FrameContext *frameContext = Renderer::GetCurrentFrameContext();
         return m_CascadedShadowMap ? m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight) : nullptr;
@@ -3027,7 +3061,7 @@ namespace ignite
         return m_CascadedShadowMap;
     }
 
-    Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
+    Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture()
     {
         if (!m_WorldEnvironment || !m_WorldEnvironment->environment)
             return nullptr;

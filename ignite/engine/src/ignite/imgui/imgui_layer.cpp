@@ -4,6 +4,7 @@
 
 #include "imgui_layer.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -429,6 +430,33 @@ namespace ignite
 
         imguiNRI->UpdateFontTexture();
 
+        {
+            const CursorMode cursorMode = InputSystem::GetCursorMode();
+            const bool cursorHiddenOrLocked = (cursorMode == CursorMode::Disabled || cursorMode == CursorMode::Hidden);
+            const bool cursorLocked = (cursorMode == CursorMode::Disabled);
+
+            ImGuiIO &io = ImGui::GetIO();
+            if (cursorHiddenOrLocked)
+                io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+            else
+                io.ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+
+            if (cursorLocked)
+            {
+                if (!(io.ConfigFlags & ImGuiConfigFlags_NoMouse))
+                {
+                    for (int button = 0; button < 5; ++button)
+                        io.AddMouseButtonEvent(button, false);
+                    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+                }
+                io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+            }
+            else
+            {
+                io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+            }
+        }
+
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
@@ -499,18 +527,24 @@ namespace ignite
             }
         }
 
-        if (m_BlockEvents)
+        const bool cursorLocked = (InputSystem::GetCursorMode() == CursorMode::Disabled);
+        if (m_BlockEvents || cursorLocked)
         {
             const bool isMouseEvent = (patchedEvent.type == SDL_EVENT_MOUSE_MOTION
                 || patchedEvent.type == SDL_EVENT_MOUSE_BUTTON_DOWN
                 || patchedEvent.type == SDL_EVENT_MOUSE_BUTTON_UP
                 || patchedEvent.type == SDL_EVENT_MOUSE_WHEEL);
-            const bool isKeyEvent = (patchedEvent.type == SDL_EVENT_KEY_DOWN
-                || patchedEvent.type == SDL_EVENT_KEY_UP
-                || patchedEvent.type == SDL_EVENT_TEXT_INPUT);
-
-            if (isMouseEvent || isKeyEvent)
+            if (isMouseEvent)
                 return;
+
+            if (m_BlockEvents)
+            {
+                const bool isKeyEvent = (patchedEvent.type == SDL_EVENT_KEY_DOWN
+                    || patchedEvent.type == SDL_EVENT_KEY_UP
+                    || patchedEvent.type == SDL_EVENT_TEXT_INPUT);
+                if (isKeyEvent)
+                    return;
+            }
         }
 
         ImGui_ImplSDL3_ProcessEvent(&patchedEvent);

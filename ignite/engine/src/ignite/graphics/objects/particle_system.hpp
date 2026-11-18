@@ -30,7 +30,10 @@ namespace ignite
         Smoke = 0,
         Fire = 1,
         Spark = 2,
-        Custom = 3
+        Custom = 3,
+        Plasma = 4,
+        MuzzleFlash = 5,
+        Shockwave = 6
     };
 
     enum class ParticleBlendMode : uint32_t
@@ -141,6 +144,78 @@ namespace ignite
             s.velocityAlignment = 1.0f; // Stretches along trajectory
             return s;
         }
+
+        static inline ParticleEmitterSettings CreatePlasma()
+        {
+            ParticleEmitterSettings s;
+            s.type = ParticleEmitterType::Plasma;
+            s.blendMode = ParticleBlendMode::Additive;
+            s.maxParticles = 3000;
+            s.emissionRate = 95.0f;
+            s.lifetimeMin = 0.25f;
+            s.lifetimeMax = 0.75f;
+            s.velocityMin = glm::vec3(-4.2f, -1.5f, -4.2f);
+            s.velocityMax = glm::vec3(4.2f, 5.2f, 4.2f);
+            s.acceleration = glm::vec3(0.0f, 1.2f, 0.0f);
+            s.drag = 1.8f;
+            s.startColor = glm::vec4(0.25f, 0.95f, 1.0f, 1.0f); // Electric cyan plasma
+            s.endColor = glm::vec4(0.1f, 0.35f, 1.0f, 0.0f);
+            s.startSize = glm::vec2(0.24f, 0.24f);
+            s.endSize = glm::vec2(0.04f, 0.04f);
+            s.rotationSpeedMin = -4.0f;
+            s.rotationSpeedMax = 4.0f;
+            s.spawnRadius = 0.14f;
+            s.velocityAlignment = 0.35f;
+            return s;
+        }
+
+        static inline ParticleEmitterSettings CreateMuzzleFlash()
+        {
+            ParticleEmitterSettings s;
+            s.type = ParticleEmitterType::MuzzleFlash;
+            s.blendMode = ParticleBlendMode::Additive;
+            s.maxParticles = 1024;
+            s.emissionRate = 0.0f; // Triggered via EmitBurst on weapon fire
+            s.lifetimeMin = 0.04f;
+            s.lifetimeMax = 0.12f;
+            s.velocityMin = glm::vec3(-2.4f, -2.4f, -2.4f);
+            s.velocityMax = glm::vec3(2.4f, 2.4f, 2.4f);
+            s.acceleration = glm::vec3(0.0f, 0.0f, 0.0f);
+            s.drag = 6.0f;
+            s.startColor = glm::vec4(1.0f, 0.92f, 0.55f, 1.0f);
+            s.endColor = glm::vec4(1.0f, 0.35f, 0.05f, 0.0f);
+            s.startSize = glm::vec2(0.28f, 0.28f);
+            s.endSize = glm::vec2(0.05f, 0.05f);
+            s.rotationSpeedMin = -8.0f;
+            s.rotationSpeedMax = 8.0f;
+            s.spawnRadius = 0.04f;
+            s.velocityAlignment = 0.5f;
+            return s;
+        }
+
+        static inline ParticleEmitterSettings CreateShockwave()
+        {
+            ParticleEmitterSettings s;
+            s.type = ParticleEmitterType::Shockwave;
+            s.blendMode = ParticleBlendMode::Additive;
+            s.maxParticles = 1024;
+            s.emissionRate = 30.0f;
+            s.lifetimeMin = 0.25f;
+            s.lifetimeMax = 0.55f;
+            s.velocityMin = glm::vec3(-5.5f, 0.5f, -5.5f);
+            s.velocityMax = glm::vec3(5.5f, 6.5f, 5.5f);
+            s.acceleration = glm::vec3(0.0f, -6.0f, 0.0f);
+            s.drag = 1.5f;
+            s.startColor = glm::vec4(0.35f, 0.95f, 1.0f, 0.95f);
+            s.endColor = glm::vec4(0.05f, 0.45f, 1.0f, 0.0f);
+            s.startSize = glm::vec2(0.18f, 0.18f);
+            s.endSize = glm::vec2(0.65f, 0.65f);
+            s.rotationSpeedMin = -3.0f;
+            s.rotationSpeedMax = 3.0f;
+            s.spawnRadius = 0.18f;
+            s.velocityAlignment = 0.0f;
+            return s;
+        }
     };
 
     struct alignas(16) GPUParticle
@@ -220,6 +295,7 @@ namespace ignite
         void Simulate(nri::CommandBuffer *cmd, float dt, const glm::vec3 &emitterPos, const ParticleEmitterSettings &settings);
         void Render(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, const ParticleEmitterSettings &settings, uint32_t objectID);
         void Reset(nri::CommandBuffer *cmd);
+        void EmitBurst(uint32_t count) { m_PendingBurstCount += count; }
 
         uint32_t GetMaxParticles() const { return m_MaxParticles; }
         uint32_t GetCurrentSpawnIndex() const { return m_CurrentSpawnIndex; }
@@ -237,6 +313,7 @@ namespace ignite
     private:
         uint32_t m_MaxParticles = 5000;
         uint32_t m_CurrentSpawnIndex = 0;
+        uint32_t m_PendingBurstCount = 0;
         float m_SpawnAccumulator = 0.0f;
         float m_TotalTime = 0.0f;
         glm::vec3 m_LastEmitterPosition{ 0.0f };

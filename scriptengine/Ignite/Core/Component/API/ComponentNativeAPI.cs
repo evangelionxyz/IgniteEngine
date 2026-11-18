@@ -426,6 +426,29 @@ public static class ComponentNativeAPI
         public IntPtr TextComponent_SetBillboard;
         public IntPtr TextComponent_GetCenterAlign;
         public IntPtr TextComponent_SetCenterAlign;
+
+        // WidgetComponent extensions
+        public IntPtr WidgetComponent_GetCanvasEnabled;
+        public IntPtr WidgetComponent_SetCanvasEnabled;
+        public IntPtr WidgetComponent_HasItem;
+        public IntPtr WidgetComponent_GetItemVisible;
+        public IntPtr WidgetComponent_SetItemVisible;
+        public IntPtr WidgetComponent_GetItemBackgroundColor;
+        public IntPtr WidgetComponent_SetItemBackgroundColor;
+        public IntPtr WidgetComponent_GetItemBorderColor;
+        public IntPtr WidgetComponent_SetItemBorderColor;
+        public IntPtr WidgetComponent_GetItemOpacity;
+        public IntPtr WidgetComponent_SetItemOpacity;
+        public IntPtr WidgetComponent_GetItemSize;
+        public IntPtr WidgetComponent_SetItemSize;
+        public IntPtr WidgetComponent_GetItemPosition;
+        public IntPtr WidgetComponent_SetItemPosition;
+        public IntPtr WidgetComponent_GetButtonText;
+        public IntPtr WidgetComponent_SetButtonText;
+        public IntPtr WidgetComponent_GetButtonInteractable;
+        public IntPtr WidgetComponent_SetButtonInteractable;
+        public IntPtr WidgetComponent_IsButtonHovered;
+        public IntPtr WidgetComponent_SetButtonColors;
     }
 
     public struct Funcs
@@ -565,6 +588,21 @@ public static class ComponentNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void WidgetComponentSetU64ByNameFn(ulong entityID, IntPtr name, ulong value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentGetBoolByNameFn(ulong entityID, IntPtr name, [MarshalAs(UnmanagedType.I1)] out bool result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentSetBoolByNameFn(ulong entityID, IntPtr name, [MarshalAs(UnmanagedType.I1)] bool value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentGetVec2ByNameFn(ulong entityID, IntPtr name, out NativeObject.Vector2 result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentSetVec2ByNameFn(ulong entityID, IntPtr name, ref NativeObject.Vector2 value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentSetButtonColorsFn(ulong entityID, IntPtr name, ref NativeObject.Vector4 normal, ref NativeObject.Vector4 hover, ref NativeObject.Vector4 pressed);
 
         // ==========================================
         // RigidbodyComponent (3D) and Collider Delegates

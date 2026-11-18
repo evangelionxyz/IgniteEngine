@@ -47,6 +47,8 @@ namespace ignite
 		static glm::vec2 GetGameplayMousePosition();
 		static void SetGameplayMousePosition(float x, float y, bool enabled);
 		static bool IsGameplayMousePositionEnabled();
+		static void SetSyntheticMouseOverride(bool enabled, float x = 0.0f, float y = 0.0f);
+		static bool IsSyntheticMouseOverrideActive();
 
 		static void SetActiveSystem(InputSystem* system);
 		static InputSystem* GetActiveSystem() { return s_ActiveSystem; }
@@ -57,6 +59,10 @@ namespace ignite
 		static void SetMouseToCenter();
 		static void SetCursorMode(CursorMode mode);
 		static CursorMode GetCursorMode();
+		static CursorMode GetRequestedCursorMode();
+		static void SetCursorForceUnlocked(bool forceUnlocked);
+		static bool IsCursorForceUnlocked();
+		static void ResetCursorState();
 
 		// Instance implementations
 		bool IsKeyPressedImpl(KeyCode keycode) const;
@@ -75,6 +81,9 @@ namespace ignite
 		void AddMouseDelta(float dx, float dy);
 		void ResetMouseDelta();
 		void SetCursorModeImpl(CursorMode mode);
+		void SetCursorForceUnlockedImpl(bool forceUnlocked);
+		void ResetCursorStateImpl();
+		void ApplyCursorModeToWindow(CursorMode mode, bool forceApply = false);
 
 	protected:
 		void UpdateActionStateOnKey(KeyCode key, bool pressed);
@@ -88,6 +97,8 @@ namespace ignite
 		glm::ivec2 m_MousePosition{ 0 };
 		glm::vec2 m_MouseDelta{ 0.0f };
 		CursorMode m_CursorMode = CursorMode::Normal;
+		CursorMode m_RequestedCursorMode = CursorMode::Normal;
+		bool m_CursorForceUnlocked = false;
 
 		Ref<class InputMapping> m_InputMapping;
 		std::unordered_map<std::string, int> m_ActionPressCounts;

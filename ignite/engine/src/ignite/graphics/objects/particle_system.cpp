@@ -300,10 +300,12 @@ namespace ignite
         glm::vec3 emitterVelocity = (m_TotalTime > dt) ? (emitterPos - m_LastEmitterPosition) / dt : glm::vec3(0.0f);
         m_LastEmitterPosition = emitterPos;
 
-        // Calculate spawn count for this frame
+        // Calculate spawn count for this frame (continuous emission + immediate bursts)
         m_SpawnAccumulator += settings.emissionRate * dt;
-        uint32_t spawnCount = static_cast<uint32_t>(m_SpawnAccumulator);
-        m_SpawnAccumulator -= static_cast<float>(spawnCount);
+        const uint32_t continuousSpawn = static_cast<uint32_t>(m_SpawnAccumulator);
+        m_SpawnAccumulator -= static_cast<float>(continuousSpawn);
+        uint32_t spawnCount = continuousSpawn + m_PendingBurstCount;
+        m_PendingBurstCount = 0;
         if (spawnCount > m_MaxParticles)
             spawnCount = m_MaxParticles;
 
