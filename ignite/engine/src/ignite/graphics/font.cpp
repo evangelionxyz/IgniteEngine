@@ -87,7 +87,7 @@ namespace ignite
         createInfo.mipLevels = 1;
         createInfo.format = nri::Format::RGBA8_UNORM;
         createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
-        createInfo.samplerLinearFiltering = false;
+        createInfo.samplerLinearFiltering = true;
         createInfo.keepInitialState = true;
         createInfo.keepCpuData = true;
 
@@ -192,11 +192,36 @@ namespace ignite
 	{
         msdfgen::FreetypeHandle *ft = msdfgen::initializeFreetype();
 
-        std::string filepathStr = filepath.generic_string();
+        std::filesystem::path resolvedPath = filepath;
+        std::error_code ec;
+        if (!std::filesystem::exists(resolvedPath, ec))
+        {
+            const std::filesystem::path candidates[] = {
+                filepath.parent_path() / "JetBrainsMono-Bold.ttf",
+                "Assets/Fonts/JetBrainsMono-Bold.ttf",
+                "example/Assets/Fonts/JetBrainsMono-Bold.ttf",
+                "resources/fonts/segoeui.ttf",
+                "ignite/editor/resources/fonts/segoeui.ttf",
+                "C:/Windows/Fonts/consolab.ttf",
+                "C:/Windows/Fonts/segoeuib.ttf",
+                "C:/Windows/Fonts/segoeui.ttf"
+            };
+            for (const auto &candidate : candidates)
+            {
+                if (!candidate.empty() && std::filesystem::exists(candidate, ec))
+                {
+                    resolvedPath = candidate;
+                    break;
+                }
+            }
+        }
+
+        std::string filepathStr = resolvedPath.generic_string();
         msdfgen::FontHandle *font = msdfgen::loadFont(ft, filepathStr.c_str());
         if (!font)
         {
             LOG_ERROR("[Font] Failed to load \"{}\"", filepathStr);
+            msdfgen::deinitializeFreetype(ft);
             return;
         }
 
@@ -221,11 +246,11 @@ namespace ignite
         const int glyphsCount = m_FontGeometry.loadCharset(font, fontScale, charset);
         LOG_INFO("[Font] Loaded {} glyphs from font (out of {})", glyphsCount, charset.size());
 
-        double emSize = 40.0;
+        double emSize = 56.0;
         msdf_atlas::TightAtlasPacker packer;
-        packer.setPixelRange(2.0);
+        packer.setPixelRange(6.0);
         packer.setMiterLimit(1.0);
-        packer.setPadding(0);
+        packer.setPadding(2);
         packer.setScale(emSize);
 
         const int remaining = packer.pack(m_Glyphs.data(), static_cast<int>(m_Glyphs.size()));

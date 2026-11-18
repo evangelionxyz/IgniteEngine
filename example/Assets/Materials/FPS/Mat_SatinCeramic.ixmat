@@ -1,0 +1,87 @@
+{
+    "Material": {
+        "Version": 4096,
+        "Name": "Mat_SatinCeramic",
+        "Type": 0,
+        "CullMode": 1,
+        "BaseColorTextureHandle": 0,
+        "MetallicTextureHandle": 0,
+        "RoughnessTextureHandle": 0,
+        "NormalTextureHandle": 0,
+        "EmissiveTextureHandle": 0,
+        "OcclusionTextureHandle": 0,
+        "GPUData": {
+            "BaseColorFactor": [
+                0.8,
+                0.83,
+                0.86,
+                1.0
+            ],
+            "BaseWeight": 1.0,
+            "RoughnessFactor": 0.48,
+            "RoughnessChannel": 1,
+            "MetallicFactor": 0.12,
+            "MetallicChannel": 2,
+            "SpecularWeight": 1.0,
+            "SpecularIOR": 1.5,
+            "SpecularColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "SpecularAnisotropy": 0.0,
+            "EmissiveFactor": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ],
+            "EmissionLuminance": 1.0,
+            "OcclusionStrength": 1.0,
+            "UseMultiScatter": 1,
+            "TilingFactorX": 1.0,
+            "TilingFactorY": 1.0,
+            "CoatWeight": 0.0,
+            "CoatRoughness": 0.0,
+            "CoatIOR": 1.6,
+            "CoatDarkening": 1.0,
+            "CoatColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "FuzzWeight": 0.0,
+            "FuzzRoughness": 0.5,
+            "FuzzColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "SubsurfaceWeight": 0.0,
+            "SubsurfaceScale": 1.0,
+            "SubsurfaceRadius": [
+                1.0,
+                0.2,
+                0.1,
+                0.0
+            ],
+            "SubsurfaceColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "TransmissionWeight": 0.0,
+            "TransmissionDepth": 0.0,
+            "TransmissionColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ]
+        }
+    }
+}

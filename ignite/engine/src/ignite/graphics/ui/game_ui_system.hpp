@@ -4,6 +4,7 @@
 #define IGN_GAME_UI_SYSTEM_HPP
 
 #include "ignite/core/subsystem.hpp"
+#include <string>
 
 namespace ignite
 {
@@ -18,6 +19,7 @@ namespace ignite
 		static void SetSceneContext(Scene *scene);
 		static bool IsMouseOverUI(float mouseX, float mouseY);
 		static void HandleMouseMotion(float mouseX, float mouseY);
+		static const std::string &GetHoveredItemName();
 	};
 }
 

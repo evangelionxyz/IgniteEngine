@@ -433,6 +433,8 @@ R"(<Project>
             projectSr.AddKeyValue("HandshakeTimeout", m_Info.serverSettings.handshakeTimeoutSec);
             projectSr.AddKeyValue("ChatMinInterval", m_Info.serverSettings.chatMinIntervalSec);
             projectSr.AddKeyValue("AutoStart", m_Info.serverSettings.autoStart);
+            if (!m_Info.serverSettings.defaultScene.empty())
+                projectSr.AddKeyValue("DefaultScene", m_Info.serverSettings.defaultScene);
             projectSr.EndMap();
 
             projectSr.EndMap();
@@ -565,6 +567,7 @@ R"(<Project>
             if (auto n = serverNode["HandshakeTimeout"]) info.serverSettings.handshakeTimeoutSec = n.as<double>();
             if (auto n = serverNode["ChatMinInterval"]) info.serverSettings.chatMinIntervalSec = n.as<double>();
             if (auto n = serverNode["AutoStart"]) info.serverSettings.autoStart = n.as<bool>();
+            if (auto n = serverNode["DefaultScene"]) info.serverSettings.defaultScene = n.as<std::string>();
         }
 
         Ref<Project> project = Project::Create(info);

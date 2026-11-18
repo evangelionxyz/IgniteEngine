@@ -45,6 +45,20 @@ namespace ignite
         tr.world.rotation = rot;
         tr.world.scale = scale;
         tr.dirty = true;
+
+        if (entity.HasComponent<CharacterControllerComponent>())
+        {
+            auto &cc = entity.GetComponent<CharacterControllerComponent>();
+            if (auto charCtrl = cc.character.lock())
+            {
+                charCtrl->SetPosition(pos);
+                charCtrl->SetRotation(rot);
+            }
+            else
+            {
+                cc.dirty = true;
+            }
+        }
     }
 
     static glm::vec3 GetEntityWorldScale(Entity entity)
@@ -57,6 +71,52 @@ namespace ignite
     // =========================================================================
     // Server-Side Replication Implementation
     // =========================================================================
+    namespace
+    {
+        void SyncSpawnedCharacterPhysics(Entity entity, const glm::vec3 &pos, const glm::quat &rot)
+        {
+            if (!entity.IsValid())
+                return;
+
+            if (entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                cc.linearVelocity = glm::vec3(0.0f);
+                cc.desiredVelocity = glm::vec3(0.0f);
+                if (auto charCtrl = cc.character.lock())
+                {
+                    charCtrl->SetPosition(pos);
+                    charCtrl->SetRotation(rot);
+                    charCtrl->SetLinearVelocity(glm::vec3(0.0f));
+                }
+                else
+                {
+                    cc.dirty = true;
+                }
+            }
+        }
+
+        void SetCamerasPrimaryRecursive(Scene *scene, Entity entity, bool primary)
+        {
+            if (!scene || !entity.IsValid())
+                return;
+
+            if (entity.HasComponent<CameraComponent>())
+            {
+                entity.GetComponent<CameraComponent>().primary = primary;
+            }
+
+            if (entity.HasComponent<IDComponent>())
+            {
+                const auto &children = entity.GetComponent<IDComponent>().children;
+                for (UUID childUUID : children)
+                {
+                    SetCamerasPrimaryRecursive(scene, SceneManager::GetEntity(scene, childUUID), primary);
+                }
+            }
+        }
+    }
+
     NetServerReplication::NetServerReplication(Scene *scene, NetServerSystem *serverSystem)
         : m_Scene(scene), m_Server(serverSystem)
     {
@@ -144,6 +204,7 @@ namespace ignite
         }
 
         ApplyEntityTransform(m_Scene, entity, position, rotation, GetEntityWorldScale(entity));
+        SyncSpawnedCharacterPhysics(entity, position, rotation);
 
         if (!entity.HasComponent<NetworkIdentityComponent>())
         {
@@ -473,6 +534,7 @@ namespace ignite
             if (entity.IsValid())
             {
                 SceneManager::RenameEntity(m_Scene, entity, "Player_" + std::to_string(msg.ownerClient));
+                SetCamerasPrimaryRecursive(m_Scene, entity, false);
             }
         }
         else
@@ -509,6 +571,11 @@ namespace ignite
             entity.GetComponent<RenderingComponent>().visible = true;
 
         ApplyEntityTransform(m_Scene, entity, msg.position, msg.rotation, GetEntityWorldScale(entity));
+        SyncSpawnedCharacterPhysics(entity, msg.position, msg.rotation);
+        if (isPlayerAvatar)
+        {
+            SetCamerasPrimaryRecursive(m_Scene, entity, isLocal);
+        }
 
         if (!entity.HasComponent<NetworkIdentityComponent>())
         {

@@ -185,7 +185,8 @@ namespace ignite
                 return nullptr;
             }
 
-            if (FmodAudio::GetFmodSystem()->createDSPByType(dspType, &dsp) != FMOD_OK || !dsp)
+            FMOD::System *fmodSystem = FmodAudio::GetFmodSystem();
+            if (!fmodSystem || fmodSystem->createDSPByType(dspType, &dsp) != FMOD_OK || !dsp)
             {
                 return nullptr;
             }
@@ -468,42 +469,76 @@ namespace ignite
                 return nullptr;
             }
 
-            return assetManager->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle);
+            return assetManager->GetAssetImmediate<WidgetCanvas>(widgetComponent.widgetHandle);
+        }
+
+        static Ref<IWidgetItem> FindWidgetItemInCanvasRecursive(const Ref<WidgetCanvas> &canvas, const std::string &itemName, Ref<WidgetCanvas> *outOwnerCanvas = nullptr)
+        {
+            if (!canvas || itemName.empty())
+            {
+                return nullptr;
+            }
+
+            if (Ref<IWidgetItem> found = canvas->FindItemByName(itemName))
+            {
+                if (outOwnerCanvas) *outOwnerCanvas = canvas;
+                return found;
+            }
+
+            AssetManager *am = AssetManager::GetInstance();
+            if (!am)
+            {
+                return nullptr;
+            }
+
+            for (const WidgetChildEntry &child : canvas->GetChildWidgets())
+            {
+                if (child.handle == AssetHandle(0))
+                    continue;
+                if (Ref<WidgetCanvas> childCanvas = am->GetAssetImmediate<WidgetCanvas>(child.handle))
+                {
+                    if (Ref<IWidgetItem> found = FindWidgetItemInCanvasRecursive(childCanvas, itemName, outOwnerCanvas))
+                    {
+                        return found;
+                    }
+                }
+            }
+            return nullptr;
+        }
+
+        static Ref<IWidgetItem> FindWidgetItem(Entity entity, const std::string &itemName, Ref<WidgetCanvas> *outOwnerCanvas = nullptr)
+        {
+            Ref<WidgetCanvas> widgetCanvas = GetEntityWidgetCanvas(entity);
+            return FindWidgetItemInCanvasRecursive(widgetCanvas, itemName, outOwnerCanvas);
+        }
+
+        static void MarkWidgetLayoutChanged(const Ref<WidgetCanvas> &canvas, const Ref<IWidgetItem> &item)
+        {
+            if (item)
+            {
+                item->MarkLayoutDirty();
+                item->MarkPaintDirty();
+            }
+            if (canvas && canvas->GetRoot())
+            {
+                canvas->GetRoot()->MarkLayoutDirty();
+                canvas->GetRoot()->MarkPaintDirty();
+            }
         }
 
         static Ref<WidgetButton> FindWidgetButton(Entity entity, const std::string &buttonName)
         {
-            if (buttonName.empty())
-            {
-                return nullptr;
-            }
-
-            Ref<WidgetCanvas> widgetCanvas = GetEntityWidgetCanvas(entity);
-            if (!widgetCanvas)
-            {
-                return nullptr;
-            }
-
-            for (const auto &[_, item] : widgetCanvas->GetItems())
-            {
-                if (!item || item->GetWidgetType() != WidgetType::Button)
-                {
-                    continue;
-                }
-
-                if (item->name != buttonName)
-                {
-                    continue;
-                }
-
-                return item->As<WidgetButton>();
-            }
-
-            return nullptr;
+            Ref<IWidgetItem> item = FindWidgetItem(entity, buttonName);
+            return (item && item->GetWidgetType() == WidgetType::Button) ? item->As<WidgetButton>() : nullptr;
         }
 
         static void InvokeWidgetButtonCallbacks(const WidgetButtonEventKey &key)
         {
+            if (!GetEntityByID(key.entityID).IsValid())
+            {
+                return;
+            }
+
             const auto bindingsIt = s_WidgetButtonEventBindings.find(key);
             if (bindingsIt == s_WidgetButtonEventBindings.end() || bindingsIt->second.empty())
             {
@@ -544,7 +579,17 @@ namespace ignite
             const bool hasBindings = bindingsIt != s_WidgetButtonEventBindings.end() && !bindingsIt->second.empty();
 
             const auto callback = hasBindings
-                ? std::function<void()>([key]() { InvokeWidgetButtonCallbacks(key); })
+                ? std::function<void()>([key]()
+                {
+                    if (Application::GetInstance())
+                    {
+                        Application::SubmitToMainThread([key]() { InvokeWidgetButtonCallbacks(key); }, "WidgetButtonEvent");
+                    }
+                    else
+                    {
+                        InvokeWidgetButtonCallbacks(key);
+                    }
+                })
                 : std::function<void()> {};
 
             switch (key.eventType)
@@ -642,16 +687,39 @@ namespace ignite
             return entity.IsValid() ? static_cast<uint64_t>(entity.GetUUID()) : 0;
         }
 
+        static Entity FindChildByNameRecursive(Scene *scene, Entity parent, const std::string &childName)
+        {
+            if (!scene || !parent.IsValid())
+                return Entity{};
+
+            if (!parent.HasComponent<IDComponent>())
+                return Entity{};
+
+            const auto &children = parent.GetComponent<IDComponent>().children;
+            for (UUID childUUID : children)
+            {
+                Entity child = SceneManager::GetEntity(scene, childUUID);
+                if (!child.IsValid())
+                    continue;
+
+                if (child.GetName() == childName)
+                    return child;
+
+                if (Entity found = FindChildByNameRecursive(scene, child, childName); found.IsValid())
+                    return found;
+            }
+
+            return Entity{};
+        }
+
         static uint64_t Entity_FindChildEntityByName(uint64_t entityID, const char *childName)
         {
             Scene *scene = GetSceneContext();
-            if (!scene || entityID == 0 || !childName)
+            if (!scene || entityID == 0 || !childName || childName[0] == '\0')
                 return 0;
 
             Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
-            Entity childEntity = SceneManager::GetEntity(scene, childName);
-            SceneManager::FindChild(scene, entity, childEntity.GetUUID());
-
+            Entity childEntity = FindChildByNameRecursive(scene, entity, std::string(childName));
             return childEntity.IsValid() ? static_cast<uint64_t>(childEntity.GetUUID()) : 0;
         }
 
@@ -927,24 +995,16 @@ namespace ignite
         // Widget Label / Image helper finders
         // =====================================================================
 
-        static Ref<WidgetLabel> FindWidgetLabel(Entity entity, const std::string &name)
+        static Ref<WidgetLabel> FindWidgetLabel(Entity entity, const std::string &name, Ref<WidgetCanvas> *outCanvas = nullptr)
         {
-            Ref<WidgetCanvas> canvas = GetEntityWidgetCanvas(entity);
-            if (!canvas) return nullptr;
-            for (const auto &[_, item] : canvas->GetItems())
-                if (item && item->name == name && item->GetWidgetType() == WidgetType::Label)
-                    return item->As<WidgetLabel>();
-            return nullptr;
+            Ref<IWidgetItem> item = FindWidgetItem(entity, name, outCanvas);
+            return (item && item->GetWidgetType() == WidgetType::Label) ? item->As<WidgetLabel>() : nullptr;
         }
 
-        static Ref<WidgetImage> FindWidgetImage(Entity entity, const std::string &name)
+        static Ref<WidgetImage> FindWidgetImage(Entity entity, const std::string &name, Ref<WidgetCanvas> *outCanvas = nullptr)
         {
-            Ref<WidgetCanvas> canvas = GetEntityWidgetCanvas(entity);
-            if (!canvas) return nullptr;
-            for (const auto &[_, item] : canvas->GetItems())
-                if (item && item->name == name && item->GetWidgetType() == WidgetType::Image)
-                    return item->As<WidgetImage>();
-            return nullptr;
+            Ref<IWidgetItem> item = FindWidgetItem(entity, name, outCanvas);
+            return (item && item->GetWidgetType() == WidgetType::Image) ? item->As<WidgetImage>() : nullptr;
         }
 
         // --- Label ---
@@ -954,21 +1014,26 @@ namespace ignite
             return static_cast<bool>(FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)));
         }
 
+        static std::string s_WidgetLabelTextBuffer;
         static void WidgetComponent_GetLabelText(uint64_t entityID, const char *labelName, const char **result)
         {
             if (!labelName || !result) return;
             if (Ref<WidgetLabel> lbl = FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)))
-                *result = lbl->text.c_str();
+            {
+                s_WidgetLabelTextBuffer = lbl->text;
+                *result = s_WidgetLabelTextBuffer.c_str();
+            }
         }
 
         static void WidgetComponent_SetLabelText(uint64_t entityID, const char *labelName, const char *text)
         {
             if (!labelName || !text) return;
             Entity entity = GetEntityByID(entityID);
-            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName), &ownerCanvas))
             {
                 lbl->text = text;
-                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+                MarkWidgetLayoutChanged(ownerCanvas, lbl);
             }
         }
 
@@ -983,10 +1048,11 @@ namespace ignite
         {
             if (!labelName || !color) return;
             Entity entity = GetEntityByID(entityID);
-            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName), &ownerCanvas))
             {
                 lbl->style.color = *color;
-                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+                MarkWidgetLayoutChanged(ownerCanvas, lbl);
             }
         }
 
@@ -1001,10 +1067,11 @@ namespace ignite
         {
             if (!labelName) return;
             Entity entity = GetEntityByID(entityID);
-            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName), &ownerCanvas))
             {
                 lbl->style.fontSize = size;
-                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+                MarkWidgetLayoutChanged(ownerCanvas, lbl);
             }
         }
 
@@ -1026,11 +1093,214 @@ namespace ignite
         {
             if (!imageName) return;
             Entity entity = GetEntityByID(entityID);
-            if (Ref<WidgetImage> img = FindWidgetImage(entity, std::string(imageName)))
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<WidgetImage> img = FindWidgetImage(entity, std::string(imageName), &ownerCanvas))
             {
                 img->imageHandle = AssetHandle(handle);
                 img->image = nullptr;
-                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+                MarkWidgetLayoutChanged(ownerCanvas, img);
+            }
+        }
+
+        // --- Extended Widget Item / Canvas / Button APIs ---
+        static void WidgetComponent_GetCanvasEnabled(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            Ref<WidgetCanvas> c = GetEntityWidgetCanvas(GetEntityByID(entityID));
+            *result = c ? c->IsEnabled() : false;
+        }
+
+        static void WidgetComponent_SetCanvasEnabled(uint64_t entityID, bool enabled)
+        {
+            if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(GetEntityByID(entityID)))
+            {
+                c->SetEnabled(enabled);
+                if (c->GetRoot()) c->GetRoot()->MarkLayoutDirty();
+            }
+        }
+
+        static bool WidgetComponent_HasItem(uint64_t entityID, const char *itemName)
+        {
+            if (!itemName) return false;
+            return static_cast<bool>(FindWidgetItem(GetEntityByID(entityID), std::string(itemName)));
+        }
+
+        static void WidgetComponent_GetItemVisible(uint64_t entityID, const char *itemName, bool *result)
+        {
+            if (!itemName || !result) return;
+            Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName));
+            *result = item ? item->IsVisible() : false;
+        }
+
+        static void WidgetComponent_SetItemVisible(uint64_t entityID, const char *itemName, bool visible)
+        {
+            if (!itemName) return;
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName), &ownerCanvas))
+            {
+                item->SetVisible(visible);
+                MarkWidgetLayoutChanged(ownerCanvas, item);
+            }
+        }
+
+        static void WidgetComponent_GetItemBackgroundColor(uint64_t entityID, const char *itemName, glm::vec4 *result)
+        {
+            if (!itemName || !result) return;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName)))
+                *result = item->baseStyle.backgroundColor;
+        }
+
+        static void WidgetComponent_SetItemBackgroundColor(uint64_t entityID, const char *itemName, const glm::vec4 *color)
+        {
+            if (!itemName || !color) return;
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName), &ownerCanvas))
+            {
+                item->baseStyle.backgroundColor = *color;
+                MarkWidgetLayoutChanged(ownerCanvas, item);
+            }
+        }
+
+        static void WidgetComponent_GetItemBorderColor(uint64_t entityID, const char *itemName, glm::vec4 *result)
+        {
+            if (!itemName || !result) return;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName)))
+                *result = item->baseStyle.borderColor;
+        }
+
+        static void WidgetComponent_SetItemBorderColor(uint64_t entityID, const char *itemName, const glm::vec4 *color)
+        {
+            if (!itemName || !color) return;
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName), &ownerCanvas))
+            {
+                item->baseStyle.borderColor = *color;
+                if (item->GetWidgetType() == WidgetType::Button)
+                {
+                    item->As<WidgetButton>()->style.borderColor = *color;
+                }
+                MarkWidgetLayoutChanged(ownerCanvas, item);
+            }
+        }
+
+        static void WidgetComponent_GetItemOpacity(uint64_t entityID, const char *itemName, float *result)
+        {
+            if (!itemName || !result) return;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName)))
+                *result = item->baseStyle.opacity;
+        }
+
+        static void WidgetComponent_SetItemOpacity(uint64_t entityID, const char *itemName, float opacity)
+        {
+            if (!itemName) return;
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName), &ownerCanvas))
+            {
+                item->baseStyle.opacity = opacity;
+                MarkWidgetLayoutChanged(ownerCanvas, item);
+            }
+        }
+
+        static void WidgetComponent_GetItemSize(uint64_t entityID, const char *itemName, glm::vec2 *result)
+        {
+            if (!itemName || !result) return;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName)))
+                *result = item->GetSize();
+        }
+
+        static void WidgetComponent_SetItemSize(uint64_t entityID, const char *itemName, const glm::vec2 *size)
+        {
+            if (!itemName || !size) return;
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName), &ownerCanvas))
+            {
+                item->SetSize(*size);
+                MarkWidgetLayoutChanged(ownerCanvas, item);
+            }
+        }
+
+        static void WidgetComponent_GetItemPosition(uint64_t entityID, const char *itemName, glm::vec2 *result)
+        {
+            if (!itemName || !result) return;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName)))
+                *result = item->GetPosition();
+        }
+
+        static void WidgetComponent_SetItemPosition(uint64_t entityID, const char *itemName, const glm::vec2 *pos)
+        {
+            if (!itemName || !pos) return;
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(itemName), &ownerCanvas))
+            {
+                item->SetPosition(*pos);
+                MarkWidgetLayoutChanged(ownerCanvas, item);
+            }
+        }
+
+        static std::string s_WidgetButtonTextBuffer;
+        static void WidgetComponent_GetButtonText(uint64_t entityID, const char *buttonName, const char **result)
+        {
+            if (!buttonName || !result) return;
+            if (Ref<WidgetButton> btn = FindWidgetButton(GetEntityByID(entityID), std::string(buttonName)))
+            {
+                s_WidgetButtonTextBuffer = btn->label ? btn->label->text : "";
+                *result = s_WidgetButtonTextBuffer.c_str();
+            }
+        }
+
+        static void WidgetComponent_SetButtonText(uint64_t entityID, const char *buttonName, const char *text)
+        {
+            if (!buttonName || !text) return;
+            Ref<WidgetCanvas> ownerCanvas;
+            if (Ref<IWidgetItem> item = FindWidgetItem(GetEntityByID(entityID), std::string(buttonName), &ownerCanvas))
+            {
+                if (item->GetWidgetType() == WidgetType::Button)
+                {
+                    Ref<WidgetButton> btn = item->As<WidgetButton>();
+                    if (btn->label)
+                    {
+                        btn->label->text = text;
+                        MarkWidgetLayoutChanged(ownerCanvas, btn);
+                    }
+                }
+            }
+        }
+
+        static void WidgetComponent_GetButtonInteractable(uint64_t entityID, const char *buttonName, bool *result)
+        {
+            if (!buttonName || !result) return;
+            if (Ref<WidgetButton> btn = FindWidgetButton(GetEntityByID(entityID), std::string(buttonName)))
+                *result = btn->interactable;
+        }
+
+        static void WidgetComponent_SetButtonInteractable(uint64_t entityID, const char *buttonName, bool interactable)
+        {
+            if (!buttonName) return;
+            if (Ref<WidgetButton> btn = FindWidgetButton(GetEntityByID(entityID), std::string(buttonName)))
+            {
+                btn->interactable = interactable;
+                if (!interactable)
+                    btn->ResetInteractionState();
+                btn->MarkPaintDirty();
+            }
+        }
+
+        static void WidgetComponent_IsButtonHovered(uint64_t entityID, const char *buttonName, bool *result)
+        {
+            if (!buttonName || !result) return;
+            Ref<WidgetButton> btn = FindWidgetButton(GetEntityByID(entityID), std::string(buttonName));
+            *result = btn ? btn->hovered : false;
+        }
+
+        static void WidgetComponent_SetButtonColors(uint64_t entityID, const char *buttonName, const glm::vec4 *normalColor, const glm::vec4 *hoverColor, const glm::vec4 *pressedColor)
+        {
+            if (!buttonName) return;
+            if (Ref<WidgetButton> btn = FindWidgetButton(GetEntityByID(entityID), std::string(buttonName)))
+            {
+                if (normalColor) btn->style.color = *normalColor;
+                if (hoverColor) btn->style.hoverColor = *hoverColor;
+                if (pressedColor) btn->style.pressedColor = *pressedColor;
+                btn->MarkPaintDirty();
             }
         }
 
@@ -1494,6 +1764,52 @@ namespace ignite
             transform.dirty = true;
         }
 
+        static void SyncEntityWorldTransform(Entity entity, TransformComponent &transform)
+        {
+            Scene *scene = GetSceneContext();
+            if (entity.GetParentUUID() != UUID(0) && scene)
+            {
+                Entity parent = SceneManager::GetEntity(scene, entity.GetParentUUID());
+                if (parent.IsValid() && parent.HasComponent<TransformComponent>())
+                {
+                    const auto &parentTr = parent.GetComponent<TransformComponent>();
+                    const glm::mat4 worldMat = parentTr.world.GetMatrix() * transform.local.GetMatrix();
+                    Transform::Decompose(worldMat, transform.world);
+                }
+                else
+                {
+                    transform.world.translation = transform.local.translation;
+                    transform.world.rotation = transform.local.rotation;
+                    transform.world.scale = transform.local.scale;
+                }
+            }
+            else
+            {
+                transform.world.translation = transform.local.translation;
+                transform.world.rotation = transform.local.rotation;
+                transform.world.scale = transform.local.scale;
+            }
+
+            transform.dirty = true;
+
+            if (scene && entity.HasComponent<IDComponent>())
+            {
+                const auto &idc = entity.GetComponent<IDComponent>();
+                const glm::mat4 parentWorld = transform.world.GetMatrix();
+                for (UUID childUUID : idc.children)
+                {
+                    Entity child = SceneManager::GetEntity(scene, childUUID);
+                    if (child.IsValid() && child.HasComponent<TransformComponent>())
+                    {
+                        auto &childTr = child.GetComponent<TransformComponent>();
+                        const glm::mat4 childWorld = parentWorld * childTr.local.GetMatrix();
+                        Transform::Decompose(childWorld, childTr.world);
+                        childTr.dirty = true;
+                    }
+                }
+            }
+        }
+
         static void TransformComponent_GetTranslation(uint64_t entityID, glm::vec3 *result)
         {
             if (!result)
@@ -1518,8 +1834,16 @@ namespace ignite
 
             auto &transform = entity.GetComponent<TransformComponent>();
             transform.local.translation = *value;
-            transform.world.translation = *value;
-            transform.dirty = true;
+            SyncEntityWorldTransform(entity, transform);
+
+            if (entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto actor = cc.character.lock())
+                {
+                    actor->SetPosition(transform.world.translation);
+                }
+            }
         }
 
         static void TransformComponent_GetRotation(uint64_t entityID, glm::quat *result)
@@ -1546,8 +1870,16 @@ namespace ignite
 
             auto &transform = entity.GetComponent<TransformComponent>();
             transform.local.rotation = *value;
-            transform.world.rotation = *value;
-            transform.dirty = true;
+            SyncEntityWorldTransform(entity, transform);
+
+            if (entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto actor = cc.character.lock())
+                {
+                    actor->SetRotation(transform.world.rotation);
+                }
+            }
         }
 
         static void TransformComponent_GetEulerAngles(uint64_t entityID, glm::vec3 *result)
@@ -1575,8 +1907,16 @@ namespace ignite
             auto &transform = entity.GetComponent<TransformComponent>();
             const glm::quat rotation = glm::quat(*value);
             transform.local.rotation = rotation;
-            transform.world.rotation = rotation;
-            transform.dirty = true;
+            SyncEntityWorldTransform(entity, transform);
+
+            if (entity.HasComponent<CharacterControllerComponent>())
+            {
+                auto &cc = entity.GetComponent<CharacterControllerComponent>();
+                if (auto actor = cc.character.lock())
+                {
+                    actor->SetRotation(transform.world.rotation);
+                }
+            }
         }
 
         static void TransformComponent_GetScale(uint64_t entityID, glm::vec3 *result)
@@ -1603,8 +1943,7 @@ namespace ignite
 
             auto &transform = entity.GetComponent<TransformComponent>();
             transform.local.scale = *value;
-            transform.world.scale = *value;
-            transform.dirty = true;
+            SyncEntityWorldTransform(entity, transform);
         }
 
         static void Sprite2DComponent_SetColor(uint64_t entityID, const glm::vec4 *color)
@@ -4530,12 +4869,27 @@ namespace ignite
             if (e.IsValid() && e.HasComponent<ParticleSystemComponent>())
             {
                 auto &ps = e.GetComponent<ParticleSystemComponent>();
+                if (preset >= 1000)
+                {
+                    const uint32_t burstCount = static_cast<uint32_t>(preset - 1000);
+                    if (!ps.system)
+                    {
+                        ps.system = ParticleSystem::Create(ps.settings.maxParticles);
+                    }
+                    ps.system->EmitBurst(burstCount);
+                    ps.isPlaying = true;
+                    return;
+                }
+
                 switch (static_cast<ParticleEmitterType>(preset))
                 {
-                    case ParticleEmitterType::Fire:  ps.settings = ParticleEmitterSettings::CreateFire(); break;
-                    case ParticleEmitterType::Spark: ps.settings = ParticleEmitterSettings::CreateSpark(); break;
+                    case ParticleEmitterType::Fire:        ps.settings = ParticleEmitterSettings::CreateFire(); break;
+                    case ParticleEmitterType::Spark:       ps.settings = ParticleEmitterSettings::CreateSpark(); break;
+                    case ParticleEmitterType::Plasma:      ps.settings = ParticleEmitterSettings::CreatePlasma(); break;
+                    case ParticleEmitterType::MuzzleFlash: ps.settings = ParticleEmitterSettings::CreateMuzzleFlash(); break;
+                    case ParticleEmitterType::Shockwave:   ps.settings = ParticleEmitterSettings::CreateShockwave(); break;
                     case ParticleEmitterType::Smoke:
-                    default:                         ps.settings = ParticleEmitterSettings::CreateSmoke(); break;
+                    default:                               ps.settings = ParticleEmitterSettings::CreateSmoke(); break;
                 }
             }
         }
@@ -5121,7 +5475,29 @@ namespace ignite
             &TextComponent_GetBillboard,
             &TextComponent_SetBillboard,
             &TextComponent_GetCenterAlign,
-            &TextComponent_SetCenterAlign
+            &TextComponent_SetCenterAlign,
+
+            &WidgetComponent_GetCanvasEnabled,
+            &WidgetComponent_SetCanvasEnabled,
+            &WidgetComponent_HasItem,
+            &WidgetComponent_GetItemVisible,
+            &WidgetComponent_SetItemVisible,
+            &WidgetComponent_GetItemBackgroundColor,
+            &WidgetComponent_SetItemBackgroundColor,
+            &WidgetComponent_GetItemBorderColor,
+            &WidgetComponent_SetItemBorderColor,
+            &WidgetComponent_GetItemOpacity,
+            &WidgetComponent_SetItemOpacity,
+            &WidgetComponent_GetItemSize,
+            &WidgetComponent_SetItemSize,
+            &WidgetComponent_GetItemPosition,
+            &WidgetComponent_SetItemPosition,
+            &WidgetComponent_GetButtonText,
+            &WidgetComponent_SetButtonText,
+            &WidgetComponent_GetButtonInteractable,
+            &WidgetComponent_SetButtonInteractable,
+            &WidgetComponent_IsButtonHovered,
+            &WidgetComponent_SetButtonColors
         };
     }
 

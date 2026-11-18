@@ -4,7 +4,7 @@
         "Name": "PlatformerDemo",
         "AssetPath": "Assets",
         "AssetRegistry": "AssetRegistry.ixreg",
-        "DefaultSceneHandle": 100001,
+        "DefaultSceneHandle": 13231573084348628075,
         "Configuration": "Debug",
         "Physics": {
             "Gravity": [
@@ -89,7 +89,8 @@
             "MaxClients": 32,
             "HandshakeTimeout": 5.0,
             "ChatMinInterval": 0.25,
-            "AutoStart": false
+            "AutoStart": false,
+            "DefaultScene": "Assets/Scenes/FPSArena.ixscene"
         }
     }
 }

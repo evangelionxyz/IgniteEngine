@@ -100,8 +100,8 @@ namespace ignite
         int GetDebugShadowMode() const { return m_SceneGPUData.debugShadow; }
         void SetDebugShadowMode(int debugShadow) { m_SceneGPUData.debugShadow = debugShadow; }
 
-        virtual Ref<Texture> GetEnvironmentMapColorTexture() const override;
-        virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const override;
+        virtual Ref<Texture> GetEnvironmentMapColorTexture() override;
+        virtual Ref<Texture> GetCascadedShadowMapDepthTexture() override;
 
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap() override;
         Ref<Renderer2D> &GetRenderer2D() { return m_Renderer2D; }
@@ -248,6 +248,7 @@ namespace ignite
 
         uint64_t m_TAAFrameIndex = 0;
         bool m_ResizeWaitedThisFrame = false;
+        uint32_t m_ViewsRenderedThisFrame = 0;
 
         std::unordered_map<entt::entity, std::vector<uint32_t>> m_EntityObjectIndexCache;
         std::unordered_map<entt::entity, uint32_t> m_EntityBoneOffsetCache;

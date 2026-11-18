@@ -3816,7 +3816,8 @@
                     "Visible": true
                 },
                 "Script": {
-                    "ClassName": "PlatformerDemo.Scripts.ServerManager"
+                    "ClassName": "PlatformerDemo.Scripts.ServerManager",
+                    "Fields": []
                 }
             },
             {
@@ -4071,8 +4072,8 @@
                     "Material2DHandle": 0,
                     "Text": "3D PLATFORMER COURSE ->",
                     "Color": [
-                        0.4000000059604645,
-                        0.949999988079071,
+                        0.1949148178100586,
+                        0.0,
                         1.0,
                         1.0
                     ],

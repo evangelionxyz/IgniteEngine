@@ -14,6 +14,10 @@ namespace ignite
         float fontSize = 16.0f; // In pixel
         float kerning = 0.0f;
         float lineSpacing = 0.025f;
+
+        bool shadowEnabled = false;
+        glm::vec4 shadowColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.75f);
+        glm::vec2 shadowOffset = glm::vec2(1.5f, 1.5f);
     };
 
     class IGN_API WidgetLabel : public IWidgetItem

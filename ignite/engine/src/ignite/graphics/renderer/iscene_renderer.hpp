@@ -23,6 +23,8 @@
 
 #include <array>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace ignite
 {
@@ -156,8 +158,8 @@ namespace ignite
         SampleMethod GetSampleMethod() const { return sceneRenderSettings.sampleMethod; }
         void SetSampleMethod(SampleMethod method);
 
-        virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
-        virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
+        virtual Ref<Texture> GetEnvironmentMapColorTexture();
+        virtual Ref<Texture> GetCascadedShadowMapDepthTexture();
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap();
 
         template<typename T>
@@ -172,6 +174,7 @@ namespace ignite
                 {
                     if (Ref<StaticMesh> defaultMesh = Renderer::GetDefaultMeshByHandle(handle))
                     {
+                        RetainAssetForCurrentCommandBuffer(defaultMesh);
                         return std::static_pointer_cast<T>(defaultMesh);
                     }
                 }
@@ -183,12 +186,13 @@ namespace ignite
 
             if (auto project = assetManager->LockActiveProject())
             {
-                AssetResolveKey key{ assetManager->LockActiveProject().get(), handle };
+                AssetResolveKey key{ project.get(), handle };
                 auto it = m_ResolvedAssetsCache.find(key);
                 if (it != m_ResolvedAssetsCache.end())
                 {
                     if (Ref<Asset> cached = it->second.lock())
                     {
+                        RetainAssetForCurrentCommandBuffer(cached);
                         return cached->As<T>();
                     }
                     m_ResolvedAssetsCache.erase(it);
@@ -198,6 +202,7 @@ namespace ignite
                 if (asset)
                 {
                     m_ResolvedAssetsCache.emplace(key, asset);
+                    RetainAssetForCurrentCommandBuffer(asset);
                 }
 
                 return asset;
@@ -214,10 +219,17 @@ namespace ignite
             nri::CommandAllocator *allocator = nullptr;
             nri::CommandBuffer *commandBuffer = nullptr;
             uint64_t fenceValue = 0;
+            std::vector<Ref<Asset>> retainedAssets;
+            std::unordered_set<const Asset *> retainedAssetSet;
+            std::vector<Ref<RenderTarget>> retainedRenderTargets;
         };
 
         nri::CommandBuffer *BeginCommandBuffer();
         void SubmitCommandBuffer(nri::CommandBuffer *cmd);
+        void WaitForPreviousCommandBuffer();
+        void RetainAssetForCurrentCommandBuffer(const Ref<Asset> &asset);
+        void RetainRenderTargetForCurrentCommandBuffer(const Ref<RenderTarget> &renderTarget);
+        void ClearRetainedCommandBufferAssets();
 
         static void FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms);
         Ref<Material> ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle);
@@ -255,6 +267,8 @@ namespace ignite
         nri::Fence *m_CommandFence = nullptr;
         uint64_t m_NextFenceValue = 1;
         uint32_t m_CurrentSlotIndex = 0;
+        uint32_t m_ActiveSlotIndex = 0;
+        bool m_IsCommandBufferRecording = false;
 
         // This is the actual viewport resolution
         // Not the scaled one

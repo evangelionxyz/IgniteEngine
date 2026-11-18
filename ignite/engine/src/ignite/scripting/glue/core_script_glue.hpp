@@ -64,6 +64,10 @@ namespace ignite
         uint32_t (*Net_GetChatCount)();
         bool (*Net_GetChatAt)(uint32_t index, uint32_t *outSenderId, const char **outSenderName, const char **outText);
         void (*Net_SetSimulationSettings)(int32_t lagMs, float lossPercent);
+
+        uint64_t (*AssetManager_GetAssetHandleByPath)(const char *filepath);
+        void (*Scene_LoadByPath)(const char *scenePath);
+        void (*Scene_Stop)();
     };
 
     class CoreScriptGlue

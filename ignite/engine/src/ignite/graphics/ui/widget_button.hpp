@@ -15,6 +15,7 @@ namespace ignite
         glm::vec4 color;
         glm::vec4 hoverColor;
         glm::vec4 pressedColor;
+        glm::vec4 disabledColor = { 0.22f, 0.22f, 0.25f, 0.65f };
         glm::vec4 borderColor;
         float cornerRadius = 0.0f;
         float borderWidth = 1.0f;
@@ -25,6 +26,8 @@ namespace ignite
     public:
         bool hovered = false;
         bool pressed = false;
+        float hoverAnim = 0.0f;
+        float pressAnim = 0.0f;
 
         ButtonStyle style;
 
@@ -35,8 +38,10 @@ namespace ignite
     public:
         WidgetButton(const std::string &text, WidgetID wID);
         virtual ~WidgetButton() override;
-        const glm::vec4 &GetCurrentColor() const;
+        glm::vec4 GetCurrentColor() const;
+        void UpdateAnimation(float dt);
 
+        void ResetInteractionState();
         void OnMouseClick(const glm::uvec2 &mousePos, bool isPressed);
 
         virtual void Measure() override;
@@ -44,13 +49,6 @@ namespace ignite
         virtual bool HitTest(int px, int py) override;
 
         virtual WidgetType GetWidgetType() const override { return WidgetType::Button; }
-
-    private:
-        std::function<void()> m_OnClick;
-        std::function<void()> m_OnPressed;
-        std::function<void()> m_OnReleased;
-        std::function<void()> m_OnHoverEnter;
-        std::function<void()> m_OnHoverExit;
     };
 }
 

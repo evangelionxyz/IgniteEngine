@@ -91,6 +91,10 @@ namespace ignite
                     button->label->font = (button->label->fontHandle != AssetHandle(0))
                         ? assetManager->GetAsset<Font>(button->label->fontHandle)
                         : nullptr;
+                    if (!button->label->font)
+                    {
+                        button->label->font = Renderer::GetDefaultFont();
+                    }
                     if (prevFont != button->label->font)
                     {
                         button->label->MarkLayoutDirty();
@@ -103,6 +107,10 @@ namespace ignite
                 label->font = (label->fontHandle != AssetHandle(0))
                     ? assetManager->GetAsset<Font>(label->fontHandle)
                     : nullptr;
+                if (!label->font)
+                {
+                    label->font = Renderer::GetDefaultFont();
+                }
                 if (prevFont != label->font)
                 {
                     label->MarkLayoutDirty();
@@ -126,22 +134,59 @@ namespace ignite
             }
         }
 
-        static void UpdateRecursive(const Ref<IWidgetItem> &item, const glm::uvec2 &mousePos, bool isMousePressed)
+        static void ResetInteractionRecursive(const Ref<IWidgetItem> &item)
         {
-            if (!item || !item->IsVisible())
+            if (!item)
+                return;
+
+            if (Ref<WidgetButton> button = item->As<WidgetButton>())
             {
+                button->ResetInteractionState();
+            }
+
+            for (const Ref<IWidgetItem> &child : item->children)
+            {
+                ResetInteractionRecursive(child);
+            }
+        }
+
+        static void UpdateRecursive(const Ref<IWidgetItem> &item, const glm::uvec2 &mousePos, bool isMousePressed, float deltaTime)
+        {
+            if (!item)
+                return;
+
+            if (!item->IsVisible())
+            {
+                ResetInteractionRecursive(item);
                 return;
             }
 
             if (Ref<WidgetButton> button = item->As<WidgetButton>())
             {
                 button->OnMouseClick(mousePos, isMousePressed);
+                button->UpdateAnimation(deltaTime);
             }
 
             for (const Ref<IWidgetItem> &child : item->children)
             {
-                UpdateRecursive(child, mousePos, isMousePressed);
+                UpdateRecursive(child, mousePos, isMousePressed, deltaTime);
             }
+        }
+
+        static void DrawWidgetDropShadow(WidgetRenderer *renderer, const Rect &borderRect, const UIStyle &style, float opacity)
+        {
+            if (!style.shadowEnabled || style.shadowColor.a <= 0.001f || style.shadowSize <= 0.0f)
+                return;
+
+            const glm::vec2 expand(style.shadowSize);
+            const Rect shadowRect = {
+                borderRect.min - expand + style.shadowOffset,
+                borderRect.max + expand + style.shadowOffset
+            };
+            glm::vec4 shadowCol = style.shadowColor;
+            shadowCol.a *= opacity;
+            const float softness = std::clamp(style.shadowSoftness, 0.08f, 0.85f);
+            renderer->DrawQuad(shadowRect, 0.0f, shadowCol, nullptr, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec2(2.0f, softness));
         }
 
         static void DrawRecursive(WidgetRenderer *renderer, const Ref<IWidgetItem> &item)
@@ -167,47 +212,108 @@ namespace ignite
                 bgColor.a *= opacity;
                 borderColor.a *= opacity;
 
+                const float hoverT = glm::clamp(button->hoverAnim, 0.0f, 1.0f);
+                const float pressT = glm::clamp(button->pressAnim, 0.0f, 1.0f);
+                const float yShift = std::round(-2.0f * hoverT + 2.5f * pressT);
+
+                Rect btnRect = {
+                    button->box.border.min + glm::vec2(0.0f, yShift),
+                    button->box.border.max + glm::vec2(0.0f, yShift)
+                };
+
+                // 1. Soft drop shadow + outer hover glow
+                DrawWidgetDropShadow(renderer, btnRect, button->baseStyle, opacity);
+                if (bgColor.a > 0.05f && hoverT > 0.01f && borderColor.a > 0.01f)
+                {
+                    Rect glowRect = {
+                        btnRect.min - glm::vec2(6.0f, 6.0f),
+                        btnRect.max + glm::vec2(6.0f, 6.0f)
+                    };
+                    glm::vec4 glowCol = glm::vec4(borderColor.r, borderColor.g, borderColor.b, 0.32f * hoverT * opacity);
+                    renderer->DrawQuad(glowRect, 0.0f, glowCol, nullptr, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec2(2.0f, 0.36f));
+                }
+
+                // 2. Button surface
                 if (bgColor.a > 0.0f)
                 {
+                    const glm::vec2 surfaceMode = (button->image == nullptr)
+                        ? glm::vec2(3.0f, hoverT + pressT * 0.6f)
+                        : glm::vec2(1.0f, 1.0f);
+
                     if (cornerRadius > 0.0f)
                     {
-                        renderer->DrawRoundedQuad(button->box.border, cornerRadius, bgColor, button->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                        renderer->DrawRoundedQuad(btnRect, cornerRadius, bgColor, button->image, glm::vec2(0.0f), glm::vec2(1.0f), surfaceMode);
                     }
                     else
                     {
-                        renderer->DrawQuad(button->box.border, 0.0f, bgColor, button->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                        renderer->DrawQuad(btnRect, 0.0f, bgColor, button->image, glm::vec2(0.0f), glm::vec2(1.0f), surfaceMode);
                     }
                 }
 
+                // 3. Button border with hover intensification
                 if (borderWidth > 0.0f && borderColor.a > 0.0f)
                 {
-                    renderer->DrawRoundedBorder(button->box.border, cornerRadius, borderWidth, borderColor);
+                    glm::vec4 activeBorderCol = glm::mix(borderColor, glm::vec4(glm::min(glm::vec3(borderColor) * 1.45f + glm::vec3(0.12f), glm::vec3(1.0f)), borderColor.a), hoverT);
+                    if (pressT > 0.05f)
+                    {
+                        activeBorderCol = glm::mix(activeBorderCol, glm::vec4(1.0f, 0.92f, 0.55f, borderColor.a), pressT * 0.7f);
+                    }
+                    renderer->DrawRoundedBorder(btnRect, cornerRadius, borderWidth + hoverT * 0.75f, activeBorderCol, glm::vec2(4.0f, hoverT));
                 }
 
+                // 4. Crisp pixel-snapped button label
                 if (button->label && button->label->font && button->label->font->IsReady())
                 {
                     const Rect textBounds = button->label->GetTextBounds();
                     const glm::vec2 textSize = textBounds.GetSize();
                     const glm::vec2 textPos =
                     {
-                        button->box.content.min.x + std::max((button->box.content.GetSize().x - textSize.x) * 0.5f, 0.0f) - textBounds.min.x,
-                        button->box.content.min.y + std::max((button->box.content.GetSize().y - textSize.y) * 0.5f, 0.0f) - textBounds.min.y
+                        std::round(button->box.content.min.x + std::max((button->box.content.GetSize().x - textSize.x) * 0.5f, 0.0f) - textBounds.min.x),
+                        std::round(button->box.content.min.y + std::max((button->box.content.GetSize().y - textSize.y) * 0.5f, 0.0f) - textBounds.min.y + yShift)
                     };
-
-                    const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), { button->label->style.fontSize, button->label->style.fontSize, 1.0f });
 
                     LabelStyle labelStyle = button->label->style;
                     labelStyle.color.a *= opacity;
+                    if (hoverT > 0.01f)
+                    {
+                        labelStyle.color.r = std::min(1.0f, labelStyle.color.r + 0.08f * hoverT);
+                        labelStyle.color.g = std::min(1.0f, labelStyle.color.g + 0.08f * hoverT);
+                        labelStyle.color.b = std::min(1.0f, labelStyle.color.b + 0.08f * hoverT);
+                    }
+
+                    if (labelStyle.shadowEnabled && labelStyle.shadowColor.a > 0.001f)
+                    {
+                        glm::vec4 shadowCol = labelStyle.shadowColor;
+                        shadowCol.a *= opacity;
+                        const glm::mat4 shadowTransform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos + labelStyle.shadowOffset, 0.0f)) *
+                            glm::scale(glm::mat4(1.0f), { labelStyle.fontSize, labelStyle.fontSize, 1.0f });
+                        renderer->DrawString(button->label->text, button->label->font, shadowCol, shadowTransform, labelStyle.kerning, labelStyle.lineSpacing);
+                    }
+
+                    const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), { labelStyle.fontSize, labelStyle.fontSize, 1.0f });
+
                     renderer->DrawString(button->label->text, button->label->font, labelStyle.color, textTransform, labelStyle.kerning, labelStyle.lineSpacing);
                 }
             }
             else if (Ref<WidgetLabel> label = item->As<WidgetLabel>())
             {
                 bgColor.a *= opacity;
+                borderColor.a *= opacity;
+
+                DrawWidgetDropShadow(renderer, label->box.border, label->baseStyle, opacity);
+
                 if (bgColor.a > 0.0f)
                 {
-                    renderer->DrawQuad(label->box.border, 0.0f, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f));
+                    if (cornerRadius > 0.0f)
+                        renderer->DrawRoundedQuad(label->box.border, cornerRadius, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f));
+                    else
+                        renderer->DrawQuad(label->box.border, 0.0f, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f));
+                }
+
+                if (borderWidth > 0.0f && borderColor.a > 0.0f)
+                {
+                    renderer->DrawRoundedBorder(label->box.border, cornerRadius, borderWidth, borderColor);
                 }
 
                 if (label->font && label->font->IsReady())
@@ -216,7 +322,18 @@ namespace ignite
                     LabelStyle labelStyle = label->style;
                     labelStyle.color.a *= opacity;
 
-                    const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(label->box.content.min - textBounds.min, 0.0f)) *
+                    const glm::vec2 snappedPos = glm::round(label->box.content.min - textBounds.min);
+
+                    if (labelStyle.shadowEnabled && labelStyle.shadowColor.a > 0.001f)
+                    {
+                        glm::vec4 shadowCol = labelStyle.shadowColor;
+                        shadowCol.a *= opacity;
+                        const glm::mat4 shadowTransform = glm::translate(glm::mat4(1.0f), glm::vec3(snappedPos + labelStyle.shadowOffset, 0.0f)) *
+                            glm::scale(glm::mat4(1.0f), { labelStyle.fontSize, labelStyle.fontSize, 1.0f });
+                        renderer->DrawString(label->text, label->font, shadowCol, shadowTransform, labelStyle.kerning, labelStyle.lineSpacing);
+                    }
+
+                    const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(snappedPos, 0.0f)) *
                         glm::scale(glm::mat4(1.0f), { labelStyle.fontSize, labelStyle.fontSize, 1.0f });
 
                     renderer->DrawString(label->text, label->font, labelStyle.color, textTransform, labelStyle.kerning, labelStyle.lineSpacing);
@@ -224,9 +341,19 @@ namespace ignite
             }
             else if (Ref<WidgetImage> img = item->As<WidgetImage>())
             {
-                glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, opacity);
+                bgColor.a *= opacity;
+                borderColor.a *= opacity;
+
+                DrawWidgetDropShadow(renderer, img->box.border, img->baseStyle, opacity);
+
+                glm::vec4 color = img->tintColor;
+                color.a *= opacity;
                 if (bgColor.a > 0.0f) color *= bgColor;
-                renderer->DrawQuad(img->box.content, 0.0f, color, img->image, glm::vec2(0.0f), glm::vec2(1.0f));
+
+                if (cornerRadius > 0.0f)
+                    renderer->DrawRoundedQuad(img->box.content, cornerRadius, color, img->image, img->uv0, img->uv1);
+                else
+                    renderer->DrawQuad(img->box.content, 0.0f, color, img->image, img->uv0, img->uv1);
 
                 if (borderWidth > 0.0f && borderColor.a > 0.0f)
                 {
@@ -238,17 +365,23 @@ namespace ignite
                 bgColor.a *= opacity;
                 borderColor.a *= opacity;
 
+                const glm::vec2 rectSize = item->box.border.GetSize();
+                const bool isTacticalCard = (bgColor.a >= 0.25f) && (borderWidth > 0.0f || cornerRadius > 2.0f) && (rectSize.x >= 48.0f && rectSize.y >= 24.0f) && (rectSize.x < 1850.0f || rectSize.y < 1020.0f);
+
+                DrawWidgetDropShadow(renderer, item->box.border, item->baseStyle, opacity);
+
                 if (bgColor.a > 0.0f)
                 {
+                    const glm::vec2 surfaceMode = isTacticalCard ? glm::vec2(3.0f, 0.0f) : glm::vec2(1.0f, 1.0f);
                     if (cornerRadius > 0.0f)
-                        renderer->DrawRoundedQuad(item->box.border, cornerRadius, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f));
+                        renderer->DrawRoundedQuad(item->box.border, cornerRadius, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f), surfaceMode);
                     else
-                        renderer->DrawQuad(item->box.border, 0.0f, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f));
+                        renderer->DrawQuad(item->box.border, 0.0f, bgColor, nullptr, glm::vec2(0.0f), glm::vec2(1.0f), surfaceMode);
                 }
 
                 if (borderWidth > 0.0f && borderColor.a > 0.0f)
                 {
-                    renderer->DrawRoundedBorder(item->box.border, cornerRadius, borderWidth, borderColor);
+                    renderer->DrawRoundedBorder(item->box.border, cornerRadius, borderWidth, borderColor, glm::vec2(4.0f, 0.0f));
                 }
             }
 
@@ -405,7 +538,7 @@ namespace ignite
         m_MouseY = mouseY;
     }
 
-    void WidgetRenderer::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1)
+    void WidgetRenderer::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
     {
         uint32_t vertexOffset = static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase);
         if (vertexOffset + 4 > m_QuadBatch.maxVertices || m_QuadBatch.indexCount + 6 > m_QuadBatch.maxIndices)
@@ -435,7 +568,7 @@ namespace ignite
         {
             m_QuadBatch.vertexBufferPtr->position = positions[i];
             m_QuadBatch.vertexBufferPtr->texCoord = textureCoords[i];
-            m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+            m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
             m_QuadBatch.vertexBufferPtr->color = color;
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr++;
@@ -452,20 +585,20 @@ namespace ignite
         m_QuadBatch.count++;
     }
 
-    void WidgetRenderer::DrawRoundedQuad(const Rect &rect, float cornerRadius, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1)
+    void WidgetRenderer::DrawRoundedQuad(const Rect &rect, float cornerRadius, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
     {
         float r = std::min({ cornerRadius, rect.GetSize().x * 0.5f, rect.GetSize().y * 0.5f });
         if (r <= 0.0f)
         {
-            DrawQuad(rect, 0.0f, color, texture, uv0, uv1);
+            DrawQuad(rect, 0.0f, color, texture, uv0, uv1, tilingFactor);
             return;
         }
 
         uint32_t texIndex = GetOrInsertQuadTexture(texture);
 
-        const int segments = 8;
+        const int segments = 12;
         std::vector<glm::vec2> points;
-        points.reserve(32);
+        points.reserve(48);
 
         auto addCornerArc = [&](const glm::vec2 &center, float startAngle, float endAngle) {
             for (int i = 0; i < segments; ++i) {
@@ -495,7 +628,7 @@ namespace ignite
         glm::vec2 centerPos = (rect.min + rect.max) * 0.5f;
         m_QuadBatch.vertexBufferPtr->position = glm::vec4(centerPos.x, centerPos.y, 0.0f, 1.0f);
         m_QuadBatch.vertexBufferPtr->texCoord = glm::vec2(0.5f, 0.5f);
-        m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+        m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
         m_QuadBatch.vertexBufferPtr->color = color;
         m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
         m_QuadBatch.vertexBufferPtr++;
@@ -507,7 +640,7 @@ namespace ignite
 
             m_QuadBatch.vertexBufferPtr->position = glm::vec4(p.x, p.y, 0.0f, 1.0f);
             m_QuadBatch.vertexBufferPtr->texCoord = glm::vec2(u, v);
-            m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+            m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
             m_QuadBatch.vertexBufferPtr->color = color;
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr++;
@@ -527,7 +660,7 @@ namespace ignite
         m_QuadBatch.count++;
     }
 
-    void WidgetRenderer::DrawRoundedBorder(const Rect &rect, float cornerRadius, float borderWidth, const glm::vec4 &borderColor)
+    void WidgetRenderer::DrawRoundedBorder(const Rect &rect, float cornerRadius, float borderWidth, const glm::vec4 &borderColor, const glm::vec2 &tilingFactor)
     {
         if (borderWidth <= 0.0f || borderColor.a <= 0.0f)
             return;
@@ -561,7 +694,7 @@ namespace ignite
         else
         {
             float r_in = std::max(0.0f, r_out - borderWidth);
-            const int segments = 8;
+            const int segments = 12;
 
             auto addCornerArcs = [&](const glm::vec2 &center, float startAngle, float endAngle) {
                 for (int i = 0; i < segments; ++i) {
@@ -591,11 +724,14 @@ namespace ignite
             return;
         }
 
+        const glm::vec2 rectSize = glm::max(rect.GetSize(), glm::vec2(1.0f));
+
         // Outer vertices
         for (uint32_t i = 0; i < K; ++i) {
+            glm::vec2 normUV = (outerPoints[i] - rect.min) / rectSize;
             m_QuadBatch.vertexBufferPtr->position = glm::vec4(outerPoints[i].x, outerPoints[i].y, 0.0f, 1.0f);
-            m_QuadBatch.vertexBufferPtr->texCoord = glm::vec2(0.0f);
-            m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+            m_QuadBatch.vertexBufferPtr->texCoord = normUV;
+            m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
             m_QuadBatch.vertexBufferPtr->color = borderColor;
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr++;
@@ -603,9 +739,10 @@ namespace ignite
 
         // Inner vertices
         for (uint32_t i = 0; i < K; ++i) {
+            glm::vec2 normUV = (innerPoints[i] - rect.min) / rectSize;
             m_QuadBatch.vertexBufferPtr->position = glm::vec4(innerPoints[i].x, innerPoints[i].y, 0.0f, 1.0f);
-            m_QuadBatch.vertexBufferPtr->texCoord = glm::vec2(0.0f);
-            m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+            m_QuadBatch.vertexBufferPtr->texCoord = normUV;
+            m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
             m_QuadBatch.vertexBufferPtr->color = borderColor;
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr++;
@@ -763,33 +900,61 @@ namespace ignite
         BuildRenderLayers();
 
         const glm::uvec2 mousePos = { m_MouseX, m_MouseY };
-        const bool isMousePressed = InputSystem::IsMouseButtonPressed(Mouse::ButtonLeft);
+        const bool allowPointerInteraction = (InputSystem::GetCursorMode() != CursorMode::Disabled);
+        const bool isMousePressed = allowPointerInteraction && InputSystem::IsMouseButtonPressed(Mouse::ButtonLeft);
+
+        const uint32_t canvasW = GetCanvasWidth();
+        const uint32_t canvasH = GetCanvasHeight();
 
         for (const WidgetRenderLayer &layer : m_RenderLayers)
         {
             if (!layer.widget || !layer.widget->IsEnabled())
                 continue;
 
-            layer.widget->SetViewportSize(m_Width, m_Height);
+            layer.widget->SetViewportSize(canvasW, canvasH);
             WidgetContainer *root = layer.widget->GetRoot();
             if (!root)
             {
-                root = layer.widget->CreateRoot(m_Width, m_Height);
+                root = layer.widget->CreateRoot(canvasW, canvasH);
             }
             if (!root)
             {
                 continue;
             }
 
+            ResolveWidgetAssetsRecursive(root->As<IWidgetItem>(), AssetManager::GetInstance());
+
             if (root->m_DirtyLayout)
             {
                 MeasureRecursive(root->As<IWidgetItem>());
-                root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height)));
+                root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(canvasW), static_cast<float>(canvasH)));
                 ClearDirtyRecursive(root->As<IWidgetItem>());
             }
+        }
 
-            ResolveWidgetAssetsRecursive(root->As<IWidgetItem>(), AssetManager::GetInstance());
-            UpdateRecursive(root->As<IWidgetItem>(), mousePos, isMousePressed);
+        bool inputBlocked = !allowPointerInteraction;
+        for (auto it = m_RenderLayers.rbegin(); it != m_RenderLayers.rend(); ++it)
+        {
+            const WidgetRenderLayer &layer = *it;
+            if (!layer.widget)
+                continue;
+
+            WidgetContainer *root = layer.widget->GetRoot();
+            if (!root)
+                continue;
+
+            if (!layer.widget->IsEnabled() || inputBlocked)
+            {
+                ResetInteractionRecursive(root->As<IWidgetItem>());
+            }
+            else
+            {
+                UpdateRecursive(root->As<IWidgetItem>(), mousePos, isMousePressed, deltaTime);
+                if (layer.blocksWidgetsBelow)
+                {
+                    inputBlocked = true;
+                }
+            }
         }
     }
 
@@ -904,12 +1069,30 @@ namespace ignite
 
     void WidgetRenderer::Render(nri::CommandBuffer *cmd, RenderTarget *fb)
     {
-        CameraBufferData cameraData = { m_Projection, glm::mat4(1.0f), {0.0f, 0.0f, 0.0f, 1.0f} };
+        CameraBufferData cameraData = { m_Projection, m_View, {0.0f, 0.0f, 0.0f, 1.0f} };
         m_CameraBuffer->SetData(Buffer(&cameraData, sizeof(cameraData)));
 
         Begin(cmd);
         RenderWidgetItems();
         Flush(fb);
+    }
+
+    void WidgetRenderer::SetCanvasSize(uint32_t width, uint32_t height)
+    {
+        if (m_CanvasWidth != width || m_CanvasHeight != height)
+        {
+            m_CanvasWidth = width;
+            m_CanvasHeight = height;
+            const uint32_t cw = GetCanvasWidth();
+            const uint32_t ch = GetCanvasHeight();
+            for (const auto &layer : m_RenderLayers)
+            {
+                if (layer.widget)
+                {
+                    layer.widget->SetViewportSize(cw, ch);
+                }
+            }
+        }
     }
 
     uint32_t WidgetRenderer::GetOrInsertQuadTexture(const Ref<Texture> &texture)
@@ -931,11 +1114,14 @@ namespace ignite
         m_Width = width;
         m_Height = height;
         m_Projection = glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f);
-        for (const auto &layer : m_RenderLayers)
+        if (m_CanvasWidth == 0 || m_CanvasHeight == 0)
         {
-            if (layer.widget)
+            for (const auto &layer : m_RenderLayers)
             {
-                layer.widget->SetViewportSize(width, height);
+                if (layer.widget)
+                {
+                    layer.widget->SetViewportSize(width, height);
+                }
             }
         }
     }
@@ -990,7 +1176,7 @@ namespace ignite
             WidgetContainer *root = layer.widget->GetRoot();
             if (!root)
             {
-                root = layer.widget->CreateRoot(m_Width, m_Height);
+                root = layer.widget->CreateRoot(GetCanvasWidth(), GetCanvasHeight());
             }
             if (!root)
             {

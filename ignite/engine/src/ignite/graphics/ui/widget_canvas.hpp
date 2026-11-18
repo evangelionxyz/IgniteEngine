@@ -59,6 +59,9 @@ namespace ignite
 
         WidgetContainer *CreateRoot(uint32_t width, uint32_t height);
         WidgetContainer *GetRoot() const { return m_Root.get(); }
+        void UpdateLayout(uint32_t width, uint32_t height);
+
+        Ref<IWidgetItem> FindItemByName(const std::string &itemName) const;
 
         static AssetType GetStaticAssetType() { return AssetType::Widget; }
         virtual AssetType GetAssetType() override { return GetStaticAssetType(); }

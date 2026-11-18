@@ -432,6 +432,29 @@ namespace ignite
         void (*TextComponent_SetBillboard)(uint64_t entityID, bool value);
         void (*TextComponent_GetCenterAlign)(uint64_t entityID, bool *result);
         void (*TextComponent_SetCenterAlign)(uint64_t entityID, bool value);
+
+        // WidgetComponent extensions
+        void (*WidgetComponent_GetCanvasEnabled)(uint64_t entityID, bool *result);
+        void (*WidgetComponent_SetCanvasEnabled)(uint64_t entityID, bool enabled);
+        bool (*WidgetComponent_HasItem)(uint64_t entityID, const char *itemName);
+        void (*WidgetComponent_GetItemVisible)(uint64_t entityID, const char *itemName, bool *result);
+        void (*WidgetComponent_SetItemVisible)(uint64_t entityID, const char *itemName, bool visible);
+        void (*WidgetComponent_GetItemBackgroundColor)(uint64_t entityID, const char *itemName, glm::vec4 *result);
+        void (*WidgetComponent_SetItemBackgroundColor)(uint64_t entityID, const char *itemName, const glm::vec4 *color);
+        void (*WidgetComponent_GetItemBorderColor)(uint64_t entityID, const char *itemName, glm::vec4 *result);
+        void (*WidgetComponent_SetItemBorderColor)(uint64_t entityID, const char *itemName, const glm::vec4 *color);
+        void (*WidgetComponent_GetItemOpacity)(uint64_t entityID, const char *itemName, float *result);
+        void (*WidgetComponent_SetItemOpacity)(uint64_t entityID, const char *itemName, float opacity);
+        void (*WidgetComponent_GetItemSize)(uint64_t entityID, const char *itemName, glm::vec2 *result);
+        void (*WidgetComponent_SetItemSize)(uint64_t entityID, const char *itemName, const glm::vec2 *size);
+        void (*WidgetComponent_GetItemPosition)(uint64_t entityID, const char *itemName, glm::vec2 *result);
+        void (*WidgetComponent_SetItemPosition)(uint64_t entityID, const char *itemName, const glm::vec2 *pos);
+        void (*WidgetComponent_GetButtonText)(uint64_t entityID, const char *buttonName, const char **result);
+        void (*WidgetComponent_SetButtonText)(uint64_t entityID, const char *buttonName, const char *text);
+        void (*WidgetComponent_GetButtonInteractable)(uint64_t entityID, const char *buttonName, bool *result);
+        void (*WidgetComponent_SetButtonInteractable)(uint64_t entityID, const char *buttonName, bool interactable);
+        void (*WidgetComponent_IsButtonHovered)(uint64_t entityID, const char *buttonName, bool *result);
+        void (*WidgetComponent_SetButtonColors)(uint64_t entityID, const char *buttonName, const glm::vec4 *normalColor, const glm::vec4 *hoverColor, const glm::vec4 *pressedColor);
     };
 
     class ComponentScriptGlue

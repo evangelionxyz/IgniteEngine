@@ -36,6 +36,7 @@ namespace ignite
 
         void Resize(ShadowMapQuality quality);
         void BeginCascade(nri::CommandBuffer *cmd, int cascadeIndex, uint32_t frameIndex = 0);
+        void EnsureShaderResourceLayout(nri::CommandBuffer *cmd, uint32_t frameIndex = 0);
 
         RenderTarget *GetCascadeFramebuffer(int cascadeIndex, uint32_t frameIndex = 0) const;
         Ref<ConstantBuffer> GetGPUDataBuffer() const { return m_GPUDataBuffer; }

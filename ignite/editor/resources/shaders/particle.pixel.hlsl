@@ -67,8 +67,34 @@ PSOutput main(VSOutput input)
             float sparkY = saturate(1.0 - abs(centered.y));
             float sparkShape = pow(sparkX, 1.5) * pow(sparkY, 0.7);
             float core = pow(sparkX, 4.0) * sparkY;
-            outColor.rgb += float3(0.8, 0.8, 0.8) * core * 2.0;
+            outColor.rgb += float3(0.95, 0.9, 0.8) * core * 2.4;
             outColor.a *= sparkShape;
+        }
+        else if (input.emitterType == 4) // Plasma: intense electric core + outer plasma ring
+        {
+            float core = exp(-dist * dist * 6.5);
+            float ring = smoothstep(0.28, 0.0, abs(dist - 0.62)) * 0.55;
+            float shape = saturate(core + ring) * smoothstep(1.0, 0.75, dist);
+            outColor.rgb = lerp(outColor.rgb, float3(0.9, 0.98, 1.0), core * 0.8);
+            outColor.rgb *= 1.65;
+            outColor.a *= shape;
+        }
+        else if (input.emitterType == 5) // MuzzleFlash: 4-point star flare + blazing core
+        {
+            float starX = exp(-abs(centered.x) * 6.0) * smoothstep(1.0, 0.0, abs(centered.y));
+            float starY = exp(-abs(centered.y) * 6.0) * smoothstep(1.0, 0.0, abs(centered.x));
+            float core = exp(-dist * dist * 5.0);
+            float flare = saturate(core + (starX + starY) * 0.65);
+            outColor.rgb = lerp(outColor.rgb, float3(1.0, 0.98, 0.92), core * 0.85) * 2.2;
+            outColor.a *= flare;
+        }
+        else if (input.emitterType == 6) // Shockwave: sharp glowing hollow energy ring
+        {
+            float ring = smoothstep(0.32, 0.0, abs(dist - 0.68));
+            float innerGlow = smoothstep(0.75, 0.0, dist) * 0.35;
+            float shape = saturate(ring + innerGlow);
+            outColor.rgb *= (1.4 + ring * 0.8);
+            outColor.a *= shape;
         }
         else // Custom / Generic particle: soft radial circle
         {

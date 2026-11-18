@@ -55,6 +55,9 @@ public static class CoreInternalCalls
     private static CoreNativeAPI.Funcs.NetUIntQueryFn? s_NetGetChatCount;
     private static CoreNativeAPI.Funcs.NetGetChatAtFn? s_NetGetChatAt;
     private static CoreNativeAPI.Funcs.NetSetSimulationSettingsFn? s_NetSetSimulationSettings;
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn? s_AssetManagerGetAssetHandleByPath;
+    private static CoreNativeAPI.Funcs.SceneLoadByPathFn? s_SceneLoadByPath;
+    private static CoreNativeAPI.Funcs.SceneStopFn? s_SceneStop;
 
     public static void Initialize(ulong apiPtr)
     {
@@ -135,6 +138,12 @@ public static class CoreInternalCalls
                 s_NetGetChatAt = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetGetChatAtFn>(api.Net_GetChatAt);
             if (api.Net_SetSimulationSettings != IntPtr.Zero)
                 s_NetSetSimulationSettings = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.NetSetSimulationSettingsFn>(api.Net_SetSimulationSettings);
+            if (api.AssetManager_GetAssetHandleByPath != IntPtr.Zero)
+                s_AssetManagerGetAssetHandleByPath = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn>(api.AssetManager_GetAssetHandleByPath);
+            if (api.Scene_LoadByPath != IntPtr.Zero)
+                s_SceneLoadByPath = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SceneLoadByPathFn>(api.Scene_LoadByPath);
+            if (api.Scene_Stop != IntPtr.Zero)
+                s_SceneStop = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.SceneStopFn>(api.Scene_Stop);
         }
         catch { /* optional binding */ }
 
@@ -550,5 +559,29 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         s_NetSetSimulationSettings?.Invoke(lagMs, lossPercent);
+    }
+
+    internal static AssetHandle AssetManager_GetAssetHandleByPath(string filepath)
+    {
+        EnsureInitialized();
+        if (s_AssetManagerGetAssetHandleByPath == null) return new AssetHandle(0);
+        IntPtr ptr = NativeObject.StringToUtf8(filepath);
+        try { return new AssetHandle(s_AssetManagerGetAssetHandleByPath(ptr)); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void Scene_LoadByPath(string scenePath)
+    {
+        EnsureInitialized();
+        if (s_SceneLoadByPath == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(scenePath);
+        try { s_SceneLoadByPath(ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void Scene_Stop()
+    {
+        EnsureInitialized();
+        s_SceneStop?.Invoke();
     }
 }

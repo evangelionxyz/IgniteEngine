@@ -41,4 +41,22 @@ public sealed class WidgetLabel
         }
         set => ComponentInternalCalls.WidgetComponent_SetLabelFontSize(m_EntityID, m_LabelName, value);
     }
+
+    public bool Visible
+    {
+        get => ComponentInternalCalls.WidgetComponent_GetItemVisible(m_EntityID, m_LabelName);
+        set => ComponentInternalCalls.WidgetComponent_SetItemVisible(m_EntityID, m_LabelName, value);
+    }
+
+    public Vector2 Size
+    {
+        get => ComponentInternalCalls.WidgetComponent_GetItemSize(m_EntityID, m_LabelName);
+        set => ComponentInternalCalls.WidgetComponent_SetItemSize(m_EntityID, m_LabelName, value);
+    }
+
+    public Vector2 Position
+    {
+        get => ComponentInternalCalls.WidgetComponent_GetItemPosition(m_EntityID, m_LabelName);
+        set => ComponentInternalCalls.WidgetComponent_SetItemPosition(m_EntityID, m_LabelName, value);
+    }
 }

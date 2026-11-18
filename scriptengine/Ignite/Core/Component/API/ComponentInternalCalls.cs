@@ -415,6 +415,29 @@ public static class ComponentInternalCalls
     private static CoreNativeAPI.Funcs.GetBoolFn? s_TextComponentGetCenterAlign;
     private static CoreNativeAPI.Funcs.SetBoolFn? s_TextComponentSetCenterAlign;
 
+    // WidgetComponent extensions
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_WidgetGetCanvasEnabled;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_WidgetSetCanvasEnabled;
+    private static ComponentNativeAPI.Funcs.WidgetComponentHasNamedItemFn? s_WidgetHasItem;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetBoolByNameFn? s_WidgetGetItemVisible;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetBoolByNameFn? s_WidgetSetItemVisible;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetVec4ByNameFn? s_WidgetGetItemBgColor;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetVec4ByNameFn? s_WidgetSetItemBgColor;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetVec4ByNameFn? s_WidgetGetItemBorderColor;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetVec4ByNameFn? s_WidgetSetItemBorderColor;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetFloatByNameFn? s_WidgetGetItemOpacity;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetFloatByNameFn? s_WidgetSetItemOpacity;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetVec2ByNameFn? s_WidgetGetItemSize;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetVec2ByNameFn? s_WidgetSetItemSize;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetVec2ByNameFn? s_WidgetGetItemPosition;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetVec2ByNameFn? s_WidgetSetItemPosition;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetStringByNameFn? s_WidgetGetButtonText;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetStringByNameFn? s_WidgetSetButtonText;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetBoolByNameFn? s_WidgetGetButtonInteractable;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetBoolByNameFn? s_WidgetSetButtonInteractable;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetBoolByNameFn? s_WidgetIsButtonHovered;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetButtonColorsFn? s_WidgetSetButtonColors;
+
     public static void Initialize(ulong apiPtr)
     {
         if (apiPtr == 0)
@@ -819,6 +842,28 @@ public static class ComponentInternalCalls
         s_TextComponentSetBillboard = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.TextComponent_SetBillboard);
         s_TextComponentGetCenterAlign = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.TextComponent_GetCenterAlign);
         s_TextComponentSetCenterAlign = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.TextComponent_SetCenterAlign);
+
+        s_WidgetGetCanvasEnabled = BindOpt<CoreNativeAPI.Funcs.GetBoolFn>(api.WidgetComponent_GetCanvasEnabled);
+        s_WidgetSetCanvasEnabled = BindOpt<CoreNativeAPI.Funcs.SetBoolFn>(api.WidgetComponent_SetCanvasEnabled);
+        s_WidgetHasItem = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentHasNamedItemFn>(api.WidgetComponent_HasItem);
+        s_WidgetGetItemVisible = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetBoolByNameFn>(api.WidgetComponent_GetItemVisible);
+        s_WidgetSetItemVisible = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetBoolByNameFn>(api.WidgetComponent_SetItemVisible);
+        s_WidgetGetItemBgColor = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetVec4ByNameFn>(api.WidgetComponent_GetItemBackgroundColor);
+        s_WidgetSetItemBgColor = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetVec4ByNameFn>(api.WidgetComponent_SetItemBackgroundColor);
+        s_WidgetGetItemBorderColor = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetVec4ByNameFn>(api.WidgetComponent_GetItemBorderColor);
+        s_WidgetSetItemBorderColor = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetVec4ByNameFn>(api.WidgetComponent_SetItemBorderColor);
+        s_WidgetGetItemOpacity = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetFloatByNameFn>(api.WidgetComponent_GetItemOpacity);
+        s_WidgetSetItemOpacity = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetFloatByNameFn>(api.WidgetComponent_SetItemOpacity);
+        s_WidgetGetItemSize = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetVec2ByNameFn>(api.WidgetComponent_GetItemSize);
+        s_WidgetSetItemSize = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetVec2ByNameFn>(api.WidgetComponent_SetItemSize);
+        s_WidgetGetItemPosition = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetVec2ByNameFn>(api.WidgetComponent_GetItemPosition);
+        s_WidgetSetItemPosition = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetVec2ByNameFn>(api.WidgetComponent_SetItemPosition);
+        s_WidgetGetButtonText = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetStringByNameFn>(api.WidgetComponent_GetButtonText);
+        s_WidgetSetButtonText = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetStringByNameFn>(api.WidgetComponent_SetButtonText);
+        s_WidgetGetButtonInteractable = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetBoolByNameFn>(api.WidgetComponent_GetButtonInteractable);
+        s_WidgetSetButtonInteractable = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetBoolByNameFn>(api.WidgetComponent_SetButtonInteractable);
+        s_WidgetIsButtonHovered = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentGetBoolByNameFn>(api.WidgetComponent_IsButtonHovered);
+        s_WidgetSetButtonColors = BindOpt<ComponentNativeAPI.Funcs.WidgetComponentSetButtonColorsFn>(api.WidgetComponent_SetButtonColors);
 
         s_Initialized = true;
     }
@@ -2600,4 +2645,186 @@ public static class ComponentInternalCalls
     internal static void TextComponent_SetBillboard(ulong id, bool v) { EnsureInitialized(); s_TextComponentSetBillboard?.Invoke(id, v); }
     internal static bool TextComponent_GetCenterAlign(ulong id) { EnsureInitialized(); bool r = false; s_TextComponentGetCenterAlign?.Invoke(id, out r); return r; }
     internal static void TextComponent_SetCenterAlign(ulong id, bool v) { EnsureInitialized(); s_TextComponentSetCenterAlign?.Invoke(id, v); }
+
+    internal static bool WidgetComponent_GetCanvasEnabled(ulong id) { EnsureInitialized(); bool r = true; s_WidgetGetCanvasEnabled?.Invoke(id, out r); return r; }
+    internal static void WidgetComponent_SetCanvasEnabled(ulong id, bool enabled) { EnsureInitialized(); s_WidgetSetCanvasEnabled?.Invoke(id, enabled); }
+
+    internal static bool WidgetComponent_HasItem(ulong id, string itemName)
+    {
+        EnsureInitialized();
+        if (s_WidgetHasItem == null) return false;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { return s_WidgetHasItem(id, ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static bool WidgetComponent_GetItemVisible(ulong id, string itemName)
+    {
+        EnsureInitialized();
+        if (s_WidgetGetItemVisible == null) return false;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { s_WidgetGetItemVisible(id, ptr, out bool r); return r; }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetItemVisible(ulong id, string itemName, bool visible)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetItemVisible == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { s_WidgetSetItemVisible(id, ptr, visible); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static Mathf.Vector4 WidgetComponent_GetItemBackgroundColor(ulong id, string itemName)
+    {
+        EnsureInitialized();
+        if (s_WidgetGetItemBgColor == null) return Mathf.Vector4.Zero;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { s_WidgetGetItemBgColor(id, ptr, out NativeObject.Vector4 r); return NativeObject.ToManaged(r); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetItemBackgroundColor(ulong id, string itemName, Mathf.Vector4 color)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetItemBgColor == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        var n = NativeObject.ToNative(color);
+        try { s_WidgetSetItemBgColor(id, ptr, ref n); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static Mathf.Vector4 WidgetComponent_GetItemBorderColor(ulong id, string itemName)
+    {
+        EnsureInitialized();
+        if (s_WidgetGetItemBorderColor == null) return Mathf.Vector4.Zero;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { s_WidgetGetItemBorderColor(id, ptr, out NativeObject.Vector4 r); return NativeObject.ToManaged(r); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetItemBorderColor(ulong id, string itemName, Mathf.Vector4 color)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetItemBorderColor == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        var n = NativeObject.ToNative(color);
+        try { s_WidgetSetItemBorderColor(id, ptr, ref n); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static float WidgetComponent_GetItemOpacity(ulong id, string itemName)
+    {
+        EnsureInitialized();
+        if (s_WidgetGetItemOpacity == null) return 1.0f;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { s_WidgetGetItemOpacity(id, ptr, out float r); return r; }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetItemOpacity(ulong id, string itemName, float opacity)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetItemOpacity == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { s_WidgetSetItemOpacity(id, ptr, opacity); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static Mathf.Vector2 WidgetComponent_GetItemSize(ulong id, string itemName)
+    {
+        EnsureInitialized();
+        if (s_WidgetGetItemSize == null) return Mathf.Vector2.Zero;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { s_WidgetGetItemSize(id, ptr, out NativeObject.Vector2 r); return NativeObject.ToManaged(r); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetItemSize(ulong id, string itemName, Mathf.Vector2 size)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetItemSize == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        var n = NativeObject.ToNative(size);
+        try { s_WidgetSetItemSize(id, ptr, ref n); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static Mathf.Vector2 WidgetComponent_GetItemPosition(ulong id, string itemName)
+    {
+        EnsureInitialized();
+        if (s_WidgetGetItemPosition == null) return Mathf.Vector2.Zero;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        try { s_WidgetGetItemPosition(id, ptr, out NativeObject.Vector2 r); return NativeObject.ToManaged(r); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetItemPosition(ulong id, string itemName, Mathf.Vector2 pos)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetItemPosition == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(itemName);
+        var n = NativeObject.ToNative(pos);
+        try { s_WidgetSetItemPosition(id, ptr, ref n); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static string WidgetComponent_GetButtonText(ulong id, string buttonName)
+    {
+        EnsureInitialized();
+        if (s_WidgetGetButtonText == null) return string.Empty;
+        IntPtr ptr = NativeObject.StringToUtf8(buttonName);
+        try { s_WidgetGetButtonText(id, ptr, out IntPtr resPtr); return NativeObject.Utf8ToString(resPtr) ?? string.Empty; }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetButtonText(ulong id, string buttonName, string text)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetButtonText == null) return;
+        IntPtr namePtr = NativeObject.StringToUtf8(buttonName);
+        IntPtr textPtr = NativeObject.StringToUtf8(text);
+        try { s_WidgetSetButtonText(id, namePtr, textPtr); }
+        finally { Marshal.FreeCoTaskMem(namePtr); Marshal.FreeCoTaskMem(textPtr); }
+    }
+
+    internal static bool WidgetComponent_GetButtonInteractable(ulong id, string buttonName)
+    {
+        EnsureInitialized();
+        if (s_WidgetGetButtonInteractable == null) return true;
+        IntPtr ptr = NativeObject.StringToUtf8(buttonName);
+        try { s_WidgetGetButtonInteractable(id, ptr, out bool r); return r; }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetButtonInteractable(ulong id, string buttonName, bool interactable)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetButtonInteractable == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(buttonName);
+        try { s_WidgetSetButtonInteractable(id, ptr, interactable); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static bool WidgetComponent_IsButtonHovered(ulong id, string buttonName)
+    {
+        EnsureInitialized();
+        if (s_WidgetIsButtonHovered == null) return false;
+        IntPtr ptr = NativeObject.StringToUtf8(buttonName);
+        try { s_WidgetIsButtonHovered(id, ptr, out bool r); return r; }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetButtonColors(ulong id, string buttonName, Mathf.Vector4 normalColor, Mathf.Vector4 hoverColor, Mathf.Vector4 pressedColor)
+    {
+        EnsureInitialized();
+        if (s_WidgetSetButtonColors == null) return;
+        IntPtr ptr = NativeObject.StringToUtf8(buttonName);
+        var n = NativeObject.ToNative(normalColor);
+        var h = NativeObject.ToNative(hoverColor);
+        var p = NativeObject.ToNative(pressedColor);
+        try { s_WidgetSetButtonColors(id, ptr, ref n, ref h, ref p); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
 }

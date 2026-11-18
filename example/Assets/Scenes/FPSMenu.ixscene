@@ -1,0 +1,991 @@
+{
+    "Scene": {
+        "Version": 4096,
+        "Entities": [
+            {
+                "ID": 910000000000000013,
+                "Name": "Audio_MenuAmbient",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "AudioSource": {
+                    "Handle": 13734612050319106672,
+                    "Volume": 0.25,
+                    "Pitch": 1.0,
+                    "Pan": 0.0,
+                    "PlayOnStart": true,
+                    "Loop": true,
+                    "DSPs": []
+                }
+            },
+            {
+                "ID": 910000000000000002,
+                "Name": "DirectionalLight",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        12.0,
+                        6.0
+                    ],
+                    "WorldRotation": [
+                        -0.3477229177951813,
+                        0.2258535772562027,
+                        0.08669707179069519,
+                        0.9058490991592407
+                    ],
+                    "WorldScale": [
+                        0.9999999403953552,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        12.0,
+                        6.0
+                    ],
+                    "LocalRotation": [
+                        -0.3477228879928589,
+                        0.2258535474538803,
+                        0.086697056889534,
+                        0.9058490991592407
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "DirectionalLight": {
+                    "Color": [
+                        1.0,
+                        0.9700000286102295,
+                        0.9200000166893005,
+                        1.0
+                    ],
+                    "Intensity": 24.0,
+                    "AngularRadius": 1.5,
+                    "ShadowStrength": 1.0,
+                    "ShadowMinBias": 0.00019999999494757503,
+                    "ShadowMaxBias": 0.0020000000949949026,
+                    "PCFRadius": 1.5,
+                    "ShadowDistance": 120.0,
+                    "ShadowResolution": 2,
+                    "CascadeShadow": true,
+                    "SoftShadows": true
+                }
+            },
+            {
+                "ID": 910000000000000005,
+                "Name": "Menu_Camera",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        1.649999976158142,
+                        2.4000000953674316
+                    ],
+                    "WorldRotation": [
+                        -0.052208468317985535,
+                        -0.06966087222099304,
+                        -0.003650771453976631,
+                        0.9961969256401062
+                    ],
+                    "WorldScale": [
+                        0.9999999403953552,
+                        1.0,
+                        0.9999999403953552
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        1.649999976158142,
+                        2.4000000953674316
+                    ],
+                    "LocalRotation": [
+                        -0.052208468317985535,
+                        -0.06966087222099304,
+                        -0.003650771686807275,
+                        0.9961969256401062
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "Camera": {
+                    "ProjectionType": 1,
+                    "AspectRatioPreset": 0,
+                    "OrthoSize": 10.0,
+                    "NearClip": 0.10000000149011612,
+                    "FarClip": 500.0,
+                    "Fov": 50.0,
+                    "Primary": true,
+                    "Lens": {
+                        "EnabledDOF": false,
+                        "FocalLength": 50.0,
+                        "FocalDistance": 8.0,
+                        "FStop": 2.799999952316284,
+                        "FocusRange": 5.0,
+                        "BlurAmount": 0.5
+                    },
+                    "PostProcessing": {
+                        "EnableVignette": true,
+                        "EnableChromAb": false,
+                        "EnableBloom": true,
+                        "EnableSSAO": true,
+                        "DebugSSAO": false,
+                        "BloomIntensity": 0.5,
+                        "BloomThreshold": 6.0,
+                        "BloomKnee": 0.5,
+                        "BloomRadius": 1.0,
+                        "BloomIterations": 5,
+                        "VignetteRadius": 1.1799999475479126,
+                        "VignetteSoftness": 0.7200000286102295,
+                        "VignetteIntensity": 0.550000011920929,
+                        "VignetteColor": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "ChromAbAmount": 0.0010000000474974513,
+                        "ChromAbRadial": 0.10000000149011612,
+                        "AoRadius": 0.6499999761581421,
+                        "AoBias": 0.02500000037252903,
+                        "AoIntensity": 1.350000023841858,
+                        "AoPower": 1.0,
+                        "TAA": false,
+                        "TAABlendFactor": 0.07999999821186066,
+                        "MSAA": false,
+                        "MSAASampleCount": 4,
+                        "TonemapMode": 2
+                    }
+                }
+            },
+            {
+                "ID": 910000000000000006,
+                "Name": "Menu_Floor",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        -0.5,
+                        -3.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        40.0,
+                        1.0,
+                        40.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        -0.5,
+                        -3.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        40.0,
+                        1.0,
+                        40.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 9362257802799095613
+                        }
+                    ]
+                }
+            },
+            {
+                "ID": 910000000000000009,
+                "Name": "Menu_HeroHelmet",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        2.0999999046325684,
+                        1.850000023841858,
+                        -3.299999952316284
+                    ],
+                    "WorldRotation": [
+                        0.0510953851044178,
+                        -0.21614302694797516,
+                        0.011327574029564857,
+                        0.974958062171936
+                    ],
+                    "WorldScale": [
+                        1.0999999046325684,
+                        1.100000023841858,
+                        1.100000023841858
+                    ],
+                    "LocalTranslation": [
+                        2.0999999046325684,
+                        1.850000023841858,
+                        -3.299999952316284
+                    ],
+                    "LocalRotation": [
+                        0.0510953851044178,
+                        -0.21614299714565277,
+                        0.011327574029564857,
+                        0.9749580025672913
+                    ],
+                    "LocalScale": [
+                        1.100000023841858,
+                        1.100000023841858,
+                        1.100000023841858
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 12091667214104364287,
+                    "OverrideMaterials": []
+                }
+            },
+            {
+                "ID": 910000000000000011,
+                "Name": "Menu_OrbCopper",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        3.8499999046325684,
+                        0.550000011920929,
+                        -4.099999904632568
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.6499999761581421,
+                        0.6499999761581421,
+                        0.6499999761581421
+                    ],
+                    "LocalTranslation": [
+                        3.8499999046325684,
+                        0.550000011920929,
+                        -4.099999904632568
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.6499999761581421,
+                        0.6499999761581421,
+                        0.6499999761581421
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 4187555684474507689
+                        }
+                    ]
+                }
+            },
+            {
+                "ID": 910000000000000012,
+                "Name": "Menu_OrbGold",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        4.349999904632568,
+                        0.8500000238418579,
+                        -2.9000000953674316
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.6499999761581421,
+                        0.6499999761581421,
+                        0.6499999761581421
+                    ],
+                    "LocalTranslation": [
+                        4.349999904632568,
+                        0.8500000238418579,
+                        -2.9000000953674316
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.6499999761581421,
+                        0.6499999761581421,
+                        0.6499999761581421
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 12856994190560798432
+                        }
+                    ]
+                }
+            },
+            {
+                "ID": 910000000000000010,
+                "Name": "Menu_OrbRough",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.3499999940395355,
+                        0.550000011920929,
+                        -4.400000095367432
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.6499999761581421,
+                        0.6499999761581421,
+                        0.6499999761581421
+                    ],
+                    "LocalTranslation": [
+                        0.3499999940395355,
+                        0.550000011920929,
+                        -4.400000095367432
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.6499999761581421,
+                        0.6499999761581421,
+                        0.6499999761581421
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444490,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 2045315682693042477
+                        }
+                    ]
+                }
+            },
+            {
+                "ID": 910000000000000007,
+                "Name": "Menu_Pedestal",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        2.0999999046325684,
+                        0.44999998807907104,
+                        -3.299999952316284
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        2.0,
+                        0.8999999761581421,
+                        2.0
+                    ],
+                    "LocalTranslation": [
+                        2.0999999046325684,
+                        0.44999998807907104,
+                        -3.299999952316284
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        2.0,
+                        0.8999999761581421,
+                        2.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444492,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 6012538090998002116
+                        }
+                    ]
+                }
+            },
+            {
+                "ID": 910000000000000008,
+                "Name": "Menu_PedestalRing",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        2.0999999046325684,
+                        0.9200000166893005,
+                        -3.299999952316284
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        2.1500000953674316,
+                        0.14000000059604645,
+                        2.1500000953674316
+                    ],
+                    "LocalTranslation": [
+                        2.0999999046325684,
+                        0.9200000166893005,
+                        -3.299999952316284
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        2.1500000953674316,
+                        0.14000000059604645,
+                        2.1500000953674316
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444496,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 10148842803858111519
+                        }
+                    ]
+                }
+            },
+            {
+                "ID": 910000000000000003,
+                "Name": "Menu_RimLight",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        4.199999809265137,
+                        2.799999952316284,
+                        -5.199999809265137
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        4.199999809265137,
+                        2.799999952316284,
+                        -5.199999809265137
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "PointLight": {
+                    "Color": [
+                        0.2199999988079071,
+                        0.8500000238418579,
+                        1.0,
+                        1.0
+                    ],
+                    "Intensity": 32.0,
+                    "Range": 14.0,
+                    "Enabled": true,
+                    "ConstantAttenuation": 1.0,
+                    "LinearAttenuation": 0.09000000357627869,
+                    "QuadraticAttenuation": 0.03200000151991844
+                }
+            },
+            {
+                "ID": 910000000000000016,
+                "Name": "Menu_UI",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "WidgetComponent": {
+                    "WidgetHandle": 16176796658309022622
+                },
+                "Script": {
+                    "ClassName": "PlatformerDemo.FPS.FPSMenuController",
+                    "Fields": [
+                        {
+                            "Name": "ArenaScenePath",
+                            "Value": "Assets/Scenes/FPSArena.ixscene",
+                            "Type": "String"
+                        },
+                        {
+                            "Name": "ServerAddress",
+                            "Value": "127.0.0.1",
+                            "Type": "String"
+                        },
+                        {
+                            "Name": "ServerPort",
+                            "Value": 8192,
+                            "Type": "Int"
+                        }
+                    ]
+                }
+            },
+            {
+                "ID": 910000000000000004,
+                "Name": "Menu_WarmLight",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        -0.5,
+                        2.200000047683716,
+                        -1.7999999523162842
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        -0.5,
+                        2.200000047683716,
+                        -1.7999999523162842
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "PointLight": {
+                    "Color": [
+                        1.0,
+                        0.7200000286102295,
+                        0.3499999940395355,
+                        1.0
+                    ],
+                    "Intensity": 24.0,
+                    "Range": 12.0,
+                    "Enabled": true,
+                    "ConstantAttenuation": 1.0,
+                    "LinearAttenuation": 0.09000000357627869,
+                    "QuadraticAttenuation": 0.03200000151991844
+                }
+            },
+            {
+                "ID": 910000000000000015,
+                "Name": "SFX_UIClick",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "AudioSource": {
+                    "Handle": 11232593576733536064,
+                    "Volume": 0.800000011920929,
+                    "Pitch": 1.0,
+                    "Pan": 0.0,
+                    "PlayOnStart": false,
+                    "Loop": false,
+                    "DSPs": []
+                }
+            },
+            {
+                "ID": 910000000000000020,
+                "Name": "SFX_UIClickEnd",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "AudioSource": {
+                    "Handle": 9500000000000000011,
+                    "Volume": 0.8500000238418579,
+                    "Pitch": 1.0,
+                    "Pan": 0.0,
+                    "PlayOnStart": false,
+                    "Loop": false,
+                    "DSPs": []
+                }
+            },
+            {
+                "ID": 910000000000000014,
+                "Name": "SFX_UIHover",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "AudioSource": {
+                    "Handle": 12206715899188766470,
+                    "Volume": 0.6499999761581421,
+                    "Pitch": 1.0,
+                    "Pan": 0.0,
+                    "PlayOnStart": false,
+                    "Loop": false,
+                    "DSPs": []
+                }
+            },
+            {
+                "ID": 910000000000000001,
+                "Name": "WorldEnvironment",
+                "Type": "Node",
+                "Parent": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "WorldEnvironment": {
+                    "SkyType": 0,
+                    "HDRHandle": 6886871699447745262,
+                    "EnableIBL": true,
+                    "Exposure": 0.6000000238418579,
+                    "Gamma": 2.200000047683716,
+                    "Ambient": 0.2199999988079071,
+                    "FogDensity": 0.0,
+                    "FogColor": [
+                        0.44999998807907104,
+                        0.5799999833106995,
+                        0.7200000286102295,
+                        1.0
+                    ],
+                    "FogStart": 15.0,
+                    "FogEnd": 120.0,
+                    "RayleighScattering": [
+                        0.005801999941468239,
+                        0.013558000326156616,
+                        0.03310000151395798
+                    ],
+                    "RayleighDensityH": 8.0,
+                    "MieScattering": [
+                        0.003996000159531832,
+                        0.003996000159531832,
+                        0.003996000159531832
+                    ],
+                    "MieDensityH": 1.2000000476837158,
+                    "MieG": 0.800000011920929,
+                    "OzoneAbsorption": [
+                        0.0006500000017695129,
+                        0.0018810000037774444,
+                        8.499999967170879e-05
+                    ],
+                    "PlanetRadius": 6360.0,
+                    "AtmosphereRadius": 6460.0,
+                    "GroundAlbedo": [
+                        0.10000000149011612,
+                        0.10000000149011612,
+                        0.10000000149011612
+                    ]
+                }
+            }
+        ]
+    }
+}

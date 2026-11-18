@@ -39,6 +39,7 @@ namespace ignite
         double handshakeTimeoutSec = 5.0;
         double chatMinIntervalSec = 0.25;
         bool autoStart = false;
+        std::string defaultScene;
 
         bool operator==(const ServerSettings &other) const = default;
     };

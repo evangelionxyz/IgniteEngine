@@ -16,4 +16,21 @@ public static class Scene
     {
         CoreInternalCalls.Scene_Load(handle.Value);
     }
+
+    /// <summary>
+    /// Transitions from the current active scene to the new scene specified by its project-relative filepath.
+    /// </summary>
+    public static void Load(string scenePath)
+    {
+        CoreInternalCalls.Scene_LoadByPath(scenePath);
+    }
+
+    /// <summary>
+    /// Stops the active scene (exits Play/Simulate mode in the editor, or closes the standalone runtime).
+    /// Note: Deferred to the end of the current frame.
+    /// </summary>
+    public static void Stop()
+    {
+        CoreInternalCalls.Scene_Stop();
+    }
 }

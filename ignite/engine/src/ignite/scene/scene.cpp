@@ -88,8 +88,8 @@ namespace ignite
                 return nullptr;
             }
 
-            const FMOD_RESULT createResult = FmodAudio::GetFmodSystem()->createDSPByType(dspType, &dsp);
-            if (createResult != FMOD_OK || !dsp)
+            FMOD::System *fmodSystem = FmodAudio::GetFmodSystem();
+            if (!fmodSystem || fmodSystem->createDSPByType(dspType, &dsp) != FMOD_OK || !dsp)
             {
                 return nullptr;
             }

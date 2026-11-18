@@ -7,12 +7,18 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/ui/game_ui_system.hpp"
+#include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_button.hpp"
+#include "ignite/graphics/ui/widget_canvas.hpp"
+#include "ignite/graphics/ui/widget_label.hpp"
 #include "ignite/net/network_manager.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/physics/3d/physics_3d.hpp"
@@ -1852,6 +1858,156 @@ namespace ignite
             };
             if (!pkg.success)
                 res["error"] = pkg.errorMessage;
+            return res;
+        }
+
+        if (action == "get_ui_info")
+        {
+            if (!ctx.scene) { res["error"] = "No active scene"; return res; }
+            nlohmann::ordered_json itemsJson = nlohmann::ordered_json::array();
+
+            std::function<void(const Ref<IWidgetItem> &)> collectItems = [&](const Ref<IWidgetItem> &item)
+            {
+                if (!item) return;
+                nlohmann::ordered_json ij;
+                ij["id"] = item->id;
+                ij["name"] = item->name;
+                ij["type"] = static_cast<int>(item->GetWidgetType());
+                ij["visible"] = item->IsEffectivelyVisible();
+                ij["world_rect"] = { item->worldRect.min.x, item->worldRect.min.y, item->worldRect.max.x, item->worldRect.max.y };
+                ij["center"] = { (item->worldRect.min.x + item->worldRect.max.x) * 0.5f, (item->worldRect.min.y + item->worldRect.max.y) * 0.5f };
+                if (item->GetWidgetType() == WidgetType::Button)
+                {
+                    auto btn = item->As<WidgetButton>();
+                    ij["hovered"] = btn->hovered;
+                    ij["pressed"] = btn->pressed;
+                    ij["interactable"] = btn->interactable;
+                    ij["text"] = btn->label ? btn->label->text : "";
+                }
+                else if (item->GetWidgetType() == WidgetType::Label)
+                {
+                    ij["text"] = item->As<WidgetLabel>()->text;
+                }
+                itemsJson.push_back(std::move(ij));
+                for (const auto &child : item->children)
+                    collectItems(child);
+            };
+
+            if (Ref<WidgetCanvas> rootWidget = ctx.scene->GetRootWidget())
+            {
+                if (rootWidget->GetRoot())
+                    collectItems(rootWidget->GetRoot()->As<IWidgetItem>());
+                if (auto *am = AssetManager::GetInstance())
+                {
+                    for (const WidgetChildEntry &child : rootWidget->GetChildWidgets())
+                    {
+                        if (!child.enabled || child.handle == AssetHandle(0)) continue;
+                        if (Ref<WidgetCanvas> cc = am->GetAsset<WidgetCanvas>(child.handle))
+                        {
+                            if (cc->GetRoot())
+                                collectItems(cc->GetRoot()->As<IWidgetItem>());
+                        }
+                    }
+                }
+            }
+
+            const glm::vec2 gpMouse = InputSystem::GetGameplayMousePosition();
+            res["ok"] = true;
+            res["data"] = {
+                { "cursor_mode", static_cast<int>(InputSystem::GetCursorMode()) },
+                { "mouse_x", gpMouse.x },
+                { "mouse_y", gpMouse.y },
+                { "is_mouse_over_ui", GameUISystem::IsMouseOverUI(gpMouse.x, gpMouse.y) },
+                { "hovered_item", GameUISystem::GetHoveredItemName() },
+                { "items", itemsJson }
+            };
+            return res;
+        }
+
+        if (action == "inject_mouse_move")
+        {
+            const bool overrideActive = cmd.value("enabled", true);
+            const float x = cmd.value("x", 0.0f);
+            const float y = cmd.value("y", 0.0f);
+            const float dx = cmd.value("dx", 0.0f);
+            const float dy = cmd.value("dy", 0.0f);
+
+            InputSystem::SetSyntheticMouseOverride(overrideActive, x, y);
+            if (auto *sys = InputSystem::GetActiveSystem())
+            {
+                if (dx != 0.0f || dy != 0.0f)
+                    sys->AddMouseDelta(dx, dy);
+            }
+            if (ctx.sceneRenderer && overrideActive)
+            {
+                const bool cursorEnabled = InputSystem::GetCursorMode() != CursorMode::Disabled;
+                ctx.sceneRenderer->SetGameplayWidgetMousePosition(
+                    static_cast<uint32_t>(std::max(0.0f, x)),
+                    static_cast<uint32_t>(std::max(0.0f, y)),
+                    cursorEnabled);
+            }
+            GameUISystem::HandleMouseMotion(x, y);
+            res["ok"] = true;
+            return res;
+        }
+
+        if (action == "inject_mouse_button")
+        {
+            const std::string btnStr = cmd.value("button", "left");
+            const bool pressed = cmd.value("pressed", true);
+            if (cmd.contains("x") && cmd.contains("y"))
+            {
+                const float x = cmd.value("x", 0.0f);
+                const float y = cmd.value("y", 0.0f);
+                InputSystem::SetSyntheticMouseOverride(true, x, y);
+                if (ctx.sceneRenderer)
+                {
+                    ctx.sceneRenderer->SetGameplayWidgetMousePosition(
+                        static_cast<uint32_t>(std::max(0.0f, x)),
+                        static_cast<uint32_t>(std::max(0.0f, y)),
+                        InputSystem::GetCursorMode() != CursorMode::Disabled);
+                }
+                GameUISystem::HandleMouseMotion(x, y);
+            }
+
+            MouseCode code = Mouse::ButtonLeft;
+            if (btnStr == "right") code = Mouse::ButtonRight;
+            else if (btnStr == "middle") code = Mouse::ButtonMiddle;
+
+            if (auto *sys = InputSystem::GetActiveSystem())
+                sys->SetMouseButton(code, pressed);
+            res["ok"] = true;
+            return res;
+        }
+
+        if (action == "inject_key")
+        {
+            const std::string keyStr = cmd.value("key", "");
+            const bool pressed = cmd.value("pressed", true);
+            KeyCode code = 0;
+            if (keyStr == "W") code = Key::W;
+            else if (keyStr == "A") code = Key::A;
+            else if (keyStr == "S") code = Key::S;
+            else if (keyStr == "D") code = Key::D;
+            else if (keyStr == "R") code = Key::R;
+            else if (keyStr == "E") code = Key::E;
+            else if (keyStr == "Q") code = Key::Q;
+            else if (keyStr == "Space") code = Key::Space;
+            else if (keyStr == "Escape") code = Key::Escape;
+            else if (keyStr == "Enter") code = Key::Enter;
+            else if (keyStr == "Tab") code = Key::Tab;
+            else if (keyStr == "LeftShift") code = IGNITE_KEY_LSHIFT;
+            else if (keyStr == "D1") code = Key::D1;
+            else if (keyStr == "D2") code = Key::D2;
+            else if (keyStr == "D3") code = Key::D3;
+            else if (keyStr == "F1") code = Key::F1;
+            else if (keyStr == "F2") code = Key::F2;
+            else if (keyStr == "F3") code = Key::F3;
+
+            if (code == 0) { res["error"] = "Unsupported key: " + keyStr; return res; }
+            if (auto *sys = InputSystem::GetActiveSystem())
+                sys->SetKey(code, pressed);
+            res["ok"] = true;
             return res;
         }
 

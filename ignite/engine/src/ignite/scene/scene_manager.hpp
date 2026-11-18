@@ -97,11 +97,15 @@ namespace ignite
         }
 
         static void Transition(AssetHandle nextSceneHandle);
+        static void RequestStop();
+        static void SetStopCallback(std::function<void()> callback);
         static void ExecutePendingTransition();
 
     private:
         static bool s_TransitionPending;
         static AssetHandle s_PendingSceneHandle;
+        static bool s_StopPending;
+        static std::function<void()> s_StopCallback;
     };
 }
 

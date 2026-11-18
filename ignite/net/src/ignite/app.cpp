@@ -163,6 +163,8 @@ namespace ignite
                     m_Config.tickRate = ss.tickRate;
                 if (!m_Config.hasExplicitSnapshotRate)
                     m_Config.snapshotRate = ss.snapshotRate;
+                if (m_Config.scenePath.empty() && !ss.defaultScene.empty())
+                    m_Config.scenePath = ss.defaultScene;
 
                 AssetHandle defSceneHandle = m_Project->GetInfo().defaultSceneHandle;
                 if (defSceneHandle != AssetHandle(0))
@@ -275,6 +277,26 @@ namespace ignite
             return false;
         }
 
+        // StartServer creates NetServerReplication which marks isLocalPlayer templates replicated by default.
+        // Headless dedicated server has no local player, so keep scene player templates un-replicated to avoid phantom Player_0 clones.
+        if (m_Scene && m_Scene->registry)
+        {
+            auto view = m_Scene->registry->view<NetworkIdentityComponent>();
+            for (entt::entity e : view)
+            {
+                auto &netComp = view.get<NetworkIdentityComponent>(e);
+                if (netComp.isLocalPlayer && netComp.ownerClient == 0)
+                {
+                    netComp.replicate = false;
+                    if (netComp.netId != 0)
+                    {
+                        m_Scene->UnregisterNetEntity(netComp.netId);
+                        netComp.netId = 0;
+                    }
+                }
+            }
+        }
+
         return true;
     }
 
@@ -313,6 +335,11 @@ namespace ignite
 
         while (m_Running)
         {
+            if (m_AssetManager)
+            {
+                m_AssetManager->OnUpdate(tickDt);
+            }
+
             if (m_NetworkManager)
             {
                 m_NetworkManager->Update(tickDt);
@@ -320,6 +347,7 @@ namespace ignite
 
             if (m_Scene && m_Scene->IsRunning())
             {
+                m_Scene->OnFixedUpdateRuntimeSimulate();
                 m_Scene->OnUpdateRuntimeSimulate(tickDt);
             }
 

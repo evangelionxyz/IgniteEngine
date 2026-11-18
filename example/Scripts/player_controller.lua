@@ -80,8 +80,13 @@ function script.on_create(entity)
         current_yaw = tr.rotation.y
         st.playerYaw = current_yaw
     end
+    Ignite.Input.SetCursorMode("Disabled")
     Ignite.Debug.SetShowEntityNames(true)
     Ignite.Log("PlayerController initialized on " .. entity:get_name())
+end
+
+function script.on_destroy(entity)
+    Ignite.Input.SetCursorMode("Normal")
 end
 
 function script.on_network_input(entity, client_id, move_x, move_y, buttons, yaw, dt)

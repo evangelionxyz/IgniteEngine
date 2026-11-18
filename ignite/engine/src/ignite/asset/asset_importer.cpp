@@ -260,6 +260,11 @@ namespace ignite
                 AssetMetaData materialMetadata = assetManager->GetMetaData(materialHandle);
                 if (materialMetadata.type == AssetType::Material)
                 {
+                    // Avoid overwriting an already-loaded material from a background mesh import,
+                    // which could destroy live GPU resources while they are referenced by active command buffers.
+                    if (assetManager->TryGetAsset(materialHandle))
+                        continue;
+
                     const auto &materialFilepath = project->GetProjectFilepath(materialMetadata.filepath);
                     Ref<Material> material = Material::Deserialize(materialFilepath);
                     assetManager->AssignAsset(materialHandle, material);
@@ -585,6 +590,11 @@ namespace ignite
                 AssetMetaData materialMetadata = assetManager->GetMetaData(materialHandle);
                 if (materialMetadata.type == AssetType::Material)
                 {
+                    // Avoid overwriting an already-loaded material from a background mesh import,
+                    // which could destroy live GPU resources while they are referenced by active command buffers.
+                    if (assetManager->TryGetAsset(materialHandle))
+                        continue;
+
                     const auto &materialFilepath = project->GetProjectFilepath(materialMetadata.filepath);
                     Ref<Material> material = Material::Deserialize(materialFilepath);
                     assetManager->AssignAsset(materialHandle, material);
@@ -972,6 +982,8 @@ namespace ignite
         if (sound)
         {
             sound->handle = handle;
+            sound->SetReadyFlag(true);
+            sound->SetDirtyFlag(false);
         }
         return sound;
     }

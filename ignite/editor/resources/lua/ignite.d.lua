@@ -200,6 +200,32 @@ function AudioSourceComponent:resume() end
 ---@field shadow_distance number
 ---@field cascade_shadow boolean
 
+---@class WidgetComponent : Component
+---@field widget_handle integer
+local WidgetComponent = {}
+---@param itemName string
+---@param visible boolean
+function WidgetComponent:set_visible(itemName, visible) end
+---@param itemName string
+---@return boolean
+function WidgetComponent:is_visible(itemName) end
+---@param itemName string
+---@param text string
+function WidgetComponent:set_text(itemName, text) end
+---@param itemName string
+---@param color Vec4
+function WidgetComponent:set_color(itemName, color) end
+---@param itemName string
+---@param size Vec2
+function WidgetComponent:set_size(itemName, size) end
+---@param itemName string
+---@param pos Vec2
+function WidgetComponent:set_position(itemName, pos) end
+---@param enabled boolean
+function WidgetComponent:set_canvas_enabled(enabled) end
+---@return boolean
+function WidgetComponent:is_canvas_enabled() end
+
 ---@class ColliderComponent : Component
 ---@field center Vec3
 ---@field size Vec3
@@ -229,6 +255,7 @@ function Entity:has_component(name) end
 ---@overload fun(self: Entity, name: "AudioSource"): AudioSourceComponent
 ---@overload fun(self: Entity, name: "Camera"): CameraComponent
 ---@overload fun(self: Entity, name: "DirectionalLight"|"PointLight"|"SpotLight"): LightComponent
+---@overload fun(self: Entity, name: "Widget"): WidgetComponent
 ---@overload fun(self: Entity, name: "BoxCollider"|"SphereCollider"|"CapsuleCollider"|"BoxCollider2D"|"CircleCollider2D"): ColliderComponent
 ---@overload fun(self: Entity, name: ComponentName): Component
 function Entity:get_component(name) end
@@ -464,6 +491,9 @@ function Ignite.Math.Vec4(x, y, z, w) end
 Ignite.Scene = {}
 ---@param path string
 function Ignite.Scene.Load(path) end
+
+---Stops the active scene (exits Play/Simulate in the editor or closes standalone runtime).
+function Ignite.Scene.Stop() end
 ---@return number
 function Ignite.Scene.GetTime() end
 ---@return boolean
@@ -538,6 +568,13 @@ function Ignite.Input.GetMouseDelta() end
 ---@param x number
 ---@param y number
 function Ignite.Input.SetMousePosition(x, y) end
+---@param mode "Normal"|"Hidden"|"Disabled"|"Captured"|integer
+function Ignite.Input.SetCursorMode(mode) end
+---@return integer
+function Ignite.Input.GetCursorMode() end
+---@return boolean
+function Ignite.Input.IsMouseOverUI() end
+function Ignite.Input.SetMouseToCenter() end
 
 ---@class IgniteKey
 ---@field Space integer

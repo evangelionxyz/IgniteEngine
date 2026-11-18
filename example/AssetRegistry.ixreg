@@ -57,6 +57,11 @@
                 "Filepath": "Assets/Characters/RobotExpressive/RobotAnimator.ac"
             },
             {
+                "Handle": 100028,
+                "Type": "Font",
+                "Filepath": "Assets/Fonts/JetBrainsMono-Bold.ttf"
+            },
+            {
                 "Handle": 100030,
                 "Type": "LuaScript",
                 "Filepath": "Scripts/player_controller.lua"
@@ -97,6 +102,11 @@
                 "Filepath": "Scripts/companion_emote.lua"
             },
             {
+                "Handle": 39447475207385183,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/fps_ambient_prop.lua"
+            },
+            {
                 "Handle": 49980650083911860,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/No.ixanim"
@@ -107,9 +117,24 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Wave.ixanim"
             },
             {
+                "Handle": 251128180975454240,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/PlasmaBolt.glb"
+            },
+            {
                 "Handle": 796275172331220433,
                 "Type": "Material",
                 "Filepath": "Assets/Characters/RobotExpressive/Black.ixmat"
+            },
+            {
+                "Handle": 907158018085272992,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/DamagedHelmet.glb"
+            },
+            {
+                "Handle": 1094827651928374650,
+                "Type": "Font",
+                "Filepath": "Assets/Fonts/JetBrainsMono-Bold.ttf"
             },
             {
                 "Handle": 1161697820125101614,
@@ -122,6 +147,11 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Yes.ixanim"
             },
             {
+                "Handle": 2045315682693042477,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_RoughConcrete.ixmat"
+            },
+            {
                 "Handle": 2180521936609524435,
                 "Type": "LuaScript",
                 "Filepath": "Scripts/server_manager.lua"
@@ -132,9 +162,14 @@
                 "Filepath": "Scripts/remote_player.lua"
             },
             {
-                "Handle": 2606434827778452165,
+                "Handle": 2451521434766767928,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_MatteRubber.ixmat"
+            },
+            {
+                "Handle": 2644396269383640757,
                 "Type": "Texture",
-                "Filepath": "play_verify.png"
+                "Filepath": "Assets/Props/FPS/DamagedHelmet/embedded_texture_3.png"
             },
             {
                 "Handle": 2829210534807985551,
@@ -147,9 +182,39 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Running.ixanim"
             },
             {
+                "Handle": 3259526182087115714,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/hit_target.wav"
+            },
+            {
+                "Handle": 4187555684474507689,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_PolishedCopper.ixmat"
+            },
+            {
                 "Handle": 4194491018363911388,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/Sitting.ixanim"
+            },
+            {
+                "Handle": 4875024084220219929,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/fps_lua_hud_bridge.lua"
+            },
+            {
+                "Handle": 5240563967183766865,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/jump_pad.wav"
+            },
+            {
+                "Handle": 5608564410954710771,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/rifle_shot.wav"
+            },
+            {
+                "Handle": 5723935754500266675,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/TacticalCrate.glb"
             },
             {
                 "Handle": 5805619208508732074,
@@ -157,9 +222,34 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Standing.ixanim"
             },
             {
+                "Handle": 6012538090998002116,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_MirrorChrome.ixmat"
+            },
+            {
+                "Handle": 6283005348334205475,
+                "Type": "Widget",
+                "Filepath": "Assets/UI/FPS_GameplayHUD.wdgt"
+            },
+            {
                 "Handle": 6624530890808932250,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/Jump.ixanim"
+            },
+            {
+                "Handle": 6696272587586827308,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_MatteTerracotta.ixmat"
+            },
+            {
+                "Handle": 6760975715794657171,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/pulse_shot.wav"
+            },
+            {
+                "Handle": 6886871699447745262,
+                "Type": "Texture",
+                "Filepath": "Assets/HDRIs/kloppenheim_06_puresky_1k.hdr"
             },
             {
                 "Handle": 6970606114947867429,
@@ -172,9 +262,24 @@
                 "Filepath": "Scripts/effects_manager.lua"
             },
             {
+                "Handle": 7707667994970967754,
+                "Type": "LuaScript",
+                "Filepath": "Scripts/fps_target.lua"
+            },
+            {
                 "Handle": 7740477268739284241,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/Punch.ixanim"
+            },
+            {
+                "Handle": 8198475896054023102,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/FPS/DamagedHelmet/embedded_texture_4.png"
+            },
+            {
+                "Handle": 8347876710597687241,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_SatinCeramic.ixmat"
             },
             {
                 "Handle": 9172818322886732462,
@@ -182,9 +287,89 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Grey.ixmat"
             },
             {
+                "Handle": 9223282872212393254,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/FPS/DamagedHelmet/embedded_texture_0.png"
+            },
+            {
+                "Handle": 9350000745848682879,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/FPS/DamagedHelmet/embedded_texture_2.png"
+            },
+            {
+                "Handle": 9362257802799095613,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_RoughAsphalt.ixmat"
+            },
+            {
+                "Handle": 9500000000000000001,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/FPS/VX47_AssaultRifle.mesh"
+            },
+            {
+                "Handle": 9500000000000000002,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/FPS/PlasmaCarbine.mesh"
+            },
+            {
+                "Handle": 9500000000000000003,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/FPS/ExplosiveBarrel.mesh"
+            },
+            {
+                "Handle": 9500000000000000004,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/FPS/TacticalCrate.mesh"
+            },
+            {
+                "Handle": 9500000000000000005,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/FPS/TargetDrone.mesh"
+            },
+            {
+                "Handle": 9500000000000000006,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/FPS/PlasmaBolt.mesh"
+            },
+            {
+                "Handle": 9500000000000000011,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/ui_click_end.wav"
+            },
+            {
+                "Handle": 9500000000000000012,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/hit_crit.wav"
+            },
+            {
+                "Handle": 9500000000000000013,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/weapon_reload.wav"
+            },
+            {
+                "Handle": 9500000000000000014,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/barrel_explode.wav"
+            },
+            {
+                "Handle": 9746438103978175998,
+                "Type": "Material",
+                "Filepath": "Assets/Props/FPS/DamagedHelmet/Material_MR.ixmat"
+            },
+            {
                 "Handle": 9807310980490264862,
                 "Type": "LuaScript",
                 "Filepath": "Scripts/joint_hazard.lua"
+            },
+            {
+                "Handle": 10148842803858111519,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_NeonCyanEmissive.ixmat"
+            },
+            {
+                "Handle": 11011587100356735786,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/FPS/DamagedHelmet/embedded_texture_1.png"
             },
             {
                 "Handle": 11195833070019743305,
@@ -192,14 +377,74 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Idle.ixanim"
             },
             {
+                "Handle": 11232593576733536064,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/ui_click.wav"
+            },
+            {
                 "Handle": 11233258005906903096,
                 "Type": "Material",
                 "Filepath": "Assets/Props/Texture.ixmat"
             },
             {
+                "Handle": 11488354295993098228,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/VX47_AssaultRifle.glb"
+            },
+            {
+                "Handle": 11586747182365259059,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/PlasmaCarbine.glb"
+            },
+            {
+                "Handle": 12091667214104364287,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/FPS/DamagedHelmet/DamagedHelmet.mesh"
+            },
+            {
                 "Handle": 12136098296841181153,
                 "Type": "SkeletalMesh",
                 "Filepath": "Assets/Characters/RobotExpressive/RobotExpressive.skmesh"
+            },
+            {
+                "Handle": 12206715899188766470,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/ui_hover.wav"
+            },
+            {
+                "Handle": 12255151608030378080,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/hit_metal.wav"
+            },
+            {
+                "Handle": 12474025087504582692,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/Lantern.glb"
+            },
+            {
+                "Handle": 12856994190560798432,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_PolishedGold.ixmat"
+            },
+            {
+                "Handle": 13073711815677964821,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_BrushedSteel.ixmat"
+            },
+            {
+                "Handle": 13155593634019545998,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/ping_pong.mp3"
+            },
+            {
+                "Handle": 13231573084348628075,
+                "Type": "Scene",
+                "Filepath": "Assets/Scenes/FPSMenu.ixscene"
+            },
+            {
+                "Handle": 13383454037512489586,
+                "Type": "Scene",
+                "Filepath": "Assets/Scenes/FPSArena.ixscene"
             },
             {
                 "Handle": 13669646693628099575,
@@ -210,6 +455,11 @@
                 "Handle": 13706518437926054881,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/ThumbsUp.ixanim"
+            },
+            {
+                "Handle": 13734612050319106672,
+                "Type": "Audio",
+                "Filepath": "Assets/Audio/arena_ambient.mp3"
             },
             {
                 "Handle": 13798299963633127977,
@@ -232,6 +482,11 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Death.ixanim"
             },
             {
+                "Handle": 14665343695351463744,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/ExplosiveBarrel.glb"
+            },
+            {
                 "Handle": 14857031018264438332,
                 "Type": "Mesh",
                 "Filepath": "Assets/Props/BoxTextured.glb"
@@ -252,9 +507,39 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Walking.ixanim"
             },
             {
+                "Handle": 15779740577124715711,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_TargetCrimson.ixmat"
+            },
+            {
+                "Handle": 16146984404276908919,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/BoomBox.glb"
+            },
+            {
+                "Handle": 16176796658309022622,
+                "Type": "Widget",
+                "Filepath": "Assets/UI/FPS_MainMenu.wdgt"
+            },
+            {
+                "Handle": 16748964132136311984,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/TargetDrone.glb"
+            },
+            {
                 "Handle": 16762444080478458413,
                 "Type": "Material",
                 "Filepath": "Assets/Props/blinn3-fx.ixmat"
+            },
+            {
+                "Handle": 17440146609365759546,
+                "Type": "Material",
+                "Filepath": "Assets/Materials/FPS/Mat_SemiMetalAlloy.ixmat"
+            },
+            {
+                "Handle": 17763391981771569265,
+                "Type": "Mesh",
+                "Filepath": "Assets/Props/FPS/WaterBottle.glb"
             }
         ]
     }

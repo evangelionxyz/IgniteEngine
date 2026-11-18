@@ -61,6 +61,10 @@ public static class CoreNativeAPI
         public IntPtr Net_GetChatCount;
         public IntPtr Net_GetChatAt;
         public IntPtr Net_SetSimulationSettings;
+
+        public IntPtr AssetManager_GetAssetHandleByPath;
+        public IntPtr Scene_LoadByPath;
+        public IntPtr Scene_Stop;
     }
 
     public struct Funcs
@@ -245,5 +249,11 @@ public static class CoreNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void NetSetSimulationSettingsFn(int lagMs, float lossPercent);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void SceneLoadByPathFn(IntPtr scenePath);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void SceneStopFn();
     }
 }
