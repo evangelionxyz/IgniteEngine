@@ -72,6 +72,7 @@ namespace ignite
         bool showBoundingBox = false;
         bool showPhysicsCollider = false;
         bool showEntityNames = false;
+        bool showGIProbes = false;
         bool renderEnvironment = true;
 
         SampleMethod sampleMethod = SampleMethod::FXAA;
@@ -232,6 +233,7 @@ namespace ignite
         nri::CommandBuffer *BeginCommandBuffer();
         void SubmitCommandBuffer(nri::CommandBuffer *cmd);
         void WaitForPreviousCommandBuffer();
+        uint32_t GetActiveCommandBufferSlotIndex() const { return m_ActiveSlotIndex; }
         void RetainAssetForCurrentCommandBuffer(const Ref<Asset> &asset);
         void RetainRenderTargetForCurrentCommandBuffer(const Ref<RenderTarget> &renderTarget);
         void ClearRetainedCommandBufferAssets();

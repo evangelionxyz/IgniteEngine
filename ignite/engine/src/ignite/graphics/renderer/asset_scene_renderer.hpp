@@ -49,9 +49,16 @@ namespace ignite
             ConstantBuffer csmBuffer{ sizeof(CSM_GPUData), true, 16, "[AssetPreview] CSM Buffer" };
             ConstantBuffer pointLightBuffer{ sizeof(PointLightBufferData), true, 16, "[AssetPreview] PointLight Buffer" };
             ConstantBuffer spotLightBuffer{ sizeof(SpotLightBufferData), true, 16, "[AssetPreview] SpotLight Buffer" };
+            ConstantBuffer giBuffer{ sizeof(GI_GPUData), true, 16, "[AssetPreview] GI Buffer" };
+            ReflectionProbeBuffer reflectionProbeBuffer;
             ConstantBuffer compositePostProcessBuffer{ sizeof(CompositePostProcess_GPUData), true, 16, "[AssetPreview] Composite PostProcess Buffer" };
             Ref<BindingSet> staticMeshBindingSet;
             Ref<BindingSet> animatedBindingSet;
+
+            ~PreviewFrameUniforms()
+            {
+                reflectionProbeBuffer.Shutdown();
+            }
         };
 
         void SyncRuntimeMaterialFromSource();

@@ -8,6 +8,7 @@
 #define MAX_BONES 100
 #define MAX_POINT_LIGHTS 16
 #define MAX_SPOT_LIGHTS 16
+#define MAX_REFLECTION_PROBES 32
 
 #define RENDER_MODE_COLOR 0
 #define RENDER_MODE_DIFFUSE 1
@@ -18,6 +19,10 @@
 #define RENDER_MODE_TRANSMISSION 6
 #define RENDER_MODE_COAT 7
 #define RENDER_MODE_FUZZ 8
+#define RENDER_MODE_GI_DIFFUSE 9
+#define RENDER_MODE_GI_SPECULAR 10
+#define RENDER_MODE_AO 11
+#define RENDER_MODE_PROBE_WEIGHTS 12
 
 struct PushConstants
 {
@@ -172,6 +177,48 @@ struct SpotLight
     float4 directionAndAngle; // xyz = direction, w = cos(outerConeAngle)
     float4 color; // rgb = color, a = intensity
     float4 attenuation; // x = constant, y = linear, z = quadratic, w = cos(innerConeAngle)
+};
+
+struct GIData
+{
+    float4 skySH[9];
+
+    int skyPrefilterCubeIndex;
+    int skyPrefilterMipCount;
+    int captureMode;
+    int giMode;
+
+    float4 gridMinAndIntensity;
+    float4 gridSizeAndSpacing;
+    int4 gridDimsAndOrder;
+    float4 biasAndFade;
+    int4 shTextureIndices0;
+    int4 shTextureIndices1;
+    int4 visibilityParams;
+
+    int reflectionCubeArrayIndex;
+    int reflectionProbeCount;
+    int reflectionMipCount;
+    int bakePointShadowCubeArrayIndex;
+
+    int gtaoTextureIndex;
+    int aoMode;
+    float aoIntensity;
+    float aoPower;
+
+    float4 viewportInvSizeAndFlags;
+};
+
+struct ReflectionProbeGPU
+{
+    float4x4 worldToLocal;
+    float4x4 localToWorld;
+    float4 boxMinAndSlice;
+    float4 boxMaxAndBlend;
+    float4 influenceMinAndPrio;
+    float4 influenceMaxAndInt;
+    float4 capturePosAndNorm;
+    float4 captureSH[4];
 };
 
 #endif

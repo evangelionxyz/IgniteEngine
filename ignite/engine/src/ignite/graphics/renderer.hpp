@@ -26,6 +26,10 @@ namespace ignite
 #define RENDER_MODE_TRANSMISSION 6
 #define RENDER_MODE_COAT 7
 #define RENDER_MODE_FUZZ 8
+#define RENDER_MODE_GI_DIFFUSE 9
+#define RENDER_MODE_GI_SPECULAR 10
+#define RENDER_MODE_AO 11
+#define RENDER_MODE_PROBE_WEIGHTS 12
 
     class DeviceManager;
     class Texture;

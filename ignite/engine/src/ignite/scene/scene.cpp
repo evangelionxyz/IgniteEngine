@@ -2751,6 +2751,16 @@ namespace ignite
     }
 
     template<>
+    IGN_API void Scene::OnComponentAdded<IrradianceVolumeComponent>(Entity entity, IrradianceVolumeComponent &comp)
+    {
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<ReflectionProbeComponent>(Entity entity, ReflectionProbeComponent &comp)
+    {
+    }
+
+    template<>
     IGN_API void Scene::OnComponentAdded<Rigidbody2DComponent>(Entity entity, Rigidbody2DComponent &comp)
     {
     }

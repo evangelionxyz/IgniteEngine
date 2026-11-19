@@ -944,6 +944,7 @@ namespace ignite
                 if (ImGui::MenuItem("Small")) m_ThumbnailSize = 64;
                 if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 72;
                 if (ImGui::MenuItem("Large")) m_ThumbnailSize = 96;
+                if (ImGui::MenuItem("Huge")) m_ThumbnailSize = 120;
                 ImGui::EndMenu();
             }
 

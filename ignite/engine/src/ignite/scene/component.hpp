@@ -87,6 +87,8 @@ namespace ignite
         { "Prefab", CompType_Prefab },
         { "Particle System", CompType_ParticleSystem },
         { "Joint", CompType_PhysicsJoint },
+        { "Irradiance Volume", CompType_IrradianceVolume },
+        { "Reflection Probe", CompType_ReflectionProbe },
     };
 
     enum EntityType : uint8_t
@@ -213,6 +215,8 @@ namespace ignite
             case CompType_Prefab: return "CompType_Prefab";
             case CompType_ParticleSystem: return "CompType_ParticleSystem";
             case CompType_PhysicsJoint: return "CompType_PhysicsJoint";
+            case CompType_IrradianceVolume: return "CompType_IrradianceVolume";
+            case CompType_ReflectionProbe: return "CompType_ReflectionProbe";
             case CompType_Invalid:
             default: return "Invalid Component";
         }
@@ -298,6 +302,8 @@ namespace ignite
     {
     public:
         bool visible = true;
+        bool contributeGI = true;
+        bool receiveGI = true;
 
         RenderingComponent() = default;
 
@@ -322,6 +328,7 @@ namespace ignite
         int shadowResolution = 2; // 0=Low, 1=Medium, 2=High, 3=Ultra
         bool cascadeShadow = true;
         bool softShadows = true;
+        bool bakeIndirect = true;
 
         COMPONENT_CLASS_TYPE(CompType_DirectionalLight)
     };
@@ -335,6 +342,7 @@ namespace ignite
         float intensity = 1.0f;
         float range = 10.0f;
         bool enabled = true;
+        bool bakeIndirect = true;
 
         // Attenuation: 1 / (constant + linear*d + quadratic*d^2)
         float constantAttenuation = 1.0f;
@@ -353,6 +361,7 @@ namespace ignite
         float intensity = 1.0f;
         float range = 10.0f;
         bool enabled = true;
+        bool bakeIndirect = true;
 
         // Attenuation: 1 / (constant + linear*d + quadratic*d^2)
         float constantAttenuation = 1.0f;
@@ -390,6 +399,53 @@ namespace ignite
         bool dirtyEnvironment = true;
 
         COMPONENT_CLASS_TYPE(CompType_WorldEnvironment)
+    };
+
+    class IrradianceVolumeComponent : public IComponent
+    {
+    public:
+        glm::vec3 extents = glm::vec3(10.0f);
+        float spacing = 1.5f;
+        int bounces = 3;
+        int captureResolution = 32;
+        int shOrder = 2;
+        int runtimeMode = 2; // 0 = Off, 1 = Fast, 2 = LeakResistant
+        float normalBias = 0.25f;
+        float viewBias = 0.1f;
+        float edgeFade = 1.0f;
+        float intensity = 1.0f;
+        int priority = 0;
+
+        AssetHandle bakedAsset = AssetHandle(0);
+        std::string bakedAssetPath;
+        uint64_t bakeHash = 0;
+
+        IrradianceVolumeComponent() = default;
+
+        COMPONENT_CLASS_TYPE(CompType_IrradianceVolume)
+    };
+
+    class ReflectionProbeComponent : public IComponent
+    {
+    public:
+        glm::vec3 influenceExtents = glm::vec3(5.0f, 3.0f, 5.0f);
+        glm::vec3 projectionExtents = glm::vec3(5.0f, 3.0f, 5.0f);
+        glm::vec3 captureOffset = glm::vec3(0.0f);
+        float blendDistance = 1.0f;
+        int resolution = 128;
+        int priority = 0;
+        float intensity = 1.0f;
+        bool normalize = true;
+        float normalizationStrength = 1.0f;
+        bool boxProjection = true;
+
+        AssetHandle bakedAsset = AssetHandle(0);
+        std::string bakedAssetPath;
+        uint64_t bakeHash = 0;
+
+        ReflectionProbeComponent() = default;
+
+        COMPONENT_CLASS_TYPE(CompType_ReflectionProbe)
     };
 
     class Sprite2DComponent : public IComponent

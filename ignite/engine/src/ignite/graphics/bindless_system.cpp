@@ -172,6 +172,12 @@ namespace ignite
         std::lock_guard<std::mutex> lock(s_Mutex);
         if (!s_Initialized) return;
 
+        // Drop any un-flushed write for this slot before the caller destroys the Texture/Descriptor
+        std::erase_if(s_PendingWrites, [index](const PendingWrite &write)
+        {
+            return write.index == index;
+        });
+
         s_PendingWrites.push_back({ index, nullptr });
         s_DeferredFrees.push_back({ index, s_CurrentFrame });
     }

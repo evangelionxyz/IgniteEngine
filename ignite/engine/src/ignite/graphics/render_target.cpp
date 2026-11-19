@@ -423,7 +423,10 @@ namespace ignite
             {
                 b.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
             }
-            b.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT, nri::StageBits::DEPTH_STENCIL_ATTACHMENT };
+            const nri::AccessBits depthAccess = clearDepth
+                ? nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE
+                : (nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_READ | nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE);
+            b.after = { depthAccess, nri::Layout::DEPTH_STENCIL_ATTACHMENT, nri::StageBits::DEPTH_STENCIL_ATTACHMENT };
             b.mipOffset = 0;
             b.mipNum = nri::REMAINING;
             b.layerOffset = 0;

@@ -56,11 +56,14 @@ namespace ignite
 
         // Components (optional so we only store the ones the entity actually has)
         std::optional<TransformComponent>      transform;
+        std::optional<RenderingComponent>      rendering;
         std::optional<Sprite2DComponent>       sprite2D;
         std::optional<Circle2DComponent>       circle2D;
-        std::optional<CameraComponent>         camera;
-        std::optional<WorldEnvironment>        worldEnv;
-        std::optional<AudioSourceComponent>    audioSource;
+        std::optional<CameraComponent>           camera;
+        std::optional<WorldEnvironment>          worldEnv;
+        std::optional<IrradianceVolumeComponent> irradianceVolume;
+        std::optional<ReflectionProbeComponent>  reflectionProbe;
+        std::optional<AudioSourceComponent>      audioSource;
         std::optional<ScriptComponent>         script;
         std::optional<LuaScriptComponent>      luaScript;
 
@@ -146,6 +149,9 @@ namespace ignite
         if (entity.HasComponent<TransformComponent>())
             snap.transform = entity.GetComponent<TransformComponent>();
 
+        if (entity.HasComponent<RenderingComponent>())
+            snap.rendering = entity.GetComponent<RenderingComponent>();
+
         if (entity.HasComponent<Sprite2DComponent>())
             snap.sprite2D = entity.GetComponent<Sprite2DComponent>();
 
@@ -157,6 +163,12 @@ namespace ignite
 
         if (entity.HasComponent<WorldEnvironment>())
             snap.worldEnv = entity.GetComponent<WorldEnvironment>();
+
+        if (entity.HasComponent<IrradianceVolumeComponent>())
+            snap.irradianceVolume = entity.GetComponent<IrradianceVolumeComponent>();
+
+        if (entity.HasComponent<ReflectionProbeComponent>())
+            snap.reflectionProbe = entity.GetComponent<ReflectionProbeComponent>();
 
         if (entity.HasComponent<AudioSourceComponent>())
             snap.audioSource = entity.GetComponent<AudioSourceComponent>();
@@ -263,6 +275,9 @@ namespace ignite
             e.GetComponent<TransformComponent>() = *snap.transform;
         }
 
+        if (snap.rendering)
+            e.AddOrReplaceComponent<RenderingComponent>(*snap.rendering);
+
         if (snap.sprite2D)
             e.AddOrReplaceComponent<Sprite2DComponent>(*snap.sprite2D);
 
@@ -274,6 +289,12 @@ namespace ignite
 
         if (snap.worldEnv)
             e.AddOrReplaceComponent<WorldEnvironment>(*snap.worldEnv);
+
+        if (snap.irradianceVolume)
+            e.AddOrReplaceComponent<IrradianceVolumeComponent>(*snap.irradianceVolume);
+
+        if (snap.reflectionProbe)
+            e.AddOrReplaceComponent<ReflectionProbeComponent>(*snap.reflectionProbe);
 
         if (snap.audioSource)
             e.AddOrReplaceComponent<AudioSourceComponent>(*snap.audioSource);

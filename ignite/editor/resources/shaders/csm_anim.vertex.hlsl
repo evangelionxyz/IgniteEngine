@@ -10,6 +10,8 @@ cbuffer SceneBuffer                     : register(b4, space0) { Scene scene; }
 cbuffer CascadesBuffer                  : register(b5, space0) { CascadesShadows csm; }
 cbuffer PointLightBuffer                : register(b6, space0) { } // unused in VS
 cbuffer SpotLightBuffer                 : register(b7, space0) { } // unused in VS
+cbuffer GIBuffer                        : register(b8, space0) { } // unused in VS
+StructuredBuffer<ReflectionProbeGPU> g_ReflectionProbes : register(t9, space0); // unused in VS
 
 float4 SkinPosition(VertexMeshAnim input, uint objectIndex)
 {

@@ -72,6 +72,27 @@ namespace ignite
         size_t m_ByteSize = 0;
     };
 
+    class ReflectionProbeBuffer
+    {
+    public:
+        void Initialize(uint32_t maxProbes = MAX_REFLECTION_PROBES, nri::Device *device = nullptr);
+        void Shutdown();
+        void SetData(const ReflectionProbe_GPUData *data, uint32_t count);
+        nri::Buffer *GetHandle() const { return m_Buffer; }
+        nri::Descriptor *GetDescriptor() const { return m_Descriptor; }
+        uint8_t *GetMappedMemory() const { return m_MappedMemory; }
+        size_t GetByteSize() const { return m_ByteSize; }
+
+        operator nri::Buffer *() const { return m_Buffer; }
+
+    private:
+        nri::Buffer *m_Buffer = nullptr;
+        nri::Memory *m_Memory = nullptr;
+        nri::Descriptor *m_Descriptor = nullptr;
+        uint8_t *m_MappedMemory = nullptr;
+        size_t m_ByteSize = 0;
+    };
+
     class ObjectAllocator
     {
     public:
@@ -133,6 +154,7 @@ namespace ignite
         ConstantBuffer csmBuffer;
         ConstantBuffer pointLightBuffer;
         ConstantBuffer spotLightBuffer;
+        ConstantBuffer giBuffer;
 
         ObjectBuffer objectBuffer;
         ObjectAllocator objectAllocator;
@@ -142,6 +164,8 @@ namespace ignite
 
         InstanceIndexBuffer instanceIndexBuffer;
         InstanceIndexAllocator instanceIndexAllocator;
+
+        ReflectionProbeBuffer reflectionProbeBuffer;
 
         Ref<BindingSet> staticMeshBindingSet;
         Ref<BindingSet> animatedBindingSet;

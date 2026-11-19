@@ -758,6 +758,22 @@ namespace ignite
             {
                 entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene, "World Environment"));
             }
+            if (ImGui::MenuItem("Irradiance Volume"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Irradiance Volume"));
+                if (entity.IsValid() && !entity.HasComponent<IrradianceVolumeComponent>())
+                {
+                    entity.AddComponent<IrradianceVolumeComponent>();
+                }
+            }
+            if (ImGui::MenuItem("Reflection Probe"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Reflection Probe"));
+                if (entity.IsValid() && !entity.HasComponent<ReflectionProbeComponent>())
+                {
+                    entity.AddComponent<ReflectionProbeComponent>();
+                }
+            }
             if (ImGui::MenuItem("Terrain"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Terrain"));
@@ -1283,7 +1299,9 @@ namespace ignite
             RenderComponent<RenderingComponent>("Rendering", selectedEntity, [&]()
             {
                 auto &comp = selectedEntity.GetComponent<RenderingComponent>();
-                UI::State visibleState = UI::DrawCheckbox("Visible", &comp.visible);
+                UI::DrawCheckbox("Visible", &comp.visible);
+                UI::DrawCheckbox("Contribute GI", &comp.contributeGI);
+                UI::DrawCheckbox("Receive GI", &comp.receiveGI);
 
             }, false); // false: not allowed to remove the component
 
@@ -1599,6 +1617,7 @@ namespace ignite
 
                 ImGui::SeparatorText("Shadow");
                 UI::DrawCheckbox("Cascade Shadow", &c.cascadeShadow);
+                UI::DrawCheckbox("Bake Indirect", &c.bakeIndirect);
 
                 ImGui::BeginDisabled(!c.cascadeShadow);
                 {
@@ -1638,6 +1657,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<PointLightComponent>();
 
                 UI::DrawCheckbox("Enabled", &c.enabled);
+                UI::DrawCheckbox("Bake Indirect", &c.bakeIndirect);
                 UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
@@ -1653,6 +1673,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<SpotLightComponent>();
 
                 UI::DrawCheckbox("Enabled", &c.enabled);
+                UI::DrawCheckbox("Bake Indirect", &c.bakeIndirect);
                 UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
@@ -1665,6 +1686,60 @@ namespace ignite
                 ImGui::SeparatorText("Cone angles");
                 UI::DrawFloatControl("Inner Angle", &c.innerConeAngle, 0.1f, 0.0f, 90.0f);
                 UI::DrawFloatControl("Outer Angle", &c.outerConeAngle, 0.1f, 0.0f, 90.0f);
+            });
+
+            RenderComponent<IrradianceVolumeComponent>("Irradiance Volume", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<IrradianceVolumeComponent>();
+                const auto &tr = selectedEntity.GetComponent<TransformComponent>();
+
+                UI::DrawVec3Control("Half Extents", c.extents, 0.1f, 10.0f);
+                UI::DrawFloatControl("Probe Spacing (m)", &c.spacing, 0.05f, 0.25f, 16.0f);
+                UI::DrawIntControl("Bounces", &c.bounces, 1, 1, 4);
+                UI::DrawIntControl("Capture Resolution", &c.captureResolution, 1, 16, 128);
+                UI::DrawIntControl("SH Order (1-2)", &c.shOrder, 1, 1, 2);
+
+                const char *modeNames[] = { "Off", "Fast", "Leak Resistant" };
+                int modeIdx = std::clamp(c.runtimeMode, 0, 2);
+                if (ImGui::Combo("Runtime Mode", &modeIdx, modeNames, 3))
+                {
+                    c.runtimeMode = modeIdx;
+                }
+
+                UI::DrawFloatControl("Normal Bias", &c.normalBias, 0.01f, 0.0f, 2.0f);
+                UI::DrawFloatControl("View Bias", &c.viewBias, 0.01f, 0.0f, 2.0f);
+                UI::DrawFloatControl("Edge Fade (m)", &c.edgeFade, 0.05f, 0.0f, 32.0f);
+                UI::DrawFloatControl("Intensity", &c.intensity, 0.05f, 0.0f, 10.0f);
+                UI::DrawIntControl("Priority", &c.priority, 1, -100, 100);
+
+                const glm::vec3 halfExt = glm::max(glm::abs(c.extents * tr.world.scale), glm::vec3(0.5f));
+                const float safeSpacing = std::max(c.spacing, 0.25f);
+                const glm::ivec3 estDims = glm::clamp(
+                    glm::ivec3(glm::ceil((halfExt * 2.0f) / safeSpacing)) + glm::ivec3(1),
+                    glm::ivec3(2, 2, 2),
+                    glm::ivec3(64, 32, 64));
+                ImGui::Text("Probe Grid: %dx%dx%d (%d probes)",
+                    estDims.x, estDims.y, estDims.z, estDims.x * estDims.y * estDims.z);
+                ImGui::TextWrapped("Baked File: %s", c.bakedAssetPath.empty() ? "(not baked)" : c.bakedAssetPath.c_str());
+            });
+
+            RenderComponent<ReflectionProbeComponent>("Reflection Probe", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<ReflectionProbeComponent>();
+                UI::DrawVec3Control("Influence Extents", c.influenceExtents, 0.1f, 5.0f);
+                UI::DrawVec3Control("Projection Extents", c.projectionExtents, 0.1f, 5.0f);
+                UI::DrawVec3Control("Capture Offset", c.captureOffset, 0.05f, 0.0f);
+                UI::DrawFloatControl("Blend Distance (m)", &c.blendDistance, 0.05f, 0.0f, 32.0f);
+                UI::DrawIntControl("Resolution", &c.resolution, 16, 32, 256);
+                UI::DrawIntControl("Priority", &c.priority, 1, -100, 100);
+                UI::DrawFloatControl("Intensity", &c.intensity, 0.05f, 0.0f, 10.0f);
+                ImGui::Checkbox("Box Projection", &c.boxProjection);
+                ImGui::Checkbox("Normalize To GI", &c.normalize);
+                if (c.normalize)
+                {
+                    UI::DrawFloatControl("Normalization Strength", &c.normalizationStrength, 0.05f, 0.0f, 1.0f);
+                }
+                ImGui::TextWrapped("Baked Cube: %s", c.bakedAssetPath.empty() ? "(not baked)" : c.bakedAssetPath.c_str());
             });
 
             RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()
@@ -4562,6 +4637,8 @@ namespace ignite
                     case CompType_DirectionalLight: addTyped(DirectionalLightComponent{}); break;
                     case CompType_PointLight: addTyped(PointLightComponent{}); break;
                     case CompType_SpotLight: addTyped(SpotLightComponent{}); break;
+                    case CompType_IrradianceVolume: addTyped(IrradianceVolumeComponent{}); break;
+                    case CompType_ReflectionProbe: addTyped(ReflectionProbeComponent{}); break;
                     case CompType_Text: addTyped(TextComponent{}); break;
                     case CompType_Widget: addTyped(WidgetComponent{}); break;
                     case CompType_Rigidbody2D: addTyped(Rigidbody2DComponent{}); break;

@@ -74,6 +74,7 @@ namespace ignite
             case nri::Format::R32_UINT:
             case nri::Format::R32_SFLOAT:
             case nri::Format::R32_SINT:
+            case nri::Format::D32_SFLOAT:
             case nri::Format::RG16_SFLOAT:
             case nri::Format::RG16_UNORM:
                 return 4;
@@ -211,8 +212,7 @@ namespace ignite
 
     size_t Texture::GetApproxSizeBytes() const
     {
-        const size_t bytesPerPixel =
-            (m_CreateInfo.format == nri::Format::RGBA32_SFLOAT) ? sizeof(float) * 4u : 4u;
+        const size_t bytesPerPixel = texture_utils::GetBytesPerPixel(m_CreateInfo.format);
 
         const size_t width = static_cast<size_t>(std::max(m_CreateInfo.width, 1u));
         const size_t height = static_cast<size_t>(std::max(m_CreateInfo.height, 1u));
@@ -403,6 +403,11 @@ namespace ignite
                 ImGui_NRI::InvalidateTextureCache(m_ShaderResourceView);
                 nri.DestroyDescriptor(m_ShaderResourceView);
             }
+            if (m_ArrayShaderResourceView)
+            {
+                ImGui_NRI::InvalidateTextureCache(m_ArrayShaderResourceView);
+                nri.DestroyDescriptor(m_ArrayShaderResourceView);
+            }
             if (m_Sampler)
             {
                 nri.DestroyDescriptor(m_Sampler);
@@ -420,6 +425,7 @@ namespace ignite
         m_MipSRVs.clear();
         m_StorageViews.clear();
         m_ShaderResourceView = nullptr;
+        m_ArrayShaderResourceView = nullptr;
         m_Sampler = nullptr;
         m_StagingBuffer = nullptr;
         m_Handle = nullptr;
@@ -764,23 +770,34 @@ namespace ignite
                 // Create full-chain SRV
                 nri::TextureViewDesc srvDesc = {};
                 srvDesc.texture = m_Handle;
-                if (m_CreateInfo.isCubeMap)
+                if (m_CreateInfo.dimension == nri::TextureType::TEXTURE_3D)
                 {
-                    srvDesc.type = (m_CreateInfo.arraySize > 6) ? nri::TextureView::TEXTURE_CUBE_ARRAY : nri::TextureView::TEXTURE_CUBE;
-                }
-                else if (m_CreateInfo.arraySize > 1)
-                {
-                    srvDesc.type = nri::TextureView::TEXTURE_ARRAY;
+                    srvDesc.type = nri::TextureView::TEXTURE;
+                    srvDesc.layerOffset = 0;
+                    srvDesc.layerNum = 1;
+                    srvDesc.sliceOffset = 0;
+                    srvDesc.sliceNum = nri::REMAINING;
                 }
                 else
                 {
-                    srvDesc.type = nri::TextureView::TEXTURE;
+                    if (m_CreateInfo.isCubeMap)
+                    {
+                        srvDesc.type = (m_CreateInfo.arraySize > 6) ? nri::TextureView::TEXTURE_CUBE_ARRAY : nri::TextureView::TEXTURE_CUBE;
+                    }
+                    else if (m_CreateInfo.arraySize > 1)
+                    {
+                        srvDesc.type = nri::TextureView::TEXTURE_ARRAY;
+                    }
+                    else
+                    {
+                        srvDesc.type = nri::TextureView::TEXTURE;
+                    }
+                    srvDesc.layerOffset = 0;
+                    srvDesc.layerNum = nri::REMAINING;
                 }
                 srvDesc.format = m_CreateInfo.format;
                 srvDesc.mipOffset = 0;
                 srvDesc.mipNum = nri::REMAINING;
-                srvDesc.layerOffset = 0;
-                srvDesc.layerNum = nri::REMAINING;
                 srvDesc.planes = isDepth ? nri::PlaneBits::DEPTH : nri::PlaneBits::ALL;
 
                 nri.CreateTextureView(srvDesc, m_ShaderResourceView);
@@ -793,17 +810,28 @@ namespace ignite
                 {
                     nri::TextureViewDesc uavDesc = {};
                     uavDesc.texture = m_Handle;
-                    uavDesc.type = (m_CreateInfo.arraySize > 1) ? nri::TextureView::STORAGE_TEXTURE_ARRAY : nri::TextureView::STORAGE_TEXTURE;
+                    if (m_CreateInfo.dimension == nri::TextureType::TEXTURE_3D)
+                    {
+                        uavDesc.type = nri::TextureView::STORAGE_TEXTURE;
+                        uavDesc.layerOffset = 0;
+                        uavDesc.layerNum = 1;
+                        uavDesc.sliceOffset = 0;
+                        uavDesc.sliceNum = nri::REMAINING;
+                    }
+                    else
+                    {
+                        uavDesc.type = (m_CreateInfo.arraySize > 1) ? nri::TextureView::STORAGE_TEXTURE_ARRAY : nri::TextureView::STORAGE_TEXTURE;
+                        uavDesc.layerOffset = 0;
+                        uavDesc.layerNum = nri::REMAINING;
+                    }
                     uavDesc.format = m_CreateInfo.format;
                     uavDesc.mipOffset = static_cast<nri::Dim_t>(mip);
                     uavDesc.mipNum = 1;
-                    uavDesc.layerOffset = 0;
-                    uavDesc.layerNum = nri::REMAINING;
                     nri.CreateTextureView(uavDesc, m_StorageViews[mip]);
                 }
             }
 
-            if (m_CreateInfo.bindless && !m_CreateInfo.isRenderTarget && !m_CreateInfo.isNativeObject && m_ShaderResourceView)
+            if (m_CreateInfo.bindless && (!m_CreateInfo.isRenderTarget || m_CreateInfo.forceBindless) && !m_CreateInfo.isNativeObject && m_ShaderResourceView)
             {
                 m_BindlessIndex = BindlessSystem::RegisterTexture(m_ShaderResourceView);
             }
@@ -1347,6 +1375,483 @@ namespace ignite
         {
             BindlessSystem::FlushPendingWrites();
         }
+    }
+
+    nri::Descriptor *Texture::GetArrayShaderResourceView()
+    {
+        EnsureTextureHandle();
+        if (!m_Handle)
+            return nullptr;
+        if (m_CreateInfo.dimension == nri::TextureType::TEXTURE_3D || m_CreateInfo.arraySize <= 1)
+            return m_ShaderResourceView;
+        if (m_ArrayShaderResourceView)
+            return m_ArrayShaderResourceView;
+
+        auto *dm = DeviceManager::GetInstance();
+        if (!dm)
+            return nullptr;
+
+        const auto &nri = dm->GetCoreInterface();
+        const auto &desc = nri.GetTextureDesc(*m_Handle);
+        if ((desc.usage & nri::TextureUsageBits::SHADER_RESOURCE) == 0)
+            return nullptr;
+
+        const bool isDepth = texture_utils::IsDepthFormat(m_CreateInfo.format);
+        nri::TextureViewDesc srvDesc = {};
+        srvDesc.texture = m_Handle;
+        srvDesc.type = nri::TextureView::TEXTURE_ARRAY;
+        srvDesc.format = m_CreateInfo.format;
+        srvDesc.mipOffset = 0;
+        srvDesc.mipNum = nri::REMAINING;
+        srvDesc.layerOffset = 0;
+        srvDesc.layerNum = nri::REMAINING;
+        srvDesc.planes = isDepth ? nri::PlaneBits::DEPTH : nri::PlaneBits::ALL;
+
+        nri.CreateTextureView(srvDesc, m_ArrayShaderResourceView);
+        return m_ArrayShaderResourceView;
+    }
+
+    bool Texture::UploadRawData(const void *data, uint32_t rowPitch, uint32_t slicePitch, uint32_t mipLevel, uint32_t arrayLayer)
+    {
+        if (!data || rowPitch == 0)
+            return false;
+
+        EnsureTextureHandle();
+        auto *dm = DeviceManager::GetInstance();
+        if (!m_Handle || !dm || !dm->GetDevice() || !dm->GetGraphicsQueue())
+            return false;
+
+        const auto &nri = dm->GetCoreInterface();
+        const auto &devDesc = nri.GetDeviceDesc(*dm->GetDevice());
+        const uint32_t rowAlign = std::max<uint32_t>(devDesc.memoryAlignment.uploadBufferTextureRow, 256u);
+        const uint32_t sliceAlign = std::max<uint32_t>(devDesc.memoryAlignment.uploadBufferTextureSlice, 512u);
+
+        const uint32_t mipW = std::max(1u, m_CreateInfo.width >> mipLevel);
+        const uint32_t mipH = std::max(1u, m_CreateInfo.height >> mipLevel);
+        const uint32_t mipD = std::max(1u, m_CreateInfo.depth >> mipLevel);
+        const uint32_t effectiveSlicePitch = (slicePitch > 0) ? slicePitch : (rowPitch * mipH);
+
+        const uint32_t alignedRowPitch = ((rowPitch + rowAlign - 1u) / rowAlign) * rowAlign;
+        const uint32_t alignedSlicePitch = ((alignedRowPitch * mipH + sliceAlign - 1u) / sliceAlign) * sliceAlign;
+        const uint64_t totalSize = static_cast<uint64_t>(alignedSlicePitch) * mipD;
+
+        nri::Buffer *staging = nullptr;
+        nri::BufferDesc bufDesc = {};
+        bufDesc.size = totalSize;
+        bufDesc.usage = nri::BufferUsageBits::NONE;
+        if (nri.CreateCommittedBuffer(*dm->GetDevice(), nri::MemoryLocation::HOST_UPLOAD, 1.0f, bufDesc, staging) != nri::Result::SUCCESS || !staging)
+            return false;
+
+        if (uint8_t *mapped = static_cast<uint8_t *>(nri.MapBuffer(*staging, 0, totalSize)))
+        {
+            const uint8_t *srcBase = static_cast<const uint8_t *>(data);
+            for (uint32_t z = 0; z < mipD; ++z)
+            {
+                const uint8_t *srcSlice = srcBase + static_cast<size_t>(z) * effectiveSlicePitch;
+                uint8_t *dstSlice = mapped + static_cast<size_t>(z) * alignedSlicePitch;
+                for (uint32_t y = 0; y < mipH; ++y)
+                {
+                    std::memcpy(dstSlice + static_cast<size_t>(y) * alignedRowPitch, srcSlice + static_cast<size_t>(y) * rowPitch, rowPitch);
+                }
+            }
+            nri.UnmapBuffer(*staging);
+        }
+
+        nri::CommandAllocator *alloc = nullptr;
+        nri::CommandBuffer *cmd = nullptr;
+        nri::Fence *fence = nullptr;
+        nri::FenceDesc fenceDesc = {};
+        if (nri.CreateFence(*dm->GetDevice(), fenceDesc, fence) != nri::Result::SUCCESS ||
+            nri.CreateCommandAllocator(*dm->GetGraphicsQueue(), alloc) != nri::Result::SUCCESS ||
+            nri.CreateCommandBuffer(*alloc, cmd) != nri::Result::SUCCESS)
+        {
+            if (cmd) nri.DestroyCommandBuffer(cmd);
+            if (alloc) nri.DestroyCommandAllocator(alloc);
+            if (fence) nri.DestroyFence(fence);
+            nri.DestroyBuffer(staging);
+            return false;
+        }
+
+        const bool isDepth = texture_utils::IsDepthFormat(m_CreateInfo.format);
+        const nri::PlaneBits planes = isDepth ? nri::PlaneBits::DEPTH : nri::PlaneBits::ALL;
+
+        bool ok = false;
+        if (nri.BeginCommandBuffer(*cmd, nullptr) == nri::Result::SUCCESS)
+        {
+            nri::TextureBarrierDesc pre = {};
+            pre.texture = m_Handle;
+            pre.before = (m_CurrentLayout == nri::Layout::UNDEFINED)
+                ? nri::AccessLayoutStage{ nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE }
+                : nri::AccessLayoutStage{ m_CurrentAccess, m_CurrentLayout, m_CurrentStages };
+            pre.after = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION, nri::StageBits::COPY };
+            pre.mipOffset = 0;
+            pre.mipNum = nri::REMAINING;
+            pre.layerOffset = 0;
+            pre.layerNum = nri::REMAINING;
+            pre.planes = planes;
+
+            nri::BarrierDesc bDesc = {};
+            bDesc.textures = &pre;
+            bDesc.textureNum = 1;
+            nri.CmdBarrier(*cmd, bDesc);
+
+            nri::TextureRegionDesc dstRegion = {};
+            dstRegion.x = 0;
+            dstRegion.y = 0;
+            dstRegion.z = 0;
+            dstRegion.width = static_cast<nri::Dim_t>(mipW);
+            dstRegion.height = static_cast<nri::Dim_t>(mipH);
+            dstRegion.depth = static_cast<nri::Dim_t>(mipD);
+            dstRegion.mipOffset = static_cast<nri::Dim_t>(mipLevel);
+            dstRegion.layerOffset = static_cast<nri::Dim_t>(arrayLayer);
+            dstRegion.planes = planes;
+
+            nri::TextureDataLayoutDesc srcLayout = {};
+            srcLayout.offset = 0;
+            srcLayout.rowPitch = alignedRowPitch;
+            srcLayout.slicePitch = alignedSlicePitch;
+
+            nri.CmdUploadBufferToTexture(*cmd, *m_Handle, dstRegion, *staging, srcLayout);
+
+            nri::TextureBarrierDesc post = pre;
+            post.before = pre.after;
+            post.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            bDesc.textures = &post;
+            nri.CmdBarrier(*cmd, bDesc);
+
+            nri.EndCommandBuffer(*cmd);
+
+            nri::FenceSubmitDesc signal = { fence, 1, nri::StageBits::ALL };
+            nri::QueueSubmitDesc submit = {};
+            submit.commandBuffers = &cmd;
+            submit.commandBufferNum = 1;
+            submit.signalFences = &signal;
+            submit.signalFenceNum = 1;
+            {
+                std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+                nri.QueueSubmit(*dm->GetGraphicsQueue(), submit);
+            }
+            nri.Wait(*fence, 1);
+            SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
+            m_Ready = true;
+            ok = true;
+        }
+
+        nri.DestroyCommandBuffer(cmd);
+        nri.DestroyCommandAllocator(alloc);
+        nri.DestroyFence(fence);
+        nri.DestroyBuffer(staging);
+        return ok;
+    }
+
+    bool Texture::UploadCubeMipChain(const std::vector<std::vector<uint8_t>> &subresourceBytes, uint32_t cubeSliceOffset)
+    {
+        EnsureTextureHandle();
+        auto *dm = DeviceManager::GetInstance();
+        if (!m_Handle || !dm || !dm->GetDevice() || !dm->GetGraphicsQueue())
+            return false;
+
+        const uint32_t mipCount = std::max(1u, m_CreateInfo.mipLevels);
+        if (subresourceBytes.size() != 6u * mipCount)
+            return false;
+
+        const auto &nri = dm->GetCoreInterface();
+        const auto &devDesc = nri.GetDeviceDesc(*dm->GetDevice());
+        const uint32_t rowAlign = std::max<uint32_t>(devDesc.memoryAlignment.uploadBufferTextureRow, 256u);
+        const uint32_t sliceAlign = std::max<uint32_t>(devDesc.memoryAlignment.uploadBufferTextureSlice, 512u);
+        const size_t bpp = texture_utils::GetBytesPerPixel(m_CreateInfo.format);
+
+        struct SubPlacement
+        {
+            uint64_t offset = 0;
+            uint32_t mipW = 0;
+            uint32_t mipH = 0;
+            uint32_t srcRowPitch = 0;
+            uint32_t alignedRowPitch = 0;
+            uint32_t alignedSlicePitch = 0;
+            uint32_t face = 0;
+            uint32_t mip = 0;
+        };
+
+        std::vector<SubPlacement> placements;
+        placements.reserve(subresourceBytes.size());
+        uint64_t totalSize = 0;
+
+        for (uint32_t face = 0; face < 6u; ++face)
+        {
+            for (uint32_t mip = 0; mip < mipCount; ++mip)
+            {
+                const size_t idx = static_cast<size_t>(face) * mipCount + mip;
+                const uint32_t mipW = std::max(1u, m_CreateInfo.width >> mip);
+                const uint32_t mipH = std::max(1u, m_CreateInfo.height >> mip);
+                const uint32_t srcRowPitch = static_cast<uint32_t>(mipW * bpp);
+                if (subresourceBytes[idx].size() < static_cast<size_t>(srcRowPitch) * mipH)
+                    return false;
+
+                totalSize = ((totalSize + sliceAlign - 1ull) / sliceAlign) * sliceAlign;
+                SubPlacement p;
+                p.offset = totalSize;
+                p.mipW = mipW;
+                p.mipH = mipH;
+                p.srcRowPitch = srcRowPitch;
+                p.alignedRowPitch = ((srcRowPitch + rowAlign - 1u) / rowAlign) * rowAlign;
+                p.alignedSlicePitch = ((p.alignedRowPitch * mipH + sliceAlign - 1u) / sliceAlign) * sliceAlign;
+                p.face = face;
+                p.mip = mip;
+                placements.push_back(p);
+                totalSize += p.alignedSlicePitch;
+            }
+        }
+
+        nri::Buffer *staging = nullptr;
+        nri::BufferDesc bufDesc = {};
+        bufDesc.size = totalSize;
+        bufDesc.usage = nri::BufferUsageBits::NONE;
+        if (nri.CreateCommittedBuffer(*dm->GetDevice(), nri::MemoryLocation::HOST_UPLOAD, 1.0f, bufDesc, staging) != nri::Result::SUCCESS || !staging)
+            return false;
+
+        if (uint8_t *mapped = static_cast<uint8_t *>(nri.MapBuffer(*staging, 0, totalSize)))
+        {
+            for (size_t i = 0; i < placements.size(); ++i)
+            {
+                const auto &p = placements[i];
+                const uint8_t *src = subresourceBytes[i].data();
+                uint8_t *dst = mapped + p.offset;
+                for (uint32_t y = 0; y < p.mipH; ++y)
+                {
+                    std::memcpy(dst + static_cast<size_t>(y) * p.alignedRowPitch, src + static_cast<size_t>(y) * p.srcRowPitch, p.srcRowPitch);
+                }
+            }
+            nri.UnmapBuffer(*staging);
+        }
+
+        nri::CommandAllocator *alloc = nullptr;
+        nri::CommandBuffer *cmd = nullptr;
+        nri::Fence *fence = nullptr;
+        nri::FenceDesc fenceDesc = {};
+        if (nri.CreateFence(*dm->GetDevice(), fenceDesc, fence) != nri::Result::SUCCESS ||
+            nri.CreateCommandAllocator(*dm->GetGraphicsQueue(), alloc) != nri::Result::SUCCESS ||
+            nri.CreateCommandBuffer(*alloc, cmd) != nri::Result::SUCCESS)
+        {
+            if (cmd) nri.DestroyCommandBuffer(cmd);
+            if (alloc) nri.DestroyCommandAllocator(alloc);
+            if (fence) nri.DestroyFence(fence);
+            nri.DestroyBuffer(staging);
+            return false;
+        }
+
+        bool ok = false;
+        if (nri.BeginCommandBuffer(*cmd, nullptr) == nri::Result::SUCCESS)
+        {
+            nri::TextureBarrierDesc pre = {};
+            pre.texture = m_Handle;
+            pre.before = (m_CurrentLayout == nri::Layout::UNDEFINED)
+                ? nri::AccessLayoutStage{ nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE }
+                : nri::AccessLayoutStage{ m_CurrentAccess, m_CurrentLayout, m_CurrentStages };
+            pre.after = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION, nri::StageBits::COPY };
+            pre.mipOffset = 0;
+            pre.mipNum = nri::REMAINING;
+            pre.layerOffset = 0;
+            pre.layerNum = nri::REMAINING;
+            pre.planes = nri::PlaneBits::ALL;
+
+            nri::BarrierDesc bDesc = {};
+            bDesc.textures = &pre;
+            bDesc.textureNum = 1;
+            nri.CmdBarrier(*cmd, bDesc);
+
+            const uint32_t baseLayer = cubeSliceOffset * 6u;
+            for (const auto &p : placements)
+            {
+                nri::TextureRegionDesc dstRegion = {};
+                dstRegion.width = static_cast<nri::Dim_t>(p.mipW);
+                dstRegion.height = static_cast<nri::Dim_t>(p.mipH);
+                dstRegion.depth = 1;
+                dstRegion.mipOffset = static_cast<nri::Dim_t>(p.mip);
+                dstRegion.layerOffset = static_cast<nri::Dim_t>(baseLayer + p.face);
+                dstRegion.planes = nri::PlaneBits::ALL;
+
+                nri::TextureDataLayoutDesc srcLayout = {};
+                srcLayout.offset = p.offset;
+                srcLayout.rowPitch = p.alignedRowPitch;
+                srcLayout.slicePitch = p.alignedSlicePitch;
+
+                nri.CmdUploadBufferToTexture(*cmd, *m_Handle, dstRegion, *staging, srcLayout);
+            }
+
+            nri::TextureBarrierDesc post = pre;
+            post.before = pre.after;
+            post.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            bDesc.textures = &post;
+            nri.CmdBarrier(*cmd, bDesc);
+            nri.EndCommandBuffer(*cmd);
+
+            nri::FenceSubmitDesc signal = { fence, 1, nri::StageBits::ALL };
+            nri::QueueSubmitDesc submit = {};
+            submit.commandBuffers = &cmd;
+            submit.commandBufferNum = 1;
+            submit.signalFences = &signal;
+            submit.signalFenceNum = 1;
+            {
+                std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+                nri.QueueSubmit(*dm->GetGraphicsQueue(), submit);
+            }
+            nri.Wait(*fence, 1);
+            SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
+            m_Ready = true;
+            ok = true;
+        }
+
+        nri.DestroyCommandBuffer(cmd);
+        nri.DestroyCommandAllocator(alloc);
+        nri.DestroyFence(fence);
+        nri.DestroyBuffer(staging);
+        return ok;
+    }
+
+    bool Texture::ReadbackTextureSubresource(const Ref<Texture> &texture, uint32_t mipLevel, uint32_t arrayLayer,
+        std::vector<uint8_t> &outBytes, uint32_t &outRowPitch, uint32_t &outSlicePitch)
+    {
+        if (!texture || !texture->GetHandle())
+            return false;
+
+        auto *dm = DeviceManager::GetInstance();
+        if (!dm || !dm->GetDevice() || !dm->GetGraphicsQueue())
+            return false;
+
+        const auto &nri = dm->GetCoreInterface();
+        const auto &devDesc = nri.GetDeviceDesc(*dm->GetDevice());
+        const auto &texDesc = nri.GetTextureDesc(*texture->GetHandle());
+        if (mipLevel >= texDesc.mipNum || arrayLayer >= texDesc.layerNum)
+            return false;
+
+        const size_t bpp = texture_utils::GetBytesPerPixel(texDesc.format);
+        const uint32_t mipW = std::max<uint32_t>(1u, static_cast<uint32_t>(texDesc.width) >> mipLevel);
+        const uint32_t mipH = std::max<uint32_t>(1u, static_cast<uint32_t>(texDesc.height) >> mipLevel);
+        const uint32_t mipD = std::max<uint32_t>(1u, static_cast<uint32_t>(texDesc.depth) >> mipLevel);
+
+        const uint32_t tightRowPitch = static_cast<uint32_t>(mipW * bpp);
+        const uint32_t tightSlicePitch = tightRowPitch * mipH;
+        const uint32_t rowAlign = std::max<uint32_t>(devDesc.memoryAlignment.uploadBufferTextureRow, 256u);
+        const uint32_t sliceAlign = std::max<uint32_t>(devDesc.memoryAlignment.uploadBufferTextureSlice, 512u);
+
+        const uint32_t alignedRowPitch = ((tightRowPitch + rowAlign - 1u) / rowAlign) * rowAlign;
+        const uint32_t alignedSlicePitch = ((alignedRowPitch * mipH + sliceAlign - 1u) / sliceAlign) * sliceAlign;
+        const uint64_t readbackSize = static_cast<uint64_t>(alignedSlicePitch) * mipD;
+
+        nri::Buffer *readbackBuf = nullptr;
+        nri::BufferDesc bufDesc = {};
+        bufDesc.size = readbackSize;
+        bufDesc.usage = nri::BufferUsageBits::NONE;
+        if (nri.CreateCommittedBuffer(*dm->GetDevice(), nri::MemoryLocation::HOST_READBACK, 1.0f, bufDesc, readbackBuf) != nri::Result::SUCCESS || !readbackBuf)
+            return false;
+
+        nri::CommandAllocator *alloc = nullptr;
+        nri::CommandBuffer *cmd = nullptr;
+        nri::Fence *fence = nullptr;
+        nri::FenceDesc fenceDesc = {};
+        if (nri.CreateFence(*dm->GetDevice(), fenceDesc, fence) != nri::Result::SUCCESS ||
+            nri.CreateCommandAllocator(*dm->GetGraphicsQueue(), alloc) != nri::Result::SUCCESS ||
+            nri.CreateCommandBuffer(*alloc, cmd) != nri::Result::SUCCESS)
+        {
+            if (cmd) nri.DestroyCommandBuffer(cmd);
+            if (alloc) nri.DestroyCommandAllocator(alloc);
+            if (fence) nri.DestroyFence(fence);
+            nri.DestroyBuffer(readbackBuf);
+            return false;
+        }
+
+        const bool isDepth = texture_utils::IsDepthFormat(texDesc.format);
+        const nri::PlaneBits planes = isDepth ? nri::PlaneBits::DEPTH : nri::PlaneBits::ALL;
+        const nri::Layout prevLayout = texture->GetCurrentLayout();
+        const nri::AccessBits prevAccess = texture->GetCurrentAccess();
+        const nri::StageBits prevStages = texture->GetCurrentStages();
+        const nri::Layout afterLayout = (prevLayout == nri::Layout::UNDEFINED) ? nri::Layout::SHADER_RESOURCE : prevLayout;
+        const nri::AccessBits afterAccess = (prevLayout == nri::Layout::UNDEFINED) ? nri::AccessBits::SHADER_RESOURCE : prevAccess;
+        const nri::StageBits afterStages = (prevLayout == nri::Layout::UNDEFINED) ? nri::StageBits::ALL : prevStages;
+
+        bool ok = false;
+        if (nri.BeginCommandBuffer(*cmd, nullptr) == nri::Result::SUCCESS)
+        {
+            nri::TextureBarrierDesc pre = {};
+            pre.texture = texture->GetHandle();
+            pre.before = (prevLayout == nri::Layout::UNDEFINED)
+                ? nri::AccessLayoutStage{ nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE }
+                : nri::AccessLayoutStage{ prevAccess, prevLayout, prevStages };
+            pre.after = { nri::AccessBits::COPY_SOURCE, nri::Layout::COPY_SOURCE, nri::StageBits::COPY };
+            pre.mipOffset = 0;
+            pre.mipNum = nri::REMAINING;
+            pre.layerOffset = 0;
+            pre.layerNum = nri::REMAINING;
+            pre.planes = planes;
+
+            nri::BarrierDesc bDesc = {};
+            bDesc.textures = &pre;
+            bDesc.textureNum = 1;
+            nri.CmdBarrier(*cmd, bDesc);
+
+            nri::TextureRegionDesc srcRegion = {};
+            srcRegion.x = 0;
+            srcRegion.y = 0;
+            srcRegion.z = 0;
+            srcRegion.width = static_cast<nri::Dim_t>(mipW);
+            srcRegion.height = static_cast<nri::Dim_t>(mipH);
+            srcRegion.depth = static_cast<nri::Dim_t>(mipD);
+            srcRegion.mipOffset = static_cast<nri::Dim_t>(mipLevel);
+            srcRegion.layerOffset = static_cast<nri::Dim_t>(arrayLayer);
+            srcRegion.planes = planes;
+
+            nri::TextureDataLayoutDesc dstLayout = {};
+            dstLayout.offset = 0;
+            dstLayout.rowPitch = alignedRowPitch;
+            dstLayout.slicePitch = alignedSlicePitch;
+
+            nri.CmdReadbackTextureToBuffer(*cmd, *readbackBuf, dstLayout, *texture->GetHandle(), srcRegion);
+
+            nri::TextureBarrierDesc post = pre;
+            post.before = pre.after;
+            post.after = { afterAccess, afterLayout, afterStages };
+            bDesc.textures = &post;
+            nri.CmdBarrier(*cmd, bDesc);
+            nri.EndCommandBuffer(*cmd);
+
+            nri::FenceSubmitDesc signal = { fence, 1, nri::StageBits::ALL };
+            nri::QueueSubmitDesc submit = {};
+            submit.commandBuffers = &cmd;
+            submit.commandBufferNum = 1;
+            submit.signalFences = &signal;
+            submit.signalFenceNum = 1;
+            {
+                std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+                nri.QueueSubmit(*dm->GetGraphicsQueue(), submit);
+            }
+            nri.Wait(*fence, 1);
+            texture->SetCurrentState(afterLayout, afterAccess, afterStages);
+
+            if (const uint8_t *mapped = static_cast<const uint8_t *>(nri.MapBuffer(*readbackBuf, 0, readbackSize)))
+            {
+                outRowPitch = tightRowPitch;
+                outSlicePitch = tightSlicePitch;
+                outBytes.resize(static_cast<size_t>(tightSlicePitch) * mipD);
+                for (uint32_t z = 0; z < mipD; ++z)
+                {
+                    const uint8_t *srcSlice = mapped + static_cast<size_t>(z) * alignedSlicePitch;
+                    uint8_t *dstSlice = outBytes.data() + static_cast<size_t>(z) * tightSlicePitch;
+                    for (uint32_t y = 0; y < mipH; ++y)
+                    {
+                        std::memcpy(dstSlice + static_cast<size_t>(y) * tightRowPitch, srcSlice + static_cast<size_t>(y) * alignedRowPitch, tightRowPitch);
+                    }
+                }
+                nri.UnmapBuffer(*readbackBuf);
+                ok = true;
+            }
+        }
+
+        nri.DestroyCommandBuffer(cmd);
+        nri.DestroyCommandAllocator(alloc);
+        nri.DestroyFence(fence);
+        nri.DestroyBuffer(readbackBuf);
+        return ok;
     }
 
     bool Texture::ReadPixelData(void *outPixels, size_t bufferSize, uint32_t x, uint32_t y, uint32_t width, uint32_t height)

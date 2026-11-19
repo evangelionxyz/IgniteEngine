@@ -61,6 +61,7 @@ namespace ignite
         bool enableDebugRuntime = false;
         bool enableWarningAsErrors = false;
         bool enableGPUValidation = false;
+        bool enableVulkanSyncValidation = false;
         bool headlessDevice = false;
         bool logBufferLifetime = false;
         bool enableHeapDirectlyIndexed = false;
