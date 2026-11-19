@@ -10,6 +10,7 @@
 
 #include "shadow_map.hpp"
 #include "ignite/scene/icamera.hpp"
+#include "ignite/math/aabb.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
@@ -287,6 +288,79 @@ namespace ignite
 
             lastSplitDist = splitDist;
         }
+    }
+
+    void CascadedShadowMap::ComputeBakeMatrix(const AABB &sceneBounds, const glm::vec3 &lightDirection)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        glm::vec3 lightDir = lightDirection;
+        if (glm::dot(lightDir, lightDir) < 1e-6f)
+        {
+            lightDir = glm::vec3(0.0f, -1.0f, 0.0f);
+        }
+        else
+        {
+            lightDir = -glm::normalize(lightDir);
+        }
+
+        const glm::vec3 upDir = (std::abs(lightDir.y) > 0.95f) ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+        const glm::mat4 lightRot = glm::lookAt(glm::vec3(0.0f), lightDir, upDir);
+
+        glm::vec3 bMin = glm::min(sceneBounds.min, sceneBounds.max);
+        glm::vec3 bMax = glm::max(sceneBounds.min, sceneBounds.max);
+        const glm::vec3 bSize = bMax - bMin;
+        if (bSize.x < 1.0f || bSize.y < 1.0f || bSize.z < 1.0f)
+        {
+            const glm::vec3 center = (bMin + bMax) * 0.5f;
+            const glm::vec3 halfExt = glm::max(bSize * 0.5f, glm::vec3(0.5f));
+            bMin = center - halfExt;
+            bMax = center + halfExt;
+        }
+
+        const std::array<glm::vec3, 8> corners{
+            glm::vec3(bMin.x, bMin.y, bMin.z),
+            glm::vec3(bMax.x, bMin.y, bMin.z),
+            glm::vec3(bMin.x, bMax.y, bMin.z),
+            glm::vec3(bMax.x, bMax.y, bMin.z),
+            glm::vec3(bMin.x, bMin.y, bMax.z),
+            glm::vec3(bMax.x, bMin.y, bMax.z),
+            glm::vec3(bMin.x, bMax.y, bMax.z),
+            glm::vec3(bMax.x, bMax.y, bMax.z),
+        };
+
+        glm::vec3 lsMin(std::numeric_limits<float>::max());
+        glm::vec3 lsMax(std::numeric_limits<float>::lowest());
+        for (const glm::vec3 &corner : corners)
+        {
+            const glm::vec3 cornerLS = glm::vec3(lightRot * glm::vec4(corner, 1.0f));
+            lsMin = glm::min(lsMin, cornerLS);
+            lsMax = glm::max(lsMax, cornerLS);
+        }
+
+        const float xySpan = glm::max(lsMax.x - lsMin.x, lsMax.y - lsMin.y);
+        const float padXY = glm::max(1.0f, xySpan / static_cast<float>(std::max(m_Resolution, 256)) * 2.0f);
+        const float zPadding = 16.0f;
+
+        const float minZ_LS = lsMin.z - zPadding;
+        const float maxZ_LS = lsMax.z + zPadding;
+        const float nearPlaneLS = 1.0f;
+        const float farPlaneLS = glm::max(nearPlaneLS + 1.0f, (maxZ_LS - minZ_LS) + nearPlaneLS);
+        const float zShift = -(maxZ_LS + nearPlaneLS);
+
+        const glm::mat4 lightView = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, zShift)) * lightRot;
+        const glm::mat4 lightProj = glm::orthoZO(
+            lsMin.x - padXY, lsMax.x + padXY,
+            lsMin.y - padXY, lsMax.y + padXY,
+            nearPlaneLS, farPlaneLS);
+
+        const glm::mat4 bakeVP = lightProj * lightView;
+        for (int i = 0; i < NUM_CASCADES; ++i)
+        {
+            m_GPUData.lightViewProj[i] = bakeVP;
+            m_GPUData.cascadeSplits[i] = 1e9f;
+        }
+        m_GPUData.shadowTexelSize = (m_Resolution > 0) ? (1.0f / static_cast<float>(m_Resolution)) : (1.0f / 2048.0f);
     }
 
     RenderTarget *CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex, uint32_t frameIndex) const

@@ -292,6 +292,7 @@ namespace ignite
             sr.AddKeyValue("Name", idComp.name);
             sr.AddKeyValue("Type", EntityTypeFlagsToString(idComp.type));
             sr.AddKeyValue("Parent", idComp.parent);
+            sr.AddKeyValue("Order", static_cast<uint32_t>(SceneManager::GetSiblingIndex(entity.GetScene(), idComp.uuid)));
 
             // Transform Component
             if (entity.HasComponent<TransformComponent>())
@@ -317,6 +318,8 @@ namespace ignite
                 sr.BeginMap("Rendering");
                 {
                     sr.AddKeyValue("Visible", comp.visible);
+                    sr.AddKeyValue("ContributeGI", comp.contributeGI);
+                    sr.AddKeyValue("ReceiveGI", comp.receiveGI);
                 }
                 sr.EndMap();
             }
@@ -338,6 +341,7 @@ namespace ignite
                     sr.AddKeyValue("ShadowResolution", comp.shadowResolution);
                     sr.AddKeyValue("CascadeShadow", comp.cascadeShadow);
                     sr.AddKeyValue("SoftShadows", comp.softShadows);
+                    sr.AddKeyValue("BakeIndirect", comp.bakeIndirect);
                 }
                 sr.EndMap();
             }
@@ -352,6 +356,7 @@ namespace ignite
                     sr.AddKeyValue("Intensity", comp.intensity);
                     sr.AddKeyValue("Range", comp.range);
                     sr.AddKeyValue("Enabled", comp.enabled);
+                    sr.AddKeyValue("BakeIndirect", comp.bakeIndirect);
                     sr.AddKeyValue("ConstantAttenuation", comp.constantAttenuation);
                     sr.AddKeyValue("LinearAttenuation", comp.linearAttenuation);
                     sr.AddKeyValue("QuadraticAttenuation", comp.quadraticAttenuation);
@@ -369,11 +374,59 @@ namespace ignite
                     sr.AddKeyValue("Intensity", comp.intensity);
                     sr.AddKeyValue("Range", comp.range);
                     sr.AddKeyValue("Enabled", comp.enabled);
+                    sr.AddKeyValue("BakeIndirect", comp.bakeIndirect);
                     sr.AddKeyValue("ConstantAttenuation", comp.constantAttenuation);
                     sr.AddKeyValue("LinearAttenuation", comp.linearAttenuation);
                     sr.AddKeyValue("QuadraticAttenuation", comp.quadraticAttenuation);
                     sr.AddKeyValue("InnerConeAngle", comp.innerConeAngle);
                     sr.AddKeyValue("OuterConeAngle", comp.outerConeAngle);
+                }
+                sr.EndMap();
+            }
+
+            // Irradiance Volume
+            if (entity.HasComponent<IrradianceVolumeComponent>())
+            {
+                const IrradianceVolumeComponent &comp = entity.GetComponent<IrradianceVolumeComponent>();
+                sr.BeginMap("IrradianceVolume");
+                {
+                    sr.AddKeyValue("Extents", comp.extents);
+                    sr.AddKeyValue("Spacing", comp.spacing);
+                    sr.AddKeyValue("Bounces", comp.bounces);
+                    sr.AddKeyValue("CaptureResolution", comp.captureResolution);
+                    sr.AddKeyValue("SHOrder", comp.shOrder);
+                    sr.AddKeyValue("RuntimeMode", comp.runtimeMode);
+                    sr.AddKeyValue("NormalBias", comp.normalBias);
+                    sr.AddKeyValue("ViewBias", comp.viewBias);
+                    sr.AddKeyValue("EdgeFade", comp.edgeFade);
+                    sr.AddKeyValue("Intensity", comp.intensity);
+                    sr.AddKeyValue("Priority", comp.priority);
+                    sr.AddKeyValue("BakedAsset", static_cast<uint64_t>(comp.bakedAsset));
+                    sr.AddKeyValue("BakedAssetPath", comp.bakedAssetPath);
+                    sr.AddKeyValue("BakeHash", comp.bakeHash);
+                }
+                sr.EndMap();
+            }
+
+            // Reflection Probe
+            if (entity.HasComponent<ReflectionProbeComponent>())
+            {
+                const ReflectionProbeComponent &comp = entity.GetComponent<ReflectionProbeComponent>();
+                sr.BeginMap("ReflectionProbe");
+                {
+                    sr.AddKeyValue("InfluenceExtents", comp.influenceExtents);
+                    sr.AddKeyValue("ProjectionExtents", comp.projectionExtents);
+                    sr.AddKeyValue("CaptureOffset", comp.captureOffset);
+                    sr.AddKeyValue("BlendDistance", comp.blendDistance);
+                    sr.AddKeyValue("Resolution", comp.resolution);
+                    sr.AddKeyValue("Priority", comp.priority);
+                    sr.AddKeyValue("Intensity", comp.intensity);
+                    sr.AddKeyValue("Normalize", comp.normalize);
+                    sr.AddKeyValue("NormalizationStrength", comp.normalizationStrength);
+                    sr.AddKeyValue("BoxProjection", comp.boxProjection);
+                    sr.AddKeyValue("BakedAsset", static_cast<uint64_t>(comp.bakedAsset));
+                    sr.AddKeyValue("BakedAssetPath", comp.bakedAssetPath);
+                    sr.AddKeyValue("BakeHash", comp.bakeHash);
                 }
                 sr.EndMap();
             }
@@ -1080,7 +1133,9 @@ namespace ignite
         if (JsonNode node = entityNode["Rendering"])
         {
             auto &comp = desEntity.AddComponent<RenderingComponent>();
-            comp.visible = node["Visible"].as<bool>();
+            if (auto n = node["Visible"]) comp.visible = n.as<bool>();
+            if (auto n = node["ContributeGI"]) comp.contributeGI = n.as<bool>();
+            if (auto n = node["ReceiveGI"]) comp.receiveGI = n.as<bool>();
         }
 
         // Camera component
@@ -1160,6 +1215,7 @@ namespace ignite
             if (auto n = node["ShadowResolution"]) comp.shadowResolution = n.as<uint32_t>();
             if (auto n = node["CascadeShadow"]) comp.cascadeShadow = n.as<bool>();
             if (auto n = node["SoftShadows"]) comp.softShadows = n.as<bool>();
+            if (auto n = node["BakeIndirect"]) comp.bakeIndirect = n.as<bool>();
         }
 
         // Point Light
@@ -1170,6 +1226,7 @@ namespace ignite
             if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
             if (auto n = node["Range"]) comp.range = n.as<float>();
             if (auto n = node["Enabled"]) comp.enabled = n.as<bool>();
+            if (auto n = node["BakeIndirect"]) comp.bakeIndirect = n.as<bool>();
             if (auto n = node["ConstantAttenuation"]) comp.constantAttenuation = n.as<float>();
             if (auto n = node["LinearAttenuation"]) comp.linearAttenuation = n.as<float>();
             if (auto n = node["QuadraticAttenuation"]) comp.quadraticAttenuation = n.as<float>();
@@ -1183,11 +1240,51 @@ namespace ignite
             if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
             if (auto n = node["Range"]) comp.range = n.as<float>();
             if (auto n = node["Enabled"]) comp.enabled = n.as<bool>();
+            if (auto n = node["BakeIndirect"]) comp.bakeIndirect = n.as<bool>();
             if (auto n = node["ConstantAttenuation"]) comp.constantAttenuation = n.as<float>();
             if (auto n = node["LinearAttenuation"]) comp.linearAttenuation = n.as<float>();
             if (auto n = node["QuadraticAttenuation"]) comp.quadraticAttenuation = n.as<float>();
             if (auto n = node["InnerConeAngle"]) comp.innerConeAngle = n.as<float>();
             if (auto n = node["OuterConeAngle"]) comp.outerConeAngle = n.as<float>();
+        }
+
+        // Irradiance Volume
+        if (JsonNode node = entityNode["IrradianceVolume"])
+        {
+            auto &comp = desEntity.AddComponent<IrradianceVolumeComponent>();
+            if (auto n = node["Extents"]) comp.extents = n.as<glm::vec3>();
+            if (auto n = node["Spacing"]) comp.spacing = n.as<float>();
+            if (auto n = node["Bounces"]) comp.bounces = n.as<int>();
+            if (auto n = node["CaptureResolution"]) comp.captureResolution = n.as<int>();
+            if (auto n = node["SHOrder"]) comp.shOrder = n.as<int>();
+            if (auto n = node["RuntimeMode"]) comp.runtimeMode = n.as<int>();
+            if (auto n = node["NormalBias"]) comp.normalBias = n.as<float>();
+            if (auto n = node["ViewBias"]) comp.viewBias = n.as<float>();
+            if (auto n = node["EdgeFade"]) comp.edgeFade = n.as<float>();
+            if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
+            if (auto n = node["Priority"]) comp.priority = n.as<int>();
+            if (auto n = node["BakedAsset"]) comp.bakedAsset = AssetHandle(n.as<uint64_t>());
+            if (auto n = node["BakedAssetPath"]) comp.bakedAssetPath = n.as<std::string>();
+            if (auto n = node["BakeHash"]) comp.bakeHash = n.as<uint64_t>();
+        }
+
+        // Reflection Probe
+        if (JsonNode node = entityNode["ReflectionProbe"])
+        {
+            auto &comp = desEntity.AddComponent<ReflectionProbeComponent>();
+            if (auto n = node["InfluenceExtents"]) comp.influenceExtents = n.as<glm::vec3>();
+            if (auto n = node["ProjectionExtents"]) comp.projectionExtents = n.as<glm::vec3>();
+            if (auto n = node["CaptureOffset"]) comp.captureOffset = n.as<glm::vec3>();
+            if (auto n = node["BlendDistance"]) comp.blendDistance = n.as<float>();
+            if (auto n = node["Resolution"]) comp.resolution = n.as<int>();
+            if (auto n = node["Priority"]) comp.priority = n.as<int>();
+            if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
+            if (auto n = node["Normalize"]) comp.normalize = n.as<bool>();
+            if (auto n = node["NormalizationStrength"]) comp.normalizationStrength = n.as<float>();
+            if (auto n = node["BoxProjection"]) comp.boxProjection = n.as<bool>();
+            if (auto n = node["BakedAsset"]) comp.bakedAsset = AssetHandle(n.as<uint64_t>());
+            if (auto n = node["BakedAssetPath"]) comp.bakedAssetPath = n.as<std::string>();
+            if (auto n = node["BakeHash"]) comp.bakeHash = n.as<uint64_t>();
         }
 
         // Terrain

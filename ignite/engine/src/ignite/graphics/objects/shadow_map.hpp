@@ -17,6 +17,7 @@
 namespace ignite
 {
     class ICamera;
+    struct AABB;
     enum class ShadowMapQuality : uint8_t
     {
         LOW = 0,
@@ -50,6 +51,10 @@ namespace ignite
         const ShadowMapQuality &GetQuality() const { return m_Quality; }
 
         void ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance = 200.0f);
+
+        // Computes a single orthographic shadow matrix covering sceneBounds along -normalize(lightDirection),
+        // setting all 4 cascade slots and disabling cascade splits so GI bakes use cascade 0 everywhere.
+        void ComputeBakeMatrix(const AABB &sceneBounds, const glm::vec3 &lightDirection);
     private:
         void CreateCascadeFramebuffers();
 

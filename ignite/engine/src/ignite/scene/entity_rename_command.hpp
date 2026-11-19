@@ -32,6 +32,12 @@ namespace ignite
         void Execute() override { Apply(m_NewName); }
         void Undo()    override { Apply(m_OldName); }
 
+        std::string GetName() const override { return "Rename Entity"; }
+        size_t GetMemoryUsage() const override
+        {
+            return sizeof(*this) + m_OldName.capacity() + m_NewName.capacity();
+        }
+
     private:
         void Apply(const std::string &name)
         {

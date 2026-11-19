@@ -519,6 +519,12 @@ namespace ignite
             CopyDirectoryFiltered(project->GetScriptsDirectory(), outDir / info.scriptsDirectory, outDir, result, ec);
         }
 
+        const std::filesystem::path bakedDir = project->GetDirectory() / "Baked";
+        if (std::filesystem::exists(bakedDir, ec))
+        {
+            CopyDirectoryFiltered(bakedDir, outDir / "Baked", outDir, result, ec);
+        }
+
         const std::filesystem::path scriptBinDir = project->GetScriptBinDirectory();
         if (std::filesystem::exists(scriptBinDir, ec))
         {

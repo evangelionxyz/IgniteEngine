@@ -9,6 +9,8 @@ cbuffer SceneBuffer                     : register(b4, space0) { Scene scene; }
 cbuffer CSMBuffer                       : register(b5, space0) { }  // unused in color pass but kept for layout
 cbuffer PointLightBuffer                : register(b6, space0) { }  // unused in VS
 cbuffer SpotLightBuffer                 : register(b7, space0) { }  // unused in VS
+cbuffer GIBuffer                        : register(b8, space0) { }  // unused in VS
+StructuredBuffer<ReflectionProbeGPU> g_ReflectionProbes : register(t9, space0); // unused in VS
 
 PixelVertexInput main(VertexMesh input, uint instanceID : SV_InstanceID)
 {

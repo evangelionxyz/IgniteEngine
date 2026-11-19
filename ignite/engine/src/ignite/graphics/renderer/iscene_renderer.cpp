@@ -61,6 +61,38 @@ namespace ignite
 
         m_CompositeVertexBuffer->SetData(screenVertices.data(), sizeof(screenVertices));
         m_CompositeVertexBufferUploadPending = false;
+
+        m_AssetChangeSignalToken = SignalBus::Subscribe<AssetChangeSignal>(
+            [this](const AssetChangeSignal &signal)
+            {
+                if (signal.handle == AssetHandle(0))
+                    return;
+                std::lock_guard<std::mutex> lock(m_DirtyResolvedAssetsMutex);
+                m_DirtyResolvedHandles.insert(signal.handle);
+            });
+    }
+
+    void ISceneRenderer::DrainDirtyResolvedAssets()
+    {
+        std::unordered_set<AssetHandle> dirty;
+        {
+            std::lock_guard<std::mutex> lock(m_DirtyResolvedAssetsMutex);
+            if (m_DirtyResolvedHandles.empty())
+                return;
+            dirty.swap(m_DirtyResolvedHandles);
+        }
+
+        for (auto it = m_ResolvedAssetsCache.begin(); it != m_ResolvedAssetsCache.end();)
+        {
+            if (dirty.contains(it->first.handle))
+            {
+                it = m_ResolvedAssetsCache.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 
     nri::CommandBuffer *ISceneRenderer::BeginCommandBuffer()
@@ -301,6 +333,12 @@ namespace ignite
 
     ISceneRenderer::~ISceneRenderer()
     {
+        if (m_AssetChangeSignalToken != kInvalidSignalToken)
+        {
+            SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeSignalToken);
+            m_AssetChangeSignalToken = kInvalidSignalToken;
+        }
+
         GPUUploadSync::DeviceWaitIdle(m_Device);
         ClearRetainedCommandBufferAssets();
 

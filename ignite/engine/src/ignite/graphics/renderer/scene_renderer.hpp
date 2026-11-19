@@ -7,6 +7,11 @@
 #include "ignite/core/base.hpp"
 #include "iscene_renderer.hpp"
 #include "ignite/graphics/hash_keys.hpp"
+#include "ignite/graphics/gpu_timer.hpp"
+#include "ignite/graphics/gi/ibl_prefilter.hpp"
+#include "ignite/graphics/gi/irradiance_volume.hpp"
+#include "ignite/graphics/gi/reflection_probe_set.hpp"
+#include "ignite/graphics/gi/sh.hpp"
 #include "batch_builder.hpp"
 #include "frame_packet.hpp"
 #include "ignite/terrain/terrain_renderer.hpp"
@@ -100,6 +105,19 @@ namespace ignite
         int GetDebugShadowMode() const { return m_SceneGPUData.debugShadow; }
         void SetDebugShadowMode(int debugShadow) { m_SceneGPUData.debugShadow = debugShadow; }
 
+        using DebugProbeGPU = gi::DebugProbeGPU;
+
+        void SetDebugProbes(std::vector<DebugProbeGPU> probes);
+        void ClearDebugProbes();
+
+        void SetIrradianceVolume(const Ref<IrradianceVolume> &volume, const std::string &sourcePath = "");
+        void ClearIrradianceVolume();
+        Ref<IrradianceVolume> GetIrradianceVolume() const { return m_ActiveIrradianceVolume; }
+
+        void SetReflectionProbeSet(const Ref<ReflectionProbeSet> &probeSet);
+        void ClearReflectionProbeSet();
+        Ref<ReflectionProbeSet> GetReflectionProbeSet() const { return m_ActiveReflectionProbeSet; }
+
         virtual Ref<Texture> GetEnvironmentMapColorTexture() override;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() override;
 
@@ -111,6 +129,7 @@ namespace ignite
 
         void PreallocateGPUData(nri::CommandBuffer *cmd, FrameContext *frameContext);
         const FramePacket &GetLastFramePacket() const { return m_FramePacket; }
+        const std::unordered_map<std::string, double> &GetLastGPUTimingsMs() const { return m_LastGPUTimingsMs; }
 
     private:
         void ClearResources();
@@ -123,6 +142,8 @@ namespace ignite
         void EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight);
 
         void ShadowPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext);
+        void UpdateSkyIBL(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext);
+        void RenderDebugProbes(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
         void ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug);
         void UIPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
         void DebugPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
@@ -193,6 +214,10 @@ namespace ignite
         Ref<GraphicsPipeline> GetEnvironmentPSO(RenderTarget *framebuffer, nri::FillMode fillMode);
         Ref<GraphicsPipeline> GetCompositePSO(RenderTarget *framebuffer, nri::FillMode fillMode);
         Ref<GraphicsPipeline> GetFXAAPSO(RenderTarget *framebuffer);
+        Ref<GraphicsPipeline> GetDebugProbePSO(RenderTarget *framebuffer, nri::FillMode fillMode);
+        void EnsureSkySHBuffers();
+        void EnsureDebugProbeBuffers(size_t requiredCount);
+        void ShutdownGIResources();
 
         Ref<BindingSet> GetOrCreateDebugGridBindingSet(nri::PipelineLayout *pipelineLayout, const ConstantBuffer &cameraBuffer, const ConstantBuffer &gridBuffer);
         Ref<BindingSet> GetOrCreateCompositeBindingSet(nri::PipelineLayout *pipelineLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
@@ -263,6 +288,52 @@ namespace ignite
         BatchBuilder m_OpaqueBatchBuilder;   // Color pass opaque static meshes
         BatchBuilder m_ShadowBatchBuilder;   // Shadow pass (CSM) static meshes
         FramePacket m_FramePacket;
+
+        std::array<GPUTimer, 6> m_GPUTimers;
+        std::unordered_map<std::string, double> m_LastGPUTimingsMs;
+        GI_GPUData m_GIGPUData{};
+
+        struct SkyIBLState
+        {
+            bool valid = false;
+            int32_t skyType = -1;
+            nri::Texture *srcTexture = nullptr;
+            glm::vec4 sunColor = glm::vec4(0.0f);
+            glm::vec3 sunDir = glm::vec3(0.0f);
+            uint64_t atmoHash = 0;
+            float altitudeKm = 0.0f;
+        } m_SkyIBLState;
+
+        Ref<IBLPrefilter> m_IBLPrefilter;
+        Ref<Texture> m_SkyRawCube;
+        Ref<Texture> m_SkyPrefilterCube;
+
+        struct SkySHReadbackSlot
+        {
+            nri::Buffer *readbackBuffer = nullptr;
+            bool pending = false;
+        };
+        nri::Buffer *m_SkySHGpuBuffer = nullptr;
+        nri::Descriptor *m_SkySHGpuUAV = nullptr;
+        bool m_SkySHGpuWritten = false;
+        std::array<SkySHReadbackSlot, 4> m_SkySHReadbacks{};
+        gi::SHL2 m_CachedSkySH{};
+        bool m_HasValidSkySH = false;
+
+        std::vector<DebugProbeGPU> m_DebugProbes;
+        nri::Buffer *m_DebugProbeBuffer = nullptr;
+        nri::Descriptor *m_DebugProbeSRV = nullptr;
+        uint8_t *m_DebugProbeMapped = nullptr;
+        size_t m_DebugProbeCapacity = 0;
+        BindingLayoutDesc m_DebugProbeLayout;
+        nri::PipelineLayout *m_DebugProbePipelineLayout = nullptr;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_DebugProbePSOCache;
+
+        Ref<IrradianceVolume> m_ActiveIrradianceVolume;
+        std::string m_LoadedIrradiancePath;
+
+        Ref<ReflectionProbeSet> m_ActiveReflectionProbeSet;
+        std::string m_LoadedReflectionSignature;
     };
 }
 

@@ -291,6 +291,35 @@ static float3 OpenPBREnvironment(OpenPBRSurface surface, float3 N, float3 V, flo
     return fuzz + (1.0f - surface.fuzzWeight) * (coatSpecular * coatRadiance + baseSpecular * throughCoat * baseRadiance);
 }
 
+static float3 OpenPBREnvironmentPrefiltered(
+    OpenPBRSurface surface,
+    float3 N,
+    float3 V,
+    TextureCube prefilterCube,
+    SamplerState samp,
+    float maxMip,
+    float3 diffuseRadiance)
+{
+    float NdotV = saturate(dot(N, V));
+    float3 R = reflect(-V, N);
+    float3 coatF = SchlickFresnelCos(NdotV, DielectricF0(max(surface.coatIOR, 1.0f)));
+
+    float baseMip = saturate(surface.specularRoughness) * max(maxMip, 0.0f);
+    float3 baseRadiance = prefilterCube.SampleLevel(samp, R, baseMip).rgb;
+    float3 baseSpecular = OpenPBRBaseSpecularAlbedo(surface, NdotV);
+
+    float coatMip = saturate(surface.coatRoughness) * max(maxMip, 0.0f);
+    float3 coatRadiance = prefilterCube.SampleLevel(samp, R, coatMip).rgb;
+    float3 coatSpecular = surface.coatWeight * coatF;
+
+    float3 throughCoat = lerp(float3(1.0f, 1.0f, 1.0f), saturate(surface.coatColor) * (1.0f - coatF),
+        surface.coatWeight * surface.coatDarkening);
+
+    float3 fuzz = surface.fuzzWeight * surface.fuzzColor * diffuseRadiance;
+
+    return fuzz + (1.0f - surface.fuzzWeight) * (coatSpecular * coatRadiance + baseSpecular * throughCoat * baseRadiance);
+}
+
 static float3 GGX(float3 N, float3 L, float3 V, float3 irradiance, float3 diffuse, float3 specular, float roughness)
 {
     float NdotL = saturate(dot(N, L));

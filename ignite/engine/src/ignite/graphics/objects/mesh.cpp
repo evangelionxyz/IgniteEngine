@@ -79,6 +79,27 @@ namespace ignite
             return value;
         }
 
+        static std::string SanitizeFilenameComponent(std::string value, const std::string &fallback)
+        {
+            for (char &ch : value)
+            {
+                const unsigned char uch = static_cast<unsigned char>(ch);
+                if (uch < 32 || ch == '/' || ch == '\\' || ch == ':' || ch == '*' || ch == '?' || ch == '"' || ch == '<' || ch == '>' || ch == '|')
+                {
+                    ch = '_';
+                }
+            }
+
+            const size_t first = value.find_first_not_of(" \t\r\n");
+            if (first == std::string::npos)
+            {
+                return fallback;
+            }
+            const size_t last = value.find_last_not_of(" \t\r\n");
+            value = value.substr(first, last - first + 1);
+            return value.empty() ? fallback : value;
+        }
+
         static FbxAMatrix BuildNodeGeometricMatrix(FbxNode *node)
         {
             FbxAMatrix geometric;
@@ -179,7 +200,8 @@ namespace ignite
         }
 
         static bool TryLoadFBXTextureFromProperty(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames,
-            const std::filesystem::path &sourceDir, FBXMeshLoader::MaterialLoader &materialLoader, MeshMaterialTextureMap &textureMap)
+            const std::filesystem::path &sourceDir, const std::string &meshStem, const char *slotTypeName,
+            FBXMeshLoader::MaterialLoader &materialLoader, MeshMaterialTextureMap &textureMap)
         {
             if (!material)
             {
@@ -231,7 +253,8 @@ namespace ignite
                     }
 
                     const std::string key = ToLowerCopy(texturePath.generic_string());
-                    std::string textureName = texturePath.stem().string();
+                    const std::string fallbackName = SanitizeFilenameComponent(std::format("{}_{}_texture", meshStem, slotTypeName), "Texture");
+                    std::string textureName = SanitizeFilenameComponent(texturePath.stem().string(), fallbackName);
                     if (materialLoader.textureLookup.contains(key))
                     {
                         const int index = materialLoader.textureLookup.at(key);
@@ -750,8 +773,8 @@ namespace ignite
     // Mesh Loader
     // ===================================
     Ref<Material> GLTFMeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials,
-        const std::vector<std::pair<std::string, Ref<Texture>>> &loadedTextures,std::array<MeshMaterialTextureMap, 5> &textureMap,
-        const std::vector<nri::SamplerDesc> &loadedSamplers, int *materialIndex)
+        const std::vector<LoadedGltfTexture> &loadedTextures, std::array<MeshMaterialTextureMap, 5> &textureMap,
+        const std::vector<nri::SamplerDesc> &loadedSamplers, int *materialIndex, const std::string &meshStem)
     {
         Ref<Material> material;
         *materialIndex = -1;
@@ -810,59 +833,47 @@ namespace ignite
             material->gpuData.roughnessFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
             material->gpuData.occlusionStrength = static_cast<float>(gltfMaterial.occlusionTexture.strength);
 
-            // base color texture
-            const int baseColorIndex = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
-            if (baseColorIndex >= 0 && baseColorIndex < loadedTextures.size())
+            const std::string cleanStem = SanitizeFilenameComponent(meshStem, "Mesh");
+            auto resolveTextureName = [&cleanStem](const LoadedGltfTexture &tex, const char *slotTypeName) -> std::string
             {
-                textureMap[0] = { baseColorIndex, loadedTextures[baseColorIndex].first, loadedTextures[baseColorIndex].second };
-            }
-            else
-            {
-                textureMap[0] = { -1, "", nullptr };
-            }
+                const std::string embeddedName = SanitizeFilenameComponent(std::format("{}_{}_texture", cleanStem, slotTypeName), "Texture");
+                if (tex.isEmbedded || tex.name.empty())
+                {
+                    return embeddedName;
+                }
+                return SanitizeFilenameComponent(tex.name, embeddedName);
+            };
 
-            // emissive texture
-            const int emissiveIndex = gltfMaterial.emissiveTexture.index;
-            if (emissiveIndex >= 0 && emissiveIndex < loadedTextures.size())
+            static constexpr std::array<const char *, 5> kSlotTypeNames =
             {
-                textureMap[1] = { emissiveIndex, loadedTextures[emissiveIndex].first, loadedTextures[emissiveIndex].second };
-            }
-            else
-            {
-                textureMap[1] = { -1, "", nullptr };
-            }
+                "BaseColor",
+                "Emissive",
+                "MetallicRoughness",
+                "Normal",
+                "Occlusion"
+            };
 
-            // metallic roughness texture
-            const int metallicRoughnessIndex = gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
-            if (metallicRoughnessIndex >= 0 && metallicRoughnessIndex < loadedTextures.size())
+            const std::array<int, 5> textureIndices =
             {
-                textureMap[2] = { metallicRoughnessIndex, loadedTextures[metallicRoughnessIndex].first, loadedTextures[metallicRoughnessIndex].second };
-            }
-            else
-            {
-                textureMap[2] = { -1, "", nullptr };
-            }
+                gltfMaterial.pbrMetallicRoughness.baseColorTexture.index,
+                gltfMaterial.emissiveTexture.index,
+                gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index,
+                gltfMaterial.normalTexture.index,
+                gltfMaterial.occlusionTexture.index
+            };
 
-            // normal texture
-            const int normalIndex = gltfMaterial.normalTexture.index;
-            if (normalIndex >= 0 && normalIndex < loadedTextures.size())
+            for (size_t slot = 0; slot < textureIndices.size(); ++slot)
             {
-                textureMap[3] = { normalIndex, loadedTextures[normalIndex].first, loadedTextures[normalIndex].second };
-            }
-            else
-            {
-                textureMap[3] = { -1, "", nullptr };
-            }
-
-            // occlusion texture
-            const int occlusionIndex = gltfMaterial.occlusionTexture.index;
-            if (occlusionIndex >= 0 && occlusionIndex < loadedTextures.size())
-            {
-                textureMap[4] = { occlusionIndex, loadedTextures[occlusionIndex].first, loadedTextures[occlusionIndex].second };
-            }
-            else
-            {
-                textureMap[4] = { -1, "", nullptr };
+                const int texIdx = textureIndices[slot];
+                if (texIdx >= 0 && texIdx < static_cast<int>(loadedTextures.size()))
+                {
+                    const LoadedGltfTexture &loadedTex = loadedTextures[texIdx];
+                    textureMap[slot] = { texIdx, resolveTextureName(loadedTex, kSlotTypeNames[slot]), loadedTex.texture };
+                }
+                else
+                {
+                    textureMap[slot] = { -1, "", nullptr };
+                }
             }
 
             if (!loadedSamplers.empty())
@@ -1156,7 +1167,9 @@ namespace ignite
         }
 
         // pre-load textures and samplers
-        const std::filesystem::path baseDir = std::filesystem::path(filename).parent_path();
+        const std::filesystem::path filenamePath(filename);
+        const std::filesystem::path baseDir = filenamePath.parent_path();
+        const std::string meshStem = SanitizeFilenameComponent(filenamePath.stem().string(), "Mesh");
         const auto textures = LoadTextures(gltfModel, baseDir);
         const auto samplers = GetSamplers(gltfModel);
 
@@ -1493,7 +1506,7 @@ namespace ignite
                 std::array<MeshMaterialTextureMap, 5> materialTextureMap{};
 
                 int materialIndex = -1;
-                Ref<Material> material = LoadMaterial(gltfPrim, gltfModel.materials, textures, materialTextureMap, samplers, &materialIndex);
+                Ref<Material> material = LoadMaterial(gltfPrim, gltfModel.materials, textures, materialTextureMap, samplers, &materialIndex, meshStem);
                 if (!material)
                 {
                     material = CreateDefaultMaterial("DefaultMaterial");
@@ -1587,10 +1600,10 @@ namespace ignite
         }
     }
 
-    std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTextures(const tinygltf::Model &model, const std::filesystem::path &baseDir)
+    std::vector<GLTFMeshLoader::LoadedGltfTexture> GLTFMeshLoader::LoadTextures(const tinygltf::Model &model, const std::filesystem::path &baseDir)
     {
-        std::vector<std::pair<std::string, Ref<Texture>>> gltfTextures;
-        gltfTextures.resize(model.textures.size(), { "", nullptr });
+        std::vector<LoadedGltfTexture> gltfTextures;
+        gltfTextures.resize(model.textures.size(), {});
 
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
 
@@ -1603,7 +1616,18 @@ namespace ignite
             if (gltfTexture.source >= 0 && gltfTexture.source < model.images.size())
             {
                 const tinygltf::Image &image = model.images[gltfTexture.source];
-                const std::string imageName = image.name.empty() ? std::format("embedded_texture_{}", gltfTexture.source) : image.name;
+                const bool isEmbedded = (image.bufferView >= 0) || image.uri.empty() || image.uri.starts_with("data:");
+                std::string imageName;
+                if (!isEmbedded)
+                {
+                    imageName = !image.name.empty()
+                        ? image.name
+                        : std::filesystem::path(image.uri).stem().string();
+                }
+                else
+                {
+                    imageName = image.name;
+                }
 
                 Ref<Texture> texture = nullptr;
                 if (loadedImages.contains(gltfTexture.source))
@@ -1612,7 +1636,7 @@ namespace ignite
                 }
                 else
                 {
-                    LOG_TRACE(" Texture {}: {} ({}x{})", i, imageName, image.width, image.height);
+                    LOG_TRACE(" Texture {}: {} ({}x{})", i, imageName.empty() ? "<embedded>" : imageName, image.width, image.height);
 
                     TextureCreateInfo createInfo;
                     createInfo.width = image.width;
@@ -1690,7 +1714,7 @@ namespace ignite
                     loadedImages[gltfTexture.source] = texture;
                 }
 
-                gltfTextures[i] = { imageName, texture };
+                gltfTextures[i] = { imageName, texture, isEmbedded };
             }
         }
 
@@ -1703,9 +1727,11 @@ namespace ignite
         for (size_t i = 0; i < model.textures.size(); ++i)
         {
             const tinygltf::Texture &gltfTexture = model.textures[i];
-            if (gltfTexture.source >= 0 && gltfTexture.source < model.images.size())
+            if (gltfTexture.source >= 0 && gltfTexture.source < model.textures.size())
             {
-                tinygltf::Sampler gltfSampler = model.samplers[gltfTexture.sampler];
+                tinygltf::Sampler gltfSampler = gltfTexture.sampler < model.samplers.size()
+                    ? model.samplers[gltfTexture.sampler]
+                    : tinygltf::Sampler{};
 
                 gltfSampler.minFilter = TINYGLTF_TEXTURE_FILTER_LINEAR;
                 nri::SamplerDesc desc = {};
@@ -1816,7 +1842,9 @@ namespace ignite
                 outScene.animations.clear();
             }
 
-            const std::filesystem::path sourceDir = std::filesystem::path(filename).parent_path();
+            const std::filesystem::path filenamePath(filename);
+            const std::filesystem::path sourceDir = filenamePath.parent_path();
+            const std::string meshStem = SanitizeFilenameComponent(filenamePath.stem().string(), "Mesh");
 
             MaterialLoader materialLoader;
             FbxNode *rootNode = fbxScene->GetRootNode();
@@ -1824,7 +1852,7 @@ namespace ignite
             {
                 for (int i = 0; i < rootNode->GetChildCount(); ++i)
                 {
-                    BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f), scaleFactor, importSkeletonAndAnimations);
+                    BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, meshStem, -1, glm::mat4(1.0f), scaleFactor, importSkeletonAndAnimations);
                 }
             }
 
@@ -2278,7 +2306,7 @@ namespace ignite
     }
 
     template<MeshVertex VertexType_T>
-    int FBXMeshLoader::ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const std::filesystem::path &sourceDir)
+    int FBXMeshLoader::ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const std::filesystem::path &sourceDir, const std::string &meshStem)
     {
         FbxSurfaceMaterial *fbxMaterial = node->GetMaterialCount() > 0 ? node->GetMaterial(0) : nullptr;
         int sceneMaterialIndex = -1;
@@ -2295,11 +2323,11 @@ namespace ignite
             std::array<MeshMaterialTextureMap, 5> textureMap{};
             if (fbxMaterial)
             {
-                TryLoadFBXTextureFromProperty(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, sourceDir, materialLoader, textureMap[0]);
-                TryLoadFBXTextureFromProperty(fbxMaterial, { "EmissiveColor", "Emissive" }, sourceDir, materialLoader, textureMap[1]);
-                TryLoadFBXTextureFromProperty(fbxMaterial, { "SpecularColor", "Specular", "Metalness" }, sourceDir, materialLoader, textureMap[2]);
-                TryLoadFBXTextureFromProperty(fbxMaterial, { "NormalMap", "Bump", "Maya|TEX_normal_map" }, sourceDir, materialLoader, textureMap[3]);
-                TryLoadFBXTextureFromProperty(fbxMaterial, { "AmbientOcclusion", "AO", "Occlusion" }, sourceDir, materialLoader, textureMap[4]);
+                TryLoadFBXTextureFromProperty(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, sourceDir, meshStem, "BaseColor", materialLoader, textureMap[0]);
+                TryLoadFBXTextureFromProperty(fbxMaterial, { "EmissiveColor", "Emissive" }, sourceDir, meshStem, "Emissive", materialLoader, textureMap[1]);
+                TryLoadFBXTextureFromProperty(fbxMaterial, { "SpecularColor", "Specular", "Metalness" }, sourceDir, meshStem, "MetallicRoughness", materialLoader, textureMap[2]);
+                TryLoadFBXTextureFromProperty(fbxMaterial, { "NormalMap", "Bump", "Maya|TEX_normal_map" }, sourceDir, meshStem, "Normal", materialLoader, textureMap[3]);
+                TryLoadFBXTextureFromProperty(fbxMaterial, { "AmbientOcclusion", "AO", "Occlusion" }, sourceDir, meshStem, "Occlusion", materialLoader, textureMap[4]);
             }
 
             outScene.materials.push_back(material);
@@ -2311,7 +2339,7 @@ namespace ignite
     }
 
     template<MeshVertex VertexType_T>
-    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
+    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, const std::string &meshStem, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
     {
         if (!node)
         {
@@ -2428,7 +2456,7 @@ namespace ignite
                 outScene.nodes[nodeIndex].meshes.push_back(meshInstance);
                 outScene.flatMeshes.push_back(meshInstance);
 
-                int sceneMaterialIndex = ProcessMaterialAndTextures(node, outScene, materialLoader, sourceDir);
+                int sceneMaterialIndex = ProcessMaterialAndTextures(node, outScene, materialLoader, sourceDir, meshStem);
 
                 outScene.materialMap[static_cast<int>(outScene.flatMeshes.size()) - 1] = sceneMaterialIndex;
             }
@@ -2436,7 +2464,7 @@ namespace ignite
 
         for (int i = 0; i < node->GetChildCount(); ++i)
         {
-            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global, scaleFactor, importSkinningData);
+            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, meshStem, nodeIndex, meshNode.global, scaleFactor, importSkinningData);
         }
     }
 

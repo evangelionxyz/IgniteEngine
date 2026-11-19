@@ -192,6 +192,7 @@ namespace ignite
 
         std::string m_StatusText;
         float m_LoadingProgress = 0.0f;
+        bool m_LoadingSceneAssets = false;
         float m_FixedAccumulator = 0.0f;
 
         static EditorLayer *s_Instance;

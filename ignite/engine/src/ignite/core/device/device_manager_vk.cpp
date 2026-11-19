@@ -150,6 +150,20 @@ namespace ignite
             enabledExtensions.layers.insert("VK_LAYER_KHRONOS_synchronization2");
         }
 
+        bool wantSyncValidation = m_DeviceParameters.enableVulkanSyncValidation;
+        if (!wantSyncValidation)
+        {
+            if (const char *syncEnv = std::getenv("IGNITE_VK_SYNC_VALIDATION"))
+            {
+                wantSyncValidation = (std::string_view(syncEnv) == "1" || std::string_view(syncEnv) == "true");
+            }
+        }
+        if (wantSyncValidation)
+        {
+            enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
+            optionalExtensions.instance.insert("VK_EXT_validation_features");
+        }
+
         m_DynamicLoader = std::make_unique<VulkanDynamicLoader>(m_DeviceParameters.vulkanLibraryName);
 
         PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = m_DynamicLoader->getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
@@ -659,6 +673,23 @@ namespace ignite
 
             requiredExtensions.erase(name);
         }
+        if (enabledExtensions.layers.contains("VK_LAYER_KHRONOS_validation"))
+        {
+            try
+            {
+                for (const auto &layerExt : vk::enumerateInstanceExtensionProperties(std::string("VK_LAYER_KHRONOS_validation")))
+                {
+                    const std::string name = layerExt.extensionName;
+                    if (optionalExtensions.instance.contains(name))
+                        enabledExtensions.instance.insert(name);
+
+                    requiredExtensions.erase(name);
+                }
+            }
+            catch (...)
+            {
+            }
+        }
 
         if (!requiredExtensions.empty())
         {
@@ -759,6 +790,25 @@ namespace ignite
             .setEnabledExtensionCount(uint32_t(instanceExtVec.size()))
             .setPpEnabledExtensionNames(instanceExtVec.data())
             .setPApplicationInfo(&applicationInfo);
+
+        vk::ValidationFeaturesEXT validationFeatures{};
+        std::vector<vk::ValidationFeatureEnableEXT> enabledValidationFeatures;
+        bool wantSyncValidation = m_DeviceParameters.enableVulkanSyncValidation;
+        if (!wantSyncValidation)
+        {
+            if (const char *syncEnv = std::getenv("IGNITE_VK_SYNC_VALIDATION"))
+            {
+                wantSyncValidation = (std::string_view(syncEnv) == "1" || std::string_view(syncEnv) == "true");
+            }
+        }
+        if (wantSyncValidation && enabledExtensions.instance.contains("VK_EXT_validation_features"))
+        {
+            enabledValidationFeatures.push_back(vk::ValidationFeatureEnableEXT::eSynchronizationValidation);
+            validationFeatures.enabledValidationFeatureCount = static_cast<uint32_t>(enabledValidationFeatures.size());
+            validationFeatures.pEnabledValidationFeatures = enabledValidationFeatures.data();
+            info.setPNext(&validationFeatures);
+            LOG_INFO("[Vulkan] Enabling VK_EXT_validation_features synchronization validation");
+        }
 
         res = vk::createInstance(&info, nullptr, &m_VulkanInstance);
         if (res != vk::Result::eSuccess)

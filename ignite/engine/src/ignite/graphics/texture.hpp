@@ -39,6 +39,7 @@ namespace ignite
         bool keepCpuData = false;
         bool deferGpuCreate = false;
         bool bindless = true;
+        bool forceBindless = false;
 
         bool keepInitialState = false;
         bool isNativeObject = false;
@@ -186,6 +187,10 @@ namespace ignite
         void SetData(nri::CommandBuffer *cmd, uint32_t rowPitch, uint32_t depthPitch);
         void PrepareUploadData(uint32_t channelCount);
         void PrepareUploadData(uint32_t rowPitch, uint32_t depthPitch);
+        bool UploadRawData(const void *data, uint32_t rowPitch, uint32_t slicePitch, uint32_t mipLevel = 0, uint32_t arrayLayer = 0);
+        bool UploadCubeMipChain(const std::vector<std::vector<uint8_t>> &subresourceBytes, uint32_t cubeSliceOffset = 0);
+        static bool ReadbackTextureSubresource(const Ref<Texture> &texture, uint32_t mipLevel, uint32_t arrayLayer,
+            std::vector<uint8_t> &outBytes, uint32_t &outRowPitch, uint32_t &outSlicePitch);
 
         // Asynchronous GPU upload queue management
         static void SubmitAsyncUpload(Ref<Texture> texture, std::function<void()> onComplete = nullptr);
@@ -196,6 +201,7 @@ namespace ignite
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nri::Texture *GetHandle() const { return m_Handle; }
         nri::Descriptor *GetShaderResourceView() const { return m_ShaderResourceView; }
+        nri::Descriptor *GetArrayShaderResourceView();
         nri::Descriptor *GetMipShaderResourceView(uint32_t mipLevel);
         nri::Descriptor *GetStorageView(uint32_t mipLevel = 0);
         nri::Descriptor *GetSampler() const { return m_Sampler; }
@@ -208,6 +214,8 @@ namespace ignite
 
         int GetWidth() const { return m_CreateInfo.width; }
         int GetHeight() const { return m_CreateInfo.height; }
+        int GetDepth() const { return m_CreateInfo.depth; }
+        uint32_t GetArraySize() const { return m_CreateInfo.arraySize; }
         int GetChannels() const { return 4; }
         int GetMipLevel() const { return m_CreateInfo.mipLevels; }
         nri::Format GetFormat() const { return m_CreateInfo.format; }
@@ -243,6 +251,7 @@ namespace ignite
         std::filesystem::path m_Filepath;
         nri::Texture *m_Handle = nullptr;
         nri::Descriptor *m_ShaderResourceView = nullptr;
+        nri::Descriptor *m_ArrayShaderResourceView = nullptr;
         std::vector<nri::Descriptor *> m_MipSRVs;
         std::vector<nri::Descriptor *> m_StorageViews;
         nri::Descriptor *m_Sampler = nullptr;

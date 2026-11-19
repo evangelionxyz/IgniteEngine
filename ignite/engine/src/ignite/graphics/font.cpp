@@ -90,26 +90,49 @@ namespace ignite
         createInfo.samplerLinearFiltering = true;
         createInfo.keepInitialState = true;
         createInfo.keepCpuData = true;
+        createInfo.deferGpuCreate = true;
 
         Ref<Texture> atlas = Texture::Create(rgbaPixels, createInfo, nullptr, "MSDF Font Atlas");
         atlas->SetReadyFlag(false);
 
-        atlas->PrepareUploadData(4);
-        Texture::SubmitAsyncUpload(atlas, [atlas, f]()
+        if (f)
         {
-            if (f)
+            f->SetAtlasTexture(atlas);
+        }
+
+        atlas->PrepareUploadData(4);
+        std::weak_ptr<Asset> weakAsset = f ? f->weak_from_this() : std::weak_ptr<Asset>();
+        Texture::SubmitAsyncUpload(atlas, [atlas, weakAsset]()
+        {
+            if (auto locked = weakAsset.lock())
             {
-                f->SetReadyFlag(atlas->IsReady());
-                f->NotifyChange();
+                auto font = std::static_pointer_cast<Font>(locked);
+                font->SetReadyFlag(atlas->IsReady());
+                font->SetLoadingFlag(false);
+                font->NotifyChange();
             }
         });
 
+        if (!DeviceManager::GetInstance() || !DeviceManager::GetInstance()->GetDevice())
+        {
+            if (f)
+            {
+                f->SetLoadingFlag(false);
+            }
+        }
+
         return atlas;
+    }
+
+    Font::Font()
+    {
+        m_Ready = false;
     }
 
     Font::Font(const std::filesystem::path &filepath)
     {
         m_Ready = false;
+        m_Loading.store(true, std::memory_order_release);
         LoadGlyphs(filepath);
     }
 
@@ -118,21 +141,54 @@ namespace ignite
         m_Glyphs.clear();
     }
 
-	Ref<Font> Font::Create(const std::filesystem::path &filepath)
+	Ref<Font> Font::Create(const std::filesystem::path &filepath, bool async)
 	{
-		return CreateRef<Font>(filepath);
+        Ref<Font> font = CreateRef<Font>();
+        font->m_Loading.store(true, std::memory_order_release);
+
+        if (async)
+        {
+            std::weak_ptr<Asset> weakAsset = font->weak_from_this();
+            const std::string jobName = std::format("Loading font {}...", filepath.filename().string());
+            AssetWorker::SubmitJob(jobName, [weakAsset, filepath]()
+            {
+                if (auto locked = weakAsset.lock())
+                {
+                    auto lockedFont = std::static_pointer_cast<Font>(locked);
+                    lockedFont->LoadGlyphs(filepath);
+                }
+            });
+        }
+        else
+        {
+            font->LoadGlyphs(filepath);
+        }
+
+		return font;
 	}
 
 	glm::vec2 Font::MeasureString(const std::string &str, float kerning, float linespacing) const
 	{
+        if (!IsReady() || str.empty())
+        {
+            return glm::vec2(0.0f);
+        }
+
 		double x = 0.0;
 		double y = 0.0;
 		double maxX = 0.0;
 		double minY = 0.0;
 
 		const auto &metrics = m_FontGeometry.getMetrics();
-		double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
-		const double spaceGlypAdvance = m_FontGeometry.getGlyph(' ')->getAdvance();
+        const double metricHeight = metrics.ascenderY - metrics.descenderY;
+        if (metricHeight == 0.0)
+        {
+            return glm::vec2(0.0f);
+        }
+
+		double fsScale = 1.0 / metricHeight;
+        const auto *spaceGlyph = m_FontGeometry.getGlyph(' ');
+		const double spaceGlypAdvance = spaceGlyph ? spaceGlyph->getAdvance() : 0.25;
 
 		for (size_t i = 0; i < str.size(); ++i)
 		{
@@ -188,8 +244,11 @@ namespace ignite
 		return glm::vec2(static_cast<float>(maxX), static_cast<float>(-minY));
 	}
 
-	void Font::LoadGlyphs(const std::filesystem::path &filepath)
-	{
+    void Font::LoadGlyphs(const std::filesystem::path &filepath)
+    {
+        m_Ready = false;
+        m_Loading.store(true, std::memory_order_release);
+
         msdfgen::FreetypeHandle *ft = msdfgen::initializeFreetype();
 
         std::filesystem::path resolvedPath = filepath;
@@ -222,6 +281,7 @@ namespace ignite
         {
             LOG_ERROR("[Font] Failed to load \"{}\"", filepathStr);
             msdfgen::deinitializeFreetype(ft);
+            m_Loading.store(false, std::memory_order_release);
             return;
         }
 
@@ -242,6 +302,7 @@ namespace ignite
 
         const double fontScale = 1.0;
 
+        m_Glyphs.clear();
         m_FontGeometry = msdf_atlas::FontGeometry(&m_Glyphs);
         const int glyphsCount = m_FontGeometry.loadCharset(font, fontScale, charset);
         LOG_INFO("[Font] Loaded {} glyphs from font (out of {})", glyphsCount, charset.size());
@@ -286,9 +347,9 @@ namespace ignite
             LOG_WARN("[Font] Edge coloring takes {}s to be done.", timer.Elapsed());
         }
 
-        m_AtlasTexture = CreateAndCacheAtlas<float, float, 3, msdf_atlas::msdfGenerator>(m_Glyphs, width, height, this);
+        CreateAndCacheAtlas<float, float, 3, msdf_atlas::msdfGenerator>(m_Glyphs, width, height, this);
 
         msdfgen::destroyFont(font);
         msdfgen::deinitializeFreetype(ft);
-	}
+    }
 }

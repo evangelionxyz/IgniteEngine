@@ -15,6 +15,12 @@
 #include "component.hpp"
 #include "entity_command_manager.hpp"
 #include "entity_destroy_command.hpp"
+#include "ignite/serializer/serializer.hpp"
+#include "ignite/serializer/entity_serializer.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <unordered_set>
 
 #include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/physics/3d/physics_3d.hpp"
@@ -36,66 +42,195 @@
 
 namespace ignite
 {
-    static std::string GenerateUniqueName(const std::string &name, const std::vector<std::string> &names, std::unordered_map<std::string, uint32_t> &strMap)
+    static std::string StripTrailingNumberSuffix(const std::string &name)
     {
-        // iterate names for the first time
-        // check if the name already exists
-        bool found = false;
-        for (auto &n : names)
-        {
-            found = n == name;
-            if (found)
-                break;
-        }
-
-        // if the name does not exist, return it as the unique key
-        if (!found)
+        if (name.size() < 4 || name.back() != ')')
             return name;
 
-        // generate a unique key if the name already exists
-        i32 counter = 1;
-        std::string uniqueKey;
+        const size_t openPos = name.rfind(" (");
+        if (openPos == std::string::npos || openPos == 0)
+            return name;
 
-        bool unique = false;
-        while (!unique)
+        const size_t digitsStart = openPos + 2;
+        const size_t digitsEnd = name.size() - 1;
+        if (digitsStart >= digitsEnd)
+            return name;
+
+        for (size_t i = digitsStart; i < digitsEnd; ++i)
         {
-            uniqueKey = fmt::format("{} ({})", name, counter);
-            unique = true;
+            if (!std::isdigit(static_cast<unsigned char>(name[i])))
+                return name;
+        }
 
-            // iterate once again
-            // check if they are already unique
-            for (auto &n : names)
+        return name.substr(0, openPos);
+    }
+
+    static std::vector<UUID> *GetParentSiblingList(Scene *scene, UUID parentUUID)
+    {
+        if (!scene)
+            return nullptr;
+
+        if (parentUUID == UUID(0))
+            return &scene->rootEntityOrder;
+
+        Entity parent = SceneManager::GetEntity(scene, parentUUID);
+        if (!parent.IsValid())
+            return nullptr;
+
+        return &parent.GetComponent<IDComponent>().children;
+    }
+
+    static void RemoveUUIDFromList(std::vector<UUID> &list, UUID target)
+    {
+        list.erase(std::remove(list.begin(), list.end(), target), list.end());
+    }
+
+    EntitySubtreeSnapshot CaptureEntitySubtreeSnapshot(Scene *scene, Entity rootEntity)
+    {
+        EntitySubtreeSnapshot snapshot;
+        if (!scene || !scene->registry || !rootEntity.IsValid())
+            return snapshot;
+
+        const IDComponent &rootId = rootEntity.GetComponent<IDComponent>();
+        snapshot.rootUUID = rootId.uuid;
+        snapshot.parentUUID = rootId.parent;
+        snapshot.rootName = rootId.name;
+        snapshot.siblingIndex = SceneManager::GetSiblingIndex(scene, rootId.uuid);
+
+        std::vector<Entity> orderedSubtree;
+        std::unordered_set<UUID> visited;
+        std::function<void(Entity)> collectSubtree = [&](Entity current)
+        {
+            if (!current.IsValid())
+                return;
+
+            const IDComponent &id = current.GetComponent<IDComponent>();
+            if (visited.contains(id.uuid))
+                return;
+
+            visited.insert(id.uuid);
+            orderedSubtree.push_back(current);
+            snapshot.childOrders.emplace_back(id.uuid, id.children);
+
+            for (UUID childUUID : id.children)
             {
-                if (n == uniqueKey) // not unique continue search
+                collectSubtree(SceneManager::GetEntity(scene, childUUID));
+            }
+        };
+
+        collectSubtree(rootEntity);
+
+        Serializer sr("");
+        sr.BeginMap();
+        sr.BeginSequence("Entities");
+        for (Entity e : orderedSubtree)
+        {
+            EntitySerializer::SerializeEntity(sr, e);
+        }
+        sr.EndSequence();
+        sr.EndMap();
+
+        snapshot.serializedEntitiesJson = sr.GetRoot().dump();
+        return snapshot;
+    }
+
+    Entity RestoreEntitySubtreeSnapshot(Scene *scene, const EntitySubtreeSnapshot &snapshot)
+    {
+        if (!scene || !scene->registry || !snapshot.IsValid())
+            return {};
+
+        JsonNode rootNode = Serializer::DeserializeFromString(snapshot.serializedEntitiesJson);
+        JsonNode entitiesNode = rootNode["Entities"];
+        if (!entitiesNode || !entitiesNode.IsSequence())
+            return {};
+
+        std::vector<UUID> restoredUUIDs;
+        for (JsonNode entityNode : entitiesNode)
+        {
+            if (!entityNode["ID"])
+                continue;
+
+            const UUID uuid = UUID(entityNode["ID"].as<uint64_t>());
+            if (!SceneManager::GetEntity(scene, uuid).IsValid())
+            {
+                EntitySerializer::DeserializeEntity(entityNode, scene, scene->GetProject());
+            }
+            restoredUUIDs.push_back(uuid);
+        }
+
+        // Restore exact child order for every entity in the subtree and keep non-root children out of rootEntityOrder
+        for (const auto &[entityUUID, childOrder] : snapshot.childOrders)
+        {
+            if (entityUUID != snapshot.rootUUID)
+            {
+                RemoveUUIDFromList(scene->rootEntityOrder, entityUUID);
+            }
+
+            Entity e = SceneManager::GetEntity(scene, entityUUID);
+            if (e.IsValid())
+            {
+                IDComponent &idComp = e.GetComponent<IDComponent>();
+                idComp.children.clear();
+                for (UUID childUUID : childOrder)
                 {
-                    unique = false;
-                    break;
+                    if (SceneManager::GetEntity(scene, childUUID).IsValid())
+                    {
+                        idComp.children.push_back(childUUID);
+                    }
                 }
             }
-            counter++; // increment the counter if names are not unique
         }
 
-        // update the counter to reflect the highest number used
-        strMap[name] = counter - 1;
-
-        // cleanup counters for names that no longer exist
-        for (auto it = strMap.begin(); it != strMap.end();)
+        // Place the restored root at its exact previous parent and sibling index
+        UUID targetParent = snapshot.parentUUID;
+        if (targetParent != UUID(0) && !SceneManager::GetEntity(scene, targetParent).IsValid())
         {
-            bool exists = false;
-            for (auto &n : names)
-            {
-                exists = name.find(it->first) == 0;
-                if (exists)
-                    break;
-            }
-
-            if (!exists)
-                it = strMap.erase(it);
-            else
-                ++it;
+            targetParent = UUID(0);
         }
 
-        return uniqueKey;
+        SceneManager::MoveEntity(scene, snapshot.rootUUID, targetParent, snapshot.siblingIndex);
+
+        for (UUID uuid : restoredUUIDs)
+        {
+            Entity e = SceneManager::GetEntity(scene, uuid);
+            if (e.IsValid() && e.HasComponent<TransformComponent>())
+            {
+                e.GetComponent<TransformComponent>().dirty = true;
+            }
+        }
+
+        scene->SetDirtyFlag(true);
+        return SceneManager::GetEntity(scene, snapshot.rootUUID);
+    }
+
+    std::string SceneManager::GenerateUniqueEntityName(Scene *scene, const std::string &baseName)
+    {
+        const std::string fallback = baseName.empty() ? std::string("Entity") : baseName;
+        if (!scene || !scene->registry)
+            return fallback;
+
+        std::unordered_set<std::string> existingNames;
+        auto view = scene->registry->view<IDComponent>();
+        for (entt::entity e : view)
+        {
+            existingNames.insert(view.get<IDComponent>(e).name);
+        }
+
+        if (!existingNames.contains(fallback))
+            return fallback;
+
+        std::string stem = StripTrailingNumberSuffix(fallback);
+        if (stem.empty())
+            stem = "Entity";
+
+        uint32_t counter = 1;
+        while (true)
+        {
+            std::string candidate = fmt::format("{} ({})", stem, counter);
+            if (!existingNames.contains(candidate))
+                return candidate;
+            ++counter;
+        }
     }
 
     Entity SceneManager::CreateEntity(Scene *scene, const std::string &name, EntityType type, UUID uuid)
@@ -106,119 +241,73 @@ namespace ignite
         entity.AddComponent<TransformComponent>();
         entity.AddComponent<RenderingComponent>();
         scene->entities[uuid] = entity;
+        if (std::find(scene->rootEntityOrder.begin(), scene->rootEntityOrder.end(), uuid) == scene->rootEntityOrder.end())
+        {
+            scene->rootEntityOrder.push_back(uuid);
+        }
         return entity;
+    }
+
+    Entity SceneManager::CreateFolder(Scene *scene, const std::string &name, UUID uuid)
+    {
+        if (!scene)
+            return Entity{};
+
+        const std::string base = name.empty() ? std::string("Folder") : name;
+        const std::string uniqueName = GenerateUniqueEntityName(scene, base);
+        Entity folder = CreateEntity(scene, uniqueName, EntityType_Folder, uuid);
+
+        if (!scene->IsRunning() && !CommandManager::IsExecutingUndoRedo() && folder.IsValid())
+        {
+            CommandManager::AddCommand(CreateScope<EntityCreateCommand>(scene, folder, "Create Folder"));
+        }
+        return folder;
     }
 
     Entity SceneManager::CreateSprite(Scene *scene, const std::string &name, UUID uuid)
     {
-        // create local storage for entity data
-        Entity createdEntity;
+        if (!scene)
+            return Entity{};
 
-        // prepare entity creation logic
-        std::function createFunc = [=, &createdEntity]() mutable
+        Entity createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
+        createdEntity.AddComponent<Sprite2DComponent>();
+
+        if (!scene->IsRunning() && !CommandManager::IsExecutingUndoRedo() && createdEntity.IsValid())
         {
-            createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
-            createdEntity.AddComponent<Sprite2DComponent>();
-        };
-
-        // immediately call createFunc to initialize createdEntity
-        createFunc();
-
-        // capture scene and entity by value to preserve the for undo
-        Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
-
-        std::function destroyFunc = [capturedScene, capturedUUID]()
-        {
-            if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-            {
-                DestroyEntity(capturedScene, entityToDestroy);
-            }
-        };
-
-        CommandManager::AddCommand(
-            CreateScope<EntityManagerCommand>(
-                createFunc,
-                destroyFunc,
-                CommandState_Create
-            )
-        );
+            CommandManager::AddCommand(CreateScope<EntityCreateCommand>(scene, createdEntity, "Create " + name));
+        }
 
         return createdEntity;
     }
 
     Entity SceneManager::CreateCircle(Scene *scene, const std::string &name, UUID uuid)
     {
-        // create local storage for entity data
-        Entity createdEntity;
+        if (!scene)
+            return Entity{};
 
-        // prepare entity creation logic
-        std::function createFunc = [=, &createdEntity]() mutable
-            {
-                createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
-                createdEntity.AddComponent<Circle2DComponent>();
-            };
+        Entity createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
+        createdEntity.AddComponent<Circle2DComponent>();
 
-        // immediately call createFunc to initialize createdEntity
-        createFunc();
-
-        // capture scene and entity by value to preserve the for undo
-        Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
-
-        std::function destroyFunc = [capturedScene, capturedUUID]()
-            {
-                if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-                {
-                    DestroyEntity(capturedScene, entityToDestroy);
-                }
-            };
-
-        CommandManager::AddCommand(
-            CreateScope<EntityManagerCommand>(
-                createFunc,
-                destroyFunc,
-                CommandState_Create
-            )
-        );
+        if (!scene->IsRunning() && !CommandManager::IsExecutingUndoRedo() && createdEntity.IsValid())
+        {
+            CommandManager::AddCommand(CreateScope<EntityCreateCommand>(scene, createdEntity, "Create " + name));
+        }
 
         return createdEntity;
     }
 
     Entity SceneManager::CreatePointLight2D(Scene *scene, const std::string &name, UUID uuid)
     {
-        // create local storage for entity data
-        Entity createdEntity;
+        if (!scene)
+            return Entity{};
 
-        // prepare entity creation logic
-        std::function createFunc = [=, &createdEntity]() mutable
-            {
-                createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
-                createdEntity.AddComponent<PointLight2DComponent>();
-            };
+        Entity createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
+        createdEntity.AddComponent<PointLight2DComponent>();
 
-        // immediately call createFunc to initialize createdEntity
-        createFunc();
-
-        // capture scene and entity by value to preserve the for undo
-        Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
-
-        std::function destroyFunc = [capturedScene, capturedUUID]()
-            {
-                if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-                {
-                    DestroyEntity(capturedScene, entityToDestroy);
-                }
-            };
-
-        CommandManager::AddCommand(
-            CreateScope<EntityManagerCommand>(
-                createFunc,
-                destroyFunc,
-                CommandState_Create
-            )
-        );
+        if (!scene->IsRunning() && !CommandManager::IsExecutingUndoRedo() && createdEntity.IsValid())
+        {
+            CommandManager::AddCommand(CreateScope<EntityCreateCommand>(scene, createdEntity, "Create " + name));
+        }
 
         return createdEntity;
     }
@@ -232,6 +321,10 @@ namespace ignite
         entity.AddComponent<TransformComponent>();
         entity.AddComponent<RenderingComponent>();
         scene->entities[uuid] = entity;
+        if (std::find(scene->rootEntityOrder.begin(), scene->rootEntityOrder.end(), uuid) == scene->rootEntityOrder.end())
+        {
+            scene->rootEntityOrder.push_back(uuid);
+        }
 
         return entity;
     }
@@ -243,153 +336,66 @@ namespace ignite
 
         const std::string entityName = name.empty() ? std::string(Renderer::GetDefaultMeshName(type)) : name;
         const AssetHandle meshHandle = Renderer::GetDefaultMeshHandle(type);
-        const bool recordUndo = !scene->IsRunning();
 
-        Entity createdEntity;
-        auto createFunc = [=, &createdEntity]() mutable
+        Entity createdEntity = CreateEntity(scene, entityName, EntityType_Node | EntityType_Mesh, uuid);
+        auto &smc = createdEntity.AddComponent<StaticMeshComponent>();
+        smc.handle = meshHandle;
+        if (auto mesh = Renderer::GetDefaultMesh(type))
         {
-            createdEntity = CreateEntity(scene, entityName, EntityType_Node | EntityType_Mesh, uuid);
-            auto &smc = createdEntity.AddComponent<StaticMeshComponent>();
-            smc.handle = meshHandle;
-            if (auto mesh = Renderer::GetDefaultMesh(type))
-            {
-                smc.worldAABB = mesh->localAABB;
-            }
-        };
+            smc.worldAABB = mesh->localAABB;
+        }
 
-        createFunc();
-
-        if (recordUndo && createdEntity.IsValid())
+        if (!scene->IsRunning() && !CommandManager::IsExecutingUndoRedo() && createdEntity.IsValid())
         {
-            Scene *capturedScene = scene;
-            UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
-            auto destroyFunc = [capturedScene, capturedUUID]()
-            {
-                if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-                {
-                    DestroyEntity(capturedScene, entityToDestroy);
-                }
-            };
-
-            CommandManager::AddCommand(
-                CreateScope<EntityManagerCommand>(
-                    createFunc,
-                    destroyFunc,
-                    CommandState_Create
-                )
-            );
+            CommandManager::AddCommand(CreateScope<EntityCreateCommand>(scene, createdEntity, "Create " + entityName));
         }
 
         return createdEntity;
     }
 
-    Entity SceneManager::CreateCamera(Scene* scene, const std::string& name, UUID uuid)
+    Entity SceneManager::CreateCamera(Scene *scene, const std::string &name, UUID uuid)
     {
-        // create local storage for entity data
-        Entity createdEntity;
+        if (!scene)
+            return Entity{};
 
-        // prepare entity creation logic
-        std::function createFunc = [=, &createdEntity]() mutable
+        Entity createdEntity = CreateEntity(scene, name, EntityType_Camera, uuid);
+        createdEntity.AddComponent<CameraComponent>();
+
+        if (!scene->IsRunning() && !CommandManager::IsExecutingUndoRedo() && createdEntity.IsValid())
         {
-            createdEntity = CreateEntity(scene, name, EntityType_Camera, uuid);
-            createdEntity.AddComponent<CameraComponent>();
-        };
-
-        // immediately call createFunc to initialize createdEntity
-        createFunc();
-
-        // capture scene and entity by value to preserve the for undo
-        Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
-
-        std::function destroyFunc = [capturedScene, capturedUUID]()
-        {
-            if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-            {
-                DestroyEntity(capturedScene, entityToDestroy);
-            }
-        };
-
-        CommandManager::AddCommand(
-            CreateScope<EntityManagerCommand>(
-                createFunc,
-                destroyFunc,
-                CommandState_Create
-            )
-        );
+            CommandManager::AddCommand(CreateScope<EntityCreateCommand>(scene, createdEntity, "Create " + name));
+        }
 
         return createdEntity;
     }
 
     Entity SceneManager::CreateWorldEnvironment(Scene *scene, const std::string &name, UUID uuid)
     {
-        // create local storage for entity data
-        Entity createdEntity;
+        if (!scene)
+            return Entity{};
 
-        // prepare entity creation logic
-        std::function createFunc = [=, &createdEntity]() mutable
+        Entity createdEntity = CreateEntity(scene, name, EntityType_WorldEnvironment, uuid);
+        createdEntity.AddComponent<WorldEnvironment>();
+
+        if (!scene->IsRunning() && !CommandManager::IsExecutingUndoRedo() && createdEntity.IsValid())
         {
-            createdEntity = CreateEntity(scene, name, EntityType_WorldEnvironment, uuid);
-            createdEntity.AddComponent<WorldEnvironment>();
-        };
-
-        // immediately call createFunc to initialize createdEntity
-        createFunc();
-
-        // capture scene and entity by value to preserve the for undo
-        Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
-
-        std::function destroyFunc = [capturedScene, capturedUUID]()
-        {
-            if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-            {
-                DestroyEntity(capturedScene, entityToDestroy);
-            }
-        };
-
-        CommandManager::AddCommand(
-            CreateScope<EntityManagerCommand>(
-                createFunc,
-                destroyFunc,
-                CommandState_Create
-            )
-        );
+            CommandManager::AddCommand(CreateScope<EntityCreateCommand>(scene, createdEntity, "Create " + name));
+        }
 
         return createdEntity;
     }
 
     Entity SceneManager::CreateEmptyEntity(Scene *scene, const std::string &name, UUID uuid)
     {
-        // create local storage for entity data
-        Entity createdEntity;
+        if (!scene)
+            return Entity{};
 
-        // prepare entity creation logic
-        std::function createFunc = [=, &createdEntity]() mutable
+        Entity createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
+
+        if (!scene->IsRunning() && !CommandManager::IsExecutingUndoRedo() && createdEntity.IsValid())
         {
-            createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
-        };
-
-        // immediately call createFunc to initialize createdEntity
-        createFunc();
-
-        // capture by value for undo safety
-        Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
-
-        std::function destroyFunc = [capturedScene, capturedUUID]()
-        {
-            if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
-                DestroyEntity(capturedScene, entityToDestroy);
-        };
-
-        CommandManager::AddCommand(
-            CreateScope<EntityManagerCommand>(
-                createFunc,
-                destroyFunc,
-                CommandState_Create
-            )
-        );
+            CommandManager::AddCommand(CreateScope<EntityCreateCommand>(scene, createdEntity, "Create " + name));
+        }
 
         return createdEntity;
     }
@@ -407,7 +413,7 @@ namespace ignite
 
     void SceneManager::DestroyEntity(Scene *scene, Entity entity)
     {
-        if (!scene || !scene->registry->valid(entity))
+        if (!scene || !scene->registry || !scene->registry->valid(entity))
             return;
 
         scene->SetDirtyFlag(true);
@@ -477,6 +483,7 @@ namespace ignite
             scene->UnregisterNetEntity(netComp.netId);
         }
 
+        RemoveUUIDFromList(scene->rootEntityOrder, idComp.uuid);
         scene->registry->destroy(entity);
         scene->entities.erase(idComp.uuid);
 
@@ -484,7 +491,10 @@ namespace ignite
         if (idComp.parent != UUID(0))
         {
             Entity parent = SceneManager::GetEntity(scene, idComp.parent);
-            parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
+            if (parent.IsValid())
+            {
+                parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
+            }
         }
     }
 
@@ -493,14 +503,18 @@ namespace ignite
         DestroyEntity(scene, GetEntity(scene, uuid));
     }
 
-    Entity SceneManager::DuplicateEntity(Scene *scene, Entity entity, bool addToParent)
+    Entity SceneManager::DuplicateEntity(Scene *scene, Entity entity, bool addToParent, bool recordUndo)
     {
+        if (!scene || !entity.IsValid())
+            return {};
+
         scene->SetDirtyFlag(true);
 
-        // first, get current entity's ID Component
-        IDComponent &idComp = entity.GetComponent<IDComponent>();
+        // Copy IDComponent fields BEFORE creating newEntity because registry insertion can reallocate pools.
+        const IDComponent origIdComp = entity.GetComponent<IDComponent>();
+        const std::string newName = addToParent ? GenerateUniqueEntityName(scene, origIdComp.name) : origIdComp.name;
 
-        Entity newEntity = SceneManager::CreateEntity(scene, idComp.name, idComp.type);
+        Entity newEntity = SceneManager::CreateEntity(scene, newName, origIdComp.type);
 
         // copy current entity's components to new entity
         SceneManager::CopyComponentIfExists(AllComponents{}, newEntity, entity);
@@ -518,35 +532,31 @@ namespace ignite
             netComp.ownerClient = 0;
         }
 
-        // get new entity's ID Component
-        IDComponent &newEntityIDComp = newEntity.GetComponent<IDComponent>();
-
-        // create its children
-        for (UUID cid : idComp.children)
+        const UUID newUUID = newEntity.GetUUID();
         {
-            Entity newChildEntity = DuplicateEntity(scene, GetEntity(scene, cid), false); // add to parent false
-
-            IDComponent &childId = newChildEntity.GetComponent<IDComponent>();
-
-            // add this child to new entity
-            newEntityIDComp.AddChild(childId.uuid);
-
-            // set child parent to new entity
-            childId.parent = newEntityIDComp.uuid;
+            IDComponent &newEntityIDComp = newEntity.GetComponent<IDComponent>();
+            newEntityIDComp.parent = UUID(0);
+            newEntityIDComp.children.clear();
         }
 
-        // check if current entity has a parent
-        if (idComp.parent != 0 && addToParent)
+        // Recursively duplicate children without emitting separate undo commands per child
+        for (UUID cid : origIdComp.children)
         {
-            // get the current entity's parent
-            Entity parent = GetEntity(scene, idComp.parent);
-            IDComponent &parentIDComp = parent.GetComponent<IDComponent>();
+            Entity srcChild = GetEntity(scene, cid);
+            if (!srcChild.IsValid())
+                continue;
 
-            // set new entity parent to this parent
-            newEntityIDComp.parent = parentIDComp.uuid;
+            Entity newChildEntity = DuplicateEntity(scene, srcChild, false, false);
+            if (newChildEntity.IsValid())
+            {
+                MoveEntity(scene, newChildEntity.GetUUID(), newUUID);
+            }
+        }
 
-            // add child to parent
-            parentIDComp.AddChild(newEntityIDComp.uuid);
+        if (addToParent)
+        {
+            // Place duplicated entity right below the original entity within the same parent (or root)
+            ReorderRelativeTo(scene, newUUID, origIdComp.uuid, HierarchyDropPosition::Below);
         }
 
         // Do not copy Particle System 
@@ -722,21 +732,10 @@ namespace ignite
             }
         }
 
-        if (!scene->IsRunning())
+        if (!scene->IsRunning() && recordUndo && !CommandManager::IsExecutingUndoRedo() && newEntity.IsValid())
         {
-            // Capture the new entity UUID so undo can destroy it
-            UUID newUUID = newEntityIDComp.uuid;
             CommandManager::AddCommand(
-                CreateScope<EntityManagerCommand>(
-                    [scene, newUUID]() { /* no-op: already duplicated */ },
-                    [scene, newUUID]()
-                    {
-                        if (Entity e = GetEntity(scene, newUUID))
-                            DestroyEntity(scene, e);
-                    },
-                    CommandState_Create
-                )
-            );
+                CreateScope<EntityCreateCommand>(scene, newEntity, "Duplicate " + origIdComp.name));
         }
 
         return newEntity;
@@ -768,30 +767,193 @@ namespace ignite
         return Entity{};
     }
 
-    bool SceneManager::AddChild(Scene *scene, Entity destination, Entity source)
+    void SceneManager::SyncHierarchyOrder(Scene *scene)
     {
-        if (source == destination)
+        if (!scene || !scene->registry)
+            return;
+
+        std::unordered_set<UUID> seenRoots;
+        std::vector<UUID> validRoots;
+        validRoots.reserve(scene->rootEntityOrder.size());
+
+        for (UUID uuid : scene->rootEntityOrder)
+        {
+            if (seenRoots.contains(uuid))
+                continue;
+
+            Entity e = GetEntity(scene, uuid);
+            if (e.IsValid() && e.GetComponent<IDComponent>().parent == UUID(0))
+            {
+                seenRoots.insert(uuid);
+                validRoots.push_back(uuid);
+            }
+        }
+
+        // Append any missing root entities not yet listed in rootEntityOrder
+        auto view = scene->registry->view<IDComponent>();
+        for (entt::entity handle : view)
+        {
+            const IDComponent &idComp = view.get<IDComponent>(handle);
+            if (idComp.parent == UUID(0) && !seenRoots.contains(idComp.uuid))
+            {
+                seenRoots.insert(idComp.uuid);
+                validRoots.push_back(idComp.uuid);
+            }
+        }
+        scene->rootEntityOrder = std::move(validRoots);
+
+        // Clean stale or duplicate entries inside every entity's children vector
+        for (entt::entity handle : view)
+        {
+            IDComponent &idComp = view.get<IDComponent>(handle);
+            if (idComp.children.empty())
+                continue;
+
+            std::unordered_set<UUID> seenChildren;
+            std::vector<UUID> validChildren;
+            validChildren.reserve(idComp.children.size());
+
+            for (UUID childUUID : idComp.children)
+            {
+                if (seenChildren.contains(childUUID))
+                    continue;
+
+                Entity child = GetEntity(scene, childUUID);
+                if (child.IsValid() && child.GetComponent<IDComponent>().parent == idComp.uuid)
+                {
+                    seenChildren.insert(childUUID);
+                    validChildren.push_back(childUUID);
+                }
+            }
+            idComp.children = std::move(validChildren);
+        }
+    }
+
+    size_t SceneManager::GetSiblingIndex(Scene *scene, UUID entityUUID)
+    {
+        Entity entity = GetEntity(scene, entityUUID);
+        if (!entity.IsValid())
+            return 0;
+
+        const UUID parentUUID = entity.GetComponent<IDComponent>().parent;
+        const std::vector<UUID> *list = GetParentSiblingList(scene, parentUUID);
+        if (!list)
+            return 0;
+
+        for (size_t i = 0; i < list->size(); ++i)
+        {
+            if ((*list)[i] == entityUUID)
+                return i;
+        }
+        return list->size();
+    }
+
+    bool SceneManager::MoveEntity(Scene *scene, UUID entityUUID, UUID newParentUUID, size_t insertIndex)
+    {
+        if (!scene || !scene->registry)
             return false;
 
-        IDComponent &destIDComp = destination.GetComponent<IDComponent>();
-        IDComponent &sourceIDComp = source.GetComponent<IDComponent>();
+        Entity src = GetEntity(scene, entityUUID);
+        if (!src.IsValid())
+            return false;
 
-        if (!IsParent(scene, destIDComp.uuid, sourceIDComp.uuid))
+        if (newParentUUID != UUID(0))
         {
-            // remove from current parent
-            if (sourceIDComp.parent != 0)
-            {
-                Entity currentParent = GetEntity(scene, sourceIDComp.parent);
-                currentParent.GetComponent<IDComponent>().RemoveChild(sourceIDComp.uuid);
-            }
+            Entity dest = GetEntity(scene, newParentUUID);
+            if (!dest.IsValid())
+                return false;
 
-            // add to target parent
-            destIDComp.AddChild(sourceIDComp.uuid);
-            sourceIDComp.parent = destIDComp.uuid;
-
-            return true;
+            if (newParentUUID == entityUUID || IsParent(scene, newParentUUID, entityUUID))
+                return false;
         }
-        return false;
+
+        IDComponent &srcID = src.GetComponent<IDComponent>();
+        const UUID oldParentUUID = srcID.parent;
+
+        if (std::vector<UUID> *oldList = GetParentSiblingList(scene, oldParentUUID))
+        {
+            RemoveUUIDFromList(*oldList, entityUUID);
+        }
+
+        srcID.parent = newParentUUID;
+
+        std::vector<UUID> *newList = GetParentSiblingList(scene, newParentUUID);
+        if (!newList)
+        {
+            srcID.parent = UUID(0);
+            newList = &scene->rootEntityOrder;
+        }
+
+        RemoveUUIDFromList(*newList, entityUUID);
+        const size_t clampedIndex = (std::min)(insertIndex, newList->size());
+        newList->insert(newList->begin() + static_cast<ptrdiff_t>(clampedIndex), entityUUID);
+
+        if (src.HasComponent<TransformComponent>())
+        {
+            src.GetComponent<TransformComponent>().dirty = true;
+        }
+
+        scene->SetDirtyFlag(true);
+        return true;
+    }
+
+    bool SceneManager::ReorderRelativeTo(Scene *scene, UUID sourceUUID, UUID targetUUID, HierarchyDropPosition position)
+    {
+        if (!scene || !scene->registry || sourceUUID == targetUUID)
+            return false;
+
+        Entity src = GetEntity(scene, sourceUUID);
+        Entity target = GetEntity(scene, targetUUID);
+        if (!src.IsValid() || !target.IsValid())
+            return false;
+
+        if (position == HierarchyDropPosition::Inside)
+        {
+            return MoveEntity(scene, sourceUUID, targetUUID, (std::numeric_limits<size_t>::max)());
+        }
+
+        const UUID targetParentUUID = target.GetComponent<IDComponent>().parent;
+        if (targetParentUUID != UUID(0) && (targetParentUUID == sourceUUID || IsParent(scene, targetParentUUID, sourceUUID)))
+        {
+            return false;
+        }
+
+        const std::vector<UUID> *destList = GetParentSiblingList(scene, targetParentUUID);
+        if (!destList)
+            return false;
+
+        size_t targetIdx = destList->size();
+        for (size_t i = 0; i < destList->size(); ++i)
+        {
+            if ((*destList)[i] == targetUUID)
+            {
+                targetIdx = i;
+                break;
+            }
+        }
+        if (targetIdx >= destList->size())
+            return false;
+
+        const UUID oldParentUUID = src.GetComponent<IDComponent>().parent;
+        size_t finalIdx = (position == HierarchyDropPosition::Above) ? targetIdx : (targetIdx + 1);
+        if (oldParentUUID == targetParentUUID)
+        {
+            const size_t oldIdx = GetSiblingIndex(scene, sourceUUID);
+            if (oldIdx < finalIdx)
+            {
+                --finalIdx;
+            }
+        }
+
+        return MoveEntity(scene, sourceUUID, targetParentUUID, finalIdx);
+    }
+
+    bool SceneManager::AddChild(Scene *scene, Entity destination, Entity source)
+    {
+        if (!destination.IsValid() || !source.IsValid() || source == destination)
+            return false;
+
+        return MoveEntity(scene, source.GetUUID(), destination.GetUUID(), (std::numeric_limits<size_t>::max)());
     }
 
     bool SceneManager::ChildExists(Scene *scene, Entity destination, Entity source)
@@ -890,6 +1052,8 @@ namespace ignite
         // copy scene extra data
         newScene->handle = other->handle;
         newScene->m_LoadedAssets = other->m_LoadedAssets;
+        newScene->rootEntityOrder = other->rootEntityOrder;
+        SyncHierarchyOrder(newScene.get());
 
         // Do not copy entities (it will be created when creating entity)
         // newScene->entities = other->entities;
@@ -995,6 +1159,13 @@ namespace ignite
             return;
         }
 
+        loadedScene->PreloadReferencedAssets();
+        if (!loadedScene->IsReadyToPlay())
+        {
+            // Related assets are not ready yet, defer transition execution
+            return;
+        }
+
         s_TransitionPending = false;
         s_PendingSceneHandle = AssetHandle(0);
 
@@ -1041,14 +1212,20 @@ namespace ignite
             return { entt::null, nullptr };
 
         const IDComponent &srcID = srcRoot.GetComponent<IDComponent>();
+        const std::vector<UUID> srcChildren = srcID.children;
 
         Entity destEntity = SceneManager::CreateEntity(destScene, srcID.name, srcID.type);
 
         SceneManager::CopyComponentIfExists(AllComponents{}, destEntity, srcRoot);
 
-        IDComponent &destID = destEntity.GetComponent<IDComponent>();
+        const UUID destUUID = destEntity.GetUUID();
+        {
+            IDComponent &destID = destEntity.GetComponent<IDComponent>();
+            destID.parent = UUID(0);
+            destID.children.clear();
+        }
 
-        for (UUID childUUID : srcID.children)
+        for (UUID childUUID : srcChildren)
         {
             Entity srcChild = SceneManager::GetEntity(srcScene, childUUID);
             if (srcChild.IsValid())
@@ -1056,8 +1233,7 @@ namespace ignite
                 Entity destChild = CloneEntityTree(destScene, srcScene, srcChild);
                 if (destChild.IsValid())
                 {
-                    destID.AddChild(destChild.GetUUID());
-                    destChild.GetComponent<IDComponent>().parent = destID.uuid;
+                    MoveEntity(destScene, destChild.GetUUID(), destUUID);
                 }
             }
         }

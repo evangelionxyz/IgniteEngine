@@ -244,12 +244,45 @@ namespace ignite
         m_ByteSize = 0;
     }
 
+    void ReflectionProbeBuffer::Initialize(uint32_t maxProbes, nri::Device *device)
+    {
+        m_ByteSize = sizeof(ReflectionProbe_GPUData) * std::max(1u, maxProbes);
+        CreateHostUploadStructuredBuffer(device, m_ByteSize, sizeof(ReflectionProbe_GPUData), "Reflection Probe Buffer", m_Buffer, m_Memory, m_Descriptor, m_MappedMemory);
+    }
+
+    void ReflectionProbeBuffer::Shutdown()
+    {
+        DestroyStructuredBuffer(m_Buffer, m_Memory, m_Descriptor, m_MappedMemory);
+        m_ByteSize = 0;
+    }
+
+    void ReflectionProbeBuffer::SetData(const ReflectionProbe_GPUData *data, uint32_t count)
+    {
+        if (!m_Buffer || !data || count == 0)
+            return;
+
+        const size_t copyBytes = std::min<size_t>(m_ByteSize, static_cast<size_t>(count) * sizeof(ReflectionProbe_GPUData));
+        if (m_MappedMemory)
+        {
+            std::memcpy(m_MappedMemory, data, copyBytes);
+            return;
+        }
+
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        if (void *mapped = nri.MapBuffer(*m_Buffer, 0, copyBytes))
+        {
+            std::memcpy(mapped, data, copyBytes);
+            nri.UnmapBuffer(*m_Buffer);
+        }
+    }
+
     FrameContext::FrameContext(nri::Device *device)
         : cameraBuffer(sizeof(CameraBufferData), true, 16, "Camera Buffer")
         , sceneBuffer(sizeof(Scene_GPUData), true, 16, "Scene Buffer")
         , csmBuffer(sizeof(CSM_GPUData), true, 16, "CSM Buffer")
         , pointLightBuffer(sizeof(PointLightBufferData), true, 16, "Point Light Buffer")
         , spotLightBuffer(sizeof(SpotLightBufferData), true, 16, "Spot Light Buffer")
+        , giBuffer(sizeof(GI_GPUData), true, 16, "GI Buffer")
         , csmPerCascadeBuffers{
             ConstantBuffer(sizeof(CSM_GPUData), true, 16, "CSM Cascade 0 Buffer"),
             ConstantBuffer(sizeof(CSM_GPUData), true, 16, "CSM Cascade 1 Buffer"),
@@ -261,6 +294,10 @@ namespace ignite
         objectBuffer.Initialize(16384, device);
         boneBuffer.Initialize(4096 * MAX_BONES, device);
         instanceIndexBuffer.Initialize(65536, device);
+        reflectionProbeBuffer.Initialize(MAX_REFLECTION_PROBES, device);
+
+        GI_GPUData defaultGI{};
+        giBuffer.SetData(&defaultGI, sizeof(defaultGI));
     }
 
     void FrameContext::InitializeBindingSets(nri::Device *device, const BindingLayoutDesc &staticLayout, const BindingLayoutDesc &animLayout)
@@ -279,6 +316,8 @@ namespace ignite
             desc.AddItem(BindingSetItem::ConstantBuffer(5, csmBuffer.GetDescriptor()));
             desc.AddItem(BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetDescriptor()));
             desc.AddItem(BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetDescriptor()));
+            desc.AddItem(BindingSetItem::ConstantBuffer(8, giBuffer.GetDescriptor()));
+            desc.AddItem(BindingSetItem::StructuredBufferSRV(9, reflectionProbeBuffer.GetDescriptor()));
             staticMeshBindingSet = BindingSet::Create("FrameContext StaticMesh", BindingSet::AllocateAndUpdate(staticPipelineLayout, 0, desc));
         }
 
@@ -293,6 +332,8 @@ namespace ignite
             desc.AddItem(BindingSetItem::ConstantBuffer(5, csmBuffer.GetDescriptor()));
             desc.AddItem(BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetDescriptor()));
             desc.AddItem(BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetDescriptor()));
+            desc.AddItem(BindingSetItem::ConstantBuffer(8, giBuffer.GetDescriptor()));
+            desc.AddItem(BindingSetItem::StructuredBufferSRV(9, reflectionProbeBuffer.GetDescriptor()));
             animatedBindingSet = BindingSet::Create("FrameContext AnimatedMesh", BindingSet::AllocateAndUpdate(animPipelineLayout, 0, desc));
         }
 
@@ -309,6 +350,8 @@ namespace ignite
                 desc.AddItem(BindingSetItem::ConstantBuffer(5, csmPerCascadeBuffers[i].GetDescriptor()));
                 desc.AddItem(BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetDescriptor()));
                 desc.AddItem(BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetDescriptor()));
+                desc.AddItem(BindingSetItem::ConstantBuffer(8, giBuffer.GetDescriptor()));
+                desc.AddItem(BindingSetItem::StructuredBufferSRV(9, reflectionProbeBuffer.GetDescriptor()));
                 staticMeshCSMBindingSet[i] = BindingSet::Create("FrameContext StaticCSM", BindingSet::AllocateAndUpdate(staticPipelineLayout, 0, desc));
             }
 
@@ -323,6 +366,8 @@ namespace ignite
                 desc.AddItem(BindingSetItem::ConstantBuffer(5, csmPerCascadeBuffers[i].GetDescriptor()));
                 desc.AddItem(BindingSetItem::ConstantBuffer(6, pointLightBuffer.GetDescriptor()));
                 desc.AddItem(BindingSetItem::ConstantBuffer(7, spotLightBuffer.GetDescriptor()));
+                desc.AddItem(BindingSetItem::ConstantBuffer(8, giBuffer.GetDescriptor()));
+                desc.AddItem(BindingSetItem::StructuredBufferSRV(9, reflectionProbeBuffer.GetDescriptor()));
                 animatedMeshCSMBindingSet[i] = BindingSet::Create("FrameContext AnimatedCSM", BindingSet::AllocateAndUpdate(animPipelineLayout, 0, desc));
             }
         }
@@ -341,6 +386,7 @@ namespace ignite
         objectBuffer.Shutdown();
         boneBuffer.Shutdown();
         instanceIndexBuffer.Shutdown();
+        reflectionProbeBuffer.Shutdown();
 
         auto *dm = DeviceManager::GetInstance();
         if (dm && dm->GetDevice())

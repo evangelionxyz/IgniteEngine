@@ -49,27 +49,43 @@ namespace ignite
         sr.AddKeyValue<uint32_t>("Version", Application::GetVersion());
         sr.BeginSequence("Entities");
 
-        // Sort by name first: copy map contents into a vector for sorting
-        std::vector<std::pair<UUID, entt::entity>> sortedEntities(m_Scene->entities.begin(), m_Scene->entities.end());
-        std::ranges::sort(sortedEntities, [scene = m_Scene](const auto &a, const auto &b)
-        {
-            Entity entityA = { a.second, scene.get() };
-            Entity entityB = { b.second, scene.get() };
+        SceneManager::SyncHierarchyOrder(m_Scene.get());
 
-            // Use Entity::GetName() to compare display names
-            return entityA.GetName() < entityB.GetName();
-        });
-
-        // entities sequence
-        for (const entt::entity e : sortedEntities | std::views::values)
+        std::unordered_set<UUID> serializedUUIDs;
+        std::function<void(Entity)> serializeTree = [&](Entity entity)
         {
-            Entity entity = { e, m_Scene.get() };
+            if (!entity.IsValid())
+                return;
+
             const IDComponent &idComp = entity.GetComponent<IDComponent>();
+            if (serializedUUIDs.contains(idComp.uuid))
+                return;
 
-            if (idComp.IsInType(EntityType_Prefab))
-                continue;
+            if (!idComp.IsInType(EntityType_Prefab))
+            {
+                serializedUUIDs.insert(idComp.uuid);
+                EntitySerializer::SerializeEntity(sr, entity);
+            }
 
-            EntitySerializer::SerializeEntity(sr, entity);
+            for (UUID childUUID : idComp.children)
+            {
+                Entity child = SceneManager::GetEntity(m_Scene.get(), childUUID);
+                serializeTree(child);
+            }
+        };
+
+        for (UUID rootUUID : m_Scene->rootEntityOrder)
+        {
+            serializeTree(SceneManager::GetEntity(m_Scene.get(), rootUUID));
+        }
+
+        // Fallback for any unvisited entities not reachable from rootEntityOrder
+        for (const auto &[uuid, e] : m_Scene->entities)
+        {
+            if (!serializedUUIDs.contains(uuid))
+            {
+                serializeTree(Entity { e, m_Scene.get() });
+            }
         }
 
         sr.EndSequence(); // Entities
@@ -152,21 +168,69 @@ namespace ignite
         Ref<Scene> desScene = Scene::Create(project);
 
 
+        std::unordered_map<UUID, uint32_t> orderMap;
+        uint32_t seqIdx = 0;
         for (JsonNode entityNode : sceneNode["Entities"])
         {
-            EntitySerializer::DeserializeEntity(entityNode, desScene.get(), project);
+            Entity desEntity = EntitySerializer::DeserializeEntity(entityNode, desScene.get(), project);
+            if (desEntity.IsValid())
+            {
+                const uint32_t orderVal = entityNode["Order"] ? entityNode["Order"].as<uint32_t>(seqIdx) : seqIdx;
+                orderMap[desEntity.GetUUID()] = orderVal;
+            }
+            ++seqIdx;
         }
 
-        // attach each node to it's parent
+        // Clear and rebuild ordered root and parent->children lists
+        desScene->rootEntityOrder.clear();
         for (const auto &[uuid, e] : desScene->entities)
         {
             Entity entity { e, desScene.get() };
-            if (entity.GetParentUUID() != UUID(0))
+            entity.GetComponent<IDComponent>().children.clear();
+        }
+
+        for (const auto &[uuid, e] : desScene->entities)
+        {
+            Entity entity { e, desScene.get() };
+            const UUID parentUUID = entity.GetParentUUID();
+            if (parentUUID != UUID(0))
             {
-                Entity parent = SceneManager::GetEntity(desScene.get(), entity.GetParentUUID());
-                SceneManager::AddChild(desScene.get(), parent, entity);
+                Entity parent = SceneManager::GetEntity(desScene.get(), parentUUID);
+                if (parent.IsValid())
+                {
+                    parent.GetComponent<IDComponent>().AddChild(uuid);
+                }
+                else
+                {
+                    entity.GetComponent<IDComponent>().parent = UUID(0);
+                    desScene->rootEntityOrder.push_back(uuid);
+                }
+            }
+            else
+            {
+                desScene->rootEntityOrder.push_back(uuid);
             }
         }
+
+        auto sortByOrder = [&orderMap](std::vector<UUID> &list)
+        {
+            std::stable_sort(list.begin(), list.end(), [&orderMap](UUID a, UUID b)
+            {
+                const auto itA = orderMap.find(a);
+                const auto itB = orderMap.find(b);
+                const uint32_t ordA = itA != orderMap.end() ? itA->second : (std::numeric_limits<uint32_t>::max)();
+                const uint32_t ordB = itB != orderMap.end() ? itB->second : (std::numeric_limits<uint32_t>::max)();
+                return ordA < ordB;
+            });
+        };
+
+        sortByOrder(desScene->rootEntityOrder);
+        for (const auto &[uuid, e] : desScene->entities)
+        {
+            Entity entity { e, desScene.get() };
+            sortByOrder(entity.GetComponent<IDComponent>().children);
+        }
+        SceneManager::SyncHierarchyOrder(desScene.get());
 
         desScene->SetDirtyFlag(false);
         return desScene;

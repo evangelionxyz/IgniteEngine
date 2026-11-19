@@ -31,6 +31,8 @@ namespace ignite
 		bool OnAssetImportSignal(const AssetImportSignal &signal);
 		virtual void OnGuiRender() override;
 
+		bool IsImporting() const { return m_IsImporting || m_ActiveImportJobs.load(std::memory_order_acquire) > 0; }
+
 	private:
 		void DrawMeshImportOptions(const FileImportPayload &payload);
 		void DrawTextureImportOptions(const FileImportPayload &payload);
@@ -45,8 +47,8 @@ namespace ignite
 
 		std::filesystem::path PrepareAssetForImport(const FileImportPayload &payload) const;
 
-		bool ImportStaticMesh(const std::filesystem::path &filepath);
-		bool ImportSkeletalMesh(const std::filesystem::path &filepath);
+		bool ImportStaticMesh(const std::filesystem::path &filepath, StaticMeshImportPayload payload);
+		bool ImportSkeletalMesh(const std::filesystem::path &filepath, SkeletalMeshImportPayload payload);
 
 		std::filesystem::path BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const;
 

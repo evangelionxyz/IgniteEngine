@@ -25,6 +25,7 @@
 #include "ignite/imgui/imgui_nri.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/shader.hpp"
+#include "ignite/graphics/thumbnail_generator.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/globals/globals.hpp"
@@ -165,6 +166,7 @@ namespace ignite
     void EditorLayer::OnDetach()
     {
         Layer::OnDetach();
+        AssetWorker::SetStatusCallback(nullptr);
         SceneManager::SetStopCallback(nullptr);
 
         if (s_Instance == this)
@@ -304,6 +306,61 @@ namespace ignite
 
         SyncActiveSceneFromProject();
 
+        const bool isImporting = m_AssetImporterPanel && m_AssetImporterPanel->IsImporting();
+        if (!isImporting)
+        {
+            if (m_State.isLoading)
+            {
+                const float workerProgress = AssetWorker::GetProgress();
+                SetLoadingProgress(workerProgress > 0.0f ? workerProgress : 0.15f);
+                if (m_StatusText == "Ready")
+                {
+                    SetStatusText("Loading project...");
+                }
+                m_LoadingSceneAssets = true;
+            }
+            else if (m_ActiveScene)
+            {
+                const SceneAssetLoadProgress assetProgress = m_ActiveScene->GetAssetLoadProgress();
+                if (!assetProgress.allReady)
+                {
+                    const float clampedProgress = std::clamp(assetProgress.progress, 0.02f, 0.99f);
+                    SetLoadingProgress(clampedProgress);
+                    SetStatusText(std::format("Loading scene assets ({}/{})...", assetProgress.readyAssets, assetProgress.totalAssets));
+                    m_LoadingSceneAssets = true;
+                }
+                else if (AssetWorker::IsBusy())
+                {
+                    const float workerProgress = AssetWorker::GetProgress();
+                    if (m_LoadingProgress <= 0.0f || m_LoadingProgress >= 1.0f || m_LoadingSceneAssets)
+                    {
+                        SetLoadingProgress(workerProgress > 0.0f ? workerProgress : 0.1f);
+                    }
+                    m_LoadingSceneAssets = false;
+                }
+                else if (m_LoadingSceneAssets || (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f))
+                {
+                    SetLoadingProgress(0.0f);
+                    SetStatusText("Ready");
+                    m_LoadingSceneAssets = false;
+                }
+            }
+            else if (AssetWorker::IsBusy())
+            {
+                const float workerProgress = AssetWorker::GetProgress();
+                if (m_LoadingProgress <= 0.0f || m_LoadingProgress >= 1.0f)
+                {
+                    SetLoadingProgress(workerProgress > 0.0f ? workerProgress : 0.1f);
+                }
+            }
+            else if (m_LoadingSceneAssets || (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f))
+            {
+                SetLoadingProgress(0.0f);
+                SetStatusText("Ready");
+                m_LoadingSceneAssets = false;
+            }
+        }
+
         // update panels
         if (m_ActiveScene)
         {
@@ -378,7 +435,9 @@ namespace ignite
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)
     {
         bool control = InputSystem::IsModifierPressed(KeyMod::Control);
-        bool shift = InputSystem::IsModifierPressed(KeyMod::LeftShift);
+        bool shift = InputSystem::IsModifierPressed(KeyMod::Shift)
+            || InputSystem::IsModifierPressed(KeyMod::LeftShift)
+            || InputSystem::IsModifierPressed(KeyMod::RightShift);
 
         if (ImGui::GetIO().WantTextInput)
         {
@@ -531,17 +590,42 @@ namespace ignite
                 }
                 break;
             }
+            case Key::Y:
+            {
+                if (control)
+                {
+                    if (m_AssetEditorPanel && m_AssetEditorPanel->HasFocusedAssetEditor())
+                    {
+                        m_AssetEditorPanel->RedoFocusedAsset();
+                        return true;
+                    }
+                    if (m_ActiveScene && !m_ActiveScene->IsRunning())
+                    {
+                        Application::GetCommandManager()->Redo();
+                        return true;
+                    }
+                }
+                break;
+            }
             case Key::Z:
             {
                 if (control)
                 {
-                    if (shift)
+                    if (m_AssetEditorPanel && m_AssetEditorPanel->HasFocusedAssetEditor())
                     {
-                        Application::GetCommandManager()->Redo();
+                        if (shift)
+                            m_AssetEditorPanel->RedoFocusedAsset();
+                        else
+                            m_AssetEditorPanel->UndoFocusedAsset();
+                        return true;
                     }
-                    else
+                    if (m_ActiveScene && !m_ActiveScene->IsRunning())
                     {
-                        Application::GetCommandManager()->Undo();
+                        if (shift)
+                            Application::GetCommandManager()->Redo();
+                        else
+                            Application::GetCommandManager()->Undo();
+                        return true;
                     }
                 }
                 break;
@@ -555,6 +639,8 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         Layer::OnRender(mainFramebuffer);
+
+        ThumbnailGenerator::Get().ProcessFrame(Renderer::GetCurrentFrameContext());
 
         if (!m_ActiveScene)
             return;
@@ -769,6 +855,36 @@ namespace ignite
             // EDIT MENU
             if (ImGui::BeginMenu("Edit", !m_State.isLoading))
             {
+                CommandHistory *activeHistory = nullptr;
+                if (m_AssetEditorPanel && m_AssetEditorPanel->HasFocusedAssetEditor())
+                {
+                    activeHistory = m_AssetEditorPanel->GetFocusedAssetHistory();
+                }
+                else if (CommandManager *cmdMgr = Application::GetCommandManager())
+                {
+                    activeHistory = &cmdMgr->GetSceneHistory();
+                }
+
+                const bool canUndo = activeHistory && activeHistory->CanUndo() && (!m_ActiveScene || !m_ActiveScene->IsRunning() || (m_AssetEditorPanel && m_AssetEditorPanel->HasFocusedAssetEditor()));
+                const bool canRedo = activeHistory && activeHistory->CanRedo() && (!m_ActiveScene || !m_ActiveScene->IsRunning() || (m_AssetEditorPanel && m_AssetEditorPanel->HasFocusedAssetEditor()));
+
+                const std::string undoLabel = (activeHistory && activeHistory->CanUndo())
+                    ? std::format("Undo {}", activeHistory->GetUndoName())
+                    : std::string("Undo");
+                const std::string redoLabel = (activeHistory && activeHistory->CanRedo())
+                    ? std::format("Redo {}", activeHistory->GetRedoName())
+                    : std::string("Redo");
+
+                if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo))
+                {
+                    activeHistory->Undo();
+                }
+                if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Shift+Z", false, canRedo))
+                {
+                    activeHistory->Redo();
+                }
+                ImGui::Separator();
+
                 const std::string vsyncLabel = DeviceManager::GetInstance()->IsVsyncEnabled() ? "Disable Vsync" : "Enable Vsync";
                 if (ImGui::MenuItem(vsyncLabel.c_str(), nullptr, nullptr))
                 {
@@ -991,8 +1107,7 @@ namespace ignite
         if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
         {
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(120.0f);
-            ImGui::ProgressBar(m_LoadingProgress, ImVec2(0.0f, 0.0f), "");
+            ImGui::ProgressBar(m_LoadingProgress, ImVec2(140.0f, 0.0f));
         }
 
         ImGui::SameLine();
@@ -1208,6 +1323,10 @@ namespace ignite
 
             Application::SubmitToMainThread([this, pr = prefab, assetManager, handle]()
             {
+                if (auto *cmdMgr = Application::GetCommandManager())
+                {
+                    cmdMgr->ClearSceneHistory();
+                }
                 SetActiveScene(pr->GetPrefabScene());
                 // SetStatusText(fmt::format("Editing Prefab: {}", assetManager->GetAssetDisplayName(handle)));
             });
@@ -1242,6 +1361,11 @@ namespace ignite
         m_EditingPrefabHandle = AssetHandle(0);
         m_MainSceneBeforeIsolation = nullptr;
 
+        if (auto *cmdMgr = Application::GetCommandManager())
+        {
+            cmdMgr->ClearSceneHistory();
+        }
+
         if (previousMainScene)
         {
             if (save && isDirty && editingHandle != AssetHandle(0))
@@ -1271,6 +1395,11 @@ namespace ignite
     void EditorLayer::NewScene()
     {
         OnSceneStop();
+
+        if (auto *cmdMgr = Application::GetCommandManager())
+        {
+            cmdMgr->ClearSceneHistory();
+        }
 
         m_CurrentSceneFilePath.clear();
 
@@ -1437,6 +1566,11 @@ namespace ignite
                     // Clear active scene references
                     SetActiveScene(nullptr);
 
+                    if (auto *cmdMgr = Application::GetCommandManager())
+                    {
+                        cmdMgr->ClearSceneHistory();
+                    }
+
                     // Reset old scene
                     m_EditorScene.reset();
                     m_ActiveScene.reset();
@@ -1460,6 +1594,7 @@ namespace ignite
             else
             {
                 LOG_ERROR("[Editor] Failed to load scene: {}", filepath.generic_string());
+                AssetWorker::ReportStatus("Ready", 0.0f);
             }
         });
     }
@@ -1515,6 +1650,12 @@ namespace ignite
             m_AssetEditorPanel->CloseAllAssetEditors();
         }
 
+        if (auto *cmdMgr = Application::GetCommandManager())
+        {
+            cmdMgr->ClearAll();
+        }
+
+        ThumbnailGenerator::Get().ClearPending();
         AssetManager::GetInstance()->Reset();
 
         // Reset everything
@@ -1576,13 +1717,21 @@ namespace ignite
 
     void EditorLayer::OnScenePlay()
     {
-        OnSceneStop();
-
         if (!m_EditorScene)
         {
             LOG_WARN("[EditorLayer] Cannot play: m_EditorScene is null");
             return;
         }
+
+        if (!m_EditorScene->IsReadyToPlay())
+        {
+            const SceneAssetLoadProgress progress = m_EditorScene->GetAssetLoadProgress();
+            LOG_WARN("[EditorLayer] Cannot play: scene assets are not ready yet ({}/{})", progress.readyAssets, progress.totalAssets);
+            SetStatusText(std::format("Loading scene assets ({}/{})...", progress.readyAssets, progress.totalAssets));
+            return;
+        }
+
+        OnSceneStop();
 
         // copy initial components to new scene
         Ref<Scene> playScene = SceneManager::Copy(m_EditorScene);
@@ -1608,16 +1757,24 @@ namespace ignite
 
     void EditorLayer::OnSceneSimulate()
     {
-        if (m_EditorScene)
-            m_EditorScene->OnStop();
-
-        OnSceneStop();
-
         if (!m_EditorScene)
         {
             LOG_WARN("[EditorLayer] Cannot simulate: m_EditorScene is null");
             return;
         }
+
+        if (!m_EditorScene->IsReadyToPlay())
+        {
+            const SceneAssetLoadProgress progress = m_EditorScene->GetAssetLoadProgress();
+            LOG_WARN("[EditorLayer] Cannot simulate: scene assets are not ready yet ({}/{})", progress.readyAssets, progress.totalAssets);
+            SetStatusText(std::format("Loading scene assets ({}/{})...", progress.readyAssets, progress.totalAssets));
+            return;
+        }
+
+        if (m_EditorScene)
+            m_EditorScene->OnStop();
+
+        OnSceneStop();
 
         // copy initial components to new scene
         Ref<Scene> simScene = SceneManager::Copy(m_EditorScene);
@@ -1853,6 +2010,15 @@ namespace ignite
 
     void EditorLayer::OnOpenProject()
     {
+        // Apply project undo limit setting
+        if (m_ActiveProject)
+        {
+            if (auto *cmdMgr = Application::GetCommandManager())
+            {
+                cmdMgr->SetMaxHistory(m_ActiveProject->GetInfo().editorSettings.undoHistoryLimit);
+            }
+        }
+
         // Reload project files
         ReloadContentBrowserPanels();
 
@@ -2227,6 +2393,127 @@ namespace ignite
                             if (ImGui::Checkbox("Auto-Start Server on Load", &serverSettings.autoStart))
                             {
                                 project->SetDirtyFlag(true);
+                            }
+                        }
+                    }
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Editor / Undo"))
+                {
+                    if (auto assetManager = AssetManager::GetInstance())
+                    {
+                        if (auto project = assetManager->LockActiveProject())
+                        {
+                            auto &editorSettings = project->GetInfo().editorSettings;
+                            CommandManager *cmdMgr = Application::GetCommandManager();
+
+                            ImGui::Text("Undo / Redo History");
+                            ImGui::Spacing();
+
+                            int historyLimit = static_cast<int>(editorSettings.undoHistoryLimit);
+                            ImGui::SetNextItemWidth(220.0f);
+                            if (ImGui::SliderInt("Undo History Limit", &historyLimit, 10, 2000))
+                            {
+                                editorSettings.undoHistoryLimit = static_cast<uint32_t>(std::clamp(historyLimit, 10, 2000));
+                                if (cmdMgr)
+                                {
+                                    cmdMgr->SetMaxHistory(editorSettings.undoHistoryLimit);
+                                }
+                                project->SetDirtyFlag(true);
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Reset (200)"))
+                            {
+                                editorSettings.undoHistoryLimit = 200;
+                                if (cmdMgr)
+                                {
+                                    cmdMgr->SetMaxHistory(200);
+                                }
+                                project->SetDirtyFlag(true);
+                            }
+
+                            if (ImGui::Checkbox("Record Entity Selection in Undo", &editorSettings.recordSelectionUndo))
+                            {
+                                project->SetDirtyFlag(true);
+                            }
+
+                            ImGui::Spacing();
+                            ImGui::SeparatorText("Estimated Memory Usage");
+
+                            if (cmdMgr)
+                            {
+                                auto formatBytes = [](size_t bytes) -> std::string
+                                {
+                                    if (bytes >= 1024u * 1024u)
+                                        return std::format("{:.2f} MB", bytes / (1024.0f * 1024.0f));
+                                    if (bytes >= 1024u)
+                                        return std::format("{:.1f} KB", bytes / 1024.0f);
+                                    return std::format("{} B", bytes);
+                                };
+
+                                const CommandHistory &sceneHist = cmdMgr->GetSceneHistory();
+                                const size_t sceneBytes = cmdMgr->GetSceneEstimatedMemoryUsage();
+                                const size_t assetBytes = cmdMgr->GetAssetHistoriesEstimatedMemoryUsage();
+                                const size_t totalBytes = sceneBytes + assetBytes;
+                                const size_t sceneSteps = sceneHist.GetUndoCount() + sceneHist.GetRedoCount();
+                                const size_t totalSteps = sceneSteps + cmdMgr->GetTotalAssetCommandCount();
+                                const size_t avgStepBytes = totalSteps > 0 ? (totalBytes / totalSteps) : 2048u;
+                                const size_t projectedBytes = avgStepBytes * static_cast<size_t>(editorSettings.undoHistoryLimit);
+
+                                ImGui::Text("Scene History: Undo %zu | Redo %zu | Limit %u | Est. %s",
+                                    sceneHist.GetUndoCount(), sceneHist.GetRedoCount(), editorSettings.undoHistoryLimit, formatBytes(sceneBytes).c_str());
+                                ImGui::Text("Asset Editor Histories (%zu open): %zu steps | Est. %s",
+                                    cmdMgr->GetAssetHistoryCount(), cmdMgr->GetTotalAssetCommandCount(), formatBytes(assetBytes).c_str());
+                                ImGui::TextColored(ImVec4(0.45f, 0.90f, 0.55f, 1.0f), "Total Undo Memory: %s", formatBytes(totalBytes).c_str());
+                                ImGui::TextDisabled("Projected Max Budget (%u steps): ~%s", editorSettings.undoHistoryLimit, formatBytes(projectedBytes).c_str());
+
+                                const float usageRatio = editorSettings.undoHistoryLimit > 0
+                                    ? std::clamp(static_cast<float>(sceneHist.GetUndoCount()) / static_cast<float>(editorSettings.undoHistoryLimit), 0.0f, 1.0f)
+                                    : 0.0f;
+                                const std::string barLabel = std::format("Scene Slots: {} / {}", sceneHist.GetUndoCount(), editorSettings.undoHistoryLimit);
+                                ImGui::ProgressBar(usageRatio, ImVec2(280.0f, 0.0f), barLabel.c_str());
+
+                                ImGui::Spacing();
+                                if (ImGui::Button("Clear Scene History"))
+                                {
+                                    cmdMgr->ClearSceneHistory();
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::Button("Clear Asset Histories"))
+                                {
+                                    cmdMgr->ClearAllAssetHistories();
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::Button("Clear All History"))
+                                {
+                                    cmdMgr->ClearAll();
+                                }
+
+                                ImGui::Spacing();
+                                if (ImGui::TreeNode("Scene Undo Stack"))
+                                {
+                                    const auto &stack = sceneHist.GetUndoStack();
+                                    if (stack.empty())
+                                    {
+                                        ImGui::TextDisabled("No recorded scene undo steps.");
+                                    }
+                                    else
+                                    {
+                                        ImGui::BeginChild("##scene_undo_stack_list", ImVec2(-1.0f, 180.0f), ImGuiChildFlags_Borders);
+                                        size_t displayIdx = stack.size();
+                                        for (auto it = stack.rbegin(); it != stack.rend(); ++it)
+                                        {
+                                            if (*it)
+                                            {
+                                                ImGui::Text("#%zu: %s (%s)", displayIdx, (*it)->GetName().c_str(), formatBytes((*it)->GetMemoryUsage()).c_str());
+                                            }
+                                            --displayIdx;
+                                        }
+                                        ImGui::EndChild();
+                                    }
+                                    ImGui::TreePop();
+                                }
                             }
                         }
                     }

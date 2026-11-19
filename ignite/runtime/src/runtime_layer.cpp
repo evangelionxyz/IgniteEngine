@@ -164,7 +164,8 @@ namespace ignite
             m_SceneRenderer->SetActiveScene(m_ActiveScene);
         }
         GameUISystem::SetSceneContext(m_ActiveScene.get());
-        if (!m_ActiveScene->IsPlaying() && !m_ActiveScene->IsSimulating())
+        m_ActiveScene->PreloadReferencedAssets();
+        if (!m_ActiveScene->IsPlaying() && !m_ActiveScene->IsSimulating() && m_ActiveScene->IsReadyToPlay())
         {
             m_ActiveScene->OnStart(ESceneState::Play);
         }
@@ -225,19 +226,31 @@ namespace ignite
                     cursorEnabledForUI);
             }
 
-            constexpr float kFixedStep = 1.0f / 60.0f;
-            constexpr int kMaxSubsteps = 8;
-            m_FixedAccumulator += std::min(std::max(deltaTime, 0.0f), 0.25f);
-            int substeps = 0;
-            while (m_FixedAccumulator >= kFixedStep && substeps < kMaxSubsteps)
+            if (m_ActiveScene->IsStopped())
             {
-                m_ActiveScene->OnFixedUpdateRuntimeSimulate();
-                m_FixedAccumulator -= kFixedStep;
-                ++substeps;
+                m_ActiveScene->PreloadReferencedAssets();
+                if (m_ActiveScene->IsReadyToPlay())
+                {
+                    m_ActiveScene->OnStart(ESceneState::Play);
+                }
             }
 
-            m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
-            SyncActiveSceneFromProject();
+            if (m_ActiveScene->IsPlaying() || m_ActiveScene->IsSimulating())
+            {
+                constexpr float kFixedStep = 1.0f / 60.0f;
+                constexpr int kMaxSubsteps = 8;
+                m_FixedAccumulator += std::min(std::max(deltaTime, 0.0f), 0.25f);
+                int substeps = 0;
+                while (m_FixedAccumulator >= kFixedStep && substeps < kMaxSubsteps)
+                {
+                    m_ActiveScene->OnFixedUpdateRuntimeSimulate();
+                    m_FixedAccumulator -= kFixedStep;
+                    ++substeps;
+                }
+
+                m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
+                SyncActiveSceneFromProject();
+            }
 
             if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera(); primaryCam && primaryCam.HasComponent<CameraComponent>())
             {
@@ -266,9 +279,13 @@ namespace ignite
                 m_SceneRenderer->SetActiveScene(m_ActiveScene);
             }
             GameUISystem::SetSceneContext(m_ActiveScene.get());
-            if (m_ActiveScene && !m_ActiveScene->IsPlaying())
+            if (m_ActiveScene)
             {
-                m_ActiveScene->OnStart(ESceneState::Play);
+                m_ActiveScene->PreloadReferencedAssets();
+                if (!m_ActiveScene->IsPlaying() && m_ActiveScene->IsReadyToPlay())
+                {
+                    m_ActiveScene->OnStart(ESceneState::Play);
+                }
             }
             if (auto *net = NetworkManager::GetInstance())
             {
@@ -387,7 +404,11 @@ namespace ignite
 
                 GameUISystem::SetSceneContext(m_ActiveScene.get());
 
-                m_ActiveScene->OnStart(ESceneState::Play);
+                m_ActiveScene->PreloadReferencedAssets();
+                if (m_ActiveScene->IsReadyToPlay())
+                {
+                    m_ActiveScene->OnStart(ESceneState::Play);
+                }
                 if (auto *net = NetworkManager::GetInstance()) net->SetActiveScene(m_ActiveScene.get());
             }
         }

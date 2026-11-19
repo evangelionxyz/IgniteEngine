@@ -8,10 +8,38 @@
 #include "scene_manager.hpp"
 
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace ignite
 {
+    struct EntitySubtreeSnapshot
+    {
+        UUID rootUUID = UUID(0);
+        UUID parentUUID = UUID(0);
+        std::string rootName;
+        size_t siblingIndex = 0;
+        std::string serializedEntitiesJson;
+        std::vector<std::pair<UUID, std::vector<UUID>>> childOrders;
+
+        size_t GetMemoryUsage() const
+        {
+            size_t total = sizeof(*this) + rootName.capacity() + serializedEntitiesJson.capacity();
+            total += childOrders.capacity() * sizeof(std::pair<UUID, std::vector<UUID>>);
+            for (const auto &[_, children] : childOrders)
+            {
+                total += children.capacity() * sizeof(UUID);
+            }
+            return total;
+        }
+
+        bool IsValid() const { return rootUUID != UUID(0) && !serializedEntitiesJson.empty(); }
+    };
+
+    IGN_API EntitySubtreeSnapshot CaptureEntitySubtreeSnapshot(Scene *scene, Entity rootEntity);
+    IGN_API Entity RestoreEntitySubtreeSnapshot(Scene *scene, const EntitySubtreeSnapshot &snapshot);
+
     // ---------------------------------------------------------------------------
     // EntitySnapshot — a by-value copy of all editor-relevant entity data.
     // Runtime-only physics handles (b2BodyId, JPH::Body*) are intentionally
@@ -28,11 +56,14 @@ namespace ignite
 
         // Components (optional so we only store the ones the entity actually has)
         std::optional<TransformComponent>      transform;
+        std::optional<RenderingComponent>      rendering;
         std::optional<Sprite2DComponent>       sprite2D;
         std::optional<Circle2DComponent>       circle2D;
-        std::optional<CameraComponent>         camera;
-        std::optional<WorldEnvironment>        worldEnv;
-        std::optional<AudioSourceComponent>    audioSource;
+        std::optional<CameraComponent>           camera;
+        std::optional<WorldEnvironment>          worldEnv;
+        std::optional<IrradianceVolumeComponent> irradianceVolume;
+        std::optional<ReflectionProbeComponent>  reflectionProbe;
+        std::optional<AudioSourceComponent>      audioSource;
         std::optional<ScriptComponent>         script;
         std::optional<LuaScriptComponent>      luaScript;
 
@@ -118,6 +149,9 @@ namespace ignite
         if (entity.HasComponent<TransformComponent>())
             snap.transform = entity.GetComponent<TransformComponent>();
 
+        if (entity.HasComponent<RenderingComponent>())
+            snap.rendering = entity.GetComponent<RenderingComponent>();
+
         if (entity.HasComponent<Sprite2DComponent>())
             snap.sprite2D = entity.GetComponent<Sprite2DComponent>();
 
@@ -129,6 +163,12 @@ namespace ignite
 
         if (entity.HasComponent<WorldEnvironment>())
             snap.worldEnv = entity.GetComponent<WorldEnvironment>();
+
+        if (entity.HasComponent<IrradianceVolumeComponent>())
+            snap.irradianceVolume = entity.GetComponent<IrradianceVolumeComponent>();
+
+        if (entity.HasComponent<ReflectionProbeComponent>())
+            snap.reflectionProbe = entity.GetComponent<ReflectionProbeComponent>();
 
         if (entity.HasComponent<AudioSourceComponent>())
             snap.audioSource = entity.GetComponent<AudioSourceComponent>();
@@ -235,6 +275,9 @@ namespace ignite
             e.GetComponent<TransformComponent>() = *snap.transform;
         }
 
+        if (snap.rendering)
+            e.AddOrReplaceComponent<RenderingComponent>(*snap.rendering);
+
         if (snap.sprite2D)
             e.AddOrReplaceComponent<Sprite2DComponent>(*snap.sprite2D);
 
@@ -246,6 +289,12 @@ namespace ignite
 
         if (snap.worldEnv)
             e.AddOrReplaceComponent<WorldEnvironment>(*snap.worldEnv);
+
+        if (snap.irradianceVolume)
+            e.AddOrReplaceComponent<IrradianceVolumeComponent>(*snap.irradianceVolume);
+
+        if (snap.reflectionProbe)
+            e.AddOrReplaceComponent<ReflectionProbeComponent>(*snap.reflectionProbe);
 
         if (snap.audioSource)
             e.AddOrReplaceComponent<AudioSourceComponent>(*snap.audioSource);

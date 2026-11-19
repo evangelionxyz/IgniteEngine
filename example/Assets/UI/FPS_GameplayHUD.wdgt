@@ -154,6 +154,198 @@
                 "ShadowSoftness": 0.07999999821186066
             },
             {
+                "Name": "StatusTitle",
+                "ID": 3,
+                "ParentID": 1,
+                "Type": 2,
+                "ZIndex": 2,
+                "Position": [
+                    24.0,
+                    12.0
+                ],
+                "WidthMode": 0,
+                "HeightMode": 0,
+                "Width": 380.50909423828125,
+                "Height": 19.15584373474121,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426,
+                "Text": "LOCAL TACTICAL ARENA  |  FOV 89 DEG",
+                "Color": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "FontHandle": 100028,
+                "FontSize": 24.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
+                "Name": "ScoreLabel",
+                "ID": 4,
+                "ParentID": 1,
+                "Type": 2,
+                "ZIndex": 4,
+                "Position": [
+                    24.0,
+                    38.0
+                ],
+                "WidthMode": 0,
+                "HeightMode": 0,
+                "Width": 458.31170654296875,
+                "Height": 19.480518341064453,
+                "MinWidth": 0.0,
+                "MinHeight": 0.0,
+                "MaxWidth": 10000.0,
+                "MaxHeight": 10000.0,
+                "Margin": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "Padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "VerticalAlignment": 0,
+                "HorizontalAlignment": 0,
+                "PositionType": 1,
+                "Overflow": 0,
+                "Visibility": 0,
+                "FlexDirection": 1,
+                "JustifyContent": 0,
+                "AlignItems": 0,
+                "AlignSelf": 0,
+                "FlexWrap": 0,
+                "FlexGrow": 0.0,
+                "FlexShrink": 1.0,
+                "FlexBasis": -1.0,
+                "FlexGap": 0.0,
+                "Interactable": true,
+                "BackgroundColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "BorderWidth": 0.0,
+                "CornerRadius": 0.0,
+                "Opacity": 1.0,
+                "ShadowEnabled": false,
+                "ShadowColor": [
+                    0.0,
+                    0.014999999664723873,
+                    0.03999999910593033,
+                    0.6000000238418579
+                ],
+                "ShadowOffset": [
+                    1.5,
+                    6.0
+                ],
+                "ShadowSize": 7.0,
+                "ShadowSoftness": 0.3199999928474426,
+                "Text": "SCORE 01000  |  HITS 6 (50%)  |  STREAK x6",
+                "Color": [
+                    1.0,
+                    0.8600000143051147,
+                    0.30000001192092896,
+                    1.0
+                ],
+                "FontHandle": 100028,
+                "FontSize": 24.0,
+                "Kerning": 0.0,
+                "LineSpacing": 0.019999999552965164,
+                "TextShadowEnabled": false,
+                "TextShadowColor": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.75
+                ],
+                "TextShadowOffset": [
+                    1.5,
+                    1.5
+                ]
+            },
+            {
                 "Name": "TopCenterSpeedCard",
                 "ID": 10,
                 "ParentID": 0,
@@ -228,102 +420,6 @@
                 "ShadowSoftness": 0.2800000011920929
             },
             {
-                "Name": "StatusTitle",
-                "ID": 3,
-                "ParentID": 1,
-                "Type": 2,
-                "ZIndex": 2,
-                "Position": [
-                    24.0,
-                    12.0
-                ],
-                "WidthMode": 0,
-                "HeightMode": 0,
-                "Width": 534.1882934570313,
-                "Height": 19.15584373474121,
-                "MinWidth": 0.0,
-                "MinHeight": 0.0,
-                "MaxWidth": 10000.0,
-                "MaxHeight": 10000.0,
-                "Margin": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "Padding": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "VerticalAlignment": 0,
-                "HorizontalAlignment": 0,
-                "PositionType": 1,
-                "Overflow": 0,
-                "Visibility": 0,
-                "FlexDirection": 1,
-                "JustifyContent": 0,
-                "AlignItems": 0,
-                "AlignSelf": 0,
-                "FlexWrap": 0,
-                "FlexGrow": 0.0,
-                "FlexShrink": 1.0,
-                "FlexBasis": -1.0,
-                "FlexGap": 0.0,
-                "Interactable": true,
-                "BackgroundColor": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "BorderColor": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "BorderWidth": 0.0,
-                "CornerRadius": 0.0,
-                "Opacity": 1.0,
-                "ShadowEnabled": false,
-                "ShadowColor": [
-                    0.0,
-                    0.014999999664723873,
-                    0.03999999910593033,
-                    0.6000000238418579
-                ],
-                "ShadowOffset": [
-                    1.5,
-                    6.0
-                ],
-                "ShadowSize": 7.0,
-                "ShadowSoftness": 0.3199999928474426,
-                "Text": "ONLINE // DEDICATED ARENA  |  ID #1  |  RTT 12 ms",
-                "Color": [
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0
-                ],
-                "FontHandle": 100028,
-                "FontSize": 24.0,
-                "Kerning": 0.0,
-                "LineSpacing": 0.019999999552965164,
-                "TextShadowEnabled": false,
-                "TextShadowColor": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.75
-                ],
-                "TextShadowOffset": [
-                    1.5,
-                    1.5
-                ]
-            },
-            {
                 "Name": "SpeedLabel",
                 "ID": 11,
                 "ParentID": 10,
@@ -335,7 +431,7 @@
                 ],
                 "WidthMode": 0,
                 "HeightMode": 0,
-                "Width": 303.5065002441406,
+                "Width": 401.6883239746094,
                 "Height": 19.15584373474121,
                 "MinWidth": 0.0,
                 "MinHeight": 0.0,
@@ -396,108 +492,12 @@
                 ],
                 "ShadowSize": 7.0,
                 "ShadowSoftness": 0.3199999928474426,
-                "Text": "VELOCITY  00.0 m/s  [CRUISE]",
+                "Text": "VELOCITY  00.0 m/s  [TACTICAL CRUISE]",
                 "Color": [
-                    0.8600000143051147,
-                    0.949999988079071,
+                    0.8399999737739563,
+                    0.9599999785423279,
                     1.0,
                     0.9800000190734863
-                ],
-                "FontHandle": 100028,
-                "FontSize": 24.0,
-                "Kerning": 0.0,
-                "LineSpacing": 0.019999999552965164,
-                "TextShadowEnabled": false,
-                "TextShadowColor": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.75
-                ],
-                "TextShadowOffset": [
-                    1.5,
-                    1.5
-                ]
-            },
-            {
-                "Name": "ScoreLabel",
-                "ID": 4,
-                "ParentID": 1,
-                "Type": 2,
-                "ZIndex": 4,
-                "Position": [
-                    24.0,
-                    38.0
-                ],
-                "WidthMode": 0,
-                "HeightMode": 0,
-                "Width": 348.8961181640625,
-                "Height": 19.15584373474121,
-                "MinWidth": 0.0,
-                "MinHeight": 0.0,
-                "MaxWidth": 10000.0,
-                "MaxHeight": 10000.0,
-                "Margin": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "Padding": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "VerticalAlignment": 0,
-                "HorizontalAlignment": 0,
-                "PositionType": 1,
-                "Overflow": 0,
-                "Visibility": 0,
-                "FlexDirection": 1,
-                "JustifyContent": 0,
-                "AlignItems": 0,
-                "AlignSelf": 0,
-                "FlexWrap": 0,
-                "FlexGrow": 0.0,
-                "FlexShrink": 1.0,
-                "FlexBasis": -1.0,
-                "FlexGap": 0.0,
-                "Interactable": true,
-                "BackgroundColor": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "BorderColor": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "BorderWidth": 0.0,
-                "CornerRadius": 0.0,
-                "Opacity": 1.0,
-                "ShadowEnabled": false,
-                "ShadowColor": [
-                    0.0,
-                    0.014999999664723873,
-                    0.03999999910593033,
-                    0.6000000238418579
-                ],
-                "ShadowOffset": [
-                    1.5,
-                    6.0
-                ],
-                "ShadowSize": 7.0,
-                "ShadowSoftness": 0.3199999928474426,
-                "Text": "SCORE 00000 | HITS 0 | STREAK x0",
-                "Color": [
-                    1.0,
-                    0.8600000143051147,
-                    0.30000001192092896,
-                    1.0
                 ],
                 "FontHandle": 100028,
                 "FontSize": 24.0,
@@ -601,7 +601,7 @@
                 ],
                 "WidthMode": 1,
                 "HeightMode": 1,
-                "Width": 40.0,
+                "Width": 10.800000190734863,
                 "Height": 10.0,
                 "MinWidth": 0.0,
                 "MinHeight": 0.0,
@@ -636,7 +636,7 @@
                 "Interactable": true,
                 "BackgroundColor": [
                     0.20000000298023224,
-                    0.9200000166893005,
+                    0.8999999761581421,
                     1.0,
                     0.9599999785423279
                 ],
@@ -904,10 +904,10 @@
                 "FlexGap": 0.0,
                 "Interactable": true,
                 "BackgroundColor": [
-                    0.25,
+                    0.2800000011920929,
                     1.0,
-                    0.7200000286102295,
-                    0.9800000190734863
+                    0.6800000071525574,
+                    0.9599999785423279
                 ],
                 "BorderColor": [
                     0.0,
@@ -940,7 +940,7 @@
                 "ZIndex": 4,
                 "Position": [
                     0.0,
-                    -12.0
+                    -15.0
                 ],
                 "WidthMode": 1,
                 "HeightMode": 1,
@@ -978,10 +978,10 @@
                 "FlexGap": 0.0,
                 "Interactable": true,
                 "BackgroundColor": [
-                    0.25,
+                    0.2800000011920929,
                     1.0,
-                    0.7200000286102295,
-                    0.949999988079071
+                    0.6800000071525574,
+                    0.9599999785423279
                 ],
                 "BorderColor": [
                     0.0,
@@ -1014,7 +1014,7 @@
                 "ZIndex": 4,
                 "Position": [
                     0.0,
-                    12.0
+                    15.0
                 ],
                 "WidthMode": 1,
                 "HeightMode": 1,
@@ -1052,10 +1052,10 @@
                 "FlexGap": 0.0,
                 "Interactable": true,
                 "BackgroundColor": [
-                    0.25,
+                    0.2800000011920929,
                     1.0,
-                    0.7200000286102295,
-                    0.949999988079071
+                    0.6800000071525574,
+                    0.9599999785423279
                 ],
                 "BorderColor": [
                     0.0,
@@ -1087,7 +1087,7 @@
                 "Type": 0,
                 "ZIndex": 4,
                 "Position": [
-                    -12.0,
+                    -15.0,
                     0.0
                 ],
                 "WidthMode": 1,
@@ -1126,10 +1126,10 @@
                 "FlexGap": 0.0,
                 "Interactable": true,
                 "BackgroundColor": [
-                    0.25,
+                    0.2800000011920929,
                     1.0,
-                    0.7200000286102295,
-                    0.949999988079071
+                    0.6800000071525574,
+                    0.9599999785423279
                 ],
                 "BorderColor": [
                     0.0,
@@ -1161,7 +1161,7 @@
                 "Type": 0,
                 "ZIndex": 4,
                 "Position": [
-                    12.0,
+                    15.0,
                     0.0
                 ],
                 "WidthMode": 1,
@@ -1200,10 +1200,10 @@
                 "FlexGap": 0.0,
                 "Interactable": true,
                 "BackgroundColor": [
-                    0.25,
+                    0.2800000011920929,
                     1.0,
-                    0.7200000286102295,
-                    0.949999988079071
+                    0.6800000071525574,
+                    0.9599999785423279
                 ],
                 "BorderColor": [
                     0.0,
@@ -1240,8 +1240,8 @@
                 ],
                 "WidthMode": 1,
                 "HeightMode": 1,
-                "Width": 28.0,
-                "Height": 28.0,
+                "Width": 38.54999923706055,
+                "Height": 38.54999923706055,
                 "MinWidth": 0.0,
                 "MinHeight": 0.0,
                 "MaxWidth": 10000.0,
@@ -1281,9 +1281,9 @@
                 ],
                 "BorderColor": [
                     1.0,
-                    0.3199999928474426,
-                    0.2199999988079071,
-                    0.9800000190734863
+                    0.8799999952316284,
+                    0.25,
+                    1.0
                 ],
                 "BorderWidth": 2.5,
                 "CornerRadius": 6.0,
@@ -1314,8 +1314,8 @@
                 ],
                 "WidthMode": 0,
                 "HeightMode": 0,
-                "Width": 50.0,
-                "Height": 16.0,
+                "Width": 180.61558532714844,
+                "Height": 12.98701286315918,
                 "MinWidth": 0.0,
                 "MinHeight": 0.0,
                 "MaxWidth": 10000.0,
@@ -1375,10 +1375,10 @@
                 ],
                 "ShadowSize": 7.0,
                 "ShadowSoftness": 0.3199999928474426,
-                "Text": "",
+                "Text": "TARGET HIT -45 HP  (+200)",
                 "Color": [
                     1.0,
-                    0.8500000238418579,
+                    0.8799999952316284,
                     0.2800000011920929,
                     1.0
                 ],
@@ -1558,7 +1558,7 @@
                 ],
                 "WidthMode": 1,
                 "HeightMode": 1,
-                "Width": 360.0,
+                "Width": 546.0,
                 "Height": 101.0,
                 "MinWidth": 0.0,
                 "MinHeight": 0.0,
@@ -1872,12 +1872,12 @@
                 "ZIndex": 4,
                 "Position": [
                     24.0,
-                    63.0
+                    54.0
                 ],
                 "WidthMode": 1,
                 "HeightMode": 1,
                 "Width": 233.0,
-                "Height": 13.837646484375,
+                "Height": 23.0,
                 "MinWidth": 0.0,
                 "MinHeight": 0.0,
                 "MaxWidth": 10000.0,
@@ -1937,7 +1937,7 @@
                 ],
                 "ShadowSize": 7.0,
                 "ShadowSoftness": 0.3199999928474426,
-                "Text": "EXO-THRUSTER CHARGE  100%",
+                "Text": "EXO-THRUSTER CHARGE  100%  [SHIFT / CTRL DASH]",
                 "Color": [
                     0.44999998807907104,
                     0.6364408135414124,
@@ -2161,9 +2161,9 @@
                 ],
                 "BorderColor": [
                     1.0,
-                    0.7215686440467834,
-                    0.21960784494876862,
-                    0.0
+                    0.7599999904632568,
+                    0.2199999988079071,
+                    0.9599999785423279
                 ],
                 "BorderWidth": 0.0,
                 "CornerRadius": 0.0,
@@ -2258,9 +2258,9 @@
                 "Text": "VX-47 ASSAULT RIFLE  [1/2]",
                 "Color": [
                     1.0,
-                    0.8199999928474426,
-                    0.3199999928474426,
-                    1.0
+                    0.7599999904632568,
+                    0.2199999988079071,
+                    0.9599999785423279
                 ],
                 "FontHandle": 100028,
                 "FontSize": 32.0,
@@ -2290,7 +2290,7 @@
                 ],
                 "WidthMode": 0,
                 "HeightMode": 0,
-                "Width": 101.49956512451172,
+                "Width": 100.9177474975586,
                 "Height": 25.541126251220703,
                 "MinWidth": 0.0,
                 "MinHeight": 0.0,
@@ -2351,10 +2351,10 @@
                 ],
                 "ShadowSize": 7.0,
                 "ShadowSoftness": 0.3199999928474426,
-                "Text": "30 / 30",
+                "Text": "18 / 30",
                 "Color": [
                     0.9599999785423279,
-                    0.9800000190734863,
+                    0.9900000095367432,
                     1.0,
                     1.0
                 ],
@@ -2460,7 +2460,7 @@
                 ],
                 "WidthMode": 1,
                 "HeightMode": 1,
-                "Width": 332.0,
+                "Width": 199.20001220703125,
                 "Height": 14.0,
                 "MinWidth": 0.0,
                 "MinHeight": 0.0,
@@ -2669,80 +2669,6 @@
                 ],
                 "ShadowSize": 7.5,
                 "ShadowSoftness": 0.2800000011920929
-            },
-            {
-                "Name": "PauseHeaderAccent",
-                "ID": 52,
-                "ParentID": 51,
-                "Type": 0,
-                "ZIndex": 12,
-                "Position": [
-                    20.0,
-                    16.0
-                ],
-                "WidthMode": 1,
-                "HeightMode": 1,
-                "Width": 480.0,
-                "Height": 4.0,
-                "MinWidth": 0.0,
-                "MinHeight": 0.0,
-                "MaxWidth": 10000.0,
-                "MaxHeight": 10000.0,
-                "Margin": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "Padding": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "VerticalAlignment": 0,
-                "HorizontalAlignment": 0,
-                "PositionType": 1,
-                "Overflow": 0,
-                "Visibility": 0,
-                "FlexDirection": 1,
-                "JustifyContent": 0,
-                "AlignItems": 0,
-                "AlignSelf": 0,
-                "FlexWrap": 0,
-                "FlexGrow": 0.0,
-                "FlexShrink": 1.0,
-                "FlexBasis": -1.0,
-                "FlexGap": 0.0,
-                "Interactable": true,
-                "BackgroundColor": [
-                    0.2199999988079071,
-                    0.8799999952316284,
-                    1.0,
-                    0.9800000190734863
-                ],
-                "BorderColor": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "BorderWidth": 0.0,
-                "CornerRadius": 2.0,
-                "Opacity": 1.0,
-                "ShadowEnabled": false,
-                "ShadowColor": [
-                    0.0,
-                    0.014999999664723873,
-                    0.03999999910593033,
-                    0.6000000238418579
-                ],
-                "ShadowOffset": [
-                    1.5,
-                    6.0
-                ],
-                "ShadowSize": 7.0,
-                "ShadowSoftness": 0.3199999928474426
             },
             {
                 "Name": "PauseTitle",

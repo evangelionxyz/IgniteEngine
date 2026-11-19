@@ -3,19 +3,30 @@
 #include <gtest/gtest.h>
 
 #include "ignite/core/agent_controller.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/graphics/font.hpp"
 #include "ignite/graphics/objects/mesh_builder.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/frame_packet.hpp"
+#include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/ui/widget_canvas.hpp"
+#include "ignite/graphics/ui/widget_label.hpp"
 #include "ignite/math/frustum.hpp"
+#include "ignite/project/project.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/editor_camera.hpp"
 #include "ignite/scene/icamera.hpp"
+#include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_camera.hpp"
+#include "ignite/scene/scene_manager.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <chrono>
 #include <cmath>
+#include <filesystem>
+#include <thread>
 
 using namespace ignite;
 
@@ -313,4 +324,155 @@ TEST(RendererShadowAndCamera, EditorCameraSetTargetAndDistancePreserved)
     EXPECT_NEAR(editorCam.position.x, 12.0f, 1e-3f);
     EXPECT_NEAR(editorCam.position.y, 6.0f, 1e-3f);
     EXPECT_NEAR(editorCam.position.z, 18.0f, 1e-3f);
+}
+
+TEST(RendererShadowAndCamera, AsyncFontLoadingOnAssetWorker)
+{
+    std::filesystem::path fontPath;
+    const std::filesystem::path candidates[] = {
+        "resources/fonts/segoeui.ttf",
+        "ignite/editor/resources/fonts/segoeui.ttf",
+        "C:/Windows/Fonts/segoeui.ttf"
+    };
+    std::error_code ec;
+    for (const auto &candidate : candidates)
+    {
+        if (std::filesystem::exists(candidate, ec))
+        {
+            fontPath = candidate;
+            break;
+        }
+    }
+
+    if (fontPath.empty())
+    {
+        GTEST_SKIP() << "No test font file found on disk";
+    }
+
+    Ref<Font> font = Font::Create(fontPath, true);
+    ASSERT_NE(font, nullptr);
+
+    // MeasureString must be safe even if called immediately before async loading completes
+    if (!font->IsReady())
+    {
+        const glm::vec2 pendingSize = font->MeasureString("Hello");
+        EXPECT_FLOAT_EQ(pendingSize.x, 0.0f);
+        EXPECT_FLOAT_EQ(pendingSize.y, 0.0f);
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (font->IsLoading() && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    EXPECT_FALSE(font->IsLoading());
+    EXPECT_TRUE(font->IsReady());
+    ASSERT_NE(font->GetAtlasTexture(), nullptr);
+    EXPECT_TRUE(font->GetAtlasTexture()->IsReady());
+
+    const glm::vec2 readySize = font->MeasureString("Hello");
+    EXPECT_GT(readySize.x, 0.0f);
+    EXPECT_GT(readySize.y, 0.0f);
+}
+
+TEST(RendererShadowAndCamera, SceneReadinessBlocksPlayUntilRelatedAssetsReady)
+{
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "IgniteSceneReadinessTest";
+    std::error_code ec;
+    std::filesystem::remove_all(tempDir, ec);
+    std::filesystem::create_directories(tempDir / "Assets", ec);
+
+    ProjectInfo info;
+    info.name = "SceneReadinessTest";
+    info.rootDirectory = tempDir;
+    info.filepath = tempDir / "SceneReadinessTest.ixproj";
+    Ref<Project> project = Project::Create(info);
+    ASSERT_NE(project, nullptr);
+
+    auto *assetManager = AssetManager::GetInstance();
+    ASSERT_NE(assetManager, nullptr);
+
+    Ref<Scene> scene = CreateRef<Scene>(project.get());
+    project->SetActiveScene(scene);
+
+    // Entity 1: Default Cube mesh (already ready)
+    Entity cubeEntity = SceneManager::CreateEntity(scene.get(), "ReadyCube", EntityType_Node);
+    auto &cubeMesh = cubeEntity.AddComponent<StaticMeshComponent>();
+    cubeMesh.handle = Renderer::GetDefaultMeshHandle(EMeshType::CUBE);
+    EXPECT_TRUE(scene->IsReadyToPlay());
+
+    // Entity 2: Sprite referencing a Texture that is not ready yet
+    const AssetHandle texHandle(123456789ULL);
+    Ref<Texture> pendingTex = Texture::Create();
+    pendingTex->handle = texHandle;
+    pendingTex->SetReadyFlag(false);
+    assetManager->AssignMetaData(texHandle, AssetMetaData("Assets/test_tex.png", AssetType::Texture));
+    assetManager->AssignAsset(texHandle, pendingTex);
+
+    Entity spriteEntity = SceneManager::CreateEntity(scene.get(), "PendingSprite", EntityType_Node);
+    auto &sprite = spriteEntity.AddComponent<Sprite2DComponent>();
+    sprite.handle = texHandle;
+
+    // Entity 3: WidgetCanvas containing a Label referencing an unready Font
+    const AssetHandle fontHandle(987654321ULL);
+    Ref<Font> pendingFont = CreateRef<Font>();
+    pendingFont->handle = fontHandle;
+    pendingFont->SetReadyFlag(false);
+    assetManager->AssignMetaData(fontHandle, AssetMetaData("Assets/test_font.ttf", AssetType::Font));
+    assetManager->AssignAsset(fontHandle, pendingFont);
+
+    const AssetHandle widgetHandle(555666777ULL);
+    Ref<WidgetCanvas> widget = CreateRef<WidgetCanvas>(scene.get());
+    widget->handle = widgetHandle;
+    WidgetContainer *root = widget->CreateRoot(1280, 720);
+    WidgetID labelId = widget->AddLabel(root, "HUD");
+    auto label = widget->GetItems().at(labelId)->As<WidgetLabel>();
+    label->fontHandle = fontHandle;
+    widget->SetReadyFlag(true);
+    assetManager->AssignMetaData(widgetHandle, AssetMetaData("Assets/test_hud.wdgt", AssetType::Widget));
+    assetManager->AssignAsset(widgetHandle, widget);
+
+    Entity uiEntity = SceneManager::CreateEntity(scene.get(), "HUDEntity", EntityType_Node);
+    uiEntity.AddComponent<WidgetComponent>().widgetHandle = widgetHandle;
+
+    // While texture and transitive widget font are unready, scene must NOT be ready to play
+    SceneAssetLoadProgress progress = scene->GetAssetLoadProgress();
+    EXPECT_FALSE(progress.allReady);
+    EXPECT_FALSE(scene->IsReadyToPlay());
+    EXPECT_GE(progress.totalAssets, 4u); // Cube + Texture + Widget + Font (+ optional DefaultFont)
+    EXPECT_GE(progress.pendingAssets, 2u);
+
+    AgentExecutionContext ctx;
+    ctx.scene = scene.get();
+    ctx.project = project.get();
+    const auto blockedPlayRes = AgentController::ExecuteCommand({ { "command", "play" } }, ctx);
+    EXPECT_FALSE(blockedPlayRes.value("ok", true));
+    EXPECT_FALSE(scene->IsPlaying());
+
+    // Mark Texture and Font ready; wait if default font was also triggered asynchronously
+    pendingTex->SetReadyFlag(true);
+    pendingFont->SetReadyFlag(true);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (!scene->IsReadyToPlay() && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    progress = scene->GetAssetLoadProgress();
+    EXPECT_TRUE(progress.allReady);
+    EXPECT_EQ(progress.pendingAssets, 0u);
+    EXPECT_TRUE(scene->IsReadyToPlay());
+
+    const auto allowedPlayRes = AgentController::ExecuteCommand({ { "command", "play" } }, ctx);
+    EXPECT_TRUE(allowedPlayRes.value("ok", false));
+    EXPECT_TRUE(scene->IsPlaying());
+
+    scene->OnStop();
+    project->SetActiveScene(nullptr);
+    scene.reset();
+    assetManager->Reset();
+    Project::CloseActive();
+    std::filesystem::remove_all(tempDir, ec);
 }

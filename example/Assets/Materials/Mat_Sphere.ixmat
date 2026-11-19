@@ -27,9 +27,9 @@
                                      "TilingFactorX":  1,
                                      "CoatRoughness":  0,
                                      "BaseColorFactor":  [
-                                                             0.88,
-                                                             0.22,
-                                                             0.28,
+                                                             1,
+                                                             0,
+                                                             0,
                                                              1
                                                          ],
                                      "FuzzWeight":  0,

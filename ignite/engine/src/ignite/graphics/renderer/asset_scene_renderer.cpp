@@ -95,6 +95,9 @@ namespace ignite
         // Allocate per-FrameContext uniform buffers owned by this AssetSceneRenderer so preview
         // rendering never overwrites the main SceneRenderer's in-flight camera/scene/lighting UBOs.
         auto uniforms = CreateRef<PreviewFrameUniforms>();
+        uniforms->reflectionProbeBuffer.Initialize(MAX_REFLECTION_PROBES, m_Device);
+        GI_GPUData defaultGI{};
+        uniforms->giBuffer.SetData(&defaultGI, sizeof(defaultGI));
 
         BindingSetDesc staticDesc;
         staticDesc.AddItem(BindingSetItem::PushConstants(0, sizeof(uint32_t)));
@@ -105,6 +108,8 @@ namespace ignite
         staticDesc.AddItem(BindingSetItem::ConstantBuffer(5, uniforms->csmBuffer.GetDescriptor()));
         staticDesc.AddItem(BindingSetItem::ConstantBuffer(6, uniforms->pointLightBuffer.GetDescriptor()));
         staticDesc.AddItem(BindingSetItem::ConstantBuffer(7, uniforms->spotLightBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(8, uniforms->giBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(9, uniforms->reflectionProbeBuffer.GetDescriptor()));
         uniforms->staticMeshBindingSet = BindingSet::Create(staticDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_STATIC), 0);
 
         BindingSetDesc animDesc;
@@ -116,6 +121,8 @@ namespace ignite
         animDesc.AddItem(BindingSetItem::ConstantBuffer(5, uniforms->csmBuffer.GetDescriptor()));
         animDesc.AddItem(BindingSetItem::ConstantBuffer(6, uniforms->pointLightBuffer.GetDescriptor()));
         animDesc.AddItem(BindingSetItem::ConstantBuffer(7, uniforms->spotLightBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(8, uniforms->giBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(9, uniforms->reflectionProbeBuffer.GetDescriptor()));
         uniforms->animatedBindingSet = BindingSet::Create(animDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_ANIM), 0);
 
         PreviewFrameUniforms *ptr = uniforms.get();
@@ -139,7 +146,16 @@ namespace ignite
         }
 
         m_SourceMaterial = material;
-        SyncRuntimeMaterialFromSource();
+        if (!m_SourceMaterial)
+        {
+            // Reset runtime fallback material to clean defaults so previous material previews
+            // never bleed into subsequent mesh previews with unassigned material slots.
+            m_RuntimeMaterial = CreateRef<Material>();
+        }
+        else
+        {
+            SyncRuntimeMaterialFromSource();
+        }
     }
 
     void AssetSceneRenderer::SetPreviewSkeletalMesh(const Ref<SkeletalMesh> &mesh)

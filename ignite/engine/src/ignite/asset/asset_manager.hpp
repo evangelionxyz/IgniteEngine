@@ -10,7 +10,9 @@
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/signals/asset_signal.hpp"
 #include "ignite/core/shared_task.hpp"
+#include "ignite/core/file_watcher.hpp"
 
+#include <chrono>
 #include <map>
 #include <memory>
 #include <vector>
@@ -21,6 +23,7 @@
 #include <string_view>
 #include <atomic>
 #include <coroutine>
+#include <unordered_set>
 
 namespace fbxsdk
 {
@@ -118,6 +121,16 @@ namespace ignite
         bool RetryAsset(AssetHandle handle);
         void CancelAssetLoad(AssetHandle handle);
 
+        // Hot-reload & FileWatcher management
+        void ReloadAssetAsync(AssetHandle handle);
+        bool ReloadAssetImmediate(AssetHandle handle);
+        void TrackMeshSourceAsset(AssetHandle handle);
+        void UntrackMeshSourceAsset(AssetHandle handle);
+        void SuppressWatchPath(const std::filesystem::path &filepath, uint32_t durationMs = 600);
+        bool IsMeshSourceWatched(AssetHandle handle) const;
+        std::filesystem::path GetWatchedMeshSourcePath(AssetHandle handle) const;
+        void DeferReleaseResource(std::shared_ptr<void> resource, uint32_t framesToWait = 4);
+
         void OnUpdate(float deltaTime);
 
         void OnAssetChangeSignal(const AssetChangeSignal &signal);
@@ -190,6 +203,22 @@ namespace ignite
         bool IsRequestCurrent(const Ref<AssetRecord> &record, std::uint64_t managerGeneration, std::uint64_t requestGeneration) const;
         void SetRecordState(const Ref<AssetRecord> &record, AssetState state, float progress, std::string error = {});
 
+        struct MeshSourceWatch
+        {
+            FileWatchToken sourceToken = kInvalidFileWatchToken;
+            FileWatchToken companionBinToken = kInvalidFileWatchToken;
+            std::filesystem::path sourcePath;
+            std::filesystem::path companionBinPath;
+        };
+
+        void StartProjectAssetWatchers(const Ref<Project> &project);
+        void StopProjectAssetWatchers();
+        void OnAssetFileChanged(const FileChangeEvent &event);
+        void OnMeshSourceFileChanged(AssetHandle meshHandle, const std::filesystem::path &sourcePath, const FileChangeEvent &event);
+        bool IsWatchPathSuppressed(const std::filesystem::path &filepath);
+        bool ApplyReloadedAsset(AssetHandle handle, const AssetMetaData &metadata, const Ref<Asset> &reloadedAsset);
+        void DrainDeferredReleases();
+
         std::atomic<uint64_t> m_ActiveLoadBytes{ 0 };
         std::mutex m_ThrottleMutex;
         std::condition_variable m_ThrottleCV;
@@ -219,6 +248,16 @@ namespace ignite
 
         SignalToken m_AssetChangeToken = kInvalidSignalToken;
         uint64_t m_LastSyncedRustVersion = 0;
+
+        mutable std::mutex m_WatchMutex;
+        std::vector<FileWatchToken> m_DirectoryWatchTokens;
+        std::unordered_map<AssetHandle, MeshSourceWatch> m_MeshSourceWatches;
+        std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_SuppressedWatchPaths;
+        std::unordered_set<AssetHandle> m_ReloadsInFlight;
+        std::unordered_set<AssetHandle> m_MeshSourceReimportsInFlight;
+
+        std::mutex m_DeferredReleaseMutex;
+        std::vector<std::pair<uint32_t, std::shared_ptr<void>>> m_DeferredReleases;
     };
 }
 
