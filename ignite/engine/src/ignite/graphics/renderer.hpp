@@ -109,6 +109,7 @@ namespace ignite
 
         static Ref<Material> GetDefaultMaterial();
         static Ref<Font> GetDefaultFont();
+        static Ref<Font> GetDefaultFontIfCreated();
 
         static Ref<StaticMesh> GetDefaultMesh(EMeshType type);
         static AssetHandle GetDefaultMeshHandle(EMeshType type);

@@ -6,6 +6,8 @@
 #include "ignite/project/project.hpp"
 #include "editor_layer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/graphics/thumbnail_generator.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
@@ -38,6 +40,7 @@ namespace ignite
     std::unordered_set<std::filesystem::path> ContentBrowserPanel::s_SharedThumbnailLoadsInFlight;
     uint64_t ContentBrowserPanel::s_SharedThumbnailLoadGeneration = 0;
     uint64_t ContentBrowserPanel::s_SharedCurrentFrame = 0;
+    SignalToken ContentBrowserPanel::s_AssetChangeSignalToken = kInvalidSignalToken;
 
     namespace
     {
@@ -175,6 +178,15 @@ namespace ignite
     {
         ++s_InstanceCount;
 
+        if (s_AssetChangeSignalToken == kInvalidSignalToken)
+        {
+            s_AssetChangeSignalToken = SignalBus::Subscribe<AssetChangeSignal>(
+                [](const AssetChangeSignal &signal)
+                {
+                    InvalidateThumbnailForAsset(signal);
+                });
+        }
+
         if (!s_SharedIcons.empty())
         {
             return;
@@ -234,6 +246,14 @@ namespace ignite
 
     void ContentBrowserPanel::ReleaseSharedResources()
     {
+        if (s_AssetChangeSignalToken != kInvalidSignalToken)
+        {
+            SignalBus::Unsubscribe<AssetChangeSignal>(s_AssetChangeSignalToken);
+            s_AssetChangeSignalToken = kInvalidSignalToken;
+        }
+
+        ThumbnailGenerator::Get().Shutdown();
+
         s_SharedThumbnailLoadGeneration++;
 
         while (!s_SharedPendingThumbnailLoads.empty())
@@ -768,7 +788,15 @@ namespace ignite
             auto it = s_SharedThumbnails.find(filepath);
             if (it != s_SharedThumbnails.end() && it->second.thumbnail == nullptr)
             {
-                StartThumbnailLoad(filepath);
+                const AssetType assetType = GetAssetTypeFromExtension(filepath.extension().string());
+                if (ThumbnailGenerator::IsSupportedAssetType(assetType))
+                {
+                    StartSceneThumbnailLoad(filepath, assetType);
+                }
+                else
+                {
+                    StartThumbnailLoad(filepath);
+                }
             }
             else
             {
@@ -2742,14 +2770,8 @@ namespace ignite
         return displaySize;
     }
 
-    Ref<Texture> ContentBrowserPanel::GetOrCreateThumbnail(const std::filesystem::path &filepath, bool isDirectory)
+    Ref<Texture> ContentBrowserPanel::GetFallbackIcon(AssetType type, const std::filesystem::path &filepath) const
     {
-        IGN_PROFILE_FUNCTION();
-
-        if (isDirectory)
-            return s_SharedIcons["folder"];
-
-        AssetType type = GetAssetTypeFromExtension(filepath.extension().string());
         switch (type)
         {
             case AssetType::Scene: return s_SharedIcons["scene"];
@@ -2763,7 +2785,7 @@ namespace ignite
             case AssetType::Skeleton: return s_SharedIcons["skeleton"];
             case AssetType::Mesh: return s_SharedIcons["mesh"];
             case AssetType::SkeletalMesh: return s_SharedIcons["mesh"];
-            case AssetType::StaticMesh: return s_SharedIcons["mesh"];
+            case AssetType::StaticMesh: return s_SharedIcons["st_mesh"];
             case AssetType::Animation2D: return s_SharedIcons["anim_2d"];
             case AssetType::AnimatorController: return s_SharedIcons["anim_ctrl"];
             case AssetType::AnimatorController2D: return s_SharedIcons["anim_ctrl_2d"];
@@ -2775,40 +2797,249 @@ namespace ignite
         if (filepath.extension() == ".cs")
             return s_SharedIcons["csharp"];
 
+        return s_SharedIcons["unknown"];
+    }
+
+    Ref<Texture> ContentBrowserPanel::GetOrCreateThumbnail(const std::filesystem::path &filepath, bool isDirectory)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (isDirectory)
+            return s_SharedIcons["folder"];
+
+        const AssetType type = GetAssetTypeFromExtension(filepath.extension().string());
+        const bool isSceneThumbnailAsset = ThumbnailGenerator::IsSupportedAssetType(type);
+        const bool isImageAsset = (!isSceneThumbnailAsset && IsImageFile(filepath));
+
+        if (!isSceneThumbnailAsset && !isImageAsset)
+        {
+            return GetFallbackIcon(type, filepath);
+        }
+
         auto it = s_SharedThumbnails.find(filepath);
         if (it != s_SharedThumbnails.end())
         {
             // Mark as used this frame
             it->second.lastFrameUsed = s_SharedCurrentFrame;
 
-            if (!it->second.thumbnail && !s_SharedThumbnailLoadsInFlight.contains(filepath))
+            if (it->second.thumbnail)
             {
-                s_SharedPendingThumbnailLoads.push(filepath);
-                s_SharedThumbnailLoadsInFlight.insert(filepath);
+                return it->second.thumbnail;
             }
 
-            return it->second.thumbnail;
-        }
-
-        // Generate image only
-        if (IsImageFile(filepath))
-        {
-            // Create placeholder entry to prevent duplicate jobs
-            FileThumbnail placeholder;
-            placeholder.thumbnail = nullptr;
-            placeholder.timestamp = 0;
-            placeholder.lastFrameUsed = s_SharedCurrentFrame;
-            s_SharedThumbnails[filepath] = placeholder;
-
-            // Add to loading queue instead of starting immediately
             if (!s_SharedThumbnailLoadsInFlight.contains(filepath))
             {
                 s_SharedPendingThumbnailLoads.push(filepath);
                 s_SharedThumbnailLoadsInFlight.insert(filepath);
             }
+
+            return GetFallbackIcon(type, filepath);
         }
 
-        return s_SharedIcons["unknown"];
+        // Create placeholder entry to prevent duplicate jobs
+        FileThumbnail placeholder;
+        placeholder.thumbnail = nullptr;
+        placeholder.timestamp = 0;
+        placeholder.lastFrameUsed = s_SharedCurrentFrame;
+        s_SharedThumbnails[filepath] = placeholder;
+
+        // Add to loading queue instead of starting immediately
+        if (!s_SharedThumbnailLoadsInFlight.contains(filepath))
+        {
+            s_SharedPendingThumbnailLoads.push(filepath);
+            s_SharedThumbnailLoadsInFlight.insert(filepath);
+        }
+
+        return GetFallbackIcon(type, filepath);
+    }
+
+    void ContentBrowserPanel::StartSceneThumbnailLoad(const std::filesystem::path &filepath, AssetType type)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        Ref<Project> project = m_EditorLayer ? m_EditorLayer->GetActiveProject() : nullptr;
+        if (!project || !m_AssetManager)
+        {
+            s_SharedThumbnailLoadsInFlight.erase(filepath);
+            return;
+        }
+
+        const std::filesystem::path relativePath = project->GetProjectRelativeFilepath(filepath);
+        AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
+        if (handle == AssetHandle(0))
+        {
+            handle = m_AssetManager->GetAssetHandle(filepath);
+        }
+
+        if (handle == AssetHandle(0))
+        {
+            s_SharedThumbnails.erase(filepath);
+            s_SharedThumbnailLoadsInFlight.erase(filepath);
+            return;
+        }
+
+        const uint64_t panelGeneration = s_SharedThumbnailLoadGeneration;
+        const std::filesystem::path capturedPath = filepath;
+        const uint32_t thumbnailSize = static_cast<uint32_t>(std::max(16, m_ThumbnailSize));
+
+        ThumbnailRequest req{};
+        req.handle = handle;
+        req.type = type;
+        req.assetPath = capturedPath;
+        req.cachePath = ThumbnailGenerator::GetCacheFilepath(project.get(), handle, capturedPath);
+        req.size = thumbnailSize;
+        req.sourceTimestamp = ThumbnailGenerator::GetFileTimestamp(capturedPath);
+        req.generation = ThumbnailGenerator::Get().GetGeneration();
+        req.onComplete = [capturedPath, panelGeneration](Ref<Texture> loadedTexture)
+        {
+            if (panelGeneration != s_SharedThumbnailLoadGeneration)
+            {
+                s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                return;
+            }
+
+            auto thumbnailIt = s_SharedThumbnails.find(capturedPath);
+            if (thumbnailIt == s_SharedThumbnails.end())
+            {
+                s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                return;
+            }
+
+            if (!loadedTexture)
+            {
+                s_SharedThumbnails.erase(thumbnailIt);
+                s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                return;
+            }
+
+            FileThumbnail ft;
+            ft.thumbnail = std::move(loadedTexture);
+            ft.lastFrameUsed = s_SharedCurrentFrame;
+            ft.timestamp = static_cast<uint64_t>(ThumbnailGenerator::GetFileTimestamp(capturedPath));
+
+            thumbnailIt->second = std::move(ft);
+            s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+        };
+
+        ThumbnailGenerator::Get().RequestThumbnail(std::move(req));
+    }
+
+    void ContentBrowserPanel::InvalidateThumbnailForAsset(const AssetChangeSignal &signal)
+    {
+        if (signal.handle == AssetHandle(0))
+            return;
+
+        AssetManager *assetManager = AssetManager::GetInstance();
+        if (!assetManager)
+            return;
+
+        Ref<Project> project = assetManager->LockActiveProject();
+        if (!project)
+            return;
+
+        auto invalidateHandle = [&project, assetManager](AssetHandle handle)
+        {
+            if (handle == AssetHandle(0))
+                return;
+
+            const AssetMetaData meta = assetManager->GetMetaData(handle);
+            if (meta.filepath.empty())
+                return;
+
+            const std::filesystem::path fullPath = project->GetProjectFilepath(meta.filepath).lexically_normal();
+            if (ThumbnailGenerator::IsSupportedAssetType(meta.type))
+            {
+                ThumbnailGenerator::Get().InvalidateThumbnail(project.get(), handle, fullPath);
+            }
+
+            const std::string targetNorm = stringutils::ToLower(fullPath.generic_string());
+            Application::SubmitToRenderThread([targetNorm]()
+            {
+                for (auto it = s_SharedThumbnails.begin(); it != s_SharedThumbnails.end();)
+                {
+                    if (stringutils::ToLower(it->first.lexically_normal().generic_string()) == targetNorm)
+                    {
+                        s_SharedThumbnailLoadsInFlight.erase(it->first);
+                        it = s_SharedThumbnails.erase(it);
+                    }
+                    else
+                    {
+                        ++it;
+                    }
+                }
+            }, "ContentBrowserPanel::InvalidateThumbnail");
+        };
+
+        std::unordered_set<AssetHandle> handlesToInvalidate;
+        if (signal.type == AssetType::Texture || ThumbnailGenerator::IsSupportedAssetType(signal.type))
+        {
+            handlesToInvalidate.insert(signal.handle);
+        }
+
+        // Cascade texture -> materials -> meshes, and material -> meshes so dependent thumbnails update too.
+        std::unordered_set<AssetHandle> affectedMaterials;
+        if (signal.type == AssetType::Material)
+        {
+            affectedMaterials.insert(signal.handle);
+        }
+        else if (signal.type == AssetType::Texture)
+        {
+            for (const auto &[matHandle, asset] : assetManager->GetLoadedAssets())
+            {
+                if (!asset || asset->GetAssetType() != AssetType::Material)
+                    continue;
+                Ref<Material> mat = std::static_pointer_cast<Material>(asset);
+                if (mat && (mat->baseColorTextureHandle == signal.handle
+                    || mat->emissiveTextureHandle == signal.handle
+                    || mat->metallicTextureHandle == signal.handle
+                    || mat->roughnessTextureHandle == signal.handle
+                    || mat->normalTextureHandle == signal.handle
+                    || mat->occlusionTextureHandle == signal.handle))
+                {
+                    affectedMaterials.insert(matHandle);
+                    handlesToInvalidate.insert(matHandle);
+                }
+            }
+        }
+
+        if (!affectedMaterials.empty())
+        {
+            for (const auto &[meshHandle, asset] : assetManager->GetLoadedAssets())
+            {
+                if (!asset)
+                    continue;
+
+                if (asset->GetAssetType() == AssetType::StaticMesh)
+                {
+                    Ref<StaticMesh> mesh = std::static_pointer_cast<StaticMesh>(asset);
+                    for (const auto &inst : mesh->GetMeshInstances())
+                    {
+                        if (inst && affectedMaterials.contains(inst->GetMaterialAssetHandle()))
+                        {
+                            handlesToInvalidate.insert(meshHandle);
+                            break;
+                        }
+                    }
+                }
+                else if (asset->GetAssetType() == AssetType::SkeletalMesh)
+                {
+                    Ref<SkeletalMesh> mesh = std::static_pointer_cast<SkeletalMesh>(asset);
+                    for (const auto &inst : mesh->GetMeshInstances())
+                    {
+                        if (inst && affectedMaterials.contains(inst->GetMaterialAssetHandle()))
+                        {
+                            handlesToInvalidate.insert(meshHandle);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (AssetHandle handle : handlesToInvalidate)
+        {
+            invalidateHandle(handle);
+        }
     }
 
     void ContentBrowserPanel::StartThumbnailLoad(const std::filesystem::path &filepath)
@@ -2999,6 +3230,7 @@ namespace ignite
     void ContentBrowserPanel::ClearThumbnails()
     {
         s_SharedThumbnailLoadGeneration++;
+        ThumbnailGenerator::Get().ClearPending();
         s_SharedThumbnails.clear();
         s_SharedThumbnailLoadsInFlight.clear();
 

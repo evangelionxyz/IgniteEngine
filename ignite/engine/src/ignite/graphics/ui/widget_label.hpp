@@ -26,6 +26,7 @@ namespace ignite
         AssetHandle fontHandle = AssetHandle(0);
         Ref<Font> font;
         std::string text;
+        bool fontReadyAtLastLayout = false;
 
         LabelStyle style;
 

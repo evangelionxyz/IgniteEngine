@@ -35,6 +35,7 @@
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/prefab.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
+#include "ignite/scene/entity_command_manager.hpp"
 #include "ignite/scene/entity_destroy_command.hpp"
 #include "ignite/scene/entity_rename_command.hpp"
 #include "ignite/scene/entity_reparent_command.hpp"
@@ -53,6 +54,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <format>
 #include <algorithm>
@@ -77,6 +79,90 @@ namespace ignite
             glm::vec2( 0.5f,  0.5f),
             glm::vec2(-0.5f,  0.5f)
         };
+
+        std::vector<UUID> FilterTopLevelUUIDs(Scene *scene, const std::vector<UUID> &inputUUIDs)
+        {
+            std::unordered_set<UUID> uuidSet(inputUUIDs.begin(), inputUUIDs.end());
+            std::vector<UUID> result;
+            result.reserve(inputUUIDs.size());
+
+            for (UUID uuid : inputUUIDs)
+            {
+                Entity e = SceneManager::GetEntity(scene, uuid);
+                if (!e.IsValid())
+                    continue;
+
+                bool hasSelectedAncestor = false;
+                UUID curParent = e.GetComponent<IDComponent>().parent;
+                while (curParent != UUID(0))
+                {
+                    if (uuidSet.contains(curParent))
+                    {
+                        hasSelectedAncestor = true;
+                        break;
+                    }
+                    Entity parentEnt = SceneManager::GetEntity(scene, curParent);
+                    if (!parentEnt.IsValid())
+                        break;
+                    curParent = parentEnt.GetComponent<IDComponent>().parent;
+                }
+
+                if (!hasSelectedAncestor && std::find(result.begin(), result.end(), uuid) == result.end())
+                {
+                    result.push_back(uuid);
+                }
+            }
+
+            return result;
+        }
+
+        std::unordered_map<UUID, size_t> BuildHierarchyVisualOrderMap(Scene *scene)
+        {
+            std::unordered_map<UUID, size_t> orderMap;
+            if (!scene)
+                return orderMap;
+
+            size_t nextIndex = 0;
+            std::function<void(Entity)> visit = [&](Entity e)
+            {
+                if (!e.IsValid())
+                    return;
+
+                const IDComponent &id = e.GetComponent<IDComponent>();
+                if (orderMap.contains(id.uuid))
+                    return;
+
+                orderMap[id.uuid] = nextIndex++;
+                for (UUID childUUID : id.children)
+                {
+                    visit(SceneManager::GetEntity(scene, childUUID));
+                }
+            };
+
+            for (UUID rootUUID : scene->rootEntityOrder)
+            {
+                visit(SceneManager::GetEntity(scene, rootUUID));
+            }
+            return orderMap;
+        }
+
+        size_t CountDescendantsRecursive(Scene *scene, Entity entity)
+        {
+            if (!scene || !entity.IsValid())
+                return 0;
+
+            size_t count = 0;
+            const auto &children = entity.GetComponent<IDComponent>().children;
+            for (UUID childUUID : children)
+            {
+                Entity child = SceneManager::GetEntity(scene, childUUID);
+                if (child.IsValid())
+                {
+                    count += 1 + CountDescendantsRecursive(scene, child);
+                }
+            }
+            return count;
+        }
     }
 
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
@@ -136,6 +222,7 @@ namespace ignite
 
         m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, nullptr);
         m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, nullptr);
+        m_Icons["folder"] = Texture::Create("resources/ui/editor/ic_editor_folder.png", createInfo, nullptr);
     }
 
     ScenePanel::~ScenePanel()
@@ -153,9 +240,17 @@ namespace ignite
 
         m_Scene = scene;
         m_SelectedEntities.clear();
+        m_TrackingSelectedEntity = UUID(0);
         m_RootEntities.clear();
         m_LastEntityCount = 0;
         m_HierarchyDirty = true;
+        m_PendingHierarchyDrop.reset();
+        m_PendingDeleteUUIDs.clear();
+        m_PendingGroupSelectionInFolder = false;
+        m_PendingUngroupFolderUUID = UUID(0);
+        m_RenamingEntityUUID = UUID(0);
+        m_FocusRenameInput = false;
+        m_LastAutoExpandedSelection = UUID(0);
 
         // A scene swap can happen while a gizmo or 2D bounds resize is active.
         // Drop those entity-specific interaction handles before the next panel
@@ -249,7 +344,50 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         ImGui::Begin("Hierarchy");
 
+        if (!m_Scene || !m_Scene->registry)
+        {
+            ImGui::End();
+            return;
+        }
+
         auto assetManager = AssetManager::GetInstance();
+        SceneManager::SyncHierarchyOrder(m_Scene);
+
+        // Toolbar: + Folder button & search filter
+        if (ImGui::SmallButton("+ Folder"))
+        {
+            Entity selected = GetSelectedEntity();
+            Entity targetParent = (selected.IsValid() && selected.GetComponent<IDComponent>().IsInType(EntityType_Folder))
+                ? selected
+                : Entity{};
+            CreateFolderInHierarchy(targetParent);
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Create a new Folder in Hierarchy (nests under selected folder if any)");
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint("##hierarchy_search", "Search hierarchy...", m_HierarchySearchBuffer, sizeof(m_HierarchySearchBuffer));
+
+        // Keyboard shortcuts when Hierarchy is focused
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && !m_Scene->IsRunning())
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_F2, false))
+            {
+                if (Entity selected = GetSelectedEntity(); selected.IsValid())
+                {
+                    m_RenamingEntityUUID = selected.GetUUID();
+                    std::memset(m_RenameBuffer, 0, sizeof(m_RenameBuffer));
+                    std::strncpy(m_RenameBuffer, selected.GetName().c_str(), sizeof(m_RenameBuffer) - 1);
+                    m_FocusRenameInput = true;
+                }
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && !m_SelectedEntities.empty())
+            {
+                m_PendingDeleteUUIDs = GetOrderedSelectedUUIDs();
+            }
+        }
 
         constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersOuter
                                              | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_HighlightHoveredColumn;
@@ -260,111 +398,259 @@ namespace ignite
 
             ImGui::TableHeadersRow();
 
-            // ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, { 0.000f, 0.245f, 0.409f, 1.000f });
-            // ImGui::PushStyleColor(ImGuiCol_FrameBg, { 0.000f, 0.000f, 0.000f, 0.620f });
-            // ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.000f, 0.243f, 0.408f, 1.000f });
-            // ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
-
-            // Root tree node
-
             const auto sceneName = m_EditorLayer->IsInPrefabIsolation() ? "Prefab" : assetManager->GetAssetDisplayName(m_Scene->handle);
             const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
                 | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns | ImGuiTreeNodeFlags_DefaultOpen;
 
             if (ImGui::TreeNodeEx(sceneName.c_str(), treeFlags))
             {
-                // target drop
-                if (ImGui::BeginDragDropTarget())
+                auto acceptRootDrop = [&]()
                 {
-                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                    if (ImGui::BeginDragDropTarget())
                     {
-                        const size_t count = payload->DataSize / sizeof(UUID);
-                        const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
-
-                        for (size_t i = 0; i < count; ++i)
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                         {
-                            const UUID uuid = droppedUUIDs[i];
-                            Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
-
-                            if (!droppedEntity)
-                                continue;
-
-                            // check if src entity has parent
-                            auto &idComp = droppedEntity.GetComponent<IDComponent>();
-                            if (idComp.parent != UUID(0))
-                            {
-                                UUID oldParent = idComp.parent;
-                                // current parent should be removed
-                                Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
-                                parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
-                                idComp.parent = UUID(0);
-
-                                // Record for undo — re-parenting to root (UUID 0)
-                                CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
-                                    m_Scene, droppedEntity.GetUUID(), oldParent, UUID(0)));
-                            }
+                            const size_t count = payload->DataSize / sizeof(UUID);
+                            const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+                            PendingHierarchyDrop drop;
+                            drop.sourceUUIDs.assign(droppedUUIDs, droppedUUIDs + count);
+                            drop.targetUUID = UUID(0);
+                            drop.position = HierarchyDropPosition::Inside;
+                            drop.toRoot = true;
+                            m_PendingHierarchyDrop = std::move(drop);
                         }
-                    }
-                    else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                    {
-                        if (payload->DataSize == sizeof(AssetHandle))
+                        else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
-                            AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-                            if (metadata.type == AssetType::Prefab)
+                            if (payload->DataSize == sizeof(AssetHandle))
                             {
-                                Ref<Prefab> prefab = assetManager->GetAsset<Prefab>(handle);
-                                if (prefab)
+                                AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                if (metadata.type == AssetType::Prefab)
                                 {
-                                    Entity instantiated = SceneManager::InstantiatePrefab(m_Scene, prefab);
-                                    if (instantiated.IsValid())
+                                    Ref<Prefab> prefab = assetManager->GetAsset<Prefab>(handle);
+                                    if (prefab)
                                     {
-                                        SetSelectedEntity(instantiated);
+                                        Entity instantiated = SceneManager::InstantiatePrefab(m_Scene, prefab);
+                                        if (instantiated.IsValid())
+                                        {
+                                            if (!m_Scene->IsRunning())
+                                            {
+                                                CommandManager::AddCommand(CreateScope<EntityCreateCommand>(m_Scene, instantiated, "Instantiate Prefab"));
+                                            }
+                                            SetSelectedEntity(instantiated);
+                                        }
                                     }
                                 }
                             }
                         }
+
+                        ImGui::EndDragDropTarget();
                     }
+                };
 
-                    ImGui::EndDragDropTarget();
-                }
+                acceptRootDrop();
 
-                // const auto entityCount = m_Scene->registry->view<IDComponent>().size();
-                std::vector<Entity> rootEntities;
+                const std::string filterLower = stringutils::ToLower(std::string(m_HierarchySearchBuffer));
 
-                m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
-                    {
-                        if (id.parent == UUID(0))
-                            rootEntities.emplace_back(e, m_Scene);
-                    });
-
-                if (m_HierarchyDirty)
+                const std::vector<UUID> rootOrderCopy = m_Scene->rootEntityOrder;
+                for (UUID rootUUID : rootOrderCopy)
                 {
-                    SortHierarchy(rootEntities);
-                    m_HierarchyDirty = false;
+                    Entity entity = SceneManager::GetEntity(m_Scene, rootUUID);
+                    if (entity.IsValid() && MatchesHierarchyFilter(entity, filterLower))
+                    {
+                        RenderEntityNode(entity);
+                    }
                 }
 
-                for (const Entity &entity : rootEntities)
-                    RenderEntityNode(entity);
+                // Only trigger one-shot auto-expansion when selection changes so folders remain collapsible.
+                m_LastAutoExpandedSelection = m_TrackingSelectedEntity;
 
-                // Add some extra space at the bottom
-                ImGui::Dummy(ImVec2(-1.0f, 32.0f));
+                // Extra root drop zone at the bottom of the hierarchy list
+                ImGui::Dummy(ImVec2(-1.0f, 36.0f));
+                acceptRootDrop();
 
                 ImGui::TreePop();
             }
 
-            // ImGui::PopStyleVar();
-            // ImGui::PopStyleColor(3);
-
-            // Context menu for creating entities
+            // Context menu on empty hierarchy area
             if (ImGui::BeginPopupContextWindow("create_entity_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
             {
-                ShowEntityContextMenu();
+                if (ImGui::MenuItem("Folder"))
+                {
+                    ScopedCommandTransaction tx("Create Folder");
+                    CreateFolderInHierarchy({});
+                }
+                ImGui::Separator();
+                {
+                    ScopedCommandTransaction tx("Create Entity");
+                    ShowEntityContextMenu();
+                }
                 ImGui::EndPopup();
             }
 
             ImGui::EndTable();
         }
+
+        // Deferred hierarchy modifications executed safely outside tree iteration
+        if (m_PendingHierarchyDrop.has_value())
+        {
+            const PendingHierarchyDrop drop = *m_PendingHierarchyDrop;
+            m_PendingHierarchyDrop.reset();
+
+            std::vector<UUID> draggedTopLevel = FilterTopLevelUUIDs(m_Scene, drop.sourceUUIDs);
+            const auto visualOrder = BuildHierarchyVisualOrderMap(m_Scene);
+            std::stable_sort(draggedTopLevel.begin(), draggedTopLevel.end(), [&visualOrder](UUID a, UUID b)
+            {
+                const auto itA = visualOrder.find(a);
+                const auto itB = visualOrder.find(b);
+                const size_t ordA = itA != visualOrder.end() ? itA->second : (std::numeric_limits<size_t>::max)();
+                const size_t ordB = itB != visualOrder.end() ? itB->second : (std::numeric_limits<size_t>::max)();
+                return ordA < ordB;
+            });
+
+            std::vector<HierarchyMoveEntry> moveEntries;
+            if (drop.toRoot)
+            {
+                for (UUID srcUUID : draggedTopLevel)
+                {
+                    Entity srcEntity = SceneManager::GetEntity(m_Scene, srcUUID);
+                    if (!srcEntity.IsValid())
+                        continue;
+
+                    const UUID oldParent = srcEntity.GetComponent<IDComponent>().parent;
+                    const size_t oldIndex = SceneManager::GetSiblingIndex(m_Scene, srcUUID);
+                    if (SceneManager::MoveEntity(m_Scene, srcUUID, UUID(0), (std::numeric_limits<size_t>::max)()))
+                    {
+                        const size_t newIndex = SceneManager::GetSiblingIndex(m_Scene, srcUUID);
+                        if (oldParent != UUID(0) || oldIndex != newIndex)
+                        {
+                            moveEntries.push_back({ srcUUID, oldParent, oldIndex, UUID(0), newIndex });
+                        }
+                    }
+                }
+            }
+            else if (drop.targetUUID != UUID(0))
+            {
+                Entity targetEntity = SceneManager::GetEntity(m_Scene, drop.targetUUID);
+                if (targetEntity.IsValid())
+                {
+                    UUID prevAnchor = drop.targetUUID;
+                    HierarchyDropPosition curPos = drop.position;
+                    for (size_t idx = 0; idx < draggedTopLevel.size(); ++idx)
+                    {
+                        const UUID srcUUID = draggedTopLevel[idx];
+                        if (srcUUID == drop.targetUUID || SceneManager::IsParent(m_Scene, drop.targetUUID, srcUUID))
+                            continue;
+
+                        Entity srcEntity = SceneManager::GetEntity(m_Scene, srcUUID);
+                        if (!srcEntity.IsValid())
+                            continue;
+
+                        const UUID oldParent = srcEntity.GetComponent<IDComponent>().parent;
+                        const size_t oldIndex = SceneManager::GetSiblingIndex(m_Scene, srcUUID);
+
+                        bool moved = false;
+                        if (curPos == HierarchyDropPosition::Below && idx > 0)
+                        {
+                            moved = SceneManager::ReorderRelativeTo(m_Scene, srcUUID, prevAnchor, HierarchyDropPosition::Below);
+                        }
+                        else if (curPos == HierarchyDropPosition::Above && idx > 0)
+                        {
+                            moved = SceneManager::ReorderRelativeTo(m_Scene, srcUUID, prevAnchor, HierarchyDropPosition::Below);
+                        }
+                        else
+                        {
+                            moved = SceneManager::ReorderRelativeTo(m_Scene, srcUUID, drop.targetUUID, curPos);
+                        }
+
+                        if (moved)
+                        {
+                            const UUID newParent = srcEntity.GetComponent<IDComponent>().parent;
+                            const size_t newIndex = SceneManager::GetSiblingIndex(m_Scene, srcUUID);
+                            if (oldParent != newParent || oldIndex != newIndex)
+                            {
+                                moveEntries.push_back({ srcUUID, oldParent, oldIndex, newParent, newIndex });
+                            }
+                            prevAnchor = srcUUID;
+                        }
+                    }
+                }
+            }
+
+            if (!moveEntries.empty() && !m_Scene->IsRunning())
+            {
+                const std::string cmdName = (moveEntries.size() > 1) ? "Reorder Entities" : "Reorder Entity";
+                CommandManager::AddCommand(CreateScope<EntityHierarchyMoveCommand>(m_Scene, std::move(moveEntries), cmdName));
+            }
+            SetHierarchyDirty();
+        }
+
+        if (!m_PendingDeleteUUIDs.empty())
+        {
+            std::vector<UUID> toDelete = FilterTopLevelUUIDs(m_Scene, m_PendingDeleteUUIDs);
+            m_PendingDeleteUUIDs.clear();
+
+            if (!toDelete.empty())
+            {
+                ScopedCommandTransaction tx(toDelete.size() > 1 ? "Delete Entities" : "Delete Entity");
+                ClearSelection(true);
+                for (UUID uuid : toDelete)
+                {
+                    Entity e = SceneManager::GetEntity(m_Scene, uuid);
+                    if (e.IsValid())
+                    {
+                        DestroyEntity(e);
+                    }
+                }
+            }
+        }
+
+        if (m_PendingGroupSelectionInFolder)
+        {
+            m_PendingGroupSelectionInFolder = false;
+            GroupSelectedEntitiesInFolder();
+        }
+
+        if (m_PendingUngroupFolderUUID != UUID(0))
+        {
+            const UUID folderUUID = m_PendingUngroupFolderUUID;
+            m_PendingUngroupFolderUUID = UUID(0);
+
+            Entity folderEntity = SceneManager::GetEntity(m_Scene, folderUUID);
+            if (folderEntity.IsValid())
+            {
+                const IDComponent folderID = folderEntity.GetComponent<IDComponent>();
+                const UUID targetParent = folderID.parent;
+                const size_t folderIndex = SceneManager::GetSiblingIndex(m_Scene, folderUUID);
+
+                ScopedCommandTransaction tx("Ungroup Folder");
+                std::vector<HierarchyMoveEntry> moveEntries;
+                size_t insertCursor = folderIndex + 1;
+                for (UUID childUUID : folderID.children)
+                {
+                    Entity childEntity = SceneManager::GetEntity(m_Scene, childUUID);
+                    if (!childEntity.IsValid())
+                        continue;
+
+                    const size_t oldIdx = SceneManager::GetSiblingIndex(m_Scene, childUUID);
+                    if (SceneManager::MoveEntity(m_Scene, childUUID, targetParent, insertCursor))
+                    {
+                        const size_t newIdx = SceneManager::GetSiblingIndex(m_Scene, childUUID);
+                        moveEntries.push_back({ childUUID, folderUUID, oldIdx, targetParent, newIdx });
+                        insertCursor = newIdx + 1;
+                    }
+                }
+
+                if (!moveEntries.empty() && !m_Scene->IsRunning())
+                {
+                    CommandManager::AddCommand(CreateScope<EntityHierarchyMoveCommand>(m_Scene, std::move(moveEntries), "Ungroup Folder Children"));
+                }
+
+                ClearSelection(true);
+                DestroyEntity(folderEntity);
+            }
+        }
+
         ImGui::End();
     }
 
@@ -559,15 +845,16 @@ namespace ignite
         auto &idComp = entity.GetComponent<IDComponent>();
         bool isDeleting = false;
         const bool isPrefab = idComp.IsInType(EntityType_Prefab);
-
+        const bool isFolder = idComp.IsInType(EntityType_Folder);
         const bool isSelected = m_SelectedEntities.contains(entity.GetUUID());
+        const bool isRenaming = (m_RenamingEntityUUID == idComp.uuid);
 
         const std::function<bool(Entity)> hasSelectedDescendant = [&](Entity current) -> bool
         {
             if (!current.IsValid())
                 return false;
 
-            const IDComponent& currentID = current.GetComponent<IDComponent>();
+            const IDComponent &currentID = current.GetComponent<IDComponent>();
             for (const UUID childUuid : currentID.children)
             {
                 if (m_SelectedEntities.contains(childUuid))
@@ -581,7 +868,9 @@ namespace ignite
             return false;
         };
 
-        if (hasSelectedDescendant(entity))
+        if (m_TrackingSelectedEntity != UUID(0)
+            && m_LastAutoExpandedSelection != m_TrackingSelectedEntity
+            && hasSelectedDescendant(entity))
         {
             ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         }
@@ -589,7 +878,8 @@ namespace ignite
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
 
-        const ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
+        const ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0)
+            | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
             | ImGuiTreeNodeFlags_OpenOnDoubleClick
             | ImGuiTreeNodeFlags_SpanAvailWidth
             | ImGuiTreeNodeFlags_OpenOnArrow
@@ -600,7 +890,31 @@ namespace ignite
         ImGui::PushStyleColor(ImGuiCol_Header, { 0.000f, 0.305f, 0.453f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, { 0.780f, 0.520f, 0.000f, 1.000f });
 
-        const bool opened = ImGui::TreeNodeEx((void *)imguiPushId, flags, "%s", idComp.name.c_str());
+        std::string nodeLabel;
+        if (isRenaming)
+        {
+            nodeLabel = fmt::format("##rename_node_{}", static_cast<uint64_t>(idComp.uuid));
+        }
+        else if (isFolder)
+        {
+            nodeLabel = fmt::format("     {}{}", idComp.name, idComp.children.empty() ? std::string() : fmt::format(" ({})", idComp.children.size()));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f, 0.82f, 0.45f, 1.0f));
+        }
+        else
+        {
+            nodeLabel = idComp.name;
+        }
+
+        const bool opened = ImGui::TreeNodeEx((void *)imguiPushId, flags, "%s", nodeLabel.c_str());
+
+        if (isFolder && !isRenaming)
+        {
+            ImGui::PopStyleColor();
+        }
+
+        const ImVec2 itemRectMin = ImGui::GetItemRectMin();
+        const ImVec2 itemRectMax = ImGui::GetItemRectMax();
+
         if (isSelected && entity.GetUUID() == m_TrackingSelectedEntity && s_LastAutoScrolledTarget != m_TrackingSelectedEntity)
         {
             if (!ImGui::IsItemVisible())
@@ -612,35 +926,73 @@ namespace ignite
 
         ImGui::PopStyleColor(3);
 
-        if (!m_Scene->IsRunning() || true)
+        if (!m_Scene->IsRunning())
         {
             ImGui::PushID((int)imguiPushId);
             if (ImGui::BeginPopupContextItem(idComp.name.c_str()))
             {
-                if (ImGui::BeginMenu("Create"))
+                if (ImGui::BeginMenu("Create Child"))
                 {
+                    if (ImGui::MenuItem("Folder"))
+                    {
+                        ScopedCommandTransaction tx("Create Child Folder");
+                        CreateFolderInHierarchy(entity);
+                    }
+                    ImGui::Separator();
+
+                    ScopedCommandTransaction tx("Create Child Entity");
                     if (const Entity e = ShowEntityContextMenu())
                     {
-                        if (SceneManager::AddChild(m_Scene, entity, e))
-                            m_Scene->SetDirtyFlag(true);
-
+                        SceneManager::MoveEntity(m_Scene, e.GetUUID(), entity.GetUUID());
                         SetSelectedEntity(e);
                     }
 
                     ImGui::EndMenu();
                 }
 
-                auto deletString = std::format("Delete ({})", m_SelectedEntities.size());
+                if (ImGui::MenuItem("Rename", "F2"))
+                {
+                    m_RenamingEntityUUID = idComp.uuid;
+                    std::memset(m_RenameBuffer, 0, sizeof(m_RenameBuffer));
+                    std::strncpy(m_RenameBuffer, idComp.name.c_str(), sizeof(m_RenameBuffer) - 1);
+                    m_FocusRenameInput = true;
+                }
+
+                if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
+                {
+                    if (!m_SelectedEntities.contains(idComp.uuid))
+                    {
+                        SetSelectedEntity(entity);
+                    }
+                    DuplicateSelectedEntity();
+                }
+
+                if (ImGui::MenuItem("Group Selected in New Folder"))
+                {
+                    if (!m_SelectedEntities.contains(idComp.uuid))
+                    {
+                        SetSelectedEntity(entity);
+                    }
+                    m_PendingGroupSelectionInFolder = true;
+                }
+
+                if (isFolder && ImGui::MenuItem("Ungroup Children"))
+                {
+                    m_PendingUngroupFolderUUID = idComp.uuid;
+                }
+
+                ImGui::Separator();
+
+                std::vector<UUID> deleteCandidates = GetOrderedSelectedUUIDs();
+                if (std::find(deleteCandidates.begin(), deleteCandidates.end(), idComp.uuid) == deleteCandidates.end())
+                {
+                    deleteCandidates.push_back(idComp.uuid);
+                }
+                const auto deletString = std::format("Delete ({})", deleteCandidates.size());
                 if (ImGui::MenuItem(deletString.c_str()))
                 {
-                    DestroyEntity(entity);
-                    for (Entity e : m_SelectedEntities | std::views::values)
-                    {
-                        if (e.IsValid())
-                            DestroyEntity(e);
-                    }
+                    m_PendingDeleteUUIDs = std::move(deleteCandidates);
                     isDeleting = true;
-                    m_SelectedEntities.clear();
                 }
 
                 ImGui::EndPopup();
@@ -648,21 +1000,20 @@ namespace ignite
             ImGui::PopID();
         }
 
-        if (!isDeleting)
+        if (!isDeleting && !isRenaming)
         {
-            // drag and drop
+            // drag and drop source
             if (isPrefab == false && ImGui::BeginDragDropSource())
             {
-                // Collect UUIDs of selected entities
                 std::vector<UUID> selectedUUIDs;
-                selectedUUIDs.reserve(m_SelectedEntities.size() + 1); // Selected entities + the current entity being dragged
+                selectedUUIDs.reserve(m_SelectedEntities.size() + 1);
                 selectedUUIDs.push_back(entity.GetUUID());
 
                 if (m_SelectedEntities.size() > 1)
                 {
                     for (auto &[uuid, selectedEntity] : m_SelectedEntities)
                     {
-                        if (selectedEntity.IsValid())
+                        if (selectedEntity.IsValid() && uuid != entity.GetUUID())
                             selectedUUIDs.push_back(uuid);
                     }
                 }
@@ -672,40 +1023,58 @@ namespace ignite
                     selectedUUIDs.size() * sizeof(UUID));
 
                 ImGui::BeginTooltip();
-                ImGui::Text("%s %llu", idComp.name.c_str(), static_cast<u64>(idComp.uuid));
+                if (selectedUUIDs.size() > 1)
+                {
+                    ImGui::Text("%s (+%zu more)", idComp.name.c_str(), selectedUUIDs.size() - 1);
+                }
+                else
+                {
+                    ImGui::Text("%s", idComp.name.c_str());
+                }
                 ImGui::EndTooltip();
 
                 ImGui::EndDragDropSource();
             }
 
-            // target drop
+            // 3-zone target drop (Above / Inside / Below)
             if (isPrefab == false && ImGui::BeginDragDropTarget())
             {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM,
+                    ImGuiDragDropFlags_AcceptPeekOnly | ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
                 {
-                    const size_t count = payload->DataSize / sizeof(UUID);
-                    const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+                    const float itemH = (std::max)(1.0f, itemRectMax.y - itemRectMin.y);
+                    const float relY = (ImGui::GetMousePos().y - itemRectMin.y) / itemH;
 
-                    for (size_t i = 0; i < count; ++i)
+                    HierarchyDropPosition dropPos = HierarchyDropPosition::Inside;
+                    if (relY < 0.25f)
+                        dropPos = HierarchyDropPosition::Above;
+                    else if (relY > 0.75f)
+                        dropPos = HierarchyDropPosition::Below;
+
+                    ImDrawList *drawList = ImGui::GetWindowDrawList();
+                    if (dropPos == HierarchyDropPosition::Above)
                     {
-                        const UUID uuid = droppedUUIDs[i];
-                        Entity droppedEntity = SceneManager::GetEntity(m_Scene, uuid);
+                        drawList->AddLine(ImVec2(itemRectMin.x, itemRectMin.y), ImVec2(itemRectMax.x, itemRectMin.y), IM_COL32(0, 210, 255, 255), 2.5f);
+                    }
+                    else if (dropPos == HierarchyDropPosition::Below)
+                    {
+                        drawList->AddLine(ImVec2(itemRectMin.x, itemRectMax.y), ImVec2(itemRectMax.x, itemRectMax.y), IM_COL32(0, 210, 255, 255), 2.5f);
+                    }
+                    else
+                    {
+                        drawList->AddRect(itemRectMin, itemRectMax, IM_COL32(0, 210, 255, 220), 2.0f, 0, 2.0f);
+                    }
 
-                        if (droppedEntity)
-                        {
-                            // Capture old parent BEFORE re-parenting
-                            UUID oldParent = droppedEntity.GetComponent<IDComponent>().parent;
-                            UUID newParent = entity.GetComponent<IDComponent>().uuid;
-
-                            // the current 'entity' is the target (new parent for src)
-                            if (SceneManager::AddChild(m_Scene, entity, droppedEntity))
-                            {
-                                // Record the re-parent for undo
-                                CommandManager::AddCommand(CreateScope<EntityReparentCommand>(
-                                    m_Scene, droppedEntity.GetUUID(), oldParent, newParent));
-                                SetHierarchyDirty();
-                            }
-                        }
+                    if (payload->IsDelivery())
+                    {
+                        const size_t count = payload->DataSize / sizeof(UUID);
+                        const auto droppedUUIDs = static_cast<const UUID *>(payload->Data);
+                        PendingHierarchyDrop drop;
+                        drop.sourceUUIDs.assign(droppedUUIDs, droppedUUIDs + count);
+                        drop.targetUUID = idComp.uuid;
+                        drop.position = dropPos;
+                        drop.toRoot = false;
+                        m_PendingHierarchyDrop = std::move(drop);
                     }
                 }
                 else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
@@ -723,6 +1092,10 @@ namespace ignite
                                 Entity instantiated = SceneManager::InstantiatePrefab(m_Scene, prefab, entity);
                                 if (instantiated.IsValid())
                                 {
+                                    if (!m_Scene->IsRunning())
+                                    {
+                                        CommandManager::AddCommand(CreateScope<EntityCreateCommand>(m_Scene, instantiated, "Instantiate Prefab"));
+                                    }
                                     SetSelectedEntity(instantiated);
                                     SetHierarchyDirty();
                                 }
@@ -734,9 +1107,67 @@ namespace ignite
                 ImGui::EndDragDropTarget();
             }
 
-            if (ImGui::IsItemHovered(ImGuiMouseButton_Left) && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            if (ImGui::IsItemHovered(ImGuiMouseButton_Left)
+                && ImGui::IsMouseReleased(ImGuiMouseButton_Left)
+                && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)
+                && !ImGui::IsItemToggledOpen())
             {
                 SetSelectedEntity(entity);
+            }
+        }
+
+        // Draw folder icon cleanly over label leading padding
+        if (isFolder && !isRenaming)
+        {
+            if (auto iconIt = m_Icons.find("folder"); iconIt != m_Icons.end() && iconIt->second)
+            {
+                if (const ImTextureID texId = UI::GetTextureID(iconIt->second))
+                {
+                    const float rowHeight = (std::max)(1.0f, itemRectMax.y - itemRectMin.y);
+                    const float iconSize = (std::min)(14.0f, rowHeight - 2.0f);
+                    const float iconX = itemRectMin.x + ImGui::GetTreeNodeToLabelSpacing();
+                    const float iconY = itemRectMin.y + (rowHeight - iconSize) * 0.5f;
+                    ImGui::GetWindowDrawList()->AddImage(
+                        texId,
+                        ImVec2(iconX, iconY),
+                        ImVec2(iconX + iconSize, iconY + iconSize),
+                        ImVec2(0.0f, 0.0f),
+                        ImVec2(1.0f, 1.0f),
+                        IM_COL32(245, 210, 115, 255));
+                }
+            }
+        }
+
+        // Inline rename input overlay
+        if (isRenaming)
+        {
+            ImGui::SameLine();
+            if (m_FocusRenameInput)
+            {
+                ImGui::SetKeyboardFocusHere();
+                m_FocusRenameInput = false;
+            }
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+            const bool enterPressed = ImGui::InputText(
+                "##inline_entity_rename",
+                m_RenameBuffer,
+                sizeof(m_RenameBuffer),
+                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+            const bool cancelPressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+            const bool deactivated = ImGui::IsItemDeactivatedAfterEdit() || ImGui::IsItemDeactivated();
+
+            if (cancelPressed)
+            {
+                m_RenamingEntityUUID = UUID(0);
+            }
+            else if (enterPressed || deactivated)
+            {
+                const std::string newName(m_RenameBuffer);
+                if (!newName.empty() && newName != idComp.name)
+                {
+                    CommandManager::ExecuteCommand(CreateScope<EntityRenameCommand>(m_Scene, idComp.uuid, idComp.name, newName));
+                }
+                m_RenamingEntityUUID = UUID(0);
             }
         }
 
@@ -744,10 +1175,15 @@ namespace ignite
         {
             if (!isDeleting)
             {
-                for (UUID uuid : entity.GetComponent<IDComponent>().children)
+                const std::vector<UUID> childrenCopy = entity.GetComponent<IDComponent>().children;
+                const std::string filterLower = stringutils::ToLower(std::string(m_HierarchySearchBuffer));
+                for (UUID uuid : childrenCopy)
                 {
                     Entity childEntity = SceneManager::GetEntity(m_Scene, uuid);
-                    RenderEntityNode(childEntity);
+                    if (childEntity.IsValid() && MatchesHierarchyFilter(childEntity, filterLower))
+                    {
+                        RenderEntityNode(childEntity);
+                    }
                 }
             }
 
@@ -778,13 +1214,27 @@ namespace ignite
                 CommandManager::ExecuteCommand(CreateScope<EntityRenameCommand>(m_Scene, idComp.uuid, oldName, newName));
             }
 
-            ImGui::SameLine();
-
-            ImVec2 addCompBtSize = ImGui::CalcTextSize("Add");
-            if (ImGui::Button("Add", { ImGui::GetContentRegionAvail().x, 25.0f * ImGui::GetWindowDpiScale() }))
+            if (idComp.IsInType(EntityType_Folder))
             {
-                ImGui::OpenPopup("##add_component_context");
+                ImGui::Spacing();
+                ImGui::SeparatorText("Folder");
+                const size_t totalDescendants = CountDescendantsRecursive(m_Scene, selectedEntity);
+                ImGui::Text("Direct Children: %zu", idComp.children.size());
+                ImGui::Text("Total Descendants: %zu", totalDescendants);
+                ImGui::Spacing();
+                if (ImGui::Button("Ungroup Children", ImVec2(-1.0f, 0.0f)))
+                {
+                    m_PendingUngroupFolderUUID = idComp.uuid;
+                }
             }
+            else
+            {
+                ImGui::SameLine();
+
+                if (ImGui::Button("Add", { ImGui::GetContentRegionAvail().x, 25.0f * ImGui::GetWindowDpiScale() }))
+                {
+                    ImGui::OpenPopup("##add_component_context");
+                }
 
             // transform component
             RenderComponent<TransformComponent>("Transform", selectedEntity, [&]()
@@ -4084,108 +4534,59 @@ namespace ignite
                     }
                 }
 
-                static auto addCompFunc = [=](Entity entity, CompType type) -> void
+                auto addCompFunc = [this](Entity entity, CompType type, const std::string &compName) -> void
                 {
+                    auto addTyped = [&](auto dummy)
+                    {
+                        using CompT = std::decay_t<decltype(dummy)>;
+                        if (entity.HasComponent<CompT>())
+                            return;
+
+                        if (m_Scene && !m_Scene->IsRunning())
+                        {
+                            CommandManager::ExecuteCommand(CreateScope<ComponentAddCommand<CompT>>(m_Scene, entity.GetUUID(), compName));
+                        }
+                        else
+                        {
+                            entity.AddComponent<CompT>();
+                        }
+                    };
+
                     switch (type)
                     {
-                    case CompType_Camera:
-                        entity.AddComponent<CameraComponent>();
-                        break;
-                    case CompType_Sprite2D:
-                        entity.AddComponent<Sprite2DComponent>();
-                        break;
-                 case CompType_Animator2D:
-                        entity.AddComponent<Animator2DComponent>();
-                        break;
-                    case CompType_Circle2D:
-                        entity.AddComponent<Circle2DComponent>();
-                        break;
-                    case CompType_PointLight2D:
-                        entity.AddComponent<PointLight2DComponent>();
-                        break;
-                    case CompType_DirectionalLight:
-                        entity.AddComponent<DirectionalLightComponent>();
-                        break;
-                    case CompType_PointLight:
-                        entity.AddComponent<PointLightComponent>();
-                        break;
-                    case CompType_SpotLight:
-                        entity.AddComponent<SpotLightComponent>();
-                        break;
-                    case CompType_Text:
-                        entity.AddComponent<TextComponent>();
-                        break;
-                    case CompType_Widget:
-                        entity.AddComponent<WidgetComponent>();
-                        break;
-                    case CompType_Rigidbody2D:
-                        entity.AddComponent<Rigidbody2DComponent>();
-                        break;
-                    case CompType_BoxCollider2D:
-                        entity.AddComponent<BoxCollider2DComponent>();
-                        break;
-                    case CompType_CircleCollider2D:
-                        entity.AddComponent<CircleCollider2DComponent>();
-                        break;
-                    case CompType_SkeletalMesh:
-                        entity.AddComponent<SkeletalMeshComponent>();
-                        break;
-                    case CompType_StaticMesh:
-                        entity.AddComponent<StaticMeshComponent>();
-                        break;
-                    case CompType_Rigidbody:
-                        entity.AddComponent<RigidbodyComponent>();
-                        break;
-                    case CompType_BoxCollider:
-                        entity.AddComponent<BoxColliderComponent>();
-                        break;
-                    case CompType_SphereCollider:
-                        entity.AddComponent<SphereColliderComponent>();
-                        break;
-                    case CompType_CapsuleCollider:
-                        entity.AddComponent<CapsuleColliderComponent>();
-                        break;
-                    case CompType_CharacterController:
-                        entity.AddComponent<CharacterControllerComponent>();
-                        break;
-                    case CompType_MeshCollider:
-                        entity.AddComponent<MeshColliderComponent>();
-                        break;
-                    case CompType_PlaneCollider:
-                        entity.AddComponent<PlaneColliderComponent>();
-                        break;
-                    case CompType_Terrain:
-                        entity.AddComponent<TerrainComponent>();
-                        break;
-                    case CompType_HeightFieldCollider:
-                        entity.AddComponent<HeightFieldColliderComponent>();
-                        break;
-                    case CompType_Prefab:
-                        entity.AddComponent<PrefabComponent>();
-                        break;
-                    case CompType_AudioSource:
-                        entity.AddComponent<AudioSourceComponent>();
-                        break;
-                    case CompType_WorldEnvironment:
-                        entity.AddComponent<WorldEnvironment>();
-                        break;
-                    case CompType_Script:
-                        entity.AddComponent<ScriptComponent>();
-                        break;
-                    case CompType_LuaScript:
-                        entity.AddComponent<LuaScriptComponent>();
-                        break;
-                    case CompType_ParticleSystem:
-                        entity.AddComponent<ParticleSystemComponent>();
-                        break;
-                    case CompType_PhysicsJoint:
-                        entity.AddComponent<PhysicsJointComponent>();
-                        break;
-                    case CompType_NetworkIdentity:
-                        entity.AddComponent<NetworkIdentityComponent>();
-                        break;
-                    default:
-                        break;
+                    case CompType_Camera: addTyped(CameraComponent{}); break;
+                    case CompType_Sprite2D: addTyped(Sprite2DComponent{}); break;
+                    case CompType_Animator2D: addTyped(Animator2DComponent{}); break;
+                    case CompType_Circle2D: addTyped(Circle2DComponent{}); break;
+                    case CompType_PointLight2D: addTyped(PointLight2DComponent{}); break;
+                    case CompType_DirectionalLight: addTyped(DirectionalLightComponent{}); break;
+                    case CompType_PointLight: addTyped(PointLightComponent{}); break;
+                    case CompType_SpotLight: addTyped(SpotLightComponent{}); break;
+                    case CompType_Text: addTyped(TextComponent{}); break;
+                    case CompType_Widget: addTyped(WidgetComponent{}); break;
+                    case CompType_Rigidbody2D: addTyped(Rigidbody2DComponent{}); break;
+                    case CompType_BoxCollider2D: addTyped(BoxCollider2DComponent{}); break;
+                    case CompType_CircleCollider2D: addTyped(CircleCollider2DComponent{}); break;
+                    case CompType_SkeletalMesh: addTyped(SkeletalMeshComponent{}); break;
+                    case CompType_StaticMesh: addTyped(StaticMeshComponent{}); break;
+                    case CompType_Rigidbody: addTyped(RigidbodyComponent{}); break;
+                    case CompType_BoxCollider: addTyped(BoxColliderComponent{}); break;
+                    case CompType_SphereCollider: addTyped(SphereColliderComponent{}); break;
+                    case CompType_CapsuleCollider: addTyped(CapsuleColliderComponent{}); break;
+                    case CompType_CharacterController: addTyped(CharacterControllerComponent{}); break;
+                    case CompType_MeshCollider: addTyped(MeshColliderComponent{}); break;
+                    case CompType_PlaneCollider: addTyped(PlaneColliderComponent{}); break;
+                    case CompType_Terrain: addTyped(TerrainComponent{}); break;
+                    case CompType_HeightFieldCollider: addTyped(HeightFieldColliderComponent{}); break;
+                    case CompType_Prefab: addTyped(PrefabComponent{}); break;
+                    case CompType_AudioSource: addTyped(AudioSourceComponent{}); break;
+                    case CompType_WorldEnvironment: addTyped(WorldEnvironment{}); break;
+                    case CompType_Script: addTyped(ScriptComponent{}); break;
+                    case CompType_LuaScript: addTyped(LuaScriptComponent{}); break;
+                    case CompType_ParticleSystem: addTyped(ParticleSystemComponent{}); break;
+                    case CompType_PhysicsJoint: addTyped(PhysicsJointComponent{}); break;
+                    case CompType_NetworkIdentity: addTyped(NetworkIdentityComponent{}); break;
+                    default: break;
                     }
                 };
 
@@ -4198,7 +4599,7 @@ namespace ignite
                     {
                         if (ImGui::Selectable(strName.c_str()))
                         {
-                            addCompFunc(Entity{ selectedEntity, m_Scene}, type);
+                            addCompFunc(Entity{ selectedEntity, m_Scene }, type, strName);
                             ImGui::CloseCurrentPopup();
                         }
                     }
@@ -4209,7 +4610,7 @@ namespace ignite
                     {
                         if (ImGui::Selectable(strName.c_str()))
                         {
-                            addCompFunc(Entity{ selectedEntity, m_Scene }, type);
+                            addCompFunc(Entity{ selectedEntity, m_Scene }, type, strName);
                             ImGui::CloseCurrentPopup();
                         }
                     }
@@ -4223,6 +4624,7 @@ namespace ignite
             {
                 focusComponentInput = true;
             }
+            } // end else (!Folder)
         }
 
         ImGui::End();
@@ -4477,7 +4879,8 @@ namespace ignite
                                 const auto parent = clickedIconEntity.GetParentUUID();
                                 if (parent != UUID(0))
                                 {
-                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene, parent); parentEntity.IsValid())
+                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene, parent);
+                                        parentEntity.IsValid() && !parentEntity.GetComponent<IDComponent>().IsInType(EntityType_Folder))
                                     {
                                         targetSelection = parentEntity;
                                     }
@@ -4534,14 +4937,15 @@ namespace ignite
                                         {
                                             Entity targetSelection = pickedEntity;
 
-                                            // Single click: prefer selecting the direct parent group first.
+                                            // Single click: prefer selecting the direct parent group first (skip Folders).
                                             // Double click: select the exact clicked entity.
                                             if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
                                             {
                                                 const auto parent = pickedEntity.GetParentUUID();
                                                 if (parent != UUID(0))
                                                 {
-                                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene, parent); parentEntity.IsValid())
+                                                    if (Entity parentEntity = SceneManager::GetEntity(m_Scene, parent);
+                                                        parentEntity.IsValid() && !parentEntity.GetComponent<IDComponent>().IsInType(EntityType_Folder))
                                                     {
                                                         targetSelection = parentEntity;
                                                     }
@@ -4609,8 +5013,11 @@ namespace ignite
                                             Entity instantiated = Prefab::Instantiate(prefab, m_Scene);
                                             if (instantiated.IsValid())
                                             {
-                                                m_SelectedEntities.clear();
-                                                m_SelectedEntities[instantiated.GetUUID()] = instantiated;
+                                                if (!m_Scene->IsRunning())
+                                                {
+                                                    CommandManager::AddCommand(CreateScope<EntityCreateCommand>(m_Scene, instantiated, "Instantiate Prefab"));
+                                                }
+                                                SetSelectedEntity(instantiated);
                                             }
                                         }
                                     }
@@ -5247,10 +5654,13 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
         const bool isScenePlaying = m_Scene && m_Scene->IsPlaying();
+        const bool isSceneReadyToPlay = m_Scene && m_Scene->IsReadyToPlay();
+        const bool canClickPlay = m_Scene && (isScenePlaying || isSceneReadyToPlay);
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
         const auto scenePlayStopID = UI::GetTextureID(scenePlayStopTex);
 
         ImGui::SameLine();
+        ImGui::BeginDisabled(!canClickPlay);
         if (UI::DrawImageButton("##PlayButton", scenePlayStopID, buttonSize))
         {
             if (isScenePlaying)
@@ -5280,12 +5690,20 @@ namespace ignite
 #endif
             }
         }
+        ImGui::EndDisabled();
+        if (!canClickPlay && m_Scene && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            const SceneAssetLoadProgress progress = m_Scene->GetAssetLoadProgress();
+            ImGui::SetTooltip("Waiting for scene assets to load (%zu/%zu)...", progress.readyAssets, progress.totalAssets);
+        }
 
         const bool isSceneSimulate = m_Scene && m_Scene->IsSimulating();
+        const bool canClickSimulate = m_Scene && (isSceneSimulate || isSceneReadyToPlay);
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
         const auto sceneSimulateID = UI::GetTextureID(sceneSimulateTex);
 
         ImGui::SameLine();
+        ImGui::BeginDisabled(!canClickSimulate);
         if (UI::DrawImageButton("##SimulateButton", sceneSimulateID, buttonSize))
         {
             if (isSceneSimulate)
@@ -5314,6 +5732,12 @@ namespace ignite
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
             }
+        }
+        ImGui::EndDisabled();
+        if (!canClickSimulate && m_Scene && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            const SceneAssetLoadProgress progress = m_Scene->GetAssetLoadProgress();
+            ImGui::SetTooltip("Waiting for scene assets to load (%zu/%zu)...", progress.readyAssets, progress.totalAssets);
         }
 
         ImGui::PopStyleVar(2);
@@ -5575,7 +5999,14 @@ namespace ignite
 
             if (componentRemoved)
             {
-                entity.RemoveComponent<T>();
+                if (m_Scene && !m_Scene->IsRunning())
+                {
+                    CommandManager::ExecuteCommand(CreateScope<ComponentRemoveCommand<T>>(m_Scene, entity.GetUUID(), entity.GetComponent<T>(), name));
+                }
+                else
+                {
+                    entity.RemoveComponent<T>();
+                }
             }
 
             ImGui::PopID();
@@ -5721,78 +6152,337 @@ namespace ignite
         SetHierarchyDirty();
     }
 
-    void ScenePanel::ClearSelection()
+    bool ScenePanel::MatchesHierarchyFilter(Entity entity, const std::string &filterLower) const
     {
-        m_SelectedEntities.clear();
-    }
-
-    Entity ScenePanel::SetSelectedEntity(Entity entity)
-    {
-        auto activeSceneRenderer = m_Scene->GetSceneRenderer();
+        if (filterLower.empty())
+            return true;
 
         if (!entity.IsValid())
-        {
-            m_SelectedEntities.clear();
-            m_TrackingSelectedEntity = UUID(0);
+            return false;
 
-            activeSceneRenderer->ClearSelectedEntities();
-            return {};
+        if (stringutils::ToLower(entity.GetName()).find(filterLower) != std::string::npos)
+            return true;
+
+        const IDComponent &idComp = entity.GetComponent<IDComponent>();
+        for (UUID childUUID : idComp.children)
+        {
+            Entity child = SceneManager::GetEntity(m_Scene, childUUID);
+            if (child.IsValid() && MatchesHierarchyFilter(child, filterLower))
+                return true;
+        }
+        return false;
+    }
+
+    std::vector<UUID> ScenePanel::GetOrderedSelectedUUIDs() const
+    {
+        std::vector<UUID> uuids;
+        uuids.reserve(m_SelectedEntities.size());
+        for (const auto &[uuid, e] : m_SelectedEntities)
+        {
+            if (uuid != UUID(0) && e.IsValid())
+            {
+                uuids.push_back(uuid);
+            }
         }
 
-        // multi select
-        if (m_EditorLayer->GetState().multiSelect)
+        const auto visualOrder = BuildHierarchyVisualOrderMap(m_Scene);
+        std::stable_sort(uuids.begin(), uuids.end(), [&visualOrder](UUID a, UUID b)
         {
-            if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
+            const auto itA = visualOrder.find(a);
+            const auto itB = visualOrder.find(b);
+            const size_t ordA = itA != visualOrder.end() ? itA->second : (std::numeric_limits<size_t>::max)();
+            const size_t ordB = itB != visualOrder.end() ? itB->second : (std::numeric_limits<size_t>::max)();
+            return ordA < ordB;
+        });
+
+        return uuids;
+    }
+
+    void ScenePanel::ApplySelectionInternal(const std::vector<UUID> &entityUUIDs, UUID trackingUUID)
+    {
+        m_SelectedEntities.clear();
+
+        SceneRenderer *activeSceneRenderer = m_Scene ? m_Scene->GetSceneRenderer() : nullptr;
+        if (activeSceneRenderer)
+        {
+            activeSceneRenderer->ClearSelectedEntities();
+        }
+
+        if (m_Scene)
+        {
+            for (UUID uuid : entityUUIDs)
             {
-                // de-select
-                activeSceneRenderer->UnselectEntity(it->second);
-                it = m_SelectedEntities.erase(it);
-
-                if (!m_SelectedEntities.empty())
+                Entity e = SceneManager::GetEntity(m_Scene, uuid);
+                if (e.IsValid())
                 {
-                    m_TrackingSelectedEntity = m_SelectedEntities.begin()->first;
-                    activeSceneRenderer->SetSelectedEntity(m_SelectedEntities.begin()->second);
-
-                    return m_SelectedEntities.begin()->second;
+                    m_SelectedEntities[uuid] = e;
+                    if (activeSceneRenderer)
+                    {
+                        activeSceneRenderer->SetSelectedEntity(e);
+                    }
                 }
             }
-            else
-            {
-                m_SelectedEntities[entity.GetUUID()] = entity;
-                activeSceneRenderer->SetSelectedEntity(entity);
-            }
-        }
-        else // single select
-        {
-            m_SelectedEntities.clear();
-            activeSceneRenderer->ClearSelectedEntities();
-
-            m_SelectedEntities[entity.GetUUID()] = entity;
-            activeSceneRenderer->SetSelectedEntity(entity);
         }
 
         if (m_SelectedEntities.empty())
         {
+            m_TrackingSelectedEntity = UUID(0);
             SetGizmoOperation(GizmoOperation::NONE);
         }
+        else if (trackingUUID != UUID(0) && m_SelectedEntities.contains(trackingUUID))
+        {
+            m_TrackingSelectedEntity = trackingUUID;
+        }
+        else
+        {
+            m_TrackingSelectedEntity = m_SelectedEntities.begin()->first;
+        }
+    }
 
-        m_TrackingSelectedEntity = entity.GetUUID();
-        return entity;
+    void ScenePanel::SetSelectedEntities(const std::vector<UUID> &entityUUIDs, UUID trackingUUID, bool recordUndo)
+    {
+        std::vector<UUID> filteredNew;
+        filteredNew.reserve(entityUUIDs.size());
+        std::unordered_set<UUID> newSet;
+
+        if (m_Scene)
+        {
+            for (UUID uuid : entityUUIDs)
+            {
+                if (uuid == UUID(0) || newSet.contains(uuid))
+                    continue;
+
+                if (SceneManager::GetEntity(m_Scene, uuid).IsValid())
+                {
+                    newSet.insert(uuid);
+                    filteredNew.push_back(uuid);
+                }
+            }
+        }
+
+        const UUID resolvedTracking = (trackingUUID != UUID(0) && newSet.contains(trackingUUID))
+            ? trackingUUID
+            : (filteredNew.empty() ? UUID(0) : filteredNew.front());
+
+        std::vector<UUID> oldUUIDs = GetOrderedSelectedUUIDs();
+        const UUID oldTracking = m_TrackingSelectedEntity;
+
+        std::unordered_set<UUID> oldSet(oldUUIDs.begin(), oldUUIDs.end());
+        if (oldSet == newSet && oldTracking == resolvedTracking)
+            return;
+
+        ApplySelectionInternal(filteredNew, resolvedTracking);
+
+        bool recordSelectionPref = true;
+        if (m_EditorLayer)
+        {
+            if (auto activeProject = m_EditorLayer->GetActiveProject())
+            {
+                recordSelectionPref = activeProject->GetInfo().editorSettings.recordSelectionUndo;
+            }
+        }
+
+        const bool shouldRecord = recordUndo && recordSelectionPref && m_Scene && !m_Scene->IsRunning() && !CommandManager::IsExecutingUndoRedo();
+        if (shouldRecord)
+        {
+            std::string cmdName = "Clear Selection";
+            if (filteredNew.size() == 1)
+            {
+                Entity e = SceneManager::GetEntity(m_Scene, filteredNew.front());
+                cmdName = e.IsValid() ? ("Select " + e.GetName()) : "Select Entity";
+            }
+            else if (filteredNew.size() > 1)
+            {
+                cmdName = std::format("Select {} Entities", filteredNew.size());
+            }
+
+            const size_t extraMem = (oldUUIDs.size() + filteredNew.size()) * sizeof(UUID);
+            ScenePanel *panel = this;
+            Scene *expectedScene = m_Scene;
+
+            CommandManager::AddCommand(CreateScope<LambdaCommand>(
+                std::move(cmdName),
+                [panel, expectedScene, filteredNew, resolvedTracking]()
+                {
+                    if (panel && panel->m_Scene == expectedScene)
+                    {
+                        panel->ApplySelectionInternal(filteredNew, resolvedTracking);
+                    }
+                },
+                [panel, expectedScene, oldUUIDs, oldTracking]()
+                {
+                    if (panel && panel->m_Scene == expectedScene)
+                    {
+                        panel->ApplySelectionInternal(oldUUIDs, oldTracking);
+                    }
+                },
+                extraMem));
+        }
+    }
+
+    void ScenePanel::ClearSelection(bool recordUndo)
+    {
+        SetSelectedEntities({}, UUID(0), recordUndo);
+    }
+
+    Entity ScenePanel::SetSelectedEntity(Entity entity)
+    {
+        if (!entity.IsValid())
+        {
+            ClearSelection(true);
+            return {};
+        }
+
+        const UUID targetUUID = entity.GetUUID();
+        std::vector<UUID> nextUUIDs;
+        UUID nextTracking = targetUUID;
+
+        if (m_EditorLayer && m_EditorLayer->GetState().multiSelect)
+        {
+            nextUUIDs = GetOrderedSelectedUUIDs();
+            auto it = std::find(nextUUIDs.begin(), nextUUIDs.end(), targetUUID);
+            if (it != nextUUIDs.end())
+            {
+                nextUUIDs.erase(it);
+                nextTracking = nextUUIDs.empty() ? UUID(0) : nextUUIDs.front();
+            }
+            else
+            {
+                nextUUIDs.push_back(targetUUID);
+                nextTracking = targetUUID;
+            }
+        }
+        else
+        {
+            nextUUIDs.push_back(targetUUID);
+            nextTracking = targetUUID;
+        }
+
+        SetSelectedEntities(nextUUIDs, nextTracking, true);
+        return m_SelectedEntities.contains(targetUUID) ? entity : GetSelectedEntity();
     }
 
     Entity ScenePanel::GetSelectedEntity()
     {
+        if (m_TrackingSelectedEntity != UUID(0))
+        {
+            auto it = m_SelectedEntities.find(m_TrackingSelectedEntity);
+            if (it != m_SelectedEntities.end() && it->second.IsValid())
+                return it->second;
+        }
         return m_SelectedEntities.empty() ? Entity{} : m_SelectedEntities.begin()->second;
+    }
+
+    Entity ScenePanel::CreateFolderInHierarchy(Entity parent)
+    {
+        if (!m_Scene)
+            return {};
+
+        ScopedCommandTransaction tx("Create Folder");
+        Entity folder = SceneManager::CreateFolder(m_Scene, "Folder");
+        if (folder.IsValid())
+        {
+            if (parent.IsValid())
+            {
+                SceneManager::MoveEntity(m_Scene, folder.GetUUID(), parent.GetUUID());
+            }
+            SetSelectedEntity(folder);
+            SetHierarchyDirty();
+        }
+        return folder;
+    }
+
+    void ScenePanel::GroupSelectedEntitiesInFolder()
+    {
+        if (!m_Scene)
+            return;
+
+        std::vector<UUID> selected = FilterTopLevelUUIDs(m_Scene, GetOrderedSelectedUUIDs());
+        if (selected.empty())
+            return;
+
+        ScopedCommandTransaction tx("Group in Folder");
+
+        Entity firstSelected = SceneManager::GetEntity(m_Scene, selected.front());
+        const UUID targetParent = firstSelected.IsValid() ? firstSelected.GetComponent<IDComponent>().parent : UUID(0);
+        const size_t insertIdx = firstSelected.IsValid() ? SceneManager::GetSiblingIndex(m_Scene, selected.front()) : 0;
+
+        Entity folder = SceneManager::CreateFolder(m_Scene, "Folder");
+        if (!folder.IsValid())
+            return;
+
+        const UUID folderUUID = folder.GetUUID();
+        {
+            const UUID folderOldParent = folder.GetComponent<IDComponent>().parent;
+            const size_t folderOldIdx = SceneManager::GetSiblingIndex(m_Scene, folderUUID);
+            if (SceneManager::MoveEntity(m_Scene, folderUUID, targetParent, insertIdx))
+            {
+                const size_t folderNewIdx = SceneManager::GetSiblingIndex(m_Scene, folderUUID);
+                if (!m_Scene->IsRunning() && (folderOldParent != targetParent || folderOldIdx != folderNewIdx))
+                {
+                    std::vector<HierarchyMoveEntry> entry = { { folderUUID, folderOldParent, folderOldIdx, targetParent, folderNewIdx } };
+                    CommandManager::AddCommand(CreateScope<EntityHierarchyMoveCommand>(m_Scene, std::move(entry), "Place Group Folder"));
+                }
+            }
+        }
+
+        std::vector<HierarchyMoveEntry> moveEntries;
+        for (UUID uuid : selected)
+        {
+            if (uuid == folderUUID || SceneManager::IsParent(m_Scene, folderUUID, uuid))
+                continue;
+
+            Entity e = SceneManager::GetEntity(m_Scene, uuid);
+            if (!e.IsValid())
+                continue;
+
+            const UUID oldParent = e.GetComponent<IDComponent>().parent;
+            const size_t oldIdx = SceneManager::GetSiblingIndex(m_Scene, uuid);
+            if (SceneManager::MoveEntity(m_Scene, uuid, folderUUID, (std::numeric_limits<size_t>::max)()))
+            {
+                const size_t newIdx = SceneManager::GetSiblingIndex(m_Scene, uuid);
+                moveEntries.push_back({ uuid, oldParent, oldIdx, folderUUID, newIdx });
+            }
+        }
+
+        if (!moveEntries.empty() && !m_Scene->IsRunning())
+        {
+            CommandManager::AddCommand(CreateScope<EntityHierarchyMoveCommand>(m_Scene, std::move(moveEntries), "Group Entities"));
+        }
+
+        SetSelectedEntity(folder);
+        SetHierarchyDirty();
     }
 
     void ScenePanel::DuplicateSelectedEntity()
     {
-        for (const Entity& entity : m_SelectedEntities | std::views::values)
+        if (!m_Scene)
+            return;
+
+        std::vector<UUID> toDuplicate = FilterTopLevelUUIDs(m_Scene, GetOrderedSelectedUUIDs());
+        if (toDuplicate.empty())
+            return;
+
+        ScopedCommandTransaction tx(toDuplicate.size() > 1 ? "Duplicate Entities" : "Duplicate Entity");
+
+        std::vector<UUID> duplicatedUUIDs;
+        duplicatedUUIDs.reserve(toDuplicate.size());
+        for (UUID uuid : toDuplicate)
         {
-            if (entity.IsValid())
+            Entity entity = SceneManager::GetEntity(m_Scene, uuid);
+            if (!entity.IsValid())
+                continue;
+
+            Entity dup = SceneManager::DuplicateEntity(m_Scene, entity, true, true);
+            if (dup.IsValid())
             {
-                SceneManager::DuplicateEntity(m_Scene, entity);
+                duplicatedUUIDs.push_back(dup.GetUUID());
             }
+        }
+
+        if (!duplicatedUUIDs.empty())
+        {
+            SetSelectedEntities(duplicatedUUIDs, duplicatedUUIDs.front(), true);
         }
         SetHierarchyDirty();
     }

@@ -358,8 +358,17 @@ namespace ignite
 
         FileImportPayload jobData = payload;
         auto jobAssetManager = assetManager;
+        const AssetType meshImportType = m_MeshImportType;
 
-        AssetWorker::SubmitJob([this, project, jobAssetManager, jobData]() mutable
+        StaticMeshImportPayload staticPayload = m_StaticMeshImportPayload;
+        staticPayload.targetDirectory = m_TargetDirectory;
+        staticPayload.overwriteExisting = false;
+
+        SkeletalMeshImportPayload skeletalPayload = m_SkeletalMeshImportPayload;
+        skeletalPayload.targetDirectory = m_TargetDirectory;
+        skeletalPayload.overwriteExisting = false;
+
+        AssetWorker::SubmitJob([this, project, jobAssetManager, jobData, meshImportType, staticPayload, skeletalPayload]() mutable
             {
                 IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::SubmitJob");
 
@@ -370,13 +379,13 @@ namespace ignite
                 {
 					case AssetType::Mesh:
 					{
-						if (m_MeshImportType == AssetType::StaticMesh)
+						if (meshImportType == AssetType::StaticMesh)
 						{
-							ImportStaticMesh(jobData.metadata.filepath);
+							ImportStaticMesh(jobData.metadata.filepath, staticPayload);
 						}
-						else if (m_MeshImportType == AssetType::SkeletalMesh)
+						else if (meshImportType == AssetType::SkeletalMesh)
 						{
-							ImportSkeletalMesh(jobData.metadata.filepath);
+							ImportSkeletalMesh(jobData.metadata.filepath, skeletalPayload);
 						}
 						else
 						{
@@ -385,10 +394,10 @@ namespace ignite
 						break;
 					}
 				    case AssetType::StaticMesh:
-					    ImportStaticMesh(jobData.metadata.filepath);
+					    ImportStaticMesh(jobData.metadata.filepath, staticPayload);
 					    break;
 				    case AssetType::SkeletalMesh:
-					    ImportSkeletalMesh(jobData.metadata.filepath);
+					    ImportSkeletalMesh(jobData.metadata.filepath, skeletalPayload);
 					    break;
                     default:
                     {
@@ -400,7 +409,7 @@ namespace ignite
 						    return;
 					    }
 
-					    const std::filesystem::path relativePath = project->GetProjectFilepath(importedPath);
+					    const std::filesystem::path relativePath = project->GetProjectRelativeFilepath(importedPath);
 					    AssetHandle finalHandle = jobAssetManager->GetAssetHandle(relativePath);
 					    if (finalHandle == AssetHandle(0))
 					    {
@@ -459,9 +468,7 @@ namespace ignite
         if (!m_CurrentAsset.has_value())
             return;
 
-        auto project = m_EditorLayer->GetActiveProject();
         auto assetManager = AssetManager::GetInstance();
-
         if (assetManager)
         {
             assetManager->PauseUnloadAssets();
@@ -470,29 +477,26 @@ namespace ignite
         m_IsImporting = true;
         m_EditorLayer->SetStatusText("Starting import...");
 
-        AssetWorker::SubmitJob([this]()
-        {
-			// Process the current asset import request
-            const AssetType currentType = m_CurrentAsset->metadata.type;
-			ProcessImportRequest(*m_CurrentAsset);
+        const FileImportPayload currentPayload = *m_CurrentAsset;
+        const AssetType currentType = currentPayload.metadata.type;
+        ProcessImportRequest(currentPayload);
 
-			// Process any remaining assets of the same type if the user chose to skip the dialog for same type
-            if (m_SkipDialogForSameType)
+        // Process any remaining assets of the same type if the user chose to skip the dialog for same type
+        if (m_SkipDialogForSameType)
+        {
+            auto queueIt = m_ImportQueues.find(currentType);
+            if (queueIt != m_ImportQueues.end())
             {
-                auto queueIt = m_ImportQueues.find(currentType);
-                if (queueIt != m_ImportQueues.end())
+                while (!queueIt->second.empty())
                 {
-                    while (!queueIt->second.empty())
-                    {
-                        FileImportPayload payload = queueIt->second.front();
-                        queueIt->second.pop();
-                        ProcessImportRequest(payload);
-                    }
+                    FileImportPayload payload = queueIt->second.front();
+                    queueIt->second.pop();
+                    ProcessImportRequest(payload);
                 }
             }
+        }
 
-            m_ShowImporterWindow = false;
-        });
+        m_ShowImporterWindow = false;
     }
 
     void AssetImporterPanel::SkipCurrentAsset()
@@ -507,43 +511,51 @@ namespace ignite
 
     std::filesystem::path AssetImporterPanel::PrepareAssetForImport(const FileImportPayload &payload) const
     {
+        static std::mutex s_PrepareImportMutex;
+        std::lock_guard<std::mutex> lock(s_PrepareImportMutex);
+
         auto project = m_EditorLayer->GetActiveProject();
         if (!project)
             return {};
 
+        auto assetManager = AssetManager::GetInstance();
+
         std::error_code ec;
-        const std::filesystem::path sourcePath = std::filesystem::weakly_canonical(payload.metadata.filepath.string(), ec).string();
+        const std::filesystem::path sourcePath = std::filesystem::weakly_canonical(payload.metadata.filepath, ec);
         if (ec || !std::filesystem::exists(sourcePath))
         {
             LOG_ERROR("[Asset Importer] File does not exist '{}'", payload.metadata.filepath.generic_string());
             return {};
         }
 
-        const std::filesystem::path assetDirectory = std::filesystem::weakly_canonical(project->GetAssetDirectory().string(), ec).string();
+        const std::filesystem::path assetDirectory = std::filesystem::weakly_canonical(project->GetAssetDirectory(), ec);
         if (ec)
             return {};
 
-        if (IsPathWithin(sourcePath.string(), assetDirectory.string()))
-            return sourcePath;
+        if (IsPathWithin(sourcePath, assetDirectory))
+        {
+            const bool alreadyRegistered = assetManager && (assetManager->GetAssetHandle(sourcePath) != AssetHandle(0));
+            if (!alreadyRegistered)
+            {
+                return sourcePath;
+            }
+        }
 
         std::filesystem::path targetDirectory = m_TargetDirectory;
         if (targetDirectory.empty())
             targetDirectory = project->GetAssetDirectory();
 
-        std::filesystem::create_directories(targetDirectory.string(), ec);
+        std::filesystem::create_directories(targetDirectory, ec);
         if (ec)
         {
             LOG_ERROR("[Asset Importer] Failed to create target directory '{}'", targetDirectory.generic_string());
             return {};
         }
 
-        std::filesystem::path destinationPath = targetDirectory / sourcePath.filename();
-        if (std::filesystem::exists(destinationPath))
-        {
-            destinationPath = BuildUniquePath(targetDirectory, sourcePath.stem().string(), sourcePath.extension().string());
-        }
+        const std::filesystem::path destinationPath = AssetImporter::BuildUniqueAssetPath(
+            targetDirectory, sourcePath.stem().string(), sourcePath.extension().string(), assetManager);
 
-        std::filesystem::copy_file(sourcePath.string(), destinationPath.string(), std::filesystem::copy_options::overwrite_existing, ec);
+        std::filesystem::copy_file(sourcePath, destinationPath, std::filesystem::copy_options::overwrite_existing, ec);
         if (ec)
         {
             LOG_ERROR("[Asset Importer] Failed to copy '{}' to '{}': {}", sourcePath.generic_string(), destinationPath.generic_string(), ec.message());
@@ -553,7 +565,7 @@ namespace ignite
         return destinationPath;
     }
 
-	bool AssetImporterPanel::ImportStaticMesh(const std::filesystem::path &filepath)
+	bool AssetImporterPanel::ImportStaticMesh(const std::filesystem::path &filepath, StaticMeshImportPayload payload)
 	{
 		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
@@ -563,20 +575,19 @@ namespace ignite
 		}
 
 		auto assetManager = AssetManager::GetInstance();
-		const std::filesystem::path meshRelativePath = project->GetProjectFilepath(filepath);
-
-		AssetHandle handle = assetManager->GetAssetHandle(meshRelativePath);
-		if (handle == AssetHandle(0))
-		{
-			handle = AssetHandle();
-		}
+		AssetHandle handle = AssetHandle();
 
 		AssetMetaData sourceMetadata;
 		sourceMetadata.filepath = filepath;
 		sourceMetadata.type = AssetType::StaticMesh;
 
-        m_StaticMeshImportPayload.targetDirectory = m_TargetDirectory;
-		Ref<StaticMesh> importedAsset = AssetImporter::ImportStaticMesh(handle, sourceMetadata, assetManager, m_StaticMeshImportPayload);
+        if (payload.targetDirectory.empty())
+        {
+            payload.targetDirectory = m_TargetDirectory;
+        }
+        payload.overwriteExisting = false;
+
+		Ref<StaticMesh> importedAsset = AssetImporter::ImportStaticMesh(handle, sourceMetadata, assetManager, payload);
 		if (!importedAsset)
 		{
 			LOG_ERROR("[Asset Importer] Failed to import mesh from {}", filepath.generic_string());
@@ -585,7 +596,7 @@ namespace ignite
         return true;
 	}
 
-	bool AssetImporterPanel::ImportSkeletalMesh(const std::filesystem::path &filepath)
+	bool AssetImporterPanel::ImportSkeletalMesh(const std::filesystem::path &filepath, SkeletalMeshImportPayload payload)
 	{
 		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
@@ -595,21 +606,20 @@ namespace ignite
 		}
 
 		auto assetManager = AssetManager::GetInstance();
-		const std::filesystem::path skmRelativePath = project->GetProjectFilepath(filepath);
-
-		AssetHandle handle = assetManager->GetAssetHandle(skmRelativePath);
-		if (handle == AssetHandle(0))
-		{
-			handle = AssetHandle();
-		}
+		AssetHandle handle = AssetHandle();
 
 		AssetMetaData sourceMetadata;
 		sourceMetadata.filepath = filepath;
 		sourceMetadata.type = AssetType::SkeletalMesh;
 
-        m_SkeletalMeshImportPayload.targetDirectory = m_TargetDirectory;
-		Ref<SkeletalMesh> importedAsset = AssetImporter::ImportSkeletalMesh(handle, sourceMetadata, assetManager, m_SkeletalMeshImportPayload);
-		if (!importedAsset && m_SkeletalMeshImportPayload.importMesh)
+        if (payload.targetDirectory.empty())
+        {
+            payload.targetDirectory = m_TargetDirectory;
+        }
+        payload.overwriteExisting = false;
+
+		Ref<SkeletalMesh> importedAsset = AssetImporter::ImportSkeletalMesh(handle, sourceMetadata, assetManager, payload);
+		if (!importedAsset && payload.importMesh)
 		{
 			LOG_ERROR("[Asset Importer] Failed to import mesh from {}", filepath.generic_string());
 			return false;
@@ -620,21 +630,6 @@ namespace ignite
 	std::filesystem::path AssetImporterPanel::BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const
     {
         IGN_PROFILE_FUNCTION();
-        std::filesystem::path candidate = directory / (baseName + extension);
-        if (!std::filesystem::exists(candidate))
-        {
-            return candidate;
-        }
-
-        uint32_t suffix = 1;
-        while (true)
-        {
-            candidate = directory / std::format("{}_{}{}", baseName, suffix, extension);
-            if (!std::filesystem::exists(candidate))
-            {
-                return candidate;
-            }
-            ++suffix;
-        }
+        return AssetImporter::BuildUniqueAssetPath(directory, baseName, extension, AssetManager::GetInstance());
     }
 }

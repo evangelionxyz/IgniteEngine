@@ -7,7 +7,9 @@
 #endif
 
 #include "asset_editor_panel.hpp"
+#include "asset_editor_undo.hpp"
 #include "editor_layer.hpp"
+#include "ignite/core/command.hpp"
 #include "ext/editor_ui.hpp"
 #include "animation_timeline.hpp"
 #include "editors/animator_editor.hpp"
@@ -70,12 +72,6 @@ namespace ignite
 {
     namespace
     {
-        struct TextureEditorState
-        {
-            TextureCreateInfo createInfo;
-            bool initialized = false;
-        };
-
         struct SpriteSheetEditorState
         {
             glm::vec2 selectionStartUV = { 0.0f, 0.0f };
@@ -148,7 +144,6 @@ namespace ignite
         static std::unordered_map<uint64_t, AnimatorControllerEditorState> s_AnimatorControllerEditorState;
 
         static std::unordered_map<uint64_t, MeshEditorState> s_MeshEditorState;
-        static std::unordered_map<uint64_t, TextureEditorState> s_TextureEditorState;
         static std::unordered_map<uint64_t, SpriteSheetEditorState> s_SpriteSheetEditorState;
         static std::unordered_map<uint64_t, Animation2DEditorState> s_Anim2DEditorState;
         static std::unordered_map<uint64_t, BlendSpaceEditorState> s_BlendSpaceEditorState;
@@ -899,6 +894,27 @@ namespace ignite
                     break;
                 }
             }
+
+            UpdateAssetUndoTracking(assetData);
+        }
+
+        AssetHandle focusedThisFrame = AssetHandle(0);
+        for (const auto &assetData : m_Assets)
+        {
+            if (assetData.isOpen && assetData.isWindowFocused)
+            {
+                focusedThisFrame = assetData.handle;
+                break;
+            }
+        }
+        if (focusedThisFrame != AssetHandle(0))
+        {
+            m_FocusedAssetHandle = focusedThisFrame;
+        }
+        else if (!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)
+            && ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
+        {
+            m_FocusedAssetHandle = AssetHandle(0);
         }
 
         std::erase_if(m_Assets, [this](UI::AssetEditorData &assetData)
@@ -908,6 +924,14 @@ namespace ignite
                 return false;
             }
 
+            if (m_FocusedAssetHandle == assetData.handle)
+            {
+                m_FocusedAssetHandle = AssetHandle(0);
+            }
+            if (auto *cmd = CommandManager::GetInstance())
+            {
+                cmd->RemoveAssetHistory(static_cast<uint64_t>(assetData.handle));
+            }
 
             if (assetData.sceneData.sceneRenderer || assetData.sceneData.sceneRT || assetData.sceneData.uiRT || assetData.sceneData.compositeRT)
             {
@@ -941,12 +965,62 @@ namespace ignite
     // :IMGUI Helper
     bool AssetEditorPanel::DrawAssetEditorHeader(UI::AssetEditorData &assetData)
     {
-        const bool isDirty = assetData.asset && assetData.asset->IsDirty();
         if (ImGui::Button("Save"))
         {
             if (!SaveAsset(assetData))
             {
                 LOG_ERROR("[Asset Editor] Failed to save asset: {}", assetData.metadata.filepath.generic_string());
+            }
+        }
+
+        if (assetData.handle != AssetHandle(0))
+        {
+            if (auto *cmd = CommandManager::GetInstance())
+            {
+                CommandHistory *hist = cmd->GetOrCreateAssetHistory(static_cast<uint64_t>(assetData.handle));
+                if (hist)
+                {
+                    const bool canUndo = hist->CanUndo();
+                    const bool canRedo = hist->CanRedo();
+
+                    ImGui::SameLine();
+                    ImGui::BeginDisabled(!canUndo);
+                    if (ImGui::Button("Undo"))
+                    {
+                        hist->Undo();
+                    }
+                    ImGui::EndDisabled();
+                    if (canUndo && ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("Undo %s (Ctrl+Z)", hist->GetUndoName().c_str());
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::BeginDisabled(!canRedo);
+                    if (ImGui::Button("Redo"))
+                    {
+                        hist->Redo();
+                    }
+                    ImGui::EndDisabled();
+                    if (canRedo && ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("Redo %s (Ctrl+Shift+Z / Ctrl+Y)", hist->GetRedoName().c_str());
+                    }
+
+                    if (hist->GetUndoCount() + hist->GetRedoCount() > 0)
+                    {
+                        const size_t bytes = hist->GetEstimatedMemoryUsage();
+                        ImGui::SameLine();
+                        if (bytes >= 1024u * 1024u)
+                        {
+                            ImGui::TextDisabled("History: %zu/%zu (~%.2f MB)", hist->GetUndoCount(), hist->GetMaxHistory(), bytes / (1024.0f * 1024.0f));
+                        }
+                        else
+                        {
+                            ImGui::TextDisabled("History: %zu/%zu (~%.1f KB)", hist->GetUndoCount(), hist->GetMaxHistory(), bytes / 1024.0f);
+                        }
+                    }
+                }
             }
         }
 
@@ -966,6 +1040,8 @@ namespace ignite
         ImGui::SetNextWindowSize(windowSize, ImGuiCond_Appearing);
         ImGui::SetNextWindowSizeConstraints(minWindowSize, ImVec2(FLT_MAX, FLT_MAX));
         assetData.sceneData.viewportVisible = ImGui::Begin(assetData.windowTitle.c_str(), &isOpen, flags);
+        assetData.isWindowFocused = assetData.sceneData.viewportVisible
+            && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         if (!assetData.sceneData.viewportVisible)
         {
             if (!isOpen && assetData.asset && assetData.asset->IsDirty())
@@ -3331,13 +3407,13 @@ namespace ignite
                         auto project = m_EditorLayer->GetActiveProject().get();
                         auto assetManager = AssetManager::GetInstance();
 
-                        const auto stateKey = static_cast<uint64_t>(assetData.handle);
-                        TextureEditorState &state = s_TextureEditorState[stateKey];
-                        if (!state.initialized)
+                        if (!assetData.textureCreateInfoInitialized)
                         {
-                            state.createInfo = texture->GetCreateInfo();
-                            state.initialized = true;
+                            assetData.textureCreateInfo = texture->GetCreateInfo();
+                            assetData.textureCreateInfoInitialized = true;
                         }
+
+                        TextureCreateInfo &createInfo = assetData.textureCreateInfo;
 
                         ImGui::Text("Path: %s", assetData.metadata.filepath.generic_string().c_str());
                         ImGui::Text("Resolution: %d x %d", texture->GetWidth(), texture->GetHeight());
@@ -3361,28 +3437,28 @@ namespace ignite
 
                         ImGui::Separator();
 
-                        auto mipLevels = static_cast<int>(state.createInfo.mipLevels);
+                        auto mipLevels = static_cast<int>(createInfo.mipLevels);
                         if (UI::DrawIntControl("Mip Levels", &mipLevels, 1.0f, 0, 16))
                         {
-                            state.createInfo.mipLevels = static_cast<uint32_t>(std::max(mipLevels, 1));
+                            createInfo.mipLevels = static_cast<uint32_t>(std::max(mipLevels, 1));
                         }
 
-                        auto arraySize = static_cast<int>(state.createInfo.arraySize);
+                        auto arraySize = static_cast<int>(createInfo.arraySize);
                         if (UI::DrawIntControl("Array Size", &arraySize, 1.0f, 1, 64))
                         {
-                            state.createInfo.arraySize = static_cast<uint32_t>(std::max(arraySize, 1));
+                            createInfo.arraySize = static_cast<uint32_t>(std::max(arraySize, 1));
                         }
 
-                        auto sampleCount = static_cast<int>(state.createInfo.sampleCount);
+                        auto sampleCount = static_cast<int>(createInfo.sampleCount);
                         if (UI::DrawIntControl("Sample Count", &sampleCount, 1.0f, 1, 16))
                         {
-                            state.createInfo.sampleCount = static_cast<uint32_t>(std::max(sampleCount, 1));
+                            createInfo.sampleCount = static_cast<uint32_t>(std::max(sampleCount, 1));
                         }
 
-                        auto sampleQuality = static_cast<int>(state.createInfo.sampleQuality);
+                        auto sampleQuality = static_cast<int>(createInfo.sampleQuality);
                         if (UI::DrawIntControl("Sample Quality", &sampleQuality, 1.0f, 0, 16))
                         {
-                            state.createInfo.sampleQuality = static_cast<uint32_t>(std::max(sampleQuality, 0));
+                            createInfo.sampleQuality = static_cast<uint32_t>(std::max(sampleQuality, 0));
                         }
 
                         const nri::Format formatOptions[] = { nri::Format::RGBA8_UNORM, nri::Format::RGBA32_SFLOAT };
@@ -3390,7 +3466,7 @@ namespace ignite
                         int currentFormatIndex = 0;
                         for (int i = 0; i < static_cast<int>(std::size(formatOptions)); ++i)
                         {
-                            if (state.createInfo.format == formatOptions[i])
+                            if (createInfo.format == formatOptions[i])
                             {
                                 currentFormatIndex = i;
                                 break;
@@ -3405,7 +3481,7 @@ namespace ignite
 
                         if (UI::DrawComboBox("Import Format", formatOptionLabels, static_cast<int>(std::size(formatOptionLabels)), &currentFormatIndex))
                         {
-                            state.createInfo.format = formatOptions[currentFormatIndex];
+                            createInfo.format = formatOptions[currentFormatIndex];
                         }
 
                         const std::array<nri::AddressMode, 3> addressModeOptions =
@@ -3434,24 +3510,24 @@ namespace ignite
                             }
                         };
 
-                        drawAddressModeCombo("Wrap U", state.createInfo.samplerAddressU);
-                        drawAddressModeCombo("Wrap V", state.createInfo.samplerAddressV);
-                        drawAddressModeCombo("Wrap W", state.createInfo.samplerAddressW);
+                        drawAddressModeCombo("Wrap U", createInfo.samplerAddressU);
+                        drawAddressModeCombo("Wrap V", createInfo.samplerAddressV);
+                        drawAddressModeCombo("Wrap W", createInfo.samplerAddressW);
 
-                        UI::DrawCheckbox("Linear Filtering", &state.createInfo.samplerLinearFiltering);
-                        UI::DrawCheckbox("Flip Vertically", &state.createInfo.flip);
-                        UI::DrawCheckbox("Keep CPU Data", &state.createInfo.keepCpuData);
-                        UI::DrawCheckbox("Keep Initial State", &state.createInfo.keepInitialState);
+                        UI::DrawCheckbox("Linear Filtering", &createInfo.samplerLinearFiltering);
+                        UI::DrawCheckbox("Flip Vertically", &createInfo.flip);
+                        UI::DrawCheckbox("Keep CPU Data", &createInfo.keepCpuData);
+                        UI::DrawCheckbox("Keep Initial State", &createInfo.keepInitialState);
 
                         ImGui::Separator();
                         if (ImGui::Button("ReImport"))
                         {
-                            Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, state.createInfo);
+                            Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, createInfo);
 
                             AssetMetaData importMetadata = assetData.metadata;
                             importMetadata.filepath = project->GetProjectFilepath(assetData.metadata.filepath);
 
-                            Ref<Texture> reimportedTexture = AssetImporter::ImportTexture(assetData.handle, importMetadata, state.createInfo, assetManager);
+                            Ref<Texture> reimportedTexture = AssetImporter::ImportTexture(assetData.handle, importMetadata, createInfo, assetManager);
                             if (reimportedTexture)
                             {
                                 reimportedTexture->handle = assetData.handle;
@@ -4989,26 +5065,27 @@ namespace ignite
             return assetData.asset->SerializeMetaFile(metaPath);
         };
 
-        switch (assetData.metadata.type)
+        auto saveImpl = [&]() -> bool
         {
-            case AssetType::Texture:
+            switch (assetData.metadata.type)
             {
-                Ref<Texture> asset = assetData.asset->As<Texture>();
-                if (!asset)
-                    return false;
+                case AssetType::Texture:
+                {
+                    Ref<Texture> asset = assetData.asset->As<Texture>();
+                    if (!asset)
+                        return false;
 
-                TextureCreateInfo createInfo = asset->GetCreateInfo();
-                const auto stateIt = s_TextureEditorState.find(static_cast<uint64_t>(assetData.handle));
-                if (stateIt != s_TextureEditorState.end() && stateIt->second.initialized)
-                    createInfo = stateIt->second.createInfo;
+                    const TextureCreateInfo createInfo = assetData.textureCreateInfoInitialized
+                        ? assetData.textureCreateInfo
+                        : asset->GetCreateInfo();
 
-                const bool metaSaved = Texture::SerializeMetaFile(metaPath, assetData.handle, createInfo);
-                if (!metaSaved)
-                    return false;
+                    const bool metaSaved = Texture::SerializeMetaFile(metaPath, assetData.handle, createInfo);
+                    if (!metaSaved)
+                        return false;
 
-                asset->SetDirtyFlag(false);
-                return true;
-            }
+                    asset->SetDirtyFlag(false);
+                    return true;
+                }
 
             case AssetType::SpriteSheet:
             {
@@ -5194,8 +5271,22 @@ namespace ignite
                 return saveDefaultMeta();
             }
             default:
-            return false;
+                return false;
         }
+        };
+
+        const bool saved = saveImpl();
+        if (saved)
+        {
+            if (auto *cmd = CommandManager::GetInstance())
+            {
+                if (CommandHistory *hist = cmd->FindAssetHistory(static_cast<uint64_t>(assetData.handle)))
+                {
+                    hist->MarkSaved();
+                }
+            }
+        }
+        return saved;
     }
 
     void AssetEditorPanel::InitializeSceneData(UI::AssetEditorData &assetData)
@@ -5242,7 +5333,7 @@ namespace ignite
 			meshResult = assetManager->GetAsset<StaticMesh>(handle);
 		}
 
-        Application::SubmitToRenderThread([this, handle, width, height, assetType, material, assetData]() mutable
+        Application::SubmitToRenderThread([this, handle, width, height, assetType, material]() mutable
         {
             RenderTargetCreateInfo rtCreateInfo = {};
             rtCreateInfo.width = width;
@@ -5288,22 +5379,126 @@ namespace ignite
 
     std::filesystem::path AssetEditorPanel::BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const
     {
-        std::filesystem::path candidate = baseDirectory / (baseName + extension);
-        if (!std::filesystem::exists(candidate))
+        return AssetImporter::BuildUniqueAssetPath(baseDirectory, baseName, extension, AssetManager::GetInstance());
+    }
+
+    UI::AssetEditorData *AssetEditorPanel::FindAssetEditorData(AssetHandle handle)
+    {
+        auto it = std::ranges::find(m_Assets, handle, &UI::AssetEditorData::handle);
+        return (it != m_Assets.end()) ? &(*it) : nullptr;
+    }
+
+    bool AssetEditorPanel::HasFocusedAssetEditor() const
+    {
+        if (m_FocusedAssetHandle == AssetHandle(0))
+            return false;
+
+        for (const auto &assetData : m_Assets)
         {
-            return candidate;
+            if (assetData.isOpen && assetData.handle == m_FocusedAssetHandle)
+                return true;
+        }
+        return false;
+    }
+
+    CommandHistory *AssetEditorPanel::GetFocusedAssetHistory()
+    {
+        if (!HasFocusedAssetEditor())
+            return nullptr;
+
+        if (auto *cmd = CommandManager::GetInstance())
+            return cmd->GetOrCreateAssetHistory(static_cast<uint64_t>(m_FocusedAssetHandle));
+
+        return nullptr;
+    }
+
+    const CommandHistory *AssetEditorPanel::GetFocusedAssetHistory() const
+    {
+        if (!HasFocusedAssetEditor())
+            return nullptr;
+
+        if (const auto *cmd = CommandManager::GetInstance())
+            return cmd->FindAssetHistory(static_cast<uint64_t>(m_FocusedAssetHandle));
+
+        return nullptr;
+    }
+
+    bool AssetEditorPanel::UndoFocusedAsset()
+    {
+        if (CommandHistory *hist = GetFocusedAssetHistory())
+            return hist->Undo();
+        return false;
+    }
+
+    bool AssetEditorPanel::RedoFocusedAsset()
+    {
+        if (CommandHistory *hist = GetFocusedAssetHistory())
+            return hist->Redo();
+        return false;
+    }
+
+    void AssetEditorPanel::UpdateAssetUndoTracking(UI::AssetEditorData &assetData)
+    {
+        if (!assetData.asset || !assetData.asset->IsReady() || CommandManager::IsExecutingUndoRedo())
+            return;
+
+        if (assetData.metadata.type == AssetType::Texture && !assetData.textureCreateInfoInitialized)
+        {
+            if (Ref<Texture> tex = assetData.asset->As<Texture>())
+            {
+                assetData.textureCreateInfo = tex->GetCreateInfo();
+                assetData.textureCreateInfoInitialized = true;
+            }
         }
 
-        uint32_t suffix = 1;
-        while (true)
+        if (!assetData.undoBaselineSnapshot)
         {
-            candidate = baseDirectory / std::format("{}_{}{}", baseName, suffix, extension);
-            if (!std::filesystem::exists(candidate))
-            {
-                return candidate;
-            }
-            ++suffix;
+            assetData.undoBaselineSnapshot = CaptureAssetSnapshot(assetData);
+            return;
         }
+
+        const bool isInteractingNow = assetData.isWindowFocused
+            && (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left));
+
+        if (isInteractingNow && !assetData.undoWasInteracting)
+        {
+            assetData.undoPendingBefore = assetData.undoBaselineSnapshot;
+        }
+
+        const bool releasedMouse = ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right);
+        const bool keyCommitted = assetData.isWindowFocused
+            && (ImGui::IsKeyPressed(ImGuiKey_Enter, false)
+                || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)
+                || ImGui::IsKeyPressed(ImGuiKey_Delete, false)
+                || ImGui::IsKeyPressed(ImGuiKey_Backspace, false));
+        const bool shouldCheckCommit = !isInteractingNow
+            && (assetData.undoWasInteracting || releasedMouse || keyCommitted || assetData.asset->IsDirty());
+
+        if (shouldCheckCommit)
+        {
+            Ref<IAssetSnapshot> current = CaptureAssetSnapshot(assetData);
+            Ref<IAssetSnapshot> before = assetData.undoPendingBefore ? assetData.undoPendingBefore : assetData.undoBaselineSnapshot;
+            if (current && before && !before->Equals(*current))
+            {
+                if (auto *cmdMgr = CommandManager::GetInstance())
+                {
+                    if (CommandHistory *hist = cmdMgr->GetOrCreateAssetHistory(static_cast<uint64_t>(assetData.handle)))
+                    {
+                        hist->AddCommand(CreateScope<AssetSnapshotCommand>(
+                            assetData.handle,
+                            this,
+                            std::format("Edit {}", AssetTypeToString(assetData.metadata.type)),
+                            before,
+                            current));
+                        assetData.asset->SetDirtyFlag(true);
+                    }
+                }
+                assetData.undoBaselineSnapshot = current;
+            }
+            assetData.undoPendingBefore.reset();
+        }
+
+        assetData.undoWasInteracting = isInteractingNow;
     }
 
     // :EVENTS
@@ -5379,12 +5574,13 @@ namespace ignite
         m_CreateRequest.targetDirectory = signal.targetDirectory;
         m_CreateRequest.open = true;
 
+        std::string defaultBaseName = "NewAsset";
         switch (signal.type)
         {
             case AssetType::Material:
             {
                 m_CreateRequest.asset = CreateRef<Material>();
-                std::memcpy(m_CreateRequest.nameBuffer, "NewMaterial", sizeof("NewMaterial"));
+                defaultBaseName = "NewMaterial";
                 break;
             }
             case AssetType::Terrain:
@@ -5392,61 +5588,61 @@ namespace ignite
                 auto ter = CreateRef<TerrainData>();
                 ter->InitFlat(64, 100.0f, 50.0f);
                 m_CreateRequest.asset = ter;
-                std::memcpy(m_CreateRequest.nameBuffer, "NewTerrainData", sizeof("NewTerrainData"));
+                defaultBaseName = "NewTerrainData";
                 break;
             }
             case AssetType::Material2D:
             {
                 m_CreateRequest.asset = CreateRef<Material2D>();
-                std::memcpy(m_CreateRequest.nameBuffer, "NewMaterial2D", sizeof("NewMaterial2D"));
+                defaultBaseName = "NewMaterial2D";
                 break;
             }
             case AssetType::SpriteSheet:
             {
                 m_CreateRequest.asset = CreateRef<SpriteSheet>();
-                std::memcpy(m_CreateRequest.nameBuffer, "NewSpriteSheet", sizeof("NewSpriteSheet"));
+                defaultBaseName = "NewSpriteSheet";
                 break;
             }
             case AssetType::Animation2D:
             {
                 m_CreateRequest.asset = Animation2D::Create("NewAnimation2D");
-                std::memcpy(m_CreateRequest.nameBuffer, "NewAnimation2D", sizeof("NewAnimation2D"));
+                defaultBaseName = "NewAnimation2D";
                 break;
             }
             case AssetType::AnimatorController2D:
             {
                 m_CreateRequest.asset = AnimatorController2D::Create();
-                std::memcpy(m_CreateRequest.nameBuffer, "NewAnimatorController", sizeof("NewAnimatorController"));
+                defaultBaseName = "NewAnimatorController";
                 break;
             }
             case AssetType::AnimatorController:
             {
                 m_CreateRequest.asset = AnimatorController::Create();
-                std::memcpy(m_CreateRequest.nameBuffer, "NewAnimatorController3D", sizeof("NewAnimatorController3D"));
+                defaultBaseName = "NewAnimatorController3D";
                 break;
             }
             case AssetType::BlendSpace:
             {
                 m_CreateRequest.asset = CreateRef<BlendSpace>();
-                std::memcpy(m_CreateRequest.nameBuffer, "NewBlendSpace", sizeof("NewBlendSpace"));
+                defaultBaseName = "NewBlendSpace";
                 break;
             }
             case AssetType::AnimationMontage:
             {
                 m_CreateRequest.asset = CreateRef<AnimationMontage>();
-                std::memcpy(m_CreateRequest.nameBuffer, "NewAnimationMontage", sizeof("NewAnimationMontage"));
+                defaultBaseName = "NewAnimationMontage";
                 break;
             }
             case AssetType::LocomotionController:
             {
                 m_CreateRequest.asset = CreateRef<LocomotionController>();
-                std::memcpy(m_CreateRequest.nameBuffer, "NewLocomotion", sizeof("NewLocomotion"));
+                defaultBaseName = "NewLocomotion";
                 break;
             }
             case AssetType::Widget:
             {
                 m_CreateRequest.asset = CreateRef<WidgetCanvas>(nullptr);
-                std::memcpy(m_CreateRequest.nameBuffer, "NewWidget", sizeof("NewWidget"));
+                defaultBaseName = "NewWidget";
                 break;
             }
             case AssetType::Invalid:
@@ -5455,7 +5651,15 @@ namespace ignite
                 break;
         }
 
-
+        const std::filesystem::path targetDir = m_CreateRequest.targetDirectory.empty()
+            ? m_EditorLayer->GetActiveProject()->GetAssetDirectory()
+            : m_CreateRequest.targetDirectory;
+        const std::string ext = GetAssetExtensionFromType(signal.type);
+        const std::string uniqueStem = ext.empty()
+            ? defaultBaseName
+            : AssetImporter::BuildUniqueAssetPath(targetDir, defaultBaseName, ext, AssetManager::GetInstance()).stem().string();
+        std::memset(m_CreateRequest.nameBuffer, 0, sizeof(m_CreateRequest.nameBuffer));
+        std::strncpy(m_CreateRequest.nameBuffer, uniqueStem.c_str(), sizeof(m_CreateRequest.nameBuffer) - 1);
 
         return true;
     }
@@ -5467,6 +5671,14 @@ namespace ignite
 
     void AssetEditorPanel::CloseAllAssetEditors()
     {
+        if (auto *cmd = CommandManager::GetInstance())
+        {
+            for (const auto &assetData : m_Assets)
+            {
+                cmd->RemoveAssetHistory(static_cast<uint64_t>(assetData.handle));
+            }
+        }
+        m_FocusedAssetHandle = AssetHandle(0);
         m_Assets.clear();
     }
 }

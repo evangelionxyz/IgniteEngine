@@ -7,6 +7,7 @@
                 "Name": "ArenaOperative_Alpha",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 0,
                 "Transform": {
                     "WorldTranslation": [
                         -11.0,
@@ -57,6 +58,7 @@
                 "Name": "ArenaOperative_Bravo",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 1,
                 "Transform": {
                     "WorldTranslation": [
                         11.0,
@@ -107,6 +109,7 @@
                 "Name": "Arena_Floor",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 2,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -210,6 +213,7 @@
                 "Name": "Audio_Ambient",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 3,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -262,6 +266,7 @@
                 "Name": "Cover_LeftFront",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 4,
                 "Transform": {
                     "WorldTranslation": [
                         -4.800000190734863,
@@ -365,6 +370,7 @@
                 "Name": "Cover_LowRubber",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 5,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -468,6 +474,7 @@
                 "Name": "Cover_RightFront",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 6,
                 "Transform": {
                     "WorldTranslation": [
                         4.800000190734863,
@@ -571,6 +578,7 @@
                 "Name": "Cover_SteelFlankL",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 7,
                 "Transform": {
                     "WorldTranslation": [
                         -8.5,
@@ -674,6 +682,7 @@
                 "Name": "Cover_SteelFlankR",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 8,
                 "Transform": {
                     "WorldTranslation": [
                         8.5,
@@ -777,6 +786,7 @@
                 "Name": "Crate_01",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 9,
                 "Transform": {
                     "WorldTranslation": [
                         -6.199999809265137,
@@ -875,6 +885,7 @@
                 "Name": "Crate_02",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 10,
                 "Transform": {
                     "WorldTranslation": [
                         -6.199999809265137,
@@ -973,6 +984,7 @@
                 "Name": "Crate_03",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 11,
                 "Transform": {
                     "WorldTranslation": [
                         -6.199999809265137,
@@ -1071,6 +1083,7 @@
                 "Name": "Deck_NorthOverlook",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 12,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -1174,6 +1187,7 @@
                 "Name": "DirectionalLight",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 13,
                 "Transform": {
                     "WorldTranslation": [
                         10.0,
@@ -1235,6 +1249,7 @@
                 "Name": "ExplosiveBarrel_01",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 14,
                 "Transform": {
                     "WorldTranslation": [
                         -2.200000047683716,
@@ -1333,6 +1348,7 @@
                 "Name": "ExplosiveBarrel_02",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 15,
                 "Transform": {
                     "WorldTranslation": [
                         2.200000047683716,
@@ -1431,6 +1447,7 @@
                 "Name": "ExplosiveBarrel_03",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 16,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -1529,6 +1546,7 @@
                 "Name": "FPS_HUD_Manager",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 17,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -1590,6 +1608,7 @@
                 "Name": "FPS_LuaBridge",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 18,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -1637,6 +1656,7 @@
                 "Name": "FPS_ServerManager",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 19,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -1684,6 +1704,7 @@
                 "Name": "ImpactPlasma",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 20,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -1777,6 +1798,7 @@
                 "Name": "ImpactSpark",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 21,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -1870,6 +1892,7 @@
                 "Name": "JumpPad_Base",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 22,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -1973,6 +1996,7 @@
                 "Name": "JumpPad_Ring",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 23,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -2029,6 +2053,7 @@
                 "Name": "Light_GalleryCenter",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 24,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -2086,6 +2111,7 @@
                 "Name": "Light_GalleryLeft",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 25,
                 "Transform": {
                     "WorldTranslation": [
                         -5.5,
@@ -2143,6 +2169,7 @@
                 "Name": "Light_GalleryRight",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 26,
                 "Transform": {
                     "WorldTranslation": [
                         5.5,
@@ -2200,6 +2227,7 @@
                 "Name": "Light_JumpPad",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 27,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -2257,6 +2285,7 @@
                 "Name": "Light_SpawnBay",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 28,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -2314,6 +2343,7 @@
                 "Name": "Light_TargetBay",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 29,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -2371,6 +2401,7 @@
                 "Name": "MatLabel_01",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 30,
                 "Transform": {
                     "WorldTranslation": [
                         -8.100000381469727,
@@ -2414,6 +2445,7 @@
                 "Name": "MatLabel_02",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 31,
                 "Transform": {
                     "WorldTranslation": [
                         -6.300000190734863,
@@ -2457,6 +2489,7 @@
                 "Name": "MatLabel_03",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 32,
                 "Transform": {
                     "WorldTranslation": [
                         -4.5,
@@ -2500,6 +2533,7 @@
                 "Name": "MatLabel_04",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 33,
                 "Transform": {
                     "WorldTranslation": [
                         -2.700000047683716,
@@ -2543,6 +2577,7 @@
                 "Name": "MatLabel_05",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 34,
                 "Transform": {
                     "WorldTranslation": [
                         -0.8999999761581421,
@@ -2586,6 +2621,7 @@
                 "Name": "MatLabel_06",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 35,
                 "Transform": {
                     "WorldTranslation": [
                         0.8999999761581421,
@@ -2629,6 +2665,7 @@
                 "Name": "MatLabel_07",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 36,
                 "Transform": {
                     "WorldTranslation": [
                         2.700000047683716,
@@ -2672,6 +2709,7 @@
                 "Name": "MatLabel_08",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 37,
                 "Transform": {
                     "WorldTranslation": [
                         4.5,
@@ -2715,6 +2753,7 @@
                 "Name": "MatLabel_09",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 38,
                 "Transform": {
                     "WorldTranslation": [
                         6.300000190734863,
@@ -2758,6 +2797,7 @@
                 "Name": "MatLabel_10",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 39,
                 "Transform": {
                     "WorldTranslation": [
                         8.100000381469727,
@@ -2801,6 +2841,7 @@
                 "Name": "MaterialSphere_BrushedSteel",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 40,
                 "Transform": {
                     "WorldTranslation": [
                         3.75,
@@ -2900,6 +2941,7 @@
                 "Name": "MaterialSphere_MatteRubber",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 41,
                 "Transform": {
                     "WorldTranslation": [
                         -6.25,
@@ -2999,6 +3041,7 @@
                 "Name": "MaterialSphere_MatteTerracotta",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 42,
                 "Transform": {
                     "WorldTranslation": [
                         -3.75,
@@ -3098,6 +3141,7 @@
                 "Name": "MaterialSphere_MirrorChrome",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 43,
                 "Transform": {
                     "WorldTranslation": [
                         11.25,
@@ -3197,6 +3241,7 @@
                 "Name": "MaterialSphere_PolishedCopper",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 44,
                 "Transform": {
                     "WorldTranslation": [
                         6.25,
@@ -3296,6 +3341,7 @@
                 "Name": "MaterialSphere_PolishedGold",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 45,
                 "Transform": {
                     "WorldTranslation": [
                         8.75,
@@ -3395,6 +3441,7 @@
                 "Name": "MaterialSphere_RoughAsphalt",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 46,
                 "Transform": {
                     "WorldTranslation": [
                         -8.75,
@@ -3494,6 +3541,7 @@
                 "Name": "MaterialSphere_RoughConcrete",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 47,
                 "Transform": {
                     "WorldTranslation": [
                         -11.25,
@@ -3593,6 +3641,7 @@
                 "Name": "MaterialSphere_SatinCeramic",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 48,
                 "Transform": {
                     "WorldTranslation": [
                         -1.25,
@@ -3692,6 +3741,7 @@
                 "Name": "MaterialSphere_SemiMetalAlloy",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 49,
                 "Transform": {
                     "WorldTranslation": [
                         1.25,
@@ -3787,210 +3837,11 @@
                 }
             },
             {
-                "ID": 920000000000000271,
-                "Name": "MuzzleFlashParticles",
-                "Type": "Node",
-                "Parent": 920000000000000071,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.2800000011920929,
-                        3.124799966812134,
-                        12.388799667358398
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        0.7400000095367432,
-                        0.7400000095367432,
-                        0.7400000095367432
-                    ],
-                    "LocalTranslation": [
-                        0.0,
-                        0.019999999552965164,
-                        -0.8799999952316284
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true
-                },
-                "ParticleSystem": {
-                    "IsPlaying": true,
-                    "EmitterType": 5,
-                    "BlendMode": 1,
-                    "MaxParticles": 512,
-                    "EmissionRate": 0.0,
-                    "LifetimeMin": 0.03999999910593033,
-                    "LifetimeMax": 0.10999999940395355,
-                    "VelocityMin": [
-                        -2.200000047683716,
-                        -2.200000047683716,
-                        -2.200000047683716
-                    ],
-                    "VelocityMax": [
-                        2.200000047683716,
-                        2.200000047683716,
-                        2.200000047683716
-                    ],
-                    "Acceleration": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "Drag": 6.0,
-                    "StartColor": [
-                        1.0,
-                        0.9200000166893005,
-                        0.5,
-                        1.0
-                    ],
-                    "EndColor": [
-                        1.0,
-                        0.3499999940395355,
-                        0.05000000074505806,
-                        0.0
-                    ],
-                    "StartSize": [
-                        0.23999999463558197,
-                        0.23999999463558197
-                    ],
-                    "EndSize": [
-                        0.03999999910593033,
-                        0.03999999910593033
-                    ],
-                    "RotationSpeedMin": -8.0,
-                    "RotationSpeedMax": 8.0,
-                    "SpawnRadius": 0.029999999329447746,
-                    "VelocityAlignment": 0.4000000059604645,
-                    "TextureHandle": 0
-                }
-            },
-            {
-                "ID": 920000000000000073,
-                "Name": "MuzzleLight",
-                "Type": "Node",
-                "Parent": 920000000000000070,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.2800000011920929,
-                        3.1999998092651367,
-                        12.550000190734863
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "LocalTranslation": [
-                        0.2800000011920929,
-                        -0.15000000596046448,
-                        -0.949999988079071
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true
-                },
-                "PointLight": {
-                    "Color": [
-                        1.0,
-                        0.7200000286102295,
-                        0.2199999988079071,
-                        1.0
-                    ],
-                    "Intensity": 0.0,
-                    "Range": 8.0,
-                    "Enabled": false,
-                    "ConstantAttenuation": 1.0,
-                    "LinearAttenuation": 0.09000000357627869,
-                    "QuadraticAttenuation": 0.03200000151991844
-                }
-            },
-            {
-                "ID": 920000000000000069,
-                "Name": "OperativeBody",
-                "Type": "Node",
-                "Parent": 920000000000000068,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.0,
-                        0.8999999761581421,
-                        13.5
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        1.0,
-                        0.0,
-                        0.0
-                    ],
-                    "WorldScale": [
-                        0.41999998688697815,
-                        0.41999998688697815,
-                        0.41999998688697815
-                    ],
-                    "LocalTranslation": [
-                        0.0,
-                        -0.8999999761581421,
-                        0.0
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        1.0,
-                        0.0,
-                        0.0
-                    ],
-                    "LocalScale": [
-                        0.41999998688697815,
-                        0.41999998688697815,
-                        0.41999998688697815
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true
-                },
-                "SkeletalMesh": {
-                    "Handle": 12136098296841181153,
-                    "AnimatorHandle": 100020,
-                    "UniqueAnimator": true,
-                    "OverrideMaterials": [],
-                    "SocketAttachments": []
-                }
-            },
-            {
                 "ID": 920000000000000041,
                 "Name": "Pedestal_HeroHelmet",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 50,
                 "Transform": {
                     "WorldTranslation": [
                         6.199999809265137,
@@ -4094,6 +3945,7 @@
                 "Name": "PhysicsCrate_04",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 51,
                 "Transform": {
                     "WorldTranslation": [
                         3.5,
@@ -4192,6 +4044,7 @@
                 "Name": "PhysicsCrate_05",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 52,
                 "Transform": {
                     "WorldTranslation": [
                         4.800000190734863,
@@ -4290,6 +4143,7 @@
                 "Name": "PhysicsCrate_06",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 53,
                 "Transform": {
                     "WorldTranslation": [
                         4.150000095367432,
@@ -4388,6 +4242,7 @@
                 "Name": "PhysicsSphere_01",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 54,
                 "Transform": {
                     "WorldTranslation": [
                         -1.399999976158142,
@@ -4487,6 +4342,7 @@
                 "Name": "PhysicsSphere_02",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 55,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -4586,6 +4442,7 @@
                 "Name": "PhysicsSphere_03",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 56,
                 "Transform": {
                     "WorldTranslation": [
                         1.399999976158142,
@@ -4685,6 +4542,7 @@
                 "Name": "PlayerAvatar",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 57,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -4814,10 +4672,62 @@
                 }
             },
             {
+                "ID": 920000000000000069,
+                "Name": "OperativeBody",
+                "Type": "Node",
+                "Parent": 920000000000000068,
+                "Order": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.8999999761581421,
+                        13.5
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        1.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldScale": [
+                        0.41999998688697815,
+                        0.41999998688697815,
+                        0.41999998688697815
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        -0.8999999761581421,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        1.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalScale": [
+                        0.41999998688697815,
+                        0.41999998688697815,
+                        0.41999998688697815
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "SkeletalMesh": {
+                    "Handle": 12136098296841181153,
+                    "AnimatorHandle": 100020,
+                    "UniqueAnimator": true,
+                    "OverrideMaterials": [],
+                    "SocketAttachments": []
+                }
+            },
+            {
                 "ID": 920000000000000070,
                 "Name": "PlayerCamera",
                 "Type": "Node",
                 "Parent": 920000000000000068,
+                "Order": 1,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -4892,9 +4802,9 @@
                         ],
                         "ChromAbAmount": 0.0010000000474974513,
                         "ChromAbRadial": 0.10000000149011612,
-                        "AoRadius": 0.6499999761581421,
+                        "AoRadius": 0.15000000596046448,
                         "AoBias": 0.02500000037252903,
-                        "AoIntensity": 1.350000023841858,
+                        "AoIntensity": 2.25,
                         "AoPower": 1.0,
                         "TAA": false,
                         "TAABlendFactor": 0.07999999821186066,
@@ -4905,10 +4815,264 @@
                 }
             },
             {
+                "ID": 920000000000000073,
+                "Name": "MuzzleLight",
+                "Type": "Node",
+                "Parent": 920000000000000070,
+                "Order": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.2800000011920929,
+                        3.1999998092651367,
+                        12.550000190734863
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.2800000011920929,
+                        -0.15000000596046448,
+                        -0.949999988079071
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "PointLight": {
+                    "Color": [
+                        1.0,
+                        0.7200000286102295,
+                        0.2199999988079071,
+                        1.0
+                    ],
+                    "Intensity": 0.0,
+                    "Range": 8.0,
+                    "Enabled": false,
+                    "ConstantAttenuation": 1.0,
+                    "LinearAttenuation": 0.09000000357627869,
+                    "QuadraticAttenuation": 0.03200000151991844
+                }
+            },
+            {
+                "ID": 920000000000000071,
+                "Name": "WeaponRig",
+                "Type": "Node",
+                "Parent": 920000000000000070,
+                "Order": 1,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.2800000011920929,
+                        3.109999895095825,
+                        13.039999961853027
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.7400000095367432,
+                        0.7400000095367432,
+                        0.7400000095367432
+                    ],
+                    "LocalTranslation": [
+                        0.2800000011920929,
+                        -0.23999999463558197,
+                        -0.46000000834465027
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.7400000095367432,
+                        0.7400000095367432,
+                        0.7400000095367432
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 9500000000000000001,
+                    "OverrideMaterials": []
+                }
+            },
+            {
+                "ID": 920000000000000271,
+                "Name": "MuzzleFlashParticles",
+                "Type": "Node",
+                "Parent": 920000000000000071,
+                "Order": 0,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.2800000011920929,
+                        3.124799966812134,
+                        12.388799667358398
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.7400000095367432,
+                        0.7400000095367432,
+                        0.7400000095367432
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.019999999552965164,
+                        -0.8799999952316284
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "ParticleSystem": {
+                    "IsPlaying": true,
+                    "EmitterType": 5,
+                    "BlendMode": 1,
+                    "MaxParticles": 512,
+                    "EmissionRate": 0.0,
+                    "LifetimeMin": 0.03999999910593033,
+                    "LifetimeMax": 0.10999999940395355,
+                    "VelocityMin": [
+                        -2.200000047683716,
+                        -2.200000047683716,
+                        -2.200000047683716
+                    ],
+                    "VelocityMax": [
+                        2.200000047683716,
+                        2.200000047683716,
+                        2.200000047683716
+                    ],
+                    "Acceleration": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "Drag": 6.0,
+                    "StartColor": [
+                        1.0,
+                        0.9200000166893005,
+                        0.5,
+                        1.0
+                    ],
+                    "EndColor": [
+                        1.0,
+                        0.3499999940395355,
+                        0.05000000074505806,
+                        0.0
+                    ],
+                    "StartSize": [
+                        0.23999999463558197,
+                        0.23999999463558197
+                    ],
+                    "EndSize": [
+                        0.03999999910593033,
+                        0.03999999910593033
+                    ],
+                    "RotationSpeedMin": -8.0,
+                    "RotationSpeedMax": 8.0,
+                    "SpawnRadius": 0.029999999329447746,
+                    "VelocityAlignment": 0.4000000059604645,
+                    "TextureHandle": 0
+                }
+            },
+            {
+                "ID": 920000000000000072,
+                "Name": "WeaponSight",
+                "Type": "Node",
+                "Parent": 920000000000000070,
+                "Order": 2,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.2800000011920929,
+                        3.2049999237060547,
+                        13.0600004196167
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        0.03500000014901161,
+                        0.03500000014901161,
+                        0.10000000149011612
+                    ],
+                    "LocalTranslation": [
+                        0.2800000011920929,
+                        -0.14499999582767487,
+                        -0.4399999976158142
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        0.03500000014901161,
+                        0.03500000014901161,
+                        0.10000000149011612
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true
+                },
+                "StaticMesh": {
+                    "Handle": 5280275259340444489,
+                    "OverrideMaterials": [
+                        {
+                            "Mesh": 0,
+                            "MaterialHandle": 10148842803858111519
+                        }
+                    ]
+                }
+            },
+            {
                 "ID": 920000000000000033,
                 "Name": "Plinth_BrushedSteel",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 58,
                 "Transform": {
                     "WorldTranslation": [
                         3.75,
@@ -5012,6 +5176,7 @@
                 "Name": "Plinth_MatteRubber",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 59,
                 "Transform": {
                     "WorldTranslation": [
                         -6.25,
@@ -5115,6 +5280,7 @@
                 "Name": "Plinth_MatteTerracotta",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 60,
                 "Transform": {
                     "WorldTranslation": [
                         -3.75,
@@ -5218,6 +5384,7 @@
                 "Name": "Plinth_MirrorChrome",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 61,
                 "Transform": {
                     "WorldTranslation": [
                         11.25,
@@ -5321,6 +5488,7 @@
                 "Name": "Plinth_PolishedCopper",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 62,
                 "Transform": {
                     "WorldTranslation": [
                         6.25,
@@ -5424,6 +5592,7 @@
                 "Name": "Plinth_PolishedGold",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 63,
                 "Transform": {
                     "WorldTranslation": [
                         8.75,
@@ -5527,6 +5696,7 @@
                 "Name": "Plinth_RoughAsphalt",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 64,
                 "Transform": {
                     "WorldTranslation": [
                         -8.75,
@@ -5630,6 +5800,7 @@
                 "Name": "Plinth_RoughConcrete",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 65,
                 "Transform": {
                     "WorldTranslation": [
                         -11.25,
@@ -5733,6 +5904,7 @@
                 "Name": "Plinth_SatinCeramic",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 66,
                 "Transform": {
                     "WorldTranslation": [
                         -1.25,
@@ -5836,6 +6008,7 @@
                 "Name": "Plinth_SemiMetalAlloy",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 67,
                 "Transform": {
                     "WorldTranslation": [
                         1.25,
@@ -5939,6 +6112,7 @@
                 "Name": "Prop_DamagedHelmet",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 68,
                 "Transform": {
                     "WorldTranslation": [
                         6.199999809265137,
@@ -5990,6 +6164,7 @@
                 "Name": "Prop_DuckMascot",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 69,
                 "Transform": {
                     "WorldTranslation": [
                         6.199999809265137,
@@ -6037,6 +6212,7 @@
                 "Name": "Ramp_East",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 70,
                 "Transform": {
                     "WorldTranslation": [
                         14.5,
@@ -6135,6 +6311,7 @@
                 "Name": "SFX_BarrelExplode",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 71,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6187,6 +6364,7 @@
                 "Name": "SFX_HitCrit",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 72,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6239,6 +6417,7 @@
                 "Name": "SFX_HitMetal",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 73,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6291,6 +6470,7 @@
                 "Name": "SFX_HitTarget",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 74,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6343,6 +6523,7 @@
                 "Name": "SFX_JumpPad",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 75,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6395,6 +6576,7 @@
                 "Name": "SFX_PingPong",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 76,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6447,6 +6629,7 @@
                 "Name": "SFX_Pulse",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 77,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6499,6 +6682,7 @@
                 "Name": "SFX_Rifle",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 78,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6551,6 +6735,7 @@
                 "Name": "SFX_UIClick",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 79,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6603,6 +6788,7 @@
                 "Name": "SFX_UIClickEnd",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 80,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6655,6 +6841,7 @@
                 "Name": "SFX_UIHover",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 81,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6707,6 +6894,7 @@
                 "Name": "SFX_WeaponReload",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 82,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6759,6 +6947,7 @@
                 "Name": "Spectator_Robot",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 83,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6809,6 +6998,7 @@
                 "Name": "Target_01",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 84,
                 "Transform": {
                     "WorldTranslation": [
                         -6.800000190734863,
@@ -6907,6 +7097,7 @@
                 "Name": "Target_02",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 85,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7005,6 +7196,7 @@
                 "Name": "Target_03",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 86,
                 "Transform": {
                     "WorldTranslation": [
                         6.800000190734863,
@@ -7103,6 +7295,7 @@
                 "Name": "Target_04",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 87,
                 "Transform": {
                     "WorldTranslation": [
                         -9.199999809265137,
@@ -7205,6 +7398,7 @@
                 "Name": "Target_05",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 88,
                 "Transform": {
                     "WorldTranslation": [
                         9.199999809265137,
@@ -7307,6 +7501,7 @@
                 "Name": "Target_06",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 89,
                 "Transform": {
                     "WorldTranslation": [
                         -6.449999809265137,
@@ -7409,6 +7604,7 @@
                 "Name": "Wall_East",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 90,
                 "Transform": {
                     "WorldTranslation": [
                         24.0,
@@ -7507,6 +7703,7 @@
                 "Name": "Wall_North",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 91,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7605,6 +7802,7 @@
                 "Name": "Wall_South",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 92,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7703,6 +7901,7 @@
                 "Name": "Wall_West",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 93,
                 "Transform": {
                     "WorldTranslation": [
                         -24.0,
@@ -7801,6 +8000,7 @@
                 "Name": "WeaponProjectile_01",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 94,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7862,6 +8062,7 @@
                 "Name": "WeaponProjectile_02",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 95,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7923,6 +8124,7 @@
                 "Name": "WeaponProjectile_03",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 96,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7984,6 +8186,7 @@
                 "Name": "WeaponProjectile_04",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 97,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8045,6 +8248,7 @@
                 "Name": "WeaponProjectile_05",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 98,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8106,6 +8310,7 @@
                 "Name": "WeaponProjectile_06",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 99,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8163,109 +8368,11 @@
                 }
             },
             {
-                "ID": 920000000000000071,
-                "Name": "WeaponRig",
-                "Type": "Node",
-                "Parent": 920000000000000070,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.2800000011920929,
-                        3.109999895095825,
-                        13.039999961853027
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        0.7400000095367432,
-                        0.7400000095367432,
-                        0.7400000095367432
-                    ],
-                    "LocalTranslation": [
-                        0.2800000011920929,
-                        -0.23999999463558197,
-                        -0.46000000834465027
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        0.7400000095367432,
-                        0.7400000095367432,
-                        0.7400000095367432
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true
-                },
-                "StaticMesh": {
-                    "Handle": 9500000000000000001,
-                    "OverrideMaterials": []
-                }
-            },
-            {
-                "ID": 920000000000000072,
-                "Name": "WeaponSight",
-                "Type": "Node",
-                "Parent": 920000000000000070,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.2800000011920929,
-                        3.2049999237060547,
-                        13.0600004196167
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        0.03500000014901161,
-                        0.03500000014901161,
-                        0.10000000149011612
-                    ],
-                    "LocalTranslation": [
-                        0.2800000011920929,
-                        -0.14499999582767487,
-                        -0.4399999976158142
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        0.03500000014901161,
-                        0.03500000014901161,
-                        0.10000000149011612
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true
-                },
-                "StaticMesh": {
-                    "Handle": 5280275259340444489,
-                    "OverrideMaterials": [
-                        {
-                            "Mesh": 0,
-                            "MaterialHandle": 10148842803858111519
-                        }
-                    ]
-                }
-            },
-            {
                 "ID": 920000000000000001,
                 "Name": "WorldEnvironment",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 100,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8351,6 +8458,7 @@
                 "Name": "WorldHitText_01",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 101,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8394,6 +8502,7 @@
                 "Name": "WorldHitText_02",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 102,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8437,6 +8546,7 @@
                 "Name": "WorldHitText_03",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 103,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8480,6 +8590,7 @@
                 "Name": "WorldHitText_04",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 104,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8523,6 +8634,7 @@
                 "Name": "WorldHitText_05",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 105,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8566,6 +8678,7 @@
                 "Name": "WorldHitText_06",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 106,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8609,6 +8722,7 @@
                 "Name": "WorldHitText_07",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 107,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8652,6 +8766,7 @@
                 "Name": "WorldHitText_08",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 108,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8695,6 +8810,7 @@
                 "Name": "WorldSign_Scoreboard",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 109,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,

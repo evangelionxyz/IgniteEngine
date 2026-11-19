@@ -8,10 +8,38 @@
 #include "scene_manager.hpp"
 
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace ignite
 {
+    struct EntitySubtreeSnapshot
+    {
+        UUID rootUUID = UUID(0);
+        UUID parentUUID = UUID(0);
+        std::string rootName;
+        size_t siblingIndex = 0;
+        std::string serializedEntitiesJson;
+        std::vector<std::pair<UUID, std::vector<UUID>>> childOrders;
+
+        size_t GetMemoryUsage() const
+        {
+            size_t total = sizeof(*this) + rootName.capacity() + serializedEntitiesJson.capacity();
+            total += childOrders.capacity() * sizeof(std::pair<UUID, std::vector<UUID>>);
+            for (const auto &[_, children] : childOrders)
+            {
+                total += children.capacity() * sizeof(UUID);
+            }
+            return total;
+        }
+
+        bool IsValid() const { return rootUUID != UUID(0) && !serializedEntitiesJson.empty(); }
+    };
+
+    IGN_API EntitySubtreeSnapshot CaptureEntitySubtreeSnapshot(Scene *scene, Entity rootEntity);
+    IGN_API Entity RestoreEntitySubtreeSnapshot(Scene *scene, const EntitySubtreeSnapshot &snapshot);
+
     // ---------------------------------------------------------------------------
     // EntitySnapshot — a by-value copy of all editor-relevant entity data.
     // Runtime-only physics handles (b2BodyId, JPH::Body*) are intentionally

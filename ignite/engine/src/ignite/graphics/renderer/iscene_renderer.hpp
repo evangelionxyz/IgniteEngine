@@ -20,8 +20,10 @@
 #include "ignite/graphics/texture.hpp"
 
 #include "ignite/asset/asset_manager.hpp"
+#include "ignite/core/signal_bus.hpp"
 
 #include <array>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -70,6 +72,7 @@ namespace ignite
         bool showBoundingBox = false;
         bool showPhysicsCollider = false;
         bool showEntityNames = false;
+        bool renderEnvironment = true;
 
         SampleMethod sampleMethod = SampleMethod::FXAA;
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
@@ -186,6 +189,8 @@ namespace ignite
 
             if (auto project = assetManager->LockActiveProject())
             {
+                DrainDirtyResolvedAssets();
+
                 AssetResolveKey key{ project.get(), handle };
                 auto it = m_ResolvedAssetsCache.find(key);
                 if (it != m_ResolvedAssetsCache.end())
@@ -235,6 +240,7 @@ namespace ignite
         Ref<Material> ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle);
 
         void EnsureSceneEnvironmentMap();
+        void DrainDirtyResolvedAssets();
 
         Ref<CascadedShadowMap> m_CascadedShadowMap;
 
@@ -251,6 +257,9 @@ namespace ignite
         Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];
 
         std::unordered_map<AssetResolveKey, WeakRef<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
+        std::mutex m_DirtyResolvedAssetsMutex;
+        std::unordered_set<AssetHandle> m_DirtyResolvedHandles;
+        SignalToken m_AssetChangeSignalToken = kInvalidSignalToken;
 
         WorldEnvironment *m_WorldEnvironment = nullptr;
         PostProcessing m_PostProcessing;

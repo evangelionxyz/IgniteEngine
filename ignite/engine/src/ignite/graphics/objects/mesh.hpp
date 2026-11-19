@@ -289,9 +289,16 @@ namespace ignite
     class IGN_API GLTFMeshLoader
     {
     public:
+        struct LoadedGltfTexture
+        {
+            std::string name;
+            Ref<Texture> texture;
+            bool isEmbedded = false;
+        };
+
         static Ref<Material> LoadMaterial(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
-            const std::vector<std::pair<std::string, Ref<Texture>>> &loadedTextures, std::array<MeshMaterialTextureMap, 5> &textureMap,
-            const std::vector<nri::SamplerDesc> &loadedSamplers, int *materialIndex);
+            const std::vector<LoadedGltfTexture> &loadedTextures, std::array<MeshMaterialTextureMap, 5> &textureMap,
+            const std::vector<nri::SamplerDesc> &loadedSamplers, int *materialIndex, const std::string &meshStem = "Mesh");
 
         template<MeshVertex VertexType_T>
         static void LoadVertexData(std::vector<VertexType_T>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
@@ -303,7 +310,7 @@ namespace ignite
         static void LoadSceneGraph(const std::string& filename, MeshScene<VertexType_T> &outScene, AssetManager *assetManager);
 
     private:
-        static std::vector<std::pair<std::string, Ref<Texture>>> LoadTextures(const tinygltf::Model& model, const std::filesystem::path &baseDir = {});
+        static std::vector<LoadedGltfTexture> LoadTextures(const tinygltf::Model& model, const std::filesystem::path &baseDir = {});
         static std::vector<nri::SamplerDesc> GetSamplers(const tinygltf::Model& model);
         static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
     };
@@ -341,7 +348,7 @@ namespace ignite
         static void LoadAnimationsOnly(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations, AssetManager *assetManager);
 
         template<MeshVertex VertexType_T>
-        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene<VertexType_T> &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData = true);
+        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene<VertexType_T> &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, const std::string &meshStem, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData = true);
 
         static Ref<Skeleton> LoadSkeleton(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult, float scaleFactor);
         static void LoadAnimations(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations, float scaleFactor);
@@ -356,7 +363,7 @@ namespace ignite
         static void LinkUnskinnedMeshToSkeleton(fbxsdk::FbxNode *node, const MeshNode<VertexMeshAnim> &meshNode, Ref<SkeletalMeshInstance> &meshInstance, MeshScene<VertexMeshAnim> &outScene, fbxsdk::FbxScene *fbxScene);
 
         template<MeshVertex VertexType_T>
-        static int ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const std::filesystem::path &sourceDir);
+        static int ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene<VertexType_T> &outScene, MaterialLoader &materialLoader, const std::filesystem::path &sourceDir, const std::string &meshStem);
     };
 
     class IGN_API MeshLoader

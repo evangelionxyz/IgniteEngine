@@ -1984,7 +1984,7 @@ namespace ignite
                     Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : nullptr;
                     if (!font)
                         font = Renderer::GetDefaultFont();
-                    if (!font)
+                    if (!font || !font->IsReady())
                         continue;
 
                     Ref<Texture> fontAtlas = font->GetAtlasTexture();
@@ -2147,7 +2147,7 @@ namespace ignite
                     Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : nullptr;
                     if (!font)
                         font = Renderer::GetDefaultFont();
-                    if (!font || !font->GetAtlasTexture() || !font->GetAtlasTexture()->IsReady())
+                    if (!font || !font->IsReady() || !font->GetAtlasTexture() || !font->GetAtlasTexture()->IsReady())
                         continue;
 
                     glm::vec4 textColor = text.color;
@@ -2168,7 +2168,7 @@ namespace ignite
                     m_ScreenTextRenderer2D->DrawString(text.text, font, textColor, screenTransform, text.kerning, text.lineSpacing, objectID, true, text.centerAlign);
                 }
 
-                if (Ref<Font> debugFont = Renderer::GetDefaultFont(); debugFont && debugFont->GetAtlasTexture() && debugFont->GetAtlasTexture()->IsReady())
+                if (Ref<Font> debugFont = Renderer::GetDefaultFont(); debugFont && debugFont->IsReady() && debugFont->GetAtlasTexture() && debugFont->GetAtlasTexture()->IsReady())
                 {
                     for (const auto &item : m_Scene->GetDebugScreenTexts())
                     {
@@ -2805,7 +2805,7 @@ namespace ignite
         if (drawEntityNames || !m_Scene->GetDebugWorldTexts().empty())
         {
             Ref<Font> debugFont = Renderer::GetDefaultFont();
-            if (debugFont && debugFont->GetAtlasTexture() && debugFont->GetAtlasTexture()->IsReady())
+            if (debugFont && debugFont->IsReady() && debugFont->GetAtlasTexture() && debugFont->GetAtlasTexture()->IsReady())
             {
                 const glm::mat4 camView = camera ? camera->GetView() : glm::mat4(1.0f);
                 const glm::vec3 camRight(camView[0][0], camView[1][0], camView[2][0]);
@@ -3808,7 +3808,7 @@ namespace ignite
                     continue;
 
                 Ref<Font> font = text.fontHandle != AssetHandle(0) ? ResolveAsset<Font>(text.fontHandle) : Renderer::GetDefaultFont();
-                if (!font)
+                if (!font || !font->IsReady())
                     continue;
 
                 Ref<Texture> fontAtlas = font->GetAtlasTexture();

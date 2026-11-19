@@ -7,11 +7,14 @@
 #include "ipanel.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/scene/entity.hpp"
+#include "ignite/scene/scene_manager.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/imgui/gizmo.hpp"
 #include "editor_camera.hpp"
+#include <optional>
 #include <string>
+#include <vector>
 #include <glm/fwd.hpp>
 
 namespace ignite
@@ -67,10 +70,14 @@ namespace ignite
         void UpdateCameraInput(float deltaTime);
         void DestroyEntity(Entity entity);
         void DuplicateSelectedEntity();
-        void ClearSelection();
+        void ClearSelection(bool recordUndo = true);
 
         Entity SetSelectedEntity(Entity entity);
+        void SetSelectedEntities(const std::vector<UUID> &entityUUIDs, UUID trackingUUID = UUID(0), bool recordUndo = true);
         Entity GetSelectedEntity();
+
+        Entity CreateFolderInHierarchy(Entity parent = {});
+        void GroupSelectedEntitiesInFolder();
 
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
 
@@ -82,6 +89,28 @@ namespace ignite
         glm::vec3 ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid = nullptr);
 
     private:
+        void ApplySelectionInternal(const std::vector<UUID> &entityUUIDs, UUID trackingUUID);
+        std::vector<UUID> GetOrderedSelectedUUIDs() const;
+        bool MatchesHierarchyFilter(Entity entity, const std::string &filterLower) const;
+
+        struct PendingHierarchyDrop
+        {
+            std::vector<UUID> sourceUUIDs;
+            UUID targetUUID = UUID(0);
+            HierarchyDropPosition position = HierarchyDropPosition::Inside;
+            bool toRoot = false;
+        };
+
+        std::optional<PendingHierarchyDrop> m_PendingHierarchyDrop;
+        std::vector<UUID> m_PendingDeleteUUIDs;
+        bool m_PendingGroupSelectionInFolder = false;
+        UUID m_PendingUngroupFolderUUID = UUID(0);
+
+        UUID m_RenamingEntityUUID = UUID(0);
+        char m_RenameBuffer[256] = {};
+        bool m_FocusRenameInput = false;
+        char m_HierarchySearchBuffer[128] = {};
+        UUID m_LastAutoExpandedSelection = UUID(0);
 
         EditorCamera m_EditorCamera;
         std::optional<EditorCamera> m_EditorCamera2D;

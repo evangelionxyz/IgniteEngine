@@ -139,7 +139,16 @@ namespace ignite
         }
 
         m_SourceMaterial = material;
-        SyncRuntimeMaterialFromSource();
+        if (!m_SourceMaterial)
+        {
+            // Reset runtime fallback material to clean defaults so previous material previews
+            // never bleed into subsequent mesh previews with unassigned material slots.
+            m_RuntimeMaterial = CreateRef<Material>();
+        }
+        else
+        {
+            SyncRuntimeMaterialFromSource();
+        }
     }
 
     void AssetSceneRenderer::SetPreviewSkeletalMesh(const Ref<SkeletalMesh> &mesh)

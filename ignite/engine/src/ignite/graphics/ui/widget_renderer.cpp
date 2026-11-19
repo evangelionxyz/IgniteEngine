@@ -69,34 +69,39 @@ namespace ignite
 
         static void ResolveWidgetAssetsRecursive(const Ref<IWidgetItem> &item, AssetManager *assetManager)
         {
-            if (!item || !assetManager)
+            if (!item)
             {
                 return;
             }
 
             if (Ref<WidgetButton> button = item->As<WidgetButton>())
             {
-                Ref<Texture> prevImg = button->image;
-                button->image = (button->imageHandle != AssetHandle(0))
-                    ? assetManager->GetAsset<Texture>(button->imageHandle)
-                    : nullptr;
-                if (prevImg != button->image)
+                if (assetManager)
                 {
-                    button->MarkLayoutDirty();
+                    Ref<Texture> prevImg = button->image;
+                    button->image = (button->imageHandle != AssetHandle(0))
+                        ? assetManager->GetAsset<Texture>(button->imageHandle)
+                        : nullptr;
+                    if (prevImg != button->image)
+                    {
+                        button->MarkLayoutDirty();
+                    }
                 }
 
                 if (button->label)
                 {
                     Ref<Font> prevFont = button->label->font;
-                    button->label->font = (button->label->fontHandle != AssetHandle(0))
+                    button->label->font = (assetManager && button->label->fontHandle != AssetHandle(0))
                         ? assetManager->GetAsset<Font>(button->label->fontHandle)
                         : nullptr;
                     if (!button->label->font)
                     {
                         button->label->font = Renderer::GetDefaultFont();
                     }
-                    if (prevFont != button->label->font)
+                    const bool isFontReady = (button->label->font && button->label->font->IsReady());
+                    if (prevFont != button->label->font || button->label->fontReadyAtLastLayout != isFontReady)
                     {
+                        button->label->fontReadyAtLastLayout = isFontReady;
                         button->label->MarkLayoutDirty();
                     }
                 }
@@ -104,27 +109,32 @@ namespace ignite
             else if (Ref<WidgetLabel> label = item->As<WidgetLabel>())
             {
                 Ref<Font> prevFont = label->font;
-                label->font = (label->fontHandle != AssetHandle(0))
+                label->font = (assetManager && label->fontHandle != AssetHandle(0))
                     ? assetManager->GetAsset<Font>(label->fontHandle)
                     : nullptr;
                 if (!label->font)
                 {
                     label->font = Renderer::GetDefaultFont();
                 }
-                if (prevFont != label->font)
+                const bool isFontReady = (label->font && label->font->IsReady());
+                if (prevFont != label->font || label->fontReadyAtLastLayout != isFontReady)
                 {
+                    label->fontReadyAtLastLayout = isFontReady;
                     label->MarkLayoutDirty();
                 }
             }
             else if (Ref<WidgetImage> img = item->As<WidgetImage>())
             {
-                Ref<Texture> prevImg = img->image;
-                img->image = (img->imageHandle != AssetHandle(0))
-                    ? assetManager->GetAsset<Texture>(img->imageHandle)
-                    : nullptr;
-                if (prevImg != img->image)
+                if (assetManager)
                 {
-                    img->MarkLayoutDirty();
+                    Ref<Texture> prevImg = img->image;
+                    img->image = (img->imageHandle != AssetHandle(0))
+                        ? assetManager->GetAsset<Texture>(img->imageHandle)
+                        : nullptr;
+                    if (prevImg != img->image)
+                    {
+                        img->MarkLayoutDirty();
+                    }
                 }
             }
 
@@ -767,19 +777,26 @@ namespace ignite
 
     void WidgetRenderer::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing)
     {
-        if (!font || !font->IsReady())
+        if (!font || !font->IsReady() || str.empty())
             return;
 
         Ref<Texture> fontAtlasTexture = font->GetAtlasTexture();
+        if (!fontAtlasTexture || !fontAtlasTexture->IsReady())
+            return;
+
         const auto &fontGeometry = font->GetGeometry();
         const auto &metrics = fontGeometry.getMetrics();
+        const double metricHeight = metrics.ascenderY - metrics.descenderY;
+        if (metricHeight == 0.0)
+            return;
 
         uint32_t texIndex = GetOrInsertFontTexture(fontAtlasTexture);
 
         double x = 0.0;
         double y = 0.0;
-        double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
-        const double spaceGlypAdvance = fontGeometry.getGlyph(' ')->getAdvance();
+        double fsScale = 1.0 / metricHeight;
+        const auto *spaceGlyph = fontGeometry.getGlyph(' ');
+        const double spaceGlypAdvance = spaceGlyph ? spaceGlyph->getAdvance() : 0.25;
 
         for (size_t i = 0; i < str.size(); ++i)
         {
@@ -1150,12 +1167,13 @@ namespace ignite
 
             m_RenderLayers.push_back({ widget, blocksLower || widget->BlocksWidgetsBelow() });
 
+            AssetManager *assetManager = AssetManager::GetInstance();
             for (const WidgetChildEntry &child : widget->GetChildWidgets())
             {
-                if (!child.enabled || child.handle == AssetHandle(0))
+                if (!child.enabled || child.handle == AssetHandle(0) || !assetManager)
                     continue;
 
-                Ref<WidgetCanvas> childWidget = AssetManager::GetInstance()->GetAsset<WidgetCanvas>(child.handle);
+                Ref<WidgetCanvas> childWidget = assetManager->GetAsset<WidgetCanvas>(child.handle);
                 if (!childWidget)
                     continue;
 

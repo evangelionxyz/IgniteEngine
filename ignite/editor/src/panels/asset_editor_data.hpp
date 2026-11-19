@@ -6,6 +6,7 @@
 
 #include "ignite/core/types.hpp"
 #include "ignite/asset/asset.hpp"
+#include "ignite/graphics/texture.hpp"
 #include "editor_camera.hpp"
 
 namespace ignite
@@ -13,6 +14,7 @@ namespace ignite
 	class AssetSceneRenderer;
 	class RenderTarget;
 	class Mesh;
+	class IAssetSnapshot;
 }
 
 namespace ignite::UI
@@ -38,6 +40,14 @@ namespace ignite::UI
 		AssetHandle handle;
 		EditorSceneData sceneData;
 		AssetHandle previewEnvTexHandle = AssetHandle(0);
+		TextureCreateInfo textureCreateInfo;
+		bool textureCreateInfoInitialized = false;
+
+		Ref<IAssetSnapshot> undoBaselineSnapshot;
+		Ref<IAssetSnapshot> undoPendingBefore;
+		bool undoWasInteracting = false;
+		bool isWindowFocused = false;
+
 		std::string windowTitle;
 		bool isOpen = true;
 		bool requestFocus = false;

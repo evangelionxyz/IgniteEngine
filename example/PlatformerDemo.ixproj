@@ -91,6 +91,10 @@
             "ChatMinInterval": 0.25,
             "AutoStart": false,
             "DefaultScene": "Assets/Scenes/FPSArena.ixscene"
+        },
+        "Editor": {
+            "UndoHistoryLimit": 200,
+            "RecordSelectionUndo": true
         }
     }
 }

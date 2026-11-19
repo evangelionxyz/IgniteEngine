@@ -1158,6 +1158,7 @@ namespace ignite
                 data["scene_state"] = SceneStateName(ctx.scene->GetState());
                 data["scene_time"] = ctx.scene->timeInSeconds;
                 data["entity_count"] = ctx.scene->entities.size();
+                data["scene_ready"] = ctx.scene->IsReadyToPlay();
             }
             if (ctx.camera)
             {
@@ -1179,6 +1180,11 @@ namespace ignite
 
         if (action == "play")
         {
+            if (ctx.scene && !ctx.scene->IsReadyToPlay())
+            {
+                res["error"] = "Scene is not ready to play: related assets are still loading";
+                return res;
+            }
             if (ctx.onPlay)
             {
                 ctx.onPlay();
@@ -1194,6 +1200,11 @@ namespace ignite
 
         if (action == "simulate")
         {
+            if (ctx.scene && !ctx.scene->IsReadyToPlay())
+            {
+                res["error"] = "Scene is not ready to simulate: related assets are still loading";
+                return res;
+            }
             if (ctx.onSimulate)
             {
                 ctx.onSimulate();

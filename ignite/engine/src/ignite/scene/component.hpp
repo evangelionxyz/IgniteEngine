@@ -98,7 +98,8 @@ namespace ignite
         EntityType_Joint = BIT(4),
         EntityType_Audio = BIT(5),
         EntityType_WorldEnvironment = BIT(5),
-        EntityType_Invalid = BIT(6)
+        EntityType_Invalid = BIT(6),
+        EntityType_Folder = BIT(7)
     };
 
     // --- 1.  Tiny helpers so the enum behaves like a bit-mask ------------------
@@ -113,14 +114,15 @@ namespace ignite
     }
 
     // --- 2.  Lookup table: bit value  -> literal string ------------------------
-    static constexpr std::array<std::pair<EntityType, const char *>, 7> kEntityNames{ {
+    static constexpr std::array<std::pair<EntityType, const char *>, 8> kEntityNames{ {
         {EntityType_Node  , "Node"},
         {EntityType_Camera, "Camera"},
         {EntityType_Mesh  , "Mesh"},
         {EntityType_Prefab, "Prefab"},
         {EntityType_Joint , "Joint"},
         {EntityType_Audio , "Audio"},
-        {EntityType_Invalid,"Invalid"}
+        {EntityType_Invalid,"Invalid"},
+        {EntityType_Folder, "Folder"}
     } };
 
     // --- 3.  Convert an OR-combination of flags to a pipe-separated string ------
@@ -154,7 +156,8 @@ namespace ignite
             {"Prefab", EntityType_Prefab},
             {"Joint", EntityType_Joint},
             {"Audio", EntityType_Audio},
-            {"Invalid", EntityType_Invalid}
+            {"Invalid", EntityType_Invalid},
+            {"Folder", EntityType_Folder}
         };
 
         EntityType result = static_cast<EntityType>(0);

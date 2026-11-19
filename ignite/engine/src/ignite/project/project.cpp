@@ -437,6 +437,11 @@ R"(<Project>
                 projectSr.AddKeyValue("DefaultScene", m_Info.serverSettings.defaultScene);
             projectSr.EndMap();
 
+            projectSr.BeginMap("Editor");
+            projectSr.AddKeyValue("UndoHistoryLimit", m_Info.editorSettings.undoHistoryLimit);
+            projectSr.AddKeyValue("RecordSelectionUndo", m_Info.editorSettings.recordSelectionUndo);
+            projectSr.EndMap();
+
             projectSr.EndMap();
         }
 
@@ -568,6 +573,14 @@ R"(<Project>
             if (auto n = serverNode["ChatMinInterval"]) info.serverSettings.chatMinIntervalSec = n.as<double>();
             if (auto n = serverNode["AutoStart"]) info.serverSettings.autoStart = n.as<bool>();
             if (auto n = serverNode["DefaultScene"]) info.serverSettings.defaultScene = n.as<std::string>();
+        }
+
+        if (JsonNode editorNode = projectNode["Editor"])
+        {
+            if (auto n = editorNode["UndoHistoryLimit"])
+                info.editorSettings.undoHistoryLimit = std::clamp<uint32_t>(n.as<uint32_t>(200u), 1u, 10000u);
+            if (auto n = editorNode["RecordSelectionUndo"])
+                info.editorSettings.recordSelectionUndo = n.as<bool>(true);
         }
 
         Ref<Project> project = Project::Create(info);

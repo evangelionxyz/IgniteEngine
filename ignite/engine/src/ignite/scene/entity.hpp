@@ -91,6 +91,7 @@ namespace ignite
         const TransformComponent &GetTransform() const { return const_cast<Entity *>(this)->GetComponent<TransformComponent>(); }
         const std::string &GetName() { return GetComponent<IDComponent>().name; }
         const std::string &GetName() const { return const_cast<Entity *>(this)->GetComponent<IDComponent>().name; }
+        Scene *GetScene() const { return m_Scene; }
 
     private:
         entt::entity m_Handle;

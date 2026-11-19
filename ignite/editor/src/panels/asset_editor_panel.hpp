@@ -9,6 +9,7 @@
 
 
 #include "ignite/asset/asset.hpp"
+#include "ignite/core/command.hpp"
 #include "ignite/core/input/mouse_event.hpp"
 #include "ignite/core/signal_bus.hpp"
 #include "ignite/core/signals/asset_signal.hpp"
@@ -88,11 +89,22 @@ namespace ignite
         void InitializeSceneData(UI::AssetEditorData &assetData);
         std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const;
 
+        bool HasFocusedAssetEditor() const;
+        bool UndoFocusedAsset();
+        bool RedoFocusedAsset();
+        CommandHistory *GetFocusedAssetHistory();
+        const CommandHistory *GetFocusedAssetHistory() const;
+        UI::AssetEditorData *FindAssetEditorData(AssetHandle handle);
+
         std::vector<UI::AssetEditorData> m_Assets;
         CreateAssetRequest m_CreateRequest;
 
         SignalToken m_OpenSignalToken   = kInvalidSignalToken;
         SignalToken m_CreateSignalToken = kInvalidSignalToken;
+
+    private:
+        void UpdateAssetUndoTracking(UI::AssetEditorData &assetData);
+        AssetHandle m_FocusedAssetHandle = AssetHandle(0);
     };
 }
 

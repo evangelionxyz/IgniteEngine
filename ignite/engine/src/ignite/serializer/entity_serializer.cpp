@@ -292,6 +292,7 @@ namespace ignite
             sr.AddKeyValue("Name", idComp.name);
             sr.AddKeyValue("Type", EntityTypeFlagsToString(idComp.type));
             sr.AddKeyValue("Parent", idComp.parent);
+            sr.AddKeyValue("Order", static_cast<uint32_t>(SceneManager::GetSiblingIndex(entity.GetScene(), idComp.uuid)));
 
             // Transform Component
             if (entity.HasComponent<TransformComponent>())

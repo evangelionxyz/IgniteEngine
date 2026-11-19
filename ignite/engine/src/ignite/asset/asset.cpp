@@ -25,6 +25,10 @@ namespace ignite
         sr.AddKeyValue("ASSET_TYPE", AssetTypeToString(const_cast<Asset *>(this)->GetAssetType()));
 
         sr.BeginMap("DATA");
+        if (!m_SourcePath.empty())
+        {
+            sr.AddKeyValue("SourcePath", m_SourcePath.generic_string());
+        }
         if (customSerializer)
         {
             customSerializer(sr);
@@ -36,11 +40,58 @@ namespace ignite
         return true;
     }
 
+    std::filesystem::path Asset::GetMetaFilePath(const std::filesystem::path &assetFilepath)
+    {
+        if (assetFilepath.empty())
+        {
+            return {};
+        }
+
+        std::filesystem::path metaPath = assetFilepath;
+        metaPath += ".meta";
+        return metaPath;
+    }
+
+    std::filesystem::path Asset::ReadSourcePathFromMetaFile(const std::filesystem::path &assetFilepath)
+    {
+        const std::filesystem::path metaPath = GetMetaFilePath(assetFilepath);
+        if (metaPath.empty())
+        {
+            return {};
+        }
+
+        std::error_code ec;
+        if (!std::filesystem::exists(metaPath, ec) || ec)
+        {
+            return {};
+        }
+
+        const JsonNode root = Serializer::Deserialize(metaPath);
+        if (!root)
+        {
+            return {};
+        }
+
+        const JsonNode dataNode = root["DATA"];
+        if (dataNode && dataNode["SourcePath"])
+        {
+            const std::string sourceStr = dataNode["SourcePath"].as<std::string>();
+            if (!sourceStr.empty())
+            {
+                return std::filesystem::path(sourceStr).lexically_normal();
+            }
+        }
+
+        return {};
+    }
+
 	void Asset::NotifyChange()
 	{
-		Application::SubmitToMainThread([this]()
+		const AssetHandle assetHandle = handle;
+		const AssetType assetType = GetAssetType();
+		Application::SubmitToMainThread([assetHandle, assetType]()
 		{
-			SignalBus::Emit<AssetChangeSignal>(AssetChangeSignal{ handle, GetAssetType() });
+			SignalBus::Emit<AssetChangeSignal>(AssetChangeSignal{ assetHandle, assetType });
 		});
 	}
 

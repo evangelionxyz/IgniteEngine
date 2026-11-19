@@ -19,9 +19,18 @@
 #include "ignite/animation/animator/animator_controller_2d.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/ui/widget_canvas.hpp"
+#include "ignite/graphics/ui/widget_button.hpp"
+#include "ignite/graphics/ui/widget_label.hpp"
+#include "ignite/graphics/ui/widget_image.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/font.hpp"
+#include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "scene_manager.hpp"
 #include "ignite/net/net_protocol.hpp"
+#include "ignite/net/network_manager.hpp"
 
 namespace ignite
 {
@@ -200,6 +209,14 @@ namespace ignite
 
     Scene::~Scene()
     {
+        if (NetworkManager *nm = NetworkManager::GetInstance())
+        {
+            if (nm->GetActiveScene() == this)
+            {
+                nm->SetActiveScene(nullptr);
+            }
+        }
+
         m_LuaScriptRuntime.reset();
 
         // Remove signal
@@ -1965,6 +1982,10 @@ namespace ignite
             {
                 addHandle(materialHandle);
             }
+            for (auto &attachmentHandle : mesh.socketAttachments | std::views::values)
+            {
+                addHandle(attachmentHandle);
+            }
         });
 
         registry->view<StaticMeshComponent>().each([&](entt::entity, const StaticMeshComponent &mesh)
@@ -1981,12 +2002,148 @@ namespace ignite
             addHandle(audio.handle);
         });
 
+        registry->view<LuaScriptComponent>().each([&](entt::entity, const LuaScriptComponent &script)
+        {
+            addHandle(script.scriptHandle);
+        });
+
+        registry->view<TerrainComponent>().each([&](entt::entity, const TerrainComponent &terrain)
+        {
+            addHandle(terrain.heightmapHandle);
+            addHandle(terrain.materialHandle);
+        });
+
         registry->view<Animator2DComponent>().each([&](entt::entity, const Animator2DComponent &animator)
         {
             addHandle(animator.controllerHandle);
         });
 
         return handles;
+    }
+
+    namespace
+    {
+        void CollectWidgetItemAssetHandles(const Ref<IWidgetItem> &item, const std::function<void(AssetHandle)> &enqueue)
+        {
+            if (!item)
+            {
+                return;
+            }
+
+            if (const auto button = std::dynamic_pointer_cast<WidgetButton>(item))
+            {
+                enqueue(button->imageHandle);
+                if (button->label)
+                {
+                    enqueue(button->label->fontHandle);
+                }
+            }
+            else if (const auto label = std::dynamic_pointer_cast<WidgetLabel>(item))
+            {
+                enqueue(label->fontHandle);
+            }
+            else if (const auto img = std::dynamic_pointer_cast<WidgetImage>(item))
+            {
+                enqueue(img->imageHandle);
+            }
+
+            for (const auto &child : item->children)
+            {
+                CollectWidgetItemAssetHandles(child, enqueue);
+            }
+        }
+
+        void CollectTransitiveAssetHandles(const Ref<Asset> &asset, const std::function<void(AssetHandle)> &enqueue)
+        {
+            if (!asset)
+            {
+                return;
+            }
+
+            switch (asset->GetAssetType())
+            {
+            case AssetType::Material:
+            {
+                const auto mat = std::static_pointer_cast<Material>(asset);
+                enqueue(mat->baseColorTextureHandle);
+                enqueue(mat->emissiveTextureHandle);
+                enqueue(mat->metallicTextureHandle);
+                enqueue(mat->roughnessTextureHandle);
+                enqueue(mat->normalTextureHandle);
+                enqueue(mat->occlusionTextureHandle);
+                break;
+            }
+            case AssetType::StaticMesh:
+            {
+                const auto mesh = std::static_pointer_cast<StaticMesh>(asset);
+                for (const auto &instance : mesh->GetMeshInstances())
+                {
+                    if (instance)
+                    {
+                        enqueue(instance->GetMaterialAssetHandle());
+                    }
+                }
+                break;
+            }
+            case AssetType::SkeletalMesh:
+            {
+                const auto mesh = std::static_pointer_cast<SkeletalMesh>(asset);
+                enqueue(mesh->GetSkeletonHandle());
+                enqueue(mesh->GetAnimatorHandle());
+                for (const auto &instance : mesh->GetMeshInstances())
+                {
+                    if (instance)
+                    {
+                        enqueue(instance->GetMaterialAssetHandle());
+                    }
+                }
+                break;
+            }
+            case AssetType::Widget:
+            {
+                const auto canvas = std::static_pointer_cast<WidgetCanvas>(asset);
+                for (const auto &child : canvas->GetChildWidgets())
+                {
+                    if (child.enabled)
+                    {
+                        enqueue(child.handle);
+                    }
+                }
+                if (WidgetContainer *root = canvas->GetRoot())
+                {
+                    CollectWidgetItemAssetHandles(root->As<IWidgetItem>(), enqueue);
+                }
+                break;
+            }
+            case AssetType::SpriteSheet:
+            {
+                const auto sheet = std::static_pointer_cast<SpriteSheet>(asset);
+                enqueue(sheet->GetTextureHandle());
+                break;
+            }
+            case AssetType::AnimatorController:
+            {
+                const auto ctrl = std::static_pointer_cast<AnimatorController>(asset);
+                enqueue(ctrl->GetSkeletonHandle());
+                for (const auto &[_, state] : ctrl->states)
+                {
+                    enqueue(state.GetMotionHandle());
+                }
+                break;
+            }
+            case AssetType::AnimatorController2D:
+            {
+                const auto ctrl = std::static_pointer_cast<AnimatorController2D>(asset);
+                for (const auto &state : ctrl->states)
+                {
+                    enqueue(state.GetAnimationAssetHandle());
+                }
+                break;
+            }
+            default:
+                break;
+            }
+        }
     }
 
     void Scene::PreloadReferencedAssets()
@@ -2001,18 +2158,161 @@ namespace ignite
             return;
         }
 
-        const auto handles = CollectReferencedAssetHandles();
-        for (AssetHandle handle : handles)
+        if (registry && (!registry->view<TextComponent>().empty() || !registry->view<WidgetComponent>().empty()))
         {
-            if (handle != AssetHandle(0))
+            (void)Renderer::GetDefaultFont();
+        }
+
+        const auto initialHandles = CollectReferencedAssetHandles();
+        std::unordered_set<AssetHandle> visited;
+        std::vector<AssetHandle> queue;
+        queue.reserve(initialHandles.size());
+
+        auto enqueue = [&](AssetHandle handle)
+        {
+            if (handle != AssetHandle(0) && visited.insert(handle).second)
             {
-                Ref<Asset> asset = m_AssetManager->GetAsset<Asset>(handle);
-                if (asset)
-                {
-                    m_LoadedAssets[handle] = asset;
-                }
+                queue.push_back(handle);
+            }
+        };
+
+        for (AssetHandle handle : initialHandles)
+        {
+            enqueue(handle);
+        }
+
+        for (size_t i = 0; i < queue.size(); ++i)
+        {
+            const AssetHandle handle = queue[i];
+            Ref<Asset> asset = m_AssetManager->GetAsset<Asset>(handle);
+            if (asset)
+            {
+                m_LoadedAssets[handle] = asset;
+                CollectTransitiveAssetHandles(asset, enqueue);
             }
         }
+    }
+
+    SceneAssetLoadProgress Scene::GetAssetLoadProgress() const
+    {
+        SceneAssetLoadProgress result;
+        AssetManager *assetManager = m_AssetManager ? m_AssetManager : AssetManager::GetInstance();
+        if (!assetManager || !registry)
+        {
+            return result;
+        }
+
+        const auto initialHandles = CollectReferencedAssetHandles();
+        std::unordered_set<AssetHandle> visited;
+        std::vector<AssetHandle> queue;
+        queue.reserve(initialHandles.size());
+
+        auto enqueue = [&](AssetHandle handle)
+        {
+            if (handle != AssetHandle(0) && visited.insert(handle).second)
+            {
+                queue.push_back(handle);
+            }
+        };
+
+        for (AssetHandle handle : initialHandles)
+        {
+            enqueue(handle);
+        }
+
+        for (size_t i = 0; i < queue.size(); ++i)
+        {
+            const AssetHandle handle = queue[i];
+            if (Renderer::IsDefaultMeshHandle(handle))
+            {
+                ++result.totalAssets;
+                ++result.readyAssets;
+                continue;
+            }
+
+            if (!assetManager->IsAssetHandleValid(handle))
+            {
+                continue;
+            }
+
+            ++result.totalAssets;
+
+            const AssetState state = assetManager->GetAssetState(handle);
+            if (state == AssetState::Failed)
+            {
+                // Failed assets will never become Ready; treat them as settled so Play isn't deadlocked.
+                ++result.readyAssets;
+                continue;
+            }
+
+            if (state == AssetState::Unloaded)
+            {
+                (void)assetManager->RequestAssetAsync(handle);
+                ++result.pendingAssets;
+                continue;
+            }
+
+            if (state == AssetState::Ready)
+            {
+                Ref<Asset> asset = assetManager->TryGetAsset(handle);
+                if (asset)
+                {
+                    CollectTransitiveAssetHandles(asset, enqueue);
+                    if (asset->IsReady())
+                    {
+                        ++result.readyAssets;
+                    }
+                    else
+                    {
+                        ++result.pendingAssets;
+                    }
+                }
+                else
+                {
+                    ++result.pendingAssets;
+                }
+            }
+            else
+            {
+                ++result.pendingAssets;
+            }
+        }
+
+        Ref<Font> defaultFont = Renderer::GetDefaultFontIfCreated();
+        if (!defaultFont && (!registry->view<TextComponent>().empty() || !registry->view<WidgetComponent>().empty()))
+        {
+            defaultFont = Renderer::GetDefaultFont();
+        }
+
+        if (defaultFont)
+        {
+            ++result.totalAssets;
+            if (defaultFont->IsReady() || !defaultFont->IsLoading())
+            {
+                ++result.readyAssets;
+            }
+            else
+            {
+                ++result.pendingAssets;
+            }
+        }
+
+        result.allReady = (result.pendingAssets == 0);
+        if (result.totalAssets > 0)
+        {
+            result.progress = static_cast<float>(result.readyAssets) / static_cast<float>(result.totalAssets);
+        }
+        else
+        {
+            result.progress = 1.0f;
+        }
+
+        return result;
+    }
+
+    bool Scene::IsReadyToPlay() const
+    {
+        return GetAssetLoadProgress().allReady;
     }
 
     void Scene::OnAssetChangeSignal(const AssetChangeSignal &signal)
