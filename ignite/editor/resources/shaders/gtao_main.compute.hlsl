@@ -43,27 +43,29 @@ float3 ReconstructViewPos(float2 uv, float viewZ)
     }
     return float3((ndc * ndcToViewMul + ndcToViewAdd) * viewZ, -viewZ);
 }
+
 float2 SpatioTemporalNoise(uint2 px, uint temporalIdx)
 {
-    // Interleaved gradient noise + R2 quasirandom temporal offset
-    float idx = float(temporalIdx % 64u);
-    float2 p = float2(px) + float2(idx * 5.588238f, idx * 5.588238f);
-    float n0 = frac(52.9829189f * frac(dot(p, float2(0.06711056f, 0.00583715f))));
-    float n1 = frac(0.754877666f * float(px.x) + 0.569840291f * float(px.y) + 0.618033989f * idx);
+    // Stratified 4x4 Bayer + low-discrepancy sequence so every 4x4 half-res block
+    // covers all 16 angle strata and radial step offsets uniformly without clumping.
+    static const uint kBayer4x4[16] = {
+         0u,  8u,  2u, 10u,
+        12u,  4u, 14u,  6u,
+         3u, 11u,  1u,  9u,
+        15u,  7u, 13u,  5u
+    };
+    uint2 tilePx = px & 3u;
+    uint bayerIdx = kBayer4x4[tilePx.y * 4u + tilePx.x];
+    uint rotIdx = ((px.x + 2u * px.y) + (px.x >> 2u) * 3u + (px.y >> 2u) * 5u) & 15u;
+    float t = float(temporalIdx % 64u);
+    float n0 = frac((float(bayerIdx) + 0.5f) / 16.0f + t * 0.618033989f);
+    float n1 = frac((float((bayerIdx * 5u + rotIdx) & 15u) + 0.5f) / 16.0f + t * 0.754877666f);
     return float2(n0, n1);
 }
-float3 LoadViewNormal(float2 uv, float3 centerPosVS, float centerZ)
-{
-    if ((flags & 1u) != 0u)
-    {
-        int2 maxFull = int2(max(int(fullRes.x) - 1, 0), max(int(fullRes.y) - 1, 0));
-        int2 px = clamp(int2(uv * fullRes), int2(0, 0), maxFull);
-        float2 enc = t_Normal.Load(int3(px, 0)).rg;
-        return OctDecode(enc);
-    }
 
+float3 ReconstructHalfDepthNormal(int2 cpx, float3 centerPosVS, float centerZ)
+{
     int2 maxHalf = int2(max(int(halfRes.x) - 1, 0), max(int(halfRes.y) - 1, 0));
-    int2 cpx = clamp(int2(uv * float2(halfRes)), int2(0, 0), maxHalf);
     int2 pxL = clamp(cpx + int2(-1,  0), int2(0, 0), maxHalf);
     int2 pxR = clamp(cpx + int2( 1,  0), int2(0, 0), maxHalf);
     int2 pxU = clamp(cpx + int2( 0, -1), int2(0, 0), maxHalf);
@@ -86,6 +88,35 @@ float3 LoadViewNormal(float2 uv, float3 centerPosVS, float centerZ)
     return (lenSq > 1e-8f) ? (n * rsqrt(lenSq)) : float3(0.0f, 0.0f, 1.0f);
 }
 
+float3 LoadViewNormal(int2 centerPx, float3 centerPosVS, float centerZ)
+{
+    float3 geomN = ReconstructHalfDepthNormal(centerPx, centerPosVS, centerZ);
+    if ((flags & 1u) == 0u)
+    {
+        return geomN;
+    }
+
+    int2 maxFull = int2(max(int(fullRes.x) - 1, 0), max(int(fullRes.y) - 1, 0));
+    int2 basePx = centerPx * 2;
+    float3 accumN = float3(0.0f, 0.0f, 0.0f);
+
+    [unroll]
+    for (int dy = 0; dy < 2; ++dy)
+    {
+        [unroll]
+        for (int dx = 0; dx < 2; ++dx)
+        {
+            int2 fpx = clamp(basePx + int2(dx, dy), int2(0, 0), maxFull);
+            float3 n = OctDecode(t_Normal.Load(int3(fpx, 0)).rg);
+            float w = max(dot(n, geomN), 0.05f);
+            accumN += n * w;
+        }
+    }
+
+    float lenSq = dot(accumN, accumN);
+    return (lenSq > 1e-8f) ? (accumN * rsqrt(lenSq)) : geomN;
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
@@ -94,8 +125,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
+    int2 centerPx = int2(DTid.xy);
+    int2 maxHalf = int2(max(int(halfRes.x) - 1, 0), max(int(halfRes.y) - 1, 0));
     float maxValidZ = min(farPlane, 65000.0f) * 0.998f;
-    float centerZ = t_PrefilteredDepth.Load(int3(int2(DTid.xy), 0)).r;
+    float centerZ = t_PrefilteredDepth.Load(int3(centerPx, 0)).r;
     if (centerZ >= maxValidZ || centerZ <= 1e-4f)
     {
         u_OutAO[DTid.xy] = 1.0f;
@@ -106,11 +139,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float3 viewPos = ReconstructViewPos(uv, centerZ);
     float3 viewVec = ((flags & 2u) != 0u) ? float3(0.0f, 0.0f, 1.0f) : normalize(-viewPos);
 
-    float3 viewNormal = LoadViewNormal(uv, viewPos, centerZ);
+    float3 viewNormal = LoadViewNormal(centerPx, viewPos, centerZ);
     if (dot(viewNormal, viewVec) < 0.0f)
     {
         viewNormal = -viewNormal;
     }
+
+    // Small view/normal bias prevents depth quantization & facet self-occlusion on flat surfaces
+    float3 biasedViewPos = viewPos
+        + viewVec * max(0.003f * centerZ, 0.004f)
+        + viewNormal * max(0.0015f * centerZ, 0.002f);
 
     float worldRadius = max(effectRadius * radiusMultiplier, 0.05f);
     float screenspaceRadius = ((flags & 2u) != 0u)
@@ -133,9 +171,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float noiseSlice = noise.x;
     float noiseSample = noise.y;
 
-    // XeGTAO Low/Medium preset for RDNA2 660M iGPU: 2 slices x 3 steps per side
-    const int kSliceCount = 2;
-    const int kStepsPerSlice = 3;
+    const int kSliceCount = 4;
+    const int kStepsPerSlice = 4;
+    const float kHorizonBias = 0.03f;
 
     float visibility = 0.0f;
 
@@ -175,26 +213,30 @@ void main(uint3 DTid : SV_DispatchThreadID)
             t = pow(max(t, 1e-4f), sampleDistributionPower);
             float sampleDistPx = max(t * screenspaceRadius, 1.0f);
             float2 sampleOffsetUV = omega * (sampleDistPx * invHalfRes);
-            float mip = clamp(log2(sampleDistPx) - 1.5f, 0.0f, float(maxDepthMip));
 
-            // Side 0: -omega
+            // Side 0: -omega (sample mip 0 at exact texel centers to eliminate coarse-mip stair-stepping)
             float2 uv0 = uv - sampleOffsetUV;
             if (all(uv0 >= 0.0f) && all(uv0 <= 1.0f))
             {
-                float z0 = t_PrefilteredDepth.SampleLevel(s_PointClamp, uv0, mip).r;
-                if (z0 < maxValidZ && z0 > 1e-4f)
+                int2 spx0 = clamp(int2(uv0 * float2(halfRes)), int2(0, 0), maxHalf);
+                if (!all(spx0 == centerPx))
                 {
-                    float3 delta0 = ReconstructViewPos(uv0, z0) - viewPos;
-                    float dist0 = length(delta0);
-                    if (dist0 > 1e-4f)
+                    float z0 = t_PrefilteredDepth.Load(int3(spx0, 0)).r;
+                    if (z0 < maxValidZ && z0 > 1e-4f)
                     {
-                        float hCos0 = dot(delta0 / dist0, viewVec);
-                        float weight0 = saturate(dist0 * falloffMul + falloffAdd);
-                        if (thinOccluderCompensation > 0.0f && dist0 > worldRadius * 0.5f)
+                        float2 exactUV0 = (float2(spx0) + 0.5f) * invHalfRes;
+                        float3 delta0 = ReconstructViewPos(exactUV0, z0) - biasedViewPos;
+                        float dist0 = length(delta0);
+                        if (dist0 > 1e-4f)
                         {
-                            weight0 *= saturate(1.0f - thinOccluderCompensation * saturate((dist0 - worldRadius * 0.5f) / worldRadius));
+                            float hCos0 = dot(delta0 / dist0, viewVec) - kHorizonBias;
+                            float weight0 = saturate(dist0 * falloffMul + falloffAdd);
+                            if (thinOccluderCompensation > 0.0f && dist0 > worldRadius * 0.5f)
+                            {
+                                weight0 *= saturate(1.0f - thinOccluderCompensation * saturate((dist0 - worldRadius * 0.5f) / worldRadius));
+                            }
+                            horizonCos0 = max(horizonCos0, lerp(lowHorizonCos0, hCos0, weight0));
                         }
-                        horizonCos0 = max(horizonCos0, lerp(lowHorizonCos0, hCos0, weight0));
                     }
                 }
             }
@@ -203,20 +245,25 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float2 uv1 = uv + sampleOffsetUV;
             if (all(uv1 >= 0.0f) && all(uv1 <= 1.0f))
             {
-                float z1 = t_PrefilteredDepth.SampleLevel(s_PointClamp, uv1, mip).r;
-                if (z1 < maxValidZ && z1 > 1e-4f)
+                int2 spx1 = clamp(int2(uv1 * float2(halfRes)), int2(0, 0), maxHalf);
+                if (!all(spx1 == centerPx))
                 {
-                    float3 delta1 = ReconstructViewPos(uv1, z1) - viewPos;
-                    float dist1 = length(delta1);
-                    if (dist1 > 1e-4f)
+                    float z1 = t_PrefilteredDepth.Load(int3(spx1, 0)).r;
+                    if (z1 < maxValidZ && z1 > 1e-4f)
                     {
-                        float hCos1 = dot(delta1 / dist1, viewVec);
-                        float weight1 = saturate(dist1 * falloffMul + falloffAdd);
-                        if (thinOccluderCompensation > 0.0f && dist1 > worldRadius * 0.5f)
+                        float2 exactUV1 = (float2(spx1) + 0.5f) * invHalfRes;
+                        float3 delta1 = ReconstructViewPos(exactUV1, z1) - biasedViewPos;
+                        float dist1 = length(delta1);
+                        if (dist1 > 1e-4f)
                         {
-                            weight1 *= saturate(1.0f - thinOccluderCompensation * saturate((dist1 - worldRadius * 0.5f) / worldRadius));
+                            float hCos1 = dot(delta1 / dist1, viewVec) - kHorizonBias;
+                            float weight1 = saturate(dist1 * falloffMul + falloffAdd);
+                            if (thinOccluderCompensation > 0.0f && dist1 > worldRadius * 0.5f)
+                            {
+                                weight1 *= saturate(1.0f - thinOccluderCompensation * saturate((dist1 - worldRadius * 0.5f) / worldRadius));
+                            }
+                            horizonCos1 = max(horizonCos1, lerp(lowHorizonCos1, hCos1, weight1));
                         }
-                        horizonCos1 = max(horizonCos1, lerp(lowHorizonCos1, hCos1, weight1));
                     }
                 }
             }

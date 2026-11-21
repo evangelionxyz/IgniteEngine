@@ -82,13 +82,16 @@ namespace ignite
 
         struct DenoiseCB
         {
+            glm::mat4 projectionInv = glm::mat4(1.0f);
             glm::uvec2 halfRes = glm::uvec2(1u);
             glm::uvec2 fullRes = glm::uvec2(1u);
             glm::ivec2 direction = glm::ivec2(1, 0);
             float depthSigma = 0.08f;
             float farPlane = 500.0f;
+            float nearPlane = 0.1f;
             uint32_t hasNormals = 0;
-            uint32_t _pad[3] = { 0, 0, 0 };
+            uint32_t passMode = 0;
+            uint32_t _pad = 0;
         };
 
         void CreateTextures(uint32_t fullWidth, uint32_t fullHeight);
@@ -103,6 +106,7 @@ namespace ignite
 
         Ref<Texture> m_PrefilteredDepth;
         Ref<Texture> m_AOTexA;
+        Ref<Texture> m_AOTexHalfB;
         Ref<Texture> m_AOTexB;
 
         BindingLayoutDesc m_PrefilterLayout;
@@ -123,6 +127,7 @@ namespace ignite
         Ref<ConstantBuffer> m_MainCB;
         Ref<ConstantBuffer> m_DenoiseHCB;
         Ref<ConstantBuffer> m_DenoiseVCB;
+        Ref<ConstantBuffer> m_DenoiseUpsampleCB;
 
         Ref<Shader> m_PrefilterShader;
         Ref<Shader> m_MainShader;

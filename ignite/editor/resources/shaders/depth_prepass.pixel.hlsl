@@ -26,30 +26,9 @@ float2 main(PixelVertexInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARG
         }
     }
 
-    float3 N = normalize(input.normal);
-    float3 finalNormal = N;
-
-    if (material.normalTextureIndex >= 0)
-    {
-        float3 T = input.tangent - N * dot(N, input.tangent);
-        float tLenSq = dot(T, T);
-        if (tLenSq > 1e-6f)
-        {
-            T *= rsqrt(tLenSq);
-        }
-        else
-        {
-            float3 bFallback;
-            BuildOrthonormalBasis(N, T, bFallback);
-        }
-        float3 bitangent = cross(N, T);
-        float3 B = dot(bitangent, input.bitangent) < 0.0f ? -bitangent : bitangent;
-
-        Texture2D normalMapTex = ResourceDescriptorHeap[SafeBindlessIndex(material.normalTextureIndex)];
-        float3 tangentNormal = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
-        finalNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
-    }
-
+    // Output clean geometric vertex normals (without tangent normal-map bumps) so GTAO
+    // evaluates against the same smooth macro geometry represented by the depth buffer.
+    float3 finalNormal = normalize(input.normal);
     if (!isFrontFace)
     {
         finalNormal = -finalNormal;

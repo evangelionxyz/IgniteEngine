@@ -16,6 +16,10 @@ struct PSInput
 {
     float4 position : SV_POSITION;
     float3 worldNormal : NORMAL;
+    float3 tangent : TANGENT;
+    float3 bitangent : BITANGENT;
+    float2 uv : TEXCOORD;
+    float4 color : COLOR;
     nointerpolation uint probeIndex : PROBEINDEX;
 };
 
@@ -49,4 +53,3 @@ PSOutput main(PSInput input)
     output.objectID = 0xFFFFFFFFu;
     return output;
 }
-

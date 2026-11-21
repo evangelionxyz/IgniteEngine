@@ -115,6 +115,7 @@ namespace ignite
             .AddItem(BindingLayoutItem::TextureSRV(0))
             .AddItem(BindingLayoutItem::TextureSRV(1))
             .AddItem(BindingLayoutItem::TextureSRV(2))
+            .AddItem(BindingLayoutItem::TextureSRV(3))
             .AddItem(BindingLayoutItem::TextureUAV(0));
 
         for (uint32_t m = 0; m < kMaxDepthMips; ++m)
@@ -124,10 +125,11 @@ namespace ignite
         m_MainCB = ConstantBuffer::Create(sizeof(MainCB), true, 1, "GTAO Main CB");
         m_DenoiseHCB = ConstantBuffer::Create(sizeof(DenoiseCB), true, 1, "GTAO Denoise H CB");
         m_DenoiseVCB = ConstantBuffer::Create(sizeof(DenoiseCB), true, 1, "GTAO Denoise V CB");
+        m_DenoiseUpsampleCB = ConstantBuffer::Create(sizeof(DenoiseCB), true, 1, "GTAO Upsample CB");
 
-        m_PrefilterShader = Shader::Create("resources/shaders/gtao_prefilter_depth.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
-        m_MainShader = Shader::Create("resources/shaders/gtao_main.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
-        m_DenoiseShader = Shader::Create("resources/shaders/gtao_denoise.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
+        m_PrefilterShader = Shader::Create("resources/shaders/gtao_prefilter_depth.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
+        m_MainShader = Shader::Create("resources/shaders/gtao_main.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
+        m_DenoiseShader = Shader::Create("resources/shaders/gtao_denoise.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
 
         CreateTextures(fullWidth, fullHeight);
     }
@@ -143,6 +145,7 @@ namespace ignite
         InvalidatePipelines();
         m_PrefilteredDepth.reset();
         m_AOTexA.reset();
+        m_AOTexHalfB.reset();
         m_AOTexB.reset();
 
         if (dm && dm->GetDevice() && m_PointClampSampler)
@@ -154,7 +157,7 @@ namespace ignite
 
     void GTAO::CreateTextures(uint32_t fullWidth, uint32_t fullHeight)
     {
-        const bool hadTextures = (m_PrefilteredDepth || m_AOTexA || m_AOTexB);
+        const bool hadTextures = (m_PrefilteredDepth || m_AOTexA || m_AOTexHalfB || m_AOTexB);
         if (hadTextures)
         {
             if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
@@ -163,6 +166,7 @@ namespace ignite
             }
             m_PrefilteredDepth.reset();
             m_AOTexA.reset();
+            m_AOTexHalfB.reset();
             m_AOTexB.reset();
             BindingCache::Clear();
         }
@@ -181,7 +185,7 @@ namespace ignite
         depthInfo.arraySize = 1;
         depthInfo.sampleCount = 1;
         depthInfo.dimension = nri::TextureType::TEXTURE_2D;
-        depthInfo.format = nri::Format::R16_SFLOAT;
+        depthInfo.format = nri::Format::R32_SFLOAT;
         depthInfo.isUAV = true;
         depthInfo.isRenderTarget = false;
         depthInfo.bindless = false;
@@ -205,9 +209,12 @@ namespace ignite
         aoTempInfo.samplerLinearFiltering = true;
         aoTempInfo.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
         aoTempInfo.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
-        m_AOTexA = Texture::Create(aoTempInfo, "[GTAO Scratch]");
+        m_AOTexA = Texture::Create(aoTempInfo, "[GTAO Scratch A]");
+        m_AOTexHalfB = Texture::Create(aoTempInfo, "[GTAO Scratch HalfB]");
 
         TextureCreateInfo aoOutInfo = aoTempInfo;
+        aoOutInfo.width = m_FullWidth;
+        aoOutInfo.height = m_FullHeight;
         aoOutInfo.bindless = true;
         aoOutInfo.forceBindless = true;
         m_AOTexB = Texture::Create(aoOutInfo, "[GTAO Final]");
@@ -222,7 +229,7 @@ namespace ignite
     {
         const uint32_t safeW = std::max(1u, fullWidth);
         const uint32_t safeH = std::max(1u, fullHeight);
-        if (m_FullWidth == safeW && m_FullHeight == safeH && m_PrefilteredDepth && m_AOTexA && m_AOTexB)
+        if (m_FullWidth == safeW && m_FullHeight == safeH && m_PrefilteredDepth && m_AOTexA && m_AOTexHalfB && m_AOTexB)
         {
             return;
         }
@@ -292,7 +299,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!cmd || !depthTexture || !depthTexture->GetHandle() || !camera || !m_PrefilteredDepth || !m_AOTexA || !m_AOTexB)
+        if (!cmd || !depthTexture || !depthTexture->GetHandle() || !camera || !m_PrefilteredDepth || !m_AOTexA || !m_AOTexHalfB || !m_AOTexB)
             return;
 
         EnsurePipelines();
@@ -320,7 +327,7 @@ namespace ignite
         // Prepare all prefiltered depth mips + AO scratch/output buffers for compute UAV writes
         {
             std::vector<nri::TextureBarrierDesc> initBarriers;
-            initBarriers.reserve(3);
+            initBarriers.reserve(4);
 
             const auto currentState = [](const Ref<Texture> &texture)
             {
@@ -350,6 +357,17 @@ namespace ignite
             aoAB.layerNum = 1;
             aoAB.planes = nri::PlaneBits::ALL;
             initBarriers.push_back(aoAB);
+
+            nri::TextureBarrierDesc aoHalfBB = {};
+            aoHalfBB.texture = m_AOTexHalfB->GetHandle();
+            aoHalfBB.before = currentState(m_AOTexHalfB);
+            aoHalfBB.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
+            aoHalfBB.mipOffset = 0;
+            aoHalfBB.mipNum = 1;
+            aoHalfBB.layerOffset = 0;
+            aoHalfBB.layerNum = 1;
+            aoHalfBB.planes = nri::PlaneBits::ALL;
+            initBarriers.push_back(aoHalfBB);
 
             nri::TextureBarrierDesc aoBB = {};
             aoBB.texture = m_AOTexB->GetHandle();
@@ -434,7 +452,7 @@ namespace ignite
         }
 
         // -------------------------------------------------------------------
-        // Pass 2: XeGTAO Main (writes raw half-res AO to m_AOTexB)
+        // Pass 2: XeGTAO Main (writes raw half-res AO to m_AOTexHalfB)
         // -------------------------------------------------------------------
         {
             const bool isOrtho = (camera->projectionType == ProjectionType::Orthographic);
@@ -465,7 +483,7 @@ namespace ignite
             bsDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_MainCB->GetDescriptor()));
             bsDesc.AddItem(BindingSetItem::TextureSRV(0, m_PrefilteredDepth->GetShaderResourceView()));
             bsDesc.AddItem(BindingSetItem::TextureSRV(1, safeNormalTex->GetShaderResourceView()));
-            bsDesc.AddItem(BindingSetItem::TextureUAV(0, m_AOTexB->GetStorageView(0)));
+            bsDesc.AddItem(BindingSetItem::TextureUAV(0, m_AOTexHalfB->GetStorageView(0)));
             bsDesc.AddItem(BindingSetItem::Sampler(0, m_PointClampSampler));
             Ref<BindingSet> bs = BindingCache::GetOrCreateBindingSet(bsDesc, m_MainPipelineLayout, 0, "GTAO Main");
             if (!bs || !bs->GetHandle())
@@ -480,7 +498,7 @@ namespace ignite
             nri.CmdDispatch(*cmd, disp);
 
             nri::TextureBarrierDesc mainDone = {};
-            mainDone.texture = m_AOTexB->GetHandle();
+            mainDone.texture = m_AOTexHalfB->GetHandle();
             mainDone.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
             mainDone.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER };
             mainDone.mipOffset = 0;
@@ -496,7 +514,7 @@ namespace ignite
         }
 
         // -------------------------------------------------------------------
-        // Pass 3: Bilateral Edge-Aware Denoise (H: B -> A, V: A -> B)
+        // Pass 3: Bilateral Edge-Aware Denoise (H: HalfB -> A, V: A -> HalfB) + Full-Res Upsample (HalfB -> B)
         // -------------------------------------------------------------------
         nri::Descriptor *depthMip0SRV = (m_DepthMipCount > 1u)
             ? m_PrefilteredDepth->GetMipShaderResourceView(0)
@@ -505,22 +523,26 @@ namespace ignite
         nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_DenoisePipelineLayout);
         nri.CmdSetPipeline(*cmd, *m_DenoisePipeline);
 
-        // Horizontal: m_AOTexB -> m_AOTexA
+        // Horizontal: m_AOTexHalfB -> m_AOTexA
         {
             DenoiseCB hcb{};
+            hcb.projectionInv = projInv;
             hcb.halfRes = glm::uvec2(m_HalfWidth, m_HalfHeight);
             hcb.fullRes = glm::uvec2(m_FullWidth, m_FullHeight);
             hcb.direction = glm::ivec2(1, 0);
             hcb.depthSigma = 0.08f;
             hcb.farPlane = farPlane;
+            hcb.nearPlane = nearPlane;
             hcb.hasNormals = hasNormals ? 1u : 0u;
+            hcb.passMode = 0u;
             m_DenoiseHCB->SetData(&hcb, sizeof(hcb));
 
             BindingSetDesc bsDesc;
             bsDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_DenoiseHCB->GetDescriptor()));
-            bsDesc.AddItem(BindingSetItem::TextureSRV(0, m_AOTexB->GetShaderResourceView()));
+            bsDesc.AddItem(BindingSetItem::TextureSRV(0, m_AOTexHalfB->GetShaderResourceView()));
             bsDesc.AddItem(BindingSetItem::TextureSRV(1, depthMip0SRV));
             bsDesc.AddItem(BindingSetItem::TextureSRV(2, safeNormalTex->GetShaderResourceView()));
+            bsDesc.AddItem(BindingSetItem::TextureSRV(3, depthTexture->GetShaderResourceView()));
             bsDesc.AddItem(BindingSetItem::TextureUAV(0, m_AOTexA->GetStorageView(0)));
             Ref<BindingSet> bs = BindingCache::GetOrCreateBindingSet(bsDesc, m_DenoisePipelineLayout, 0, "GTAO Denoise H");
             if (!bs || !bs->GetHandle())
@@ -540,7 +562,7 @@ namespace ignite
             barriers[0].layerNum = 1;
             barriers[0].planes = nri::PlaneBits::ALL;
 
-            barriers[1].texture = m_AOTexB->GetHandle();
+            barriers[1].texture = m_AOTexHalfB->GetHandle();
             barriers[1].before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER };
             barriers[1].after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
             barriers[1].mipNum = 1;
@@ -553,15 +575,18 @@ namespace ignite
             nri.CmdBarrier(*cmd, bd);
         }
 
-        // Vertical: m_AOTexA -> m_AOTexB
+        // Vertical: m_AOTexA -> m_AOTexHalfB
         {
             DenoiseCB vcb{};
+            vcb.projectionInv = projInv;
             vcb.halfRes = glm::uvec2(m_HalfWidth, m_HalfHeight);
             vcb.fullRes = glm::uvec2(m_FullWidth, m_FullHeight);
             vcb.direction = glm::ivec2(0, 1);
             vcb.depthSigma = 0.08f;
             vcb.farPlane = farPlane;
+            vcb.nearPlane = nearPlane;
             vcb.hasNormals = hasNormals ? 1u : 0u;
+            vcb.passMode = 1u;
             m_DenoiseVCB->SetData(&vcb, sizeof(vcb));
 
             BindingSetDesc bsDesc;
@@ -569,7 +594,8 @@ namespace ignite
             bsDesc.AddItem(BindingSetItem::TextureSRV(0, m_AOTexA->GetShaderResourceView()));
             bsDesc.AddItem(BindingSetItem::TextureSRV(1, depthMip0SRV));
             bsDesc.AddItem(BindingSetItem::TextureSRV(2, safeNormalTex->GetShaderResourceView()));
-            bsDesc.AddItem(BindingSetItem::TextureUAV(0, m_AOTexB->GetStorageView(0)));
+            bsDesc.AddItem(BindingSetItem::TextureSRV(3, depthTexture->GetShaderResourceView()));
+            bsDesc.AddItem(BindingSetItem::TextureUAV(0, m_AOTexHalfB->GetStorageView(0)));
             Ref<BindingSet> bs = BindingCache::GetOrCreateBindingSet(bsDesc, m_DenoisePipelineLayout, 0, "GTAO Denoise V");
             if (!bs || !bs->GetHandle())
                 return;
@@ -578,6 +604,51 @@ namespace ignite
             nri.CmdSetDescriptorSet(*cmd, setDesc);
 
             nri::DispatchDesc disp = { (m_HalfWidth + 7u) / 8u, (m_HalfHeight + 7u) / 8u, 1u };
+            nri.CmdDispatch(*cmd, disp);
+
+            nri::TextureBarrierDesc halfDone = {};
+            halfDone.texture = m_AOTexHalfB->GetHandle();
+            halfDone.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
+            halfDone.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER };
+            halfDone.mipNum = 1;
+            halfDone.layerNum = 1;
+            halfDone.planes = nri::PlaneBits::ALL;
+
+            nri::BarrierDesc bd = {};
+            bd.textures = &halfDone;
+            bd.textureNum = 1;
+            nri.CmdBarrier(*cmd, bd);
+        }
+
+        // Full-res Bilateral Upsample: m_AOTexHalfB -> m_AOTexB
+        {
+            DenoiseCB ucb{};
+            ucb.projectionInv = projInv;
+            ucb.halfRes = glm::uvec2(m_HalfWidth, m_HalfHeight);
+            ucb.fullRes = glm::uvec2(m_FullWidth, m_FullHeight);
+            ucb.direction = glm::ivec2(0, 0);
+            ucb.depthSigma = 0.08f;
+            ucb.farPlane = farPlane;
+            ucb.nearPlane = nearPlane;
+            ucb.hasNormals = hasNormals ? 1u : 0u;
+            ucb.passMode = 2u;
+            m_DenoiseUpsampleCB->SetData(&ucb, sizeof(ucb));
+
+            BindingSetDesc bsDesc;
+            bsDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_DenoiseUpsampleCB->GetDescriptor()));
+            bsDesc.AddItem(BindingSetItem::TextureSRV(0, m_AOTexHalfB->GetShaderResourceView()));
+            bsDesc.AddItem(BindingSetItem::TextureSRV(1, depthMip0SRV));
+            bsDesc.AddItem(BindingSetItem::TextureSRV(2, safeNormalTex->GetShaderResourceView()));
+            bsDesc.AddItem(BindingSetItem::TextureSRV(3, depthTexture->GetShaderResourceView()));
+            bsDesc.AddItem(BindingSetItem::TextureUAV(0, m_AOTexB->GetStorageView(0)));
+            Ref<BindingSet> bs = BindingCache::GetOrCreateBindingSet(bsDesc, m_DenoisePipelineLayout, 0, "GTAO Upsample");
+            if (!bs || !bs->GetHandle())
+                return;
+
+            nri::SetDescriptorSetDesc setDesc = { 0, bs->GetHandle(), nri::BindPoint::COMPUTE };
+            nri.CmdSetDescriptorSet(*cmd, setDesc);
+
+            nri::DispatchDesc disp = { (m_FullWidth + 7u) / 8u, (m_FullHeight + 7u) / 8u, 1u };
             nri.CmdDispatch(*cmd, disp);
 
             nri::TextureBarrierDesc outDone = {};
@@ -597,6 +668,7 @@ namespace ignite
 
         m_PrefilteredDepth->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER);
         m_AOTexA->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER);
+        m_AOTexHalfB->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER);
         m_AOTexB->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE,
             nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER);
     }

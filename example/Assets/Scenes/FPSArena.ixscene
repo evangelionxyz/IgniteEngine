@@ -2098,377 +2098,11 @@
                 }
             },
             {
-                "ID": 920000000000000202,
-                "Name": "Light_GalleryCenter",
-                "Type": "Node",
-                "Parent": 0,
-                "Order": 24,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.0,
-                        3.5999999046325684,
-                        -5.400000095367432
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "LocalTranslation": [
-                        0.0,
-                        3.5999999046325684,
-                        -5.400000095367432
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true,
-                    "ContributeGI": true,
-                    "ReceiveGI": true
-                },
-                "PointLight": {
-                    "Color": [
-                        0.9200000166893005,
-                        0.9700000286102295,
-                        1.0,
-                        1.0
-                    ],
-                    "Intensity": 9.0,
-                    "Range": 15.0,
-                    "Enabled": true,
-                    "BakeIndirect": true,
-                    "ConstantAttenuation": 1.0,
-                    "LinearAttenuation": 0.09000000357627869,
-                    "QuadraticAttenuation": 0.03200000151991844
-                }
-            },
-            {
-                "ID": 920000000000000201,
-                "Name": "Light_GalleryLeft",
-                "Type": "Node",
-                "Parent": 0,
-                "Order": 25,
-                "Transform": {
-                    "WorldTranslation": [
-                        -5.5,
-                        3.4000000953674316,
-                        -5.599999904632568
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "LocalTranslation": [
-                        -5.5,
-                        3.4000000953674316,
-                        -5.599999904632568
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true,
-                    "ContributeGI": true,
-                    "ReceiveGI": true
-                },
-                "PointLight": {
-                    "Color": [
-                        1.0,
-                        0.9599999785423279,
-                        0.8999999761581421,
-                        1.0
-                    ],
-                    "Intensity": 8.5,
-                    "Range": 14.0,
-                    "Enabled": true,
-                    "BakeIndirect": true,
-                    "ConstantAttenuation": 1.0,
-                    "LinearAttenuation": 0.09000000357627869,
-                    "QuadraticAttenuation": 0.03200000151991844
-                }
-            },
-            {
-                "ID": 920000000000000203,
-                "Name": "Light_GalleryRight",
-                "Type": "Node",
-                "Parent": 0,
-                "Order": 26,
-                "Transform": {
-                    "WorldTranslation": [
-                        5.5,
-                        3.4000000953674316,
-                        -5.599999904632568
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "LocalTranslation": [
-                        5.5,
-                        3.4000000953674316,
-                        -5.599999904632568
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true,
-                    "ContributeGI": true,
-                    "ReceiveGI": true
-                },
-                "PointLight": {
-                    "Color": [
-                        0.8500000238418579,
-                        0.949999988079071,
-                        1.0,
-                        1.0
-                    ],
-                    "Intensity": 8.5,
-                    "Range": 14.0,
-                    "Enabled": true,
-                    "BakeIndirect": true,
-                    "ConstantAttenuation": 1.0,
-                    "LinearAttenuation": 0.09000000357627869,
-                    "QuadraticAttenuation": 0.03200000151991844
-                }
-            },
-            {
-                "ID": 920000000000000003,
-                "Name": "Light_JumpPad",
-                "Type": "Node",
-                "Parent": 0,
-                "Order": 27,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.0,
-                        1.149999976158142,
-                        0.0
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "LocalTranslation": [
-                        0.0,
-                        1.149999976158142,
-                        0.0
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true,
-                    "ContributeGI": true,
-                    "ReceiveGI": true
-                },
-                "PointLight": {
-                    "Color": [
-                        0.18000000715255737,
-                        0.8799999952316284,
-                        1.0,
-                        1.0
-                    ],
-                    "Intensity": 6.5,
-                    "Range": 9.0,
-                    "Enabled": true,
-                    "BakeIndirect": true,
-                    "ConstantAttenuation": 1.0,
-                    "LinearAttenuation": 0.09000000357627869,
-                    "QuadraticAttenuation": 0.03200000151991844
-                }
-            },
-            {
-                "ID": 920000000000000006,
-                "Name": "Light_SpawnBay",
-                "Type": "Node",
-                "Parent": 0,
-                "Order": 28,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.0,
-                        5.0,
-                        13.0
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "LocalTranslation": [
-                        0.0,
-                        5.0,
-                        13.0
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true,
-                    "ContributeGI": true,
-                    "ReceiveGI": true
-                },
-                "PointLight": {
-                    "Color": [
-                        0.3499999940395355,
-                        0.7799999713897705,
-                        1.0,
-                        1.0
-                    ],
-                    "Intensity": 32.0,
-                    "Range": 22.0,
-                    "Enabled": true,
-                    "BakeIndirect": true,
-                    "ConstantAttenuation": 1.0,
-                    "LinearAttenuation": 0.09000000357627869,
-                    "QuadraticAttenuation": 0.03200000151991844
-                }
-            },
-            {
-                "ID": 920000000000000005,
-                "Name": "Light_TargetBay",
-                "Type": "Node",
-                "Parent": 0,
-                "Order": 29,
-                "Transform": {
-                    "WorldTranslation": [
-                        0.0,
-                        6.199999809265137,
-                        -14.0
-                    ],
-                    "WorldRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "WorldScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "LocalTranslation": [
-                        0.0,
-                        6.199999809265137,
-                        -14.0
-                    ],
-                    "LocalRotation": [
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0
-                    ],
-                    "LocalScale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                },
-                "Rendering": {
-                    "Visible": true,
-                    "ContributeGI": true,
-                    "ReceiveGI": true
-                },
-                "PointLight": {
-                    "Color": [
-                        1.0,
-                        0.3499999940395355,
-                        0.30000001192092896,
-                        1.0
-                    ],
-                    "Intensity": 38.0,
-                    "Range": 24.0,
-                    "Enabled": true,
-                    "BakeIndirect": true,
-                    "ConstantAttenuation": 1.0,
-                    "LinearAttenuation": 0.09000000357627869,
-                    "QuadraticAttenuation": 0.03200000151991844
-                }
-            },
-            {
                 "ID": 920000000000000210,
                 "Name": "MatLabel_01",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 30,
+                "Order": 24,
                 "Transform": {
                     "WorldTranslation": [
                         -8.100000381469727,
@@ -2514,7 +2148,7 @@
                 "Name": "MatLabel_02",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 31,
+                "Order": 25,
                 "Transform": {
                     "WorldTranslation": [
                         -6.300000190734863,
@@ -2560,7 +2194,7 @@
                 "Name": "MatLabel_03",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 32,
+                "Order": 26,
                 "Transform": {
                     "WorldTranslation": [
                         -4.5,
@@ -2606,7 +2240,7 @@
                 "Name": "MatLabel_04",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 33,
+                "Order": 27,
                 "Transform": {
                     "WorldTranslation": [
                         -2.700000047683716,
@@ -2652,7 +2286,7 @@
                 "Name": "MatLabel_05",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 34,
+                "Order": 28,
                 "Transform": {
                     "WorldTranslation": [
                         -0.8999999761581421,
@@ -2698,7 +2332,7 @@
                 "Name": "MatLabel_06",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 35,
+                "Order": 29,
                 "Transform": {
                     "WorldTranslation": [
                         0.8999999761581421,
@@ -2744,7 +2378,7 @@
                 "Name": "MatLabel_07",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 36,
+                "Order": 30,
                 "Transform": {
                     "WorldTranslation": [
                         2.700000047683716,
@@ -2790,7 +2424,7 @@
                 "Name": "MatLabel_08",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 37,
+                "Order": 31,
                 "Transform": {
                     "WorldTranslation": [
                         4.5,
@@ -2836,7 +2470,7 @@
                 "Name": "MatLabel_09",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 38,
+                "Order": 32,
                 "Transform": {
                     "WorldTranslation": [
                         6.300000190734863,
@@ -2882,7 +2516,7 @@
                 "Name": "MatLabel_10",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 39,
+                "Order": 33,
                 "Transform": {
                     "WorldTranslation": [
                         8.100000381469727,
@@ -2928,7 +2562,7 @@
                 "Name": "MaterialSphere_BrushedSteel",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 40,
+                "Order": 34,
                 "Transform": {
                     "WorldTranslation": [
                         3.75,
@@ -3030,7 +2664,7 @@
                 "Name": "MaterialSphere_MatteRubber",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 41,
+                "Order": 35,
                 "Transform": {
                     "WorldTranslation": [
                         -6.25,
@@ -3132,7 +2766,7 @@
                 "Name": "MaterialSphere_MatteTerracotta",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 42,
+                "Order": 36,
                 "Transform": {
                     "WorldTranslation": [
                         -3.75,
@@ -3234,7 +2868,7 @@
                 "Name": "MaterialSphere_MirrorChrome",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 43,
+                "Order": 37,
                 "Transform": {
                     "WorldTranslation": [
                         11.25,
@@ -3336,7 +2970,7 @@
                 "Name": "MaterialSphere_PolishedCopper",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 44,
+                "Order": 38,
                 "Transform": {
                     "WorldTranslation": [
                         6.25,
@@ -3438,7 +3072,7 @@
                 "Name": "MaterialSphere_PolishedGold",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 45,
+                "Order": 39,
                 "Transform": {
                     "WorldTranslation": [
                         8.75,
@@ -3540,7 +3174,7 @@
                 "Name": "MaterialSphere_RoughAsphalt",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 46,
+                "Order": 40,
                 "Transform": {
                     "WorldTranslation": [
                         -8.75,
@@ -3642,7 +3276,7 @@
                 "Name": "MaterialSphere_RoughConcrete",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 47,
+                "Order": 41,
                 "Transform": {
                     "WorldTranslation": [
                         -11.25,
@@ -3744,7 +3378,7 @@
                 "Name": "MaterialSphere_SatinCeramic",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 48,
+                "Order": 42,
                 "Transform": {
                     "WorldTranslation": [
                         -1.25,
@@ -3846,7 +3480,7 @@
                 "Name": "MaterialSphere_SemiMetalAlloy",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 49,
+                "Order": 43,
                 "Transform": {
                     "WorldTranslation": [
                         1.25,
@@ -3948,7 +3582,7 @@
                 "Name": "Pedestal_HeroHelmet",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 50,
+                "Order": 44,
                 "Transform": {
                     "WorldTranslation": [
                         6.199999809265137,
@@ -4054,7 +3688,7 @@
                 "Name": "PhysicsCrate_04",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 51,
+                "Order": 45,
                 "Transform": {
                     "WorldTranslation": [
                         3.5,
@@ -4155,7 +3789,7 @@
                 "Name": "PhysicsCrate_05",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 52,
+                "Order": 46,
                 "Transform": {
                     "WorldTranslation": [
                         4.800000190734863,
@@ -4256,7 +3890,7 @@
                 "Name": "PhysicsCrate_06",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 53,
+                "Order": 47,
                 "Transform": {
                     "WorldTranslation": [
                         4.150000095367432,
@@ -4357,7 +3991,7 @@
                 "Name": "PhysicsSphere_01",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 54,
+                "Order": 48,
                 "Transform": {
                     "WorldTranslation": [
                         -1.399999976158142,
@@ -4459,7 +4093,7 @@
                 "Name": "PhysicsSphere_02",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 55,
+                "Order": 49,
                 "Transform": {
                     "WorldTranslation": [
                         -0.5999999642372131,
@@ -4561,7 +4195,7 @@
                 "Name": "PhysicsSphere_03",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 56,
+                "Order": 50,
                 "Transform": {
                     "WorldTranslation": [
                         1.399999976158142,
@@ -4663,7 +4297,7 @@
                 "Name": "PlayerAvatar",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 57,
+                "Order": 51,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -4930,7 +4564,7 @@
                         "ChromAbAmount": 0.0010000000474974513,
                         "ChromAbRadial": 0.10000000149011612,
                         "AoMode": 2,
-                        "AoRadius": 0.5,
+                        "AoRadius": 1.0,
                         "AoBias": 0.02500000037252903,
                         "AoIntensity": 1.5,
                         "AoPower": 1.5,
@@ -5209,7 +4843,7 @@
                 "Name": "Plinth_BrushedSteel",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 58,
+                "Order": 52,
                 "Transform": {
                     "WorldTranslation": [
                         3.75,
@@ -5315,7 +4949,7 @@
                 "Name": "Plinth_MatteRubber",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 59,
+                "Order": 53,
                 "Transform": {
                     "WorldTranslation": [
                         -6.25,
@@ -5421,7 +5055,7 @@
                 "Name": "Plinth_MatteTerracotta",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 60,
+                "Order": 54,
                 "Transform": {
                     "WorldTranslation": [
                         -3.75,
@@ -5527,7 +5161,7 @@
                 "Name": "Plinth_MirrorChrome",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 61,
+                "Order": 55,
                 "Transform": {
                     "WorldTranslation": [
                         11.25,
@@ -5633,7 +5267,7 @@
                 "Name": "Plinth_PolishedCopper",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 62,
+                "Order": 56,
                 "Transform": {
                     "WorldTranslation": [
                         6.25,
@@ -5739,7 +5373,7 @@
                 "Name": "Plinth_PolishedGold",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 63,
+                "Order": 57,
                 "Transform": {
                     "WorldTranslation": [
                         8.75,
@@ -5845,7 +5479,7 @@
                 "Name": "Plinth_RoughAsphalt",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 64,
+                "Order": 58,
                 "Transform": {
                     "WorldTranslation": [
                         -8.75,
@@ -5951,7 +5585,7 @@
                 "Name": "Plinth_RoughConcrete",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 65,
+                "Order": 59,
                 "Transform": {
                     "WorldTranslation": [
                         -11.25,
@@ -6057,7 +5691,7 @@
                 "Name": "Plinth_SatinCeramic",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 66,
+                "Order": 60,
                 "Transform": {
                     "WorldTranslation": [
                         -1.25,
@@ -6163,7 +5797,7 @@
                 "Name": "Plinth_SemiMetalAlloy",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 67,
+                "Order": 61,
                 "Transform": {
                     "WorldTranslation": [
                         1.25,
@@ -6269,7 +5903,7 @@
                 "Name": "Prop_DamagedHelmet",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 68,
+                "Order": 62,
                 "Transform": {
                     "WorldTranslation": [
                         6.199999809265137,
@@ -6323,7 +5957,7 @@
                 "Name": "Prop_DuckMascot",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 69,
+                "Order": 63,
                 "Transform": {
                     "WorldTranslation": [
                         6.199999809265137,
@@ -6373,7 +6007,7 @@
                 "Name": "Ramp_East",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 70,
+                "Order": 64,
                 "Transform": {
                     "WorldTranslation": [
                         14.5,
@@ -6474,7 +6108,7 @@
                 "Name": "SFX_BarrelExplode",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 71,
+                "Order": 65,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6529,7 +6163,7 @@
                 "Name": "SFX_HitCrit",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 72,
+                "Order": 66,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6584,7 +6218,7 @@
                 "Name": "SFX_HitMetal",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 73,
+                "Order": 67,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6639,7 +6273,7 @@
                 "Name": "SFX_HitTarget",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 74,
+                "Order": 68,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6694,7 +6328,7 @@
                 "Name": "SFX_JumpPad",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 75,
+                "Order": 69,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6749,7 +6383,7 @@
                 "Name": "SFX_PingPong",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 76,
+                "Order": 70,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6804,7 +6438,7 @@
                 "Name": "SFX_Pulse",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 77,
+                "Order": 71,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6859,7 +6493,7 @@
                 "Name": "SFX_Rifle",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 78,
+                "Order": 72,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6914,7 +6548,7 @@
                 "Name": "SFX_UIClick",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 79,
+                "Order": 73,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -6969,7 +6603,7 @@
                 "Name": "SFX_UIClickEnd",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 80,
+                "Order": 74,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7024,7 +6658,7 @@
                 "Name": "SFX_UIHover",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 81,
+                "Order": 75,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7079,7 +6713,7 @@
                 "Name": "SFX_WeaponReload",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 82,
+                "Order": 76,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7134,7 +6768,7 @@
                 "Name": "Spectator_Robot",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 83,
+                "Order": 77,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7187,7 +6821,7 @@
                 "Name": "Target_01",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 84,
+                "Order": 78,
                 "Transform": {
                     "WorldTranslation": [
                         -6.800000190734863,
@@ -7288,7 +6922,7 @@
                 "Name": "Target_02",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 85,
+                "Order": 79,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -7389,7 +7023,7 @@
                 "Name": "Target_03",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 86,
+                "Order": 80,
                 "Transform": {
                     "WorldTranslation": [
                         6.800000190734863,
@@ -7490,7 +7124,7 @@
                 "Name": "Target_04",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 87,
+                "Order": 81,
                 "Transform": {
                     "WorldTranslation": [
                         -9.199999809265137,
@@ -7595,7 +7229,7 @@
                 "Name": "Target_05",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 88,
+                "Order": 82,
                 "Transform": {
                     "WorldTranslation": [
                         9.199999809265137,
@@ -7700,7 +7334,7 @@
                 "Name": "Target_06",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 89,
+                "Order": 83,
                 "Transform": {
                     "WorldTranslation": [
                         -6.449999809265137,
@@ -7805,7 +7439,7 @@
                 "Name": "Wall_East",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 90,
+                "Order": 84,
                 "Transform": {
                     "WorldTranslation": [
                         24.0,
@@ -7906,7 +7540,7 @@
                 "Name": "Wall_North",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 91,
+                "Order": 85,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8007,7 +7641,7 @@
                 "Name": "Wall_South",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 92,
+                "Order": 86,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8108,7 +7742,7 @@
                 "Name": "Wall_West",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 93,
+                "Order": 87,
                 "Transform": {
                     "WorldTranslation": [
                         -24.0,
@@ -8209,7 +7843,7 @@
                 "Name": "WeaponProjectile_01",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 94,
+                "Order": 88,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8274,7 +7908,7 @@
                 "Name": "WeaponProjectile_02",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 95,
+                "Order": 89,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8339,7 +7973,7 @@
                 "Name": "WeaponProjectile_03",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 96,
+                "Order": 90,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8404,7 +8038,7 @@
                 "Name": "WeaponProjectile_04",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 97,
+                "Order": 91,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8469,7 +8103,7 @@
                 "Name": "WeaponProjectile_05",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 98,
+                "Order": 92,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8534,7 +8168,7 @@
                 "Name": "WeaponProjectile_06",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 99,
+                "Order": 93,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8599,7 +8233,7 @@
                 "Name": "WorldEnvironment",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 100,
+                "Order": 94,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8687,7 +8321,7 @@
                 "Name": "WorldHitText_01",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 101,
+                "Order": 95,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8733,7 +8367,7 @@
                 "Name": "WorldHitText_02",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 102,
+                "Order": 96,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8779,7 +8413,7 @@
                 "Name": "WorldHitText_03",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 103,
+                "Order": 97,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8825,7 +8459,7 @@
                 "Name": "WorldHitText_04",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 104,
+                "Order": 98,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8871,7 +8505,7 @@
                 "Name": "WorldHitText_05",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 105,
+                "Order": 99,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8917,7 +8551,7 @@
                 "Name": "WorldHitText_06",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 106,
+                "Order": 100,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -8963,7 +8597,7 @@
                 "Name": "WorldHitText_07",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 107,
+                "Order": 101,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -9009,7 +8643,7 @@
                 "Name": "WorldHitText_08",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 108,
+                "Order": 102,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -9055,7 +8689,7 @@
                 "Name": "WorldSign_Scoreboard",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 109,
+                "Order": 103,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -9118,7 +8752,7 @@
                 "Name": "Reflection Probe",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 110,
+                "Order": 104,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -9132,9 +8766,9 @@
                         1.0
                     ],
                     "WorldScale": [
+                        6.125,
                         3.5,
-                        3.5,
-                        3.5
+                        4.375
                     ],
                     "LocalTranslation": [
                         0.0,
@@ -9148,9 +8782,9 @@
                         1.0
                     ],
                     "LocalScale": [
+                        6.125,
                         3.5,
-                        3.5,
-                        3.5
+                        4.375
                     ]
                 },
                 "Rendering": {
@@ -9182,8 +8816,8 @@
                     "NormalizationStrength": 1.0,
                     "BoxProjection": true,
                     "BakedAsset": 0,
-                    "BakedAssetPath": "",
-                    "BakeHash": 0
+                    "BakedAssetPath": "Baked/FPSArena/Reflection_Probe_17435175628387817263.igcube",
+                    "BakeHash": 12686788227776152436
                 }
             },
             {
@@ -9191,7 +8825,7 @@
                 "Name": "Irradiance Volume",
                 "Type": "Node",
                 "Parent": 0,
-                "Order": 111,
+                "Order": 105,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -9205,9 +8839,9 @@
                         1.0
                     ],
                     "WorldScale": [
+                        3.0,
                         1.0,
-                        1.0,
-                        1.0
+                        3.0
                     ],
                     "LocalTranslation": [
                         0.0,
@@ -9221,9 +8855,9 @@
                         1.0
                     ],
                     "LocalScale": [
+                        3.0,
                         1.0,
-                        1.0,
-                        1.0
+                        3.0
                     ]
                 },
                 "Rendering": {
@@ -9249,7 +8883,7 @@
                     "Priority": 0,
                     "BakedAsset": 0,
                     "BakedAssetPath": "Baked/FPSArena/11625325304509787447.igi",
-                    "BakeHash": 6532633067176802938
+                    "BakeHash": 12686788227776152436
                 }
             }
         ]

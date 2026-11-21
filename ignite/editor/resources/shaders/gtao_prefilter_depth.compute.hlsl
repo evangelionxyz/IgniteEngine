@@ -14,7 +14,7 @@ cbuffer GTAOPrefilterParams : register(b0)
 Texture2D<float> t_SrcDepth : register(t0);
 
 #ifdef TARGET_VULKAN
-    [[vk::image_format("r16f")]]
+    [[vk::image_format("r32f")]]
 #endif
 RWTexture2D<float> u_DstDepth : register(u0);
 
@@ -29,29 +29,34 @@ float DeviceDepthToViewZ(float d)
     float viewZ = abs(view.z / max(abs(view.w), 1e-6f));
     return clamp(viewZ, max(nearPlane, 1e-3f), maxZ);
 }
+
 float WeightedAverage4(float z0, float z1, float z2, float z3)
 {
     float minZ = min(min(z0, z1), min(z2, z3));
-    float maxZ = min(farPlane, 65000.0f);
-    if (minZ >= maxZ * 0.998f)
+    float maxZ = max(max(z0, z1), max(z2, z3));
+    float maxValidZ = min(farPlane, 65000.0f);
+    if (minZ >= maxValidZ * 0.998f)
     {
-        return maxZ;
+        return maxValidZ;
     }
 
+    // Weight relative to the quad median so sloped surfaces are not pulled toward minZ.
+    float medZ = (z0 + z1 + z2 + z3 - minZ - maxZ) * 0.5f;
     float invRange = 1.0f / max(effectRadius * 0.5f, 0.05f);
-    float w0 = saturate(1.0f - abs(z0 - minZ) * invRange);
-    float w1 = saturate(1.0f - abs(z1 - minZ) * invRange);
-    float w2 = saturate(1.0f - abs(z2 - minZ) * invRange);
-    float w3 = saturate(1.0f - abs(z3 - minZ) * invRange);
+    float w0 = saturate(1.0f - abs(z0 - medZ) * invRange);
+    float w1 = saturate(1.0f - abs(z1 - medZ) * invRange);
+    float w2 = saturate(1.0f - abs(z2 - medZ) * invRange);
+    float w3 = saturate(1.0f - abs(z3 - medZ) * invRange);
 
-    w0 = max(w0, (z0 <= minZ + 1e-4f) ? 1.0f : 0.0f);
-    w1 = max(w1, (z1 <= minZ + 1e-4f) ? 1.0f : 0.0f);
-    w2 = max(w2, (z2 <= minZ + 1e-4f) ? 1.0f : 0.0f);
-    w3 = max(w3, (z3 <= minZ + 1e-4f) ? 1.0f : 0.0f);
+    w0 = max(w0, (abs(z0 - medZ) <= 1e-4f) ? 1.0f : 0.0f);
+    w1 = max(w1, (abs(z1 - medZ) <= 1e-4f) ? 1.0f : 0.0f);
+    w2 = max(w2, (abs(z2 - medZ) <= 1e-4f) ? 1.0f : 0.0f);
+    w3 = max(w3, (abs(z3 - medZ) <= 1e-4f) ? 1.0f : 0.0f);
 
     float wSum = max(w0 + w1 + w2 + w3, 1e-5f);
-    return clamp((z0 * w0 + z1 * w1 + z2 * w2 + z3 * w3) / wSum, 0.0f, maxZ);
+    return clamp((z0 * w0 + z1 * w1 + z2 * w2 + z3 * w3) / wSum, 0.0f, maxValidZ);
 }
+
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {

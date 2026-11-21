@@ -1674,8 +1674,8 @@ namespace ignite
         params.cullMode = nri::CullMode::FRONT;
         params.depthFunc = nri::CompareOp::LESS_EQUAL;
 
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/gi_debug_probe.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/gi_debug_probe.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/gi_debug_probe.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/gi_debug_probe.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("GI Debug Probe Pipeline");
         gp->SetShaders({ vertexShader, pixelShader })

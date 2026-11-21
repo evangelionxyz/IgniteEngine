@@ -12,6 +12,8 @@
 *.sln
 *.slnx
 *.aps
+.cache
+scratchfiles
 cmake_install.cmake
 imgui.ini
 Makefile
@@ -32,7 +34,6 @@ openspec
 __pycache__
 ignite/test/test-resources/temp
 test-resources
-.cache
 IgniteEditor/obj
 msbuild.binlog
 *.DotSettings.user

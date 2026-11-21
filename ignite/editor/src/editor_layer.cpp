@@ -434,7 +434,15 @@ namespace ignite
                     const bool ok = m_GIBaker->DidFinishSuccessfully();
                     if (ok && m_SceneRenderer)
                     {
-                        m_SceneRenderer->ClearIrradianceVolume();
+                        Ref<IrradianceVolume> uploadedVol = CreateRef<IrradianceVolume>();
+                        if (uploadedVol->UploadFromData(m_GIBaker->GetLastBakedData()))
+                        {
+                            m_SceneRenderer->SetIrradianceVolume(uploadedVol);
+                        }
+                        else
+                        {
+                            m_SceneRenderer->ClearIrradianceVolume();
+                        }
                     }
                     if (m_BakeReflectionProbesAfterGI)
                     {

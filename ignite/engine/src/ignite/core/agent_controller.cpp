@@ -35,6 +35,7 @@
 #include "ignite/serializer/scene_serializer.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/packing.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <stb_image_write.h>
 
@@ -1100,7 +1101,15 @@ namespace ignite
                 m_WasGIBaking = false;
                 if (ctx.giBaker->DidFinishSuccessfully() && ctx.sceneRenderer)
                 {
-                    ctx.sceneRenderer->ClearIrradianceVolume();
+                    Ref<IrradianceVolume> uploadedVol = CreateRef<IrradianceVolume>();
+                    if (uploadedVol->UploadFromData(ctx.giBaker->GetLastBakedData()))
+                    {
+                        ctx.sceneRenderer->SetIrradianceVolume(uploadedVol);
+                    }
+                    else
+                    {
+                        ctx.sceneRenderer->ClearIrradianceVolume();
+                    }
                 }
             }
         }
@@ -1176,6 +1185,14 @@ namespace ignite
         {
             while (m_ScriptIndex < m_ScriptCommands.size())
             {
+                const nlohmann::ordered_json &peekCmd = m_ScriptCommands[m_ScriptIndex];
+                const std::string peekAction = peekCmd.value("command", peekCmd.value("action", ""));
+                if (ctx.giBaker && ctx.giBaker->IsBaking()
+                    && peekAction != "get_gi_status" && peekAction != "cancel_gi_bake")
+                {
+                    return;
+                }
+
                 const nlohmann::ordered_json &cmd = m_ScriptCommands[m_ScriptIndex++];
                 const std::string action = cmd.value("command", cmd.value("action", ""));
                 if (action == "wait_frames")
@@ -1737,7 +1754,24 @@ namespace ignite
             if (ctx.sceneRenderer)
             {
                 if (cmd.contains("render_scale")) ctx.sceneRenderer->sceneRenderSettings.renderScale = cmd["render_scale"].get<float>();
-                if (cmd.contains("render_mode")) ctx.sceneRenderer->SetRenderMode(cmd["render_mode"].get<int>());
+                auto parseRenderMode = [](const nlohmann::ordered_json &val) -> int
+                {
+                    if (val.is_string())
+                    {
+                        const std::string s = val.get<std::string>();
+                        if (s == "color" || s == "default") return RENDER_MODE_COLOR;
+                        if (s == "gi_diffuse" || s == "giDiffuse") return RENDER_MODE_GI_DIFFUSE;
+                        if (s == "gi_specular" || s == "giSpecular") return RENDER_MODE_GI_SPECULAR;
+                        if (s == "ao") return RENDER_MODE_AO;
+                        if (s == "probe_weights" || s == "probeWeights") return RENDER_MODE_PROBE_WEIGHTS;
+                        return RENDER_MODE_COLOR;
+                    }
+                    if (val.is_number_integer())
+                        return val.get<int>();
+                    return RENDER_MODE_COLOR;
+                };
+                if (cmd.contains("render_mode")) ctx.sceneRenderer->SetRenderMode(parseRenderMode(cmd["render_mode"]));
+                else if (cmd.contains("renderMode")) ctx.sceneRenderer->SetRenderMode(parseRenderMode(cmd["renderMode"]));
                 if (cmd.contains("gi_debug_mode"))
                     ctx.sceneRenderer->SetRenderMode(std::clamp(cmd["gi_debug_mode"].get<int>(), 9, 12));
                 if (cmd.contains("debug_shadow")) ctx.sceneRenderer->SetDebugShadowMode(cmd["debug_shadow"].get<int>());
@@ -1770,9 +1804,13 @@ namespace ignite
                     return -1;
                 };
                 if (cmd.contains("gi_mode")) ctx.sceneRenderer->sceneRenderSettings.giModeOverride = parseGIMode(cmd["gi_mode"]);
+                else if (cmd.contains("giMode")) ctx.sceneRenderer->sceneRenderSettings.giModeOverride = parseGIMode(cmd["giMode"]);
                 if (cmd.contains("ao_mode")) ctx.sceneRenderer->sceneRenderSettings.aoModeOverride = parseAOMode(cmd["ao_mode"]);
+                else if (cmd.contains("aoMode")) ctx.sceneRenderer->sceneRenderSettings.aoModeOverride = parseAOMode(cmd["aoMode"]);
                 if (cmd.contains("depth_prepass")) ctx.sceneRenderer->sceneRenderSettings.enableDepthPrepass = cmd["depth_prepass"].get<bool>();
+                else if (cmd.contains("depthPrepass")) ctx.sceneRenderer->sceneRenderSettings.enableDepthPrepass = cmd["depthPrepass"].get<bool>();
                 if (cmd.contains("show_gi_probes")) ctx.sceneRenderer->sceneRenderSettings.showGIProbes = cmd["show_gi_probes"].get<bool>();
+                else if (cmd.contains("showGIProbes")) ctx.sceneRenderer->sceneRenderSettings.showGIProbes = cmd["showGIProbes"].get<bool>();
                 if (cmd.contains("show_colliders")) ctx.sceneRenderer->sceneRenderSettings.showPhysicsCollider = cmd["show_colliders"].get<bool>();
                 if (cmd.contains("show_bounds")) ctx.sceneRenderer->sceneRenderSettings.showBoundingBox = cmd["show_bounds"].get<bool>();
                 if (cmd.contains("show_entity_names")) ctx.sceneRenderer->sceneRenderSettings.showEntityNames = cmd["show_entity_names"].get<bool>();
@@ -1847,6 +1885,13 @@ namespace ignite
             {
                 res["error"] = "No irradiance volume found";
                 return res;
+            }
+
+            {
+                auto &volComp = volume.GetComponent<IrradianceVolumeComponent>();
+                if (cmd.contains("bounces")) volComp.bounces = std::clamp(cmd["bounces"].get<int>(), 1, 4);
+                if (cmd.contains("resolution")) volComp.captureResolution = std::clamp(cmd["resolution"].get<int>(), 16, 128);
+                if (cmd.contains("spacing")) volComp.spacing = std::max(cmd["spacing"].get<float>(), 0.25f);
             }
 
             std::filesystem::path outputPath = cmd.value("output_path", "");
@@ -1960,6 +2005,49 @@ namespace ignite
                 for ([[maybe_unused]] entt::entity e : ctx.scene->registry->view<ReflectionProbeComponent>())
                     ++probeCount;
             }
+            uint32_t bakedProbeCount = 0;
+            uint32_t invalidProbes = 0;
+            uint32_t relocatedProbes = 0;
+            float invalidPercent = 0.0f;
+            const IrradianceVolumeData *bakedDataPtr = nullptr;
+            if (ctx.sceneRenderer && ctx.sceneRenderer->GetIrradianceVolume() && ctx.sceneRenderer->GetIrradianceVolume()->IsValid())
+            {
+                bakedDataPtr = &ctx.sceneRenderer->GetIrradianceVolume()->GetData();
+            }
+            else if (ctx.giBaker && ctx.giBaker->DidFinishSuccessfully())
+            {
+                bakedDataPtr = &ctx.giBaker->GetLastBakedData();
+            }
+            if (bakedDataPtr)
+            {
+                bakedProbeCount = bakedDataPtr->GetProbeCount();
+                const size_t expectedHalfCount = static_cast<size_t>(bakedProbeCount) * 4u;
+                if (bakedDataPtr->probeOffsetsHalfRGBA.size() == expectedHalfCount)
+                {
+                    for (uint32_t i = 0; i < bakedProbeCount; ++i)
+                    {
+                        const float st = glm::unpackHalf1x16(bakedDataPtr->probeOffsetsHalfRGBA[static_cast<size_t>(i) * 4u + 3u]);
+                        if (st < 0.5f)
+                            ++invalidProbes;
+                        else if (st > 1.5f)
+                            ++relocatedProbes;
+                    }
+                }
+                else if (bakedDataPtr->shHalfRGBA[6].size() == expectedHalfCount)
+                {
+                    for (uint32_t i = 0; i < bakedProbeCount; ++i)
+                    {
+                        const float validity = glm::unpackHalf1x16(bakedDataPtr->shHalfRGBA[6][static_cast<size_t>(i) * 4u + 3u]);
+                        if (validity < 0.5f)
+                            ++invalidProbes;
+                    }
+                }
+                if (bakedProbeCount > 0)
+                {
+                    invalidPercent = (100.0f * static_cast<float>(invalidProbes)) / static_cast<float>(bakedProbeCount);
+                }
+            }
+
             res["ok"] = true;
             res["data"] = {
                 { "baking", ctx.giBaker->IsBaking() },
@@ -1967,6 +2055,10 @@ namespace ignite
                 { "progress", ctx.giBaker->GetProgress() },
                 { "completed_probes", ctx.giBaker->GetCompletedProbes() },
                 { "total_probes", ctx.giBaker->GetTotalProbes() },
+                { "baked_probe_count", bakedProbeCount },
+                { "invalid_probes", invalidProbes },
+                { "relocated_probes", relocatedProbes },
+                { "invalid_percent", invalidPercent },
                 { "scene_bake_hash", sceneBakeHash },
                 { "out_of_date", outOfDate },
                 { "volume_count", volumeCount },
