@@ -415,6 +415,62 @@ class IgniteMcpServer:
         timeout_sec = float(args.get("timeout_sec", 15.0))
         return self._send_watch_command(session, command, params=params, timeout_sec=timeout_sec)
 
+    def tool_bake_gi(self, args: dict[str, Any]) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if args.get("volume") is not None:
+            params["volume"] = args["volume"]
+        if args.get("output_path"):
+            params["output_path"] = str(args["output_path"])
+        return self.tool_send_command({
+            "session_id": args["session_id"],
+            "command": "bake_gi",
+            "params": params,
+            "timeout_sec": float(args.get("timeout_sec", 30.0)),
+        })
+
+    def tool_bake_reflection_probes(self, args: dict[str, Any]) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if args.get("output_dir"):
+            params["output_dir"] = str(args["output_dir"])
+        return self.tool_send_command({
+            "session_id": args["session_id"],
+            "command": "bake_reflection_probes",
+            "params": params,
+            "timeout_sec": float(args.get("timeout_sec", 60.0)),
+        })
+
+    def tool_clear_baked_gi(self, args: dict[str, Any]) -> dict[str, Any]:
+        return self.tool_send_command({
+            "session_id": args["session_id"],
+            "command": "clear_baked_gi",
+            "params": {},
+            "timeout_sec": float(args.get("timeout_sec", 15.0)),
+        })
+
+    def tool_get_gi_status(self, args: dict[str, Any]) -> dict[str, Any]:
+        return self.tool_send_command({
+            "session_id": args["session_id"],
+            "command": "get_gi_status",
+            "params": {},
+            "timeout_sec": float(args.get("timeout_sec", 15.0)),
+        })
+
+    def tool_set_gi_debug_mode(self, args: dict[str, Any]) -> dict[str, Any]:
+        return self.tool_send_command({
+            "session_id": args["session_id"],
+            "command": "set_gi_debug_mode",
+            "params": {"mode": int(args["mode"])},
+            "timeout_sec": float(args.get("timeout_sec", 15.0)),
+        })
+
+    def tool_get_gpu_timings(self, args: dict[str, Any]) -> dict[str, Any]:
+        return self.tool_send_command({
+            "session_id": args["session_id"],
+            "command": "get_gpu_timings",
+            "params": {},
+            "timeout_sec": float(args.get("timeout_sec", 15.0)),
+        })
+
     def tool_stop_app(self, args: dict[str, Any]) -> dict[str, Any]:
         session_id = str(args["session_id"])
         with self.lock:
@@ -716,6 +772,69 @@ class IgniteMcpServer:
                 },
             },
             {
+                "name": "ignite_bake_gi",
+                "description": "Start a time-sliced irradiance-volume GI bake in a running Ignite Editor session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {
+                        "session_id": {"type": "string"},
+                        "volume": {"description": "Volume entity name or UUID", "oneOf": [{"type": "string"}, {"type": "integer"}]},
+                        "output_path": {"type": "string"},
+                        "timeout_sec": {"type": "number", "default": 30.0},
+                    },
+                },
+            },
+            {
+                "name": "ignite_bake_reflection_probes",
+                "description": "Bake all reflection probes in a running Ignite Editor session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {
+                        "session_id": {"type": "string"},
+                        "output_dir": {"type": "string"},
+                        "timeout_sec": {"type": "number", "default": 60.0},
+                    },
+                },
+            },
+            {
+                "name": "ignite_clear_baked_gi",
+                "description": "Clear baked GI volume and reflection probe references from the active scene.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {"session_id": {"type": "string"}, "timeout_sec": {"type": "number", "default": 15.0}},
+                },
+            },
+            {
+                "name": "ignite_get_gi_status",
+                "description": "Read the progress and completion state of the active GI bake.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {"session_id": {"type": "string"}, "timeout_sec": {"type": "number", "default": 15.0}},
+                },
+            },
+            {
+                "name": "ignite_set_gi_debug_mode",
+                "description": "Set GI debug rendering mode: 0 for color or 9..12 for diffuse, specular, AO, and probe weights.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id", "mode"],
+                    "properties": {"session_id": {"type": "string"}, "mode": {"type": "integer", "minimum": 0, "maximum": 12}},
+                },
+            },
+            {
+                "name": "ignite_get_gpu_timings",
+                "description": "Read the latest SceneRenderer GPU timestamp zones, including depth prepass and GTAO.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {"session_id": {"type": "string"}, "timeout_sec": {"type": "number", "default": 15.0}},
+                },
+            },
+            {
                 "name": "ignite_run_command_script",
                 "description": "Execute a sequence of AgentController JSON commands headlessly or in a window via --command-script and return the parsed JSON execution report.",
                 "inputSchema": {
@@ -807,6 +926,12 @@ class IgniteMcpServer:
                     "ignite_run_tests": self.tool_run_tests,
                     "ignite_launch_app": self.tool_launch_app,
                     "ignite_send_command": self.tool_send_command,
+                    "ignite_bake_gi": self.tool_bake_gi,
+                    "ignite_bake_reflection_probes": self.tool_bake_reflection_probes,
+                    "ignite_clear_baked_gi": self.tool_clear_baked_gi,
+                    "ignite_get_gi_status": self.tool_get_gi_status,
+                    "ignite_set_gi_debug_mode": self.tool_set_gi_debug_mode,
+                    "ignite_get_gpu_timings": self.tool_get_gpu_timings,
                     "ignite_stop_app": self.tool_stop_app,
                     "ignite_run_command_script": self.tool_run_command_script,
                     "ignite_package_game": self.tool_package_game,

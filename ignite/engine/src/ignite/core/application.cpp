@@ -179,9 +179,25 @@ namespace ignite
         deviceParams.startMaximized = m_CreateInfo.maximized;
         deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
-        deviceParams.enableDebugRuntime = true;
-        deviceParams.enableNRIValidation = true;
-        // deviceParams.enableGPUValidation = true;
+        constexpr bool enableValidation = false;
+
+        deviceParams.enableDebugRuntime = enableValidation;
+        deviceParams.enableNRIValidation = enableValidation;
+        // Every validation check is individually switchable through "deviceParams.vkValidation" (see
+        // "VulkanValidationSettings"): turn a check off once the class of error it reports is gone.
+        // Core validation left on, everything expensive/opinionated opt-in only.
+        deviceParams.vkValidation.core = true; // Core is always enabled on debug mode
+        deviceParams.vkValidation.synchronization = enableValidation;
+        deviceParams.vkValidation.bestPractices = enableValidation;
+        deviceParams.vkValidation.threadSafety = enableValidation;
+        deviceParams.vkValidation.statelessParameters = enableValidation;
+        deviceParams.vkValidation.objectLifetime = enableValidation;
+        deviceParams.vkValidation.uniqueHandles = enableValidation;
+        deviceParams.vkValidation.shaderValidation = enableValidation;
+        // GPU-AV and core validation are mutually exclusive: GPU-AV is very slow and the layer warns when
+        // both are on. Leave it off and enable it explicitly while debugging GPU-side errors.
+        deviceParams.enableGPUValidation = enableValidation;
+        deviceParams.enableVulkanSyncValidation = enableValidation;
 #endif
         deviceParams.swapChainBufferCount = 3; // TRIPLE BUFFER
         deviceParams.enablePerMonitorDPI = true;

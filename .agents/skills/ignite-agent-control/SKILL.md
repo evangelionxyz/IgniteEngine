@@ -23,6 +23,7 @@ Start `python D:\Dev\Ignite\scripts\ignite_mcp_server.py` (stdio MCP JSON-RPC 2.
 - **Build & Test**: `ignite_build_solution`, `ignite_sync_shaders`, `ignite_run_tests`
 - **Live App Control**: `ignite_launch_app` (spawns target with `--watch-command-file` / `--response-file` and waits for `ping`), `ignite_send_command`, `ignite_stop_app`, `ignite_run_command_script`, `ignite_list_sessions`
 - **Packaging & Dedicated Server**: `ignite_package_game`, `ignite_start_server` (`Ignite.Network.exe`)
+- **GI & Diagnostics**: `ignite_bake_gi`, `ignite_bake_reflection_probes`, `ignite_clear_baked_gi`, `ignite_get_gi_status`, `ignite_set_gi_debug_mode`, `ignite_get_gpu_timings` (bridging `bake_gi`, `bake_reflection_probes`, `clear_baked_gi`, `get_gi_status`, `cancel_gi_bake`, `set_gi_debug_mode`, and `get_gpu_timings`).
 
 ## 3. Readiness Gate & Command Reference
 - `get_status` returns `scene_ready` (`Scene::IsReadyToPlay()`). Both `play` and `simulate` fail with an error while scene assets are still loading (`scene_ready == false`), so poll `get_status` / `wait_frames` until `scene_ready` is `true` before entering Play or Simulate mode.
@@ -50,5 +51,11 @@ Start `python D:\Dev\Ignite\scripts\ignite_mcp_server.py` (stdio MCP JSON-RPC 2.
   - Camera, Rendering, Physics & Scripting: `set_camera`, `set_render_settings`, `capture_screenshot`, `physics_raycast`, `run_lua`
   - Networking: `net_start_server`, `net_stop_server`, `net_connect`, `net_disconnect`, `net_send_input`, `net_send_chat`
   - UI & Input Injection: `get_ui_info`, `inject_mouse_move`, `inject_mouse_button`, `inject_key`
+  - GI & Diagnostics: `bake_gi`, `bake_reflection_probes`, `clear_baked_gi`, `get_gi_status`, `cancel_gi_bake`, `set_gi_debug_mode` (0 or 9..12), `get_gpu_timings`
 - **Supported Primitives**: `Cube`, `Sphere`, `Plane`, `Cylinder`, `Cone`, `Torus`.
-- **Supported Components**: `Transform`, `Rendering`, `StaticMesh`, `SkeletalMesh`, `Camera`, `DirectionalLight`, `PointLight`, `SpotLight`, `WorldEnvironment`, `Rigidbody`/`Rigidbody3D`, `Rigidbody2D`, `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `BoxCollider2D`, `CircleCollider2D`, `CharacterController`, `AudioSource`, `LuaScript`, `NetworkIdentity`, `Sprite2D`, `Text`, `PhysicsJoint`/`Joint`, `ParticleSystem`/`Particle`.
+- **Supported Components**: `Transform`, `Rendering`, `StaticMesh`, `SkeletalMesh`, `Camera`, `DirectionalLight`, `PointLight`, `SpotLight`, `WorldEnvironment`, `IrradianceVolume`, `ReflectionProbe`, `Rigidbody`/`Rigidbody3D`, `Rigidbody2D`, `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `BoxCollider2D`, `CircleCollider2D`, `CharacterController`, `AudioSource`, `LuaScript`, `NetworkIdentity`, `Sprite2D`, `Text`, `PhysicsJoint`/`Joint`, `ParticleSystem`/`Particle`.
+
+For a headless GI regression, launch an Editor session with an `.ixproj`, send
+`bake_gi`, poll `get_gi_status` until `finished` is true, then send
+`set_gi_debug_mode` and `capture_screenshot`. `get_gpu_timings` reports the
+`DepthNormalPrepass` and `GTAO` timestamp zones when GPU timestamps are supported.

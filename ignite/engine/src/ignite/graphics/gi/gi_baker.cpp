@@ -17,9 +17,174 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 namespace ignite
 {
+    namespace
+    {
+        constexpr uint64_t kFNVOffset = 1469598103934665603ull;
+        constexpr uint64_t kFNVPrime = 1099511628211ull;
+
+        struct BakeHashRecord
+        {
+            uint64_t entity = 0;
+            std::vector<uint8_t> bytes;
+        };
+
+        void HashBytes(uint64_t &hash, const void *data, size_t size)
+        {
+            const auto *bytes = static_cast<const uint8_t *>(data);
+            for (size_t i = 0; i < size; ++i)
+                hash = (hash ^ bytes[i]) * kFNVPrime;
+        }
+
+        template<typename T>
+        void AppendBytes(std::vector<uint8_t> &out, const T &value)
+        {
+            const auto *bytes = reinterpret_cast<const uint8_t *>(&value);
+            out.insert(out.end(), bytes, bytes + sizeof(T));
+        }
+
+        void AppendTag(std::vector<uint8_t> &out, uint32_t tag)
+        {
+            AppendBytes(out, tag);
+        }
+
+        template<typename T>
+        void AppendComponent(std::vector<uint8_t> &out, uint32_t tag, const T &component)
+        {
+            AppendTag(out, tag);
+            AppendBytes(out, component);
+        }
+    }
+
+    uint64_t ComputeSceneBakeHash(const Scene *scene)
+    {
+        if (!scene || !scene->registry)
+            return 0;
+
+        std::vector<BakeHashRecord> records;
+        for (entt::entity e : scene->registry->view<IDComponent>())
+        {
+            const auto &id = scene->registry->get<IDComponent>(e);
+            const uint64_t entityID = static_cast<uint64_t>(id.uuid);
+            BakeHashRecord record;
+            record.entity = entityID;
+            AppendBytes(record.bytes, entityID);
+
+            const auto *transform = scene->registry->try_get<TransformComponent>(e);
+            const auto *rendering = scene->registry->try_get<RenderingComponent>(e);
+            if (transform)
+            {
+                AppendTag(record.bytes, 1u);
+                AppendBytes(record.bytes, transform->world.translation);
+                AppendBytes(record.bytes, transform->world.rotation);
+                AppendBytes(record.bytes, transform->world.scale);
+            }
+
+            if (rendering)
+            {
+                AppendTag(record.bytes, 2u);
+                AppendBytes(record.bytes, rendering->visible);
+                AppendBytes(record.bytes, rendering->contributeGI);
+                AppendBytes(record.bytes, rendering->receiveGI);
+            }
+
+            if (const auto *mesh = scene->registry->try_get<StaticMeshComponent>(e);
+                mesh && (!rendering || rendering->contributeGI))
+            {
+                AppendTag(record.bytes, 3u);
+                AppendBytes(record.bytes, static_cast<uint64_t>(mesh->handle));
+                std::vector<std::pair<int, uint64_t>> overrides;
+                overrides.reserve(mesh->overrideMaterials.size());
+                for (const auto &[slot, handle] : mesh->overrideMaterials)
+                    overrides.emplace_back(slot, static_cast<uint64_t>(handle));
+                std::ranges::sort(overrides);
+                for (const auto &[slot, handle] : overrides)
+                {
+                    AppendBytes(record.bytes, slot);
+                    AppendBytes(record.bytes, handle);
+                }
+            }
+
+            if (transform)
+            {
+                if (const auto *light = scene->registry->try_get<DirectionalLightComponent>(e); light && light->bakeIndirect)
+                {
+                    AppendTag(record.bytes, 10u);
+                    AppendBytes(record.bytes, *light);
+                }
+                if (const auto *light = scene->registry->try_get<PointLightComponent>(e); light && light->bakeIndirect)
+                {
+                    AppendTag(record.bytes, 11u);
+                    AppendBytes(record.bytes, *light);
+                }
+                if (const auto *light = scene->registry->try_get<SpotLightComponent>(e); light && light->bakeIndirect)
+                {
+                    AppendTag(record.bytes, 12u);
+                    AppendBytes(record.bytes, *light);
+                }
+            }
+
+            if (const auto *environment = scene->registry->try_get<WorldEnvironment>(e))
+            {
+                AppendTag(record.bytes, 20u);
+                AppendBytes(record.bytes, static_cast<uint32_t>(environment->skyType));
+                AppendBytes(record.bytes, static_cast<uint64_t>(environment->hdrHandle));
+                AppendBytes(record.bytes, environment->exposure);
+                AppendBytes(record.bytes, environment->gamma);
+                AppendBytes(record.bytes, environment->ambient);
+                AppendBytes(record.bytes, environment->enableIBL);
+                AppendBytes(record.bytes, environment->atmosphereParams);
+            }
+
+            if (record.bytes.size() > sizeof(entityID))
+                records.push_back(std::move(record));
+        }
+
+        std::ranges::sort(records, [](const BakeHashRecord &a, const BakeHashRecord &b) { return a.entity < b.entity; });
+        uint64_t hash = kFNVOffset;
+        const uint32_t version = 1u;
+        HashBytes(hash, &version, sizeof(version));
+        for (const auto &record : records)
+            HashBytes(hash, record.bytes.data(), record.bytes.size());
+        return hash;
+    }
+
+    bool IsSceneGIOutOfDate(const Scene *scene)
+    {
+        if (!scene || !scene->registry)
+            return false;
+
+        auto view = scene->registry->view<IrradianceVolumeComponent>();
+        bool hasVolume = false;
+        for (entt::entity e : view)
+        {
+            hasVolume = true;
+            const auto &vol = view.get<IrradianceVolumeComponent>(e);
+            if (vol.bakeHash == 0 || vol.bakedAssetPath.empty())
+            {
+                return true;
+            }
+        }
+        if (!hasVolume)
+            return false;
+
+        const uint64_t currentHash = ComputeSceneBakeHash(scene);
+        for (entt::entity e : view)
+        {
+            const auto &vol = view.get<IrradianceVolumeComponent>(e);
+            if (vol.bakeHash != currentHash)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     GIBaker::~GIBaker()
     {
         m_PrevBounceVolume.reset();
@@ -486,7 +651,8 @@ namespace ignite
         m_Scene = scene;
         m_AssetManager = assetManager;
         m_SavePath = savePath;
-        m_BakeHash = vol.bakeHash;
+        m_BakeHash = ComputeSceneBakeHash(scene);
+        m_BakeVolumeEntity = volumeEntity;
 
         m_ProbeSH.assign(m_ProbeCount, gi::SHL2{});
         m_ProbeValidity.assign(m_ProbeCount, 1.0f);
@@ -532,6 +698,26 @@ namespace ignite
         if (!m_SavePath.empty())
         {
             m_FinishedSuccessfully = gi_io::SaveIrradianceVolume(m_SavePath, m_BakedData);
+        }
+        if (m_FinishedSuccessfully && m_BakeVolumeEntity.IsValid())
+        {
+            auto &volume = m_BakeVolumeEntity.GetComponent<IrradianceVolumeComponent>();
+            volume.bakeHash = m_BakeHash;
+            if (!m_SavePath.empty())
+            {
+                if (m_Scene && m_Scene->GetProject())
+                {
+                    std::error_code relEc;
+                    const std::filesystem::path relPath = std::filesystem::relative(
+                        m_SavePath, m_Scene->GetProject()->GetDirectory(), relEc);
+                    const bool insideProj = !relEc && !relPath.empty() && !relPath.native().starts_with(L"..");
+                    volume.bakedAssetPath = insideProj ? relPath.generic_string() : m_SavePath.generic_string();
+                }
+                else
+                {
+                    volume.bakedAssetPath = m_SavePath.generic_string();
+                }
+            }
         }
         return false;
     }
@@ -974,6 +1160,7 @@ namespace ignite
         m_Phase = BakePhase::Idle;
         m_Scene = nullptr;
         m_AssetManager = nullptr;
+        m_BakeVolumeEntity = Entity();
         m_NextProbeIndex = 0;
         m_RelocationCursor = 0;
         m_CompletedProbes = 0;
@@ -1088,6 +1275,7 @@ namespace ignite
                 continue;
             }
 
+            comp.bakeHash = ComputeSceneBakeHash(scene);
             ReflectionProbeData rpData;
             rpData.resolution = res;
             rpData.mipCount = mipCount;
@@ -1148,7 +1336,8 @@ namespace ignite
             if (!projectDir.empty())
             {
                 std::filesystem::path relPath = std::filesystem::relative(outFile, projectDir, ec);
-                comp.bakedAssetPath = (!ec && !relPath.empty()) ? relPath.generic_string() : outFile.generic_string();
+                const bool insideProj = !ec && !relPath.empty() && !relPath.native().starts_with(L"..");
+                comp.bakedAssetPath = insideProj ? relPath.generic_string() : outFile.generic_string();
             }
             else
             {

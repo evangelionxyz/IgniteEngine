@@ -56,12 +56,37 @@ namespace ignite
         static nri::CallbackInterface GetInterface();
     };
 
+    // Individual VK_LAYER_KHRONOS_validation layer settings. Every one of these can be turned off,
+    // so once an error class no longer reproduces the check can simply be disabled instead of the
+    // whole layer. Names match the keys in VkLayer_khronos_validation.json.
+    struct VulkanValidationSettings
+    {
+        bool core = true;                 // "validate_core"
+        bool synchronization = false;     // "validate_sync"
+        bool bestPractices = false;       // "validate_best_practices"
+        bool threadSafety = false;        // "thread_safety"
+        bool statelessParameters = false; // "stateless_param"
+        bool objectLifetime = false;      // "object_lifetime"
+        bool uniqueHandles = false;       // "unique_handles"
+        bool shaderValidation = false;    // "check_shaders"
+        bool gpuAssisted = false;         // "gpuav_enable" (very slow together with core)
+        bool debugPrintf = false;         // "printf_enable"
+
+        // GPU-AV sub-checks for features this engine never enables. Leaving them at the layer default
+        // ("on") makes the layer print "option was enabled, but the feature is not supported".
+        // "gpuav_validate_ray_hit_object" has no layer setting key in the current validation layer, so it
+        // cannot be toggled from the application.
+        bool gpuAssistedRayQuery = false;    // "gpuav_validate_ray_query"
+        bool gpuAssistedMeshShading = false; // "gpuav_mesh_shading"
+    };
+
     struct InstanceParameters
     {
         bool enableDebugRuntime = false;
         bool enableWarningAsErrors = false;
         bool enableGPUValidation = false;
         bool enableVulkanSyncValidation = false;
+        VulkanValidationSettings vkValidation{};
         bool headlessDevice = false;
         bool logBufferLifetime = false;
         bool enableHeapDirectlyIndexed = false;

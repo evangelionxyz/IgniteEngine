@@ -11,6 +11,7 @@
 #include "ignite/graphics/gi/irradiance_volume.hpp"
 #include "ignite/graphics/gi/gi_asset_io.hpp"
 #include "ignite/graphics/gi/sh.hpp"
+#include "ignite/scene/entity.hpp"
 
 #include <NRI.h>
 #include <glm/glm.hpp>
@@ -21,9 +22,13 @@ namespace ignite
 {
     class Scene;
     class AssetManager;
-    class Entity;
     class TransformComponent;
     class IrradianceVolumeComponent;
+
+    // Stable content hash for the static inputs that contribute to a GI bake.
+    // Baked asset paths and the stored hash itself are intentionally excluded.
+    IGN_API uint64_t ComputeSceneBakeHash(const Scene *scene);
+    IGN_API bool IsSceneGIOutOfDate(const Scene *scene);
 
     // Orchestrates offline/in-editor irradiance probe grid baking using SceneCaptureRenderer
     // and IBLPrefilter SH projection, supporting both synchronous and time-sliced execution.
@@ -102,6 +107,7 @@ namespace ignite
         AssetManager *m_AssetManager = nullptr;
         std::filesystem::path m_SavePath;
         uint64_t m_BakeHash = 0;
+        Entity m_BakeVolumeEntity;
 
         BakePhase m_Phase = BakePhase::Idle;
         glm::vec3 m_BoundsMin = glm::vec3(0.0f);

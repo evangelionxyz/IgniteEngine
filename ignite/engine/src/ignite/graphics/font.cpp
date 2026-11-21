@@ -322,7 +322,7 @@ namespace ignite
         emSize = packer.getScale();
 
         // Get thread count
-        const auto THREAD_COUNT = std::max(std::thread::hardware_concurrency(), 1u);
+        const auto THREAD_COUNT = std::max(std::thread::hardware_concurrency() / 2u, 1u);
 
         uint64_t coloringSeed = static_cast<uint64_t>(std::hash<std::string>{}(filepathStr));
         if (coloringSeed == 0)

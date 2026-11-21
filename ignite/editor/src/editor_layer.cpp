@@ -2,6 +2,7 @@
 
 #include "pch.hpp"
 #include "editor_layer.hpp"
+#include "ignite/graphics/gi/gi_baker.hpp"
 #include <ignite/net/network_manager.hpp>
 #include "ext/editor_ui.hpp"
 #include "panels/scene_panel.hpp"
@@ -138,6 +139,7 @@ namespace ignite
 
         // create render target framebuffer
         m_SceneRenderer = CreateRef<SceneRenderer>();
+        m_GIBaker = CreateScope<GIBaker>();
 
         const auto &cmdArgs = Application::GetInstance()->GetCreateInfo().cmdLineArgs;
         AgentController::Get().InitializeFromArgs(cmdArgs);
@@ -187,6 +189,7 @@ namespace ignite
         m_ContentBrowserPanel = nullptr;
 
         m_SceneRenderer.reset();
+        m_GIBaker.reset();
     }
 
     void EditorLayer::AddContentBrowserPanel()
@@ -403,6 +406,7 @@ namespace ignite
             agentCtx.scene = m_ActiveScene.get();
             agentCtx.project = m_ActiveProject.get();
             agentCtx.sceneRenderer = m_SceneRenderer.get();
+            agentCtx.giBaker = m_GIBaker.get();
             if (m_ActiveScene && m_ActiveScene->IsPlaying())
             {
                 agentCtx.camera = &m_EditorPlayCamera;
@@ -420,6 +424,43 @@ namespace ignite
             agentCtx.onStop = [this]() { OnSceneStop(); };
             agentCtx.onSimulate = [this]() { OnSceneSimulate(); };
             AgentController::Get().Update(deltaTime, agentCtx);
+
+            if (m_GIBaker)
+            {
+                const bool isBaking = m_GIBaker->IsBaking();
+                if (m_WasGIBaking && !isBaking)
+                {
+                    m_WasGIBaking = false;
+                    const bool ok = m_GIBaker->DidFinishSuccessfully();
+                    if (ok && m_SceneRenderer)
+                    {
+                        m_SceneRenderer->ClearIrradianceVolume();
+                    }
+                    if (m_BakeReflectionProbesAfterGI)
+                    {
+                        m_BakeReflectionProbesAfterGI = false;
+                        if (ok && m_ActiveScene && m_ActiveProject)
+                        {
+                            const std::string sceneName = m_CurrentSceneFilePath.empty()
+                                ? "Scene" : m_CurrentSceneFilePath.stem().string();
+                            const std::filesystem::path outputDir = m_ActiveProject->GetDirectory() / "Baked" / sceneName;
+                            m_GIBaker->BakeReflectionProbes(
+                                m_ActiveScene.get(),
+                                m_ActiveScene->GetAssetManager(),
+                                m_SceneRenderer ? m_SceneRenderer->GetIrradianceVolume().get() : nullptr,
+                                outputDir);
+                            if (m_SceneRenderer)
+                            {
+                                m_SceneRenderer->ClearReflectionProbeSet();
+                            }
+                        }
+                    }
+                }
+                else if (isBaking)
+                {
+                    m_WasGIBaking = true;
+                }
+            }
         }
     }
 
@@ -852,6 +893,111 @@ namespace ignite
                 ImGui::EndMenu();
             }
 
+            if (ImGui::BeginMenu("Lighting", m_ActiveProject != nullptr && m_ActiveScene != nullptr && !m_State.isLoading))
+            {
+                Entity bakeVolume;
+                if (m_ScenePanel)
+                    bakeVolume = m_ScenePanel->GetSelectedEntity();
+                if (!bakeVolume || !bakeVolume.HasComponent<IrradianceVolumeComponent>())
+                {
+                    for (entt::entity e : m_ActiveScene->registry->view<IrradianceVolumeComponent>())
+                    {
+                        bakeVolume = Entity(e, m_ActiveScene.get());
+                        break;
+                    }
+                }
+
+                const std::string sceneName = m_CurrentSceneFilePath.empty()
+                    ? "Scene" : m_CurrentSceneFilePath.stem().string();
+                const std::filesystem::path bakedDir = m_ActiveProject->GetDirectory() / "Baked" / sceneName;
+                const bool isBaking = m_GIBaker && m_GIBaker->IsBaking();
+                const bool canBake = bakeVolume.IsValid() && !isBaking;
+
+                if (ImGui::MenuItem("Bake GI", nullptr, false, canBake))
+                {
+                    const std::filesystem::path output = bakedDir
+                        / (std::to_string(static_cast<uint64_t>(bakeVolume.GetUUID())) + ".igi");
+                    m_BakeReflectionProbesAfterGI = false;
+                    if (m_GIBaker->StartBake(m_ActiveScene.get(), m_ActiveScene->GetAssetManager(), bakeVolume, output))
+                        m_State.giBakeModal = true;
+                }
+                if (ImGui::MenuItem("Bake Reflection Probes", nullptr, false, m_GIBaker != nullptr && !isBaking))
+                {
+                    m_GIBaker->BakeReflectionProbes(
+                        m_ActiveScene.get(),
+                        m_ActiveScene->GetAssetManager(),
+                        m_SceneRenderer ? m_SceneRenderer->GetIrradianceVolume().get() : nullptr,
+                        bakedDir);
+                    if (m_SceneRenderer)
+                        m_SceneRenderer->ClearReflectionProbeSet();
+                }
+                if (ImGui::MenuItem("Bake All", nullptr, false, m_GIBaker != nullptr && !isBaking))
+                {
+                    if (bakeVolume.IsValid())
+                    {
+                        const std::filesystem::path output = bakedDir
+                            / (std::to_string(static_cast<uint64_t>(bakeVolume.GetUUID())) + ".igi");
+                        m_BakeReflectionProbesAfterGI = true;
+                        if (m_GIBaker->StartBake(m_ActiveScene.get(), m_ActiveScene->GetAssetManager(), bakeVolume, output))
+                            m_State.giBakeModal = true;
+                    }
+                    else
+                    {
+                        m_GIBaker->BakeReflectionProbes(
+                            m_ActiveScene.get(),
+                            m_ActiveScene->GetAssetManager(),
+                            m_SceneRenderer ? m_SceneRenderer->GetIrradianceVolume().get() : nullptr,
+                            bakedDir);
+                        if (m_SceneRenderer)
+                            m_SceneRenderer->ClearReflectionProbeSet();
+                    }
+                }
+                if (ImGui::MenuItem("Clear Baked Data", nullptr, false, !isBaking))
+                {
+                    for (entt::entity e : m_ActiveScene->registry->view<IrradianceVolumeComponent>())
+                    {
+                        auto &vol = m_ActiveScene->registry->get<IrradianceVolumeComponent>(e);
+                        vol.bakedAssetPath.clear();
+                        vol.bakeHash = 0;
+                    }
+                    for (entt::entity e : m_ActiveScene->registry->view<ReflectionProbeComponent>())
+                    {
+                        auto &rp = m_ActiveScene->registry->get<ReflectionProbeComponent>(e);
+                        rp.bakedAssetPath.clear();
+                        rp.bakeHash = 0;
+                    }
+                    if (m_SceneRenderer)
+                    {
+                        m_SceneRenderer->ClearIrradianceVolume();
+                        m_SceneRenderer->ClearReflectionProbeSet();
+                    }
+                }
+                if (ImGui::MenuItem("Cancel GI Bake", nullptr, false, isBaking))
+                    m_GIBaker->CancelBake();
+
+                ImGui::Separator();
+                if (ImGui::MenuItem("Show GI Probes", nullptr, m_SceneRenderer->sceneRenderSettings.showGIProbes))
+                {
+                    m_SceneRenderer->sceneRenderSettings.showGIProbes = !m_SceneRenderer->sceneRenderSettings.showGIProbes;
+                }
+
+                if (ImGui::BeginMenu("Debug Mode"))
+                {
+                    static constexpr int kGIModes[] = { RENDER_MODE_GI_DIFFUSE, RENDER_MODE_GI_SPECULAR,
+                        RENDER_MODE_AO, RENDER_MODE_PROBE_WEIGHTS };
+                    static constexpr const char *kGINames[] = { "GI Diffuse", "GI Specular", "AO", "Probe Weights" };
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        if (ImGui::MenuItem(kGINames[i], nullptr, m_SceneRenderer->GetRenderMode() == kGIModes[i]))
+                            m_SceneRenderer->SetRenderMode(kGIModes[i]);
+                    }
+                    if (ImGui::MenuItem("Color", nullptr, m_SceneRenderer->GetRenderMode() == RENDER_MODE_COLOR))
+                        m_SceneRenderer->SetRenderMode(RENDER_MODE_COLOR);
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
+
             // EDIT MENU
             if (ImGui::BeginMenu("Edit", !m_State.isLoading))
             {
@@ -1004,6 +1150,29 @@ namespace ignite
 
         UIProjectCreation();
 
+        if (m_GIBaker && m_GIBaker->IsBaking())
+            ImGui::OpenPopup("Bake GI");
+        if (m_State.giBakeModal && ImGui::BeginPopupModal("Bake GI", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            const uint32_t total = m_GIBaker ? m_GIBaker->GetTotalProbes() : 0u;
+            const uint32_t completed = m_GIBaker ? m_GIBaker->GetCompletedProbes() : 0u;
+            const float progress = m_GIBaker ? m_GIBaker->GetProgress() : 0.0f;
+            ImGui::Text("Time-sliced irradiance bake");
+            ImGui::ProgressBar(progress, ImVec2(320.0f, 0.0f));
+            ImGui::Text("Probes: %u / %u", completed, total);
+            if (m_GIBaker && m_GIBaker->IsBaking())
+            {
+                if (ImGui::Button("Cancel"))
+                    m_GIBaker->CancelBake();
+            }
+            else if (ImGui::Button("Close"))
+            {
+                m_State.giBakeModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
         ImVec2 avail = ImGui::GetContentRegionAvail();
 
         // Dockspace tabs area gets everything except status bar
@@ -1108,6 +1277,42 @@ namespace ignite
         {
             ImGui::SameLine();
             ImGui::ProgressBar(m_LoadingProgress, ImVec2(140.0f, 0.0f));
+        }
+
+        if (m_ActiveScene && m_ActiveProject && !m_State.isLoading && IsSceneGIOutOfDate(m_ActiveScene.get()))
+        {
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.45f, 0.10f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.55f, 0.15f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.75f, 0.35f, 0.05f, 1.0f));
+            const bool isBaking = m_GIBaker && m_GIBaker->IsBaking();
+            ImGui::BeginDisabled(isBaking);
+            if (ImGui::Button("GI Out of Date - Rebake"))
+            {
+                Entity bakeVolume;
+                if (m_ScenePanel)
+                    bakeVolume = m_ScenePanel->GetSelectedEntity();
+                if (!bakeVolume || !bakeVolume.HasComponent<IrradianceVolumeComponent>())
+                {
+                    for (entt::entity e : m_ActiveScene->registry->view<IrradianceVolumeComponent>())
+                    {
+                        bakeVolume = Entity(e, m_ActiveScene.get());
+                        break;
+                    }
+                }
+                if (bakeVolume.IsValid() && m_GIBaker)
+                {
+                    const std::string sceneName = m_CurrentSceneFilePath.empty()
+                        ? "Scene" : m_CurrentSceneFilePath.stem().string();
+                    const std::filesystem::path output = m_ActiveProject->GetDirectory()
+                        / "Baked" / sceneName / (std::to_string(static_cast<uint64_t>(bakeVolume.GetUUID())) + ".igi");
+                    m_BakeReflectionProbesAfterGI = false;
+                    if (m_GIBaker->StartBake(m_ActiveScene.get(), m_ActiveScene->GetAssetManager(), bakeVolume, output))
+                        m_State.giBakeModal = true;
+                }
+            }
+            ImGui::EndDisabled();
+            ImGui::PopStyleColor(3);
         }
 
         ImGui::SameLine();
@@ -2986,6 +3191,25 @@ namespace ignite
                 }
             }
 
+            ImGui::Spacing();
+            ImGui::SeparatorText("GPU Pass Timings (ms)");
+            const auto &timings = m_SceneRenderer->GetLastGPUTimingsMs();
+            if (timings.empty())
+            {
+                ImGui::Text("No GPU timestamps available");
+            }
+            else
+            {
+                double totalMs = 0.0;
+                for (const auto &[zoneName, ms] : timings)
+                {
+                    totalMs += ms;
+                    ImGui::Text("%s: %.3f ms", zoneName.c_str(), ms);
+                }
+                ImGui::Separator();
+                ImGui::Text("Total Timed: %.3f ms", totalMs);
+            }
+
             ImGui::TreePop();
         }
 
@@ -3043,7 +3267,11 @@ namespace ignite
 
                 if (ImGui::TreeNodeEx("Shading"))
                 {
-                    static const char *renderModeLabels[] = { "Color", "Diffuse", "Normals", "Metallic", "Roughness", "Subsurface", "Transmission", "Coat", "Fuzz" };
+                    static const char *renderModeLabels[] = {
+                        "Color", "Diffuse", "Normals", "Metallic", "Roughness",
+                        "Subsurface", "Transmission", "Coat", "Fuzz",
+                        "GI Diffuse", "GI Specular", "AO", "Probe Weights"
+                    };
                     static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
                     static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "ACES Filmic" };
                     static const char *fillModeLabels[]{ "Solid", "Wireframe" };
@@ -3065,6 +3293,28 @@ namespace ignite
                     {
                         m_SceneRenderer->SetDebugShadowMode(debugShadow);
                     }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Global Illumination & AO"))
+                {
+                    static const char *giModeLabels[] = { "Volume Default", "Off", "Fast", "Leak-Resistant" };
+                    int giIdx = std::clamp(renderSettings.giModeOverride + 1, 0, 3);
+                    if (UI::DrawComboBox("GI Mode", giModeLabels, IM_ARRAYSIZE(giModeLabels), &giIdx))
+                    {
+                        renderSettings.giModeOverride = giIdx - 1;
+                    }
+
+                    static const char *aoModeLabels[] = { "Camera Default", "Off", "Legacy SSAO", "GTAO" };
+                    int aoIdx = std::clamp(renderSettings.aoModeOverride + 1, 0, 3);
+                    if (UI::DrawComboBox("AO Mode", aoModeLabels, IM_ARRAYSIZE(aoModeLabels), &aoIdx))
+                    {
+                        renderSettings.aoModeOverride = aoIdx - 1;
+                    }
+
+                    UI::DrawCheckbox("Depth+Normal Prepass", &renderSettings.enableDepthPrepass);
+                    UI::DrawCheckbox("Show GI Probes", &renderSettings.showGIProbes);
 
                     ImGui::TreePop();
                 }

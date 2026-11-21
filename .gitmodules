@@ -51,7 +51,7 @@
 	url = https://github.com/lua/lua.git
 [submodule "thirdparty/NRI"]
 	path = thirdparty/NRI
-	url = https://github.com/NVIDIA-RTX/NRI.git
+	url = https://github.com/evangelionxyz/NRI.git
 [submodule "thirdparty/VulkanMemoryAllocator"]
 	path = thirdparty/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git

@@ -52,6 +52,11 @@ return script
 Supported component types in Lua (`PrimitiveName`: `Cube`, `Sphere`, `Plane`, `Cylinder`, `Cone`, `Torus`):
 `Rendering`, `Transform`, `Rigidbody2D`, `Rigidbody` / `Rigidbody3D`, `Sprite2D`, `Circle2D`, `StaticMesh`, `SkeletalMesh`, `AudioSource`, `Camera`, `DirectionalLight`, `PointLight`, `SpotLight`, `CharacterController`, `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `BoxCollider2D`, `CircleCollider2D`, `Text`, `Widget`, `NetworkIdentity`, `PhysicsJoint` / `Joint`, `ParticleSystem` / `Particle`.
 
+## 1b. Lighting, Global Illumination & Ambient Occlusion Authoring
+- Place an `IrradianceVolume` covering indoor rooms/corridors (`extents`, `spacing`, `bounces`, `runtimeMode` = Off/Fast/LeakResistant) and optional `ReflectionProbe` boxes (`influenceExtents`, `projectionExtents`) for parallax-corrected specular GI.
+- Use `RenderingComponent::contributeGI` / `receiveGI` and light `bakeIndirect` flags to control static bake participation; bake via `Lighting -> Bake All` (saves relative `.igi` / `.igcube` files under `Baked/<Scene>/`, which `GamePackager` copies into standalone builds).
+- Camera `PostProcessing` defaults to `AOMode::GTAO` (depth+normal prepass + half-res XeGTAO with indirect-only Jimenez `MultiBounceAO`).
+
 ### IDE Autocomplete & Stub Verification
 API stubs live in `ignite/editor/resources/lua/ignite.d.lua` (and project `.luarc.json`). After modifying `lua.cpp` bindings, update `ignite.d.lua` and run `python scripts/gen_lua_stubs.py --check`.
 

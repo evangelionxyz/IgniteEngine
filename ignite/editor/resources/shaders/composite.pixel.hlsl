@@ -114,7 +114,6 @@ float4 main(VSOutput input) : SV_Target
 
     const bool hasFog = (fogDensity > 0.0f);
     const bool hasDOF = (enableDOF > 0);
-    const bool hasSSAO = (chromAbParams.y > 0.5f);
 
     if (hasDOF)
     {
@@ -166,11 +165,6 @@ float4 main(VSOutput input) : SV_Target
             sceneColor = accum / totalWeight;
         }
 
-        if (hasSSAO)
-        {
-            float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-            sceneColor *= saturate(pow(max(ao, 1e-4f), max(chromAbParams.z, 0.0f)));
-        }
         if (hasFog)
         {
             sceneColor = ApplyFogWithDistance(sceneColor, dist, input.uv);
@@ -178,11 +172,6 @@ float4 main(VSOutput input) : SV_Target
     }
     else
     {
-        if (hasSSAO)
-        {
-            float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-            sceneColor *= saturate(pow(max(ao, 1e-4f), max(chromAbParams.z, 0.0f)));
-        }
         if (hasFog)
         {
             float depth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;

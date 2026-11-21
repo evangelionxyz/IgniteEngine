@@ -63,7 +63,7 @@ PSOutput main(PSInput input)
     }
     else
     {
-        Texture2D tex = ResourceDescriptorHeap[input.texIndex];
+        Texture2D tex = ResourceDescriptorHeap[NonUniformResourceIndex(SafeBindlessIndex(input.texIndex))];
         float4 texColor = tex.Sample(samplerState, uv * input.tilingFactor);
         finalColor = texColor * input.color;
         finalColor.a = (input.texIndex == 0) ? input.color.a : (texColor.a * input.color.a);

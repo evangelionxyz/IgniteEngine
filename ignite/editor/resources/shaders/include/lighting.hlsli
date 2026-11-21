@@ -4,6 +4,7 @@
 #ifndef IGN_LIGHTING_HLSLI
 #define IGN_LIGHTING_HLSLI
 
+#include "binding_helpers.hlsli"
 #include "helpers.hlsli"
 #include "pbr.hlsli"
 #include "scene.hlsli"
@@ -27,6 +28,15 @@ static float SelectChannel(float4 value, int channel)
     if (channel == 3)
         return value.a;
     return value.r;
+}
+
+static float3 MultiBounceAO(float ao, float3 albedo)
+{
+    float3 a =  2.0404f * albedo - 0.3324f;
+    float3 b = -4.7951f * albedo + 0.6417f;
+    float3 c =  2.7552f * albedo + 0.6903f;
+    float3 x = float3(ao, ao, ao);
+    return saturate(max(x, ((x * a + b) * x + c) * x));
 }
 
 static PSOutput EvaluateMeshPixel(
@@ -63,17 +73,28 @@ static PSOutput EvaluateMeshPixel(
 
     float3 lightDirection = normalize(sunDirection);
 
-    Texture2D baseColorTex = ResourceDescriptorHeap[material.baseColorTextureIndex];
-    Texture2D emissiveTex = ResourceDescriptorHeap[material.emissiveTextureIndex];
-    Texture2D metallicTex = ResourceDescriptorHeap[material.metallicTextureIndex];
-    Texture2D roughnessTex = ResourceDescriptorHeap[material.roughnessTextureIndex];
-    Texture2D occlusionTex = ResourceDescriptorHeap[material.occlusionTextureIndex];
+    Texture2D baseColorTex = ResourceDescriptorHeap[SafeBindlessIndex(material.baseColorTextureIndex)];
+    Texture2D emissiveTex = ResourceDescriptorHeap[SafeBindlessIndex(material.emissiveTextureIndex)];
+    Texture2D metallicTex = ResourceDescriptorHeap[SafeBindlessIndex(material.metallicTextureIndex)];
+    Texture2D roughnessTex = ResourceDescriptorHeap[SafeBindlessIndex(material.roughnessTextureIndex)];
+    Texture2D occlusionTex = ResourceDescriptorHeap[SafeBindlessIndex(material.occlusionTextureIndex)];
 
     float3 emissiveColor = SRGBToLinear(emissiveTex.Sample(sampler0, tiledUV).rgb) * material.emissiveFactor.rgb;
     float4 metallicColor = metallicTex.Sample(sampler0, tiledUV);
     float4 roughnessColor = roughnessTex.Sample(sampler0, tiledUV);
     float occlusionSample = occlusionTex.Sample(sampler0, tiledUV).r;
-    float ao = lerp(1.0f, occlusionSample, saturate(material.occlusionStrength));
+    float materialAO = lerp(1.0f, occlusionSample, saturate(material.occlusionStrength));
+    float screenAO = 1.0f;
+    if (gi.captureMode == 0 && gi.aoMode == 2 && gi.gtaoTextureIndex >= 0 && material.blendMode != 1)
+    {
+        float2 halfTexel = gi.viewportInvSizeAndFlags.xy;
+        float2 screenUV = clamp(input.position.xy * gi.viewportInvSizeAndFlags.xy, halfTexel, 1.0f - halfTexel);
+        Texture2D gtaoTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.gtaoTextureIndex)];
+        float rawGtao = gtaoTex.SampleLevel(sampler0, screenUV, 0.0f).r;
+        float expFactor = max(gi.aoPower * gi.aoIntensity, 0.0f);
+        screenAO = saturate(pow(max(rawGtao, 1e-4f), expFactor));
+    }
+    float ao = min(materialAO, screenAO);
 
     float metallic = clamp(SelectChannel(metallicColor, material.metallicChannel) * material.metallicFactor, 0.0f, 1.0f);
     float roughness = clamp(SelectChannel(roughnessColor, material.roughnessChannel) * material.roughnessFactor, 0.0f, 1.0f);
@@ -114,7 +135,7 @@ static PSOutput EvaluateMeshPixel(
     float3 B = dot(bitangent, input.bitangent) < 0.0f ? -bitangent : bitangent;
     if (material.normalTextureIndex >= 0)
     {
-        Texture2D normalMapTex = ResourceDescriptorHeap[material.normalTextureIndex];
+        Texture2D normalMapTex = ResourceDescriptorHeap[SafeBindlessIndex(material.normalTextureIndex)];
         float3 tangentNormal = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
         finalNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
     }
@@ -188,7 +209,7 @@ static PSOutput EvaluateMeshPixel(
             float localShadow = 1.0f;
             if (gi.captureMode != 0 && gi.bakePointShadowCubeArrayIndex >= 0 && pi < 8)
             {
-                TextureCubeArray<float4> localShadowCubes = ResourceDescriptorHeap[gi.bakePointShadowCubeArrayIndex];
+                TextureCubeArray<float4> localShadowCubes = ResourceDescriptorHeap[SafeBindlessIndex(gi.bakePointShadowCubeArrayIndex)];
                 float stored = localShadowCubes.SampleLevel(sampler0, float4(-toLight, float(pi)), 0.0f).r;
                 float bias = 0.006f + 0.012f * (1.0f - saturate(dot(finalNormal, toLight)));
                 localShadow = (((d / range) - bias) <= stored) ? 1.0f : 0.0f;
@@ -228,7 +249,7 @@ static PSOutput EvaluateMeshPixel(
             float localShadow = 1.0f;
             if (gi.captureMode != 0 && gi.bakePointShadowCubeArrayIndex >= 0 && si < 4)
             {
-                TextureCubeArray<float4> localShadowCubes = ResourceDescriptorHeap[gi.bakePointShadowCubeArrayIndex];
+                TextureCubeArray<float4> localShadowCubes = ResourceDescriptorHeap[SafeBindlessIndex(gi.bakePointShadowCubeArrayIndex)];
                 float stored = localShadowCubes.SampleLevel(sampler0, float4(-toLight, float(8 + si)), 0.0f).r;
                 float bias = 0.006f + 0.012f * (1.0f - saturate(dot(finalNormal, toLight)));
                 localShadow = (((d / range) - bias) <= stored) ? 1.0f : 0.0f;
@@ -264,7 +285,7 @@ static PSOutput EvaluateMeshPixel(
             float3 combinedDiff = (gi.giMode > 0 && gi.biasAndFade.w > 0.5f && gi.viewportInvSizeAndFlags.w > 0.5f)
                 ? lerp(skyDiffuseIrradiance, volIrradiance, volW)
                 : skyDiffuseIrradiance;
-            ambient = kD * surface.baseWeight * surface.baseColor * combinedDiff * ao;
+            ambient = kD * surface.baseWeight * surface.baseColor * combinedDiff * MultiBounceAO(ao, surface.baseColor);
 
             // Specular indirect radiance for base and coat roughness lobes
             float3 R = reflect(-viewDirection, finalNormal);
@@ -274,7 +295,7 @@ static PSOutput EvaluateMeshPixel(
             {
                 if (gi.skyPrefilterCubeIndex >= 0)
                 {
-                    TextureCube skyPrefilterCube = ResourceDescriptorHeap[gi.skyPrefilterCubeIndex];
+                    TextureCube skyPrefilterCube = ResourceDescriptorHeap[SafeBindlessIndex(gi.skyPrefilterCubeIndex)];
                     float maxSkyMip = float(max(gi.skyPrefilterMipCount - 1, 0));
                     skyBaseRad = skyPrefilterCube.SampleLevel(sampler0, R, saturate(surface.specularRoughness) * maxSkyMip).rgb;
                     skyCoatRad = skyPrefilterCube.SampleLevel(sampler0, R, saturate(surface.coatRoughness) * maxSkyMip).rgb;
@@ -307,7 +328,7 @@ static PSOutput EvaluateMeshPixel(
                 float3 coatSpec = surface.coatWeight * coatF;
                 float3 throughCoat = lerp(float3(1.0f, 1.0f, 1.0f), saturate(surface.coatColor) * (1.0f - coatF),
                     surface.coatWeight * surface.coatDarkening);
-                float3 fuzz = surface.fuzzWeight * surface.fuzzColor * combinedDiff * ao;
+                float3 fuzz = surface.fuzzWeight * surface.fuzzColor * combinedDiff * MultiBounceAO(ao, surface.fuzzColor);
 
                 float baseSO = ComputeSpecularOcclusion(NdotV, ao, surface.specularRoughness);
                 float coatSO = ComputeSpecularOcclusion(NdotV, ao, surface.coatRoughness);
@@ -328,7 +349,7 @@ static PSOutput EvaluateMeshPixel(
             float3 combinedDiff = (gi.giMode > 0 && gi.biasAndFade.w > 0.5f)
                 ? lerp(skyDiffuseIrradiance, volIrradiance, volW)
                 : skyDiffuseIrradiance;
-            ambient = kD * surface.baseWeight * surface.baseColor * combinedDiff * ao;
+            ambient = kD * surface.baseWeight * surface.baseColor * combinedDiff * MultiBounceAO(ao, surface.baseColor);
         }
 
         if (gi.captureMode != 0)

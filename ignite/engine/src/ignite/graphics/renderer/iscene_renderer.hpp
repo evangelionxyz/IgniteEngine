@@ -75,6 +75,10 @@ namespace ignite
         bool showGIProbes = false;
         bool renderEnvironment = true;
 
+        int giModeOverride = -1;     // -1 = Volume default, 0 = Off, 1 = Fast, 2 = LeakResistant
+        int aoModeOverride = -1;     // -1 = Camera PostProcessing, 0 = Off, 1 = LegacySSAO, 2 = GTAO
+        bool enableDepthPrepass = true;
+
         SampleMethod sampleMethod = SampleMethod::FXAA;
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
         MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths

@@ -44,18 +44,10 @@ namespace ignite
         return ret;
     }
 
-    static VKAPI_ATTR VkBool32 VKAPI_CALL VkDebugReportCallback(
-        vk::DebugReportFlagsEXT flags,
-        vk::DebugReportObjectTypeEXT objType,
-        uint64_t obj,
-        size_t location,
-        int32_t code,
-        const char *layerPrefix,
-        const char *msg,
-        void *userData)
+    static VKAPI_ATTR VkBool32 VKAPI_CALL VkDebugReportCallback(vk::DebugReportFlagsEXT flags, vk::DebugReportObjectTypeEXT objType,
+        uint64_t obj, size_t location, int32_t code, const char *layerPrefix, const char *msg, void *userData)
     {
-        DeviceManager_VK *manager = (DeviceManager_VK *)userData;
-        if (manager)
+        if (auto manager = (DeviceManager_VK*)userData)
         {
             const auto &ignored = manager->GetDeviceParameters().ignoreVulkanValidationMessageLocations;
             const auto found = std::find(ignored.begin(), ignored.end(), location);
@@ -64,7 +56,6 @@ namespace ignite
         }
 
         LOG_WARN("[VULKAN: Location={} code {}, layerPrefix='{}'] \n\t{}\n", location, code, layerPrefix, msg);
-
         return VK_FALSE;
     }
 
@@ -145,23 +136,28 @@ namespace ignite
     {
         if (m_DeviceParameters.enableDebugRuntime)
         {
-            enabledExtensions.instance.insert("VK_EXT_debug_report");
+            enabledExtensions.instance.insert(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+            enabledExtensions.instance.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
             enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
-            enabledExtensions.layers.insert("VK_LAYER_KHRONOS_synchronization2");
+            // "VK_LAYER_KHRONOS_synchronization2" is deprecated and no longer ships with the modern
+            // validation layers; synchronization validation is requested through
+            // "VK_EXT_validation_features" instead (see below).
         }
 
-        bool wantSyncValidation = m_DeviceParameters.enableVulkanSyncValidation;
-        if (!wantSyncValidation)
-        {
-            if (const char *syncEnv = std::getenv("IGNITE_VK_SYNC_VALIDATION"))
-            {
-                wantSyncValidation = (std::string_view(syncEnv) == "1" || std::string_view(syncEnv) == "true");
-            }
-        }
-        if (wantSyncValidation)
+        if (m_DeviceParameters.enableDebugRuntime
+            || IsVulkanSyncValidationRequested()
+            || IsVulkanGpuValidationRequested())
         {
             enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
-            optionalExtensions.instance.insert("VK_EXT_validation_features");
+            // All per-check toggles below are delivered as VkLayerSettingsCreateInfoEXT, which needs this
+            // instance extension. It lives on the validation layer, so it is resolved in "CreateInstance".
+            optionalExtensions.instance.insert(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
+        }
+
+        if (IsVulkanSyncValidationRequested())
+        {
+            optionalExtensions.instance.insert(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
         }
 
         m_DynamicLoader = std::make_unique<VulkanDynamicLoader>(m_DeviceParameters.vulkanLibraryName);
@@ -495,7 +491,7 @@ namespace ignite
 
         const auto &acquireSemaphore = m_AcquireSemaphores[m_CurrentFrame];
 
-        vk::Result res;
+        vk::Result res = vk::Result::eErrorUnknown;
         if (m_SwapChain)
         {
             for (int attempt = 0; attempt < 3; ++attempt)
@@ -521,8 +517,11 @@ namespace ignite
 
         if (res == vk::Result::eSuccess || res == vk::Result::eSuboptimalKHR)
         {
-            // Submit acquire semaphore wait on graphics queue so all GPU work submitted this frame waits for image acquisition
-            vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eTransfer;
+            // Submit acquire semaphore wait on graphics queue so all GPU work submitted this frame waits for image acquisition.
+            // The very first thing the frame does is transition the acquired image out of its present/undefined
+            // layout. That transition is recorded in a separate command buffer, and it is not guaranteed to be
+            // ordered after an acquire wait narrowed to color-attachment-output or transfer stages, so wait at all stages.
+            vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eAllCommands;
             vk::SubmitInfo submitInfo{};
             submitInfo.waitSemaphoreCount = 1;
             submitInfo.pWaitSemaphores = &acquireSemaphore;
@@ -626,38 +625,127 @@ namespace ignite
             layers.push_back(ext);
     }
 
+    namespace
+    {
+        // Reads a boolean-ish environment variable. Returns "-1" when it is not set.
+        int ReadBoolEnv(const char *name)
+        {
+            const char *raw = std::getenv(name);
+            if (!raw)
+                return -1;
+
+            const std::string_view text(raw);
+            return (text == "1" || text == "true" || text == "on") ? 1 : 0;
+        }
+    }
+
+    bool DeviceManager_VK::IsVulkanSyncValidationRequested() const
+    {
+        if (m_DeviceParameters.enableVulkanSyncValidation || m_DeviceParameters.vkValidation.synchronization)
+            return true;
+
+        return ReadBoolEnv("IGNITE_VK_SYNC_VALIDATION") == 1;
+    }
+
+    bool DeviceManager_VK::IsVulkanGpuValidationRequested() const
+    {
+        if (m_DeviceParameters.enableGPUValidation || m_DeviceParameters.vkValidation.gpuAssisted)
+            return true;
+
+        return ReadBoolEnv("IGNITE_VK_GPU_VALIDATION") == 1;
+    }
+
+    void DeviceManager_VK::CollectValidationLayerSettings(std::vector<vk::LayerSettingEXT> &settings,
+        std::vector<VkBool32> &valueStorage) const
+    {
+        settings.clear();
+        valueStorage.clear();
+
+        const VulkanValidationSettings &cfg = m_DeviceParameters.vkValidation;
+
+        // GPU-AV and core validation running together is extremely slow and the layer reports a
+        // VALIDATION-SETTINGS warning about it. GPU-AV takes precedence; core validation is only
+        // enabled while GPU-AV is off.
+        const bool gpuAssisted = IsVulkanGpuValidationRequested();
+        const bool coreValidation = cfg.core && !gpuAssisted;
+
+        struct Entry
+        {
+            const char *name;
+            bool enabled;
+        };
+
+        const Entry entries[] = {
+            { "validate_core", coreValidation },
+            { "validate_sync", IsVulkanSyncValidationRequested() },
+            { "validate_best_practices", cfg.bestPractices },
+            { "thread_safety", cfg.threadSafety },
+            { "stateless_param", cfg.statelessParameters },
+            { "object_lifetime", cfg.objectLifetime },
+            { "unique_handles", cfg.uniqueHandles },
+            // Synchronization validation always parses SPIR-V to learn read/write access, so it warns when
+            // shader validation is explicitly off. Keep it on while sync validation runs.
+            { "check_shaders", cfg.shaderValidation || IsVulkanSyncValidationRequested() },
+            { "gpuav_enable", gpuAssisted },
+            { "printf_enable", cfg.debugPrintf },
+            // GPU-AV sub-checks for features this engine never enables. Leaving them at the layer default
+            // ("on") makes the layer announce that it had to disable unsupported instrumentation itself.
+            // Note: this layer version has no "gpuav_validate_ray_hit_object" setting key - only the
+            // internal flag behind "gpuav_validate_ray_query" and "gpuav_mesh_shading" exist.
+            { "gpuav_validate_ray_query", gpuAssisted && cfg.gpuAssistedRayQuery },
+            { "gpuav_mesh_shading", gpuAssisted && cfg.gpuAssistedMeshShading },
+        };
+
+        // The layer dereferences "pValues" lazily during "vkCreateInstance", so the backing storage must
+        // outlive this call. It belongs to the caller's vector for that reason.
+        valueStorage.reserve(std::size(entries));
+        for (const Entry &entry : entries)
+            valueStorage.push_back(entry.enabled ? VK_TRUE : VK_FALSE);
+
+        settings.reserve(std::size(entries));
+        for (size_t i = 0; i < std::size(entries); ++i)
+        {
+            settings.push_back(vk::LayerSettingEXT{
+                "VK_LAYER_KHRONOS_validation",
+                entries[i].name,
+                vk::LayerSettingTypeEXT::eBool32,
+                1,
+                &valueStorage[i] });
+        }
+    }
+
     bool DeviceManager_VK::CreateInstance()
     {
         if (!m_DeviceParameters.headlessDevice)
         {
-            uint32_t glfwExtCount;
-            const char* const* glfwExt = SDL_Vulkan_GetInstanceExtensions(&glfwExtCount);
-            LOG_ASSERT(glfwExt, " Failed to get required instance extensions");
+            uint32_t extCount;
+            const auto extensions = SDL_Vulkan_GetInstanceExtensions(&extCount);
+            LOG_ASSERT(extensions, " Failed to get required instance extensions");
 
-            for (uint32_t i = 0; i < glfwExtCount; ++i)
+            for (uint32_t i = 0; i < extCount; ++i)
             {
-                enabledExtensions.instance.insert(std::string(glfwExt[i]));
+                enabledExtensions.instance.insert(std::string(extensions[i]));
             }
         }
 
         // add instance extensions requested by the user
-        for (const std::string &name : m_DeviceParameters.requiredVulkanInstanceExtensions)
+        for (const std::string& name : m_DeviceParameters.requiredVulkanInstanceExtensions)
         {
             enabledExtensions.instance.insert(name);
         }
 
-        for (const std::string &name : m_DeviceParameters.optionalVulkanInstanceExtensions)
+        for (const std::string& name : m_DeviceParameters.optionalVulkanInstanceExtensions)
         {
             optionalExtensions.instance.insert(name);
         }
 
         // add layers requested by the user
-        for (const std::string &name : m_DeviceParameters.requiredVulkanLayers)
+        for (const std::string& name : m_DeviceParameters.requiredVulkanLayers)
         {
             enabledExtensions.layers.insert(name);
         }
 
-        for (const std::string &name : m_DeviceParameters.optionalVulkanLayers)
+        for (const std::string& name : m_DeviceParameters.optionalVulkanLayers)
         {
             optionalExtensions.layers.insert(name);
         }
@@ -665,7 +753,7 @@ namespace ignite
         std::unordered_set<std::string> requiredExtensions = enabledExtensions.instance;
 
         // figure out which optional extensions are supported
-        for (const auto &instanceExt : vk::enumerateInstanceExtensionProperties())
+        for (const auto& instanceExt : vk::enumerateInstanceExtensionProperties())
         {
             const std::string name = instanceExt.extensionName;
             if (optionalExtensions.instance.contains(name))
@@ -677,7 +765,7 @@ namespace ignite
         {
             try
             {
-                for (const auto &layerExt : vk::enumerateInstanceExtensionProperties(std::string("VK_LAYER_KHRONOS_validation")))
+                for (const auto& layerExt : vk::enumerateInstanceExtensionProperties(std::string("VK_LAYER_KHRONOS_validation")))
                 {
                     const std::string name = layerExt.extensionName;
                     if (optionalExtensions.instance.contains(name))
@@ -695,7 +783,7 @@ namespace ignite
         {
             std::stringstream ss;
             ss << "Cannot create a Vulkan instance because the following required extension(s) are note supported: ";
-            for (const auto &ext : requiredExtensions)
+            for (const auto& ext : requiredExtensions)
             {
                 ss << '\n' << ' - ' << ext;
             }
@@ -705,21 +793,21 @@ namespace ignite
         }
 
         LOG_WARN("Enabled Vulkan instance extensions: ");
-        for (const auto &ext : enabledExtensions.instance)
+        for (const auto& ext : enabledExtensions.instance)
         {
             LOG_TRACE("    {}", ext);
         }
 
         std::unordered_set<std::string> requiredLayers = enabledExtensions.layers;
-		LOG_WARN("Available Vulkan Layers: ");
-        for (const auto &layer : vk::enumerateInstanceLayerProperties())
+        LOG_WARN("Available Vulkan Layers: ");
+        for (const auto& layer : vk::enumerateInstanceLayerProperties())
         {
             const std::string name = layer.layerName;
-			LOG_TRACE("    {}", name);
-			if (optionalExtensions.layers.contains(name))
-			{
+            LOG_TRACE("    {}", name);
+            if (optionalExtensions.layers.contains(name))
+            {
                 enabledExtensions.layers.insert(name);
-			}
+            }
 
             requiredLayers.erase(name);
         }
@@ -728,16 +816,16 @@ namespace ignite
         {
             std::stringstream ss;
             ss << "Cannot create a Vulkan instance because the following required layer(s) are not support: ";
-            for (const auto &ext : requiredLayers)
+            for (const auto& ext : requiredLayers)
                 ss << '\n' << " - " << ext;
             LOG_ASSERT(false, "{}", ss.str());
             return false;
         }
 
         LOG_WARN("Enabled Vulkan layers: ");
-        for (const auto &layer : enabledExtensions.layers)
+        for (const auto& layer : enabledExtensions.layers)
         {
-			LOG_TRACE("    {}", layer.c_str());
+            LOG_TRACE("    {}", layer.c_str());
         }
 
         auto instanceExtVec = StringSetToVector(enabledExtensions.instance);
@@ -784,7 +872,7 @@ namespace ignite
         }
 
         // create the Vulkan Instance
-        vk::InstanceCreateInfo info = vk::InstanceCreateInfo()
+        auto instanceCreateInfo = vk::InstanceCreateInfo()
             .setEnabledLayerCount(uint32_t(layerVec.size()))
             .setPpEnabledLayerNames(layerVec.data())
             .setEnabledExtensionCount(uint32_t(instanceExtVec.size()))
@@ -793,24 +881,54 @@ namespace ignite
 
         vk::ValidationFeaturesEXT validationFeatures{};
         std::vector<vk::ValidationFeatureEnableEXT> enabledValidationFeatures;
-        bool wantSyncValidation = m_DeviceParameters.enableVulkanSyncValidation;
-        if (!wantSyncValidation)
-        {
-            if (const char *syncEnv = std::getenv("IGNITE_VK_SYNC_VALIDATION"))
-            {
-                wantSyncValidation = (std::string_view(syncEnv) == "1" || std::string_view(syncEnv) == "true");
-            }
-        }
-        if (wantSyncValidation && enabledExtensions.instance.contains("VK_EXT_validation_features"))
+        const bool useValidationFeatures = IsVulkanSyncValidationRequested()
+            && enabledExtensions.instance.contains(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+        if (useValidationFeatures)
         {
             enabledValidationFeatures.push_back(vk::ValidationFeatureEnableEXT::eSynchronizationValidation);
-            validationFeatures.enabledValidationFeatureCount = static_cast<uint32_t>(enabledValidationFeatures.size());
-            validationFeatures.pEnabledValidationFeatures = enabledValidationFeatures.data();
-            info.setPNext(&validationFeatures);
+            validationFeatures.setEnabledValidationFeatureCount(static_cast<uint32_t>(enabledValidationFeatures.size()));
+            validationFeatures.setPEnabledValidationFeatures(enabledValidationFeatures.data());
+
             LOG_INFO("[Vulkan] Enabling VK_EXT_validation_features synchronization validation");
         }
 
-        res = vk::createInstance(&info, nullptr, &m_VulkanInstance);
+        std::vector<vk::LayerSettingEXT> validationSettings;
+        std::vector<VkBool32> validationSettingValues;
+        vk::LayerSettingsCreateInfoEXT layerSettings{};
+        const bool useLayerSettings = enabledExtensions.instance.contains(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
+        if (useLayerSettings)
+        {
+            CollectValidationLayerSettings(validationSettings, validationSettingValues);
+            if (!validationSettings.empty())
+            {
+                layerSettings.setPSettings(validationSettings.data())
+                    .setSettingCount(static_cast<uint32_t>(validationSettings.size()));
+
+                LOG_INFO("[Vulkan] Layer Settings: ");
+                for (size_t i = 0; i < validationSettings.size(); ++i)
+                {
+                    LOG_INFO("    {} {}", validationSettings[i].pSettingName,
+                        validationSettingValues[i] ? "Enabled" : "Disabled");
+                }
+            }
+        }
+
+        // Chain the validation structures (locals live until "vkCreateInstance" returns).
+        void *validationChain = nullptr;
+        if (!validationSettings.empty())
+        {
+            layerSettings.setPNext(validationChain);
+            validationChain = &layerSettings;
+        }
+        if (useValidationFeatures)
+        {
+            validationFeatures.setPNext(validationChain);
+            validationChain = &validationFeatures;
+        }
+        if (validationChain)
+            instanceCreateInfo.setPNext(validationChain);
+
+        res = vk::createInstance(&instanceCreateInfo, nullptr, &m_VulkanInstance);
         if (res != vk::Result::eSuccess)
         {
             std::string resultStr = vk::to_string(res);
@@ -832,29 +950,33 @@ namespace ignite
 
     void DeviceManager_VK::InstallDebugCallback()
     {
-        const auto info = vk::DebugReportCallbackCreateInfoEXT()
-            .setFlags(vk::DebugReportFlagBitsEXT::eError
+        constexpr auto flags =
+              vk::DebugReportFlagBitsEXT::eError
+#if _DEBUG
+            | vk::DebugReportFlagBitsEXT::eDebug
+#endif
             | vk::DebugReportFlagBitsEXT::eWarning
-            //| vk::DebugReportFlagBitsEXT::eInformation
-            | vk::DebugReportFlagBitsEXT::ePerformanceWarning)
+            | vk::DebugReportFlagBitsEXT::ePerformanceWarning;
+
+        const auto info = vk::DebugReportCallbackCreateInfoEXT()
+            .setFlags(flags)
             .setPfnCallback(VkDebugReportCallback)
             .setPUserData(this);
 
         vk::Result res = m_VulkanInstance.createDebugReportCallbackEXT(&info, nullptr, &m_DebugReportCallback);
-
         LOG_ASSERT(res == vk::Result::eSuccess, "Vulkan: Failed to create report debug callback");
     }
 
     bool DeviceManager_VK::PickPhysicalDevice()
     {
-        VkFormat requestedFormat = (VkFormat)nriConvertNRIFormatToVK(m_DeviceParameters.swapChainFormat);
+        const auto requestedFormat = static_cast<vk::Format>(nriConvertNRIFormatToVK(m_DeviceParameters.swapChainFormat));
         vk::Extent2D requestedExtent(m_DeviceParameters.backBufferWidth, m_DeviceParameters.backBufferHeight);
 
         auto devices = m_VulkanInstance.enumeratePhysicalDevices();
-        i32 adapterIndex = m_DeviceParameters.adapterIndex;
+        int32_t adapterIndex = m_DeviceParameters.adapterIndex;
 
-        i32 firstDevice = 0;
-        i32 lastDevice = i32(devices.size()) - 1;
+        int32_t firstDevice = 0;
+        int32_t lastDevice = int32_t(devices.size()) - 1;
 
         if (adapterIndex >= 0)
         {
@@ -870,7 +992,7 @@ namespace ignite
         // build a list of GPUs
         std::vector<vk::PhysicalDevice> discreteGPUs;
         std::vector<vk::PhysicalDevice> otherGPUs;
-        for (i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex)
+        for (int32_t deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex)
         {
             const vk::PhysicalDevice &dev = devices[deviceIndex];
             vk::PhysicalDeviceProperties prop = dev.getProperties();
@@ -952,7 +1074,7 @@ namespace ignite
                     bool surfaceFormatPresent = false;
                     for (const vk::SurfaceFormatKHR &surfaceFmt : surfaceFmts)
                     {
-                        if (surfaceFmt.format == vk::Format(requestedFormat))
+                        if (surfaceFmt.format == requestedFormat)
                         {
                             surfaceFormatPresent = true;
                             break;
@@ -1109,7 +1231,7 @@ namespace ignite
         bool synchronization2Supported = false;
         bool maintenance4Supported = false;
         bool aftermathSupported = false;
-		bool mutableDescriptorSupported = false;
+        bool mutableDescriptorSupported = false;
 
         LOG_INFO("Enabled Vulkan device extensions: ");
         for (const auto &ext : enabledExtensions.device)
@@ -1140,8 +1262,8 @@ namespace ignite
                 m_SwapChainMutableFormatSupported = true;
             else if (ext == VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME)
                 aftermathSupported = true;
-			else if (ext == VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME)
-				mutableDescriptorSupported = true;
+            else if (ext == VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME)
+                mutableDescriptorSupported = true;
         }
 
 #define APPEND_EXTENSION(condition, desc) if (condition) { (desc).pNext = pNext; pNext = &(desc); }
@@ -1154,12 +1276,18 @@ namespace ignite
         auto maintenance4Features = vk::PhysicalDeviceMaintenance4Features();
         // determine support for aftermath
         auto aftermathPhysicalFeatures  = vk::PhysicalDeviceDiagnosticsConfigFeaturesNV();
+        // determine support for Vulkan 1.2 features (update after bind, descriptor indexing, etc.)
+        auto vulkan12PhysicalFeatures = vk::PhysicalDeviceVulkan12Features();
+        // determine support for Vulkan 1.1 features (16-bit storage)
+        auto vulkan11PhysicalFeatures = vk::PhysicalDeviceVulkan11Features();
 
         // put the user provided extension structure at the end of the chain
         pNext = m_DeviceParameters.physicalDeviceFeatures2Extensions;
         APPEND_EXTENSION(true, bufferDeviceAddressFeatures);
         APPEND_EXTENSION(maintenance4Supported, maintenance4Features);
         APPEND_EXTENSION(aftermathSupported, aftermathPhysicalFeatures);
+        APPEND_EXTENSION(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_2, vulkan12PhysicalFeatures);
+        APPEND_EXTENSION(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_1, vulkan11PhysicalFeatures);
 
         physicalDeviceFeatures2.pNext = pNext;
         m_VulkanPhysicalDevice.getFeatures2(&physicalDeviceFeatures2);
@@ -1181,7 +1309,7 @@ namespace ignite
         std::vector<vk::DeviceQueueCreateInfo> queueDesc;
         queueDesc.reserve(uniqueQueueFamilies.size());
 
-        for (i32 queueFamily : uniqueQueueFamilies)
+        for (int32_t queueFamily : uniqueQueueFamilies)
         {
             queueDesc.push_back(vk::DeviceQueueCreateInfo()
                 .setQueueFamilyIndex(queueFamily)
@@ -1211,7 +1339,7 @@ namespace ignite
             .setAttachmentFragmentShadingRate(true);
         auto vulkan13features = vk::PhysicalDeviceVulkan13Features()
             .setSynchronization2(synchronization2Supported)
-			.setDynamicRendering(true)
+            .setDynamicRendering(true)
             .setShaderDemoteToHelperInvocation(true)
             .setMaintenance4(maintenance4Features.maintenance4);
         auto aftermathFeatures = vk::DeviceDiagnosticsConfigCreateInfoNV()
@@ -1233,8 +1361,8 @@ namespace ignite
         APPEND_EXTENSION(storage16BitSupported, storage16BitFeatures)
         APPEND_EXTENSION(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3, vulkan13features)
         APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 &&maintenance4Supported, maintenance4Features);
-		APPEND_EXTENSION(aftermathSupported, aftermathFeatures);
-		APPEND_EXTENSION(mutableDescriptorSupported, mutableDescriptorFeatures);
+        APPEND_EXTENSION(aftermathSupported, aftermathFeatures);
+        APPEND_EXTENSION(mutableDescriptorSupported, mutableDescriptorFeatures);
 
 #undef APPEND_EXTENSION
 
@@ -1250,6 +1378,7 @@ namespace ignite
             .setGeometryShader(true)
             .setImageCubeArray(true)
             .setShaderInt16(true)
+            .setShaderInt64(physicalDeviceFeatures2.features.shaderInt64)
             .setFillModeNonSolid(true)
             .setFragmentStoresAndAtomics(true)
             .setDualSrcBlend(true)
@@ -1258,16 +1387,36 @@ namespace ignite
             .setMultiViewport(m_MultiViewportSupported);
 
         // add a Vulkan 1.1 structure with default settings to make it easier for apps to modify them
+        //
+        // "storageBuffer16BitAccess" is core Vulkan 1.1 functionality: on a 1.1+ device the feature can be
+        // enabled without "VK_KHR_16bit_storage", so gating it on the extension alone would make the
+        // validation layer force the feature on our behalf (the "validation is adjusting settings" warning).
+        const bool storageBuffer16BitAccessSupported = vulkan11PhysicalFeatures.storageBuffer16BitAccess
+            || (storage16BitSupported && physicalDeviceProperties.apiVersion < VK_API_VERSION_1_1);
         auto vulkan11features = vk::PhysicalDeviceVulkan11Features()
+            .setStorageBuffer16BitAccess(storageBuffer16BitAccessSupported)
             .setPNext(pNext);
 
+        // Vulkan memory model / scalar block layout / 8-bit storage are needed by the shader toolchain
+        // (and by GPU-Assisted Validation). They are requested only when the device reports support, which
+        // avoids the validation layer having to force them behind our back ("validation is adjusting
+        // settings" warning).
         auto vulkan12features = vk::PhysicalDeviceVulkan12Features()
-            .setDescriptorIndexing(true)
-            .setRuntimeDescriptorArray(true)
-            .setDescriptorBindingPartiallyBound(true)
-            .setDescriptorBindingVariableDescriptorCount(true)
-            .setTimelineSemaphore(true)
-            .setShaderSampledImageArrayNonUniformIndexing(true)
+            .setDescriptorIndexing(vulkan12PhysicalFeatures.descriptorIndexing)
+            .setRuntimeDescriptorArray(vulkan12PhysicalFeatures.runtimeDescriptorArray)
+            .setDescriptorBindingPartiallyBound(vulkan12PhysicalFeatures.descriptorBindingPartiallyBound)
+            .setDescriptorBindingVariableDescriptorCount(vulkan12PhysicalFeatures.descriptorBindingVariableDescriptorCount)
+            .setDescriptorBindingSampledImageUpdateAfterBind(vulkan12PhysicalFeatures.descriptorBindingSampledImageUpdateAfterBind)
+            .setDescriptorBindingStorageImageUpdateAfterBind(vulkan12PhysicalFeatures.descriptorBindingStorageImageUpdateAfterBind)
+            .setDescriptorBindingStorageBufferUpdateAfterBind(vulkan12PhysicalFeatures.descriptorBindingStorageBufferUpdateAfterBind)
+            .setDescriptorBindingUniformBufferUpdateAfterBind(vulkan12PhysicalFeatures.descriptorBindingUniformBufferUpdateAfterBind)
+            .setDescriptorBindingUpdateUnusedWhilePending(vulkan12PhysicalFeatures.descriptorBindingUpdateUnusedWhilePending)
+            .setTimelineSemaphore(vulkan12PhysicalFeatures.timelineSemaphore)
+            .setShaderSampledImageArrayNonUniformIndexing(vulkan12PhysicalFeatures.shaderSampledImageArrayNonUniformIndexing)
+            .setScalarBlockLayout(vulkan12PhysicalFeatures.scalarBlockLayout)
+            .setVulkanMemoryModel(vulkan12PhysicalFeatures.vulkanMemoryModel)
+            .setVulkanMemoryModelDeviceScope(vulkan12PhysicalFeatures.vulkanMemoryModelDeviceScope)
+            .setStorageBuffer8BitAccess(vulkan12PhysicalFeatures.storageBuffer8BitAccess)
             .setBufferDeviceAddress(bufferDeviceAddressFeatures.bufferDeviceAddress)
             .setPNext(&vulkan11features);
 
@@ -1314,12 +1463,14 @@ namespace ignite
     {
         DestroySwapChain();
 
-        m_SwapChainFormat = {
+        m_SwapChainFormat =
+        {
             vk::Format(nriConvertNRIFormatToVK(m_DeviceParameters.swapChainFormat)),
             vk::ColorSpaceKHR::eSrgbNonlinear
         };
 
-        std::unordered_set<uint32_t> uniqueQueues = {
+        std::unordered_set<uint32_t> uniqueQueues =
+        {
             uint32_t(m_GraphicsQueueFamily),
             uint32_t(m_PresentQueueFamily)
         };
@@ -1329,6 +1480,22 @@ namespace ignite
         const bool enableSwapChainSharing = queues.size() > 1;
 
         vk::SurfaceCapabilitiesKHR capabilities = m_VulkanPhysicalDevice.getSurfaceCapabilitiesKHR(m_WindowSurface);
+
+        // Get Surface Present Mode
+        PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkPFN_vkGetPhysicalDeviceSurfacePresentModesKHRAddr = m_DynamicLoader->getProcAddress<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>("vkGetPhysicalDeviceSurfacePresentModesKHR");
+        uint32_t presentModeCount = 0;
+        vkPFN_vkGetPhysicalDeviceSurfacePresentModesKHRAddr(m_VulkanPhysicalDevice, m_WindowSurface, &presentModeCount, nullptr);
+        std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+        vkPFN_vkGetPhysicalDeviceSurfacePresentModesKHRAddr(m_VulkanPhysicalDevice, m_WindowSurface, &presentModeCount, presentModes.data());
+
+        const bool supportVSync = std::ranges::any_of(presentModes, [](const VkPresentModeKHR mode)
+        {
+            return mode == VK_PRESENT_MODE_FIFO_KHR;
+        });
+
+        const vk::PresentModeKHR optimalPresentMode = (m_DeviceParameters.vsyncEnable && supportVSync)
+            ? vk::PresentModeKHR::eFifo
+            : vk::PresentModeKHR::eImmediate;
 
         vk::Extent2D extent;
         if (capabilities.currentExtent.width != 0xFFFFFFFF)
@@ -1363,7 +1530,7 @@ namespace ignite
             .setPQueueFamilyIndices(enableSwapChainSharing ? queues.data() : nullptr)
             .setPreTransform(capabilities.currentTransform)
             .setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
-            .setPresentMode(m_DeviceParameters.vsyncEnable ? vk::PresentModeKHR::eFifo : vk::PresentModeKHR::eImmediate)
+            .setPresentMode(optimalPresentMode)
             .setClipped(VK_TRUE)
             .setOldSwapchain(VK_NULL_HANDLE);
 

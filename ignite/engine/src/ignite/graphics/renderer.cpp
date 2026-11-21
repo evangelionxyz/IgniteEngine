@@ -91,6 +91,10 @@ namespace ignite
             std::vector<uint8_t> blackUIntData(sizeof(uint32_t));
             memcpy(blackUIntData.data(), &blackUInt, sizeof(uint32_t));
             m_BlackUIntTexture = Texture::Create(blackUIntData, uintTexCI, nullptr);
+
+            // Immediately bind slot 0 fallback and default textures in the bindless heap
+            // so slot 0 is guaranteed valid even before the first Renderer::BeginFrame().
+            BindlessSystem::FlushPendingWrites();
         }
 
         // Default materials

@@ -27,7 +27,7 @@ float ScreenPxRange(uint texIndex, float2 uv)
     const float pxRange = 6.0f;
     uint width = 1u;
     uint height = 1u;
-    Texture2D tex = ResourceDescriptorHeap[texIndex];
+    Texture2D tex = ResourceDescriptorHeap[NonUniformResourceIndex(SafeBindlessIndex(texIndex))];
     tex.GetDimensions(width, height);
     width = max(width, 1u);
     height = max(height, 1u);
@@ -38,7 +38,7 @@ float ScreenPxRange(uint texIndex, float2 uv)
 
 PSOutput main(PSInput input)
 {
-    Texture2D tex = ResourceDescriptorHeap[input.texIndex];
+    Texture2D tex = ResourceDescriptorHeap[NonUniformResourceIndex(SafeBindlessIndex(input.texIndex))];
     float3 msd = tex.Sample(samplerState, input.texCoord).rgb;
     float sd = Median(msd) - 0.5f;
     float screenPxDistance = ScreenPxRange(input.texIndex, input.texCoord) * sd;

@@ -2,6 +2,7 @@
 
 #include "pch.hpp"
 #include "scene_panel.hpp"
+#include "ignite/graphics/gi/gi_baker.hpp"
 #include "editor_layer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/audio/fmod_dsp.hpp"
@@ -1721,6 +1722,10 @@ namespace ignite
                 ImGui::Text("Probe Grid: %dx%dx%d (%d probes)",
                     estDims.x, estDims.y, estDims.z, estDims.x * estDims.y * estDims.z);
                 ImGui::TextWrapped("Baked File: %s", c.bakedAssetPath.empty() ? "(not baked)" : c.bakedAssetPath.c_str());
+                const uint64_t currentBakeHash = ComputeSceneBakeHash(m_Scene);
+                const bool bakeOutOfDate = c.bakeHash == 0 || c.bakeHash != currentBakeHash;
+                ImGui::TextColored(bakeOutOfDate ? ImVec4(1.0f, 0.55f, 0.2f, 1.0f) : ImVec4(0.35f, 0.9f, 0.4f, 1.0f),
+                    bakeOutOfDate ? "GI out of date" : "GI up to date");
             });
 
             RenderComponent<ReflectionProbeComponent>("Reflection Probe", selectedEntity, [&]()
@@ -2476,12 +2481,20 @@ namespace ignite
                         }
                         ImGui::EndDisabled();
 
-                        // SSAO
-                        c.dirty |= UI::DrawCheckbox("SSAO (Hemisphere + Bilateral Blur)", &pp.enableSSAO).isItemEdited;
+                        // Ambient Occlusion (GTAO / Legacy SSAO)
+                        c.dirty |= UI::DrawCheckbox("Enable Ambient Occlusion", &pp.enableSSAO).isItemEdited;
                         ImGui::BeginDisabled(!pp.enableSSAO);
                         {
-                            c.dirty |= UI::DrawFloatControl("SSAO Radius", &pp.aoRadius, 0.01f, 0.1f, 2.5f).isItemEdited;
-                            c.dirty |= UI::DrawFloatControl("SSAO Intensity", &pp.aoIntensity, 0.05f, 0.2f, 3.0f).isItemEdited;
+                            static const char *kAOModes[] = { "Off", "Legacy SSAO", "GTAO" };
+                            int aoModeIdx = static_cast<int>(pp.aoMode);
+                            if (UI::DrawComboBox("AO Mode", kAOModes, IM_ARRAYSIZE(kAOModes), &aoModeIdx))
+                            {
+                                pp.aoMode = static_cast<AOMode>(std::clamp(aoModeIdx, 0, 2));
+                                c.dirty = true;
+                            }
+                            c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.05f, 2.5f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 3.0f).isItemEdited;
+                            c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.025f, 0.1f, 5.0f).isItemEdited;
                         }
                         ImGui::EndDisabled();
 

@@ -25,6 +25,13 @@ namespace ignite
         Filmic = 2,
     };
 
+    enum class AOMode : int
+    {
+        Off = 0,
+        LegacySSAO = 1,
+        GTAO = 2,
+    };
+
     struct CameraBufferData
     {
         glm::mat4 viewProjection;
@@ -81,7 +88,8 @@ namespace ignite
         float chromAbAmount = 0.001f;
         float chromAbRadial = 0.1f;
 
-        // HBAO params
+        // HBAO / XeGTAO params
+        AOMode aoMode = AOMode::GTAO;
         float aoRadius = 0.65f;     // view-space horizon radius in world units
         float aoBias = 0.025f;      // tangent bias to reduce self-occlusion
         float aoIntensity = 1.35f;  // blend strength when applied in post

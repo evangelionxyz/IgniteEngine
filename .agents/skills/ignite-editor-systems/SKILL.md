@@ -49,7 +49,11 @@ Use this skill when modifying asset import naming, FileWatcher hot-reload, GPU t
   - `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` and `Edit -> Undo/Redo` route to the focused Asset Editor tab or active Scene.
   - Project Settings -> `"Editor / Undo"` persists `ProjectInfo::EditorSettings` (`undoHistoryLimit = 200`, `recordSelectionUndo = true`) in `.ixproj` and displays live/projected memory usage.
 
-## 5. Verification
+## 5. Global Illumination & GTAO Tooling (`editor_layer.cpp`, `gi_baker.hpp`)
+- **`Lighting` Menu & Status Badge**: `Bake GI`, `Bake Reflection Probes`, `Bake All`, `Clear Baked Data`, `Cancel GI Bake`, `Show GI Probes`, and `Debug Mode` (`GI Diffuse` 9, `GI Specular` 10, `AO` 11, `Probe Weights` 12). The status bar displays a `GI Out of Date - Rebake` button whenever `IsSceneGIOutOfDate(scene)` is true (`ComputeSceneBakeHash`).
+- **Scene Renderer Panel**: Shows `GPU Pass Timings (ms)` (`DepthNormalPrepass`, `GTAO`, `ColorPass`, `ShadowPass`, `CompositePass`) and `Global Illumination & AO` overrides (`giModeOverride`, `aoModeOverride`, `enableDepthPrepass`, `showGIProbes`).
+
+## 6. Verification
 Run the targeted C++ regression suite after modifying any of the subsystems above:
 ```powershell
 Push-Location D:\Dev\Ignite\bin\Debug

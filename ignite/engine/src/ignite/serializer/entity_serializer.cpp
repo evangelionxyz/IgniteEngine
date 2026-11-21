@@ -481,6 +481,7 @@ namespace ignite
                         sr.AddKeyValue("ChromAbAmount", pp.chromAbAmount);
                         sr.AddKeyValue("ChromAbRadial", pp.chromAbRadial);
 
+                        sr.AddKeyValue("AoMode", static_cast<int>(pp.aoMode));
                         sr.AddKeyValue("AoRadius", pp.aoRadius);
                         sr.AddKeyValue("AoBias", pp.aoBias);
                         sr.AddKeyValue("AoIntensity", pp.aoIntensity);
@@ -1187,6 +1188,7 @@ namespace ignite
                 if (auto n = ppNode["ChromAbAmount"]) pp.chromAbAmount = n.as<float>();
                 if (auto n = ppNode["ChromAbRadial"]) pp.chromAbRadial = n.as<float>();
 
+                if (auto n = ppNode["AoMode"]) pp.aoMode = static_cast<AOMode>(std::clamp(n.as<int>(), 0, 2));
                 if (auto n = ppNode["AoRadius"]) pp.aoRadius = n.as<float>();
                 if (auto n = ppNode["AoBias"]) pp.aoBias = n.as<float>();
                 if (auto n = ppNode["AoIntensity"]) pp.aoIntensity = n.as<float>();

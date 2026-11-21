@@ -29,6 +29,7 @@
 
 namespace ignite
 {
+    class GIBaker;
     class ShaderFactory;
     class ScenePanel;
     class AssetImporterPanel;
@@ -56,6 +57,7 @@ namespace ignite
             bool gameplayViewportWindow = false;
             bool consoleWindow = true;
             bool networkWindow = true;
+            bool giBakeModal = false;
 
             const int STABLE_RESIZE_FRAME = 6;
 
@@ -164,6 +166,9 @@ namespace ignite
         std::vector<ContentBrowserPanel *> m_ContentBrowserPanels;
 
         Ref<SceneRenderer> m_SceneRenderer;
+        Scope<GIBaker> m_GIBaker;
+        bool m_WasGIBaking = false;
+        bool m_BakeReflectionProbesAfterGI = false;
 
         Ref<Scene> m_ActiveScene;
         Ref<Scene> m_EditorScene;

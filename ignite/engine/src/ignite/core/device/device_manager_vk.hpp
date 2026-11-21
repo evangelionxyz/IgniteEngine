@@ -80,6 +80,16 @@ namespace ignite
         void DestroyOffscreenBuffers();
         void CreateDescriptorPool();
 
+        //
+        // Validation helpers. The layer settings are collected once from "VulkanValidationSettings"
+        // (plus the "IGNITE_VK_*" environment overrides) so the instance creation code stays readable
+        // and individual checks can be turned off once they stop firing.
+        //
+        bool IsVulkanSyncValidationRequested() const;
+        bool IsVulkanGpuValidationRequested() const;
+        void CollectValidationLayerSettings(std::vector<vk::LayerSettingEXT> &settings,
+            std::vector<VkBool32> &valueStorage) const;
+
         void WaitForIdle() override;
 
         nri::Device *GetDevice() const override { return m_Device; }

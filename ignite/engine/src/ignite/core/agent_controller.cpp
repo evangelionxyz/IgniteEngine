@@ -13,6 +13,7 @@
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
+#include "ignite/graphics/gi/gi_baker.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
 #include "ignite/graphics/ui/widget.hpp"
@@ -169,6 +170,8 @@ namespace ignite
             if (e.HasComponent<NetworkIdentityComponent>()) comps.push_back("NetworkIdentity");
             if (e.HasComponent<PhysicsJointComponent>()) comps.push_back("PhysicsJoint");
             if (e.HasComponent<ParticleSystemComponent>()) comps.push_back("ParticleSystem");
+            if (e.HasComponent<IrradianceVolumeComponent>()) comps.push_back("IrradianceVolume");
+            if (e.HasComponent<ReflectionProbeComponent>()) comps.push_back("ReflectionProbe");
             return comps;
         }
 
@@ -193,7 +196,14 @@ namespace ignite
                 return j;
 
             if (e.HasComponent<RenderingComponent>())
-                j["Rendering"] = { { "visible", e.GetComponent<RenderingComponent>().visible } };
+            {
+                const auto &rc = e.GetComponent<RenderingComponent>();
+                j["Rendering"] = {
+                    { "visible", rc.visible },
+                    { "contribute_gi", rc.contributeGI },
+                    { "receive_gi", rc.receiveGI }
+                };
+            }
 
             if (e.HasComponent<StaticMeshComponent>())
             {
@@ -337,6 +347,41 @@ namespace ignite
                 };
             }
 
+            if (e.HasComponent<IrradianceVolumeComponent>())
+            {
+                const auto &iv = e.GetComponent<IrradianceVolumeComponent>();
+                j["IrradianceVolume"] = {
+                    { "extents", Vec3ToJson(iv.extents) },
+                    { "spacing", iv.spacing },
+                    { "bounces", iv.bounces },
+                    { "capture_resolution", iv.captureResolution },
+                    { "runtime_mode", iv.runtimeMode },
+                    { "intensity", iv.intensity },
+                    { "priority", iv.priority },
+                    { "baked_asset_path", iv.bakedAssetPath },
+                    { "bake_hash", iv.bakeHash }
+                };
+            }
+
+            if (e.HasComponent<ReflectionProbeComponent>())
+            {
+                const auto &rp = e.GetComponent<ReflectionProbeComponent>();
+                j["ReflectionProbe"] = {
+                    { "influence_extents", Vec3ToJson(rp.influenceExtents) },
+                    { "projection_extents", Vec3ToJson(rp.projectionExtents) },
+                    { "capture_offset", Vec3ToJson(rp.captureOffset) },
+                    { "blend_distance", rp.blendDistance },
+                    { "resolution", rp.resolution },
+                    { "priority", rp.priority },
+                    { "intensity", rp.intensity },
+                    { "normalize", rp.normalize },
+                    { "normalization_strength", rp.normalizationStrength },
+                    { "box_projection", rp.boxProjection },
+                    { "baked_asset_path", rp.bakedAssetPath },
+                    { "bake_hash", rp.bakeHash }
+                };
+            }
+
             return j;
         }
 
@@ -364,6 +409,8 @@ namespace ignite
             {
                 auto &rc = e.HasComponent<RenderingComponent>() ? e.GetComponent<RenderingComponent>() : e.AddComponent<RenderingComponent>();
                 if (props.contains("visible")) rc.visible = props["visible"].get<bool>();
+                if (props.contains("contribute_gi")) rc.contributeGI = props["contribute_gi"].get<bool>();
+                if (props.contains("receive_gi")) rc.receiveGI = props["receive_gi"].get<bool>();
                 return true;
             }
 
@@ -407,6 +454,20 @@ namespace ignite
                 if (props.contains("gamma")) cc.camera.lens.gamma = props["gamma"].get<float>();
                 if (props.contains("ssao")) cc.camera.postProcessing.enableSSAO = props["ssao"].get<bool>();
                 if (props.contains("enable_ssao")) cc.camera.postProcessing.enableSSAO = props["enable_ssao"].get<bool>();
+                if (props.contains("ao_mode"))
+                {
+                    if (props["ao_mode"].is_string())
+                    {
+                        const std::string m = props["ao_mode"].get<std::string>();
+                        if (m == "off") cc.camera.postProcessing.aoMode = AOMode::Off;
+                        else if (m == "ssao" || m == "legacy_ssao") cc.camera.postProcessing.aoMode = AOMode::LegacySSAO;
+                        else if (m == "gtao" || m == "xegtao") cc.camera.postProcessing.aoMode = AOMode::GTAO;
+                    }
+                    else if (props["ao_mode"].is_number_integer())
+                    {
+                        cc.camera.postProcessing.aoMode = static_cast<AOMode>(std::clamp(props["ao_mode"].get<int>(), 0, 2));
+                    }
+                }
                 if (props.contains("ao_radius")) cc.camera.postProcessing.aoRadius = props["ao_radius"].get<float>();
                 if (props.contains("ao_intensity")) cc.camera.postProcessing.aoIntensity = props["ao_intensity"].get<float>();
                 if (props.contains("ao_bias")) cc.camera.postProcessing.aoBias = props["ao_bias"].get<float>();
@@ -447,6 +508,7 @@ namespace ignite
                 if (props.contains("shadow_resolution")) dl.shadowResolution = props["shadow_resolution"].get<uint32_t>();
                 if (props.contains("cascade_shadow")) dl.cascadeShadow = props["cascade_shadow"].get<bool>();
                 if (props.contains("soft_shadows")) dl.softShadows = props["soft_shadows"].get<bool>();
+                if (props.contains("bake_indirect")) dl.bakeIndirect = props["bake_indirect"].get<bool>();
                 return true;
             }
 
@@ -457,6 +519,7 @@ namespace ignite
                 if (props.contains("intensity")) pl.intensity = props["intensity"].get<float>();
                 if (props.contains("range")) pl.range = props["range"].get<float>();
                 if (props.contains("enabled")) pl.enabled = props["enabled"].get<bool>();
+                if (props.contains("bake_indirect")) pl.bakeIndirect = props["bake_indirect"].get<bool>();
                 return true;
             }
 
@@ -469,6 +532,7 @@ namespace ignite
                 if (props.contains("enabled")) sl.enabled = props["enabled"].get<bool>();
                 if (props.contains("inner_cone_angle")) sl.innerConeAngle = props["inner_cone_angle"].get<float>();
                 if (props.contains("outer_cone_angle")) sl.outerConeAngle = props["outer_cone_angle"].get<float>();
+                if (props.contains("bake_indirect")) sl.bakeIndirect = props["bake_indirect"].get<bool>();
                 return true;
             }
 
@@ -779,6 +843,35 @@ namespace ignite
                 return true;
             }
 
+            if (type == "IrradianceVolume")
+            {
+                auto &iv = e.HasComponent<IrradianceVolumeComponent>() ? e.GetComponent<IrradianceVolumeComponent>() : e.AddComponent<IrradianceVolumeComponent>();
+                if (props.contains("extents")) iv.extents = ReadJsonVec3(props["extents"], iv.extents);
+                if (props.contains("spacing")) iv.spacing = props["spacing"].get<float>();
+                if (props.contains("bounces")) iv.bounces = props["bounces"].get<int>();
+                if (props.contains("capture_resolution")) iv.captureResolution = props["capture_resolution"].get<int>();
+                if (props.contains("runtime_mode")) iv.runtimeMode = std::clamp(props["runtime_mode"].get<int>(), 0, 2);
+                if (props.contains("intensity")) iv.intensity = props["intensity"].get<float>();
+                if (props.contains("priority")) iv.priority = props["priority"].get<int>();
+                return true;
+            }
+
+            if (type == "ReflectionProbe")
+            {
+                auto &rp = e.HasComponent<ReflectionProbeComponent>() ? e.GetComponent<ReflectionProbeComponent>() : e.AddComponent<ReflectionProbeComponent>();
+                if (props.contains("influence_extents")) rp.influenceExtents = ReadJsonVec3(props["influence_extents"], rp.influenceExtents);
+                if (props.contains("projection_extents")) rp.projectionExtents = ReadJsonVec3(props["projection_extents"], rp.projectionExtents);
+                if (props.contains("capture_offset")) rp.captureOffset = ReadJsonVec3(props["capture_offset"], rp.captureOffset);
+                if (props.contains("blend_distance")) rp.blendDistance = props["blend_distance"].get<float>();
+                if (props.contains("resolution")) rp.resolution = props["resolution"].get<int>();
+                if (props.contains("priority")) rp.priority = props["priority"].get<int>();
+                if (props.contains("intensity")) rp.intensity = props["intensity"].get<float>();
+                if (props.contains("normalize")) rp.normalize = props["normalize"].get<bool>();
+                if (props.contains("normalization_strength")) rp.normalizationStrength = props["normalization_strength"].get<float>();
+                if (props.contains("box_projection")) rp.boxProjection = props["box_projection"].get<bool>();
+                return true;
+            }
+
             outError = "Unsupported component type: " + type;
             return false;
         }
@@ -992,6 +1085,26 @@ namespace ignite
 
     void AgentController::Update(float deltaTime, AgentExecutionContext &ctx)
     {
+        // The editor and headless command-script paths share the same
+        // time-sliced baker. Advancing it here keeps UI and automation in lockstep.
+        if (ctx.giBaker)
+        {
+            const bool isBaking = ctx.giBaker->IsBaking();
+            if (isBaking)
+            {
+                m_WasGIBaking = true;
+                ctx.giBaker->StepBake(32);
+            }
+            if (m_WasGIBaking && !ctx.giBaker->IsBaking())
+            {
+                m_WasGIBaking = false;
+                if (ctx.giBaker->DidFinishSuccessfully() && ctx.sceneRenderer)
+                {
+                    ctx.sceneRenderer->ClearIrradianceVolume();
+                }
+            }
+        }
+
         // 1. Handle wait barriers for command scripts
         if (m_WaitFrames > 0)
         {
@@ -1625,7 +1738,41 @@ namespace ignite
             {
                 if (cmd.contains("render_scale")) ctx.sceneRenderer->sceneRenderSettings.renderScale = cmd["render_scale"].get<float>();
                 if (cmd.contains("render_mode")) ctx.sceneRenderer->SetRenderMode(cmd["render_mode"].get<int>());
+                if (cmd.contains("gi_debug_mode"))
+                    ctx.sceneRenderer->SetRenderMode(std::clamp(cmd["gi_debug_mode"].get<int>(), 9, 12));
                 if (cmd.contains("debug_shadow")) ctx.sceneRenderer->SetDebugShadowMode(cmd["debug_shadow"].get<int>());
+                auto parseGIMode = [](const nlohmann::ordered_json &val) -> int
+                {
+                    if (val.is_string())
+                    {
+                        const std::string s = val.get<std::string>();
+                        if (s == "off") return 0;
+                        if (s == "fast") return 1;
+                        if (s == "leak_resistant" || s == "leakResistant" || s == "leak-resistant") return 2;
+                        return -1;
+                    }
+                    if (val.is_number_integer())
+                        return std::clamp(val.get<int>(), -1, 2);
+                    return -1;
+                };
+                auto parseAOMode = [](const nlohmann::ordered_json &val) -> int
+                {
+                    if (val.is_string())
+                    {
+                        const std::string s = val.get<std::string>();
+                        if (s == "off") return 0;
+                        if (s == "ssao" || s == "legacy_ssao" || s == "legacySSAO") return 1;
+                        if (s == "gtao" || s == "xegtao") return 2;
+                        return -1;
+                    }
+                    if (val.is_number_integer())
+                        return std::clamp(val.get<int>(), -1, 2);
+                    return -1;
+                };
+                if (cmd.contains("gi_mode")) ctx.sceneRenderer->sceneRenderSettings.giModeOverride = parseGIMode(cmd["gi_mode"]);
+                if (cmd.contains("ao_mode")) ctx.sceneRenderer->sceneRenderSettings.aoModeOverride = parseAOMode(cmd["ao_mode"]);
+                if (cmd.contains("depth_prepass")) ctx.sceneRenderer->sceneRenderSettings.enableDepthPrepass = cmd["depth_prepass"].get<bool>();
+                if (cmd.contains("show_gi_probes")) ctx.sceneRenderer->sceneRenderSettings.showGIProbes = cmd["show_gi_probes"].get<bool>();
                 if (cmd.contains("show_colliders")) ctx.sceneRenderer->sceneRenderSettings.showPhysicsCollider = cmd["show_colliders"].get<bool>();
                 if (cmd.contains("show_bounds")) ctx.sceneRenderer->sceneRenderSettings.showBoundingBox = cmd["show_bounds"].get<bool>();
                 if (cmd.contains("show_entity_names")) ctx.sceneRenderer->sceneRenderSettings.showEntityNames = cmd["show_entity_names"].get<bool>();
@@ -1676,6 +1823,201 @@ namespace ignite
                 }
             }
             res["ok"] = true;
+            return res;
+        }
+
+        if (action == "bake_gi")
+        {
+            if (!ctx.giBaker || !ctx.scene || !ctx.scene->registry)
+            {
+                res["error"] = "GI baker is unavailable";
+                return res;
+            }
+
+            Entity volume = ResolveTargetEntity(ctx.scene, cmd, "volume");
+            if (!volume || !volume.HasComponent<IrradianceVolumeComponent>())
+            {
+                for (entt::entity e : ctx.scene->registry->view<IrradianceVolumeComponent>())
+                {
+                    volume = Entity(e, ctx.scene);
+                    break;
+                }
+            }
+            if (!volume || !volume.HasComponent<IrradianceVolumeComponent>())
+            {
+                res["error"] = "No irradiance volume found";
+                return res;
+            }
+
+            std::filesystem::path outputPath = cmd.value("output_path", "");
+            if (outputPath.empty() && ctx.project)
+            {
+                outputPath = ctx.project->GetDirectory() / "Baked" / "AgentGI"
+                    / (std::to_string(static_cast<uint64_t>(volume.GetUUID())) + ".igi");
+            }
+            const bool started = ctx.giBaker->StartBake(ctx.scene, ctx.scene->GetAssetManager(), volume, outputPath);
+            res["ok"] = started;
+            res["data"] = {
+                { "bake_hash", ComputeSceneBakeHash(ctx.scene) },
+                { "output_path", outputPath.generic_string() },
+                { "total_probes", ctx.giBaker->GetTotalProbes() }
+            };
+            if (!started)
+                res["error"] = "Failed to start GI bake";
+            return res;
+        }
+
+        if (action == "bake_reflection_probes")
+        {
+            if (!ctx.giBaker || !ctx.scene || !ctx.scene->registry)
+            {
+                res["error"] = "GI baker is unavailable";
+                return res;
+            }
+
+            std::filesystem::path outputDir = cmd.value("output_dir", "");
+            if (outputDir.empty() && ctx.project)
+            {
+                outputDir = ctx.project->GetDirectory() / "Baked" / "AgentGI";
+            }
+
+            std::vector<std::filesystem::path> savedPaths;
+            const IrradianceVolume *activeVol = ctx.sceneRenderer ? ctx.sceneRenderer->GetIrradianceVolume().get() : nullptr;
+            const bool ok = ctx.giBaker->BakeReflectionProbes(
+                ctx.scene, ctx.scene->GetAssetManager(), activeVol, outputDir, &savedPaths);
+            if (ctx.sceneRenderer)
+            {
+                ctx.sceneRenderer->ClearReflectionProbeSet();
+            }
+
+            nlohmann::ordered_json pathArray = nlohmann::ordered_json::array();
+            for (const auto &p : savedPaths)
+                pathArray.push_back(p.generic_string());
+
+            res["ok"] = ok;
+            res["data"] = {
+                { "probe_count", savedPaths.size() },
+                { "saved_paths", std::move(pathArray) }
+            };
+            if (!ok)
+                res["error"] = "Failed to bake reflection probes (ensure at least one ReflectionProbe component exists)";
+            return res;
+        }
+
+        if (action == "clear_baked_gi")
+        {
+            if (!ctx.scene || !ctx.scene->registry)
+            {
+                res["error"] = "No active scene";
+                return res;
+            }
+            uint32_t clearedVolumes = 0;
+            uint32_t clearedProbes = 0;
+            for (entt::entity e : ctx.scene->registry->view<IrradianceVolumeComponent>())
+            {
+                auto &vol = ctx.scene->registry->get<IrradianceVolumeComponent>(e);
+                vol.bakedAssetPath.clear();
+                vol.bakeHash = 0;
+                ++clearedVolumes;
+            }
+            for (entt::entity e : ctx.scene->registry->view<ReflectionProbeComponent>())
+            {
+                auto &rp = ctx.scene->registry->get<ReflectionProbeComponent>(e);
+                rp.bakedAssetPath.clear();
+                rp.bakeHash = 0;
+                ++clearedProbes;
+            }
+            if (ctx.sceneRenderer)
+            {
+                ctx.sceneRenderer->ClearIrradianceVolume();
+                ctx.sceneRenderer->ClearReflectionProbeSet();
+            }
+            res["ok"] = true;
+            res["data"] = {
+                { "cleared_volumes", clearedVolumes },
+                { "cleared_probes", clearedProbes }
+            };
+            return res;
+        }
+
+        if (action == "get_gi_status")
+        {
+            if (!ctx.giBaker)
+            {
+                res["error"] = "GI baker is unavailable";
+                return res;
+            }
+            uint32_t volumeCount = 0;
+            uint32_t probeCount = 0;
+            uint64_t sceneBakeHash = 0;
+            bool outOfDate = false;
+            if (ctx.scene && ctx.scene->registry)
+            {
+                sceneBakeHash = ComputeSceneBakeHash(ctx.scene);
+                outOfDate = IsSceneGIOutOfDate(ctx.scene);
+                for ([[maybe_unused]] entt::entity e : ctx.scene->registry->view<IrradianceVolumeComponent>())
+                    ++volumeCount;
+                for ([[maybe_unused]] entt::entity e : ctx.scene->registry->view<ReflectionProbeComponent>())
+                    ++probeCount;
+            }
+            res["ok"] = true;
+            res["data"] = {
+                { "baking", ctx.giBaker->IsBaking() },
+                { "finished", ctx.giBaker->DidFinishSuccessfully() },
+                { "progress", ctx.giBaker->GetProgress() },
+                { "completed_probes", ctx.giBaker->GetCompletedProbes() },
+                { "total_probes", ctx.giBaker->GetTotalProbes() },
+                { "scene_bake_hash", sceneBakeHash },
+                { "out_of_date", outOfDate },
+                { "volume_count", volumeCount },
+                { "reflection_probe_count", probeCount }
+            };
+            return res;
+        }
+
+        if (action == "cancel_gi_bake")
+        {
+            if (!ctx.giBaker)
+            {
+                res["error"] = "GI baker is unavailable";
+                return res;
+            }
+            ctx.giBaker->CancelBake();
+            res["ok"] = true;
+            return res;
+        }
+
+        if (action == "set_gi_debug_mode")
+        {
+            if (!ctx.sceneRenderer)
+            {
+                res["error"] = "SceneRenderer unavailable";
+                return res;
+            }
+            const int mode = cmd.value("mode", RENDER_MODE_COLOR);
+            if (mode != RENDER_MODE_COLOR && (mode < RENDER_MODE_GI_DIFFUSE || mode > RENDER_MODE_PROBE_WEIGHTS))
+            {
+                res["error"] = "GI debug mode must be 0 or in the range 9..12";
+                return res;
+            }
+            ctx.sceneRenderer->SetRenderMode(mode);
+            res["ok"] = true;
+            res["data"] = { { "mode", mode } };
+            return res;
+        }
+
+        if (action == "get_gpu_timings")
+        {
+            if (!ctx.sceneRenderer)
+            {
+                res["error"] = "SceneRenderer unavailable";
+                return res;
+            }
+            res["ok"] = true;
+            nlohmann::ordered_json timings = nlohmann::ordered_json::object();
+            for (const auto &[name, milliseconds] : ctx.sceneRenderer->GetLastGPUTimingsMs())
+                timings[name] = milliseconds;
+            res["data"] = { { "timings_ms", std::move(timings) } };
             return res;
         }
 

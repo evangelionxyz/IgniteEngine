@@ -101,6 +101,22 @@ namespace ignite
         if (!depthTex || !depthTex->GetHandle())
             return;
 
+        // If cascaded shadows have never been rendered for this frame slot, the depth array is still
+        // in its created, never-written layout. Transitioning that straight to a read-only layout is
+        // invalid (the contents would be silently discarded), so materialize a defined depth state by
+        // clearing every cascade layer through its render target first. This is a one-time cost per slot.
+        if (depthTex->GetCurrentLayout() == nri::Layout::UNDEFINED
+            && frameIndex < m_CascadeFramebuffers.size())
+        {
+            for (int cascadeIndex = 0; cascadeIndex < NUM_CASCADES; ++cascadeIndex)
+            {
+                if (auto &cascadeRT = m_CascadeFramebuffers[frameIndex][cascadeIndex])
+                {
+                    cascadeRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                }
+            }
+        }
+
         if (depthTex->GetCurrentLayout() == nri::Layout::SHADER_RESOURCE)
             return;
 

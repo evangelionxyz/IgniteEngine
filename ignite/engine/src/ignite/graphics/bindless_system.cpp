@@ -150,6 +150,8 @@ namespace ignite
         std::lock_guard<std::mutex> lock(s_Mutex);
         if (!s_Initialized) return 0;
 
+        constexpr uint32_t kMaxBindlessDescriptors = 16384u;
+
         uint32_t index = 0;
         if (!s_FreeIndices.empty())
         {
@@ -158,6 +160,11 @@ namespace ignite
         }
         else
         {
+            if (s_NextIndex >= kMaxBindlessDescriptors)
+            {
+                LOG_ERROR("[BindlessSystem] Bindless descriptor heap exhausted (capacity {})", kMaxBindlessDescriptors);
+                return 0;
+            }
             index = s_NextIndex++;
         }
 

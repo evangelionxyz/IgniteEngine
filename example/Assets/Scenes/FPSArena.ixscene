@@ -43,7 +43,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "SkeletalMesh": {
                     "Handle": 12136098296841181153,
@@ -94,7 +96,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "SkeletalMesh": {
                     "Handle": 12136098296841181153,
@@ -145,7 +149,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -249,7 +255,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 13734612050319106672,
@@ -302,7 +310,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -406,7 +416,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -510,7 +522,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -614,7 +628,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -718,7 +734,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -822,7 +840,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 2829210534807985551,
@@ -921,7 +941,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 2829210534807985551,
@@ -1020,7 +1042,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 2829210534807985551,
@@ -1119,7 +1143,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -1223,7 +1249,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "DirectionalLight": {
                     "Color": [
@@ -1241,7 +1269,8 @@
                     "ShadowDistance": 120.0,
                     "ShadowResolution": 2,
                     "CascadeShadow": true,
-                    "SoftShadows": true
+                    "SoftShadows": true,
+                    "BakeIndirect": true
                 }
             },
             {
@@ -1285,7 +1314,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000003,
@@ -1384,7 +1415,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000003,
@@ -1483,7 +1516,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000003,
@@ -1582,7 +1617,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "WidgetComponent": {
                     "WidgetHandle": 6283005348334205475
@@ -1644,7 +1681,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "LuaScript": {
                     "ScriptHandle": 4875024084220219929,
@@ -1692,7 +1731,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "Script": {
                     "ClassName": "PlatformerDemo.FPS.FPSServerManager",
@@ -1740,7 +1781,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "ParticleSystem": {
                     "IsPlaying": true,
@@ -1834,7 +1877,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "ParticleSystem": {
                     "IsPlaying": false,
@@ -1928,7 +1973,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444492,
@@ -2032,7 +2079,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444496,
@@ -2089,7 +2138,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -2101,6 +2152,7 @@
                     "Intensity": 9.0,
                     "Range": 15.0,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -2147,7 +2199,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -2159,6 +2213,7 @@
                     "Intensity": 8.5,
                     "Range": 14.0,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -2205,7 +2260,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -2217,6 +2274,7 @@
                     "Intensity": 8.5,
                     "Range": 14.0,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -2263,7 +2321,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -2275,6 +2335,7 @@
                     "Intensity": 6.5,
                     "Range": 9.0,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -2321,7 +2382,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -2333,6 +2396,7 @@
                     "Intensity": 32.0,
                     "Range": 22.0,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -2379,7 +2443,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -2391,6 +2457,7 @@
                     "Intensity": 38.0,
                     "Range": 24.0,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -2437,7 +2504,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2481,7 +2550,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2525,7 +2596,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2569,7 +2642,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2613,7 +2688,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2657,7 +2734,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2701,7 +2780,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2745,7 +2826,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2789,7 +2872,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2833,7 +2918,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -2877,7 +2964,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -2977,7 +3066,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3077,7 +3168,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3177,7 +3270,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3277,7 +3372,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3377,7 +3474,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3477,7 +3576,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3577,7 +3678,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3677,7 +3780,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3777,7 +3882,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -3877,7 +3984,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444492,
@@ -3981,7 +4090,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000004,
@@ -4080,7 +4191,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000004,
@@ -4179,7 +4292,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000004,
@@ -4278,7 +4393,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -4345,8 +4462,8 @@
                 "Order": 55,
                 "Transform": {
                     "WorldTranslation": [
-                        0.0,
-                        0.6499999761581421,
+                        -0.5999999642372131,
+                        1.0,
                         -11.199999809265137
                     ],
                     "WorldRotation": [
@@ -4361,8 +4478,8 @@
                         0.8500000238418579
                     ],
                     "LocalTranslation": [
-                        0.0,
-                        0.6499999761581421,
+                        -0.5999999642372131,
+                        1.0,
                         -11.199999809265137
                     ],
                     "LocalRotation": [
@@ -4378,7 +4495,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -4478,7 +4597,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -4578,7 +4699,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "CharacterController": {
                     "Radius": 0.44999998807907104,
@@ -4608,18 +4731,13 @@
                     "ClassName": "PlatformerDemo.FPS.FPSPlayerController",
                     "Fields": [
                         {
-                            "Name": "MoveSpeed",
-                            "Value": 9.199999809265137,
-                            "Type": "Float"
-                        },
-                        {
                             "Name": "MouseSensitivity",
                             "Value": 0.14000000059604645,
                             "Type": "Float"
                         },
                         {
-                            "Name": "SprintSpeed",
-                            "Value": 14.199999809265137,
+                            "Name": "MoveSpeed",
+                            "Value": 9.199999809265137,
                             "Type": "Float"
                         },
                         {
@@ -4628,18 +4746,23 @@
                             "Type": "Float"
                         },
                         {
+                            "Name": "SprintSpeed",
+                            "Value": 14.199999809265137,
+                            "Type": "Float"
+                        },
+                        {
                             "Name": "Gravity",
                             "Value": 22.0,
                             "Type": "Float"
                         },
                         {
-                            "Name": "FireIntervalRifle",
-                            "Value": 0.10499999672174454,
+                            "Name": "FireIntervalPlasma",
+                            "Value": 0.23999999463558197,
                             "Type": "Float"
                         },
                         {
-                            "Name": "FireIntervalPlasma",
-                            "Value": 0.23999999463558197,
+                            "Name": "FireIntervalRifle",
+                            "Value": 0.10499999672174454,
                             "Type": "Float"
                         },
                         {
@@ -4712,7 +4835,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "SkeletalMesh": {
                     "Handle": 12136098296841181153,
@@ -4763,7 +4888,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "Camera": {
                     "ProjectionType": 1,
@@ -4802,10 +4929,11 @@
                         ],
                         "ChromAbAmount": 0.0010000000474974513,
                         "ChromAbRadial": 0.10000000149011612,
-                        "AoRadius": 0.15000000596046448,
+                        "AoMode": 2,
+                        "AoRadius": 0.5,
                         "AoBias": 0.02500000037252903,
-                        "AoIntensity": 2.25,
-                        "AoPower": 1.0,
+                        "AoIntensity": 1.5,
+                        "AoPower": 1.5,
                         "TAA": false,
                         "TAABlendFactor": 0.07999999821186066,
                         "MSAA": false,
@@ -4855,7 +4983,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -4867,6 +4997,7 @@
                     "Intensity": 0.0,
                     "Range": 8.0,
                     "Enabled": false,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -4913,7 +5044,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000001,
@@ -4961,7 +5094,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "ParticleSystem": {
                     "IsPlaying": true,
@@ -5055,7 +5190,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5108,7 +5245,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5212,7 +5351,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5316,7 +5457,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5420,7 +5563,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5524,7 +5669,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5628,7 +5775,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5732,7 +5881,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5836,7 +5987,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -5940,7 +6093,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -6044,7 +6199,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -6148,7 +6305,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 12091667214104364287,
@@ -6200,7 +6359,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 13669646693628099575,
@@ -6248,7 +6409,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -6347,7 +6510,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 9500000000000000014,
@@ -6400,7 +6565,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 9500000000000000012,
@@ -6453,7 +6620,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 12255151608030378080,
@@ -6506,7 +6675,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 3259526182087115714,
@@ -6559,7 +6730,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 5240563967183766865,
@@ -6612,7 +6785,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 13155593634019545998,
@@ -6665,7 +6840,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 6760975715794657171,
@@ -6718,7 +6895,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 5608564410954710771,
@@ -6771,7 +6950,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 11232593576733536064,
@@ -6824,7 +7005,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 9500000000000000011,
@@ -6877,7 +7060,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 12206715899188766470,
@@ -6930,7 +7115,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 9500000000000000013,
@@ -6983,7 +7170,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "SkeletalMesh": {
                     "Handle": 12136098296841181153,
@@ -7034,7 +7223,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000005,
@@ -7133,7 +7324,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000005,
@@ -7232,7 +7425,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000005,
@@ -7331,7 +7526,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000005,
@@ -7434,7 +7631,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 9500000000000000005,
@@ -7537,7 +7736,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 12091667214104364287,
@@ -7640,7 +7841,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -7739,7 +7942,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -7838,7 +8043,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -7937,7 +8144,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -8036,7 +8245,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -8048,6 +8259,7 @@
                     "Intensity": 6.5,
                     "Range": 5.5,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.14000000059604645,
                     "QuadraticAttenuation": 0.07000000029802322
@@ -8098,7 +8310,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -8110,6 +8324,7 @@
                     "Intensity": 6.5,
                     "Range": 5.5,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.14000000059604645,
                     "QuadraticAttenuation": 0.07000000029802322
@@ -8160,7 +8375,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -8172,6 +8389,7 @@
                     "Intensity": 6.5,
                     "Range": 5.5,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.14000000059604645,
                     "QuadraticAttenuation": 0.07000000029802322
@@ -8222,7 +8440,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -8234,6 +8454,7 @@
                     "Intensity": 6.5,
                     "Range": 5.5,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.14000000059604645,
                     "QuadraticAttenuation": 0.07000000029802322
@@ -8284,7 +8505,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -8296,6 +8519,7 @@
                     "Intensity": 6.5,
                     "Range": 5.5,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.14000000059604645,
                     "QuadraticAttenuation": 0.07000000029802322
@@ -8346,7 +8570,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -8358,6 +8584,7 @@
                     "Intensity": 6.5,
                     "Range": 5.5,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.14000000059604645,
                     "QuadraticAttenuation": 0.07000000029802322
@@ -8408,7 +8635,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "WorldEnvironment": {
                     "SkyType": 0,
@@ -8494,7 +8723,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -8538,7 +8769,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -8582,7 +8815,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -8626,7 +8861,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -8670,7 +8907,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -8714,7 +8953,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -8758,7 +8999,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -8802,7 +9045,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": false
+                    "Visible": false,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 }
             },
             {
@@ -8846,7 +9091,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "TextComponent": {
                     "FontHandle": 100002,
@@ -8864,6 +9111,145 @@
                     "ScreenSpace": false,
                     "Billboard": false,
                     "CenterAlign": true
+                }
+            },
+            {
+                "ID": 17435175628387817263,
+                "Name": "Reflection Probe",
+                "Type": "Node",
+                "Parent": 0,
+                "Order": 110,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        3.5,
+                        3.5,
+                        3.5
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        3.5,
+                        3.5,
+                        3.5
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
+                },
+                "ReflectionProbe": {
+                    "InfluenceExtents": [
+                        5.0,
+                        3.0,
+                        5.0
+                    ],
+                    "ProjectionExtents": [
+                        5.0,
+                        3.0,
+                        5.0
+                    ],
+                    "CaptureOffset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "BlendDistance": 1.0,
+                    "Resolution": 128,
+                    "Priority": 0,
+                    "Intensity": 1.0,
+                    "Normalize": true,
+                    "NormalizationStrength": 1.0,
+                    "BoxProjection": true,
+                    "BakedAsset": 0,
+                    "BakedAssetPath": "",
+                    "BakeHash": 0
+                }
+            },
+            {
+                "ID": 11625325304509787447,
+                "Name": "Irradiance Volume",
+                "Type": "Node",
+                "Parent": 0,
+                "Order": 111,
+                "Transform": {
+                    "WorldTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "WorldScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "LocalTranslation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "LocalScale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
+                },
+                "IrradianceVolume": {
+                    "Extents": [
+                        10.0,
+                        10.0,
+                        10.0
+                    ],
+                    "Spacing": 1.5,
+                    "Bounces": 3,
+                    "CaptureResolution": 32,
+                    "SHOrder": 2,
+                    "RuntimeMode": 2,
+                    "NormalBias": 0.25,
+                    "ViewBias": 0.10000000149011612,
+                    "EdgeFade": 1.0,
+                    "Intensity": 1.0,
+                    "Priority": 0,
+                    "BakedAsset": 0,
+                    "BakedAssetPath": "Baked/FPSArena/11625325304509787447.igi",
+                    "BakeHash": 6532633067176802938
                 }
             }
         ]

@@ -4,6 +4,7 @@
 #ifndef IGN_REFLECTION_PROBES_HLSLI
 #define IGN_REFLECTION_PROBES_HLSLI
 
+#include "binding_helpers.hlsli"
 #include "scene.hlsli"
 
 // Lagarde specular occlusion from ambient occlusion, NdotV, and surface roughness
@@ -182,7 +183,7 @@ static void EvaluateReflectionProbes(
         return;
     }
 
-    TextureCubeArray probeCubeArray = ResourceDescriptorHeap[gi.reflectionCubeArrayIndex];
+    TextureCubeArray probeCubeArray = ResourceDescriptorHeap[SafeBindlessIndex(gi.reflectionCubeArrayIndex)];
     float maxMip = float(max(gi.reflectionMipCount - 1, 0));
 
     float3 b0, c0;

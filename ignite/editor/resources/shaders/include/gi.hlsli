@@ -4,6 +4,7 @@
 #ifndef IGN_GI_HLSLI
 #define IGN_GI_HLSLI
 
+#include "binding_helpers.hlsli"
 #include "scene.hlsli"
 #include "sh.hlsli"
 
@@ -44,13 +45,13 @@ static float3 SampleIrradianceVolumeFast(float3 worldPos, float3 N, GIData gi, S
     float3 gridCoord = clamp((biasedPos - gridMin) / spacing, float3(0.0f, 0.0f, 0.0f), dims - 1.0f);
     float3 uvw = (gridCoord + 0.5f) / dims;
 
-    Texture3D<float4> shTex0 = ResourceDescriptorHeap[gi.shTextureIndices0.x];
-    Texture3D<float4> shTex1 = ResourceDescriptorHeap[gi.shTextureIndices0.y];
-    Texture3D<float4> shTex2 = ResourceDescriptorHeap[gi.shTextureIndices0.z];
-    Texture3D<float4> shTex3 = ResourceDescriptorHeap[gi.shTextureIndices0.w];
-    Texture3D<float4> shTex4 = ResourceDescriptorHeap[gi.shTextureIndices1.x];
-    Texture3D<float4> shTex5 = ResourceDescriptorHeap[gi.shTextureIndices1.y];
-    Texture3D<float4> shTex6 = ResourceDescriptorHeap[gi.shTextureIndices1.z];
+    Texture3D<float4> shTex0 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.x)];
+    Texture3D<float4> shTex1 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.y)];
+    Texture3D<float4> shTex2 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.z)];
+    Texture3D<float4> shTex3 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.w)];
+    Texture3D<float4> shTex4 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.x)];
+    Texture3D<float4> shTex5 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.y)];
+    Texture3D<float4> shTex6 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.z)];
 
     float4 t0 = shTex0.SampleLevel(linSampler, uvw, 0.0f);
     float4 t1 = shTex1.SampleLevel(linSampler, uvw, 0.0f);
@@ -83,13 +84,13 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
     int3 baseCoord = min(int3(floor(gridCoord)), max(dims - 2, int3(0, 0, 0)));
     float3 alpha = saturate(gridCoord - float3(baseCoord));
 
-    Texture3D<float4> shTex0 = ResourceDescriptorHeap[gi.shTextureIndices0.x];
-    Texture3D<float4> shTex1 = ResourceDescriptorHeap[gi.shTextureIndices0.y];
-    Texture3D<float4> shTex2 = ResourceDescriptorHeap[gi.shTextureIndices0.z];
-    Texture3D<float4> shTex3 = ResourceDescriptorHeap[gi.shTextureIndices0.w];
-    Texture3D<float4> shTex4 = ResourceDescriptorHeap[gi.shTextureIndices1.x];
-    Texture3D<float4> shTex5 = ResourceDescriptorHeap[gi.shTextureIndices1.y];
-    Texture3D<float4> shTex6 = ResourceDescriptorHeap[gi.shTextureIndices1.z];
+    Texture3D<float4> shTex0 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.x)];
+    Texture3D<float4> shTex1 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.y)];
+    Texture3D<float4> shTex2 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.z)];
+    Texture3D<float4> shTex3 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.w)];
+    Texture3D<float4> shTex4 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.x)];
+    Texture3D<float4> shTex5 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.y)];
+    Texture3D<float4> shTex6 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.z)];
 
     bool hasOffsets = (gi.shTextureIndices1.w >= 0);
     bool hasVisAtlas = (gi.visibilityParams.x >= 0 && gi.visibilityParams.z > 0 && gi.visibilityParams.w > 0);
@@ -135,7 +136,7 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
         float3 probePos = gridMin + float3(probeCoord) * spacing;
         if (hasOffsets)
         {
-            Texture3D<float4> offsetTex = ResourceDescriptorHeap[gi.shTextureIndices1.w];
+            Texture3D<float4> offsetTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.w)];
             float4 offData = offsetTex.Load(loadPos);
             probePos += offData.xyz;
             if (offData.w < 0.5f)
@@ -159,7 +160,7 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
 
         if (hasVisAtlas && d > 1e-5f)
         {
-            Texture2D<float4> visAtlas = ResourceDescriptorHeap[gi.visibilityParams.x];
+            Texture2D<float4> visAtlas = ResourceDescriptorHeap[SafeBindlessIndex(gi.visibilityParams.x)];
             int probeFlatIdx = (probeCoord.z * dims.y + probeCoord.y) * dims.x + probeCoord.x;
             int tileCol = probeFlatIdx % visCols;
             int tileRow = probeFlatIdx / visCols;

@@ -8,6 +8,7 @@
 #include "iscene_renderer.hpp"
 #include "ignite/graphics/hash_keys.hpp"
 #include "ignite/graphics/gpu_timer.hpp"
+#include "ignite/graphics/gtao.hpp"
 #include "ignite/graphics/gi/ibl_prefilter.hpp"
 #include "ignite/graphics/gi/irradiance_volume.hpp"
 #include "ignite/graphics/gi/reflection_probe_set.hpp"
@@ -71,6 +72,7 @@ namespace ignite
         Ref<RenderTarget> compositeRT;
         Ref<RenderTarget> debugRT;
         Ref<RenderTarget> taaHistoryRT[3];
+        Ref<RenderTarget> depthPrepassRT;  // RG16F octahedral view-normal + shared scene depth (prepass)
 
         bool taaHistoryValid = false;
         int msaaSampleCount = 1;           // Tracks the current MSAA sample count (1 = no MSAA)
@@ -160,6 +162,19 @@ namespace ignite
         /// Flush all accumulated shadow (CSM) static-mesh batches to the command list.
         void FlushShadowBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, uint32_t cascadeIndex);
 
+        void FlushBatches(BatchBuilder &builder, nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer);
+
+        // Depth + normal prepass / GTAO (M6)
+        void EnsureDepthPrepassRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
+        std::vector<Ref<GTAO>> GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight);
+        void DepthPrepass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *depthPrepassFB);
+        Ref<GraphicsPipeline> GetOrCreateDepthPrepassPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
+            RenderTarget *framebuffer, nri::CullMode cullMode, const char *vertexShaderPath, EBindingLayout meshLayout);
+        Ref<GraphicsPipeline> GetStaticDepthPrepassPSO(RenderTarget *framebuffer, nri::CullMode cullMode = nri::CullMode::FRONT);
+        Ref<GraphicsPipeline> GetAnimatedDepthPrepassPSO(RenderTarget *framebuffer, nri::CullMode cullMode = nri::CullMode::FRONT);
+        bool IsEntitySelected(entt::entity e) const;
+        bool HasSelectedGIEntity() const;
+
     private:
         struct TransparentDrawCall
         {
@@ -189,7 +204,7 @@ namespace ignite
 
         Ref<GraphicsPipeline> GetOrCreateMeshPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
             RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode, const char *vertexShaderPath, const char *pixelShaderPath,
-            EBindingLayout meshLayout, bool transparent);
+            EBindingLayout meshLayout, bool transparent, bool depthWrite = true);
 
         Ref<GraphicsPipeline> GetOrCreateCMSPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
             RenderTarget *framebuffer, const char *vertexShaderPath, const char *pixelShaderPath, EBindingLayout meshLayout);
@@ -236,6 +251,13 @@ namespace ignite
         std::unordered_map<ICamera *, Ref<CameraRenderTarget>> m_RenderTargets;
         std::unordered_map<ICamera *, std::vector<Ref<Bloom>>> m_Blooms;
         std::unordered_map<ICamera *, std::vector<Ref<SSAO>>> m_SSAOs;
+        std::unordered_map<ICamera *, std::vector<Ref<GTAO>>> m_GTAOs;
+
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticDepthPrepassPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedDepthPrepassPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticReadOnlyDepthPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedReadOnlyDepthPSOCache;
+        bool m_ColorPassDepthReadOnly = false;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentAnimatedPSOCache;
@@ -287,6 +309,7 @@ namespace ignite
         // -----------------------------------------------------------------------
         BatchBuilder m_OpaqueBatchBuilder;   // Color pass opaque static meshes
         BatchBuilder m_ShadowBatchBuilder;   // Shadow pass (CSM) static meshes
+        BatchBuilder m_DepthPrepassBatchBuilder; // Depth + normal prepass static meshes
         FramePacket m_FramePacket;
 
         std::array<GPUTimer, 6> m_GPUTimers;
