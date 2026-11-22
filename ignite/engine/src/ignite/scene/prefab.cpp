@@ -27,12 +27,36 @@ namespace ignite
             sr.AddKeyValue("RootEntity", m_RootEntityUUID);
             sr.BeginSequence("Entities");
             {
+                SceneManager::SyncHierarchyOrder(m_PrefabScene.get());
+                std::unordered_set<UUID> serializedUUIDs;
+                std::function<void(Entity)> serializeTree = [&](Entity entity)
+                {
+                    if (!entity.IsValid())
+                        return;
+
+                    const IDComponent &idComp = entity.GetComponent<IDComponent>();
+                    if (serializedUUIDs.contains(idComp.uuid))
+                        return;
+
+                    serializedUUIDs.insert(idComp.uuid);
+                    EntitySerializer::SerializeEntity(sr, entity);
+
+                    for (UUID childUUID : idComp.children)
+                    {
+                        serializeTree(SceneManager::GetEntity(m_PrefabScene.get(), childUUID));
+                    }
+                };
+
+                for (UUID rootUUID : m_PrefabScene->rootEntityOrder)
+                {
+                    serializeTree(SceneManager::GetEntity(m_PrefabScene.get(), rootUUID));
+                }
+
                 for (const auto &[uuid, entityHandle] : m_PrefabScene->entities)
                 {
-                    Entity entity = { entityHandle, m_PrefabScene.get() };
-                    if (entity.IsValid())
+                    if (!serializedUUIDs.contains(uuid))
                     {
-                        EntitySerializer::SerializeEntity(sr, entity);
+                        serializeTree(Entity { entityHandle, m_PrefabScene.get() });
                     }
                 }
             }
@@ -72,9 +96,24 @@ namespace ignite
 
         if (JsonNode entitiesNode = prefabNode["Entities"])
         {
+            std::unordered_map<UUID, uint32_t> orderMap;
+            uint32_t seqIdx = 0;
             for (JsonNode entityNode : entitiesNode)
             {
-                EntitySerializer::DeserializeEntity(entityNode, prefab->m_PrefabScene.get(), project);
+                Entity desEntity = EntitySerializer::DeserializeEntity(entityNode, prefab->m_PrefabScene.get(), project);
+                if (desEntity.IsValid())
+                {
+                    const uint32_t orderVal = entityNode["Order"] ? entityNode["Order"].as<uint32_t>(seqIdx) : seqIdx;
+                    orderMap[desEntity.GetUUID()] = orderVal;
+                }
+                ++seqIdx;
+            }
+
+            prefab->m_PrefabScene->rootEntityOrder.clear();
+            for (const auto &[uuid, handle] : prefab->m_PrefabScene->entities)
+            {
+                Entity entity { handle, prefab->m_PrefabScene.get() };
+                entity.GetComponent<IDComponent>().children.clear();
             }
 
             // Wire up parent/child relationships
@@ -86,10 +125,39 @@ namespace ignite
                     Entity parent = SceneManager::GetEntity(prefab->m_PrefabScene.get(), entity.GetParentUUID());
                     if (parent.IsValid())
                     {
-                        SceneManager::AddChild(prefab->m_PrefabScene.get(), parent, entity);
+                        parent.GetComponent<IDComponent>().AddChild(uuid);
+                    }
+                    else
+                    {
+                        entity.GetComponent<IDComponent>().parent = UUID(0);
+                        prefab->m_PrefabScene->rootEntityOrder.push_back(uuid);
                     }
                 }
+                else
+                {
+                    prefab->m_PrefabScene->rootEntityOrder.push_back(uuid);
+                }
             }
+
+            auto sortByOrder = [&orderMap](std::vector<UUID> &list)
+            {
+                std::stable_sort(list.begin(), list.end(), [&orderMap](UUID a, UUID b)
+                {
+                    const auto itA = orderMap.find(a);
+                    const auto itB = orderMap.find(b);
+                    const uint32_t ordA = itA != orderMap.end() ? itA->second : (std::numeric_limits<uint32_t>::max)();
+                    const uint32_t ordB = itB != orderMap.end() ? itB->second : (std::numeric_limits<uint32_t>::max)();
+                    return ordA < ordB;
+                });
+            };
+
+            sortByOrder(prefab->m_PrefabScene->rootEntityOrder);
+            for (const auto &[uuid, handle] : prefab->m_PrefabScene->entities)
+            {
+                Entity entity { handle, prefab->m_PrefabScene.get() };
+                sortByOrder(entity.GetComponent<IDComponent>().children);
+            }
+            SceneManager::SyncHierarchyOrder(prefab->m_PrefabScene.get());
         }
 
 		prefab->SetDirtyFlag(false); // Prefab

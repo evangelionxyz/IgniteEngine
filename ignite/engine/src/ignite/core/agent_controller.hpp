@@ -22,6 +22,7 @@ namespace ignite
     class Project;
     class SceneRenderer;
     class ICamera;
+    class GIBaker;
     struct ApplicationCommandLineArgs;
 
     struct IGN_API AgentExecutionContext
@@ -29,6 +30,7 @@ namespace ignite
         Scene *scene = nullptr;
         Project *project = nullptr;
         SceneRenderer *sceneRenderer = nullptr;
+        GIBaker *giBaker = nullptr;
         ICamera *camera = nullptr;
 
         std::function<void(const Ref<Scene> &)> onSceneReplaced;
@@ -82,6 +84,7 @@ namespace ignite
 
         int m_WaitFrames = 0;
         float m_WaitSeconds = 0.0f;
+        bool m_WasGIBaking = false;
         std::vector<nlohmann::ordered_json> m_Results;
 
         static std::atomic<bool> s_AutomationActive;

@@ -24,6 +24,9 @@ namespace ignite
         static void SubmitJob(std::string_view name, AssetJob assetJob);
         static void SetStatusCallback(StatusCallback callback);
         static void ReportStatus(std::string_view status, float progress = -1.0f);
+        static int GetActiveJobCount();
+        static bool IsBusy();
+        static float GetProgress();
     };
 }
 

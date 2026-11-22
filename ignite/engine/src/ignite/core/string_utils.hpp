@@ -33,11 +33,18 @@
 
 namespace ignite::stringutils
 {
+    inline bool StartsWith(std::string_view const& value, std::string_view const& starting)
+    {
+        std::string v(value);
+        std::string s(starting);
+        return v.starts_with(s.c_str());
+    }
+
     inline bool EndsWith(std::string_view const &value, std::string_view const &ending)
     {
         std::string v(value);
         std::string e(ending);
-        return ignite_string_ends_with(v.c_str(), e.c_str());
+        return v.ends_with(e.c_str());
     }
 
     static std::string ToLower(const std::string &str)

@@ -95,9 +95,12 @@ namespace ignite
         std::filesystem::path GetNodeFullpath(uint32_t nodeIndex) const;
 
         bool IsImageFile(const std::filesystem::path &filepath) const;
+        Ref<Texture> GetFallbackIcon(AssetType type, const std::filesystem::path &filepath) const;
         Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath, bool isDirectory);
         ImVec2 CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const;
         void StartThumbnailLoad(const std::filesystem::path &filepath);
+        void StartSceneThumbnailLoad(const std::filesystem::path &filepath, AssetType type);
+        static void InvalidateThumbnailForAsset(const AssetChangeSignal &signal);
         void UnloadUnusedThumbnails();
         void ClearThumbnails();
 
@@ -107,8 +110,8 @@ namespace ignite
         AssetEditorPanel *m_AssetEditorPanel;
         AssetManager *m_AssetManager = nullptr;
 
-        int m_ThumbnailSize = 72;
-        int m_LastThumbnailSize = 72;
+        int m_ThumbnailSize = 96;
+        int m_LastThumbnailSize = 96;
 
         std::filesystem::path m_BaseDirectory;
         std::filesystem::path m_CurrentDirectory;
@@ -134,6 +137,7 @@ namespace ignite
         static std::unordered_set<std::filesystem::path> s_SharedThumbnailLoadsInFlight;
         static uint64_t s_SharedThumbnailLoadGeneration;
         static uint64_t s_SharedCurrentFrame;
+        static SignalToken s_AssetChangeSignalToken;
 
         // Modal state for create/rename/delete operations
         bool m_ShowCreateFolderModal = false;

@@ -56,6 +56,16 @@ namespace ignite
         float scale[3];
     };
 
+    struct ThumbnailBinaryData
+    {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        uint32_t channels = 4;
+        int64_t sourceTimestamp = 0;
+        uint64_t assetHandle = 0;
+        std::vector<uint8_t> pixels;
+    };
+
     class BinarySerializer
     {
     public:
@@ -1112,6 +1122,125 @@ namespace ignite
             inFile.close();
 
             return skeleton;
+        }
+
+        static bool SerializeThumbnail(const ThumbnailBinaryData &data, const std::filesystem::path &filepath)
+        {
+            if (filepath.empty() || data.width == 0 || data.height == 0 || data.channels == 0)
+                return false;
+
+            const size_t expectedPixelBytes = static_cast<size_t>(data.width) * static_cast<size_t>(data.height) * static_cast<size_t>(data.channels);
+            if (data.pixels.size() != expectedPixelBytes)
+                return false;
+
+            std::error_code ec;
+            if (filepath.has_parent_path())
+            {
+                std::filesystem::create_directories(filepath.parent_path(), ec);
+                if (ec)
+                    return false;
+            }
+
+            static constexpr char kMagic[4] = { 'T', 'H', 'M', 'B' };
+            static constexpr uint32_t kVersion = 1;
+
+            std::vector<std::byte> buffer;
+            buffer.reserve(4 + sizeof(uint32_t) * 5 + sizeof(int64_t) + sizeof(uint64_t) + expectedPixelBytes);
+
+            AppendBytes(buffer, kMagic, sizeof(kMagic));
+            AppendRaw(buffer, kVersion);
+            AppendRaw(buffer, data.width);
+            AppendRaw(buffer, data.height);
+            AppendRaw(buffer, data.channels);
+            AppendRaw(buffer, data.sourceTimestamp);
+            AppendRaw(buffer, data.assetHandle);
+
+            const uint32_t pixelByteSize = static_cast<uint32_t>(expectedPixelBytes);
+            AppendRaw(buffer, pixelByteSize);
+            AppendBytes(buffer, data.pixels.data(), expectedPixelBytes);
+
+            std::filesystem::path tempPath = filepath;
+            tempPath += ".tmp";
+
+            {
+                std::ofstream of(tempPath, std::ios::binary | std::ios::trunc);
+                if (!of.is_open())
+                    return false;
+
+                of.write(reinterpret_cast<const char *>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+                if (!of.good())
+                {
+                    of.close();
+                    std::filesystem::remove(tempPath, ec);
+                    return false;
+                }
+            }
+
+            std::filesystem::rename(tempPath, filepath, ec);
+            if (ec)
+            {
+                // On Windows, rename fails if target exists; replace via remove + rename fallback
+                std::error_code removeEc;
+                std::filesystem::remove(filepath, removeEc);
+                ec.clear();
+                std::filesystem::rename(tempPath, filepath, ec);
+                if (ec)
+                {
+                    std::filesystem::remove(tempPath, removeEc);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        static bool DeserializeThumbnail(const std::filesystem::path &filepath, ThumbnailBinaryData &outData)
+        {
+            outData = {};
+            if (filepath.empty())
+                return false;
+
+            std::error_code ec;
+            if (!std::filesystem::exists(filepath, ec) || ec)
+                return false;
+
+            std::ifstream inFile(filepath, std::ios::binary);
+            if (!inFile.is_open())
+                return false;
+
+            char magic[4] = {};
+            if (!ReadRaw(inFile, magic, sizeof(magic)) || std::memcmp(magic, "THMB", 4) != 0)
+                return false;
+
+            uint32_t version = 0;
+            if (!ReadRaw(inFile, &version) || version != 1)
+                return false;
+
+            ThumbnailBinaryData parsed{};
+            uint32_t pixelByteSize = 0;
+            if (!ReadRaw(inFile, &parsed.width) ||
+                !ReadRaw(inFile, &parsed.height) ||
+                !ReadRaw(inFile, &parsed.channels) ||
+                !ReadRaw(inFile, &parsed.sourceTimestamp) ||
+                !ReadRaw(inFile, &parsed.assetHandle) ||
+                !ReadRaw(inFile, &pixelByteSize))
+            {
+                return false;
+            }
+
+            if (parsed.width == 0 || parsed.height == 0 || parsed.width > 2048 || parsed.height > 2048 || parsed.channels != 4)
+                return false;
+
+            const size_t expectedPixelBytes = static_cast<size_t>(parsed.width) * static_cast<size_t>(parsed.height) * static_cast<size_t>(parsed.channels);
+            if (pixelByteSize != expectedPixelBytes || !HasRemainingBytes(inFile, expectedPixelBytes))
+                return false;
+
+            parsed.pixels.resize(expectedPixelBytes);
+            if (!ReadRaw(inFile, parsed.pixels.data(), expectedPixelBytes))
+                return false;
+
+            outData = std::move(parsed);
+            return true;
         }
     };
 }

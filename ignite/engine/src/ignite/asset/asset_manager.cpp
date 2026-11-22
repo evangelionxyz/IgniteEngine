@@ -13,21 +13,72 @@
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/scene.hpp"
+#include "ignite/scene/sprite_sheet.hpp"
+#include "ignite/scripting/lua/lua_script.hpp"
 #include "ignite/terrain/terrain.hpp"
+#include "ignite/asset/asset_worker.hpp"
 
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/serial.hpp"
 #include "ignite/core/core.hpp"
 #include <fbxsdk.h>
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 
 namespace ignite
 {
     static AssetMetaData s_NullMetaData;
     static AssetManager *s_AssetManagerInstance = nullptr;
+
+    namespace
+    {
+        std::string NormalizeWatchKey(const std::filesystem::path &path)
+        {
+            std::error_code ec;
+            std::filesystem::path absPath = std::filesystem::absolute(path, ec);
+            if (ec)
+                absPath = path;
+
+            std::string key = absPath.lexically_normal().generic_string();
+            while (key.size() > 1 && key.back() == '/')
+                key.pop_back();
+
+#ifdef PLATFORM_WINDOWS
+            std::transform(key.begin(), key.end(), key.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+#endif
+            return key;
+        }
+
+        std::string ToLowerAscii(std::string s)
+        {
+            std::transform(s.begin(), s.end(), s.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return s;
+        }
+
+        bool ShouldIgnoreWatchedPath(const std::filesystem::path &path)
+        {
+            const std::string ext = ToLowerAscii(path.extension().string());
+            if (ext == ".tmp" || ext == ".ixproj" || ext == ".ixreg" || ext == ".slnx" || ext == ".csproj" || ext == ".props")
+                return true;
+
+            for (const auto &part : path)
+            {
+                const std::string name = ToLowerAscii(part.string());
+                if (name == ".cache" || name == ".vs" || name == ".git" || name == "bin" || name == "obj")
+                    return true;
+            }
+
+            return false;
+        }
+    }
 
     static shared_task<Ref<Asset>> MakeCompletedAssetTask(Ref<Asset> asset)
     {
@@ -121,12 +172,19 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
+        StopProjectAssetWatchers();
+
         if (auto *dm = DeviceManager::GetInstance())
         {
             if (auto *device = dm->GetDevice())
             {
                 GPUUploadSync::DeviceWaitIdle(device);
             }
+        }
+
+        {
+            std::lock_guard<std::mutex> relLock(m_DeferredReleaseMutex);
+            m_DeferredReleases.clear();
         }
 
         decltype(m_LoadedAssets) oldLoadedAssets;
@@ -167,8 +225,15 @@ namespace ignite
             return;
 
         Reset();
-        std::lock_guard<std::mutex> projectLock(m_ProjectMutex);
-        m_Project = project;
+        {
+            std::lock_guard<std::mutex> projectLock(m_ProjectMutex);
+            m_Project = project;
+        }
+
+        if (project)
+        {
+            StartProjectAssetWatchers(project);
+        }
     }
 
     AssetManager *AssetManager::GetInstance()
@@ -284,6 +349,11 @@ namespace ignite
         }
 
         SyncFromRust();
+
+        if (metadata.type == AssetType::StaticMesh || metadata.type == AssetType::SkeletalMesh)
+        {
+            TrackMeshSourceAsset(handle);
+        }
     }
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
@@ -304,6 +374,8 @@ namespace ignite
     void AssetManager::RemoveAsset(AssetHandle handle)
     {
         IGN_PROFILE_FUNCTION();
+
+        UntrackMeshSourceAsset(handle);
 
         {
             std::unique_lock lock(m_AssetMutex);
@@ -629,43 +701,64 @@ namespace ignite
         std::vector<IgniteAssetRegistryEntryFFI> entries(count);
         const size_t fetched = ignite_asset_get_registry_snapshot(entries.data(), count);
 
-        std::unique_lock lock(m_AssetMutex);
-        auto activeProject = LockActiveProject();
-        for (size_t i = 0; i < fetched; ++i)
+        std::vector<AssetHandle> newlyAddedMeshes;
         {
-            const AssetHandle handle = AssetHandle(entries[i].handle);
-            if (handle == AssetHandle(0))
-                continue;
-
-            AssetMetaData metadata;
-            metadata.filepath = entries[i].filepath;
-            metadata.type = static_cast<AssetType>(entries[i].asset_type);
-
-            // Asset Registry
-            m_AssetRegistry[handle] = metadata;
-
-            auto &record = m_AssetRecords[handle];
-            if (!record)
+            std::unique_lock lock(m_AssetMutex);
+            auto activeProject = LockActiveProject();
+            for (size_t i = 0; i < fetched; ++i)
             {
-                record = std::make_shared<AssetRecord>();
-            }
-            record->metadata = metadata;
+                const AssetHandle handle = AssetHandle(entries[i].handle);
+                if (handle == AssetHandle(0))
+                    continue;
 
-            if (!metadata.filepath.empty())
-            {
-                // Asset Handle by Path
-                const std::filesystem::path absoluteMetadataPath = activeProject ? activeProject->GetProjectFilepath(metadata.filepath) : metadata.filepath;
-                m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
+                const bool isNewHandle = !m_AssetRegistry.contains(handle);
+
+                AssetMetaData metadata;
+                metadata.filepath = entries[i].filepath;
+                metadata.type = static_cast<AssetType>(entries[i].asset_type);
+
+                // Asset Registry
+                m_AssetRegistry[handle] = metadata;
+
+                auto &record = m_AssetRecords[handle];
+                if (!record)
+                {
+                    record = std::make_shared<AssetRecord>();
+                }
+                record->metadata = metadata;
+
+                if (!metadata.filepath.empty())
+                {
+                    // Asset Handle by Path
+                    const std::filesystem::path absoluteMetadataPath = activeProject ? activeProject->GetProjectFilepath(metadata.filepath) : metadata.filepath;
+                    m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
+                    m_AssetHandleByPath[NormalizeWatchKey(absoluteMetadataPath)] = handle;
+                }
+
+                if (isNewHandle && (metadata.type == AssetType::StaticMesh || metadata.type == AssetType::SkeletalMesh))
+                {
+                    newlyAddedMeshes.push_back(handle);
+                }
             }
+
+            m_LastSyncedRustVersion = rustVersion;
         }
 
-        m_LastSyncedRustVersion = rustVersion;
+        for (AssetHandle meshHandle : newlyAddedMeshes)
+        {
+            TrackMeshSourceAsset(meshHandle);
+        }
     }
 
     void AssetManager::OnUpdate(float deltaTime)
     {
+        (void)deltaTime;
+
         // Sync metadata registry from Rust source of truth
         SyncFromRust();
+
+        // Drain deferred GPU-safe asset releases
+        DrainDeferredReleases();
 
         // Call each frame
         if (!m_OnChangeCallbacks.empty())
@@ -680,8 +773,8 @@ namespace ignite
 
     void AssetManager::OnAssetChangeSignal(const AssetChangeSignal &signal)
     {
-        auto activeScene = LockActiveProject()->LockActiveScene();
-        if (!activeScene)
+        auto activeProject = LockActiveProject();
+        if (!activeProject)
             return;
 
         switch (signal.type)
@@ -696,34 +789,46 @@ namespace ignite
             {
                 auto onChangeFunc = [this, signal]() -> bool
                     {
-                        const auto &assets = GetLoadedAssets();
-                        for (const auto &[handle, asset] : assets)
+                        std::vector<Ref<Material>> materialsToCheck;
                         {
-                            if (asset && asset->GetAssetType() == AssetType::Material)
+                            std::unique_lock lock(m_AssetMutex);
+                            for (const auto &[handle, asset] : m_LoadedAssets)
                             {
-                                Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                                if (!material)
-                                    continue;
-
-                                if (signal.type == AssetType::Material)
+                                if (asset && asset->GetAssetType() == AssetType::Material)
                                 {
-                                    if (handle == signal.handle)
-                                    {
-                                        material->InvalidateBindingSet();
-                                    }
+                                    materialsToCheck.push_back(std::static_pointer_cast<Material>(asset));
                                 }
-                                else
-                                {
-                                    auto isTextureBeingUsed = [this](AssetHandle textureHandle, Ref<Material> material) -> bool
-                                        {
-                                            return textureHandle == material->baseColorTextureHandle || textureHandle == material->emissiveTextureHandle || textureHandle == material->metallicTextureHandle || textureHandle == material->roughnessTextureHandle || textureHandle == material->normalTextureHandle || textureHandle == material->occlusionTextureHandle;
-                                        };
+                            }
+                        }
 
-                                    const bool validTextureRequest = (signal.type == AssetType::Texture) && isTextureBeingUsed(signal.handle, material);
-                                    if (signal.type == AssetType::Environment || validTextureRequest)
+                        for (const auto &material : materialsToCheck)
+                        {
+                            if (!material)
+                                continue;
+
+                            if (signal.type == AssetType::Material)
+                            {
+                                if (material->handle == signal.handle)
+                                {
+                                    material->InvalidateBindingSet();
+                                }
+                            }
+                            else
+                            {
+                                auto isTextureBeingUsed = [](AssetHandle textureHandle, const Ref<Material> &mat) -> bool
                                     {
-                                        material->InvalidateBindingSet();
-                                    }
+                                        return textureHandle == mat->baseColorTextureHandle
+                                            || textureHandle == mat->emissiveTextureHandle
+                                            || textureHandle == mat->metallicTextureHandle
+                                            || textureHandle == mat->roughnessTextureHandle
+                                            || textureHandle == mat->normalTextureHandle
+                                            || textureHandle == mat->occlusionTextureHandle;
+                                    };
+
+                                const bool validTextureRequest = (signal.type == AssetType::Texture) && isTextureBeingUsed(signal.handle, material);
+                                if (signal.type == AssetType::Environment || validTextureRequest)
+                                {
+                                    material->InvalidateBindingSet();
                                 }
                             }
                         }
@@ -737,7 +842,8 @@ namespace ignite
             {
                 auto onChangeFunc = [this, signal]() -> bool
                 {
-                    auto activeScene = LockActiveProject()->LockActiveScene();
+                    auto proj = LockActiveProject();
+                    auto activeScene = proj ? proj->LockActiveScene() : nullptr;
                     if (!activeScene || !activeScene->registry)
                         return true;
 
@@ -896,10 +1002,19 @@ namespace ignite
     {
         if (auto project = LockActiveProject())
         {
-            const auto &absoluteFilepath = std::filesystem::absolute(project->GetProjectFilepath(filepath).string());
+            const std::filesystem::path projectPath = project->GetProjectFilepath(filepath);
+            std::error_code ec;
+            const std::filesystem::path absoluteFilepath = std::filesystem::absolute(projectPath, ec);
+            const std::filesystem::path lookupPath = ec ? projectPath : absoluteFilepath;
 
             std::unique_lock lock(m_AssetMutex);
-            auto it = m_AssetHandleByPath.find(absoluteFilepath.generic_string());
+            auto it = m_AssetHandleByPath.find(lookupPath.generic_string());
+            if (it != m_AssetHandleByPath.end())
+            {
+                return it->second;
+            }
+
+            it = m_AssetHandleByPath.find(NormalizeWatchKey(lookupPath));
             if (it != m_AssetHandleByPath.end())
             {
                 return it->second;
@@ -1068,5 +1183,807 @@ namespace ignite
 
         LOG_ASSERT(isValidType, "[Asset Manager] Failed to import asset, please check the AssetType: {}", getterMetadata.filepath.generic_string());
         return asset;
+    }
+
+    // -------------------------------------------------------------------------
+    // Asset FileWatcher, Hot Reload & Mesh Source Tracking
+    // -------------------------------------------------------------------------
+
+    void AssetManager::DeferReleaseResource(std::shared_ptr<void> resource, uint32_t framesToWait)
+    {
+        if (!resource)
+            return;
+
+        std::lock_guard<std::mutex> lock(m_DeferredReleaseMutex);
+        m_DeferredReleases.emplace_back(std::max(1u, framesToWait), std::move(resource));
+    }
+
+    void AssetManager::DrainDeferredReleases()
+    {
+        std::vector<std::shared_ptr<void>> readyToDrop;
+        {
+            std::lock_guard<std::mutex> lock(m_DeferredReleaseMutex);
+            if (m_DeferredReleases.empty())
+                return;
+
+            for (auto it = m_DeferredReleases.begin(); it != m_DeferredReleases.end();)
+            {
+                if (it->first <= 1)
+                {
+                    readyToDrop.push_back(std::move(it->second));
+                    it = m_DeferredReleases.erase(it);
+                }
+                else
+                {
+                    --it->first;
+                    ++it;
+                }
+            }
+        }
+        readyToDrop.clear();
+    }
+
+    void AssetManager::SuppressWatchPath(const std::filesystem::path &filepath, uint32_t durationMs)
+    {
+        if (filepath.empty())
+            return;
+
+        const std::string key = NormalizeWatchKey(filepath);
+        const auto expiry = std::chrono::steady_clock::now() + std::chrono::milliseconds(durationMs);
+
+        std::lock_guard<std::mutex> lock(m_WatchMutex);
+        m_SuppressedWatchPaths[key] = expiry;
+    }
+
+    bool AssetManager::IsWatchPathSuppressed(const std::filesystem::path &filepath)
+    {
+        const std::string key = NormalizeWatchKey(filepath);
+        const auto now = std::chrono::steady_clock::now();
+
+        std::lock_guard<std::mutex> lock(m_WatchMutex);
+        auto it = m_SuppressedWatchPaths.find(key);
+        if (it == m_SuppressedWatchPaths.end())
+            return false;
+
+        if (now <= it->second)
+            return true;
+
+        m_SuppressedWatchPaths.erase(it);
+        return false;
+    }
+
+    void AssetManager::StartProjectAssetWatchers(const Ref<Project> &project)
+    {
+        if (!project)
+            return;
+
+        StopProjectAssetWatchers();
+
+        auto watchDirectoryIfValid = [this](const std::filesystem::path &dir)
+        {
+            std::error_code ec;
+            if (dir.empty() || !std::filesystem::is_directory(dir, ec) || ec)
+                return;
+
+            const FileWatchToken token = FileWatcher::WatchDirectory(dir,
+                [this](const FileChangeEvent &event)
+                {
+                    OnAssetFileChanged(event);
+                });
+
+            if (token != kInvalidFileWatchToken)
+            {
+                std::lock_guard<std::mutex> lock(m_WatchMutex);
+                m_DirectoryWatchTokens.push_back(token);
+                LOG_INFO("[Asset Manager] Watching asset directory: {}", dir.generic_string());
+            }
+        };
+
+        const std::filesystem::path assetDir = project->GetAssetDirectory();
+        watchDirectoryIfValid(assetDir);
+
+        const std::filesystem::path scriptsDir = project->GetScriptsDirectory();
+        if (!scriptsDir.empty() && NormalizeWatchKey(scriptsDir) != NormalizeWatchKey(assetDir))
+        {
+            watchDirectoryIfValid(scriptsDir);
+        }
+
+        // Track source files for any meshes already present in the registry
+        std::vector<AssetHandle> meshHandles;
+        {
+            std::unique_lock lock(m_AssetMutex);
+            for (const auto &[handle, meta] : m_AssetRegistry)
+            {
+                if (meta.type == AssetType::StaticMesh || meta.type == AssetType::SkeletalMesh)
+                {
+                    meshHandles.push_back(handle);
+                }
+            }
+        }
+
+        for (AssetHandle handle : meshHandles)
+        {
+            TrackMeshSourceAsset(handle);
+        }
+    }
+
+    void AssetManager::StopProjectAssetWatchers()
+    {
+        std::vector<FileWatchToken> tokensToUnwatch;
+        {
+            std::lock_guard<std::mutex> lock(m_WatchMutex);
+            tokensToUnwatch.swap(m_DirectoryWatchTokens);
+            for (const auto &[handle, watch] : m_MeshSourceWatches)
+            {
+                if (watch.sourceToken != kInvalidFileWatchToken)
+                    tokensToUnwatch.push_back(watch.sourceToken);
+                if (watch.companionBinToken != kInvalidFileWatchToken)
+                    tokensToUnwatch.push_back(watch.companionBinToken);
+            }
+            m_MeshSourceWatches.clear();
+            m_SuppressedWatchPaths.clear();
+            m_ReloadsInFlight.clear();
+            m_MeshSourceReimportsInFlight.clear();
+        }
+
+        for (FileWatchToken token : tokensToUnwatch)
+        {
+            FileWatcher::Unwatch(token);
+        }
+    }
+
+    void AssetManager::TrackMeshSourceAsset(AssetHandle handle)
+    {
+        if (handle == AssetHandle(0))
+            return;
+
+        Ref<Project> project = LockActiveProject();
+        if (!project)
+            return;
+
+        AssetMetaData metadata;
+        {
+            std::unique_lock lock(m_AssetMutex);
+            auto it = m_AssetRegistry.find(handle);
+            if (it == m_AssetRegistry.end())
+                return;
+            metadata = it->second;
+        }
+
+        if (metadata.type != AssetType::StaticMesh && metadata.type != AssetType::SkeletalMesh)
+            return;
+
+        const std::filesystem::path meshFullPath = project->GetProjectFilepath(metadata.filepath);
+        const std::string projRootKey = NormalizeWatchKey(project->GetDirectory());
+        const std::string meshPathKey = NormalizeWatchKey(meshFullPath);
+        if (meshPathKey.size() <= projRootKey.size()
+            || meshPathKey.compare(0, projRootKey.size(), projRootKey) != 0)
+        {
+            return;
+        }
+        std::filesystem::path rawSourcePath;
+
+        if (Ref<Asset> loaded = TryGetAsset(handle))
+        {
+            rawSourcePath = loaded->GetSourcePath();
+        }
+        if (rawSourcePath.empty())
+        {
+            rawSourcePath = Asset::ReadSourcePathFromMetaFile(meshFullPath);
+        }
+
+        if (rawSourcePath.empty())
+        {
+            UntrackMeshSourceAsset(handle);
+            return;
+        }
+
+        std::filesystem::path resolvedSource = rawSourcePath.is_absolute()
+            ? rawSourcePath.lexically_normal()
+            : project->GetProjectFilepath(rawSourcePath).lexically_normal();
+
+        std::error_code ec;
+        if (!std::filesystem::exists(resolvedSource, ec) || ec || !std::filesystem::is_regular_file(resolvedSource, ec))
+        {
+            // Only track mesh source assets if the source file exists on disk.
+            UntrackMeshSourceAsset(handle);
+            return;
+        }
+
+        const std::string resolvedKey = NormalizeWatchKey(resolvedSource);
+        {
+            std::lock_guard<std::mutex> lock(m_WatchMutex);
+            auto existingIt = m_MeshSourceWatches.find(handle);
+            if (existingIt != m_MeshSourceWatches.end()
+                && existingIt->second.sourceToken != kInvalidFileWatchToken
+                && NormalizeWatchKey(existingIt->second.sourcePath) == resolvedKey)
+            {
+                return;
+            }
+        }
+
+        // Replace any previous watch for this handle
+        UntrackMeshSourceAsset(handle);
+
+        const FileWatchToken sourceToken = FileWatcher::WatchFile(resolvedSource,
+            [this, handle, resolvedSource](const FileChangeEvent &ev)
+            {
+                OnMeshSourceFileChanged(handle, resolvedSource, ev);
+            });
+
+        if (sourceToken == kInvalidFileWatchToken)
+            return;
+
+        MeshSourceWatch watch{};
+        watch.sourceToken = sourceToken;
+        watch.sourcePath = resolvedSource;
+
+        // If this is a .gltf file with an existing sibling .bin buffer, watch it as well.
+        if (ToLowerAscii(resolvedSource.extension().string()) == ".gltf")
+        {
+            std::filesystem::path candidateBin = resolvedSource;
+            candidateBin.replace_extension(".bin");
+            if (std::filesystem::exists(candidateBin, ec) && !ec && std::filesystem::is_regular_file(candidateBin, ec))
+            {
+                watch.companionBinPath = candidateBin;
+                watch.companionBinToken = FileWatcher::WatchFile(candidateBin,
+                    [this, handle, resolvedSource](const FileChangeEvent &ev)
+                    {
+                        OnMeshSourceFileChanged(handle, resolvedSource, ev);
+                    });
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_WatchMutex);
+            m_MeshSourceWatches[handle] = std::move(watch);
+        }
+
+        LOG_INFO("[Asset Manager] Tracking mesh source '{}' for handle {}",
+            resolvedSource.generic_string(), static_cast<uint64_t>(handle));
+    }
+
+    void AssetManager::UntrackMeshSourceAsset(AssetHandle handle)
+    {
+        FileWatchToken sourceToken = kInvalidFileWatchToken;
+        FileWatchToken binToken = kInvalidFileWatchToken;
+
+        {
+            std::lock_guard<std::mutex> lock(m_WatchMutex);
+            auto it = m_MeshSourceWatches.find(handle);
+            if (it == m_MeshSourceWatches.end())
+                return;
+
+            sourceToken = it->second.sourceToken;
+            binToken = it->second.companionBinToken;
+            m_MeshSourceWatches.erase(it);
+        }
+
+        if (sourceToken != kInvalidFileWatchToken)
+            FileWatcher::Unwatch(sourceToken);
+        if (binToken != kInvalidFileWatchToken)
+            FileWatcher::Unwatch(binToken);
+    }
+
+    bool AssetManager::IsMeshSourceWatched(AssetHandle handle) const
+    {
+        std::lock_guard<std::mutex> lock(m_WatchMutex);
+        auto it = m_MeshSourceWatches.find(handle);
+        return it != m_MeshSourceWatches.end() && it->second.sourceToken != kInvalidFileWatchToken;
+    }
+
+    std::filesystem::path AssetManager::GetWatchedMeshSourcePath(AssetHandle handle) const
+    {
+        std::lock_guard<std::mutex> lock(m_WatchMutex);
+        auto it = m_MeshSourceWatches.find(handle);
+        return it != m_MeshSourceWatches.end() ? it->second.sourcePath : std::filesystem::path{};
+    }
+
+    void AssetManager::OnAssetFileChanged(const FileChangeEvent &event)
+    {
+        if (m_ShuttingDown.load(std::memory_order_acquire) || event.path.empty())
+            return;
+
+        Ref<Project> project = LockActiveProject();
+        if (!project)
+            return;
+
+        const std::filesystem::path projectRelPath = project->GetProjectRelativeFilepath(event.path);
+        if (ShouldIgnoreWatchedPath(projectRelPath))
+            return;
+
+        if (IsWatchPathSuppressed(event.path))
+            return;
+
+        const std::string ext = ToLowerAscii(event.path.extension().string());
+
+        // Handle sidecar .meta JSON changes (e.g. texture import settings or mesh source path updates)
+        if (ext == ".meta")
+        {
+            const std::filesystem::path targetPath = event.path.parent_path() / event.path.stem();
+            const AssetHandle targetHandle = GetAssetHandle(targetPath);
+            if (targetHandle != AssetHandle(0))
+            {
+                const AssetType targetType = GetAssetType(targetHandle);
+                if (targetType == AssetType::StaticMesh || targetType == AssetType::SkeletalMesh)
+                {
+                    TrackMeshSourceAsset(targetHandle);
+                }
+                else if (targetType == AssetType::Texture)
+                {
+                    ReloadAssetAsync(targetHandle);
+                }
+            }
+            return;
+        }
+
+        AssetHandle handle = GetAssetHandle(event.path);
+
+        if (event.type == FileChangeType::Removed)
+        {
+            if (handle != AssetHandle(0))
+            {
+                const AssetType type = GetAssetType(handle);
+                UntrackMeshSourceAsset(handle);
+                SignalBus::Emit(AssetChangeSignal{ handle, type });
+            }
+            return;
+        }
+
+        // If a brand new supported asset file is added inside Assets/, register its metadata.
+        // Skip raw mesh source files (.fbx/.gltf/.glb) which are imported explicitly.
+        if (handle == AssetHandle(0))
+        {
+            const AssetType detectedType = GetAssetTypeFromExtension(ext);
+            if (detectedType != AssetType::Invalid
+                && detectedType != AssetType::Mesh
+                && detectedType != AssetType::Metadata
+                && detectedType != AssetType::Project)
+            {
+                AssetMetaData newMeta;
+                newMeta.filepath = project->GetProjectRelativeFilepath(event.path);
+                newMeta.type = detectedType;
+                handle = AssetHandle();
+                AssignMetaData(handle, newMeta);
+                LOG_INFO("[Asset Manager] Registered newly added asset: {}", newMeta.filepath.generic_string());
+                SignalBus::Emit(AssetChangeSignal{ handle, detectedType });
+            }
+            return;
+        }
+
+        const AssetType type = GetAssetType(handle);
+        if (type == AssetType::Invalid || type == AssetType::Scene || type == AssetType::Project)
+            return;
+
+        if (type == AssetType::StaticMesh || type == AssetType::SkeletalMesh)
+        {
+            TrackMeshSourceAsset(handle);
+        }
+
+        ReloadAssetAsync(handle);
+    }
+
+    void AssetManager::OnMeshSourceFileChanged(AssetHandle meshHandle, const std::filesystem::path &sourcePath, const FileChangeEvent &event)
+    {
+        if (m_ShuttingDown.load(std::memory_order_acquire) || meshHandle == AssetHandle(0))
+            return;
+
+        std::error_code ec;
+        if (event.type == FileChangeType::Removed || !std::filesystem::exists(sourcePath, ec) || ec)
+        {
+            LOG_INFO("[Asset Manager] Mesh source asset removed/missing '{}'; stopping watch for handle {}",
+                sourcePath.generic_string(), static_cast<uint64_t>(meshHandle));
+            UntrackMeshSourceAsset(meshHandle);
+            return;
+        }
+
+        Ref<Project> project = LockActiveProject();
+        if (!project)
+            return;
+
+        AssetMetaData meshMeta;
+        {
+            std::unique_lock lock(m_AssetMutex);
+            auto it = m_AssetRegistry.find(meshHandle);
+            if (it == m_AssetRegistry.end())
+            {
+                UntrackMeshSourceAsset(meshHandle);
+                return;
+            }
+            meshMeta = it->second;
+        }
+
+        if (meshMeta.type != AssetType::StaticMesh && meshMeta.type != AssetType::SkeletalMesh)
+            return;
+
+        {
+            std::lock_guard<std::mutex> lock(m_WatchMutex);
+            if (!m_MeshSourceReimportsInFlight.insert(meshHandle).second)
+                return;
+        }
+
+        const std::filesystem::path existingMeshFullPath = project->GetProjectFilepath(meshMeta.filepath);
+        const std::filesystem::path targetDir = existingMeshFullPath.parent_path();
+        const AssetType meshType = meshMeta.type;
+        const uint64_t managerGen = m_Generation.load(std::memory_order_acquire);
+
+        LOG_INFO("[Asset Manager] Source asset changed '{}'; reloading mesh, materials, and thumbnails (handle {})",
+            sourcePath.generic_string(), static_cast<uint64_t>(meshHandle));
+
+        AssetWorker::SubmitJob("Reloading mesh from source...", [this, meshHandle, meshType, sourcePath, existingMeshFullPath, targetDir, managerGen]()
+        {
+            auto clearInFlight = [this, meshHandle]()
+            {
+                std::lock_guard<std::mutex> lock(m_WatchMutex);
+                m_MeshSourceReimportsInFlight.erase(meshHandle);
+            };
+
+            if (m_ShuttingDown.load(std::memory_order_acquire) || m_Generation.load(std::memory_order_acquire) != managerGen)
+            {
+                clearInFlight();
+                return;
+            }
+
+            std::vector<AssetHandle> updatedMaterials;
+            std::vector<AssetHandle> updatedTextures;
+
+            AssetMetaData sourceMetadata;
+            sourceMetadata.filepath = sourcePath;
+            sourceMetadata.type = meshType;
+
+            bool success = false;
+            if (meshType == AssetType::StaticMesh)
+            {
+                StaticMeshImportPayload payload{};
+                payload.targetDirectory = targetDir;
+                payload.outputMeshPath = existingMeshFullPath;
+                payload.importMaterials = true;
+                payload.forceRebuild = true;
+                payload.overwriteExisting = true;
+                payload.outUpdatedMaterials = &updatedMaterials;
+                payload.outUpdatedTextures = &updatedTextures;
+
+                Ref<StaticMesh> reloaded = AssetImporter::ImportStaticMesh(meshHandle, sourceMetadata, this, payload);
+                success = (reloaded != nullptr);
+            }
+            else if (meshType == AssetType::SkeletalMesh)
+            {
+                SkeletalMeshImportPayload payload{};
+                payload.targetDirectory = targetDir;
+                payload.outputMeshPath = existingMeshFullPath;
+                payload.importMesh = true;
+                payload.importMaterials = true;
+                payload.importSkeleton = true;
+                payload.importAnimations = false;
+                payload.forceRebuild = true;
+                payload.overwriteExisting = true;
+                payload.outUpdatedMaterials = &updatedMaterials;
+                payload.outUpdatedTextures = &updatedTextures;
+
+                Ref<SkeletalMesh> reloaded = AssetImporter::ImportSkeletalMesh(meshHandle, sourceMetadata, this, payload);
+                success = (reloaded != nullptr);
+            }
+
+            clearInFlight();
+
+            if (!success || m_ShuttingDown.load(std::memory_order_acquire) || m_Generation.load(std::memory_order_acquire) != managerGen)
+                return;
+
+            // Emit AssetChangeSignal on main thread for textures, materials, and mesh so
+            // live scenes, material binding sets, and ContentBrowser/ThumbnailGenerator all refresh.
+            Application::SubmitToMainThread([meshHandle, meshType, updatedTextures = std::move(updatedTextures), updatedMaterials = std::move(updatedMaterials)]()
+            {
+                for (AssetHandle texHandle : updatedTextures)
+                {
+                    if (texHandle != AssetHandle(0))
+                        SignalBus::Emit(AssetChangeSignal{ texHandle, AssetType::Texture });
+                }
+                for (AssetHandle matHandle : updatedMaterials)
+                {
+                    if (matHandle != AssetHandle(0))
+                        SignalBus::Emit(AssetChangeSignal{ matHandle, AssetType::Material });
+                }
+                SignalBus::Emit(AssetChangeSignal{ meshHandle, meshType });
+            }, "AssetManager::OnMeshSourceReimported");
+        });
+    }
+
+    void AssetManager::ReloadAssetAsync(AssetHandle handle)
+    {
+        if (m_ShuttingDown.load(std::memory_order_acquire) || handle == AssetHandle(0))
+            return;
+
+        {
+            std::lock_guard<std::mutex> lock(m_WatchMutex);
+            if (!m_ReloadsInFlight.insert(handle).second)
+                return;
+        }
+
+        const uint64_t managerGen = m_Generation.load(std::memory_order_acquire);
+
+        AssetWorker::SubmitJob([this, handle, managerGen]()
+        {
+            struct InFlightGuard
+            {
+                AssetManager *mgr;
+                AssetHandle h;
+                ~InFlightGuard()
+                {
+                    std::lock_guard<std::mutex> lock(mgr->m_WatchMutex);
+                    mgr->m_ReloadsInFlight.erase(h);
+                }
+            } guard{ this, handle };
+
+            if (m_ShuttingDown.load(std::memory_order_acquire) || m_Generation.load(std::memory_order_acquire) != managerGen)
+                return;
+
+            ReloadAssetImmediate(handle);
+        });
+    }
+
+    bool AssetManager::ReloadAssetImmediate(AssetHandle handle)
+    {
+        if (m_ShuttingDown.load(std::memory_order_acquire) || handle == AssetHandle(0))
+            return false;
+
+        Ref<Project> project = LockActiveProject();
+        if (!project)
+            return false;
+
+        AssetMetaData metadata;
+        Ref<Asset> existingAsset;
+        {
+            std::unique_lock lock(m_AssetMutex);
+            auto metaIt = m_AssetRegistry.find(handle);
+            if (metaIt == m_AssetRegistry.end())
+                return false;
+            metadata = metaIt->second;
+
+            auto loadedIt = m_LoadedAssets.find(handle);
+            if (loadedIt != m_LoadedAssets.end())
+                existingAsset = loadedIt->second;
+        }
+
+        const std::filesystem::path fullPath = project->GetProjectFilepath(metadata.filepath);
+        std::error_code ec;
+        if (fullPath.empty() || !std::filesystem::exists(fullPath, ec) || ec)
+            return false;
+
+        // Even if the asset is not currently loaded in memory, emit AssetChangeSignal so
+        // cached thumbnails in ContentBrowser / ThumbnailGenerator are invalidated & refreshed.
+        if (!existingAsset)
+        {
+            Application::SubmitToMainThread([handle, type = metadata.type]()
+            {
+                SignalBus::Emit(AssetChangeSignal{ handle, type });
+            }, "AssetManager::NotifyUnloadedAssetChange");
+            return true;
+        }
+
+        Ref<Asset> reloadedAsset;
+        try
+        {
+            if (metadata.type == AssetType::Texture)
+            {
+                AssetMetaData textureMetadata = metadata;
+                textureMetadata.filepath = fullPath;
+                TextureCreateInfo createInfo = Texture::GetDefaultCreateInfo(metadata);
+                if (!Texture::LoadCreateInfoFile(Texture::GetMetaPath(project.get(), metadata), createInfo))
+                {
+                    Texture::LoadCreateInfoFile(Texture::GetLegacyMetaPath(project.get(), metadata), createInfo);
+                }
+                reloadedAsset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
+            }
+            else
+            {
+                reloadedAsset = AssetImporter::Import(handle, metadata, this);
+            }
+        }
+        catch (const std::exception &e)
+        {
+            LOG_ERROR("[Asset Manager] Failed to reload asset '{}' (handle {}): {}",
+                metadata.filepath.generic_string(), static_cast<uint64_t>(handle), e.what());
+            return false;
+        }
+        catch (...)
+        {
+            LOG_ERROR("[Asset Manager] Failed to reload asset '{}' (handle {}): unknown error",
+                metadata.filepath.generic_string(), static_cast<uint64_t>(handle));
+            return false;
+        }
+
+        if (!reloadedAsset)
+            return false;
+
+        return ApplyReloadedAsset(handle, metadata, reloadedAsset);
+    }
+
+    bool AssetManager::ApplyReloadedAsset(AssetHandle handle, const AssetMetaData &metadata, const Ref<Asset> &reloadedAsset)
+    {
+        if (!reloadedAsset)
+            return false;
+
+        reloadedAsset->handle = handle;
+        Ref<Asset> existingAsset = TryGetAsset(handle);
+
+        switch (metadata.type)
+        {
+            case AssetType::Material:
+            {
+                if (existingAsset)
+                {
+                    Ref<Material> dst = existingAsset->As<Material>();
+                    Ref<Material> src = reloadedAsset->As<Material>();
+                    if (dst && src)
+                    {
+                        Application::SubmitToRenderThread([dst, src]()
+                        {
+                            dst->name = src->name;
+                            dst->SetType(src->GetType());
+                            dst->SetCullMode(src->GetCullMode());
+                            dst->baseColorTextureHandle = src->baseColorTextureHandle;
+                            dst->emissiveTextureHandle = src->emissiveTextureHandle;
+                            dst->metallicTextureHandle = src->metallicTextureHandle;
+                            dst->roughnessTextureHandle = src->roughnessTextureHandle;
+                            dst->normalTextureHandle = src->normalTextureHandle;
+                            dst->occlusionTextureHandle = src->occlusionTextureHandle;
+                            dst->gpuData = src->gpuData;
+                            dst->InvalidateBindingSet();
+                            dst->SetDirtyFlag(false);
+                            dst->SetReadyFlag(true);
+                        }, "AssetManager::ReloadMaterialInPlace");
+                    }
+                }
+                else
+                {
+                    AssignAsset(handle, reloadedAsset);
+                }
+                break;
+            }
+            case AssetType::Material2D:
+            {
+                if (existingAsset)
+                {
+                    Ref<Material2D> dst = existingAsset->As<Material2D>();
+                    Ref<Material2D> src = reloadedAsset->As<Material2D>();
+                    if (dst && src)
+                    {
+                        Application::SubmitToMainThread([dst, src]()
+                        {
+                            dst->name = src->name;
+                            dst->textureHandle = src->textureHandle;
+                            dst->data = src->data;
+                            dst->SetDirtyFlag(false);
+                            dst->SetReadyFlag(true);
+                        }, "AssetManager::ReloadMaterial2DInPlace");
+                    }
+                }
+                else
+                {
+                    AssignAsset(handle, reloadedAsset);
+                }
+                break;
+            }
+            case AssetType::SpriteSheet:
+            {
+                if (existingAsset)
+                {
+                    Ref<SpriteSheet> dst = existingAsset->As<SpriteSheet>();
+                    Ref<SpriteSheet> src = reloadedAsset->As<SpriteSheet>();
+                    if (dst && src)
+                    {
+                        Application::SubmitToMainThread([dst, src]()
+                        {
+                            dst->SetAtlasSize(src->GetAtlasSize());
+                            dst->SetTextureHandle(src->GetTextureHandle());
+                            dst->GetSprites() = src->GetSprites();
+                            dst->SetDirtyFlag(false);
+                            dst->SetReadyFlag(true);
+                        }, "AssetManager::ReloadSpriteSheetInPlace");
+                    }
+                }
+                else
+                {
+                    AssignAsset(handle, reloadedAsset);
+                }
+                break;
+            }
+            case AssetType::StaticMesh:
+            {
+                if (existingAsset)
+                {
+                    Ref<StaticMesh> dst = existingAsset->As<StaticMesh>();
+                    Ref<StaticMesh> src = reloadedAsset->As<StaticMesh>();
+                    if (dst && src)
+                    {
+                        auto newInstances = src->GetMeshInstances();
+                        const std::filesystem::path newSourcePath = src->GetSourcePath();
+                        Application::SubmitToRenderThread([this, dst, newInstances = std::move(newInstances), newSourcePath]() mutable
+                        {
+                            auto oldInstances = std::make_shared<std::vector<Ref<StaticMeshInstance>>>(dst->GetMeshInstances());
+                            dst->SetMeshInstances(newInstances);
+                            dst->SetSourcePath(newSourcePath);
+                            dst->CalculateLocalAABB();
+                            dst->SetDirtyFlag(false);
+                            dst->SetReadyFlag(true);
+                            DeferReleaseResource(std::move(oldInstances));
+                        }, "AssetManager::ReloadStaticMeshInPlace");
+                    }
+                }
+                else
+                {
+                    AssignAsset(handle, reloadedAsset);
+                }
+                break;
+            }
+            case AssetType::SkeletalMesh:
+            {
+                if (existingAsset)
+                {
+                    Ref<SkeletalMesh> dst = existingAsset->As<SkeletalMesh>();
+                    Ref<SkeletalMesh> src = reloadedAsset->As<SkeletalMesh>();
+                    if (dst && src)
+                    {
+                        auto newInstances = src->GetMeshInstances();
+                        const AssetHandle newSkel = src->GetSkeletonHandle();
+                        const AssetHandle newAnim = src->GetAnimatorHandle();
+                        const std::filesystem::path newSourcePath = src->GetSourcePath();
+                        Application::SubmitToRenderThread([this, dst, newInstances = std::move(newInstances), newSkel, newAnim, newSourcePath]() mutable
+                        {
+                            auto oldInstances = std::make_shared<std::vector<Ref<SkeletalMeshInstance>>>(dst->GetMeshInstances());
+                            dst->SetMeshInstances(newInstances);
+                            dst->SetSkeleton(newSkel);
+                            dst->SetAnimator(newAnim);
+                            dst->SetSourcePath(newSourcePath);
+                            dst->CalculateLocalAABB();
+                            dst->SetDirtyFlag(false);
+                            dst->SetReadyFlag(true);
+                            DeferReleaseResource(std::move(oldInstances));
+                        }, "AssetManager::ReloadSkeletalMeshInPlace");
+                    }
+                }
+                else
+                {
+                    AssignAsset(handle, reloadedAsset);
+                }
+                break;
+            }
+            case AssetType::LuaScript:
+            {
+                if (existingAsset)
+                {
+                    Ref<lua::Script> dst = existingAsset->As<lua::Script>();
+                    if (dst)
+                    {
+                        lua::Script::InvalidateFieldCache(dst->GetFilepath());
+                        dst->Reload();
+                    }
+                }
+                else
+                {
+                    AssignAsset(handle, reloadedAsset);
+                }
+                break;
+            }
+            default:
+            {
+                if (existingAsset)
+                {
+                    DeferReleaseResource(existingAsset);
+                }
+                AssignAsset(handle, reloadedAsset);
+                break;
+            }
+        }
+
+        LOG_INFO("[Asset Manager] Hot-reloaded {} '{}' (handle {})",
+            AssetTypeToString(metadata.type), metadata.filepath.generic_string(), static_cast<uint64_t>(handle));
+
+        Application::SubmitToMainThread([handle, type = metadata.type]()
+        {
+            SignalBus::Emit(AssetChangeSignal{ handle, type });
+        }, "AssetManager::NotifyAssetReloaded");
+
+        return true;
     }
 }

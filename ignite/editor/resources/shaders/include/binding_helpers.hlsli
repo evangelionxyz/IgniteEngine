@@ -71,4 +71,22 @@
 // Macro to declare a push constant block on Vulkan and a regular cbuffer on other platforms.
 #define DECLARE_PUSH_CONSTANTS(ty,name,reg,space) VK_PUSH_CONSTANT DECLARE_CBUFFER(ty,name,reg,space)
 
+// Bindless descriptor heap capacity (must match BindlessSystem descriptorNum = 16384).
+// Always clamp indices into [0, IGN_BINDLESS_MAX_DESCRIPTORS - 1] before indexing
+// ResourceDescriptorHeap: drivers such as AMD LLPC can speculatively hoist scalar
+// descriptor loads above `if (idx >= 0)` branches, turning sentinel `-1` (0xFFFFFFFF)
+// into an out-of-bounds GPU read below the descriptor heap base (VK_ERROR_DEVICE_LOST).
+#define IGN_BINDLESS_MAX_DESCRIPTORS 16384u
+
+static uint SafeBindlessIndex(int index)
+{
+    uint u = (uint)index;
+    return (u < IGN_BINDLESS_MAX_DESCRIPTORS) ? u : 0u;
+}
+
+static uint SafeBindlessIndex(uint index)
+{
+    return (index < IGN_BINDLESS_MAX_DESCRIPTORS) ? index : 0u;
+}
+
 #endif // BINDING_HELPERS_HLSLI

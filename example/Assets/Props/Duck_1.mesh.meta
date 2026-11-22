@@ -1,0 +1,9 @@
+{
+    "Version": 4096,
+    "ASSET_HANDLE": 5566361921882400997,
+    "ASSET_TYPE": "StaticMesh",
+    "DATA": {
+        "SourcePath": "E:/3D Models/glTF-Sample-Models/2.0/Duck/glTF-Binary/Duck.glb",
+        "ImportMaterials": true
+    }
+}

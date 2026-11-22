@@ -7,6 +7,7 @@
                 "Name": "Audio_MenuAmbient",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 0,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -42,7 +43,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 13734612050319106672,
@@ -55,37 +58,88 @@
                 }
             },
             {
+                "ID": 910000000000000012,
+                "Name": "Avocado",
+                "Type": "Node",
+                "Parent": 0,
+                "Order": 1,
+                "Transform": {
+                    "WorldTranslation": [
+                        -0.4499993324279785,
+                        0.4500000476837158,
+                        -5.05000114440918
+                    ],
+                    "WorldRotation": [
+                        0.0,
+                        0.23361332714557648,
+                        0.0,
+                        0.9723295569419861
+                    ],
+                    "WorldScale": [
+                        70.3828125,
+                        70.3828125,
+                        70.3828125
+                    ],
+                    "LocalTranslation": [
+                        -0.4499993324279785,
+                        0.4500000476837158,
+                        -5.05000114440918
+                    ],
+                    "LocalRotation": [
+                        0.0,
+                        0.23361332714557648,
+                        0.0,
+                        0.9723295569419861
+                    ],
+                    "LocalScale": [
+                        70.3828125,
+                        70.3828125,
+                        70.3828125
+                    ]
+                },
+                "Rendering": {
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
+                },
+                "StaticMesh": {
+                    "Handle": 970617691749241032,
+                    "OverrideMaterials": []
+                }
+            },
+            {
                 "ID": 910000000000000002,
                 "Name": "DirectionalLight",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 2,
                 "Transform": {
                     "WorldTranslation": [
-                        0.0,
-                        12.0,
+                        1.3000000715255737,
+                        5.5,
                         6.0
                     ],
                     "WorldRotation": [
-                        -0.3477229177951813,
-                        0.2258535772562027,
-                        0.08669707179069519,
-                        0.9058490991592407
+                        -0.3477230370044708,
+                        0.22585366666316986,
+                        0.08669721335172653,
+                        0.9058489799499512
                     ],
                     "WorldScale": [
-                        0.9999999403953552,
                         1.0,
-                        1.0
+                        1.0,
+                        0.9999999403953552
                     ],
                     "LocalTranslation": [
-                        0.0,
-                        12.0,
+                        1.3000000715255737,
+                        5.5,
                         6.0
                     ],
                     "LocalRotation": [
-                        -0.3477228879928589,
-                        0.2258535474538803,
-                        0.086697056889534,
-                        0.9058490991592407
+                        -0.3477230370044708,
+                        0.22585366666316986,
+                        0.08669721335172653,
+                        0.9058489799499512
                     ],
                     "LocalScale": [
                         1.0,
@@ -94,7 +148,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "DirectionalLight": {
                     "Color": [
@@ -103,7 +159,7 @@
                         0.9200000166893005,
                         1.0
                     ],
-                    "Intensity": 24.0,
+                    "Intensity": 0.949999988079071,
                     "AngularRadius": 1.5,
                     "ShadowStrength": 1.0,
                     "ShadowMinBias": 0.00019999999494757503,
@@ -112,7 +168,8 @@
                     "ShadowDistance": 120.0,
                     "ShadowResolution": 2,
                     "CascadeShadow": true,
-                    "SoftShadows": true
+                    "SoftShadows": true,
+                    "BakeIndirect": true
                 }
             },
             {
@@ -120,6 +177,7 @@
                 "Name": "Menu_Camera",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 3,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -155,7 +213,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "Camera": {
                     "ProjectionType": 1,
@@ -194,6 +254,7 @@
                         ],
                         "ChromAbAmount": 0.0010000000474974513,
                         "ChromAbRadial": 0.10000000149011612,
+                        "AoMode": 2,
                         "AoRadius": 0.6499999761581421,
                         "AoBias": 0.02500000037252903,
                         "AoIntensity": 1.350000023841858,
@@ -211,6 +272,7 @@
                 "Name": "Menu_Floor",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 4,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -246,7 +308,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444489,
@@ -263,6 +327,7 @@
                 "Name": "Menu_HeroHelmet",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 5,
                 "Transform": {
                     "WorldTranslation": [
                         2.0999999046325684,
@@ -298,7 +363,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 12091667214104364287,
@@ -310,6 +377,7 @@
                 "Name": "Menu_OrbCopper",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 6,
                 "Transform": {
                     "WorldTranslation": [
                         3.8499999046325684,
@@ -345,7 +413,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -358,10 +428,11 @@
                 }
             },
             {
-                "ID": 910000000000000012,
+                "ID": 5532381234426739202,
                 "Name": "Menu_OrbGold",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 7,
                 "Transform": {
                     "WorldTranslation": [
                         4.349999904632568,
@@ -397,7 +468,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -414,6 +487,7 @@
                 "Name": "Menu_OrbRough",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 8,
                 "Transform": {
                     "WorldTranslation": [
                         0.3499999940395355,
@@ -449,7 +523,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444490,
@@ -466,6 +542,7 @@
                 "Name": "Menu_Pedestal",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 9,
                 "Transform": {
                     "WorldTranslation": [
                         2.0999999046325684,
@@ -501,7 +578,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444492,
@@ -518,6 +597,7 @@
                 "Name": "Menu_PedestalRing",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 10,
                 "Transform": {
                     "WorldTranslation": [
                         2.0999999046325684,
@@ -553,7 +633,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "StaticMesh": {
                     "Handle": 5280275259340444496,
@@ -570,6 +652,7 @@
                 "Name": "Menu_RimLight",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 11,
                 "Transform": {
                     "WorldTranslation": [
                         4.199999809265137,
@@ -605,7 +688,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -617,6 +702,7 @@
                     "Intensity": 32.0,
                     "Range": 14.0,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -627,6 +713,7 @@
                 "Name": "Menu_UI",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 12,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -662,7 +749,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "WidgetComponent": {
                     "WidgetHandle": 16176796658309022622
@@ -693,6 +782,7 @@
                 "Name": "Menu_WarmLight",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 13,
                 "Transform": {
                     "WorldTranslation": [
                         -0.5,
@@ -728,7 +818,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "PointLight": {
                     "Color": [
@@ -740,6 +832,7 @@
                     "Intensity": 24.0,
                     "Range": 12.0,
                     "Enabled": true,
+                    "BakeIndirect": true,
                     "ConstantAttenuation": 1.0,
                     "LinearAttenuation": 0.09000000357627869,
                     "QuadraticAttenuation": 0.03200000151991844
@@ -750,6 +843,7 @@
                 "Name": "SFX_UIClick",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 14,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -785,7 +879,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 11232593576733536064,
@@ -802,6 +898,7 @@
                 "Name": "SFX_UIClickEnd",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 15,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -837,7 +934,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 9500000000000000011,
@@ -854,6 +953,7 @@
                 "Name": "SFX_UIHover",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 16,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -889,7 +989,9 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "AudioSource": {
                     "Handle": 12206715899188766470,
@@ -906,6 +1008,7 @@
                 "Name": "WorldEnvironment",
                 "Type": "Node",
                 "Parent": 0,
+                "Order": 17,
                 "Transform": {
                     "WorldTranslation": [
                         0.0,
@@ -941,10 +1044,12 @@
                     ]
                 },
                 "Rendering": {
-                    "Visible": true
+                    "Visible": true,
+                    "ContributeGI": true,
+                    "ReceiveGI": true
                 },
                 "WorldEnvironment": {
-                    "SkyType": 0,
+                    "SkyType": 1,
                     "HDRHandle": 6886871699447745262,
                     "EnableIBL": true,
                     "Exposure": 0.6000000238418579,

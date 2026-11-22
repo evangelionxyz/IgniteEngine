@@ -8,6 +8,7 @@
 #include "ignite/scene/component.hpp"
 
 #include <functional>
+#include <unordered_set>
 
 namespace ignite
 {
@@ -68,6 +69,10 @@ namespace ignite
     {
 		bool importMaterials = true;
 		bool forceRebuild = false;
+        bool overwriteExisting = false;
+        std::filesystem::path outputMeshPath;
+        std::vector<AssetHandle> *outUpdatedMaterials = nullptr;
+        std::vector<AssetHandle> *outUpdatedTextures = nullptr;
     };
 
 	struct SkeletalMeshImportPayload : public StaticMeshImportPayload
@@ -112,6 +117,15 @@ namespace ignite
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo &createInfo, AssetManager *assetManager);
         static Ref<FmodSound> ImportAudio(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<TerrainData> ImportTerrain(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
+
+        static std::string SanitizeAssetName(const std::string &name, const std::string &fallback = "Asset");
+        static std::filesystem::path BuildUniqueAssetPath(
+            const std::filesystem::path &directory,
+            const std::string &baseName,
+            const std::string &extension,
+            AssetManager *assetManager = nullptr,
+            std::unordered_set<std::string> *reservedLowerPaths = nullptr,
+            bool checkExisting = true);
     };
 }
 

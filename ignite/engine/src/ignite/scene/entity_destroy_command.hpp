@@ -27,73 +27,43 @@ namespace ignite
     public:
         EntityDestroyCommand(Scene *scene, Entity entity)
             : m_Scene(scene)
+            , m_Snapshot(CaptureEntitySubtreeSnapshot(scene, entity))
         {
-            // Snapshot the entity and all its descendants BEFORE destruction
-            SnapshotSubtree(entity);
         }
 
-        // Redo — destroy the root entity (children are destroyed recursively)
+        // Execute / Redo — destroy the root entity (children are destroyed recursively)
         void Execute() override
         {
-            if (!m_Snapshots.empty())
+            if (m_Scene && m_Snapshot.rootUUID != UUID(0))
             {
-                Entity e = SceneManager::GetEntity(m_Scene, m_Snapshots[0].uuid);
+                Entity e = SceneManager::GetEntity(m_Scene, m_Snapshot.rootUUID);
                 if (e.IsValid())
                     SceneManager::DestroyEntity(m_Scene, e);
             }
         }
 
-        // Undo — restore in snapshot order (parent before children)
+        // Undo — recreate the full subtree with all components & sibling order
         void Undo() override
         {
-            for (const EntitySnapshot &snap : m_Snapshots)
+            if (m_Scene && m_Snapshot.IsValid() && !SceneManager::GetEntity(m_Scene, m_Snapshot.rootUUID).IsValid())
             {
-                // Only restore if it doesn't already exist (safety check)
-                if (!SceneManager::GetEntity(m_Scene, snap.uuid).IsValid())
-                    RestoreEntity(m_Scene, snap);
+                RestoreEntitySubtreeSnapshot(m_Scene, m_Snapshot);
             }
+        }
 
-            // Re-link parent for the root entity of this subtree
-            if (!m_Snapshots.empty())
-            {
-                const EntitySnapshot &root = m_Snapshots[0];
-                if (root.parent != UUID(0))
-                {
-                    Entity parentEntity = SceneManager::GetEntity(m_Scene, root.parent);
-                    Entity restoredRoot = SceneManager::GetEntity(m_Scene, root.uuid);
-                    if (parentEntity.IsValid() && restoredRoot.IsValid())
-                    {
-                        IDComponent &parentId = parentEntity.GetComponent<IDComponent>();
-                        // Add child reference if not already present
-                        bool alreadyChild = false;
-                        for (UUID c : parentId.children)
-                            if (c == root.uuid) { alreadyChild = true; break; }
-                        if (!alreadyChild)
-                            parentId.AddChild(root.uuid);
-                    }
-                }
-            }
+        std::string GetName() const override
+        {
+            return m_Snapshot.rootName.empty() ? "Delete Entity" : ("Delete " + m_Snapshot.rootName);
+        }
+
+        size_t GetMemoryUsage() const override
+        {
+            return sizeof(*this) + m_Snapshot.GetMemoryUsage();
         }
 
     private:
-        // DFS pre-order: parent snapshot comes before child snapshots
-        void SnapshotSubtree(Entity entity)
-        {
-            if (!entity.IsValid())
-                return;
-
-            m_Snapshots.push_back(SnapshotEntity(m_Scene, entity));
-
-            const IDComponent &id = entity.GetComponent<IDComponent>();
-            for (UUID childUUID : id.children)
-            {
-                Entity child = SceneManager::GetEntity(m_Scene, childUUID);
-                SnapshotSubtree(child);
-            }
-        }
-
-        Scene                    *m_Scene;
-        std::vector<EntitySnapshot> m_Snapshots; // [0] = root, rest = descendants
+        Scene *m_Scene = nullptr;
+        EntitySubtreeSnapshot m_Snapshot;
     };
 }
 

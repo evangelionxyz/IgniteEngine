@@ -26,6 +26,9 @@ namespace ignite
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<WidgetCanvas> Deserialize(const std::filesystem::path &filepath);
 
+        std::string SerializeToString() const;
+        bool DeserializeFromString(const std::string &jsonData);
+
         inline void SetViewportSize(uint32_t width, uint32_t height)
         {
             if (m_ViewportSize.x != width || m_ViewportSize.y != height)

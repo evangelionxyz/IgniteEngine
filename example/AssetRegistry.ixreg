@@ -132,6 +132,11 @@
                 "Filepath": "Assets/Props/FPS/DamagedHelmet.glb"
             },
             {
+                "Handle": 970617691749241032,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/Avocado.mesh"
+            },
+            {
                 "Handle": 1094827651928374650,
                 "Type": "Font",
                 "Filepath": "Assets/Fonts/JetBrainsMono-Bold.ttf"
@@ -145,6 +150,11 @@
                 "Handle": 1486087688009903763,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/Yes.ixanim"
+            },
+            {
+                "Handle": 1641386165452492381,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/Avocado_1.mesh"
             },
             {
                 "Handle": 2045315682693042477,
@@ -187,6 +197,11 @@
                 "Filepath": "Assets/Audio/hit_target.wav"
             },
             {
+                "Handle": 3379390328301514600,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/Duck_BaseColor_texture.png"
+            },
+            {
                 "Handle": 4187555684474507689,
                 "Type": "Material",
                 "Filepath": "Assets/Materials/FPS/Mat_PolishedCopper.ixmat"
@@ -207,6 +222,11 @@
                 "Filepath": "Assets/Audio/jump_pad.wav"
             },
             {
+                "Handle": 5566361921882400997,
+                "Type": "StaticMesh",
+                "Filepath": "Assets/Props/Duck_1.mesh"
+            },
+            {
                 "Handle": 5608564410954710771,
                 "Type": "Audio",
                 "Filepath": "Assets/Audio/rifle_shot.wav"
@@ -225,6 +245,11 @@
                 "Handle": 6012538090998002116,
                 "Type": "Material",
                 "Filepath": "Assets/Materials/FPS/Mat_MirrorChrome.ixmat"
+            },
+            {
+                "Handle": 6084944616298138354,
+                "Type": "Material",
+                "Filepath": "Assets/Props/2256_Avocado_d.ixmat"
             },
             {
                 "Handle": 6283005348334205475,
@@ -252,6 +277,11 @@
                 "Filepath": "Assets/HDRIs/kloppenheim_06_puresky_1k.hdr"
             },
             {
+                "Handle": 6888392332919845603,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/embedded_texture_1.png"
+            },
+            {
                 "Handle": 6970606114947867429,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/Dance.ixanim"
@@ -260,6 +290,11 @@
                 "Handle": 7058554600036747221,
                 "Type": "LuaScript",
                 "Filepath": "Scripts/effects_manager.lua"
+            },
+            {
+                "Handle": 7374980052644442627,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/embedded_texture_2.png"
             },
             {
                 "Handle": 7707667994970967754,
@@ -280,6 +315,11 @@
                 "Handle": 8347876710597687241,
                 "Type": "Material",
                 "Filepath": "Assets/Materials/FPS/Mat_SatinCeramic.ixmat"
+            },
+            {
+                "Handle": 8953178543544427659,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/Avocado_MetallicRoughness_texture.png"
             },
             {
                 "Handle": 9172818322886732462,
@@ -427,6 +467,11 @@
                 "Filepath": "Assets/Materials/FPS/Mat_PolishedGold.ixmat"
             },
             {
+                "Handle": 12959973874828397093,
+                "Type": "Material",
+                "Filepath": "Assets/Props/blinn3-fx_1.ixmat"
+            },
+            {
                 "Handle": 13073711815677964821,
                 "Type": "Material",
                 "Filepath": "Assets/Materials/FPS/Mat_BrushedSteel.ixmat"
@@ -445,6 +490,11 @@
                 "Handle": 13383454037512489586,
                 "Type": "Scene",
                 "Filepath": "Assets/Scenes/FPSArena.ixscene"
+            },
+            {
+                "Handle": 13669366685357449935,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/Avocado_Normal_texture.png"
             },
             {
                 "Handle": 13669646693628099575,
@@ -467,6 +517,11 @@
                 "Filepath": "Assets/Characters/RobotExpressive/Main.ixmat"
             },
             {
+                "Handle": 13810600111191535806,
+                "Type": "Material",
+                "Filepath": "Assets/Props/2256_Avocado_d_1.ixmat"
+            },
+            {
                 "Handle": 13952465026886948373,
                 "Type": "Mesh",
                 "Filepath": "Assets/Characters/RobotExpressive/RobotExpressive.glb"
@@ -480,6 +535,11 @@
                 "Handle": 14026181933728809512,
                 "Type": "SkeletalAnimation",
                 "Filepath": "Assets/Characters/RobotExpressive/Death.ixanim"
+            },
+            {
+                "Handle": 14559035923226433742,
+                "Type": "Texture",
+                "Filepath": "Assets/Props/Avocado_BaseColor_texture.png"
             },
             {
                 "Handle": 14665343695351463744,

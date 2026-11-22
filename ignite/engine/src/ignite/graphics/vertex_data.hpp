@@ -62,7 +62,9 @@ namespace ignite
                 .AddItem(BindingLayoutItem::VolatileConstantBuffer(4))          // b4: Scene
                 .AddItem(BindingLayoutItem::VolatileConstantBuffer(5))          // b5: CSM
                 .AddItem(BindingLayoutItem::VolatileConstantBuffer(6))          // b6: PointLight
-                .AddItem(BindingLayoutItem::VolatileConstantBuffer(7));         // b7: SpotLight
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(7))          // b7: SpotLight
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(8))          // b8: GI
+                .AddItem(BindingLayoutItem::StructuredBufferSRV(9));            // t9: ReflectionProbes
         }
     };
 
@@ -89,7 +91,9 @@ namespace ignite
                 .AddItem(BindingLayoutItem::VolatileConstantBuffer(4)) // Scene
                 .AddItem(BindingLayoutItem::VolatileConstantBuffer(5)) // CSM
                 .AddItem(BindingLayoutItem::VolatileConstantBuffer(6)) // PointLight
-                .AddItem(BindingLayoutItem::VolatileConstantBuffer(7));// SpotLight
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(7)) // SpotLight
+                .AddItem(BindingLayoutItem::VolatileConstantBuffer(8)) // GI
+                .AddItem(BindingLayoutItem::StructuredBufferSRV(9));   // ReflectionProbes
         }
     };
 

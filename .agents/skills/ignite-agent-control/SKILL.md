@@ -6,7 +6,7 @@ description: Control Ignite.Editor.exe, Ignite.Runtime.exe, packaged games, and 
 # Ignite Agent Control & MCP Automation
 
 ## 1. Batch Script Execution (`--command-script`)
-Run reproducible Editor/Runtime automation workflows without manual clicking:
+Run reproducible Editor or Runtime automation workflows without manual clicking:
 ```powershell
 D:\Dev\Ignite\bin\Debug\Ignite.Editor.exe `
   --project="D:\Path\To\Project.ixproj" `
@@ -15,17 +15,19 @@ D:\Dev\Ignite\bin\Debug\Ignite.Editor.exe `
   --command-report "D:\Path\To\report.json" `
   --quit-after-script
 ```
-Notice `Application::Tick` checks `AgentController::IsAutomationActive()`, so rendering and simulation proceed even when the window does not have OS focus.
+Supported presentation flags: `--windowed`, `--offscreen`, `--headless`, `--nogui`.
+`Application::Tick` checks `AgentController::IsAutomationActive()`, so simulation and rendering proceed even when the window does not have OS focus.
 
 ## 2. Live Interactive Session via MCP Server
-Start `python D:\Dev\Ignite\scripts\ignite_mcp_server.py` (stdio MCP JSON-RPC 2.0):
-- `ignite_launch_app(target="editor", project_path=..., windowed=True)` spawns the app with `--watch-command-file` / `--response-file` and waits for `ping`.
-- `ignite_send_command(session_id=..., command=..., params={...})` dispatches single JSON commands synchronously and returns structured results.
-- `ignite_package_game(project_path=..., output_dir=..., include_server=True)` exports a self-contained game build.
-- `ignite_start_server(scene_path=..., project_path=..., port=8192)` launches `Ignite.Network.exe`.
+Start `python D:\Dev\Ignite\scripts\ignite_mcp_server.py` (stdio MCP JSON-RPC 2.0). Available MCP tools:
+- **Build & Test**: `ignite_build_solution`, `ignite_sync_shaders`, `ignite_run_tests`
+- **Live App Control**: `ignite_launch_app` (spawns target with `--watch-command-file` / `--response-file` and waits for `ping`), `ignite_send_command`, `ignite_stop_app`, `ignite_run_command_script`, `ignite_list_sessions`
+- **Packaging & Dedicated Server**: `ignite_package_game`, `ignite_start_server` (`Ignite.Network.exe`)
+- **GI & Diagnostics**: `ignite_bake_gi`, `ignite_bake_reflection_probes`, `ignite_clear_baked_gi`, `ignite_get_gi_status`, `ignite_set_gi_debug_mode`, `ignite_get_gpu_timings` (bridging `bake_gi`, `bake_reflection_probes`, `clear_baked_gi`, `get_gi_status`, `cancel_gi_bake`, `set_gi_debug_mode`, and `get_gpu_timings`).
 
-## 3. Command JSON Reference
-Example command array:
+## 3. Readiness Gate & Command Reference
+- `get_status` returns `scene_ready` (`Scene::IsReadyToPlay()`). Both `play` and `simulate` fail with an error while scene assets are still loading (`scene_ready == false`), so poll `get_status` / `wait_frames` until `scene_ready` is `true` before entering Play or Simulate mode.
+- Example command array:
 ```json
 [
   { "command": "create_entity", "name": "HeroCube", "primitive": "Cube", "position": [0, 2, 0] },
@@ -42,6 +44,18 @@ Example command array:
   { "command": "stop" }
 ]
 ```
-Supported primitives: `Cube`, `Sphere`, `Plane`, `Cylinder`, `Cone`, `Torus`.
-Supported components for `add_component`/`set_component`/`remove_component`:
-`Transform`, `StaticMesh`, `Camera`, `DirectionalLight`, `PointLight`, `SpotLight`, `Rigidbody`/`Rigidbody3D`, `Rigidbody2D`, `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `AudioSource`, `LuaScript`, `NetworkIdentity`, `Text`.
+- **All `AgentController` Actions**:
+  - Lifecycle & Timing: `ping`, `get_status`, `play`, `simulate`, `stop`, `pause`, `resume`, `step_frames`, `wait_frames`, `wait_seconds`, `quit`
+  - Scene, Assets & Packaging: `load_scene`, `save_scene`, `import_asset`, `list_assets`, `package_game`
+  - Entities & Components: `list_entities`, `get_entity`, `create_entity`, `duplicate_entity`, `destroy_entity`, `rename_entity`, `add_component`, `set_component`, `update_component`, `remove_component`
+  - Camera, Rendering, Physics & Scripting: `set_camera`, `set_render_settings`, `capture_screenshot`, `physics_raycast`, `run_lua`
+  - Networking: `net_start_server`, `net_stop_server`, `net_connect`, `net_disconnect`, `net_send_input`, `net_send_chat`
+  - UI & Input Injection: `get_ui_info`, `inject_mouse_move`, `inject_mouse_button`, `inject_key`
+  - GI & Diagnostics: `bake_gi`, `bake_reflection_probes`, `clear_baked_gi`, `get_gi_status`, `cancel_gi_bake`, `set_gi_debug_mode` (0 or 9..12), `get_gpu_timings`
+- **Supported Primitives**: `Cube`, `Sphere`, `Plane`, `Cylinder`, `Cone`, `Torus`.
+- **Supported Components**: `Transform`, `Rendering`, `StaticMesh`, `SkeletalMesh`, `Camera`, `DirectionalLight`, `PointLight`, `SpotLight`, `WorldEnvironment`, `IrradianceVolume`, `ReflectionProbe`, `Rigidbody`/`Rigidbody3D`, `Rigidbody2D`, `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `BoxCollider2D`, `CircleCollider2D`, `CharacterController`, `AudioSource`, `LuaScript`, `NetworkIdentity`, `Sprite2D`, `Text`, `PhysicsJoint`/`Joint`, `ParticleSystem`/`Particle`.
+
+For a headless GI regression, launch an Editor session with an `.ixproj`, send
+`bake_gi`, poll `get_gi_status` until `finished` is true, then send
+`set_gi_debug_mode` and `capture_screenshot`. `get_gpu_timings` reports the
+`DepthNormalPrepass` and `GTAO` timestamp zones when GPU timestamps are supported.

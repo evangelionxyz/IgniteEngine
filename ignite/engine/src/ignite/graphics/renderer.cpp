@@ -91,6 +91,10 @@ namespace ignite
             std::vector<uint8_t> blackUIntData(sizeof(uint32_t));
             memcpy(blackUIntData.data(), &blackUInt, sizeof(uint32_t));
             m_BlackUIntTexture = Texture::Create(blackUIntData, uintTexCI, nullptr);
+
+            // Immediately bind slot 0 fallback and default textures in the bindless heap
+            // so slot 0 is guaranteed valid even before the first Renderer::BeginFrame().
+            BindlessSystem::FlushPendingWrites();
         }
 
         // Default materials
@@ -241,11 +245,23 @@ namespace ignite
         return s_RendererInstance->m_DefaultMaterial;
     }
 
+    static std::mutex s_DefaultFontMutex;
+
+    Ref<Font> Renderer::GetDefaultFontIfCreated()
+    {
+        if (!s_RendererInstance)
+            return nullptr;
+
+        std::lock_guard<std::mutex> lock(s_DefaultFontMutex);
+        return s_RendererInstance->m_DefaultFont;
+    }
+
     Ref<Font> Renderer::GetDefaultFont()
     {
         if (!s_RendererInstance)
             return nullptr;
 
+        std::lock_guard<std::mutex> lock(s_DefaultFontMutex);
         if (!s_RendererInstance->m_DefaultFont)
         {
             static constexpr const char *kDefaultFontCandidates[] = {
@@ -263,7 +279,7 @@ namespace ignite
             {
                 if (std::filesystem::exists(candidate, ec))
                 {
-                    s_RendererInstance->m_DefaultFont = Font::Create(candidate);
+                    s_RendererInstance->m_DefaultFont = Font::Create(candidate, true);
                     break;
                 }
             }

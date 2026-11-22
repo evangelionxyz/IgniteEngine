@@ -77,6 +77,15 @@ namespace ignite
             }
         }
 
+        if (auto it = m_GTAOs.find(camera); it != m_GTAOs.end())
+        {
+            for (auto &gtao : it->second)
+            {
+                if (gtao)
+                    gtao->Resize(renderWidth, renderHeight);
+            }
+        }
+
         auto it = m_RenderTargets.find(camera);
         if (it == m_RenderTargets.end())
         {
@@ -112,6 +121,9 @@ namespace ignite
                 target->debugRT->GetCreateInfo().depthAttachmentOverride = (target->sceneRT && target->msaaSampleCount == 1) ? target->sceneRT->GetDepthAttachment() : nullptr;
                 target->debugRT->Resize(renderWidth, renderHeight, false);
             }
+
+            if (sceneRenderSettings.enableDepthPrepass && target->msaaSampleCount == 1)
+                EnsureDepthPrepassRT(target, renderWidth, renderHeight);
         }
     }
 
@@ -182,6 +194,34 @@ namespace ignite
         }
     }
 
+    void SceneRenderer::EnsureDepthPrepassRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight)
+    {
+        if (!target || !target->sceneRT || target->msaaSampleCount != 1 || !target->sceneRT->GetDepthAttachment())
+            return;
+
+        if (!target->depthPrepassRT)
+        {
+            RenderTargetCreateInfo createInfo = {};
+            createInfo.width = renderWidth;
+            createInfo.height = renderHeight;
+            createInfo.sampleCount = 1;
+            createInfo.attachments =
+            {
+                FramebufferAttachments{ "[GI Depth Prepass Normal]", nri::Format::RG16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
+                FramebufferAttachments{ "[GI Depth Prepass Shared Depth]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT }
+            };
+            // The prepass and the forward pass must see exactly the same depth image.
+            // This also avoids a depth copy and preserves early-Z on the AMD driver.
+            createInfo.depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+            target->depthPrepassRT = RenderTarget::Create(createInfo, "[Scene Renderer] GI Depth Prepass RT");
+        }
+        else if (target->depthPrepassRT->GetWidth() != renderWidth || target->depthPrepassRT->GetHeight() != renderHeight)
+        {
+            target->depthPrepassRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+            target->depthPrepassRT->Resize(renderWidth, renderHeight, false);
+        }
+    }
+
     void SceneRenderer::EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight)
     {
         if (!target)
@@ -226,6 +266,7 @@ namespace ignite
         }
 
         target->debugRT = nullptr;
+        target->depthPrepassRT = nullptr;
         m_CompositeBindingSetCache.clear();
     }
 
@@ -330,5 +371,31 @@ namespace ignite
 
         m_SSAOs.emplace(camera, SSAOs);
         return SSAOs;
+    }
+
+    std::vector<Ref<GTAO>> SceneRenderer::GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight)
+    {
+        const uint32_t safeW = std::max(renderWidth, 1u);
+        const uint32_t safeH = std::max(renderHeight, 1u);
+        auto it = m_GTAOs.find(camera);
+        if (it != m_GTAOs.end())
+        {
+            for (auto &gtao : it->second)
+            {
+                if (gtao)
+                    gtao->Resize(safeW, safeH);
+            }
+            return it->second;
+        }
+
+        const uint32_t slotCount = std::max<uint32_t>(
+            DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight,
+            static_cast<uint32_t>(m_CommandBufferSlots.size()));
+        std::vector<Ref<GTAO>> gtaos(slotCount);
+        for (uint32_t i = 0; i < slotCount; ++i)
+            gtaos[i] = CreateRef<GTAO>(safeW, safeH);
+
+        m_GTAOs.emplace(camera, gtaos);
+        return gtaos;
     }
 }

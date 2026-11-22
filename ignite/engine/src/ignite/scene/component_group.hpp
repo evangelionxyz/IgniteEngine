@@ -61,6 +61,8 @@ namespace ignite
         DirectionalLightComponent,
         PointLightComponent,
         SpotLightComponent,
+        IrradianceVolumeComponent,
+        ReflectionProbeComponent,
         Animator2DComponent,
         TerrainComponent,
         HeightFieldColliderComponent,

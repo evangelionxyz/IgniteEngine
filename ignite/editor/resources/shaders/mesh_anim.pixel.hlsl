@@ -1,295 +1,44 @@
 #include "include/binding_helpers.hlsli"
-#include "include/helpers.hlsli"
-#include "include/pbr.hlsli"
-#include "include/scene.hlsli"
-#include "include/shadow.hlsli"
+#include "include/lighting.hlsli"
 
 // ==============================
 // set 0
 // ==============================
-
 DECLARE_PUSH_CONSTANTS(PushConstants, g_Push, 0, 0); // b0
-cbuffer CameraBuffer                    : register(b1, space0) { Camera camera; }
-StructuredBuffer<Object> g_ObjectBuffer : register(t2, space0);
-StructuredBuffer<float4x4> g_Bones      : register(t3, space0);
-cbuffer SceneBuffer                     : register(b4, space0) { Scene scene; }
-cbuffer CascadesBuffer                  : register(b5, space0) { CascadesShadows csm; }
-cbuffer PointLightBuffer                : register(b6, space0) { PointLight pointLights[MAX_POINT_LIGHTS]; };
-cbuffer SpotLightBuffer                 : register(b7, space0) { SpotLight spotLights[MAX_SPOT_LIGHTS]; };
+cbuffer                              CameraBuffer       : register(b1, space0) { Camera camera; }
+StructuredBuffer<Object>             g_ObjectBuffer     : register(t2, space0);
+StructuredBuffer<float4x4>           g_Bones            : register(t3, space0);
+cbuffer                              SceneBuffer        : register(b4, space0) { Scene scene; }
+cbuffer                              CascadesBuffer     : register(b5, space0) { CascadesShadows csm; }
+cbuffer                              PointLightBuffer   : register(b6, space0) { PointLight pointLights[MAX_POINT_LIGHTS]; }
+cbuffer                              SpotLightBuffer    : register(b7, space0) { SpotLight spotLights[MAX_SPOT_LIGHTS]; }
+cbuffer                              GIBuffer           : register(b8, space0) { GIData gi; }
+StructuredBuffer<ReflectionProbeGPU> g_ReflectionProbes : register(t9, space0);
 
 // ==============================
 // set 1
 // ==============================
-cbuffer MaterialBuffer          : register(b0, space1) { Material material; }
-Texture2D environmentMapTexture : register(t0, space1);
-Texture2DArray shadowMap        : register(t1, space1);
-SamplerState sampler0           : register(s0, space1);
-SamplerState shadowSampler      : register(s1, space1); // linear sampler for shadow map PCF
+cbuffer        MaterialBuffer        : register(b0, space1) { Material material; }
+Texture2D      environmentMapTexture : register(t0, space1);
+Texture2DArray shadowMap             : register(t1, space1);
+SamplerState   sampler0              : register(s0, space1);
+SamplerState   shadowSampler         : register(s1, space1);
 
-struct PSOutput
+PSOutput main(PixelVertexInput input, bool isFrontFace : SV_IsFrontFace)
 {
-    float4 color : SV_TARGET0;
-    uint objectID : SV_TARGET1;
-};
-
-
-float SelectChannel(float4 value, int channel)
-{
-    if (channel == 1) return value.g;
-    if (channel == 2) return value.b;
-    if (channel == 3) return value.a;
-    return value.r;
-}
-
-PSOutput main(PixelVertexInput input)
-{
-    PSOutput result;
-    result.objectID = input.objectID;
-
-    float2 tiledUV = input.uv * material.tilingFactor;
-
-    float3 N = normalize(input.normal);
-    float3 viewDirection = normalize(camera.position.xyz - input.worldPos);
-    
-    // Light Angle X : Azimuth
-    // Light Angle Y : Elevation
-    float3 sunDirection = float3(
-        cos(scene.lightAngle.y) * sin(scene.lightAngle.x),
-        sin(scene.lightAngle.y),
-        cos(scene.lightAngle.y) * cos(scene.lightAngle.x)
-    );
-
-    float3 lightDirection = normalize(sunDirection);
-
-    Texture2D baseColorTex = ResourceDescriptorHeap[material.baseColorTextureIndex];
-    Texture2D emissiveTex = ResourceDescriptorHeap[material.emissiveTextureIndex];
-    Texture2D metallicTex = ResourceDescriptorHeap[material.metallicTextureIndex];
-    Texture2D roughnessTex = ResourceDescriptorHeap[material.roughnessTextureIndex];
-    Texture2D occlusionTex = ResourceDescriptorHeap[material.occlusionTextureIndex];
-
-    float3 emissiveColor = SRGBToLinear(emissiveTex.Sample(sampler0, tiledUV).rgb) * material.emissiveFactor.rgb;
-    float4 metallicColor = metallicTex.Sample(sampler0, tiledUV);
-    float4 roughnessColor = roughnessTex.Sample(sampler0, tiledUV);
-    float occlusionSample = occlusionTex.Sample(sampler0, tiledUV).r;
-    float ao = lerp(1.0f, occlusionSample, saturate(material.occlusionStrength));
-
-    float metallic = clamp(SelectChannel(metallicColor, material.metallicChannel) * material.metallicFactor, 0.0f, 1.0f);
-    float roughness = clamp(SelectChannel(roughnessColor, material.roughnessChannel) * material.roughnessFactor, 0.0f, 1.0f);
-
-    // Sample base color with sRGB-to-linear conversion and alpha for transparency support
-    float4 rawBaseColor = baseColorTex.Sample(sampler0, tiledUV);
-    float4 baseColorSample = float4(SRGBToLinear(rawBaseColor.rgb), rawBaseColor.a) * input.color;
-    float finalAlpha = baseColorSample.a * material.baseColorFactor.a;
-
-    // Discard nearly transparent fragments in transparent mode, or below cutoff in masked mode
-    if ((material.blendMode == 1 && finalAlpha < 0.001f) || (material.blendMode == 2 && finalAlpha < 0.5f))
-    {
-        discard;
-    }
-
-    // Tangent space normal mapping with safe orthonormal basis fallback
-    float3 finalNormal = N;
-    float3 T = input.tangent - N * dot(N, input.tangent);
-    float tLenSq = dot(T, T);
-    if (tLenSq > 1e-6f)
-    {
-        T *= rsqrt(tLenSq);
-    }
-    else
-    {
-        float3 bFallback;
-        BuildOrthonormalBasis(N, T, bFallback);
-    }
-    float3 bitangent = cross(N, T);
-    float3 B = dot(bitangent, input.bitangent) < 0.0f ? -bitangent : bitangent;
-    if (material.normalTextureIndex >= 0)
-    {
-        Texture2D normalMapTex = ResourceDescriptorHeap[material.normalTextureIndex];
-        float3 tangentNormal = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
-        finalNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
-    }
-
-    if (scene.renderMode == RENDER_MODE_COLOR)
-    {
-
-        OpenPBRSurface surface;
-        surface.baseColor = baseColorSample.rgb * material.baseColorFactor.rgb;
-        surface.baseWeight = saturate(material.baseWeight);
-        surface.metalness = metallic;
-        surface.specularWeight = material.specularWeight;
-        surface.specularColor = material.specularColor.rgb;
-        surface.specularRoughness = max(roughness, 0.05f);
-        surface.specularIOR = max(material.specularIOR, 1.0f);
-        surface.coatWeight = saturate(material.coatWeight);
-        surface.coatColor = material.coatColor.rgb;
-        surface.coatRoughness = max(saturate(material.coatRoughness), 0.05f);
-        surface.coatIOR = max(material.coatIOR, 1.0f);
-        surface.coatDarkening = saturate(material.coatDarkening);
-        surface.specularAnisotropy = saturate(material.specularAnisotropy);
-        surface.subsurfaceWeight = saturate(material.subsurfaceWeight);
-        surface.subsurfaceColor = material.subsurfaceColor.rgb;
-        surface.subsurfaceRadius = material.subsurfaceRadius.rgb;
-        surface.subsurfaceScale = material.subsurfaceScale;
-        surface.transmissionWeight = saturate(material.transmissionWeight);
-        surface.transmissionColor = material.transmissionColor.rgb;
-        surface.transmissionDepth = material.transmissionDepth;
-        surface.fuzzWeight = saturate(material.fuzzWeight);
-        surface.fuzzColor = material.fuzzColor.rgb;
-        surface.fuzzRoughness = max(saturate(material.fuzzRoughness), 0.05f);
-        surface.useMultiScatter = saturate(material.useMultiScatter);
-
-        float3 reflectDirection = reflect(-viewDirection, finalNormal);
-        const float cameraAltitudeKm = camera.position.y * 0.001f;
-        float3 reflectedSpecular = float3(0.0f, 0.0f, 0.0f);
-        if (scene.enableIBL != 0)
-        {
-            float3 reflectRadiance = SampleEnvironmentMap(environmentMapTexture, sampler0, reflectDirection, scene.skyType, cameraAltitudeKm);
-            float3 blurredReflectRadiance = SampleRoughEnvironmentSpecular(environmentMapTexture, sampler0, reflectDirection, surface.specularRoughness, scene.skyType, cameraAltitudeKm);
-            reflectedSpecular = OpenPBREnvironment(surface, finalNormal, viewDirection, reflectRadiance, blurredReflectRadiance);
-        }
-
-        float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
-        float3 directLighting = OpenPBRDirect(surface, finalNormal, lightDirection, viewDirection, T, B, irradiance);
-
-        float shadowTerm = SampleShadow(csm, shadowMap, shadowSampler, camera.view, 
-            input.worldPos, finalNormal, lightDirection, input.position.xy);
-        
-        directLighting *= shadowTerm;
-
-        // Point Lights PBR
-        for (int pi = 0; pi < scene.numPointLights; ++pi)
-        {
-            float3 lightPos = pointLights[pi].positionAndRange.xyz;
-            float range = max(pointLights[pi].positionAndRange.w, 1e-4f);
-            float3 color = pointLights[pi].color.rgb;
-            float intensity = pointLights[pi].color.a;
-            float constAtt = pointLights[pi].attenuation.x;
-            float linAtt = pointLights[pi].attenuation.y;
-            float quadAtt = pointLights[pi].attenuation.z;
-
-            float3 lightVec = lightPos - input.worldPos;
-            float d = length(lightVec);
-            if (d > range || d < 1e-5f) continue;
-
-            float3 toLight = lightVec / d;
-            float atten = 1.0f / max(constAtt + linAtt * d + quadAtt * (d * d), 1e-4f);
-            atten *= saturate(1.0f - (d / range));
-
-            float3 ptIrradiance = color * intensity * atten;
-            directLighting += OpenPBRDirect(surface, finalNormal, toLight, viewDirection, T, B, ptIrradiance);
-        }
-
-        // Spot Lights PBR
-        for (int si = 0; si < scene.numSpotLights; ++si)
-        {
-            float3 lightPos = spotLights[si].positionAndRange.xyz;
-            float range = max(spotLights[si].positionAndRange.w, 1e-4f);
-            float3 spotDir = spotLights[si].directionAndAngle.xyz;
-            float cosOuter = spotLights[si].directionAndAngle.w;
-            float3 color = spotLights[si].color.rgb;
-            float intensity = spotLights[si].color.a;
-            float constAtt = spotLights[si].attenuation.x;
-            float linAtt = spotLights[si].attenuation.y;
-            float quadAtt = spotLights[si].attenuation.z;
-            float cosInner = spotLights[si].attenuation.w;
-
-            float3 lightVec = lightPos - input.worldPos;
-            float d = length(lightVec);
-            if (d > range || d < 1e-5f) continue;
-
-            float3 toLight = lightVec / d;
-            float theta = dot(-toLight, spotDir);
-            if (theta < cosOuter) continue;
-
-            float atten = 1.0f / max(constAtt + linAtt * d + quadAtt * (d * d), 1e-4f);
-            atten *= saturate(1.0f - (d / range));
-
-            float coneFactor = saturate((theta - cosOuter) / max(0.0001f, cosInner - cosOuter));
-            atten *= coneFactor;
-
-            float3 spIrradiance = color * intensity * atten;
-            directLighting += OpenPBRDirect(surface, finalNormal, toLight, viewDirection, T, B, spIrradiance);
-        }
-
-        // Diffuse ambient from the (cosine convolved) environment. Not affected by the sun shadow.
-        float3 ambient = float3(0.0f, 0.0f, 0.0f);
-        if (scene.enableIBL != 0)
-        {
-            float3 diffuseIrradiance = SampleEnvironmentIrradiance(environmentMapTexture, sampler0, finalNormal, scene.skyType, cameraAltitudeKm);
-            float3 kS = OpenPBRBaseSpecularAlbedo(surface, saturate(dot(finalNormal, viewDirection)));
-            float3 kD = (1.0f - kS) * (1.0f - surface.metalness);
-
-            ambient = kD * surface.baseWeight * surface.baseColor * diffuseIrradiance * ao;
-            reflectedSpecular *= ao;
-        }
-
-        float3 finalColor = directLighting + ambient + reflectedSpecular;
-
-        if (length(emissiveColor) > 0.01f)
-        {
-            // emissiveColor already includes emissiveFactor.rgb
-            finalColor += emissiveColor * material.emissiveFactor.a * material.emissionLuminance;
-        }
-
-        if (scene.debugShadow == 2)
-        {
-            result.color = float4(shadowTerm, shadowTerm, shadowTerm, 1.0f);
-            return result;
-        }
-
-        if (scene.debugShadow == 1)
-        {
-            float3 viewPos = mul(camera.view, float4(input.worldPos, 1.0f)).xyz;
-            float viewDepth = -viewPos.z;
-            int ci = GetCascadeIndex(csm.cascadeSplits, viewDepth);
-            float3 dbg = ci == 0 ? float3(1.0f, 0.0f, 0.0f)
-                : (ci == 1 ? float3(0.0f, 1.0f, 0.0f)
-                : (ci == 2 ? float3(0.0f, 0.0f, 1.0f)
-                : float3(1.0f, 1.0f, 0.0f)));
-            finalColor *= dbg;
-        }
-
-        // Output alpha: 1.0 for opaque, actual alpha for transparent
-        float outputAlpha = (material.blendMode == 1) ? finalAlpha : 1.0f;
-        result.color = float4(finalColor, outputAlpha);
-    }
-    else if (scene.renderMode == RENDER_MODE_DIFFUSE)
-    {
-        float3 diffuse = baseColorTex.Sample(sampler0, tiledUV).rgb;
-        result.color = float4(diffuse, 1.0f);
-    }
-    else if (scene.renderMode == RENDER_MODE_NORMALS)
-    {
-        result.color = float4(finalNormal * 0.5f + 0.5f, 1.0f);
-    }
-    else if (scene.renderMode == RENDER_MODE_METALLIC)
-    {
-        result.color = float4(metallic, metallic, metallic, 1.0f);
-    }
-    else if (scene.renderMode == RENDER_MODE_ROUGHNESS)
-    {
-        result.color = float4(roughness, roughness, roughness, 1.0f);
-    }
-    else if (scene.renderMode == RENDER_MODE_SUBSURFACE)
-    {
-        float ss = material.subsurfaceWeight;
-        result.color = float4(material.subsurfaceColor.rgb * ss, 1.0f);
-    }
-    else if (scene.renderMode == RENDER_MODE_TRANSMISSION)
-    {
-        float tr = material.transmissionWeight;
-        result.color = float4(material.transmissionColor.rgb * tr, 1.0f);
-    }
-    else if (scene.renderMode == RENDER_MODE_COAT)
-    {
-        float ct = material.coatWeight;
-        result.color = float4(material.coatColor.rgb * ct, 1.0f);
-    }
-    else if (scene.renderMode == RENDER_MODE_FUZZ)
-    {
-        float fz = material.fuzzWeight;
-        result.color = float4(material.fuzzColor.rgb * fz, 1.0f);
-    }
-
-    return result;
+    return EvaluateMeshPixel(
+        input,
+        isFrontFace,
+        camera,
+        scene,
+        csm,
+        pointLights,
+        spotLights,
+        gi,
+        g_ReflectionProbes,
+        material,
+        environmentMapTexture,
+        shadowMap,
+        sampler0,
+        shadowSampler);
 }

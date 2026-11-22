@@ -49,6 +49,8 @@ namespace ignite
         CompType_PhysicsJoint,
         CompType_NetworkIdentity,
         CompType_LuaScript,
+        CompType_IrradianceVolume,
+        CompType_ReflectionProbe,
 
         CompType_COUNT
     };

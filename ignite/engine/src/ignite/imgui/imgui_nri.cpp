@@ -194,9 +194,18 @@ namespace ignite
         auto &slot = m_CommandSlots[slotIndex];
         m_CurrentSlotIndex = (m_CurrentSlotIndex + 1) % static_cast<uint32_t>(m_CommandSlots.size());
 
-        if (m_CommandFence && slot.fenceValue > 0 && nri.GetFenceValue(*m_CommandFence) < slot.fenceValue)
+        if (m_CommandFence && slot.fenceValue > 0)
         {
-            nri.Wait(*m_CommandFence, slot.fenceValue);
+            const uint64_t currentFenceValue = nri.GetFenceValue(*m_CommandFence);
+            if (currentFenceValue == std::numeric_limits<uint64_t>::max())
+            {
+                LOG_ERROR("[ImGui] BeginCommandBuffer: fence returned UINT64_MAX (device lost)");
+                return nullptr;
+            }
+            if (currentFenceValue < slot.fenceValue)
+            {
+                nri.Wait(*m_CommandFence, slot.fenceValue);
+            }
         }
 
         nri.ResetCommandAllocator(*slot.allocator);

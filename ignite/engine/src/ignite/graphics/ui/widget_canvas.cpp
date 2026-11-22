@@ -17,6 +17,501 @@
 
 namespace ignite
 {
+    namespace
+    {
+        void CollectDfsItems(
+            const Ref<IWidgetItem> &item,
+            std::unordered_set<WidgetID> &visited,
+            std::vector<Ref<IWidgetItem>> &outItems)
+        {
+            if (!item || visited.contains(item->id))
+            {
+                return;
+            }
+
+            visited.insert(item->id);
+            outItems.push_back(item);
+            for (const Ref<IWidgetItem> &child : item->children)
+            {
+                CollectDfsItems(child, visited, outItems);
+            }
+        }
+
+        void SerializeWidgetCanvasToSerializer(
+            const std::string &canvasName,
+            bool enabled,
+            bool blocksWidgetsBelow,
+            const WidgetContainer *root,
+            const std::unordered_map<WidgetID, Ref<IWidgetItem>> &widgetItems,
+            const std::vector<WidgetChildEntry> &childWidgets,
+            Serializer &sr)
+        {
+            sr.BeginMap();
+            sr.BeginMap("Widget");
+            sr.AddKeyValue("Version", Application::GetVersion());
+            sr.AddKeyValue("Name", canvasName);
+            sr.AddKeyValue("Enabled", enabled);
+            sr.AddKeyValue("BlocksWidgetsBelow", blocksWidgetsBelow);
+
+            std::vector<Ref<IWidgetItem>> orderedItems;
+            orderedItems.reserve(widgetItems.size());
+            std::unordered_set<WidgetID> visited;
+
+            if (root)
+            {
+                auto rootIt = widgetItems.find(root->id);
+                if (rootIt != widgetItems.end() && rootIt->second)
+                {
+                    CollectDfsItems(rootIt->second, visited, orderedItems);
+                }
+            }
+
+            std::vector<WidgetID> orphanIds;
+            for (const auto &[id, item] : widgetItems)
+            {
+                if (item && !visited.contains(id))
+                {
+                    orphanIds.push_back(id);
+                }
+            }
+            std::sort(orphanIds.begin(), orphanIds.end());
+            for (WidgetID id : orphanIds)
+            {
+                CollectDfsItems(widgetItems.at(id), visited, orderedItems);
+            }
+
+            sr.BeginSequence("Items");
+            for (const Ref<IWidgetItem> &item : orderedItems)
+            {
+                if (!item)
+                {
+                    continue;
+                }
+
+                sr.BeginMap();
+                sr.AddKeyValue("Name", item->name);
+                sr.AddKeyValue("ID", item->id);
+                const WidgetID parentId = item->parent
+                    ? item->parent->id
+                    : (item.get() == root ? item->id : -1);
+                sr.AddKeyValue("ParentID", parentId);
+                sr.AddKeyValue("Type", static_cast<int>(item->GetWidgetType()));
+                sr.AddKeyValue("ZIndex", item->zIndex);
+
+                // Layout properties
+                sr.AddKeyValue("Position", item->layout.position);
+                sr.AddKeyValue("WidthMode", static_cast<int>(item->layout.widthMode));
+                sr.AddKeyValue("HeightMode", static_cast<int>(item->layout.heightMode));
+                sr.AddKeyValue("Width", item->layout.width);
+                sr.AddKeyValue("Height", item->layout.height);
+                sr.AddKeyValue("MinWidth", item->layout.minWidth);
+                sr.AddKeyValue("MinHeight", item->layout.minHeight);
+                sr.AddKeyValue("MaxWidth", item->layout.maxWidth);
+                sr.AddKeyValue("MaxHeight", item->layout.maxHeight);
+                sr.AddKeyValue("Margin", item->layout.margin);
+                sr.AddKeyValue("Padding", item->layout.padding);
+                sr.AddKeyValue("VerticalAlignment", static_cast<int>(item->layout.verticalAlignment));
+                sr.AddKeyValue("HorizontalAlignment", static_cast<int>(item->layout.horizontalAlignment));
+                sr.AddKeyValue("PositionType", static_cast<int>(item->layout.positionType));
+                sr.AddKeyValue("Overflow", static_cast<int>(item->layout.overflow));
+                sr.AddKeyValue("Visibility", static_cast<int>(item->layout.visibility));
+
+                // Flex properties
+                sr.AddKeyValue("FlexDirection", static_cast<int>(item->layout.flex.direction));
+                sr.AddKeyValue("JustifyContent", static_cast<int>(item->layout.flex.justifyContent));
+                sr.AddKeyValue("AlignItems", static_cast<int>(item->layout.flex.alignItems));
+                sr.AddKeyValue("AlignSelf", static_cast<int>(item->layout.flex.alignSelf));
+                sr.AddKeyValue("FlexWrap", static_cast<int>(item->layout.flex.wrap));
+                sr.AddKeyValue("FlexGrow", item->layout.flex.grow);
+                sr.AddKeyValue("FlexShrink", item->layout.flex.shrink);
+                sr.AddKeyValue("FlexBasis", item->layout.flex.basis);
+                sr.AddKeyValue("FlexGap", item->layout.flex.gap);
+
+                // UIStyle properties
+                sr.AddKeyValue("Interactable", item->interactable);
+                sr.AddKeyValue("BackgroundColor", item->baseStyle.backgroundColor);
+                sr.AddKeyValue("BorderColor", item->baseStyle.borderColor);
+                sr.AddKeyValue("BorderWidth", item->baseStyle.borderWidth);
+                sr.AddKeyValue("CornerRadius", item->baseStyle.cornerRadius);
+                sr.AddKeyValue("Opacity", item->baseStyle.opacity);
+                sr.AddKeyValue("ShadowEnabled", item->baseStyle.shadowEnabled);
+                sr.AddKeyValue("ShadowColor", item->baseStyle.shadowColor);
+                sr.AddKeyValue("ShadowOffset", item->baseStyle.shadowOffset);
+                sr.AddKeyValue("ShadowSize", item->baseStyle.shadowSize);
+                sr.AddKeyValue("ShadowSoftness", item->baseStyle.shadowSoftness);
+
+                if (item->GetWidgetType() == WidgetType::BoxSizing)
+                {
+                    if (const Ref<WidgetBoxSizing> boxSizing = item->As<WidgetBoxSizing>())
+                    {
+                        sr.AddKeyValue("BoxMinSize", boxSizing->minSize);
+                        sr.AddKeyValue("BoxMaxSize", boxSizing->maxSize);
+                    }
+                }
+
+                if (item->GetWidgetType() == WidgetType::Button)
+                {
+                    if (const Ref<WidgetButton> button = item->As<WidgetButton>())
+                    {
+                        sr.AddKeyValue("ImageHandle", static_cast<uint64_t>(button->imageHandle));
+                        sr.AddKeyValue("NormalColor", button->style.color);
+                        sr.AddKeyValue("HoverColor", button->style.hoverColor);
+                        sr.AddKeyValue("PressedColor", button->style.pressedColor);
+                        sr.AddKeyValue("DisabledColor", button->style.disabledColor);
+                        sr.AddKeyValue("BorderColor", button->style.borderColor);
+                        sr.AddKeyValue("BorderWidth", button->style.borderWidth);
+                        sr.AddKeyValue("CornerRadius", button->style.cornerRadius);
+
+                        if (button->label)
+                        {
+                            sr.AddKeyValue("FontHandle", static_cast<uint64_t>(button->label->fontHandle));
+                            sr.AddKeyValue("Text", button->label->text);
+                            sr.AddKeyValue("TextColor", button->label->style.color);
+                            sr.AddKeyValue("FontSize", button->label->style.fontSize);
+                            sr.AddKeyValue("Kerning", button->label->style.kerning);
+                            sr.AddKeyValue("LineSpacing", button->label->style.lineSpacing);
+                            sr.AddKeyValue("TextShadowEnabled", button->label->style.shadowEnabled);
+                            sr.AddKeyValue("TextShadowColor", button->label->style.shadowColor);
+                            sr.AddKeyValue("TextShadowOffset", button->label->style.shadowOffset);
+                        }
+                    }
+                }
+
+                if (item->GetWidgetType() == WidgetType::Label)
+                {
+                    if (const Ref<WidgetLabel> label = item->As<WidgetLabel>())
+                    {
+                        sr.AddKeyValue("Text", label->text);
+                        sr.AddKeyValue("Color", label->style.color);
+                        sr.AddKeyValue("FontHandle", static_cast<uint64_t>(label->fontHandle));
+                        sr.AddKeyValue("FontSize", label->style.fontSize);
+                        sr.AddKeyValue("Kerning", label->style.kerning);
+                        sr.AddKeyValue("LineSpacing", label->style.lineSpacing);
+                        sr.AddKeyValue("TextShadowEnabled", label->style.shadowEnabled);
+                        sr.AddKeyValue("TextShadowColor", label->style.shadowColor);
+                        sr.AddKeyValue("TextShadowOffset", label->style.shadowOffset);
+                    }
+                }
+
+                if (item->GetWidgetType() == WidgetType::Image)
+                {
+                    if (const Ref<WidgetImage> img = item->As<WidgetImage>())
+                    {
+                        sr.AddKeyValue("ImageHandle", static_cast<uint64_t>(img->imageHandle));
+                        sr.AddKeyValue("TintColor", img->tintColor);
+                        sr.AddKeyValue("UV0", img->uv0);
+                        sr.AddKeyValue("UV1", img->uv1);
+                    }
+                }
+
+                sr.EndMap();
+            }
+            sr.EndSequence();
+
+            sr.BeginSequence("ChildWidgets");
+            for (const WidgetChildEntry &child : childWidgets)
+            {
+                sr.BeginMap();
+                sr.AddKeyValue("Handle", static_cast<uint64_t>(child.handle));
+                sr.AddKeyValue("Enabled", child.enabled);
+                sr.AddKeyValue("BlockWidgetsBelow", child.blockWidgetsBelow);
+                sr.EndMap();
+            }
+            sr.EndSequence();
+
+            sr.EndMap();
+            sr.EndMap();
+        }
+
+        void DeserializeWidgetCanvasNode(
+            const JsonNode &widgetNode,
+            std::string &outName,
+            bool &outEnabled,
+            bool &outBlocksWidgetsBelow,
+            std::unordered_map<WidgetID, Ref<IWidgetItem>> &outWidgetItems,
+            std::vector<WidgetChildEntry> &outChildWidgets,
+            Ref<WidgetContainer> &outRoot,
+            WidgetID &outNextWidgetItemId,
+            glm::uvec2 &outViewportSize,
+            bool applyLegacyShadowDefaults)
+        {
+            outRoot.reset();
+            outWidgetItems.clear();
+            outChildWidgets.clear();
+            outNextWidgetItemId = 0;
+
+            if (widgetNode["Name"]) outName = widgetNode["Name"].as<std::string>();
+            if (widgetNode["Enabled"]) outEnabled = widgetNode["Enabled"].as<bool>();
+            if (widgetNode["BlocksWidgetsBelow"]) outBlocksWidgetsBelow = widgetNode["BlocksWidgetsBelow"].as<bool>();
+
+            std::vector<WidgetID> loadedOrder;
+            std::unordered_map<int, int> parentMap;
+            if (JsonNode itemsNode = widgetNode["Items"]; itemsNode && itemsNode.IsSequence())
+            {
+                for (const JsonNode &itemNode : itemsNode)
+                {
+                    if (!itemNode["ID"] || !itemNode["Type"])
+                        continue;
+
+                    const WidgetType type = static_cast<WidgetType>(itemNode["Type"].as<int>());
+                    const WidgetID id = itemNode["ID"].as<int>();
+                    const WidgetID parentID = itemNode["ParentID"].as<int>();
+
+                    Ref<IWidgetItem> item = nullptr;
+                    switch (type)
+                    {
+                        case WidgetType::Container: item = CreateRef<WidgetContainer>(id); break;
+                        case WidgetType::Button:    item = CreateRef<WidgetButton>("", id); break;
+                        case WidgetType::Label:     item = CreateRef<WidgetLabel>("", id); break;
+                        case WidgetType::Image:     item = CreateRef<WidgetImage>(id); break;
+                        case WidgetType::BoxSizing: item = CreateRef<WidgetBoxSizing>(id); break;
+                        case WidgetType::Overlay:   item = CreateRef<WidgetOverlay>(id); break;
+                        default: break;
+                    }
+
+                    if (!item)
+                        continue;
+
+                    if (auto n = itemNode["Name"]) item->name = n.as<std::string>();
+                    if (auto n = itemNode["ID"]) item->id = n.as<int>();
+                    if (auto n = itemNode["ZIndex"]) item->zIndex = n.as<int>();
+
+                    if (auto n = itemNode["Position"]) item->layout.position = n.as<glm::vec2>();
+                    if (auto n = itemNode["WidthMode"]) item->layout.widthMode = static_cast<SizeMode>(n.as<int>());
+                    if (auto n = itemNode["HeightMode"]) item->layout.heightMode = static_cast<SizeMode>(n.as<int>());
+
+                    if (auto n = itemNode["Width"]) item->layout.width = n.as<float>();
+                    else if (auto n = itemNode["Size"]) item->layout.width = n.as<glm::vec2>().x;
+
+                    if (auto n = itemNode["Height"]) item->layout.height = n.as<float>();
+                    else if (auto n = itemNode["Size"]) item->layout.height = n.as<glm::vec2>().y;
+
+                    if (auto n = itemNode["MinWidth"]) item->layout.minWidth = n.as<float>();
+                    if (auto n = itemNode["MinHeight"]) item->layout.minHeight = n.as<float>();
+                    if (auto n = itemNode["MaxWidth"]) item->layout.maxWidth = n.as<float>();
+                    if (auto n = itemNode["MaxHeight"]) item->layout.maxHeight = n.as<float>();
+
+                    if (auto n = itemNode["Margin"])
+                    {
+                        try { item->layout.margin = n.as<glm::vec4>(); }
+                        catch (...) { item->layout.margin = glm::vec4(n.as<float>()); }
+                    }
+
+                    if (auto n = itemNode["Padding"])
+                    {
+                        try { item->layout.padding = n.as<glm::vec4>(); }
+                        catch (...) { item->layout.padding = glm::vec4(n.as<float>()); }
+                    }
+
+                    if (auto n = itemNode["VerticalAlignment"]) item->layout.verticalAlignment = static_cast<VerticalAlignment>(n.as<int>());
+                    if (auto n = itemNode["HorizontalAlignment"]) item->layout.horizontalAlignment = static_cast<HorizontalAlignment>(n.as<int>());
+                    if (auto n = itemNode["PositionType"]) item->layout.positionType = static_cast<PositionType>(n.as<int>());
+                    if (auto n = itemNode["Overflow"]) item->layout.overflow = static_cast<OverflowMode>(n.as<int>());
+
+                    if (auto n = itemNode["Visibility"])
+                        item->layout.visibility = static_cast<VisibilityMode>(n.as<int>());
+                    else if (auto n = itemNode["Visible"])
+                        item->layout.visibility = n.as<bool>() ? VisibilityMode::Visible : VisibilityMode::Hidden;
+
+                    if (auto n = itemNode["FlexDirection"])
+                        item->layout.flex.direction = static_cast<FlexDirection>(n.as<int>());
+                    else if (auto n = itemNode["Layout"])
+                        item->layout.flex.direction = (n.as<int>() == 0) ? FlexDirection::Row : FlexDirection::Column;
+
+                    if (auto n = itemNode["JustifyContent"]) item->layout.flex.justifyContent = static_cast<JustifyContent>(n.as<int>());
+                    if (auto n = itemNode["AlignItems"]) item->layout.flex.alignItems = static_cast<AlignItems>(n.as<int>());
+                    if (auto n = itemNode["AlignSelf"]) item->layout.flex.alignSelf = static_cast<AlignSelf>(n.as<int>());
+                    if (auto n = itemNode["FlexWrap"]) item->layout.flex.wrap = static_cast<FlexWrap>(n.as<int>());
+                    if (auto n = itemNode["FlexGrow"]) item->layout.flex.grow = n.as<float>();
+                    if (auto n = itemNode["FlexShrink"]) item->layout.flex.shrink = n.as<float>();
+                    if (auto n = itemNode["FlexBasis"]) item->layout.flex.basis = n.as<float>();
+
+                    if (auto n = itemNode["FlexGap"]) item->layout.flex.gap = n.as<float>();
+                    else if (auto n = itemNode["Gap"]) item->layout.flex.gap = n.as<float>();
+
+                    if (auto n = itemNode["Interactable"]) item->interactable = n.as<bool>();
+                    if (auto n = itemNode["BackgroundColor"]) item->baseStyle.backgroundColor = n.as<glm::vec4>();
+                    if (auto n = itemNode["BorderColor"]) item->baseStyle.borderColor = n.as<glm::vec4>();
+                    if (auto n = itemNode["BorderWidth"]) item->baseStyle.borderWidth = n.as<float>();
+                    if (auto n = itemNode["CornerRadius"]) item->baseStyle.cornerRadius = n.as<float>();
+                    if (auto n = itemNode["Opacity"]) item->baseStyle.opacity = n.as<float>();
+
+                    if (auto n = itemNode["ShadowEnabled"])
+                    {
+                        item->baseStyle.shadowEnabled = n.as<bool>();
+                    }
+                    else if (applyLegacyShadowDefaults)
+                    {
+                        if (type == WidgetType::Button)
+                        {
+                            item->baseStyle.shadowEnabled = true;
+                            item->baseStyle.shadowColor = glm::vec4(0.0f, 0.015f, 0.04f, 0.58f);
+                            item->baseStyle.shadowOffset = glm::vec2(1.0f, 5.0f);
+                            item->baseStyle.shadowSize = 6.0f;
+                            item->baseStyle.shadowSoftness = 0.34f;
+                        }
+                        else if (type == WidgetType::Container || type == WidgetType::BoxSizing || type == WidgetType::Overlay)
+                        {
+                            const bool isCard = (item->baseStyle.backgroundColor.a >= 0.25f)
+                                && (item->baseStyle.borderWidth > 0.0f || item->baseStyle.cornerRadius > 2.0f)
+                                && (item->layout.width >= 48.0f && item->layout.height >= 24.0f)
+                                && (item->layout.width < 1850.0f || item->layout.height < 1020.0f);
+                            if (isCard)
+                            {
+                                item->baseStyle.shadowEnabled = true;
+                                item->baseStyle.shadowColor = glm::vec4(0.0f, 0.01f, 0.03f, 0.62f);
+                                item->baseStyle.shadowOffset = glm::vec2(1.5f, 7.0f);
+                                item->baseStyle.shadowSize = 7.5f;
+                                item->baseStyle.shadowSoftness = 0.28f;
+                            }
+                        }
+                    }
+                    if (auto n = itemNode["ShadowColor"]) item->baseStyle.shadowColor = n.as<glm::vec4>();
+                    if (auto n = itemNode["ShadowOffset"]) item->baseStyle.shadowOffset = n.as<glm::vec2>();
+                    if (auto n = itemNode["ShadowSize"]) item->baseStyle.shadowSize = n.as<float>();
+                    if (auto n = itemNode["ShadowSoftness"]) item->baseStyle.shadowSoftness = n.as<float>();
+
+                    if (type == WidgetType::BoxSizing)
+                    {
+                        if (Ref<WidgetBoxSizing> boxSizing = item->As<WidgetBoxSizing>())
+                        {
+                            if (auto n = itemNode["BoxMinSize"]) boxSizing->minSize = n.as<glm::vec2>();
+                            if (auto n = itemNode["BoxMaxSize"]) boxSizing->maxSize = n.as<glm::vec2>();
+                        }
+                    }
+                    else if (type == WidgetType::Container)
+                    {
+                        if (Ref<WidgetContainer> container = item->As<WidgetContainer>())
+                        {
+                            if (itemNode["Layout"])
+                            {
+                                const int oldLayout = itemNode["Layout"].as<int>();
+                                container->layout.flex.direction = (oldLayout == 0) ? FlexDirection::Row : FlexDirection::Column;
+                            }
+                            if (itemNode["Padding"])
+                            {
+                                try { container->layout.padding = itemNode["Padding"].as<glm::vec4>(); }
+                                catch (...) { container->layout.padding = glm::vec4(itemNode["Padding"].as<float>()); }
+                            }
+                            if (itemNode["Gap"]) container->layout.flex.gap = itemNode["Gap"].as<float>();
+                        }
+                    }
+                    else if (type == WidgetType::Button)
+                    {
+                        if (Ref<WidgetButton> button = item->As<WidgetButton>())
+                        {
+                            if (auto n = itemNode["ImageHandle"]) button->imageHandle = AssetHandle(n.as<uint64_t>());
+                            if (auto n = itemNode["NormalColor"]) button->style.color = n.as<glm::vec4>();
+                            if (auto n = itemNode["HoverColor"]) button->style.hoverColor = n.as<glm::vec4>();
+                            if (auto n = itemNode["PressedColor"]) button->style.pressedColor = n.as<glm::vec4>();
+                            if (auto n = itemNode["DisabledColor"]) button->style.disabledColor = n.as<glm::vec4>();
+                            if (auto n = itemNode["Interactable"]) button->interactable = n.as<bool>();
+                            if (auto n = itemNode["BorderColor"]) button->style.borderColor = n.as<glm::vec4>();
+                            if (auto n = itemNode["BorderWidth"]) button->style.borderWidth = n.as<float>();
+                            if (auto n = itemNode["CornerRadius"]) button->style.cornerRadius = n.as<float>();
+
+                            if (button->label)
+                            {
+                                if (auto n = itemNode["FontHandle"]) button->label->fontHandle = AssetHandle(n.as<uint64_t>());
+                                if (auto n = itemNode["Text"]) button->label->text = n.as<std::string>();
+                                if (auto n = itemNode["TextColor"]) button->label->style.color = n.as<glm::vec4>();
+                                else if (auto n = itemNode["Color"]) button->label->style.color = n.as<glm::vec4>();
+                                if (auto n = itemNode["FontSize"]) button->label->style.fontSize = n.as<float>();
+                                if (auto n = itemNode["Kerning"]) button->label->style.kerning = n.as<float>();
+                                if (auto n = itemNode["LineSpacing"]) button->label->style.lineSpacing = n.as<float>();
+                                if (auto n = itemNode["TextShadowEnabled"]) button->label->style.shadowEnabled = n.as<bool>();
+                                if (auto n = itemNode["TextShadowColor"]) button->label->style.shadowColor = n.as<glm::vec4>();
+                                if (auto n = itemNode["TextShadowOffset"]) button->label->style.shadowOffset = n.as<glm::vec2>();
+                            }
+                        }
+                    }
+                    else if (type == WidgetType::Label)
+                    {
+                        if (Ref<WidgetLabel> text = item->As<WidgetLabel>())
+                        {
+                            if (itemNode["FontHandle"]) text->fontHandle = AssetHandle(itemNode["FontHandle"].as<uint64_t>());
+                            if (itemNode["Text"]) text->text = itemNode["Text"].as<std::string>();
+                            if (itemNode["Color"]) text->style.color = itemNode["Color"].as<glm::vec4>();
+                            else if (itemNode["TextColor"]) text->style.color = itemNode["TextColor"].as<glm::vec4>();
+                            if (itemNode["FontSize"]) text->style.fontSize = itemNode["FontSize"].as<float>();
+                            if (itemNode["Kerning"]) text->style.kerning = itemNode["Kerning"].as<float>();
+                            if (itemNode["LineSpacing"]) text->style.lineSpacing = itemNode["LineSpacing"].as<float>();
+                            if (auto n = itemNode["TextShadowEnabled"]) text->style.shadowEnabled = n.as<bool>();
+                            if (auto n = itemNode["TextShadowColor"]) text->style.shadowColor = n.as<glm::vec4>();
+                            if (auto n = itemNode["TextShadowOffset"]) text->style.shadowOffset = n.as<glm::vec2>();
+                        }
+                    }
+                    else if (type == WidgetType::Image)
+                    {
+                        if (Ref<WidgetImage> img = item->As<WidgetImage>())
+                        {
+                            if (auto n = itemNode["ImageHandle"]) img->imageHandle = AssetHandle(n.as<uint64_t>());
+                            if (auto n = itemNode["TintColor"]) img->tintColor = n.as<glm::vec4>();
+                            if (auto n = itemNode["UV0"]) img->uv0 = n.as<glm::vec2>();
+                            if (auto n = itemNode["UV1"]) img->uv1 = n.as<glm::vec2>();
+                        }
+                    }
+
+                    outWidgetItems[id] = item;
+                    loadedOrder.push_back(id);
+                    parentMap[id] = parentID;
+                    outNextWidgetItemId = std::max(outNextWidgetItemId, id + 1);
+                }
+            }
+
+            for (const WidgetID id : loadedOrder)
+            {
+                const Ref<IWidgetItem> &item = outWidgetItems[id];
+                if (!item)
+                {
+                    continue;
+                }
+
+                const auto parentIt = parentMap.find(id);
+                const int parentID = (parentIt != parentMap.end()) ? parentIt->second : -1;
+
+                if (id == parentID || parentID < 0)
+                {
+                    if (item->GetWidgetType() == WidgetType::Container && !outRoot)
+                    {
+                        outRoot = item->As<WidgetContainer>();
+                        const glm::vec2 rootSize = outRoot->GetSize();
+                        if (rootSize.x > 0.0f && rootSize.y > 0.0f)
+                        {
+                            outViewportSize =
+                            {
+                                static_cast<uint32_t>(std::max(rootSize.x, 1.0f)),
+                                static_cast<uint32_t>(std::max(rootSize.y, 1.0f))
+                            };
+                        }
+                    }
+                    continue;
+                }
+
+                const auto ownerIt = outWidgetItems.find(parentID);
+                if (ownerIt == outWidgetItems.end() || !ownerIt->second)
+                {
+                    continue;
+                }
+
+                item->parent = ownerIt->second.get();
+                ownerIt->second->children.push_back(item);
+            }
+
+            if (JsonNode childrenNode = widgetNode["ChildWidgets"]; childrenNode && childrenNode.IsSequence())
+            {
+                for (const JsonNode &childNode : childrenNode)
+                {
+                    WidgetChildEntry child;
+                    if (childNode["Handle"]) child.handle = AssetHandle(childNode["Handle"].as<uint64_t>());
+                    if (childNode["Enabled"]) child.enabled = childNode["Enabled"].as<bool>();
+                    if (childNode["BlockWidgetsBelow"]) child.blockWidgetsBelow = childNode["BlockWidgetsBelow"].as<bool>();
+                    outChildWidgets.push_back(child);
+                }
+            }
+        }
+    }
+
     WidgetCanvas::WidgetCanvas(Scene *scene)
         : m_ViewportSize({ 1280, 720 })
     { }
@@ -36,155 +531,50 @@ namespace ignite
     bool WidgetCanvas::Serialize(const std::filesystem::path &filepath)
     {
         Serializer sr(filepath);
-        sr.BeginMap();
-
-        sr.BeginMap("Widget");
-        sr.AddKeyValue("Version", Application::GetVersion());
-        sr.AddKeyValue("Name", name);
-        sr.AddKeyValue("Enabled", m_Enabled);
-        sr.AddKeyValue("BlocksWidgetsBelow", m_BlocksWidgetsBelow);
-
-        sr.BeginSequence("Items");
-        for (const auto &[_, item] : m_WidgetItems)
-        {
-            if (!item)
-            {
-                continue;
-            }
-
-            sr.BeginMap();
-            sr.AddKeyValue("Name", item->name);
-            sr.AddKeyValue("ID", item->id);
-            sr.AddKeyValue("ParentID", item->parent ? item->parent->id : 0);
-            sr.AddKeyValue("Type", static_cast<int>(item->GetWidgetType()));
-            sr.AddKeyValue("ZIndex", item->zIndex);
-
-            // Layout properties
-            sr.AddKeyValue("Position", item->layout.position);
-            sr.AddKeyValue("WidthMode", static_cast<int>(item->layout.widthMode));
-            sr.AddKeyValue("HeightMode", static_cast<int>(item->layout.heightMode));
-            sr.AddKeyValue("Width", item->layout.width);
-            sr.AddKeyValue("Height", item->layout.height);
-            sr.AddKeyValue("MinWidth", item->layout.minWidth);
-            sr.AddKeyValue("MinHeight", item->layout.minHeight);
-            sr.AddKeyValue("MaxWidth", item->layout.maxWidth);
-            sr.AddKeyValue("MaxHeight", item->layout.maxHeight);
-            sr.AddKeyValue("Margin", item->layout.margin);
-            sr.AddKeyValue("Padding", item->layout.padding);
-            sr.AddKeyValue("VerticalAlignment", static_cast<int>(item->layout.verticalAlignment));
-            sr.AddKeyValue("HorizontalAlignment", static_cast<int>(item->layout.horizontalAlignment));
-            sr.AddKeyValue("PositionType", static_cast<int>(item->layout.positionType));
-            sr.AddKeyValue("Overflow", static_cast<int>(item->layout.overflow));
-            sr.AddKeyValue("Visibility", static_cast<int>(item->layout.visibility));
-
-            // Flex properties
-            sr.AddKeyValue("FlexDirection", static_cast<int>(item->layout.flex.direction));
-            sr.AddKeyValue("JustifyContent", static_cast<int>(item->layout.flex.justifyContent));
-            sr.AddKeyValue("AlignItems", static_cast<int>(item->layout.flex.alignItems));
-            sr.AddKeyValue("AlignSelf", static_cast<int>(item->layout.flex.alignSelf));
-            sr.AddKeyValue("FlexWrap", static_cast<int>(item->layout.flex.wrap));
-            sr.AddKeyValue("FlexGrow", item->layout.flex.grow);
-            sr.AddKeyValue("FlexShrink", item->layout.flex.shrink);
-            sr.AddKeyValue("FlexBasis", item->layout.flex.basis);
-            sr.AddKeyValue("FlexGap", item->layout.flex.gap);
-
-            // UIStyle properties
-            sr.AddKeyValue("Interactable", item->interactable);
-            sr.AddKeyValue("BackgroundColor", item->baseStyle.backgroundColor);
-            sr.AddKeyValue("BorderColor", item->baseStyle.borderColor);
-            sr.AddKeyValue("BorderWidth", item->baseStyle.borderWidth);
-            sr.AddKeyValue("CornerRadius", item->baseStyle.cornerRadius);
-            sr.AddKeyValue("Opacity", item->baseStyle.opacity);
-            sr.AddKeyValue("ShadowEnabled", item->baseStyle.shadowEnabled);
-            sr.AddKeyValue("ShadowColor", item->baseStyle.shadowColor);
-            sr.AddKeyValue("ShadowOffset", item->baseStyle.shadowOffset);
-            sr.AddKeyValue("ShadowSize", item->baseStyle.shadowSize);
-            sr.AddKeyValue("ShadowSoftness", item->baseStyle.shadowSoftness);
-
-            if (item->GetWidgetType() == WidgetType::BoxSizing)
-            {
-                if (const Ref<WidgetBoxSizing> boxSizing = item->As<WidgetBoxSizing>())
-                {
-                    sr.AddKeyValue("BoxMinSize", boxSizing->minSize);
-                    sr.AddKeyValue("BoxMaxSize", boxSizing->maxSize);
-                }
-            }
-
-            if (item->GetWidgetType() == WidgetType::Button)
-            {
-                if (const Ref<WidgetButton> button = item->As<WidgetButton>())
-                {
-                    sr.AddKeyValue("ImageHandle", static_cast<uint64_t>(button->imageHandle));
-                    sr.AddKeyValue("NormalColor", button->style.color);
-                    sr.AddKeyValue("HoverColor", button->style.hoverColor);
-                    sr.AddKeyValue("PressedColor", button->style.pressedColor);
-                    sr.AddKeyValue("DisabledColor", button->style.disabledColor);
-                    sr.AddKeyValue("BorderColor", button->style.borderColor);
-                    sr.AddKeyValue("BorderWidth", button->style.borderWidth);
-                    sr.AddKeyValue("CornerRadius", button->style.cornerRadius);
-
-                    if (button->label)
-                    {
-                        sr.AddKeyValue("FontHandle", static_cast<uint64_t>(button->label->fontHandle));
-                        sr.AddKeyValue("Text", button->label->text);
-                        sr.AddKeyValue("TextColor", button->label->style.color);
-                        sr.AddKeyValue("FontSize", button->label->style.fontSize);
-                        sr.AddKeyValue("Kerning", button->label->style.kerning);
-                        sr.AddKeyValue("LineSpacing", button->label->style.lineSpacing);
-                        sr.AddKeyValue("TextShadowEnabled", button->label->style.shadowEnabled);
-                        sr.AddKeyValue("TextShadowColor", button->label->style.shadowColor);
-                        sr.AddKeyValue("TextShadowOffset", button->label->style.shadowOffset);
-                    }
-                }
-            }
-
-            if (item->GetWidgetType() == WidgetType::Label)
-            {
-                if (const Ref<WidgetLabel> label = item->As<WidgetLabel>())
-                {
-                    sr.AddKeyValue("Text", label->text);
-                    sr.AddKeyValue("Color", label->style.color);
-                    sr.AddKeyValue("FontHandle", static_cast<uint64_t>(label->fontHandle));
-                    sr.AddKeyValue("FontSize", label->style.fontSize);
-                    sr.AddKeyValue("Kerning", label->style.kerning);
-                    sr.AddKeyValue("LineSpacing", label->style.lineSpacing);
-                    sr.AddKeyValue("TextShadowEnabled", label->style.shadowEnabled);
-                    sr.AddKeyValue("TextShadowColor", label->style.shadowColor);
-                    sr.AddKeyValue("TextShadowOffset", label->style.shadowOffset);
-                }
-            }
-
-            if (item->GetWidgetType() == WidgetType::Image)
-            {
-                if (const Ref<WidgetImage> img = item->As<WidgetImage>())
-                {
-                    sr.AddKeyValue("ImageHandle", static_cast<uint64_t>(img->imageHandle));
-                    sr.AddKeyValue("TintColor", img->tintColor);
-                    sr.AddKeyValue("UV0", img->uv0);
-                    sr.AddKeyValue("UV1", img->uv1);
-                }
-            }
-
-            sr.EndMap();
-        }
-        sr.EndSequence();
-
-        sr.BeginSequence("ChildWidgets");
-        for (const WidgetChildEntry &child : m_ChildWidgets)
-        {
-            sr.BeginMap();
-            sr.AddKeyValue("Handle", static_cast<uint64_t>(child.handle));
-            sr.AddKeyValue("Enabled", child.enabled);
-            sr.AddKeyValue("BlockWidgetsBelow", child.blockWidgetsBelow);
-            sr.EndMap();
-        }
-        sr.EndSequence();
-
-        sr.EndMap();
-        sr.EndMap();
-
+        SerializeWidgetCanvasToSerializer(name, m_Enabled, m_BlocksWidgetsBelow, m_Root.get(), m_WidgetItems, m_ChildWidgets, sr);
         sr.Serialize();
         SetDirtyFlag(false);
+        return true;
+    }
+
+    std::string WidgetCanvas::SerializeToString() const
+    {
+        Serializer sr("");
+        SerializeWidgetCanvasToSerializer(name, m_Enabled, m_BlocksWidgetsBelow, m_Root.get(), m_WidgetItems, m_ChildWidgets, sr);
+        return sr.GetRoot().dump();
+    }
+
+    bool WidgetCanvas::DeserializeFromString(const std::string &jsonData)
+    {
+        if (jsonData.empty())
+        {
+            return false;
+        }
+
+        JsonNode fileNode = Serializer::DeserializeFromString(jsonData);
+        JsonNode widgetNode = fileNode["Widget"];
+        if (!widgetNode)
+        {
+            return false;
+        }
+
+        DeserializeWidgetCanvasNode(
+            widgetNode,
+            name,
+            m_Enabled,
+            m_BlocksWidgetsBelow,
+            m_WidgetItems,
+            m_ChildWidgets,
+            m_Root,
+            m_NextWidgetItemId,
+            m_ViewportSize,
+            false);
+
+        if (m_Root)
+        {
+            m_Root->MarkLayoutDirty();
+            m_Root->MarkPaintDirty();
+        }
         return true;
     }
 
@@ -203,300 +593,17 @@ namespace ignite
         }
 
         Ref<WidgetCanvas> widget = CreateRef<WidgetCanvas>(nullptr);
-        if (widgetNode["Name"]) widget->name = widgetNode["Name"].as<std::string>();
-        if (widgetNode["Enabled"]) widget->m_Enabled = widgetNode["Enabled"].as<bool>();
-        if (widgetNode["BlocksWidgetsBelow"]) widget->m_BlocksWidgetsBelow = widgetNode["BlocksWidgetsBelow"].as<bool>();
-
-        widget->m_WidgetItems.clear();
-        std::unordered_map<int, int> parentMap;
-        if (JsonNode itemsNode = widgetNode["Items"]; itemsNode && itemsNode.IsSequence())
-        {
-            for (const JsonNode &itemNode : itemsNode)
-            {
-                if (!itemNode["ID"] || !itemNode["Type"])
-                    continue;
-
-                const WidgetType type = static_cast<WidgetType>(itemNode["Type"].as<int>());
-                const WidgetID id = itemNode["ID"].as<int>();
-                const WidgetID parentID = itemNode["ParentID"].as<int>();
-
-                Ref<IWidgetItem> item = nullptr;
-                switch (type)
-                {
-                    case WidgetType::Container: item = CreateRef<WidgetContainer>(id); break;
-                    case WidgetType::Button:    item = CreateRef<WidgetButton>("", id); break;
-                    case WidgetType::Label:     item = CreateRef<WidgetLabel>("", id); break;
-                    case WidgetType::Image:     item = CreateRef<WidgetImage>(id); break;
-                    case WidgetType::BoxSizing: item = CreateRef<WidgetBoxSizing>(id); break;
-                    case WidgetType::Overlay:   item = CreateRef<WidgetOverlay>(id); break;
-                    default: break;
-                }
-
-                if (!item)
-                    continue;
-
-                if (auto n = itemNode["Name"]) item->name = n.as<std::string>();
-                if (auto n = itemNode["ID"]) item->id = n.as<int>();
-                if (auto n = itemNode["ZIndex"]) item->zIndex = n.as<int>();
-
-                // Position & Size fallback
-                if (auto n = itemNode["Position"]) item->layout.position = n.as<glm::vec2>();
-                if (auto n = itemNode["WidthMode"]) item->layout.widthMode = static_cast<SizeMode>(n.as<int>());
-                if (auto n = itemNode["HeightMode"]) item->layout.heightMode = static_cast<SizeMode>(n.as<int>());
-
-                if (auto n = itemNode["Width"]) item->layout.width = n.as<float>();
-                else if (auto n = itemNode["Size"]) item->layout.width = n.as<glm::vec2>().x;
-
-                if (auto n = itemNode["Height"]) item->layout.height = n.as<float>();
-                else if (auto n = itemNode["Size"]) item->layout.height = n.as<glm::vec2>().y;
-
-                if (auto n = itemNode["MinWidth"]) item->layout.minWidth = n.as<float>();
-                if (auto n = itemNode["MinHeight"]) item->layout.minHeight = n.as<float>();
-                if (auto n = itemNode["MaxWidth"]) item->layout.maxWidth = n.as<float>();
-                if (auto n = itemNode["MaxHeight"]) item->layout.maxHeight = n.as<float>();
-
-                // Margin & Padding fallback (vec4 or scalar)
-                if (auto n = itemNode["Margin"])
-                {
-                    try { item->layout.margin = n.as<glm::vec4>(); }
-                    catch (...) { item->layout.margin = glm::vec4(n.as<float>()); }
-                }
-
-                if (auto n = itemNode["Padding"])
-                {
-                    try { item->layout.padding = n.as<glm::vec4>(); }
-                    catch (...) { item->layout.padding = glm::vec4(n.as<float>()); }
-                }
-
-                if (auto n = itemNode["VerticalAlignment"]) item->layout.verticalAlignment = static_cast<VerticalAlignment>(n.as<int>());
-                if (auto n = itemNode["HorizontalAlignment"]) item->layout.horizontalAlignment = static_cast<HorizontalAlignment>(n.as<int>());
-                if (auto n = itemNode["PositionType"]) item->layout.positionType = static_cast<PositionType>(n.as<int>());
-                if (auto n = itemNode["Overflow"]) item->layout.overflow = static_cast<OverflowMode>(n.as<int>());
-
-                if (auto n = itemNode["Visibility"])
-                {
-                    item->layout.visibility = static_cast<VisibilityMode>(n.as<int>());
-                }
-                else if (auto n = itemNode["Visible"])
-                {
-                    item->layout.visibility = n.as<bool>() ? VisibilityMode::Visible : VisibilityMode::Hidden;
-                }
-
-                // Flex fallback
-                if (auto n = itemNode["FlexDirection"])
-                {
-                    item->layout.flex.direction = static_cast<FlexDirection>(n.as<int>());
-                }
-                else if (auto n = itemNode["Layout"])
-                {
-                    const int oldLayout = n.as<int>();
-                    item->layout.flex.direction = (oldLayout == 0) ? FlexDirection::Row : FlexDirection::Column;
-                }
-
-                if (auto n = itemNode["JustifyContent"]) item->layout.flex.justifyContent = static_cast<JustifyContent>(n.as<int>());
-                if (auto n = itemNode["AlignItems"]) item->layout.flex.alignItems = static_cast<AlignItems>(n.as<int>());
-                if (auto n = itemNode["AlignSelf"]) item->layout.flex.alignSelf = static_cast<AlignSelf>(n.as<int>());
-                if (auto n = itemNode["FlexWrap"]) item->layout.flex.wrap = static_cast<FlexWrap>(n.as<int>());
-                if (auto n = itemNode["FlexGrow"]) item->layout.flex.grow = n.as<float>();
-                if (auto n = itemNode["FlexShrink"]) item->layout.flex.shrink = n.as<float>();
-                if (auto n = itemNode["FlexBasis"]) item->layout.flex.basis = n.as<float>();
-
-                if (auto n = itemNode["FlexGap"]) item->layout.flex.gap = n.as<float>();
-                else if (auto n = itemNode["Gap"]) item->layout.flex.gap = n.as<float>();
-
-                // UIStyle
-                if (auto n = itemNode["Interactable"]) item->interactable = n.as<bool>();
-                if (auto n = itemNode["BackgroundColor"]) item->baseStyle.backgroundColor = n.as<glm::vec4>();
-                if (auto n = itemNode["BorderColor"]) item->baseStyle.borderColor = n.as<glm::vec4>();
-                if (auto n = itemNode["BorderWidth"]) item->baseStyle.borderWidth = n.as<float>();
-                if (auto n = itemNode["CornerRadius"]) item->baseStyle.cornerRadius = n.as<float>();
-                if (auto n = itemNode["Opacity"]) item->baseStyle.opacity = n.as<float>();
-
-                if (auto n = itemNode["ShadowEnabled"])
-                {
-                    item->baseStyle.shadowEnabled = n.as<bool>();
-                }
-                else
-                {
-                    // Legacy fallback for existing .wdgt files without explicit ShadowEnabled
-                    if (type == WidgetType::Button)
-                    {
-                        item->baseStyle.shadowEnabled = true;
-                        item->baseStyle.shadowColor = glm::vec4(0.0f, 0.015f, 0.04f, 0.58f);
-                        item->baseStyle.shadowOffset = glm::vec2(1.0f, 5.0f);
-                        item->baseStyle.shadowSize = 6.0f;
-                        item->baseStyle.shadowSoftness = 0.34f;
-                    }
-                    else if (type == WidgetType::Container || type == WidgetType::BoxSizing || type == WidgetType::Overlay)
-                    {
-                        const bool isCard = (item->baseStyle.backgroundColor.a >= 0.25f)
-                            && (item->baseStyle.borderWidth > 0.0f || item->baseStyle.cornerRadius > 2.0f)
-                            && (item->layout.width >= 48.0f && item->layout.height >= 24.0f)
-                            && (item->layout.width < 1850.0f || item->layout.height < 1020.0f);
-                        if (isCard)
-                        {
-                            item->baseStyle.shadowEnabled = true;
-                            item->baseStyle.shadowColor = glm::vec4(0.0f, 0.01f, 0.03f, 0.62f);
-                            item->baseStyle.shadowOffset = glm::vec2(1.5f, 7.0f);
-                            item->baseStyle.shadowSize = 7.5f;
-                            item->baseStyle.shadowSoftness = 0.28f;
-                        }
-                    }
-                }
-                if (auto n = itemNode["ShadowColor"]) item->baseStyle.shadowColor = n.as<glm::vec4>();
-                if (auto n = itemNode["ShadowOffset"]) item->baseStyle.shadowOffset = n.as<glm::vec2>();
-                if (auto n = itemNode["ShadowSize"]) item->baseStyle.shadowSize = n.as<float>();
-                if (auto n = itemNode["ShadowSoftness"]) item->baseStyle.shadowSoftness = n.as<float>();
-
-                if (type == WidgetType::BoxSizing)
-                {
-                    if (Ref<WidgetBoxSizing> boxSizing = item->As<WidgetBoxSizing>())
-                    {
-                        if (auto n = itemNode["BoxMinSize"]) boxSizing->minSize = n.as<glm::vec2>();
-                        if (auto n = itemNode["BoxMaxSize"]) boxSizing->maxSize = n.as<glm::vec2>();
-                    }
-                }
-
-                if (type == WidgetType::Container)
-                {
-                    if (Ref<WidgetContainer> container = item->As<WidgetContainer>())
-                    {
-                        if (itemNode["Layout"])
-                        {
-                            const int oldLayout = itemNode["Layout"].as<int>();
-                            container->layout.flex.direction = (oldLayout == 0) ? FlexDirection::Row : FlexDirection::Column;
-                        }
-                        if (itemNode["Padding"])
-                        {
-                            try { container->layout.padding = itemNode["Padding"].as<glm::vec4>(); }
-                            catch (...) { container->layout.padding = glm::vec4(itemNode["Padding"].as<float>()); }
-                        }
-                        if (itemNode["Gap"]) container->layout.flex.gap = itemNode["Gap"].as<float>();
-                    }
-                }
-
-                if (type == WidgetType::Button)
-                {
-                    if (Ref<WidgetButton> button = item->As<WidgetButton>())
-                    {
-                        if (auto n = itemNode["ImageHandle"]) button->imageHandle = AssetHandle(n.as<uint64_t>());
-                        if (auto n = itemNode["NormalColor"]) button->style.color = n.as<glm::vec4>();
-                        if (auto n = itemNode["HoverColor"]) button->style.hoverColor = n.as<glm::vec4>();
-                        if (auto n = itemNode["PressedColor"]) button->style.pressedColor = n.as<glm::vec4>();
-                        if (auto n = itemNode["DisabledColor"]) button->style.disabledColor = n.as<glm::vec4>();
-                        if (auto n = itemNode["Interactable"]) button->interactable = n.as<bool>();
-                        if (auto n = itemNode["BorderColor"]) button->style.borderColor = (n.as<glm::vec4>());
-                        if (auto n = itemNode["BorderWidth"]) button->style.borderWidth = n.as<float>();
-                        if (auto n = itemNode["CornerRadius"]) button->style.cornerRadius = n.as<float>();
-
-                        // Load label
-                        if (button->label)
-                        {
-                            if (auto n = itemNode["FontHandle"]) button->label->fontHandle = AssetHandle(n.as<uint64_t>());
-                            if (auto n = itemNode["Text"]) button->label->text = n.as<std::string>();
-                            if (auto n = itemNode["TextColor"]) button->label->style.color = n.as<glm::vec4>();
-                            else if (auto n = itemNode["Color"]) button->label->style.color = n.as<glm::vec4>();
-                            if (auto n = itemNode["FontSize"]) button->label->style.fontSize = n.as<float>();
-                            if (auto n = itemNode["Kerning"]) button->label->style.kerning = n.as<float>();
-                            if (auto n = itemNode["LineSpacing"]) button->label->style.lineSpacing = n.as<float>();
-                            if (auto n = itemNode["TextShadowEnabled"]) button->label->style.shadowEnabled = n.as<bool>();
-                            if (auto n = itemNode["TextShadowColor"]) button->label->style.shadowColor = n.as<glm::vec4>();
-                            if (auto n = itemNode["TextShadowOffset"]) button->label->style.shadowOffset = n.as<glm::vec2>();
-                        }
-                    }
-                }
-                else if (type == WidgetType::Label)
-                {
-                    if (Ref<WidgetLabel> text = item->As<WidgetLabel>())
-                    {
-                        if (itemNode["FontHandle"]) text->fontHandle = AssetHandle(itemNode["FontHandle"].as<uint64_t>());
-                        if (itemNode["Text"]) text->text = itemNode["Text"].as<std::string>();
-                        if (itemNode["Color"]) text->style.color = itemNode["Color"].as<glm::vec4>();
-                        else if (itemNode["TextColor"]) text->style.color = itemNode["TextColor"].as<glm::vec4>();
-                        if (itemNode["FontSize"]) text->style.fontSize = itemNode["FontSize"].as<float>();
-                        if (itemNode["Kerning"]) text->style.kerning = itemNode["Kerning"].as<float>();
-                        if (itemNode["LineSpacing"]) text->style.lineSpacing = itemNode["LineSpacing"].as<float>();
-                        if (auto n = itemNode["TextShadowEnabled"]) text->style.shadowEnabled = n.as<bool>();
-                        if (auto n = itemNode["TextShadowColor"]) text->style.shadowColor = n.as<glm::vec4>();
-                        if (auto n = itemNode["TextShadowOffset"]) text->style.shadowOffset = n.as<glm::vec2>();
-                    }
-                }
-
-                else if (type == WidgetType::Image)
-                {
-                    if (Ref<WidgetImage> img = item->As<WidgetImage>())
-                    {
-                        if (auto n = itemNode["ImageHandle"]) img->imageHandle = AssetHandle(n.as<uint64_t>());
-                        if (auto n = itemNode["TintColor"]) img->tintColor = n.as<glm::vec4>();
-                        if (auto n = itemNode["UV0"]) img->uv0 = n.as<glm::vec2>();
-                        if (auto n = itemNode["UV1"]) img->uv1 = n.as<glm::vec2>();
-                    }
-                }
-
-                widget->m_WidgetItems[id] = item;
-                parentMap[id] = parentID;
-                widget->m_NextWidgetItemId = std::max(widget->m_NextWidgetItemId, id + 1);
-            }
-        }
-
-        for (auto &[id, item] : widget->m_WidgetItems)
-        {
-            if (item)
-            {
-                item->children.clear();
-            }
-        }
-
-        for (auto &[id, item] : widget->m_WidgetItems)
-        {
-            if (!item)
-            {
-                continue;
-            }
-
-            const auto parentIt = parentMap.find(id);
-            const int parentID = (parentIt != parentMap.end()) ? parentIt->second : -1;
-
-            if (id == parentID || parentID < 0)
-            {
-                if (item->GetWidgetType() == WidgetType::Container && !widget->m_Root)
-                {
-                    widget->m_Root = item->As<WidgetContainer>();
-                    const glm::vec2 rootSize = widget->m_Root->GetSize();
-                    if (rootSize.x > 0.0f && rootSize.y > 0.0f)
-                    {
-                        widget->m_ViewportSize =
-                        {
-                            static_cast<uint32_t>(std::max(rootSize.x, 1.0f)),
-                            static_cast<uint32_t>(std::max(rootSize.y, 1.0f))
-                        };
-                    }
-                }
-                continue;
-            }
-
-            const auto ownerIt = widget->m_WidgetItems.find(parentID);
-            if (ownerIt == widget->m_WidgetItems.end() || !ownerIt->second)
-            {
-                continue;
-            }
-
-            item->parent = ownerIt->second.get();
-            ownerIt->second->children.push_back(item);
-        }
-
-        widget->m_ChildWidgets.clear();
-        if (JsonNode childrenNode = widgetNode["ChildWidgets"]; childrenNode && childrenNode.IsSequence())
-        {
-            for (const JsonNode &childNode : childrenNode)
-            {
-                WidgetChildEntry child;
-                if (childNode["Handle"]) child.handle = AssetHandle(childNode["Handle"].as<uint64_t>());
-                if (childNode["Enabled"]) child.enabled = childNode["Enabled"].as<bool>();
-                if (childNode["BlockWidgetsBelow"]) child.blockWidgetsBelow = childNode["BlockWidgetsBelow"].as<bool>();
-                widget->m_ChildWidgets.push_back(child);
-            }
-        }
+        DeserializeWidgetCanvasNode(
+            widgetNode,
+            widget->name,
+            widget->m_Enabled,
+            widget->m_BlocksWidgetsBelow,
+            widget->m_WidgetItems,
+            widget->m_ChildWidgets,
+            widget->m_Root,
+            widget->m_NextWidgetItemId,
+            widget->m_ViewportSize,
+            true);
 
         widget->SetDirtyFlag(false);
         widget->SetReadyFlag(true);
@@ -805,8 +912,12 @@ namespace ignite
                         : nullptr;
                     if (!button->label->font)
                         button->label->font = Renderer::GetDefaultFont();
-                    if (prevFont != button->label->font)
+                    const bool isFontReady = (button->label->font && button->label->font->IsReady());
+                    if (prevFont != button->label->font || button->label->fontReadyAtLastLayout != isFontReady)
+                    {
+                        button->label->fontReadyAtLastLayout = isFontReady;
                         button->label->MarkLayoutDirty();
+                    }
                 }
             }
             else if (Ref<WidgetLabel> label = item->As<WidgetLabel>())
@@ -817,8 +928,12 @@ namespace ignite
                     : nullptr;
                 if (!label->font)
                     label->font = Renderer::GetDefaultFont();
-                if (prevFont != label->font)
+                const bool isFontReady = (label->font && label->font->IsReady());
+                if (prevFont != label->font || label->fontReadyAtLastLayout != isFontReady)
+                {
+                    label->fontReadyAtLastLayout = isFontReady;
                     label->MarkLayoutDirty();
+                }
             }
             else if (Ref<WidgetImage> img = item->As<WidgetImage>())
             {

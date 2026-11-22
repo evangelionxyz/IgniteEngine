@@ -13,6 +13,7 @@ namespace ignite
 	static constexpr int VERTEX_MAX_BONES = 4;
 	static constexpr int MAX_POINT_LIGHTS = 16;
 	static constexpr int MAX_SPOT_LIGHTS = 16;
+	static constexpr int MAX_REFLECTION_PROBES = 32;
 
 	struct Mesh_GPUData
 	{
@@ -149,6 +150,48 @@ namespace ignite
 	struct SpotLightBufferData
 	{
 		SpotLight_GPUData lights[MAX_SPOT_LIGHTS];
+	};
+
+	struct GI_GPUData
+	{
+		glm::vec4 skySH[9] = {};
+
+		int32_t skyPrefilterCubeIndex = -1;
+		int32_t skyPrefilterMipCount = 1;
+		int32_t captureMode = 0; // 0=Normal, 1=IrradianceCapture, 2=ReflectionCapture
+		int32_t giMode = 1;      // 0=Off, 1=Fast, 2=LeakResistant
+
+		glm::vec4 gridMinAndIntensity = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		glm::vec4 gridSizeAndSpacing  = glm::vec4(1.0f, 1.0f, 1.0f, 1.5f);
+		glm::ivec4 gridDimsAndOrder   = glm::ivec4(0, 0, 0, 2);
+		glm::vec4 biasAndFade         = glm::vec4(0.25f, 0.1f, 1.0f, 0.0f); // w=hasVolume
+		glm::ivec4 shTextureIndices0  = glm::ivec4(-1, -1, -1, -1); // sh0..sh3
+		glm::ivec4 shTextureIndices1  = glm::ivec4(-1, -1, -1, -1); // sh4..sh6, offsetTex
+		glm::ivec4 visibilityParams   = glm::ivec4(-1, 8, 0, 0);    // x=visAtlasIdx, y=octRes, z=cols, w=rows
+
+		int32_t reflectionCubeArrayIndex = -1;
+		int32_t reflectionProbeCount = 0;
+		int32_t reflectionMipCount = 1;
+		int32_t bakePointShadowCubeArrayIndex = -1;
+
+		int32_t gtaoTextureIndex = -1;
+		int32_t aoMode = 1; // 0=Off, 1=LegacySSAO, 2=GTAO
+		float aoIntensity = 1.0f;
+		float aoPower = 1.0f;
+
+		glm::vec4 viewportInvSizeAndFlags = glm::vec4(1.0f / 1280.0f, 1.0f / 720.0f, 0.0f, 1.0f); // z=depthPrepassActive, w=receiveGI
+	};
+
+	struct ReflectionProbe_GPUData
+	{
+		glm::mat4 worldToLocal = glm::mat4(1.0f);
+		glm::mat4 localToWorld = glm::mat4(1.0f);
+		glm::vec4 boxMinAndSlice = glm::vec4(-5.0f, -5.0f, -5.0f, 0.0f);
+		glm::vec4 boxMaxAndBlend = glm::vec4(5.0f, 5.0f, 5.0f, 1.0f);
+		glm::vec4 influenceMinAndPrio = glm::vec4(-5.0f, -5.0f, -5.0f, 0.0f);
+		glm::vec4 influenceMaxAndInt = glm::vec4(5.0f, 5.0f, 5.0f, 1.0f);
+		glm::vec4 capturePosAndNorm = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		glm::vec4 captureSH[4] = {};
 	};
 }
 

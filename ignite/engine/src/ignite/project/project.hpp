@@ -44,6 +44,14 @@ namespace ignite
         bool operator==(const ServerSettings &other) const = default;
     };
 
+    struct EditorSettings
+    {
+        uint32_t undoHistoryLimit = 200;
+        bool recordSelectionUndo = true;
+
+        bool operator==(const EditorSettings &other) const = default;
+    };
+
     struct ProjectInfo
     {
         std::string name;
@@ -58,6 +66,7 @@ namespace ignite
         physics::Physics3DType physics3DType = physics::Physics3DType::Jolt;
         physics::Physics3DSettings physicsSettings;
         ServerSettings serverSettings;
+        EditorSettings editorSettings;
         ProjectConfiguration configuration = ProjectConfiguration::Debug;
     };
 

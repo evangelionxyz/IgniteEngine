@@ -95,6 +95,9 @@ namespace ignite
         // Allocate per-FrameContext uniform buffers owned by this AssetSceneRenderer so preview
         // rendering never overwrites the main SceneRenderer's in-flight camera/scene/lighting UBOs.
         auto uniforms = CreateRef<PreviewFrameUniforms>();
+        uniforms->reflectionProbeBuffer.Initialize(MAX_REFLECTION_PROBES, m_Device);
+        GI_GPUData defaultGI{};
+        uniforms->giBuffer.SetData(&defaultGI, sizeof(defaultGI));
 
         BindingSetDesc staticDesc;
         staticDesc.AddItem(BindingSetItem::PushConstants(0, sizeof(uint32_t)));
@@ -105,6 +108,8 @@ namespace ignite
         staticDesc.AddItem(BindingSetItem::ConstantBuffer(5, uniforms->csmBuffer.GetDescriptor()));
         staticDesc.AddItem(BindingSetItem::ConstantBuffer(6, uniforms->pointLightBuffer.GetDescriptor()));
         staticDesc.AddItem(BindingSetItem::ConstantBuffer(7, uniforms->spotLightBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::ConstantBuffer(8, uniforms->giBuffer.GetDescriptor()));
+        staticDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(9, uniforms->reflectionProbeBuffer.GetDescriptor()));
         uniforms->staticMeshBindingSet = BindingSet::Create(staticDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_STATIC), 0);
 
         BindingSetDesc animDesc;
@@ -116,6 +121,8 @@ namespace ignite
         animDesc.AddItem(BindingSetItem::ConstantBuffer(5, uniforms->csmBuffer.GetDescriptor()));
         animDesc.AddItem(BindingSetItem::ConstantBuffer(6, uniforms->pointLightBuffer.GetDescriptor()));
         animDesc.AddItem(BindingSetItem::ConstantBuffer(7, uniforms->spotLightBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::ConstantBuffer(8, uniforms->giBuffer.GetDescriptor()));
+        animDesc.AddItem(BindingSetItem::StructuredBuffer_SRV(9, uniforms->reflectionProbeBuffer.GetDescriptor()));
         uniforms->animatedBindingSet = BindingSet::Create(animDesc, Renderer::GetPipelineLayout(EBindingLayout::MESH_ANIM), 0);
 
         PreviewFrameUniforms *ptr = uniforms.get();
@@ -123,58 +130,52 @@ namespace ignite
         return ptr;
     }
 
-    // ---------------------------------------------------------------------------
-    // SetPreviewMaterial — material only; preview mesh is managed separately via
-    // SetPreviewStaticMesh() so callers don't need to pass the mesh here.
-    // ---------------------------------------------------------------------------
     void AssetSceneRenderer::SetPreviewMaterial(const Ref<Material> &material)
     {
         m_UseEnvironment = true;
-
-        // Create environment lazily when a material preview is requested
         if (!m_Environment)
         {
             m_Environment = Environment::Create();
             m_EnvironmentTextureLoadAttempted = false;
         }
-
         m_SourceMaterial = material;
-        SyncRuntimeMaterialFromSource();
+        if (!m_SourceMaterial)
+        {
+            m_RuntimeMaterial = CreateRef<Material>();
+        }
+        else
+        {
+            SyncRuntimeMaterialFromSource();
+        }
     }
 
     void AssetSceneRenderer::SetPreviewSkeletalMesh(const Ref<SkeletalMesh> &mesh)
     {
         m_UseEnvironment = true;
-
         if (!m_Environment)
         {
             m_Environment = Environment::Create();
             m_EnvironmentTextureLoadAttempted = false;
         }
-
         if (!m_CascadedShadowMap)
         {
             m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
         }
-
         m_PreviewSkeletalMesh = mesh;
     }
 
     void AssetSceneRenderer::SetPreviewStaticMesh(const Ref<StaticMesh> &mesh)
     {
         m_UseEnvironment = true;
-
         if (!m_Environment)
         {
             m_Environment = Environment::Create();
             m_EnvironmentTextureLoadAttempted = false;
         }
-
         if (!m_CascadedShadowMap)
         {
             m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
         }
-
         m_PreviewStaticMesh = mesh;
     }
 
@@ -235,6 +236,8 @@ namespace ignite
         }
 
         nri::CommandBuffer *cmd = BeginCommandBuffer();
+        if (!cmd)
+            return;
         RetainRenderTargetForCurrentCommandBuffer(sceneRT);
         RetainRenderTargetForCurrentCommandBuffer(uiRT);
         RetainRenderTargetForCurrentCommandBuffer(compositeRT);
@@ -355,7 +358,7 @@ namespace ignite
             }
             else
             {
-                const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+                constexpr uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
                 m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
             }
 
@@ -461,17 +464,6 @@ namespace ignite
         m_Environment->Draw(cmd, rt, envPipeline, uniforms.cameraBuffer, uniforms.sceneBuffer);
     }
 
-    // ---------------------------------------------------------------------------
-    // DrawPreviewMeshImpl — generic implementation for static and skeletal meshes.
-    //
-    // Key per-type differences handled via if constexpr:
-    //   Skeletal: applies bone transforms to the per-instance world matrix and uploads the skeleton constant buffer via SetSkeletonData.
-    //   Static:   no skeleton data needed.
-    //
-    // The caller (DrawPreviewStaticMesh / DrawPreviewSkeletalMesh) passes the
-    // correct shader paths, binding layout enum, and pipeline cache references so
-    // no global state is shared between the two mesh types.
-    // ---------------------------------------------------------------------------
     template<typename MeshT>
     void AssetSceneRenderer::DrawPreviewMeshImpl(const Ref<MeshT> &mesh, nri::CommandBuffer *cmd, RenderTarget *rt,
         FrameContext *frameContext, PreviewFrameUniforms &uniforms,
@@ -487,9 +479,6 @@ namespace ignite
         if (!mesh || !m_RuntimeMaterial || !rt)
             return;
 
-        // Update the shared runtime material binding set.
-        // This is always required — even when per-instance materials are present,
-        // the runtime material is the fallback for any instance with no assigned material.
         if (!m_RuntimeMaterial->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
             return;
 
@@ -540,11 +529,6 @@ namespace ignite
             if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                 continue;
 
-            // Resolve material:
-            //  - Material-preview mode (m_SourceMaterial set): always use the runtime material
-            //    so the material being edited covers every mesh slot, ignoring per-instance overrides.
-            //  - Mesh-preview mode (no m_SourceMaterial): per-instance material takes priority,
-            //    with m_RuntimeMaterial as the fallback for unassigned slots.
             Ref<Material> material;
             if (!m_SourceMaterial)
             {

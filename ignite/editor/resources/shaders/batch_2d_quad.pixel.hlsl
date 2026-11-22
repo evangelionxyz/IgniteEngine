@@ -31,7 +31,7 @@ struct PSOutput
 
 PSOutput main(PSInput input)
 {
-    Texture2D tex = ResourceDescriptorHeap[input.texIndex];
+    Texture2D tex = ResourceDescriptorHeap[NonUniformResourceIndex(SafeBindlessIndex(input.texIndex))];
     float4 texColor = tex.Sample(samplerState, input.texCoord * input.tilingFactor);
     Material2D material;
     material.baseColor = input.color;

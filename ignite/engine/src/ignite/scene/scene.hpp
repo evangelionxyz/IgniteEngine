@@ -86,6 +86,15 @@ namespace ignite
         glm::vec4 color = glm::vec4(0.2f, 0.9f, 0.4f, 1.0f);
     };
 
+    struct SceneAssetLoadProgress
+    {
+        size_t totalAssets = 0;
+        size_t readyAssets = 0;
+        size_t pendingAssets = 0;
+        bool allReady = true;
+        float progress = 1.0f;
+    };
+
     class IGN_API Scene final : public Asset
     {
     public:
@@ -140,6 +149,7 @@ namespace ignite
 
         entt::registry *registry;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
+        std::vector<UUID> rootEntityOrder;
 
         inline bool IsPaused() const { return m_State == ESceneState::Paused; }
 		inline bool IsStopped() const { return m_State == ESceneState::Stop; }
@@ -160,6 +170,8 @@ namespace ignite
 
         std::unordered_set<AssetHandle> CollectReferencedAssetHandles() const;
         void PreloadReferencedAssets();
+        SceneAssetLoadProgress GetAssetLoadProgress() const;
+        bool IsReadyToPlay() const;
 
         float timeInSeconds = 0.0f;
         bool showDebugEntityNames = false;
