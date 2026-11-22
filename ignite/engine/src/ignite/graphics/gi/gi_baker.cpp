@@ -12,6 +12,7 @@
 #include "ignite/scene/component.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/core/string_utils.hpp"
 
 #include <glm/gtc/packing.hpp>
 #include <algorithm>
@@ -710,7 +711,7 @@ namespace ignite
                     std::error_code relEc;
                     const std::filesystem::path relPath = std::filesystem::relative(
                         m_SavePath, m_Scene->GetProject()->GetDirectory(), relEc);
-                    const bool insideProj = !relEc && !relPath.empty() && !relPath.native().starts_with(L"..");
+                    const bool insideProj = !relEc && !relPath.empty() && !stringutils::StartsWith(relPath.generic_string(), "..");
                     volume.bakedAssetPath = insideProj ? relPath.generic_string() : m_SavePath.generic_string();
                 }
                 else
@@ -1336,7 +1337,7 @@ namespace ignite
             if (!projectDir.empty())
             {
                 std::filesystem::path relPath = std::filesystem::relative(outFile, projectDir, ec);
-                const bool insideProj = !ec && !relPath.empty() && !relPath.native().starts_with(L"..");
+                const bool insideProj = !ec && !relPath.empty() && !stringutils::StartsWith(relPath.generic_string(), "..");
                 comp.bakedAssetPath = insideProj ? relPath.generic_string() : outFile.generic_string();
             }
             else
