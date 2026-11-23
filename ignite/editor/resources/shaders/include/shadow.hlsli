@@ -4,6 +4,9 @@
 #ifndef IGN_SHADOW_HLSLI
 #define IGN_SHADOW_HLSLI
 
+#include "binding_helpers.hlsli"
+#include "helpers.hlsli"
+
 #define NUM_CASCADES 4
 
 struct CascadesShadows
@@ -45,6 +48,19 @@ static const float2 k_PoissonDisk[16] =
     float2(-0.81409955f, 0.91437590f),
     float2(0.19984126f, 0.78641367f),
     float2(0.14383161f, -0.14100790f)
+};
+
+// Balanced, zero-mean 8-tap Poisson disk (4 antipodal pairs) for local shadow PCF
+static const float2 k_LocalShadowDisk8[8] =
+{
+    float2( 0.3827f,  0.1585f),
+    float2(-0.3827f, -0.1585f),
+    float2(-0.2121f,  0.5121f),
+    float2( 0.2121f, -0.5121f),
+    float2( 0.7800f, -0.3231f),
+    float2(-0.7800f,  0.3231f),
+    float2( 0.3696f,  0.8924f),
+    float2(-0.3696f, -0.8924f)
 };
 
 static int GetCascadeIndex(float4 cascadeSplits, float viewDepth)
@@ -159,6 +175,97 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
     visibility /= 16.0f;
 
     return saturate(lerp(1.0f, visibility, csm.shadowStrength));
+}
+
+static float SampleLocalCubeArrayTap(int cubeArrayIdx, SamplerState samp, float3 dir, int sliceIndex, float normDist, float bias)
+{
+    if (cubeArrayIdx < 0)
+    {
+        return 1.0f;
+    }
+
+    TextureCubeArray<float4> shadowCubes = ResourceDescriptorHeap[SafeBindlessIndex(cubeArrayIdx)];
+    float stored = shadowCubes.SampleLevel(samp, float4(dir, float(sliceIndex)), 0.0f).r;
+    return ((normDist - bias) <= stored) ? 1.0f : 0.0f;
+}
+
+static float SampleLocalPointOrSpotShadow(
+    int staticCubeArrayIdx,
+    int dynamicCubeArrayIdx,
+    SamplerState samp,
+    float4 shadowParams,
+    float3 lightPos,
+    float lightRange,
+    float3 worldPos,
+    float3 N,
+    float2 screenPos)
+{
+    if (shadowParams.x < -0.5f || lightRange <= 1e-4f || shadowParams.w <= 0.001f)
+    {
+        return 1.0f;
+    }
+    if (staticCubeArrayIdx < 0 && dynamicCubeArrayIdx < 0)
+    {
+        return 1.0f;
+    }
+
+    int sliceIndex = int(shadowParams.x + 0.5f);
+    float baseBias = shadowParams.y;
+    float pcfRadius = shadowParams.z;
+    float strength = saturate(shadowParams.w);
+
+    float3 toWorld = worldPos - lightPos;
+    float dist = length(toWorld);
+    if (dist >= lightRange || dist <= 1e-4f)
+    {
+        return 1.0f;
+    }
+
+    float3 dir = toWorld / dist;
+    float ndl = saturate(dot(N, -dir));
+    float bias = baseBias * (0.35f + 1.25f * (1.0f - ndl));
+    float normDist = dist / lightRange;
+
+    float vis = 1.0f;
+    if (pcfRadius <= 1e-4f)
+    {
+        float sVis = SampleLocalCubeArrayTap(staticCubeArrayIdx, samp, dir, sliceIndex, normDist, bias);
+        float dVis = SampleLocalCubeArrayTap(dynamicCubeArrayIdx, samp, dir, sliceIndex, normDist, bias);
+        vis = min(sVis, dVis);
+    }
+    else
+    {
+        float3 T, B;
+        BuildOrthonormalBasis(dir, T, B);
+
+        float angle = InterleavedGradientNoise(screenPos) * 6.28318530718f;
+        float sinA = sin(angle);
+        float cosA = cos(angle);
+        float2x2 rot = float2x2(cosA, -sinA, sinA, cosA);
+
+        float accum = 0.0f;
+        [unroll]
+        for (int i = 0; i < 8; ++i)
+        {
+            float2 off = mul(rot, k_LocalShadowDisk8[i]) * pcfRadius;
+            float3 sampleDir = normalize(dir + T * off.x + B * off.y);
+            float tapNormDist = normDist;
+            float tapNdl = dot(N, -sampleDir);
+            if (ndl > 1e-4f && tapNdl > ndl)
+            {
+                // Intersect sampleDir with receiver tangent plane through worldPos:
+                // t_plane = dist * (N . -dir) / (N . -sampleDir).
+                // Only shrink (tapNdl > ndl) so outward taps on curved/grazing surfaces never overshoot.
+                tapNormDist = normDist * clamp(ndl / tapNdl, 0.2f, 1.0f);
+            }
+            float sVis = SampleLocalCubeArrayTap(staticCubeArrayIdx, samp, sampleDir, sliceIndex, tapNormDist, bias);
+            float dVis = SampleLocalCubeArrayTap(dynamicCubeArrayIdx, samp, sampleDir, sliceIndex, tapNormDist, bias);
+            accum += min(sVis, dVis);
+        }
+        vis = accum * (1.0f / 8.0f);
+    }
+
+    return saturate(lerp(1.0f, vis, strength));
 }
 
 #endif

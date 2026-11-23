@@ -1301,6 +1301,17 @@ namespace ignite
             {
                 auto &comp = selectedEntity.GetComponent<RenderingComponent>();
                 UI::DrawCheckbox("Visible", &comp.visible);
+
+                const char *mobilityLabels[] = { "Static", "Movable" };
+                int mobilityIdx = static_cast<int>(comp.mobility);
+                if (UI::DrawComboBox("Mobility", mobilityLabels, IM_ARRAYSIZE(mobilityLabels), &mobilityIdx))
+                {
+                    comp.mobility = static_cast<EntityMobility>(std::clamp(mobilityIdx, 0, 1));
+                    if (m_Scene) m_Scene->SetDirtyFlag(true);
+                }
+
+                UI::DrawCheckbox("Cast Shadow", &comp.castShadow);
+                UI::DrawCheckbox("Receive Shadow", &comp.receiveShadow);
                 UI::DrawCheckbox("Contribute GI", &comp.contributeGI);
                 UI::DrawCheckbox("Receive GI", &comp.receiveGI);
 
@@ -1667,6 +1678,16 @@ namespace ignite
                 UI::DrawFloatControl("Constant", &c.constantAttenuation, 0.01f, 0.0f, 10.0f);
                 UI::DrawFloatControl("Linear", &c.linearAttenuation, 0.001f, 0.0f, 10.0f);
                 UI::DrawFloatControl("Quadratic", &c.quadraticAttenuation, 0.0001f, 0.0f, 10.0f);
+
+                ImGui::SeparatorText("Shadow");
+                UI::DrawCheckbox("Cast Shadow", &c.castShadow);
+                ImGui::BeginDisabled(!c.castShadow);
+                UI::DrawCheckbox("Bake Static Shadow", &c.bakeStaticShadow);
+                UI::DrawCheckbox("Soft Shadows", &c.softShadows);
+                UI::DrawFloatControl("Shadow Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+                UI::DrawFloatControl("Shadow Bias", &c.shadowBias, 0.0005f, 0.0f, 0.1f);
+                UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.001f, 0.0f, 0.15f);
+                ImGui::EndDisabled();
             });
 
             RenderComponent<SpotLightComponent>("Spot Light", selectedEntity, [&]()
@@ -1687,6 +1708,16 @@ namespace ignite
                 ImGui::SeparatorText("Cone angles");
                 UI::DrawFloatControl("Inner Angle", &c.innerConeAngle, 0.1f, 0.0f, 90.0f);
                 UI::DrawFloatControl("Outer Angle", &c.outerConeAngle, 0.1f, 0.0f, 90.0f);
+
+                ImGui::SeparatorText("Shadow");
+                UI::DrawCheckbox("Cast Shadow", &c.castShadow);
+                ImGui::BeginDisabled(!c.castShadow);
+                UI::DrawCheckbox("Bake Static Shadow", &c.bakeStaticShadow);
+                UI::DrawCheckbox("Soft Shadows", &c.softShadows);
+                UI::DrawFloatControl("Shadow Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+                UI::DrawFloatControl("Shadow Bias", &c.shadowBias, 0.0005f, 0.0f, 0.1f);
+                UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.001f, 0.0f, 0.15f);
+                ImGui::EndDisabled();
             });
 
             RenderComponent<IrradianceVolumeComponent>("Irradiance Volume", selectedEntity, [&]()
@@ -1706,6 +1737,7 @@ namespace ignite
                 {
                     c.runtimeMode = modeIdx;
                 }
+                ImGui::Checkbox("Sky Visibility Split", &c.skyVisibilitySplit);
 
                 UI::DrawFloatControl("Normal Bias", &c.normalBias, 0.01f, 0.0f, 2.0f);
                 UI::DrawFloatControl("View Bias", &c.viewBias, 0.01f, 0.0f, 2.0f);
@@ -1733,8 +1765,13 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<ReflectionProbeComponent>();
                 UI::DrawVec3Control("Influence Extents", c.influenceExtents, 0.1f, 5.0f);
                 UI::DrawVec3Control("Projection Extents", c.projectionExtents, 0.1f, 5.0f);
+                if (ImGui::Button("Fit Projection to Influence"))
+                {
+                    c.projectionExtents = c.influenceExtents;
+                }
                 UI::DrawVec3Control("Capture Offset", c.captureOffset, 0.05f, 0.0f);
                 UI::DrawFloatControl("Blend Distance (m)", &c.blendDistance, 0.05f, 0.0f, 32.0f);
+                UI::DrawFloatControl("Exclude Self Radius (m)", &c.excludeRadius, 0.05f, 0.0f, 10.0f);
                 UI::DrawIntControl("Resolution", &c.resolution, 16, 32, 256);
                 UI::DrawIntControl("Priority", &c.priority, 1, -100, 100);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.05f, 0.0f, 10.0f);
@@ -1745,6 +1782,22 @@ namespace ignite
                     UI::DrawFloatControl("Normalization Strength", &c.normalizationStrength, 0.05f, 0.0f, 1.0f);
                 }
                 ImGui::TextWrapped("Baked Cube: %s", c.bakedAssetPath.empty() ? "(not baked)" : c.bakedAssetPath.c_str());
+
+                bool hasBakedFile = false;
+                if (!c.bakedAssetPath.empty())
+                {
+                    std::filesystem::path resolved(c.bakedAssetPath);
+                    if (resolved.is_relative() && m_Scene && m_Scene->GetProject())
+                    {
+                        resolved = m_Scene->GetProject()->GetDirectory() / resolved;
+                    }
+                    std::error_code ec;
+                    hasBakedFile = std::filesystem::exists(resolved, ec);
+                }
+                const uint64_t sceneHash = ComputeSceneBakeHash(m_Scene);
+                const bool upToDate = hasBakedFile && c.bakeHash != 0 && c.bakeHash == sceneHash;
+                ImGui::TextColored(upToDate ? ImVec4(0.35f, 0.9f, 0.4f, 1.0f) : ImVec4(1.0f, 0.55f, 0.2f, 1.0f),
+                    upToDate ? "Reflection probe up to date" : (hasBakedFile ? "Reflection probe out of date" : "Reflection probe not baked"));
             });
 
             RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()

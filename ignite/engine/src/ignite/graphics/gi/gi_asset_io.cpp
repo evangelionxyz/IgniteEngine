@@ -101,6 +101,7 @@ namespace ignite::gi_io
         const bool hasOffsets = (data.probeOffsetsHalfRGBA.size() == expectedSHSize);
         const size_t visAtlasTexels = static_cast<size_t>(data.GetVisibilityAtlasWidth()) * static_cast<size_t>(data.GetVisibilityAtlasHeight());
         const bool hasVis = (visAtlasTexels > 0 && data.visibilityAtlasHalfRG.size() == visAtlasTexels * 2u);
+        const bool hasSkyVis = (data.skyVisibilityHalfRGBA.size() == expectedSHSize);
 
         IGIHeader hdr{};
         std::memcpy(hdr.magic, kIGIMagic, sizeof(kIGIMagic));
@@ -114,7 +115,8 @@ namespace ignite::gi_io
         hdr.spacing = data.spacing;
         hdr.shOrder = data.shOrder;
         hdr.flags = (hasVis ? IrradianceVolumeData::kFlagHasVisibilityAtlas : 0u)
-                  | (hasOffsets ? IrradianceVolumeData::kFlagHasProbeOffsets : 0u);
+                  | (hasOffsets ? IrradianceVolumeData::kFlagHasProbeOffsets : 0u)
+                  | (hasSkyVis ? IrradianceVolumeData::kFlagHasSkyVisibility : 0u);
         hdr.visOctRes = data.visOctRes;
         hdr.visAtlasCols = hasVis ? data.visAtlasCols : 0u;
         hdr.visAtlasRows = hasVis ? data.visAtlasRows : 0u;
@@ -139,6 +141,11 @@ namespace ignite::gi_io
         }
 
         if (hasVis && !WriteExact(out, data.visibilityAtlasHalfRG.data(), visAtlasTexels * 2u))
+        {
+            return false;
+        }
+
+        if (hasSkyVis && !WriteExact(out, data.skyVisibilityHalfRGBA.data(), expectedSHSize))
         {
             return false;
         }
@@ -213,6 +220,16 @@ namespace ignite::gi_io
             }
             outData.visibilityAtlasHalfRG.resize(visAtlasTexels * 2u);
             if (!ReadExact(in, outData.visibilityAtlasHalfRG.data(), visAtlasTexels * 2u))
+            {
+                outData = IrradianceVolumeData{};
+                return false;
+            }
+        }
+
+        if ((hdr.flags & IrradianceVolumeData::kFlagHasSkyVisibility) != 0u)
+        {
+            outData.skyVisibilityHalfRGBA.resize(expectedSHSize);
+            if (!ReadExact(in, outData.skyVisibilityHalfRGBA.data(), expectedSHSize))
             {
                 outData = IrradianceVolumeData{};
                 return false;

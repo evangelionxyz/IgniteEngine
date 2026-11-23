@@ -22,6 +22,18 @@ namespace ignite
     struct SkeletalMeshComponent;
     struct TerrainComponent;
 
+    struct LocalShadowLightItem
+    {
+        uint32_t slot = 0; // 0..7 point lights, 8..11 spot lights
+        glm::vec3 position{ 0.0f };
+        float range = 1.0f;
+        bool isSpot = false;
+        glm::vec3 direction{ 0.0f, 0.0f, 1.0f };
+        float cosOuterAngle = -1.0f;
+        bool castShadow = true;
+        bool bakeStaticShadow = true;
+    };
+
     struct StaticMeshPacketItem
     {
         entt::entity entity = entt::null;
@@ -32,6 +44,9 @@ namespace ignite
         const StaticMeshComponent *component = nullptr;
         uint32_t firstObjectIndexOffset = 0;
         uint32_t instanceCount = 0;
+        bool isStatic = true;
+        bool castShadow = true;
+        bool receiveShadow = true;
     };
 
     struct SkeletalMeshPacketItem
@@ -43,6 +58,9 @@ namespace ignite
         SkeletalMesh *mesh = nullptr;
         const SkeletalMeshComponent *component = nullptr;
         uint32_t boneOffset = 0;
+        bool isStatic = false;
+        bool castShadow = true;
+        bool receiveShadow = true;
     };
 
     struct TerrainPacketItem
@@ -53,6 +71,9 @@ namespace ignite
         glm::mat4 normalMatrix{ 1.0f };
         TerrainComponent *component = nullptr;
         Material *material = nullptr;
+        bool isStatic = true;
+        bool castShadow = true;
+        bool receiveShadow = true;
     };
 
     struct FramePacketStats
@@ -84,6 +105,7 @@ namespace ignite
         // Lighting & shadow state
         PointLightBufferData pointLights{};
         SpotLightBufferData spotLights{};
+        std::vector<LocalShadowLightItem> localShadowLights;
         glm::vec3 sunDirection{ 0.0f, 1.0f, 0.0f };
         float shadowDistance = 200.0f;
         bool cascadeShadow = false;

@@ -41,12 +41,14 @@ namespace ignite
         Ref<Texture> GetSHTexture(size_t idx) const { return idx < m_SHTextures.size() ? m_SHTextures[idx] : nullptr; }
         Ref<Texture> GetOffsetTexture() const { return m_OffsetTexture; }
         Ref<Texture> GetVisibilityAtlas() const { return m_VisibilityAtlas; }
+        Ref<Texture> GetSkyVisibilityTexture() const { return m_SkyVisibilityTexture; }
 
     private:
         IrradianceVolumeData m_Data;
         std::array<Ref<Texture>, 7> m_SHTextures;
         Ref<Texture> m_OffsetTexture;
         Ref<Texture> m_VisibilityAtlas;
+        Ref<Texture> m_SkyVisibilityTexture;
     };
 }
 

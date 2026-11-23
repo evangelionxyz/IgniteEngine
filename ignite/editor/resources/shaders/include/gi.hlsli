@@ -48,14 +48,23 @@ static float3 SampleIrradianceVolumeFast(float3 worldPos, float3 N, GIData gi, S
     Texture3D<float4> shTex0 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.x)];
     Texture3D<float4> shTex1 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.y)];
     Texture3D<float4> shTex2 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.z)];
+
+    float4 t0 = shTex0.SampleLevel(linSampler, uvw, 0.0f);
+    float4 t1 = shTex1.SampleLevel(linSampler, uvw, 0.0f);
+    float4 t2 = shTex2.SampleLevel(linSampler, uvw, 0.0f);
+
+    if (gi.gridDimsAndOrder.w == 1)
+    {
+        float3 sh1[4];
+        UnpackSHL1(t0, t1, t2, sh1);
+        return EvalSHIrradianceL1(sh1, N);
+    }
+
     Texture3D<float4> shTex3 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices0.w)];
     Texture3D<float4> shTex4 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.x)];
     Texture3D<float4> shTex5 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.y)];
     Texture3D<float4> shTex6 = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.z)];
 
-    float4 t0 = shTex0.SampleLevel(linSampler, uvw, 0.0f);
-    float4 t1 = shTex1.SampleLevel(linSampler, uvw, 0.0f);
-    float4 t2 = shTex2.SampleLevel(linSampler, uvw, 0.0f);
     float4 t3 = shTex3.SampleLevel(linSampler, uvw, 0.0f);
     float4 t4 = shTex4.SampleLevel(linSampler, uvw, 0.0f);
     float4 t5 = shTex5.SampleLevel(linSampler, uvw, 0.0f);
@@ -78,6 +87,7 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
     float3 gridMin = gi.gridMinAndIntensity.xyz;
     float spacing = max(gi.gridSizeAndSpacing.w, 1e-4f);
     int3 dims = max(gi.gridDimsAndOrder.xyz, int3(1, 1, 1));
+    bool isL1 = (gi.gridDimsAndOrder.w == 1);
 
     float3 Pb = worldPos + (N * gi.biasAndFade.x + V * gi.biasAndFade.y) * spacing;
     float3 gridCoord = clamp((Pb - gridMin) / spacing, float3(0.0f, 0.0f, 0.0f), float3(dims) - 1.0f);
@@ -124,14 +134,32 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
         float4 t0 = shTex0.Load(loadPos);
         float4 t1 = shTex1.Load(loadPos);
         float4 t2 = shTex2.Load(loadPos);
-        float4 t3 = shTex3.Load(loadPos);
-        float4 t4 = shTex4.Load(loadPos);
-        float4 t5 = shTex5.Load(loadPos);
-        float4 t6 = shTex6.Load(loadPos);
 
         float3 probeSH[9];
         float validity = 1.0f;
-        UnpackSHL2(t0, t1, t2, t3, t4, t5, t6, probeSH, validity);
+        if (isL1)
+        {
+            float3 probeSH1[4];
+            UnpackSHL1(t0, t1, t2, probeSH1);
+            probeSH[0] = probeSH1[0];
+            probeSH[1] = probeSH1[1];
+            probeSH[2] = probeSH1[2];
+            probeSH[3] = probeSH1[3];
+            [unroll]
+            for (int z = 4; z < 9; ++z) probeSH[z] = float3(0.0f, 0.0f, 0.0f);
+            if (!hasOffsets)
+            {
+                validity = shTex6.Load(loadPos).w;
+            }
+        }
+        else
+        {
+            float4 t3 = shTex3.Load(loadPos);
+            float4 t4 = shTex4.Load(loadPos);
+            float4 t5 = shTex5.Load(loadPos);
+            float4 t6 = shTex6.Load(loadPos);
+            UnpackSHL2(t0, t1, t2, t3, t4, t5, t6, probeSH, validity);
+        }
 
         float3 probePos = gridMin + float3(probeCoord) * spacing;
         if (hasOffsets)
@@ -181,10 +209,17 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
         w = (w < 0.2f) ? (w * w * w) / (0.2f * 0.2f) : w;
         if (w > 1e-6f)
         {
-            [unroll]
-            for (int c = 0; c < 9; ++c)
+            accumSH[0] += probeSH[0] * w;
+            accumSH[1] += probeSH[1] * w;
+            accumSH[2] += probeSH[2] * w;
+            accumSH[3] += probeSH[3] * w;
+            if (!isL1)
             {
-                accumSH[c] += probeSH[c] * w;
+                [unroll]
+                for (int c = 4; c < 9; ++c)
+                {
+                    accumSH[c] += probeSH[c] * w;
+                }
             }
             accumW += w;
         }
@@ -193,6 +228,11 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
     if (accumW > 1e-4f)
     {
         float invW = 1.0f / accumW;
+        if (isL1)
+        {
+            float3 sh1[4] = { accumSH[0] * invW, accumSH[1] * invW, accumSH[2] * invW, accumSH[3] * invW };
+            return EvalSHIrradianceL1(sh1, N);
+        }
         [unroll]
         for (int c = 0; c < 9; ++c)
         {
@@ -202,6 +242,24 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
     }
 
     return SampleIrradianceVolumeFast(worldPos, N, gi, linSampler, outVolW);
+}
+
+static float SampleGISkyVisibility(float3 worldPos, float3 N, GIData gi, SamplerState linSampler)
+{
+    if (gi.skyVisibilitySplit == 0 || gi.skyVisibilityTexIndex < 0)
+    {
+        return 1.0f;
+    }
+
+    float3 gridMin = gi.gridMinAndIntensity.xyz;
+    float spacing = max(gi.gridSizeAndSpacing.w, 1e-4f);
+    float3 dims = max(float3(gi.gridDimsAndOrder.xyz), float3(1.0f, 1.0f, 1.0f));
+    float3 biasedPos = worldPos + N * (gi.biasAndFade.x * spacing);
+    float3 gridCoord = clamp((biasedPos - gridMin) / spacing, float3(0.0f, 0.0f, 0.0f), dims - 1.0f);
+    float3 uvw = (gridCoord + 0.5f) / dims;
+
+    Texture3D<float4> skyVisTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.skyVisibilityTexIndex)];
+    return saturate(skyVisTex.SampleLevel(linSampler, uvw, 0.0f).r);
 }
 
 static float3 SampleGIIrradiance(float3 worldPos, float3 N, float3 V, GIData gi, SamplerState linSampler, out float outVolW)

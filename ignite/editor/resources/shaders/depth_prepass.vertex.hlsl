@@ -53,5 +53,6 @@ PixelVertexInput main(VertexMesh input, uint instanceID : SV_InstanceID)
     pixelInput.uv = input.uv;
     pixelInput.color = input.color;
     pixelInput.objectID = g_ObjectBuffer[objectIndex].objectID;
+    pixelInput.receiveShadow = g_ObjectBuffer[objectIndex].receiveShadow;
     return pixelInput;
 }

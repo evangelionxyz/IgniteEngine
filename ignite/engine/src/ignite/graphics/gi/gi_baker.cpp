@@ -92,10 +92,13 @@ namespace ignite
                 AppendBytes(record.bytes, rendering->visible);
                 AppendBytes(record.bytes, rendering->contributeGI);
                 AppendBytes(record.bytes, rendering->receiveGI);
+                AppendBytes(record.bytes, static_cast<int>(rendering->mobility));
+                AppendBytes(record.bytes, rendering->castShadow);
+                AppendBytes(record.bytes, rendering->receiveShadow);
             }
 
             if (const auto *mesh = scene->registry->try_get<StaticMeshComponent>(e);
-                mesh && (!rendering || rendering->contributeGI))
+                mesh && (!rendering || rendering->IsStaticForGI()))
             {
                 AppendTag(record.bytes, 3u);
                 AppendBytes(record.bytes, static_cast<uint64_t>(mesh->handle));
@@ -118,12 +121,14 @@ namespace ignite
                     AppendTag(record.bytes, 10u);
                     AppendBytes(record.bytes, *light);
                 }
-                if (const auto *light = scene->registry->try_get<PointLightComponent>(e); light && light->bakeIndirect)
+                if (const auto *light = scene->registry->try_get<PointLightComponent>(e);
+                    light && (light->bakeIndirect || (light->castShadow && light->bakeStaticShadow)))
                 {
                     AppendTag(record.bytes, 11u);
                     AppendBytes(record.bytes, *light);
                 }
-                if (const auto *light = scene->registry->try_get<SpotLightComponent>(e); light && light->bakeIndirect)
+                if (const auto *light = scene->registry->try_get<SpotLightComponent>(e);
+                    light && (light->bakeIndirect || (light->castShadow && light->bakeStaticShadow)))
                 {
                     AppendTag(record.bytes, 12u);
                     AppendBytes(record.bytes, *light);
@@ -503,7 +508,7 @@ namespace ignite
         outData.dims = m_Dims;
         outData.boundsMin = m_BoundsMin;
         outData.spacing = m_Spacing;
-        outData.shOrder = 2;
+        outData.shOrder = m_SHOrder;
         outData.flags = 0;
         outData.bakeHash = m_BakeHash;
 
@@ -515,8 +520,16 @@ namespace ignite
 
         for (uint32_t probeIdx = 0; probeIdx < m_ProbeCount; ++probeIdx)
         {
+            gi::SHL2 sh = m_ProbeSH[probeIdx];
+            if (m_SHOrder == 1u)
+            {
+                for (int c = 4; c < 9; ++c)
+                {
+                    sh.c[c] = glm::vec3(0.0f);
+                }
+            }
             glm::vec4 packed[7]{};
-            gi::PackSHL2To7RGBA(m_ProbeSH[probeIdx], m_ProbeValidity[probeIdx], packed);
+            gi::PackSHL2To7RGBA(sh, m_ProbeValidity[probeIdx], packed);
 
             const size_t base = static_cast<size_t>(probeIdx) * 4u;
             for (int t = 0; t < 7; ++t)
@@ -573,6 +586,22 @@ namespace ignite
                 }
                 outData.flags |= IrradianceVolumeData::kFlagHasVisibilityAtlas;
             }
+
+            if (m_ProbeSkyVis.size() == m_ProbeCount)
+            {
+                outData.skyVisibilityHalfRGBA.resize(totalHalfCount);
+                for (uint32_t probeIdx = 0; probeIdx < m_ProbeCount; ++probeIdx)
+                {
+                    const size_t base = static_cast<size_t>(probeIdx) * 4u;
+                    const float vis = std::clamp(m_ProbeSkyVis[probeIdx], 0.0f, 1.0f);
+                    const uint16_t h = glm::packHalf1x16(vis);
+                    outData.skyVisibilityHalfRGBA[base + 0u] = h;
+                    outData.skyVisibilityHalfRGBA[base + 1u] = h;
+                    outData.skyVisibilityHalfRGBA[base + 2u] = h;
+                    outData.skyVisibilityHalfRGBA[base + 3u] = glm::packHalf1x16(1.0f);
+                }
+                outData.flags |= IrradianceVolumeData::kFlagHasSkyVisibility;
+            }
         }
     }
 
@@ -583,33 +612,33 @@ namespace ignite
             return false;
         }
 
-        const GI_GPUData *giOverride = nullptr;
-        if (bounceIndex > 0)
+        if (bounceIndex == 0)
         {
-            IrradianceVolumeData prevData;
-            PackWorkingData(prevData, true);
-            if (!m_PrevBounceVolume)
-            {
-                m_PrevBounceVolume = CreateRef<IrradianceVolume>();
-            }
-            if (!m_PrevBounceVolume->UploadFromData(prevData))
-            {
-                return false;
-            }
-            m_PrevBounceGIData = GI_GPUData{};
-            m_PrevBounceVolume->FillGIGPUData(m_PrevBounceGIData, nullptr);
-            m_PrevBounceGIData.giMode = 2; // Use LeakResistant mode between bounce captures
-            m_PrevBounceGIData.gridMinAndIntensity.w = 1.0f;
-            m_PrevBounceGIData.biasAndFade.z = std::max(0.1f, m_Spacing * 0.2f);
-            m_PrevBounceGIData.viewportInvSizeAndFlags.w = 1.0f;
-            giOverride = &m_PrevBounceGIData;
+            const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+            nri.ResetCommandAllocator(*m_CmdAllocator);
+            nri.BeginCommandBuffer(*m_CmdBuffer, nullptr);
+            m_Capturer.PrepareScene(m_Scene, m_AssetManager, m_CmdBuffer, nullptr);
+            SubmitAndWaitCommandBuffer();
+            return true;
         }
 
-        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
-        nri.ResetCommandAllocator(*m_CmdAllocator);
-        nri.BeginCommandBuffer(*m_CmdBuffer, nullptr);
-        m_Capturer.PrepareScene(m_Scene, m_AssetManager, m_CmdBuffer, giOverride);
-        SubmitAndWaitCommandBuffer();
+        IrradianceVolumeData prevData;
+        PackWorkingData(prevData, true);
+        if (!m_PrevBounceVolume)
+        {
+            m_PrevBounceVolume = CreateRef<IrradianceVolume>();
+        }
+        if (!m_PrevBounceVolume->UploadFromData(prevData))
+        {
+            return false;
+        }
+        m_PrevBounceGIData = GI_GPUData{};
+        m_PrevBounceVolume->FillGIGPUData(m_PrevBounceGIData, nullptr);
+        m_PrevBounceGIData.giMode = 2; // Use LeakResistant mode between bounce captures
+        m_PrevBounceGIData.gridMinAndIntensity.w = 1.0f;
+        m_PrevBounceGIData.biasAndFade.z = std::max(0.1f, m_Spacing * 0.2f);
+        m_PrevBounceGIData.viewportInvSizeAndFlags.w = 1.0f;
+        m_Capturer.SetOverrideGIData(&m_PrevBounceGIData);
         return true;
     }
 
@@ -641,6 +670,8 @@ namespace ignite
 
         ComputeVolumeGrid(tr, vol, m_BoundsMin, m_Dims, m_Spacing);
         m_Resolution = static_cast<uint32_t>(std::clamp(vol.captureResolution, 16, 128));
+        m_SHOrder = (vol.shOrder == 1) ? 1u : 2u;
+        m_SkyVisibilitySplit = vol.skyVisibilitySplit;
         m_ProbeCount = static_cast<uint32_t>(m_Dims.x) * static_cast<uint32_t>(m_Dims.y) * static_cast<uint32_t>(m_Dims.z);
         m_TotalBounces = static_cast<uint32_t>(std::clamp(vol.bounces, 1, 4));
         m_CurrentBounce = 0;
@@ -657,6 +688,7 @@ namespace ignite
 
         m_ProbeSH.assign(m_ProbeCount, gi::SHL2{});
         m_ProbeValidity.assign(m_ProbeCount, 1.0f);
+        m_ProbeSkyVis.assign(m_ProbeCount, 0.0f);
         m_ProbeOffsets.assign(m_ProbeCount, glm::vec3(0.0f));
         m_ProbeState.assign(m_ProbeCount, 1.0f);
         m_ProbeVisTiles.assign(m_ProbeCount, {});
@@ -786,7 +818,7 @@ namespace ignite
                 capSettings.nearPlane = 0.05f;
                 capSettings.farPlane = 500.0f;
                 capSettings.mode = CaptureMode::Irradiance;
-                capSettings.includeSky = true;
+                capSettings.includeSky = !m_SkyVisibilitySplit;
                 capSettings.enablePreviousGI = (m_CurrentBounce > 0u);
                 if (capSettings.enablePreviousGI)
                 {
@@ -899,6 +931,10 @@ namespace ignite
                             const bool valid = (st.backfaceFraction <= 0.25f);
                             m_ProbeValidity[probeIdx] = valid ? 1.0f : 0.0f;
                             m_ProbeState[probeIdx] = valid ? 1.0f : 0.0f;
+                            if (probeIdx < m_ProbeSkyVis.size())
+                            {
+                                m_ProbeSkyVis[probeIdx] = std::clamp(st.skyVisibility, 0.0f, 1.0f);
+                            }
 
                             if (!valid && st.closestBackfaceDirAndDist.w >= 0.0f)
                             {
@@ -1004,7 +1040,7 @@ namespace ignite
                 capSettings.nearPlane = 0.05f;
                 capSettings.farPlane = 500.0f;
                 capSettings.mode = CaptureMode::Irradiance;
-                capSettings.includeSky = true;
+                capSettings.includeSky = !m_SkyVisibilitySplit;
                 capSettings.enablePreviousGI = false;
 
                 for (uint32_t localIdx = 0; localIdx < batchCount; ++localIdx)
@@ -1069,6 +1105,10 @@ namespace ignite
                             accepted[localIdx] = 1;
                             m_ProbeValidity[probeIdx] = 1.0f;
                             m_ProbeState[probeIdx] = 2.0f; // Relocated
+                            if (probeIdx < m_ProbeSkyVis.size())
+                            {
+                                m_ProbeSkyVis[probeIdx] = std::clamp(statsArr[localIdx].skyVisibility, 0.0f, 1.0f);
+                            }
                         }
                         else
                         {
@@ -1233,6 +1273,7 @@ namespace ignite
             capSettings.farPlane = 500.0f;
             capSettings.mode = CaptureMode::Reflection;
             capSettings.includeSky = true;
+            capSettings.excludeOriginRadius = std::max(0.0f, comp.excludeRadius);
             capSettings.enablePreviousGI = (activeVolume && activeVolume->IsValid());
             if (capSettings.enablePreviousGI)
             {

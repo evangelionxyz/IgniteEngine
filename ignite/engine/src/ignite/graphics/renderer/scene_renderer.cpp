@@ -35,6 +35,7 @@
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/bindless_system.hpp"
 #include "ignite/graphics/gi/gi_baker.hpp"
+#include "ignite/graphics/gi/scene_capture_renderer.hpp"
 #include "ignite/graphics/objects/procedural_sky.hpp"
 #include "ignite/imgui/imgui_nri.hpp"
 
@@ -242,6 +243,7 @@ namespace ignite
         m_SkyPrefilterCube.reset();
         m_SkyIBLState = {};
         ShutdownGIResources();
+        ShutdownLocalShadowResources();
 
         m_ResolvedAssetsCache.clear();
         ClearRetainedCommandBufferAssets();
@@ -396,7 +398,7 @@ namespace ignite
             }
         }
 
-        // 6. Check for Active Directional Light with Cascaded Shadows
+        // 6. Check for Active Directional / Point / Spot Lights with Shadows
         {
             auto lightView = registry->view<TransformComponent, DirectionalLightComponent>();
             for (entt::entity e : lightView)
@@ -406,6 +408,32 @@ namespace ignite
                 {
                     plan.hasActiveShadows = true;
                     break;
+                }
+            }
+            if (!plan.hasActiveShadows)
+            {
+                auto ptView = registry->view<TransformComponent, RenderingComponent, PointLightComponent>();
+                for (entt::entity e : ptView)
+                {
+                    const auto &[tr, rc, light] = ptView.get<TransformComponent, RenderingComponent, PointLightComponent>(e);
+                    if (rc.visible && light.enabled && light.castShadow)
+                    {
+                        plan.hasActiveShadows = true;
+                        break;
+                    }
+                }
+            }
+            if (!plan.hasActiveShadows)
+            {
+                auto spView = registry->view<TransformComponent, RenderingComponent, SpotLightComponent>();
+                for (entt::entity e : spView)
+                {
+                    const auto &[tr, rc, light] = spView.get<TransformComponent, RenderingComponent, SpotLightComponent>(e);
+                    if (rc.visible && light.enabled && light.castShadow)
+                    {
+                        plan.hasActiveShadows = true;
+                        break;
+                    }
                 }
             }
         }
@@ -1022,11 +1050,14 @@ namespace ignite
             break;
         }
 
+        m_FramePacket.localShadowLights.clear();
+
         // Collect point lights
         {
             PointLightBufferData &pointLightData = m_FramePacket.pointLights;
             pointLightData = {};
             int pointLightCount = 0;
+            uint32_t nextPointShadowSlot = 0;
 
             auto pointLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, PointLightComponent>();
             for (entt::entity e : pointLightView)
@@ -1039,9 +1070,30 @@ namespace ignite
                     continue;
 
                 PointLight_GPUData &gpu = pointLightData.lights[pointLightCount];
-                gpu.positionAndRange = glm::vec4(tr.world.translation, std::max(light.range, 0.001f));
+                const float clampedRange = std::max(light.range, 0.001f);
+                gpu.positionAndRange = glm::vec4(tr.world.translation, clampedRange);
                 gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
                 gpu.attenuation = glm::vec4(std::max(light.constantAttenuation, 0.001f), light.linearAttenuation, light.quadraticAttenuation, 0.0f);
+
+                if (light.castShadow && nextPointShadowSlot < kMaxLocalShadowPointLights)
+                {
+                    const uint32_t slot = nextPointShadowSlot++;
+                    gpu.shadowParams = glm::vec4(static_cast<float>(slot), light.shadowBias,
+                        light.softShadows ? light.pcfRadius : 0.0f, light.shadowStrength);
+
+                    LocalShadowLightItem shadowLight;
+                    shadowLight.slot = slot;
+                    shadowLight.position = tr.world.translation;
+                    shadowLight.range = clampedRange;
+                    shadowLight.isSpot = false;
+                    shadowLight.castShadow = true;
+                    shadowLight.bakeStaticShadow = light.bakeStaticShadow;
+                    m_FramePacket.localShadowLights.push_back(shadowLight);
+                }
+                else
+                {
+                    gpu.shadowParams = glm::vec4(-1.0f, light.shadowBias, 0.0f, 0.0f);
+                }
                 ++pointLightCount;
             }
 
@@ -1055,6 +1107,7 @@ namespace ignite
             SpotLightBufferData &spotLightData = m_FramePacket.spotLights;
             spotLightData = {};
             int spotLightCount = 0;
+            uint32_t nextSpotShadowSlot = 0;
 
             auto spotLightView = m_Scene->registry->view<TransformComponent, RenderingComponent, SpotLightComponent>();
             for (entt::entity e : spotLightView)
@@ -1066,14 +1119,38 @@ namespace ignite
                 if (!rc.visible || !light.enabled)
                     continue;
 
-                const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+                glm::vec3 forward = tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f);
+                forward = glm::dot(forward, forward) > 1e-6f ? glm::normalize(forward) : glm::vec3(0.0f, 0.0f, 1.0f);
 
                 SpotLight_GPUData &gpu = spotLightData.lights[spotLightCount];
-                gpu.positionAndRange = glm::vec4(tr.world.translation, std::max(light.range, 0.001f));
+                const float clampedRange = std::max(light.range, 0.001f);
+                gpu.positionAndRange = glm::vec4(tr.world.translation, clampedRange);
                 gpu.directionAndAngle = glm::vec4(forward, glm::cos(glm::radians(light.outerConeAngle)));
                 gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
                 gpu.attenuation = glm::vec4(std::max(light.constantAttenuation, 0.001f), light.linearAttenuation, light.quadraticAttenuation,
                     glm::cos(glm::radians(light.innerConeAngle)));
+
+                if (light.castShadow && nextSpotShadowSlot < kMaxLocalShadowSpotLights)
+                {
+                    const uint32_t slot = kMaxLocalShadowPointLights + nextSpotShadowSlot++;
+                    gpu.shadowParams = glm::vec4(static_cast<float>(slot), light.shadowBias,
+                        light.softShadows ? light.pcfRadius : 0.0f, light.shadowStrength);
+
+                    LocalShadowLightItem shadowLight;
+                    shadowLight.slot = slot;
+                    shadowLight.position = tr.world.translation;
+                    shadowLight.range = clampedRange;
+                    shadowLight.isSpot = true;
+                    shadowLight.direction = forward;
+                    shadowLight.cosOuterAngle = gpu.directionAndAngle.w;
+                    shadowLight.castShadow = true;
+                    shadowLight.bakeStaticShadow = light.bakeStaticShadow;
+                    m_FramePacket.localShadowLights.push_back(shadowLight);
+                }
+                else
+                {
+                    gpu.shadowParams = glm::vec4(-1.0f, light.shadowBias, 0.0f, 0.0f);
+                }
                 ++spotLightCount;
             }
 
@@ -1214,7 +1291,9 @@ namespace ignite
                     {
                         uuidVal = static_cast<uint64_t>(id->uuid);
                     }
-                    reflSig += std::to_string(uuidVal) + ":" + rp.bakedAssetPath + ":" + std::to_string(rp.priority) + "|";
+                    reflSig += std::to_string(uuidVal) + ":" + rp.bakedAssetPath + ":"
+                        + std::to_string(rp.priority) + ":" + std::to_string(rp.bakeHash) + ":"
+                        + std::to_string(rp.resolution) + "|";
                 }
 
                 if (reflSig.empty())
@@ -1243,6 +1322,7 @@ namespace ignite
 
                     if (m_ActiveReflectionProbeSet && m_ActiveReflectionProbeSet->IsValid())
                     {
+                        m_ActiveReflectionProbeSet->UpdateProbeTransformsFromScene(m_Scene.get());
                         m_ActiveReflectionProbeSet->FillGIGPUData(m_GIGPUData);
                         const auto &probesGPU = m_ActiveReflectionProbeSet->GetProbesGPU();
                         frameContext->reflectionProbeBuffer.SetData(probesGPU.data(), static_cast<uint32_t>(probesGPU.size()));
@@ -1849,6 +1929,7 @@ namespace ignite
                 }
                 gpuData.objectID = objectID;
                 gpuData.boneOffset = boneOffset;
+                gpuData.receiveShadow = rc.receiveShadow ? 1u : 0u;
 
                 uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
                 indices.push_back(objectIndex);
@@ -1863,6 +1944,9 @@ namespace ignite
             skelItem.mesh = skeletalMesh.get();
             skelItem.component = &smc;
             skelItem.boneOffset = boneOffset;
+            skelItem.isStatic = (rc.mobility == EntityMobility::Static);
+            skelItem.castShadow = rc.castShadow;
+            skelItem.receiveShadow = rc.receiveShadow;
             m_FramePacket.skeletalMeshes.push_back(skelItem);
             m_FramePacket.skeletalMeshAABBs.push_back(smc.worldAABB);
 
@@ -2004,6 +2088,7 @@ namespace ignite
                 }
                 gpuData.objectID = objectID;
                 gpuData.boneOffset = 0;
+                gpuData.receiveShadow = rc.receiveShadow ? 1u : 0u;
 
                 uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
                 indices.push_back(objectIndex);
@@ -2020,6 +2105,9 @@ namespace ignite
             staticItem.component = &smc;
             staticItem.firstObjectIndexOffset = firstObjectOffset;
             staticItem.instanceCount = static_cast<uint32_t>(instances.size());
+            staticItem.isStatic = (rc.mobility == EntityMobility::Static);
+            staticItem.castShadow = rc.castShadow;
+            staticItem.receiveShadow = rc.receiveShadow;
             m_FramePacket.staticMeshes.push_back(staticItem);
             m_FramePacket.staticMeshAABBs.push_back(smc.worldAABB);
         }
@@ -2053,6 +2141,7 @@ namespace ignite
                 gpuData.normal = normalMat;
                 gpuData.objectID = objectID;
                 gpuData.boneOffset = 0;
+                gpuData.receiveShadow = rc.receiveShadow ? 1u : 0u;
 
                 uint32_t objectIndex = frameContext->objectAllocator.Allocate(cmd, gpuData);
                 indices.push_back(objectIndex);
@@ -2067,6 +2156,9 @@ namespace ignite
             terrainItem.component = &tc;
             Ref<Material> mat = ResolveAsset<Material>(tc.materialHandle);
             terrainItem.material = mat ? mat.get() : nullptr;
+            terrainItem.isStatic = (rc.mobility == EntityMobility::Static);
+            terrainItem.castShadow = rc.castShadow;
+            terrainItem.receiveShadow = rc.receiveShadow;
             m_FramePacket.terrains.push_back(terrainItem);
         }
         m_FramePacket.stats.totalTerrains = static_cast<uint32_t>(m_FramePacket.terrains.size());
@@ -2076,7 +2168,8 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        // If no directional light has cascaded shadows enabled, write default disabled CSM buffer and return immediately
+        // If no directional light has cascaded shadows enabled, write default disabled CSM buffer,
+        // still render local point/spot light shadows, and return.
         if (!m_FramePacket.cascadeShadow)
         {
             CSM_GPUData sceneCascadeData = {};
@@ -2089,6 +2182,7 @@ namespace ignite
                 if (frameContext && frameContext->frameIndexInFlight != 0)
                     m_CascadedShadowMap->EnsureShaderResourceLayout(cmd, frameContext->frameIndexInFlight);
             }
+            LocalLightShadowPass(cmd, frameContext);
             return;
         }
 
@@ -2143,7 +2237,7 @@ namespace ignite
                                 continue;
 
                             const StaticMeshPacketItem &item = m_FramePacket.staticMeshes[cIdx];
-                            if (!item.mesh)
+                            if (!item.mesh || !item.castShadow)
                                 continue;
 
                             const auto &instances = item.mesh->GetMeshInstances();
@@ -2174,7 +2268,7 @@ namespace ignite
                     // Terrain Shadows from FramePacket
                     for (const TerrainPacketItem &tItem : m_FramePacket.terrains)
                     {
-                        if (!tItem.component)
+                        if (!tItem.component || !tItem.castShadow)
                             continue;
 
                         auto cacheIt = m_EntityObjectIndexCache.find(tItem.entity);
@@ -2235,7 +2329,7 @@ namespace ignite
                                 continue;
 
                             const SkeletalMeshPacketItem &item = m_FramePacket.skeletalMeshes[cIdx];
-                            if (!item.mesh || !item.component)
+                            if (!item.mesh || !item.component || !item.castShadow)
                                 continue;
 
                             Ref<SkeletalMesh> skeletalMesh = ResolveAsset<SkeletalMesh>(item.component->handle);
@@ -2285,6 +2379,654 @@ namespace ignite
                     }
                 }
             }
+        }
+
+        LocalLightShadowPass(cmd, frameContext);
+    }
+
+    void SceneRenderer::ShutdownLocalShadowResources()
+    {
+        m_LocalShadowStaticPSO.reset();
+        m_LocalShadowAnimPSO.reset();
+        m_StaticLocalShadowStaticBindingSets.clear();
+        m_StaticLocalShadowAnimBindingSets.clear();
+        m_DynamicLocalShadowStaticBindingSets.clear();
+        m_DynamicLocalShadowAnimBindingSets.clear();
+
+        for (auto &rt : m_StaticLocalShadowFaceRTs) rt.reset();
+        for (auto &cb : m_StaticLocalShadowFaceCameraBuffers) cb.reset();
+        m_StaticLocalShadowCubeArray.reset();
+        m_StaticLocalShadowDepthTex.reset();
+        m_StaticLocalShadowHash = 0;
+        m_StaticLocalShadowValid = false;
+        m_StaticLocalShadowInitialized = false;
+
+        for (auto &rt : m_DynamicLocalShadowFaceRTs) rt.reset();
+        for (auto &cb : m_DynamicLocalShadowFaceCameraBuffers) cb.reset();
+        m_DynamicLocalShadowCubeArray.reset();
+        m_DynamicLocalShadowDepthTex.reset();
+        m_HasDynamicLocalShadows = false;
+        m_DynamicLocalShadowInitialized = false;
+    }
+
+    void SceneRenderer::EnsureLocalShadowResources()
+    {
+        auto createCubeResources = [](const char *debugPrefix,
+            Ref<Texture> &outCubeArray,
+            Ref<Texture> &outDepthTex,
+            std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> &outFaceRTs,
+            std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6> &outFaceCBs)
+        {
+            if (!outCubeArray)
+            {
+                TextureCreateInfo cubeInfo;
+                cubeInfo.width = kLocalShadowResolution;
+                cubeInfo.height = kLocalShadowResolution;
+                cubeInfo.depth = 1;
+                cubeInfo.mipLevels = 1;
+                cubeInfo.arraySize = kMaxLocalShadowLights * 6;
+                cubeInfo.sampleCount = 1;
+                cubeInfo.dimension = nri::TextureType::TEXTURE_2D;
+                cubeInfo.format = nri::Format::R32_SFLOAT;
+                cubeInfo.isCubeMap = true;
+                cubeInfo.isRenderTarget = true;
+                cubeInfo.isUAV = false;
+                cubeInfo.bindless = true;
+                cubeInfo.forceBindless = true;
+                cubeInfo.samplerLinearFiltering = true;
+                cubeInfo.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
+                cubeInfo.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
+                cubeInfo.samplerAddressW = nri::AddressMode::CLAMP_TO_EDGE;
+                outCubeArray = Texture::Create(cubeInfo, std::string(debugPrefix) + " CubeArray");
+            }
+
+            if (!outDepthTex)
+            {
+                TextureCreateInfo depthInfo;
+                depthInfo.width = kLocalShadowResolution;
+                depthInfo.height = kLocalShadowResolution;
+                depthInfo.depth = 1;
+                depthInfo.mipLevels = 1;
+                depthInfo.arraySize = 1;
+                depthInfo.sampleCount = 1;
+                depthInfo.dimension = nri::TextureType::TEXTURE_2D;
+                depthInfo.format = nri::Format::D32_SFLOAT;
+                depthInfo.isCubeMap = false;
+                depthInfo.isRenderTarget = true;
+                depthInfo.isUAV = false;
+                depthInfo.bindless = false;
+                outDepthTex = Texture::Create(depthInfo, std::string(debugPrefix) + " Depth");
+            }
+
+            if (!outCubeArray || !outDepthTex)
+            {
+                return;
+            }
+
+            for (uint32_t slice = 0; slice < kMaxLocalShadowLights * 6; ++slice)
+            {
+                if (!outFaceRTs[slice])
+                {
+                    RenderTargetCreateInfo rtInfo;
+                    rtInfo.width = kLocalShadowResolution;
+                    rtInfo.height = kLocalShadowResolution;
+                    rtInfo.sampleCount = 1;
+                    rtInfo.attachments = {
+                        FramebufferAttachments{ "LocalShadowDist", nri::Format::R32_SFLOAT, nri::Layout::COLOR_ATTACHMENT, 0, slice, 1 },
+                        FramebufferAttachments{ "LocalShadowDepth", nri::Format::D32_SFLOAT, nri::Layout::DEPTH_STENCIL_ATTACHMENT, 0, 0, 1 }
+                    };
+                    rtInfo.colorAttachmentOverrides = { outCubeArray };
+                    rtInfo.depthAttachmentOverride = outDepthTex;
+
+                    outFaceRTs[slice] = RenderTarget::Create(rtInfo, std::string(debugPrefix) + " FaceRT");
+                    outFaceRTs[slice]->SetClearColorAttachmentFloat(glm::vec4(1.0f), 0);
+                    outFaceRTs[slice]->SetClearDepthAttachment(1.0f, 0);
+                }
+
+                if (!outFaceCBs[slice])
+                {
+                    outFaceCBs[slice] = ConstantBuffer::Create(sizeof(CameraBufferData), true, 1, std::string(debugPrefix) + " Cam");
+                }
+            }
+        };
+
+        createCubeResources("[SceneRenderer StaticLocalShadow]",
+            m_StaticLocalShadowCubeArray, m_StaticLocalShadowDepthTex, m_StaticLocalShadowFaceRTs, m_StaticLocalShadowFaceCameraBuffers);
+        createCubeResources("[SceneRenderer DynamicLocalShadow]",
+            m_DynamicLocalShadowCubeArray, m_DynamicLocalShadowDepthTex, m_DynamicLocalShadowFaceRTs, m_DynamicLocalShadowFaceCameraBuffers);
+
+        BindlessSystem::FlushPendingWrites();
+    }
+
+    Ref<GraphicsPipeline> SceneRenderer::GetOrCreateLocalShadowPSO(bool animated)
+    {
+        Ref<GraphicsPipeline> &psoRef = animated ? m_LocalShadowAnimPSO : m_LocalShadowStaticPSO;
+        if (psoRef)
+        {
+            return psoRef;
+        }
+
+        RenderTarget *sampleRT = m_StaticLocalShadowFaceRTs[0] ? m_StaticLocalShadowFaceRTs[0].get() : m_DynamicLocalShadowFaceRTs[0].get();
+        if (!sampleRT)
+        {
+            return nullptr;
+        }
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.enableDepthTest = true;
+        params.enableDepthWrite = true;
+        params.enableDepthStencil = false;
+        params.fillMode = nri::FillMode::SOLID;
+        params.cullMode = nri::CullMode::NONE;
+        params.depthFunc = nri::CompareOp::LESS_EQUAL;
+
+        Ref<Shader> vertexShader = Shader::Create(
+            animated ? "resources/shaders/gi_point_shadow_anim.vertex.hlsl" : "resources/shaders/gi_point_shadow.vertex.hlsl",
+            UMBRA_SHADER_TYPE_VERTEX, false);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/gi_point_shadow.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+        psoRef = GraphicsPipeline::Create(animated ? "SceneRenderer LocalShadow Anim PSO" : "SceneRenderer LocalShadow Static PSO");
+        psoRef->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(Renderer::GetBindingLayout(animated ? EBindingLayout::MESH_ANIM : EBindingLayout::MESH_STATIC))
+            .Build(sampleRT, params);
+
+        return psoRef;
+    }
+
+    Ref<BindingSet> SceneRenderer::GetOrCreateLocalShadowBindingSet(
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &cache,
+        FrameContext *frameContext, uint32_t slice, ConstantBuffer *camBuf, bool animated)
+    {
+        if (!frameContext || !camBuf || slice >= kMaxLocalShadowLights * 6)
+        {
+            return nullptr;
+        }
+
+        auto &arr = cache[frameContext];
+        if (arr[slice])
+        {
+            return arr[slice];
+        }
+
+        nri::PipelineLayout *layout = Renderer::GetPipelineLayout(animated ? EBindingLayout::MESH_ANIM : EBindingLayout::MESH_STATIC);
+        if (!layout)
+        {
+            return nullptr;
+        }
+
+        BindingSetDesc desc;
+        desc.AddItem(BindingSetItem::PushConstants(0, sizeof(uint32_t)));
+        desc.AddItem(BindingSetItem::ConstantBuffer(1, camBuf->GetDescriptor()));
+        desc.AddItem(BindingSetItem::StructuredBufferSRV(2, frameContext->objectBuffer.GetDescriptor()));
+        desc.AddItem(BindingSetItem::StructuredBufferSRV(3, animated ? frameContext->boneBuffer.GetDescriptor() : frameContext->instanceIndexBuffer.GetDescriptor()));
+        desc.AddItem(BindingSetItem::ConstantBuffer(4, frameContext->sceneBuffer.GetDescriptor()));
+        desc.AddItem(BindingSetItem::ConstantBuffer(5, frameContext->csmBuffer.GetDescriptor()));
+        desc.AddItem(BindingSetItem::ConstantBuffer(6, frameContext->pointLightBuffer.GetDescriptor()));
+        desc.AddItem(BindingSetItem::ConstantBuffer(7, frameContext->spotLightBuffer.GetDescriptor()));
+        desc.AddItem(BindingSetItem::ConstantBuffer(8, frameContext->giBuffer.GetDescriptor()));
+        desc.AddItem(BindingSetItem::StructuredBufferSRV(9, frameContext->reflectionProbeBuffer.GetDescriptor()));
+        arr[slice] = BindingSet::Create(animated ? "SceneRenderer LocalShadow Anim Set0" : "SceneRenderer LocalShadow Static Set0", layout, 0, desc);
+        return arr[slice];
+    }
+
+    void SceneRenderer::RenderLocalShadowPassCube(nri::CommandBuffer *cmd, FrameContext *frameContext,
+        const std::vector<LocalShadowLightItem> &lights, bool staticOnly, bool includeMovableOnly,
+        std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> &faceRTs,
+        std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6> &faceCamBuffers,
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &staticBindingCache,
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &animBindingCache,
+        const Ref<GraphicsPipeline> &staticPSO, const Ref<GraphicsPipeline> &animPSO)
+    {
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        const size_t staticCount = m_FramePacket.staticMeshes.size();
+        const size_t skelCount = m_FramePacket.skeletalMeshes.size();
+
+        for (const LocalShadowLightItem &light : lights)
+        {
+            if (light.slot >= kMaxLocalShadowLights)
+            {
+                continue;
+            }
+
+            const float range = std::max(light.range, 0.5f);
+            for (uint32_t face = 0; face < 6; ++face)
+            {
+                const uint32_t slice = light.slot * 6u + face;
+                RenderTarget *rt = faceRTs[slice].get();
+                ConstantBuffer *camBuf = faceCamBuffers[slice].get();
+                if (!rt || !camBuf)
+                {
+                    continue;
+                }
+
+                glm::mat4 faceView(1.0f);
+                glm::mat4 faceProj(1.0f);
+                SceneCaptureRenderer::GetCubemapFaceViewProj(light.position, face, 0.05f, range, faceView, faceProj);
+
+                CameraBufferData camData{};
+                camData.viewProjection = faceProj;
+                camData.view = faceView;
+                camData.position = glm::vec4(light.position, std::max(light.range, 1e-4f));
+                camBuf->SetData(&camData, sizeof(camData));
+
+                const Frustum faceFrustum(faceProj * faceView);
+
+                rt->BeginRendering(cmd, true, true);
+
+                Ref<BindingSet> staticSet = GetOrCreateLocalShadowBindingSet(staticBindingCache, frameContext, slice, camBuf, false);
+                if (staticPSO && staticPSO->GetHandle() && staticSet)
+                {
+                    m_ShadowBatchBuilder.Clear();
+
+                    if (staticCount > 0)
+                    {
+                        m_FramePacket.visibilityScratch.resize(staticCount);
+                        faceFrustum.IsAABBVisibleBatch(m_FramePacket.staticMeshAABBs.data(), staticCount, m_FramePacket.visibilityScratch.data());
+
+                        for (size_t cIdx = 0; cIdx < staticCount; ++cIdx)
+                        {
+                            if (!m_FramePacket.visibilityScratch[cIdx])
+                                continue;
+
+                            const StaticMeshPacketItem &item = m_FramePacket.staticMeshes[cIdx];
+                            if (!item.mesh || !item.castShadow)
+                                continue;
+                            if (staticOnly && !item.isStatic)
+                                continue;
+                            if (includeMovableOnly && item.isStatic)
+                                continue;
+
+                            const auto &instances = item.mesh->GetMeshInstances();
+                            for (size_t idx = 0; idx < instances.size() && idx < item.instanceCount; ++idx)
+                            {
+                                auto &meshInstance = instances[idx];
+                                auto &primitive = meshInstance->GetPrimitive();
+                                if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
+                                    continue;
+
+                                const uint32_t objectIndex = m_FramePacket.staticMeshObjectIndices[item.firstObjectIndexOffset + idx];
+                                BatchKey key;
+                                key.vertexBuffer = *primitive->vertexBuffer;
+                                key.indexBuffer = *primitive->indexBuffer;
+                                key.meshBindingSet = staticSet->GetHandle();
+                                key.materialBindingSet = nullptr;
+                                key.pipeline = staticPSO->GetHandle();
+
+                                m_ShadowBatchBuilder.Submit(key,
+                                    *primitive->vertexBuffer, *primitive->indexBuffer,
+                                    staticSet, nullptr, staticPSO,
+                                    primitive->indexBuffer->GetCount(), objectIndex);
+                            }
+                        }
+                    }
+
+                    for (const TerrainPacketItem &tItem : m_FramePacket.terrains)
+                    {
+                        if (!tItem.component || !tItem.castShadow)
+                            continue;
+                        if (staticOnly && !tItem.isStatic)
+                            continue;
+                        if (includeMovableOnly && tItem.isStatic)
+                            continue;
+
+                        auto cacheIt = m_EntityObjectIndexCache.find(tItem.entity);
+                        if (cacheIt == m_EntityObjectIndexCache.end())
+                            continue;
+
+                        const auto &chunks = tItem.component->chunks;
+                        for (size_t idx = 0; idx < chunks.size() && idx < cacheIt->second.size(); ++idx)
+                        {
+                            const auto &chunk = chunks[idx];
+                            if (!chunk.primitive || !chunk.primitive->vertexBuffer || !chunk.primitive->indexBuffer)
+                                continue;
+
+                            const AABB worldBounds = chunk.bounds.Transform(tItem.worldMatrix);
+                            if (!faceFrustum.IsAABBVisible(worldBounds))
+                                continue;
+
+                            const uint32_t objectIndex = cacheIt->second[idx];
+                            BatchKey key;
+                            key.vertexBuffer = *chunk.primitive->vertexBuffer;
+                            key.indexBuffer = *chunk.primitive->indexBuffer;
+                            key.meshBindingSet = staticSet->GetHandle();
+                            key.materialBindingSet = nullptr;
+                            key.pipeline = staticPSO->GetHandle();
+
+                            m_ShadowBatchBuilder.Submit(key,
+                                *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
+                                staticSet, nullptr, staticPSO,
+                                chunk.primitive->indexBuffer->GetCount(), objectIndex);
+                        }
+                    }
+
+                    if (!m_ShadowBatchBuilder.IsEmpty())
+                    {
+                        m_ShadowBatchBuilder.Finalize();
+                        const auto &batches = m_ShadowBatchBuilder.GetBatches();
+
+                        std::vector<uint32_t> allObjectIndices;
+                        std::vector<uint32_t> batchBaseOffsets;
+                        batchBaseOffsets.reserve(batches.size());
+                        for (const DrawBatch &batch : batches)
+                        {
+                            batchBaseOffsets.push_back(static_cast<uint32_t>(allObjectIndices.size()));
+                            allObjectIndices.insert(allObjectIndices.end(), batch.objectIndices.begin(), batch.objectIndices.end());
+                        }
+
+                        const uint32_t globalBaseOffset = frameContext->instanceIndexAllocator.Allocate(
+                            cmd, allObjectIndices.data(), static_cast<uint32_t>(allObjectIndices.size()));
+
+                        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *staticPSO->GetPipelineLayout());
+                        nri.CmdSetPipeline(*cmd, *staticPSO->GetHandle());
+                        nri::SetDescriptorSetDesc set0 = { 0, staticSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                        nri.CmdSetDescriptorSet(*cmd, set0);
+
+                        for (size_t bIdx = 0; bIdx < batches.size(); ++bIdx)
+                        {
+                            const DrawBatch &batch = batches[bIdx];
+                            if (!batch.vertexBuffer || !batch.indexBuffer)
+                                continue;
+
+                            const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[bIdx];
+                            nri::VertexBufferDesc vbDesc = {};
+                            vbDesc.buffer = batch.vertexBuffer;
+                            vbDesc.offset = 0;
+                            vbDesc.stride = batch.vertexStride ? batch.vertexStride : static_cast<uint32_t>(sizeof(VertexMeshStatic));
+                            nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+                            nri.CmdSetIndexBuffer(*cmd, *batch.indexBuffer, 0, nri::IndexType::UINT32);
+
+                            nri::SetRootConstantsDesc rootConstDesc = {};
+                            rootConstDesc.rootConstantIndex = 0;
+                            rootConstDesc.data = &baseOffset;
+                            rootConstDesc.size = sizeof(baseOffset);
+                            rootConstDesc.offset = 0;
+                            rootConstDesc.bindPoint = nri::BindPoint::GRAPHICS;
+                            nri.CmdSetRootConstants(*cmd, rootConstDesc);
+
+                            nri::DrawIndexedDesc drawDesc = {};
+                            drawDesc.indexNum = batch.indexCount;
+                            drawDesc.instanceNum = batch.GetInstanceCount();
+                            nri.CmdDrawIndexed(*cmd, drawDesc);
+                            Renderer::Stats.shadowDrawCallCount++;
+                        }
+                    }
+                }
+
+                if (skelCount > 0 && animPSO && animPSO->GetHandle())
+                {
+                    Ref<BindingSet> animSet = GetOrCreateLocalShadowBindingSet(animBindingCache, frameContext, slice, camBuf, true);
+                    if (animSet && animSet->GetHandle())
+                    {
+                        m_FramePacket.visibilityScratch.resize(skelCount);
+                        faceFrustum.IsAABBVisibleBatch(m_FramePacket.skeletalMeshAABBs.data(), skelCount, m_FramePacket.visibilityScratch.data());
+
+                        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *animPSO->GetPipelineLayout());
+                        nri.CmdSetPipeline(*cmd, *animPSO->GetHandle());
+                        nri::SetDescriptorSetDesc set0 = { 0, animSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                        nri.CmdSetDescriptorSet(*cmd, set0);
+
+                        for (size_t cIdx = 0; cIdx < skelCount; ++cIdx)
+                        {
+                            if (!m_FramePacket.visibilityScratch[cIdx])
+                                continue;
+
+                            const SkeletalMeshPacketItem &item = m_FramePacket.skeletalMeshes[cIdx];
+                            if (!item.mesh || !item.component || !item.castShadow)
+                                continue;
+                            if (staticOnly && !item.isStatic)
+                                continue;
+                            if (includeMovableOnly && item.isStatic)
+                                continue;
+
+                            auto cacheIt = m_EntityObjectIndexCache.find(item.entity);
+                            if (cacheIt == m_EntityObjectIndexCache.end())
+                                continue;
+
+                            const auto &instances = item.mesh->GetMeshInstances();
+                            for (size_t idx = 0; idx < instances.size() && idx < cacheIt->second.size(); ++idx)
+                            {
+                                auto &primitive = instances[idx]->GetPrimitive();
+                                if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
+                                    continue;
+
+                                nri::VertexBufferDesc vbDesc = {};
+                                vbDesc.buffer = primitive->vertexBuffer->GetHandle();
+                                vbDesc.offset = 0;
+                                vbDesc.stride = static_cast<uint32_t>(sizeof(VertexMeshAnim));
+                                nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+                                nri.CmdSetIndexBuffer(*cmd, *primitive->indexBuffer->GetHandle(), 0, nri::IndexType::UINT32);
+
+                                uint32_t objectIndex = cacheIt->second[idx];
+                                nri::SetRootConstantsDesc rootConstDesc = {};
+                                rootConstDesc.rootConstantIndex = 0;
+                                rootConstDesc.data = &objectIndex;
+                                rootConstDesc.size = sizeof(objectIndex);
+                                rootConstDesc.offset = 0;
+                                rootConstDesc.bindPoint = nri::BindPoint::GRAPHICS;
+                                nri.CmdSetRootConstants(*cmd, rootConstDesc);
+
+                                nri::DrawIndexedDesc drawDesc = {};
+                                drawDesc.indexNum = primitive->indexBuffer->GetCount();
+                                drawDesc.instanceNum = 1;
+                                nri.CmdDrawIndexed(*cmd, drawDesc);
+                                Renderer::Stats.shadowDrawCallCount++;
+                            }
+                        }
+                    }
+                }
+
+                rt->EndRendering(cmd);
+            }
+        }
+    }
+
+    void SceneRenderer::LocalLightShadowPass(nri::CommandBuffer *cmd, FrameContext *frameContext)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        m_GIGPUData.bakePointShadowCubeArrayIndex = -1;
+        m_GIGPUData.dynamicPointShadowCubeArrayIndex = -1;
+
+        if (!cmd || !frameContext || m_FramePacket.localShadowLights.empty())
+        {
+            return;
+        }
+
+        EnsureLocalShadowResources();
+        if (!m_StaticLocalShadowCubeArray || !m_DynamicLocalShadowCubeArray)
+        {
+            return;
+        }
+
+        if (!m_StaticLocalShadowInitialized && m_StaticLocalShadowFaceRTs[0])
+        {
+            m_StaticLocalShadowFaceRTs[0]->BeginRendering(cmd, true, true);
+            m_StaticLocalShadowFaceRTs[0]->EndRendering(cmd);
+            m_StaticLocalShadowInitialized = true;
+        }
+        if (!m_DynamicLocalShadowInitialized && m_DynamicLocalShadowFaceRTs[0])
+        {
+            m_DynamicLocalShadowFaceRTs[0]->BeginRendering(cmd, true, true);
+            m_DynamicLocalShadowFaceRTs[0]->EndRendering(cmd);
+            m_DynamicLocalShadowInitialized = true;
+        }
+
+        bool hasMovableCaster = false;
+        for (const auto &item : m_FramePacket.staticMeshes)
+        {
+            if (item.castShadow && !item.isStatic) { hasMovableCaster = true; break; }
+        }
+        if (!hasMovableCaster)
+        {
+            for (const auto &item : m_FramePacket.terrains)
+            {
+                if (item.castShadow && !item.isStatic) { hasMovableCaster = true; break; }
+            }
+        }
+        if (!hasMovableCaster)
+        {
+            for (const auto &item : m_FramePacket.skeletalMeshes)
+            {
+                if (item.castShadow && !item.isStatic) { hasMovableCaster = true; break; }
+            }
+        }
+
+        std::vector<LocalShadowLightItem> staticBakedLights;
+        std::vector<LocalShadowLightItem> unbakedDynamicLights;
+        std::vector<LocalShadowLightItem> movableOverlayLights;
+        staticBakedLights.reserve(m_FramePacket.localShadowLights.size());
+        unbakedDynamicLights.reserve(m_FramePacket.localShadowLights.size());
+        movableOverlayLights.reserve(m_FramePacket.localShadowLights.size());
+
+        for (const LocalShadowLightItem &light : m_FramePacket.localShadowLights)
+        {
+            if (light.bakeStaticShadow)
+            {
+                staticBakedLights.push_back(light);
+                if (hasMovableCaster)
+                {
+                    movableOverlayLights.push_back(light);
+                }
+            }
+            else
+            {
+                unbakedDynamicLights.push_back(light);
+            }
+        }
+
+        // Compute deterministic content hash for static local shadows (static casters + shadow lights)
+        uint64_t staticHash = 14695981039346656037ull;
+        auto mixBytes = [&staticHash](const void *data, size_t size)
+        {
+            const auto *bytes = static_cast<const uint8_t *>(data);
+            for (size_t i = 0; i < size; ++i)
+            {
+                staticHash ^= bytes[i];
+                staticHash *= 1099511628211ull;
+            }
+        };
+
+        for (const LocalShadowLightItem &l : m_FramePacket.localShadowLights)
+        {
+            mixBytes(&l.slot, sizeof(l.slot));
+            mixBytes(&l.position, sizeof(l.position));
+            mixBytes(&l.range, sizeof(l.range));
+            mixBytes(&l.isSpot, sizeof(l.isSpot));
+            mixBytes(&l.bakeStaticShadow, sizeof(l.bakeStaticShadow));
+        }
+        for (const auto &item : m_FramePacket.staticMeshes)
+        {
+            if (!item.castShadow || !item.isStatic) continue;
+            mixBytes(&item.objectID, sizeof(item.objectID));
+            mixBytes(&item.worldMatrix, sizeof(item.worldMatrix));
+            const void *meshPtr = item.mesh;
+            mixBytes(&meshPtr, sizeof(meshPtr));
+        }
+        for (const auto &item : m_FramePacket.terrains)
+        {
+            if (!item.castShadow || !item.isStatic) continue;
+            mixBytes(&item.objectID, sizeof(item.objectID));
+            mixBytes(&item.worldMatrix, sizeof(item.worldMatrix));
+        }
+
+        const bool needStaticRebuild = !staticBakedLights.empty() && (!m_StaticLocalShadowValid || staticHash != m_StaticLocalShadowHash);
+        const bool needDynamicRender = !unbakedDynamicLights.empty() || !movableOverlayLights.empty();
+
+        if (needStaticRebuild || needDynamicRender)
+        {
+            // Prevent WRITE_AFTER_READ hazards against prior frame's ColorPass reading these cube arrays
+            WaitForPreviousCommandBuffer();
+        }
+
+        Ref<GraphicsPipeline> staticPSO = GetOrCreateLocalShadowPSO(false);
+        Ref<GraphicsPipeline> animPSO = GetOrCreateLocalShadowPSO(true);
+
+        if (needStaticRebuild)
+        {
+            // Clear slices belonging to non-baked lights so min(static, dynamic) never applies stale static data
+            for (const LocalShadowLightItem &unbaked : unbakedDynamicLights)
+            {
+                if (unbaked.slot < kMaxLocalShadowLights)
+                {
+                    for (uint32_t face = 0; face < 6; ++face)
+                    {
+                        RenderTarget *rt = m_StaticLocalShadowFaceRTs[unbaked.slot * 6u + face].get();
+                        if (rt)
+                        {
+                            rt->BeginRendering(cmd, true, true);
+                            rt->EndRendering(cmd);
+                        }
+                    }
+                }
+            }
+
+            RenderLocalShadowPassCube(cmd, frameContext, staticBakedLights, true, false,
+                m_StaticLocalShadowFaceRTs, m_StaticLocalShadowFaceCameraBuffers,
+                m_StaticLocalShadowStaticBindingSets, m_StaticLocalShadowAnimBindingSets,
+                staticPSO, animPSO);
+
+            m_StaticLocalShadowHash = staticHash;
+            m_StaticLocalShadowValid = true;
+        }
+        else if (staticBakedLights.empty())
+        {
+            m_StaticLocalShadowValid = false;
+            m_StaticLocalShadowHash = 0;
+        }
+
+        if (needDynamicRender)
+        {
+            // If we have both unbaked lights and baked lights without movable casters, clear inactive dynamic slices cleanly
+            if (!unbakedDynamicLights.empty() && !hasMovableCaster)
+            {
+                for (const LocalShadowLightItem &baked : staticBakedLights)
+                {
+                    if (baked.slot < kMaxLocalShadowLights)
+                    {
+                        for (uint32_t face = 0; face < 6; ++face)
+                        {
+                            RenderTarget *rt = m_DynamicLocalShadowFaceRTs[baked.slot * 6u + face].get();
+                            if (rt)
+                            {
+                                rt->BeginRendering(cmd, true, true);
+                                rt->EndRendering(cmd);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!unbakedDynamicLights.empty())
+            {
+                RenderLocalShadowPassCube(cmd, frameContext, unbakedDynamicLights, false, false,
+                    m_DynamicLocalShadowFaceRTs, m_DynamicLocalShadowFaceCameraBuffers,
+                    m_DynamicLocalShadowStaticBindingSets, m_DynamicLocalShadowAnimBindingSets,
+                    staticPSO, animPSO);
+            }
+
+            if (!movableOverlayLights.empty())
+            {
+                RenderLocalShadowPassCube(cmd, frameContext, movableOverlayLights, false, true,
+                    m_DynamicLocalShadowFaceRTs, m_DynamicLocalShadowFaceCameraBuffers,
+                    m_DynamicLocalShadowStaticBindingSets, m_DynamicLocalShadowAnimBindingSets,
+                    staticPSO, animPSO);
+            }
+
+            m_HasDynamicLocalShadows = true;
+        }
+        else
+        {
+            m_HasDynamicLocalShadows = false;
+        }
+
+        if (!staticBakedLights.empty() && m_StaticLocalShadowValid && m_StaticLocalShadowCubeArray->GetBindlessIndex() != UINT32_MAX)
+        {
+            m_GIGPUData.bakePointShadowCubeArrayIndex = static_cast<int32_t>(m_StaticLocalShadowCubeArray->GetBindlessIndex());
+        }
+        if (m_HasDynamicLocalShadows && m_DynamicLocalShadowCubeArray->GetBindlessIndex() != UINT32_MAX)
+        {
+            m_GIGPUData.dynamicPointShadowCubeArrayIndex = static_cast<int32_t>(m_DynamicLocalShadowCubeArray->GetBindlessIndex());
         }
     }
 

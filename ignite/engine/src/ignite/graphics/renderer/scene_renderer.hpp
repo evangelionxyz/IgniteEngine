@@ -144,6 +144,9 @@ namespace ignite
         void EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight);
 
         void ShadowPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext);
+        void LocalLightShadowPass(nri::CommandBuffer *cmd, FrameContext *frameContext);
+        void EnsureLocalShadowResources();
+        void ShutdownLocalShadowResources();
         void UpdateSkyIBL(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext);
         void RenderDebugProbes(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
         void ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug);
@@ -357,6 +360,46 @@ namespace ignite
 
         Ref<ReflectionProbeSet> m_ActiveReflectionProbeSet;
         std::string m_LoadedReflectionSignature;
+
+        // Runtime Static (cached by hash) + Dynamic (movable casters) Point & Spot Light shadow cube arrays
+        static constexpr uint32_t kMaxLocalShadowPointLights = 8;
+        static constexpr uint32_t kMaxLocalShadowSpotLights = 4;
+        static constexpr uint32_t kMaxLocalShadowLights = kMaxLocalShadowPointLights + kMaxLocalShadowSpotLights;
+        static constexpr uint32_t kLocalShadowResolution = 256;
+
+        Ref<Texture> m_StaticLocalShadowCubeArray;
+        Ref<Texture> m_StaticLocalShadowDepthTex;
+        std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> m_StaticLocalShadowFaceRTs;
+        std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6> m_StaticLocalShadowFaceCameraBuffers;
+        uint64_t m_StaticLocalShadowHash = 0;
+        bool m_StaticLocalShadowValid = false;
+        bool m_StaticLocalShadowInitialized = false;
+
+        Ref<Texture> m_DynamicLocalShadowCubeArray;
+        Ref<Texture> m_DynamicLocalShadowDepthTex;
+        std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> m_DynamicLocalShadowFaceRTs;
+        std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6> m_DynamicLocalShadowFaceCameraBuffers;
+        bool m_HasDynamicLocalShadows = false;
+        bool m_DynamicLocalShadowInitialized = false;
+
+        Ref<GraphicsPipeline> m_LocalShadowStaticPSO;
+        Ref<GraphicsPipeline> m_LocalShadowAnimPSO;
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> m_StaticLocalShadowStaticBindingSets;
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> m_StaticLocalShadowAnimBindingSets;
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> m_DynamicLocalShadowStaticBindingSets;
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> m_DynamicLocalShadowAnimBindingSets;
+
+        Ref<GraphicsPipeline> GetOrCreateLocalShadowPSO(bool animated);
+        Ref<BindingSet> GetOrCreateLocalShadowBindingSet(
+            std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &cache,
+            FrameContext *frameContext, uint32_t slice, ConstantBuffer *camBuf, bool animated);
+        void RenderLocalShadowPassCube(nri::CommandBuffer *cmd, FrameContext *frameContext,
+            const std::vector<LocalShadowLightItem> &lights, bool staticOnly, bool includeMovableOnly,
+            std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> &faceRTs,
+            std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6> &faceCamBuffers,
+            std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &staticBindingCache,
+            std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &animBindingCache,
+            const Ref<GraphicsPipeline> &staticPSO, const Ref<GraphicsPipeline> &animPSO);
     };
 }
 

@@ -20,7 +20,8 @@ float2 main(PixelVertexInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARG
         Texture2D baseColorTex = ResourceDescriptorHeap[SafeBindlessIndex(material.baseColorTextureIndex)];
         float4 rawBase = baseColorTex.Sample(sampler0, tiledUV);
         float finalAlpha = rawBase.a * input.color.a * material.baseColorFactor.a;
-        if (finalAlpha < 0.5f)
+        float alphaCutoff = (material.alphaCutoff > 0.0f) ? material.alphaCutoff : 0.5f;
+        if (finalAlpha < alphaCutoff)
         {
             discard;
         }

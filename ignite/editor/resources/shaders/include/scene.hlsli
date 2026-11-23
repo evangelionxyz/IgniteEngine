@@ -39,7 +39,8 @@ struct Object
     float4x4 normalMatrix;
     uint objectID;
     uint boneOffset;
-    float2 _padding;
+    uint receiveShadow;
+    uint _padding;
 };
 
 struct Camera
@@ -107,7 +108,8 @@ struct Material
     // OpenPBR transmission
     float transmissionWeight;
     float transmissionDepth;
-    float2 _padTR;
+    float specularRotation;
+    float transmissionScatter;
     float4 transmissionColor;
 
     // OpenPBR fuzz
@@ -119,7 +121,8 @@ struct Material
     // Advanced
     float useMultiScatter;
     float emissionLuminance;
-    float2 _padAdv;
+    float alphaCutoff;
+    float normalScale;
 };
 
 struct Skeleton
@@ -161,6 +164,7 @@ struct PixelVertexInput
     float2 uv : TEXCOORD;
     float4 color : COLOR;
     nointerpolation uint objectID : OBJECTID;
+    nointerpolation uint receiveShadow : RECEIVESHADOW;
 };
 
 // Lighting
@@ -169,6 +173,7 @@ struct PointLight
     float4 positionAndRange; // xyz = position, w = range
     float4 color; // rgb = color, a = intensity
     float4 attenuation; // x = constant, y = linear, z = quadratic, w = unused
+    float4 shadowParams; // x = shadow slice index (<0 disabled), y = bias, z = pcfRadius, w = shadowStrength
 };
 
 struct SpotLight
@@ -177,6 +182,7 @@ struct SpotLight
     float4 directionAndAngle; // xyz = direction, w = cos(outerConeAngle)
     float4 color; // rgb = color, a = intensity
     float4 attenuation; // x = constant, y = linear, z = quadratic, w = cos(innerConeAngle)
+    float4 shadowParams; // x = shadow slice index (<0 disabled), y = bias, z = pcfRadius, w = shadowStrength
 };
 
 struct GIData
@@ -207,6 +213,11 @@ struct GIData
     float aoPower;
 
     float4 viewportInvSizeAndFlags;
+
+    int dynamicPointShadowCubeArrayIndex;
+    int skyVisibilitySplit;
+    int skyVisibilityTexIndex;
+    int _giPad0;
 };
 
 struct ReflectionProbeGPU

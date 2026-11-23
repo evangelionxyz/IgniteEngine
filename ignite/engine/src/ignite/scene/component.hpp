@@ -298,12 +298,23 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_Transform)
     };
 
+    enum class EntityMobility : int
+    {
+        Static = 0,
+        Movable = 1,
+    };
+
     class RenderingComponent : public IComponent
     {
     public:
         bool visible = true;
+        EntityMobility mobility = EntityMobility::Static;
+        bool castShadow = true;
+        bool receiveShadow = true;
         bool contributeGI = true;
         bool receiveGI = true;
+
+        bool IsStaticForGI() const { return mobility == EntityMobility::Static && contributeGI; }
 
         RenderingComponent() = default;
 
@@ -349,6 +360,14 @@ namespace ignite
         float linearAttenuation = 0.09f;
         float quadraticAttenuation = 0.032f;
 
+        // Shadows
+        bool castShadow = true;
+        bool bakeStaticShadow = true;
+        bool softShadows = true;
+        float shadowStrength = 1.0f;
+        float shadowBias = 0.015f;
+        float pcfRadius = 0.02f;
+
         COMPONENT_CLASS_TYPE(CompType_PointLight)
     };
 
@@ -371,6 +390,14 @@ namespace ignite
         // Cone angles in degrees
         float innerConeAngle = 12.5f;  // Full-intensity inner cone
         float outerConeAngle = 45.0f;  // Falloff outer cone
+
+        // Shadows
+        bool castShadow = true;
+        bool bakeStaticShadow = true;
+        bool softShadows = true;
+        float shadowStrength = 1.0f;
+        float shadowBias = 0.015f;
+        float pcfRadius = 0.02f;
 
         COMPONENT_CLASS_TYPE(CompType_SpotLight)
     };
@@ -410,6 +437,7 @@ namespace ignite
         int captureResolution = 32;
         int shOrder = 2;
         int runtimeMode = 2; // 0 = Off, 1 = Fast, 2 = LeakResistant
+        bool skyVisibilitySplit = false; // M8 §3.7 separate dynamic sky visibility term
         float normalBias = 0.25f;
         float viewBias = 0.1f;
         float edgeFade = 1.0f;
@@ -438,6 +466,7 @@ namespace ignite
         bool normalize = true;
         float normalizationStrength = 1.0f;
         bool boxProjection = true;
+        float excludeRadius = 0.65f;
 
         AssetHandle bakedAsset = AssetHandle(0);
         std::string bakedAssetPath;

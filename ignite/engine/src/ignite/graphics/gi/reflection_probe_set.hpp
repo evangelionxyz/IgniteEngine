@@ -10,7 +10,9 @@
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/graphics/gi/gi_asset_io.hpp"
 
+#include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <array>
 #include <filesystem>
 #include <vector>
 
@@ -43,6 +45,7 @@ namespace ignite
         ~ReflectionProbeSet() = default;
 
         bool BuildFromScene(Scene *scene, const std::filesystem::path &projectRoot = {});
+        bool UpdateProbeTransformsFromScene(Scene *scene);
         void Clear();
 
         void FillGIGPUData(GI_GPUData &outGI) const;
@@ -55,8 +58,16 @@ namespace ignite
         Ref<Texture> GetCubeArray() const { return m_CubeArray; }
 
     private:
+        struct BoundProbeEntry
+        {
+            entt::entity entity = entt::null;
+            uint32_t sliceIdx = 0;
+            std::array<glm::vec4, 4> captureSH = {};
+        };
+
         Ref<Texture> m_CubeArray;
         std::vector<ReflectionProbe_GPUData> m_Probes;
+        std::vector<BoundProbeEntry> m_BoundEntries;
         uint32_t m_Resolution = 128;
         uint32_t m_MipCount = 1;
     };

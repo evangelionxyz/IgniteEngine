@@ -201,6 +201,9 @@ namespace ignite
                 const auto &rc = e.GetComponent<RenderingComponent>();
                 j["Rendering"] = {
                     { "visible", rc.visible },
+                    { "mobility", rc.mobility == EntityMobility::Static ? "Static" : "Movable" },
+                    { "cast_shadow", rc.castShadow },
+                    { "receive_shadow", rc.receiveShadow },
                     { "contribute_gi", rc.contributeGI },
                     { "receive_gi", rc.receiveGI }
                 };
@@ -254,7 +257,14 @@ namespace ignite
                     { "color", Vec4ToJson(pl.color) },
                     { "intensity", pl.intensity },
                     { "range", pl.range },
-                    { "enabled", pl.enabled }
+                    { "enabled", pl.enabled },
+                    { "bake_indirect", pl.bakeIndirect },
+                    { "cast_shadow", pl.castShadow },
+                    { "bake_static_shadow", pl.bakeStaticShadow },
+                    { "soft_shadows", pl.softShadows },
+                    { "shadow_strength", pl.shadowStrength },
+                    { "shadow_bias", pl.shadowBias },
+                    { "pcf_radius", pl.pcfRadius }
                 };
             }
 
@@ -266,8 +276,15 @@ namespace ignite
                     { "intensity", sl.intensity },
                     { "range", sl.range },
                     { "enabled", sl.enabled },
+                    { "bake_indirect", sl.bakeIndirect },
                     { "inner_cone_angle", sl.innerConeAngle },
-                    { "outer_cone_angle", sl.outerConeAngle }
+                    { "outer_cone_angle", sl.outerConeAngle },
+                    { "cast_shadow", sl.castShadow },
+                    { "bake_static_shadow", sl.bakeStaticShadow },
+                    { "soft_shadows", sl.softShadows },
+                    { "shadow_strength", sl.shadowStrength },
+                    { "shadow_bias", sl.shadowBias },
+                    { "pcf_radius", sl.pcfRadius }
                 };
             }
 
@@ -378,6 +395,7 @@ namespace ignite
                     { "normalize", rp.normalize },
                     { "normalization_strength", rp.normalizationStrength },
                     { "box_projection", rp.boxProjection },
+                    { "exclude_radius", rp.excludeRadius },
                     { "baked_asset_path", rp.bakedAssetPath },
                     { "bake_hash", rp.bakeHash }
                 };
@@ -410,6 +428,21 @@ namespace ignite
             {
                 auto &rc = e.HasComponent<RenderingComponent>() ? e.GetComponent<RenderingComponent>() : e.AddComponent<RenderingComponent>();
                 if (props.contains("visible")) rc.visible = props["visible"].get<bool>();
+                if (props.contains("mobility"))
+                {
+                    if (props["mobility"].is_string())
+                    {
+                        const std::string m = props["mobility"].get<std::string>();
+                        rc.mobility = (m == "Movable" || m == "movable" || m == "Dynamic" || m == "dynamic")
+                            ? EntityMobility::Movable : EntityMobility::Static;
+                    }
+                    else if (props["mobility"].is_number_integer())
+                    {
+                        rc.mobility = static_cast<EntityMobility>(std::clamp(props["mobility"].get<int>(), 0, 1));
+                    }
+                }
+                if (props.contains("cast_shadow")) rc.castShadow = props["cast_shadow"].get<bool>();
+                if (props.contains("receive_shadow")) rc.receiveShadow = props["receive_shadow"].get<bool>();
                 if (props.contains("contribute_gi")) rc.contributeGI = props["contribute_gi"].get<bool>();
                 if (props.contains("receive_gi")) rc.receiveGI = props["receive_gi"].get<bool>();
                 return true;
@@ -521,6 +554,12 @@ namespace ignite
                 if (props.contains("range")) pl.range = props["range"].get<float>();
                 if (props.contains("enabled")) pl.enabled = props["enabled"].get<bool>();
                 if (props.contains("bake_indirect")) pl.bakeIndirect = props["bake_indirect"].get<bool>();
+                if (props.contains("cast_shadow")) pl.castShadow = props["cast_shadow"].get<bool>();
+                if (props.contains("bake_static_shadow")) pl.bakeStaticShadow = props["bake_static_shadow"].get<bool>();
+                if (props.contains("soft_shadows")) pl.softShadows = props["soft_shadows"].get<bool>();
+                if (props.contains("shadow_strength")) pl.shadowStrength = props["shadow_strength"].get<float>();
+                if (props.contains("shadow_bias")) pl.shadowBias = props["shadow_bias"].get<float>();
+                if (props.contains("pcf_radius")) pl.pcfRadius = props["pcf_radius"].get<float>();
                 return true;
             }
 
@@ -534,6 +573,12 @@ namespace ignite
                 if (props.contains("inner_cone_angle")) sl.innerConeAngle = props["inner_cone_angle"].get<float>();
                 if (props.contains("outer_cone_angle")) sl.outerConeAngle = props["outer_cone_angle"].get<float>();
                 if (props.contains("bake_indirect")) sl.bakeIndirect = props["bake_indirect"].get<bool>();
+                if (props.contains("cast_shadow")) sl.castShadow = props["cast_shadow"].get<bool>();
+                if (props.contains("bake_static_shadow")) sl.bakeStaticShadow = props["bake_static_shadow"].get<bool>();
+                if (props.contains("soft_shadows")) sl.softShadows = props["soft_shadows"].get<bool>();
+                if (props.contains("shadow_strength")) sl.shadowStrength = props["shadow_strength"].get<float>();
+                if (props.contains("shadow_bias")) sl.shadowBias = props["shadow_bias"].get<float>();
+                if (props.contains("pcf_radius")) sl.pcfRadius = props["pcf_radius"].get<float>();
                 return true;
             }
 
@@ -870,6 +915,7 @@ namespace ignite
                 if (props.contains("normalize")) rp.normalize = props["normalize"].get<bool>();
                 if (props.contains("normalization_strength")) rp.normalizationStrength = props["normalization_strength"].get<float>();
                 if (props.contains("box_projection")) rp.boxProjection = props["box_projection"].get<bool>();
+                if (props.contains("exclude_radius")) rp.excludeRadius = props["exclude_radius"].get<float>();
                 return true;
             }
 

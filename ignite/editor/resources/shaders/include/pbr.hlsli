@@ -14,9 +14,9 @@ struct OpenPBRSurface
     float3 specularColor; float specularRoughness; float specularIOR;
     float coatWeight; float3 coatColor; float coatRoughness; float coatIOR;
     float coatDarkening;
-    float specularAnisotropy;
+    float specularAnisotropy; float specularRotation;
     float subsurfaceWeight; float3 subsurfaceColor; float3 subsurfaceRadius; float subsurfaceScale;
-    float transmissionWeight; float3 transmissionColor; float transmissionDepth;
+    float transmissionWeight; float3 transmissionColor; float transmissionDepth; float transmissionScatter;
     float fuzzWeight; float3 fuzzColor; float fuzzRoughness;
     float useMultiScatter;
 };
@@ -47,6 +47,16 @@ static float GGXSmithG1(float NdotX, float roughness)
     return 2.0f * NdotX / max(NdotX + sqrt(alpha2 + (1.0f - alpha2) * n2), 1e-5f);
 }
 
+// Height-correlated Smith GGX visibility G2 / (4 * NdotV * NdotL)
+static float GGXVisibilityCorrelated(float NdotV, float NdotL, float roughness)
+{
+    float alpha = max(roughness * roughness, 0.0025f);
+    float a2 = alpha * alpha;
+    float ggxV = NdotL * sqrt(max(NdotV * NdotV * (1.0f - a2) + a2, 1e-6f));
+    float ggxL = NdotV * sqrt(max(NdotL * NdotL * (1.0f - a2) + a2, 1e-6f));
+    return 0.5f / max(ggxV + ggxL, 1e-5f);
+}
+
 static float3 GGXBRDF(float3 N, float3 L, float3 V, float roughness, float3 F)
 {
     float NdotL = saturate(dot(N, L));
@@ -54,8 +64,8 @@ static float3 GGXBRDF(float3 N, float3 L, float3 V, float roughness, float3 F)
     if (NdotL <= 0.0f || NdotV <= 0.0f) return 0.0f;
     float3 H = normalize(L + V);
     float D = GGXDistribution(saturate(dot(N, H)), roughness);
-    float G = GGXSmithG1(NdotL, roughness) * GGXSmithG1(NdotV, roughness);
-    return F * (D * G / max(4.0f * NdotL * NdotV, 1e-5f));
+    float Vis = GGXVisibilityCorrelated(NdotV, NdotL, roughness);
+    return F * (D * Vis);
 }
 
 static float DielectricF0(float iorRatio)
@@ -114,12 +124,90 @@ static float GGXDirectionalAlbedo(float cosTheta, float roughness)
     return saturate(AB.x + AB.y);
 }
 
+static float OpenPBRCoatRoughenedRoughness(float baseRoughness, float coatRoughness, float coatWeight)
+{
+    float rb = saturate(baseRoughness);
+    float rc = saturate(coatRoughness);
+    float r4 = lerp(rb * rb * rb * rb, max(rb, rc) * max(rb, rc) * max(rb, rc) * max(rb, rc), saturate(coatWeight));
+    return clamp(pow(max(r4, 1e-8f), 0.25f), 0.05f, 1.0f);
+}
+
+static float3 OpenPBRThroughCoat(float cosTheta, float3 coatF, OpenPBRSurface surface)
+{
+    float invCos = 1.0f / max(saturate(cosTheta), 0.25f);
+    float3 coatTint = pow(max(saturate(surface.coatColor), float3(1e-4f, 1e-4f, 1e-4f)), invCos);
+    return lerp(float3(1.0f, 1.0f, 1.0f), coatTint * (1.0f - coatF),
+        saturate(surface.coatWeight) * saturate(surface.coatDarkening));
+}
+
+static void OpenPBRRotateTangentFrame(float3 N, float3 T, float3 B, float rotation01, out float3 outT, out float3 outB)
+{
+    if (abs(rotation01) <= 1e-5f)
+    {
+        outT = T;
+        outB = B;
+        return;
+    }
+
+    float angle = rotation01 * (2.0f * M_PI);
+    float s = sin(angle);
+    float c = cos(angle);
+    outT = normalize(T * c + B * s);
+    outB = normalize(cross(N, outT));
+    if (dot(outB, B * c - T * s) < 0.0f)
+    {
+        outB = -outB;
+    }
+}
+
+static float3 OpenPBRAnisotropicReflectionDir(float3 V, float3 N, float3 T, float3 B, float roughness, float anisotropy, float rotation01)
+{
+    if (anisotropy <= 1e-4f)
+    {
+        return reflect(-V, N);
+    }
+
+    float3 rotT, rotB;
+    OpenPBRRotateTangentFrame(N, T, B, rotation01, rotT, rotB);
+    float3 bentNormal = N;
+    float3 grainDir = cross(rotB, V);
+    float grainLenSq = dot(grainDir, grainDir);
+    if (grainLenSq > 1e-6f)
+    {
+        float3 grainNormal = normalize(cross(grainDir * rsqrt(grainLenSq), rotB));
+        float bendFactor = saturate(anisotropy) * clamp(5.0f * roughness, 0.0f, 1.0f);
+        bentNormal = normalize(lerp(N, grainNormal, bendFactor));
+    }
+    return reflect(-V, bentNormal);
+}
+
+static float EnvSheenApprox(float roughness, float NdotV)
+{
+    float r = clamp(roughness, 0.07f, 1.0f);
+    float x = saturate(NdotV);
+    float invR = 1.0f / r;
+    float c0 = -0.35f + 0.15f * r;
+    float c1 = 0.72f + 0.25f * r;
+    return saturate(c1 + c0 * pow(x, 0.65f + 0.2f * invR));
+}
+
+// Split-sum environment BRDF approximation (Karis / Lazarov). Returns (scale, bias) applied to F0.
+static float2 EnvBRDFApprox(float roughness, float NdotV)
+{
+    float4 c0 = float4(-1.0f, -0.0275f, -0.572f, 0.022f);
+    float4 c1 = float4(1.0f, 0.0425f, 1.04f, -0.04f);
+    float4 r = roughness * c0 + c1;
+    float a004 = min(r.x * r.x, exp2(-9.28f * saturate(NdotV))) * r.x + r.y;
+    return float2(-1.04f, 1.04f) * a004 + r.zw;
+}
+
 static float3 MultiScatterCompensation(float NdotV, float NdotL, float roughness, float3 F0, float enabled)
 {
-    float Eo = GGXDirectionalAlbedo(NdotV, roughness);
-    float Ei = GGXDirectionalAlbedo(NdotL, roughness);
-    float3 compensation = 1.0f + F0 * ((1.0f - Eo) * (1.0f - Ei) / max(Eo * Ei, 1e-5f));
-    return lerp(float3(1.0f, 1.0f, 1.0f), compensation, enabled);
+    float2 abV = EnvBRDFApprox(saturate(roughness), saturate(NdotV));
+    float2 abL = EnvBRDFApprox(saturate(roughness), saturate(NdotL));
+    float Ess = max(0.5f * (abV.x + abV.y + abL.x + abL.y), 0.08f);
+    float3 compensation = 1.0f + F0 * ((1.0f - Ess) / Ess);
+    return lerp(float3(1.0f, 1.0f, 1.0f), compensation, saturate(enabled));
 }
 
 static void ComputeAnisotropicAlpha(float roughness, float anisotropy, out float alphaT, out float alphaB)
@@ -208,63 +296,61 @@ static float3 OpenPBRDirect(OpenPBRSurface surface, float3 N, float3 L, float3 V
     float NdotL = saturate(dot(N, L));
     float NdotV = saturate(dot(N, V));
     if (NdotL <= 0.0f || NdotV <= 0.0f) return 0.0f;
-    
+
+    float3 rotT, rotB;
+    OpenPBRRotateTangentFrame(N, T, B, surface.specularRotation, rotT, rotB);
+    float effectiveRough = OpenPBRCoatRoughenedRoughness(surface.specularRoughness, surface.coatRoughness, surface.coatWeight);
+
     float3 H = normalize(L + V);
-    float3 baseF = OpenPBRBaseFresnel(saturate(dot(L, H)), surface);
-    
+    float LdotH = saturate(dot(L, H));
+    float3 baseF = OpenPBRBaseFresnel(LdotH, surface);
+
     float3 baseSpecular = 0.0f;
     if (surface.specularAnisotropy > 0.0f)
     {
         float alphaT, alphaB;
-        ComputeAnisotropicAlpha(surface.specularRoughness, surface.specularAnisotropy, alphaT, alphaB);
-        baseSpecular = GGXBRDFAniso(N, L, V, T, B, alphaT, alphaB, baseF);
+        ComputeAnisotropicAlpha(effectiveRough, surface.specularAnisotropy, alphaT, alphaB);
+        baseSpecular = GGXBRDFAniso(N, L, V, rotT, rotB, alphaT, alphaB, baseF);
     }
     else
     {
-        baseSpecular = GGXBRDF(N, L, V, surface.specularRoughness, baseF);
+        baseSpecular = GGXBRDF(N, L, V, effectiveRough, baseF);
     }
-    
-    float3 comp = MultiScatterCompensation(NdotV, NdotL, surface.specularRoughness, baseF, surface.useMultiScatter);
+
+    float3 comp = MultiScatterCompensation(NdotV, NdotL, effectiveRough, baseF, surface.useMultiScatter);
     baseSpecular *= comp;
-    
-    float3 diffuseTerm = OrenNayarDiffuse(N, L, V, surface.specularRoughness, float3(1.0f, 1.0f, 1.0f)) * NdotL;
+
+    float3 diffuseTerm = OrenNayarDiffuse(N, L, V, effectiveRough, float3(1.0f, 1.0f, 1.0f)) * NdotL;
     float3 ssTerm = SubsurfaceWrapDiffuse(N, L, surface.subsurfaceColor, surface.subsurfaceRadius, surface.subsurfaceScale);
     float3 diffSS = lerp(diffuseTerm, ssTerm, surface.subsurfaceWeight);
-    
+
     float3 transTerm = TransmissionBeerLaw(surface.transmissionColor, surface.transmissionDepth, NdotV) * M_RCPPI * NdotL;
     float3 diffSSTrans = lerp(diffSS, transTerm, surface.transmissionWeight);
-    
-    float3 baseDiffuse = (1.0f - surface.metalness) * surface.baseWeight * surface.baseColor * (1.0f - baseF) * diffSSTrans;
-    
-    float3 base = baseDiffuse + baseSpecular * NdotL;
-    
-    float3 coatF = SchlickFresnelCos(saturate(dot(L, H)), DielectricF0(max(surface.coatIOR, 1.0f)));
-    float3 coat = surface.coatWeight * GGXBRDF(N, L, V, surface.coatRoughness, coatF) * NdotL;
-    
-    float3 throughCoat = lerp(float3(1.0f, 1.0f, 1.0f), saturate(surface.coatColor) * (1.0f - coatF),
-        surface.coatWeight * surface.coatDarkening);
-        
-    float3 fuzz = surface.fuzzWeight * FuzzBRDF(N, L, V, surface.fuzzRoughness, surface.fuzzColor) * NdotL;
-    
-    return (fuzz + (1.0f - surface.fuzzWeight) * (coat + base * throughCoat)) * irradiance;
-}
 
-// Split-sum environment BRDF approximation (Karis / Lazarov). Returns (scale, bias) applied to F0.
-static float2 EnvBRDFApprox(float roughness, float NdotV)
-{
-    float4 c0 = float4(-1.0f, -0.0275f, -0.572f, 0.022f);
-    float4 c1 = float4(1.0f, 0.0425f, 1.04f, -0.04f);
-    float4 r = roughness * c0 + c1;
-    float a004 = min(r.x * r.x, exp2(-9.28f * saturate(NdotV))) * r.x + r.y;
-    return float2(-1.04f, 1.04f) * a004 + r.zw;
+    float3 baseDiffuse = (1.0f - surface.metalness) * surface.baseWeight * surface.baseColor * (1.0f - baseF) * diffSSTrans;
+
+    float3 base = baseDiffuse + baseSpecular * NdotL;
+
+    float3 coatF = SchlickFresnelCos(LdotH, DielectricF0(max(surface.coatIOR, 1.0f)));
+    float3 coat = surface.coatWeight * GGXBRDF(N, L, V, surface.coatRoughness, coatF) * NdotL;
+
+    float3 throughCoat = OpenPBRThroughCoat(0.5f * (NdotV + NdotL), coatF, surface);
+
+    float3 fuzz = surface.fuzzWeight * FuzzBRDF(N, L, V, surface.fuzzRoughness, surface.fuzzColor) * NdotL;
+
+    return (fuzz + (1.0f - surface.fuzzWeight) * (coat + base * throughCoat)) * irradiance;
 }
 
 // Directional albedo of the base specular lobe (what fraction of the environment is reflected).
 static float3 OpenPBRBaseSpecularAlbedo(OpenPBRSurface surface, float NdotV)
 {
+    float effectiveRough = OpenPBRCoatRoughenedRoughness(surface.specularRoughness, surface.coatRoughness, surface.coatWeight);
     float3 f0 = OpenPBRBaseFresnel(1.0f, surface);
-    float2 ab = EnvBRDFApprox(saturate(surface.specularRoughness), NdotV);
-    return saturate(f0 * ab.x + ab.y * saturate(surface.specularWeight));
+    float2 ab = EnvBRDFApprox(saturate(effectiveRough), NdotV);
+    float3 single = f0 * ab.x + ab.y * saturate(surface.specularWeight);
+    float Ess = max(ab.x + ab.y, 0.08f);
+    float3 comp = lerp(float3(1.0f, 1.0f, 1.0f), 1.0f + f0 * ((1.0f - Ess) / Ess), saturate(surface.useMultiScatter));
+    return saturate(single * comp);
 }
 
 // sharpRadiance: environment sampled along the reflection vector (mirror, no blur).
@@ -275,18 +361,20 @@ static float3 OpenPBREnvironment(OpenPBRSurface surface, float3 N, float3 V, flo
     float NdotV = saturate(dot(N, V));
     float3 coatF = SchlickFresnelCos(NdotV, DielectricF0(max(surface.coatIOR, 1.0f)));
 
-    float baseBlur = smoothstep(0.0f, 0.6f, surface.specularRoughness);
+    float effectiveRough = OpenPBRCoatRoughenedRoughness(surface.specularRoughness, surface.coatRoughness, surface.coatWeight);
+    float baseBlur = smoothstep(0.0f, 0.6f, effectiveRough);
     float3 baseRadiance = lerp(sharpRadiance, blurredRadiance, baseBlur);
     float3 baseSpecular = OpenPBRBaseSpecularAlbedo(surface, NdotV);
 
     float coatBlur = smoothstep(0.0f, 0.6f, surface.coatRoughness);
     float3 coatRadiance = lerp(sharpRadiance, blurredRadiance, coatBlur);
-    float3 coatSpecular = surface.coatWeight * coatF;
+    float2 coatAB = EnvBRDFApprox(saturate(surface.coatRoughness), NdotV);
+    float coatF0 = DielectricF0(max(surface.coatIOR, 1.0f));
+    float3 coatSpecular = surface.coatWeight * saturate(coatF0 * coatAB.x + coatAB.y);
 
-    float3 throughCoat = lerp(float3(1.0f, 1.0f, 1.0f), saturate(surface.coatColor) * (1.0f - coatF),
-        surface.coatWeight * surface.coatDarkening);
+    float3 throughCoat = OpenPBRThroughCoat(NdotV, coatF, surface);
 
-    float3 fuzz = surface.fuzzWeight * surface.fuzzColor * blurredRadiance;
+    float3 fuzz = surface.fuzzWeight * surface.fuzzColor * EnvSheenApprox(surface.fuzzRoughness, NdotV) * blurredRadiance;
 
     return fuzz + (1.0f - surface.fuzzWeight) * (coatSpecular * coatRadiance + baseSpecular * throughCoat * baseRadiance);
 }
@@ -304,18 +392,20 @@ static float3 OpenPBREnvironmentPrefiltered(
     float3 R = reflect(-V, N);
     float3 coatF = SchlickFresnelCos(NdotV, DielectricF0(max(surface.coatIOR, 1.0f)));
 
-    float baseMip = saturate(surface.specularRoughness) * max(maxMip, 0.0f);
+    float effectiveRough = OpenPBRCoatRoughenedRoughness(surface.specularRoughness, surface.coatRoughness, surface.coatWeight);
+    float baseMip = saturate(effectiveRough) * max(maxMip, 0.0f);
     float3 baseRadiance = prefilterCube.SampleLevel(samp, R, baseMip).rgb;
     float3 baseSpecular = OpenPBRBaseSpecularAlbedo(surface, NdotV);
 
     float coatMip = saturate(surface.coatRoughness) * max(maxMip, 0.0f);
     float3 coatRadiance = prefilterCube.SampleLevel(samp, R, coatMip).rgb;
-    float3 coatSpecular = surface.coatWeight * coatF;
+    float2 coatAB = EnvBRDFApprox(saturate(surface.coatRoughness), NdotV);
+    float coatF0 = DielectricF0(max(surface.coatIOR, 1.0f));
+    float3 coatSpecular = surface.coatWeight * saturate(coatF0 * coatAB.x + coatAB.y);
 
-    float3 throughCoat = lerp(float3(1.0f, 1.0f, 1.0f), saturate(surface.coatColor) * (1.0f - coatF),
-        surface.coatWeight * surface.coatDarkening);
+    float3 throughCoat = OpenPBRThroughCoat(NdotV, coatF, surface);
 
-    float3 fuzz = surface.fuzzWeight * surface.fuzzColor * diffuseRadiance;
+    float3 fuzz = surface.fuzzWeight * surface.fuzzColor * EnvSheenApprox(surface.fuzzRoughness, NdotV) * diffuseRadiance;
 
     return fuzz + (1.0f - surface.fuzzWeight) * (coatSpecular * coatRadiance + baseSpecular * throughCoat * baseRadiance);
 }

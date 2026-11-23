@@ -114,6 +114,8 @@ namespace ignite
         glm::ivec3 m_Dims = glm::ivec3(0);
         float m_Spacing = 1.5f;
         uint32_t m_Resolution = 32;
+        uint32_t m_SHOrder = 2;
+        bool m_SkyVisibilitySplit = false;
         uint32_t m_ProbeCount = 0;
         uint32_t m_CurrentBounce = 0;
         uint32_t m_TotalBounces = 1;
@@ -123,6 +125,7 @@ namespace ignite
 
         std::vector<gi::SHL2> m_ProbeSH;
         std::vector<float> m_ProbeValidity;
+        std::vector<float> m_ProbeSkyVis;
         std::vector<glm::vec3> m_ProbeOffsets;
         std::vector<float> m_ProbeState;
         std::vector<std::array<glm::vec2, 100>> m_ProbeVisTiles;
