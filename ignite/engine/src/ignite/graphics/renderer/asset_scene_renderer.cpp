@@ -71,6 +71,7 @@ namespace ignite
         m_SkeletalTransparentPipelineCache.clear();
         m_EnvironmentPipelineCache.clear();
         m_CompositePipelineCache.clear();
+        m_GizmoRT.reset();
         m_Environment = nullptr;
 
         if (m_DefaultEnvTexture && m_DefaultEnvTexture.use_count() == 1)
@@ -366,7 +367,70 @@ namespace ignite
             m_WidgetRenderer->Render(cmd, uiRT.get());
         }
 
-        CompositePass(cmd, camera, compositeRT.get(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), uniforms->compositePostProcessBuffer);
+        Ref<Texture> gizmoTexture = nullptr;
+        if (!m_GizmoDrawList.Empty() && m_GizmoRenderer)
+        {
+            const uint32_t gW = std::max(1u, compositeRT->GetWidth());
+            const uint32_t gH = std::max(1u, compositeRT->GetHeight());
+            if (!m_GizmoRT)
+            {
+                RenderTargetCreateInfo gInfo = {};
+                gInfo.width = gW;
+                gInfo.height = gH;
+                gInfo.attachments =
+                {
+                    FramebufferAttachments{ "[AssetPreview Gizmo Depth]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
+                    FramebufferAttachments{ "[AssetPreview Gizmo Color]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT },
+                };
+                m_GizmoRT = RenderTarget::Create(gInfo, "[AssetSceneRenderer] Gizmo RT");
+            }
+            else if (m_GizmoRT->GetWidth() != gW || m_GizmoRT->GetHeight() != gH)
+            {
+                m_GizmoRT->Resize(gW, gH);
+            }
+
+            if (m_GizmoRT)
+            {
+                m_GizmoRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                m_GizmoRT->ClearDepthAttachment(cmd, 1.0f, 0);
+
+                Ref<Texture> gizmoDepth = (sceneRT->GetDepthAttachment() && sceneRT->GetSampleCount() == 1)
+                    ? sceneRT->GetDepthAttachment()
+                    : Renderer::GetWhiteTexture();
+                if (gizmoDepth && gizmoDepth->GetHandle() && gizmoDepth->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
+                {
+                    const nri::Format fmt = gizmoDepth->GetFormat();
+                    const bool isDepth = (fmt == nri::Format::D16_UNORM || fmt == nri::Format::D32_SFLOAT
+                        || fmt == nri::Format::D24_UNORM_S8_UINT || fmt == nri::Format::D32_SFLOAT_S8_UINT);
+                    const bool hasStencil = (fmt == nri::Format::D24_UNORM_S8_UINT || fmt == nri::Format::D32_SFLOAT_S8_UINT);
+
+                    nri::TextureBarrierDesc b = {};
+                    b.texture = gizmoDepth->GetHandle();
+                    b.before = { gizmoDepth->GetCurrentAccess(), gizmoDepth->GetCurrentLayout(), gizmoDepth->GetCurrentStages() };
+                    if (b.before.layout == nri::Layout::UNDEFINED)
+                        b.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+                    b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    b.mipOffset = 0;
+                    b.mipNum = nri::REMAINING;
+                    b.layerOffset = 0;
+                    b.layerNum = nri::REMAINING;
+                    b.planes = isDepth
+                        ? (hasStencil ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL) : nri::PlaneBits::DEPTH)
+                        : nri::PlaneBits::ALL;
+
+                    nri::BarrierDesc bd = {};
+                    bd.textures = &b;
+                    bd.textureNum = 1;
+                    DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, bd);
+                    gizmoDepth->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
+                }
+
+                m_GizmoRenderer->Render(cmd, m_GizmoRT->GetFramebuffer(), camera, m_GizmoDrawList, gizmoDepth, &m_SceneGPUData);
+                gizmoTexture = m_GizmoRT->GetColorAttachment(0);
+            }
+        }
+
+        CompositePass(cmd, camera, compositeRT.get(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), gizmoTexture, uniforms->compositePostProcessBuffer);
         SubmitCommandBuffer(cmd);
     }
 
@@ -705,7 +769,7 @@ namespace ignite
     // ---------------------------------------------------------------------------
     // CompositePass
     // ---------------------------------------------------------------------------
-    void AssetSceneRenderer::CompositePass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, ConstantBuffer &postProcessBuffer)
+    void AssetSceneRenderer::CompositePass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> gizmoTexture, ConstantBuffer &postProcessBuffer)
     {
         if (!cmd || !rt || !sceneTexture || !uiTexture)
             return;
@@ -755,6 +819,7 @@ namespace ignite
             m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(6)); // debug
             m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(7)); // objectID
             m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(8)); // TAA history
+            m_CompositeBindingLayout.AddItem(BindingLayoutItem::TextureSRV(9)); // gizmo
             m_CompositeBindingLayout.AddItem(BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
             m_CompositeBindingLayout.AddItem(BindingLayoutItem::Sampler(0));
 
@@ -777,6 +842,25 @@ namespace ignite
             m_CompositePipelineCache[rt] = pipeline;
         }
 
+        Ref<Texture> safeGizmo = gizmoTexture ? gizmoTexture : Renderer::GetBlackTexture();
+        if (gizmoTexture && gizmoTexture->GetHandle() && gizmoTexture->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
+        {
+            nri::TextureBarrierDesc b = {};
+            b.texture = gizmoTexture->GetHandle();
+            b.before = { gizmoTexture->GetCurrentAccess(), gizmoTexture->GetCurrentLayout(), gizmoTexture->GetCurrentStages() };
+            b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            b.mipOffset = 0;
+            b.mipNum = nri::REMAINING;
+            b.layerOffset = 0;
+            b.layerNum = nri::REMAINING;
+            b.planes = nri::PlaneBits::ALL;
+            nri::BarrierDesc bd = {};
+            bd.textures = &b;
+            bd.textureNum = 1;
+            DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, bd);
+            gizmoTexture->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
+        }
+
         BindingSetDesc bindingSetDesc;
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(0, sceneTexture->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(1, uiTexture->GetShaderResourceView()));
@@ -787,6 +871,7 @@ namespace ignite
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(6, Renderer::GetBlackTexture()->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(7, Renderer::GetBlackUIntTexture()->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(8, Renderer::GetBlackTexture()->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(9, safeGizmo->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::ConstantBuffer(0, postProcessBuffer.GetDescriptor()));
         bindingSetDesc.AddItem(BindingSetItem::Sampler(0, m_CompositeSampler));
 

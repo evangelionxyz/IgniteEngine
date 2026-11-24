@@ -8,7 +8,7 @@
 #include "ignite/scene/editor_camera.hpp"
 #include "ignite/scene/entity.hpp"
 
-#include "ignite/imgui/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
 
 namespace ignite
 {

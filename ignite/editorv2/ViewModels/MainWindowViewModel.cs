@@ -59,6 +59,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsRotateActive => ActiveGizmo == GizmoOperation.Rotate;
     public bool IsScaleActive => ActiveGizmo == GizmoOperation.Scale;
     public bool IsBoundSizing2DActive => ActiveGizmo == GizmoOperation.BoundSizing2D;
+    public bool IsBoundSizing3DActive => ActiveGizmo == GizmoOperation.BoundSizing3D;
 
     partial void OnActiveGizmoChanged(GizmoOperation value)
     {
@@ -67,6 +68,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsRotateActive));
         OnPropertyChanged(nameof(IsScaleActive));
         OnPropertyChanged(nameof(IsBoundSizing2DActive));
+        OnPropertyChanged(nameof(IsBoundSizing3DActive));
         OnPropertyChanged(nameof(SnapValue));
         NativeEngineBridge.Ignite_Viewport_SetGizmoOperation((int)value);
     }
@@ -217,6 +219,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsRotateActive));
                 OnPropertyChanged(nameof(IsScaleActive));
                 OnPropertyChanged(nameof(IsBoundSizing2DActive));
+                OnPropertyChanged(nameof(IsBoundSizing3DActive));
                 OnPropertyChanged(nameof(SnapValue));
             }
         };
@@ -433,6 +436,7 @@ public partial class MainWindowViewModel : ViewModelBase
             "Rotate" => GizmoOperation.Rotate,
             "Scale" => GizmoOperation.Scale,
             "BoundSizing2D" => GizmoOperation.BoundSizing2D,
+            "BoundSizing3D" => GizmoOperation.BoundSizing3D,
             _ => GizmoOperation.None
         };
     }

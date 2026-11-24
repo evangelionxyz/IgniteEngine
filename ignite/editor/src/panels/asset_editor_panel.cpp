@@ -52,7 +52,7 @@
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/imgui/imgui_nri.hpp"
-#include "ignite/imgui/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/asset/asset_manager.hpp"
@@ -789,6 +789,12 @@ namespace ignite
             }
 
 			FrameContext *frameContext = Renderer::GetCurrentFrameContext();
+            if (assetData.metadata.type != AssetType::Skeleton
+                && assetData.metadata.type != AssetType::SkeletalAnimation
+                && assetData.metadata.type != AssetType::AnimationMontage)
+            {
+                sceneData.sceneRenderer->ClearGizmoDrawList();
+            }
             sceneData.sceneRenderer->BeginFrame();
             sceneData.sceneRenderer->Render(&sceneData.camera, frameContext, sceneData.sceneRT, sceneData.uiRT, sceneData.compositeRT);
         }
@@ -4015,14 +4021,17 @@ namespace ignite
                                             GizmoInfo gizmoInfo;
                                             gizmoInfo.cameraView = assetData.sceneData.camera.GetView();
                                             gizmoInfo.cameraProjection = assetData.sceneData.camera.GetProjection();
+                                            gizmoInfo.cameraPosition = assetData.sceneData.camera.position;
+                                            gizmoInfo.cameraForward = assetData.sceneData.camera.GetForwardDirection();
                                             gizmoInfo.cameraType = assetData.sceneData.camera.projectionType;
+                                            gizmoInfo.viewportHovered = previewViewportFocused;
                                             gizmoInfo.snapValue = 0.05f;
                                             gizmoInfo.isSnapping = false;
                                             gizmoInfo.viewRect = viewportRect;
 
                                             s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
-                                            s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                                            s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
+                                            s_SkeletonPreviewGizmo.SetOperation(GizmoOperation::TRANSLATE);
+                                            s_SkeletonPreviewGizmo.SetMode(GizmoMode::LOCAL);
 
                                             glm::mat4 gizmoTransform = glm::mat4(1.0f);
                                             if (useSocketGizmo)
@@ -4085,6 +4094,15 @@ namespace ignite
 
                                                 skeleton->SetDirtyFlag(true);
                                             }
+
+                                            if (assetData.sceneData.sceneRenderer)
+                                            {
+                                                assetData.sceneData.sceneRenderer->SetGizmoDrawList(s_SkeletonPreviewGizmo.GetDrawList());
+                                            }
+                                        }
+                                        else if (assetData.sceneData.sceneRenderer)
+                                        {
+                                            assetData.sceneData.sceneRenderer->ClearGizmoDrawList();
                                         }
 
                                         if (assetData.sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)

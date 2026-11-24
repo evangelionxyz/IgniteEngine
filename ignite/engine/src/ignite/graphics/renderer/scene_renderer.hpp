@@ -46,6 +46,7 @@ namespace ignite
         bool requiresObjectId = false;
         bool requiresDebugOverlay = false;
         bool requiresGrid = false;
+        bool requiresGizmo = false;
         bool requiresBloom = false;
         bool requiresSSAO = false;
         bool requiresTAA = false;
@@ -58,7 +59,7 @@ namespace ignite
 
         bool IsEmptyScene() const
         {
-            return !HasRenderables() && !hasWidgets && !hasScreenText && !requiresDebugOverlay && !requiresObjectId;
+            return !HasRenderables() && !hasWidgets && !hasScreenText && !requiresDebugOverlay && !requiresObjectId && !requiresGizmo;
         }
     };
 
@@ -68,6 +69,7 @@ namespace ignite
         Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
         Ref<RenderTarget> selectionRT;     // Single-sample selected-object ID mask for outlines
         Ref<RenderTarget> widgetRT;
+        Ref<RenderTarget> gizmoRT;
         Ref<RenderTarget> postProcessRT;  // Intermediate LDR target for tonemapping before FXAA/UI
         Ref<RenderTarget> compositeRT;
         Ref<RenderTarget> debugRT;
@@ -139,6 +141,7 @@ namespace ignite
 
         RenderPlan BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera);
         void EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
+        void EnsureGizmoRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
         void EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
         void EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
         void EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight);
@@ -152,10 +155,10 @@ namespace ignite
         void ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug);
         void UIPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
         void DebugPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
-        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false, RenderTarget *targetFramebuffer = nullptr);
+        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, Ref<Texture> gizmoTexture = nullptr, bool msaaResolved = false, RenderTarget *targetFramebuffer = nullptr);
         void FXAAPass(nri::CommandBuffer *cmd, RenderTarget *framebuffer, Ref<Texture> inputTexture);
 
-        void DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D);
+        void DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, int planeMode);
         void DrawDebug2D(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
         void DrawDebug3D(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
 
@@ -239,7 +242,7 @@ namespace ignite
 
         Ref<BindingSet> GetOrCreateDebugGridBindingSet(nri::PipelineLayout *pipelineLayout, const ConstantBuffer &cameraBuffer, const ConstantBuffer &gridBuffer);
         Ref<BindingSet> GetOrCreateCompositeBindingSet(nri::PipelineLayout *pipelineLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const ConstantBuffer &postProcessBuffer, nri::Descriptor *sampler, bool useResolvedScene = false);
+            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, Ref<Texture> gizmoTexture, const ConstantBuffer &postProcessBuffer, nri::Descriptor *sampler, bool useResolvedScene = false);
 
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
         std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);

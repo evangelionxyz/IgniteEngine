@@ -73,13 +73,51 @@ namespace ignite
 {
     namespace
     {
-        const std::array<glm::vec2, 4> kBoundsCorners =
+        void ComputeSharedGizmoPivotAndBounds(const ScenePanel *panel, const std::unordered_map<UUID, Entity> &selectedEntities, glm::vec3 &outPivot, AABB &outBounds)
         {
-            glm::vec2(-0.5f, -0.5f),
-            glm::vec2( 0.5f, -0.5f),
-            glm::vec2( 0.5f,  0.5f),
-            glm::vec2(-0.5f,  0.5f)
-        };
+            outPivot = glm::vec3(0.0f);
+            if (selectedEntities.empty())
+            {
+                outBounds = AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+                return;
+            }
+
+            for (Entity entity : selectedEntities | std::views::values)
+            {
+                outPivot += entity.GetTransform().world.translation;
+            }
+            outPivot /= static_cast<float>(selectedEntities.size());
+
+            glm::vec3 boundsMin(std::numeric_limits<float>::max());
+            glm::vec3 boundsMax(std::numeric_limits<float>::lowest());
+            bool anyValid = false;
+
+            for (Entity entity : selectedEntities | std::views::values)
+            {
+                const AABB localBounds = panel->ComputeEntityLocalBounds(entity);
+                const glm::mat4 worldMat = entity.GetTransform().world.GetMatrix();
+                for (int corner = 0; corner < 8; ++corner)
+                {
+                    const glm::vec3 localCorner(
+                        (corner & 1) ? localBounds.max.x : localBounds.min.x,
+                        (corner & 2) ? localBounds.max.y : localBounds.min.y,
+                        (corner & 4) ? localBounds.max.z : localBounds.min.z);
+                    const glm::vec3 relWorld = glm::vec3(worldMat * glm::vec4(localCorner, 1.0f)) - outPivot;
+                    boundsMin = glm::min(boundsMin, relWorld);
+                    boundsMax = glm::max(boundsMax, relWorld);
+                    anyValid = true;
+                }
+            }
+
+            if (!anyValid || glm::any(glm::lessThanEqual(boundsMax - boundsMin, glm::vec3(1e-4f))))
+            {
+                outBounds = AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+            }
+            else
+            {
+                outBounds = AABB::FromMinMax(boundsMin, boundsMax);
+            }
+        }
 
         std::vector<UUID> FilterTopLevelUUIDs(Scene *scene, const std::vector<UUID> &inputUUIDs)
         {
@@ -253,15 +291,12 @@ namespace ignite
         m_FocusRenameInput = false;
         m_LastAutoExpandedSelection = UUID(0);
 
-        // A scene swap can happen while a gizmo or 2D bounds resize is active.
+        // A scene swap can happen while a gizmo drag is active.
         // Drop those entity-specific interaction handles before the next panel
         // frame can resolve them against the new scene.
         m_Data.isGizmoManipulating = false;
         m_Data.isGizmoBeingUse = false;
-        m_Data.is2DBoundsSizing = false;
-        m_Data.is2DBoundsHovered = false;
-        m_Data.active2DCorner = -1;
-        m_Data.active2DEntity = UUID(0);
+        m_Gizmo.ResetInteraction();
         m_ViewportData.wantMouseDragging = false;
         m_SceneFocused = false;
     }
@@ -4914,7 +4949,7 @@ namespace ignite
                                 ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
                                 drawList->AddImage(UI::GetTextureID(texture), iconMin, iconMax);
 
-                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
                                 {
                                     if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
                                         mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
@@ -4973,7 +5008,7 @@ namespace ignite
                                 );
                                 drawList->AddImage(UI::GetTextureID(texture), iconMin, iconMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
 
-                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
                                 {
                                     if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
                                         mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
@@ -5012,7 +5047,7 @@ namespace ignite
                 // Mouse picking from viewport object-id attachment (on mouse down only)
                 if (!m_Scene->IsPlaying())
                 {
-                    if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                    if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
                     {
                         if (clickedIconEntity.IsValid())
                         {
@@ -5175,8 +5210,8 @@ namespace ignite
                     auto view = m_EditorCamera.GetView();
                     auto &projection = m_EditorCamera.GetProjection();
 
-                    // Draw orientation just for Perspective projection
-                    if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
+                    // Draw orientation gizmo for both Perspective and 3D/2.5D Orthographic views (not Mode2D)
+                    if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D)
                     {
                         constexpr float orientationSize = 80.0f;
                         ImGuiOrientation::internal::config.mSize = orientationSize;
@@ -5191,9 +5226,8 @@ namespace ignite
 
                         if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
                         {
-                            glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
-                            m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
-                            m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
+                            m_EditorCamera.SetOrientationFromView(view);
+                            m_EditorCamera3D = m_EditorCamera;
                         }
                     }
 
@@ -5201,109 +5235,106 @@ namespace ignite
                     GizmoInfo gizmoInfo;
                     gizmoInfo.cameraView = view;
                     gizmoInfo.cameraProjection = projection;
+                    gizmoInfo.cameraPosition = m_EditorCamera.position;
+                    gizmoInfo.cameraForward = m_EditorCamera.GetForwardDirection();
                     gizmoInfo.cameraType = m_EditorCamera.projectionType;
                     gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
+                    gizmoInfo.isSnapping = ImGui::GetIO().KeyCtrl;
                     switch (m_Gizmo.GetOperation())
                     {
                         default:
-                        case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
-                        case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
-                        case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
+                        case GizmoOperation::TRANSLATE:
+                            gizmoInfo.snapValue = m_ViewportData.snapValues[0];
+                            break;
+                        case GizmoOperation::ROTATE:
+                            gizmoInfo.snapValue = m_ViewportData.snapValues[1];
+                            break;
+                        case GizmoOperation::SCALE:
+                        case GizmoOperation::BOUND_SIZING_2D:
+                        case GizmoOperation::BOUND_SIZING_3D:
+                            gizmoInfo.snapValue = m_ViewportData.snapValues[2];
+                            break;
                     }
 
                     m_Gizmo.SetInfo(gizmoInfo);
 
-                    Render2DBoundsSizing();
-
-                    // Start manipulation: Fired only on the first frame of interaction
-                    const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
-                    bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
-
                     static std::unordered_map<UUID, TransformComponent> initialTransforms;
+                    static glm::vec3 initialPivot(0.0f);
+                    static AABB initialSharedBounds(glm::vec3(0.0f), glm::vec3(1.0f));
 
-                    if (isManipulatingNow && !m_Data.isGizmoManipulating)
+                    const bool wasManipulating = m_Data.isGizmoManipulating;
+                    if (!wasManipulating && !m_SelectedEntities.empty())
                     {
                         initialTransforms.clear();
                         for (const auto &[uuid, entity] : m_SelectedEntities)
                         {
-                            // Store the original transform of each selected entity
                             initialTransforms[uuid] = entity.GetTransform();
+                        }
+                        if (m_SelectedEntities.size() > 1)
+                        {
+                            ComputeSharedGizmoPivotAndBounds(this, m_SelectedEntities, initialPivot, initialSharedBounds);
                         }
                     }
 
-                    // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
-                    bool wasManipulating = m_Data.isGizmoManipulating;
-                    m_Data.isGizmoManipulating = isManipulatingNow;
-                    m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered() || m_Data.is2DBoundsHovered || m_Data.is2DBoundsSizing;
+                    bool isManipulatingNow = false;
 
-                    if (allowGizmoManipulation && m_SelectedEntities.size() > 1)
+                    if (m_SelectedEntities.size() > 1)
                     {
-                        // Step 1: Compute shared pivot (center of all selected entities)
-                        glm::vec3 pivot(0.0f);
-                        for (Entity entity : m_SelectedEntities | std::views::values)
+                        glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), initialPivot);
+                        glm::mat4 manipulatedTransform = gizmoTransform;
+
+                        isManipulatingNow = m_Gizmo.Manipulate(manipulatedTransform, initialSharedBounds);
+                        m_Data.isGizmoManipulating = isManipulatingNow;
+                        m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered();
+
+                        if (isManipulatingNow)
                         {
-                            pivot += entity.GetTransform().world.translation;
-                        }
-                        pivot /= static_cast<float>(m_SelectedEntities.size());
+                            const glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
 
-                        // Step 2: create a transform matrix for the gizmo at the pivot point
-                        glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
-                        glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
-
-                        // Step 3: Manipulate the matrix
-                        m_Gizmo.Manipulate(manipulatedTransform);
-
-                        if (m_Data.isGizmoManipulating)
-                        {
-                            // THis delta is now the TOTAL change from the moment of manipulation began
-                            glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
-
-                            // Decompose the total delta
                             glm::vec3 deltaTranslation, deltaScale, deltaRotation;
                             Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
+                            const GizmoOperation op = m_Gizmo.GetOperation();
+                            const bool applyScale = (op == GizmoOperation::SCALE || op == GizmoOperation::BOUND_SIZING_2D || op == GizmoOperation::BOUND_SIZING_3D);
+
+                            const glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -initialPivot);
+                            const glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), initialPivot);
+                            const glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
 
                             for (auto &[uuid, entity] : m_SelectedEntities)
                             {
-                                // Get the live transform component to apply changes to it
+                                auto itInit = initialTransforms.find(uuid);
+                                if (itInit == initialTransforms.end())
+                                    continue;
+
                                 auto &tr = entity.GetTransform();
+                                const auto &initialTransform = itInit->second;
+                                const glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
 
-                                // Get the ORIGINAL transform we stored at the beginning of the manipulation
-                                const auto &initialTransform = initialTransforms.at(uuid);
-                                glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
+                                const glm::vec3 newWorldPos = glm::vec3(fromPivot * gizmoDelta * toPivot * glm::vec4(initialTransform.world.translation, 1.0f));
+                                glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * initialWorldMatrix;
+                                newWorldMatrix[3] = glm::vec4(newWorldPos, 1.0f);
 
-                                // Apply Translation and Rotation around the shared pivot
-                                glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
-                                glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), pivot);
-                                glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
-
-                                // Apply the total delta to the ORIGINAL world matrix
-                                glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
                                 glm::vec3 newTranslation, newRotationEuler, newScale;
                                 Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
 
-                                // ----- Apply Scale and Update Local Transform -----
                                 if (entity.GetParentUUID() != UUID(0))
                                 {
                                     Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
                                     const auto &parentTr = parent.GetTransform();
-                                    glm::mat4 parentWorld = parentTr.world.GetMatrix();
-                                    glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
+                                    const glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
                                     glm::vec3 localTranslation, localEuler, localScale;
                                     Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
                                     tr.local.translation = localTranslation;
                                     tr.local.rotation = glm::quat(localEuler);
-
-                                    // Apply the total scale delta to the ORIGINAL local scale
-                                    tr.local.scale = initialTransform.local.scale * deltaScale;
+                                    tr.local.scale = applyScale ? (initialTransform.local.scale * deltaScale) : initialTransform.local.scale;
                                 }
                                 else
                                 {
                                     tr.local.translation = newTranslation;
                                     tr.local.rotation = glm::quat(newRotationEuler);
-
-                                    // Apply the total scale delta to the ORIGINAL local scale
-                                    tr.local.scale = initialTransform.local.scale * deltaScale;
+                                    tr.local.scale = applyScale ? (initialTransform.local.scale * deltaScale) : initialTransform.local.scale;
                                 }
 
                                 tr.dirty = true;
@@ -5385,120 +5416,109 @@ namespace ignite
                     }
                     else if (Entity entity = GetSelectedEntity())
                     {
-                        if (allowGizmoManipulation)
+                        auto &tr = entity.GetTransform();
+                        glm::mat4 transformMatrix = tr.world.GetMatrix();
+                        const AABB localBounds = ComputeEntityLocalBounds(entity);
+
+                        isManipulatingNow = m_Gizmo.Manipulate(transformMatrix, localBounds);
+                        m_Data.isGizmoManipulating = isManipulatingNow;
+                        m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered();
+
+                        if (isManipulatingNow)
                         {
-                            auto &tr = entity.GetTransform();
-                            glm::mat4 transformMatrix = tr.world.GetMatrix();
+                            const glm::vec3 preservedLocalScale = tr.local.scale;
+                            glm::vec3 translation, rotation, scale;
+                            Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
+                            const GizmoOperation op = m_Gizmo.GetOperation();
+                            const bool applyScale = (op == GizmoOperation::SCALE || op == GizmoOperation::BOUND_SIZING_2D || op == GizmoOperation::BOUND_SIZING_3D);
 
-                            m_Gizmo.Manipulate(transformMatrix);
-
-                            if (m_Gizmo.IsManipulating())
+                            if (entity.GetParentUUID() != UUID(0))
                             {
-                                const glm::vec3 preservedLocalScale = tr.local.scale;
-                                glm::vec3 translation, rotation, scale;
-                                Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
-                                const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
+                                Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
+                                const auto &parentTr = parent.GetTransform();
+                                const glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                                const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
 
-                                if (entity.GetParentUUID() != UUID(0))
-                                {
-                                    Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
-                                    const auto &parentTr = parent.GetTransform();
-                                    const glm::mat4 parentWorld = parentTr.world.GetMatrix();
-                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
-
-                                    glm::vec3 localTranslation, localEuler, localScale;
-                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                    tr.local.translation = localTranslation;
-                                    tr.local.rotation = glm::quat(localEuler);
-
-                                    if (op == ImGuizmo::SCALE)
-                                    {
-                                        tr.local.scale = localScale;
-                                    }
-                                    else
-                                    {
-                                        tr.local.scale = preservedLocalScale;
-                                    }
-                                }
-                                else
-                                {
-                                    tr.local.translation = translation;
-                                    tr.local.rotation = glm::quat(rotation);
-
-                                    if (op == ImGuizmo::SCALE)
-                                    {
-                                        tr.local.scale = scale;
-                                    }
-                                    else
-                                    {
-                                        tr.local.scale = preservedLocalScale;
-                                    }
-                                }
-                                tr.dirty = true;
-
-                                // check if the entity has rigidbody and update its position and rotation in the physics engine
-                                if (isPlayOrSimulate)
-                                {
-                                    Application::SubmitToMainThread([scene = m_Scene, entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
-                                        if (entity.IsValid())
-                                        {
-                                            if (entity.HasComponent<RigidbodyComponent>())
-                                            {
-                                                auto &rb = entity.GetComponent<RigidbodyComponent>();
-                                                rb.isGizmoDragging = true;
-                                                if (auto dynActor = rb.dynamicActor.lock())
-                                                {
-                                                    dynActor->SetPosition(translation, true);
-                                                    dynActor->SetRotation(rotation, true);
-                                                    dynActor->SetLinearVelocity(glm::vec3(0.0f));
-                                                    dynActor->SetAngularVelocity(glm::vec3(0.0f));
-                                                }
-                                                else if (auto statActor = rb.staticActor.lock())
-                                                {
-                                                    statActor->SetPosition(translation, true);
-                                                    statActor->SetRotation(rotation, true);
-                                                }
-                                            }
-                                            if (entity.HasComponent<Rigidbody2DComponent>())
-                                            {
-                                                auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
-                                                rb2D.isGizmoDragging = true;
-                                                if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
-                                                {
-                                                    scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
-                                                    scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
-                                                    scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
-                                                    scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
-                                                    scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
-                                                }
-                                            }
-                                        }
-                                    });
-                                }
+                                glm::vec3 localTranslation, localEuler, localScale;
+                                Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                tr.local.translation = localTranslation;
+                                tr.local.rotation = glm::quat(localEuler);
+                                tr.local.scale = applyScale ? localScale : preservedLocalScale;
                             }
-
-                            // Commit a single command when the gizmo is released (single entity)
-                            if (!isManipulatingNow && wasManipulating)
+                            else
                             {
-                                if (isPlayOrSimulate)
-                                {
-                                    Application::SubmitToMainThread([scene = m_Scene, entity]() mutable {
-                                        if (entity.IsValid())
-                                        {
-                                            if (entity.HasComponent<RigidbodyComponent>())
-                                                entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
-                                            if (entity.HasComponent<Rigidbody2DComponent>())
-                                                entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
-                                        }
-                                    });
-                                }
+                                tr.local.translation = translation;
+                                tr.local.rotation = glm::quat(rotation);
+                                tr.local.scale = applyScale ? scale : preservedLocalScale;
+                            }
+                            tr.dirty = true;
 
-                                if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
-                                {
-                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, entity.GetUUID(), it->second, entity.GetTransform()));
-                                }
+                            if (isPlayOrSimulate)
+                            {
+                                Application::SubmitToMainThread([scene = m_Scene, entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
+                                    if (entity.IsValid())
+                                    {
+                                        if (entity.HasComponent<RigidbodyComponent>())
+                                        {
+                                            auto &rb = entity.GetComponent<RigidbodyComponent>();
+                                            rb.isGizmoDragging = true;
+                                            if (auto dynActor = rb.dynamicActor.lock())
+                                            {
+                                                dynActor->SetPosition(translation, true);
+                                                dynActor->SetRotation(rotation, true);
+                                                dynActor->SetLinearVelocity(glm::vec3(0.0f));
+                                                dynActor->SetAngularVelocity(glm::vec3(0.0f));
+                                            }
+                                            else if (auto statActor = rb.staticActor.lock())
+                                            {
+                                                statActor->SetPosition(translation, true);
+                                                statActor->SetRotation(rotation, true);
+                                            }
+                                        }
+                                        if (entity.HasComponent<Rigidbody2DComponent>())
+                                        {
+                                            auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
+                                            rb2D.isGizmoDragging = true;
+                                            if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
+                                            {
+                                                scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
+                                                scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
+                                                scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
+                                                scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
+                                                scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
+                                            }
+                                        }
+                                    }
+                                });
                             }
                         }
+
+                        // Commit a single command when the gizmo is released (single entity)
+                        if (!isManipulatingNow && wasManipulating)
+                        {
+                            if (isPlayOrSimulate)
+                            {
+                                Application::SubmitToMainThread([scene = m_Scene, entity]() mutable {
+                                    if (entity.IsValid())
+                                    {
+                                        if (entity.HasComponent<RigidbodyComponent>())
+                                            entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
+                                        if (entity.HasComponent<Rigidbody2DComponent>())
+                                            entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
+                                    }
+                                });
+                            }
+
+                            if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
+                            {
+                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, entity.GetUUID(), it->second, entity.GetTransform()));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        m_Data.isGizmoManipulating = false;
+                        m_Data.isGizmoBeingUse = false;
                     }
                 }
             }
@@ -5734,6 +5754,20 @@ namespace ignite
         else
         {
             m_EditorCamera.SetPanSnapValue(0.0f);
+            static constexpr std::array<const char *, 8> kViewPresetLabels = {
+                "Perspective", "2.5D Ortho", "Top", "Bottom", "Front", "Back", "Left", "Right"
+            };
+            int viewPresetIndex = static_cast<int>(m_EditorCamera.GetViewPreset());
+            if (viewPresetIndex < 0 || viewPresetIndex >= static_cast<int>(kViewPresetLabels.size()))
+            {
+                viewPresetIndex = 0;
+            }
+            ImGui::SetNextItemWidth(112.0f);
+            if (ImGui::Combo("##view_preset", &viewPresetIndex, kViewPresetLabels.data(), static_cast<int>(kViewPresetLabels.size())))
+            {
+                m_EditorCamera.SetViewPreset(static_cast<EditorCamera::EditorViewPreset>(viewPresetIndex));
+                m_EditorCamera3D = m_EditorCamera;
+            }
         }
 
         ImGui::SameLine();
@@ -5755,13 +5789,20 @@ namespace ignite
         ImGui::SameLine();
         if (drawGizmoBtn("scale", buttonSize, m_Data.gizmoOp == GizmoOperation::SCALE)) SetGizmoOperation(GizmoOperation::SCALE);
 
-        if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
         {
             ImGui::SameLine();
-            bool isBoundSizing = m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D;
-            if (isBoundSizing) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-            else ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+            const bool is2DBounds = m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D;
+            ImGui::PushStyleColor(ImGuiCol_Button, is2DBounds ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
             if (ImGui::Button("2D Bounds", ImVec2(0, 24))) SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
+            ImGui::PopStyleColor();
+        }
+
+        if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D)
+        {
+            ImGui::SameLine();
+            const bool is3DBounds = m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_3D;
+            ImGui::PushStyleColor(ImGuiCol_Button, is3DBounds ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+            if (ImGui::Button("3D Bounds", ImVec2(0, 24))) SetGizmoOperation(GizmoOperation::BOUND_SIZING_3D);
             ImGui::PopStyleColor();
         }
 
@@ -5769,10 +5810,10 @@ namespace ignite
         ImGui::Spacing();
         ImGui::SameLine();
 
-        const bool isLocal = m_Gizmo.GetMode() == ImGuizmo::LOCAL;
-        if (drawGizmoBtn("transform_local", buttonSize, isLocal)) m_Gizmo.SetMode(ImGuizmo::LOCAL);
+        const bool isLocal = m_Gizmo.GetMode() == GizmoMode::LOCAL;
+        if (drawGizmoBtn("transform_local", buttonSize, isLocal)) SetGizmoMode(GizmoMode::LOCAL);
         ImGui::SameLine();
-        if (drawGizmoBtn("transform_world", buttonSize, !isLocal)) m_Gizmo.SetMode(ImGuizmo::WORLD);
+        if (drawGizmoBtn("transform_world", buttonSize, !isLocal)) SetGizmoMode(GizmoMode::WORLD);
 
         ImGui::PopStyleVar(2);
 
@@ -5781,13 +5822,15 @@ namespace ignite
         switch (m_Gizmo.GetOperation())
         {
         default:
-        case ImGuizmo::OPERATION::TRANSLATE:
+        case GizmoOperation::TRANSLATE:
             ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[0], 0.05f, 0.0f, 100.0f, "Snap %.2f");
             break;
-        case ImGuizmo::OPERATION::ROTATE:
+        case GizmoOperation::ROTATE:
             ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[1], 0.05f, 0.0f, 100.0f, "Snap %.2f");
             break;
-        case ImGuizmo::OPERATION::SCALE:
+        case GizmoOperation::SCALE:
+        case GizmoOperation::BOUND_SIZING_2D:
+        case GizmoOperation::BOUND_SIZING_3D:
             ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[2], 0.05f, 0.0f, 100.0f, "Snap %.2f");
             break;
         }
@@ -5888,214 +5931,122 @@ namespace ignite
         ImGui::EndDisabled();
     }
 
-    bool ScenePanel::Is2DResizableEntity(Entity entity) const
+    AABB ScenePanel::ComputeEntityLocalBounds(Entity entity) const
     {
-        return entity.IsValid() && (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>());
+        if (!entity.IsValid())
+        {
+            return AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+        }
+
+        AssetManager *am = AssetManager::GetInstance();
+        if (entity.HasComponent<StaticMeshComponent>() && am)
+        {
+            const auto &smc = entity.GetComponent<StaticMeshComponent>();
+            if (smc.handle != AssetHandle(0))
+            {
+                if (Ref<StaticMesh> mesh = am->GetAsset<StaticMesh>(smc.handle))
+                {
+                    const AABB &aabb = (glm::length(mesh->localAABB.GetSize()) > 1e-4f)
+                        ? mesh->localAABB
+                        : mesh->CalculateLocalAABB();
+                    if (glm::length(aabb.GetSize()) > 1e-4f)
+                    {
+                        return aabb;
+                    }
+                }
+            }
+        }
+
+        if (entity.HasComponent<SkeletalMeshComponent>() && am)
+        {
+            const auto &skc = entity.GetComponent<SkeletalMeshComponent>();
+            if (skc.handle != AssetHandle(0))
+            {
+                if (Ref<SkeletalMesh> mesh = am->GetAsset<SkeletalMesh>(skc.handle))
+                {
+                    const AABB &aabb = (glm::length(mesh->localAABB.GetSize()) > 1e-4f)
+                        ? mesh->localAABB
+                        : mesh->CalculateLocalAABB();
+                    if (glm::length(aabb.GetSize()) > 1e-4f)
+                    {
+                        return aabb;
+                    }
+                }
+            }
+        }
+
+        if (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>())
+        {
+            return AABB::FromMinMax(glm::vec3(-0.5f, -0.5f, 0.0f), glm::vec3(0.5f, 0.5f, 0.0f));
+        }
+
+        return AABB(glm::vec3(0.0f), glm::vec3(1.0f));
     }
 
-    glm::vec3 ScenePanel::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid)
+    void ScenePanel::SubmitGizmoForRender(SceneRenderer *renderer, ICamera *camera)
     {
-        return Math::ScreenToWorldOnPlane(screenPos, planeZ,
-            m_EditorCamera.GetProjection() * m_EditorCamera.GetView(),
-            { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max },
-            isValid
-        );
-    }
-
-    void ScenePanel::Render2DBoundsSizing()
-    {
-        IGN_PROFILE_FUNCTION();
-        m_Data.is2DBoundsHovered = false;
-
-        auto clearResizeState = [this]()
+        if (!renderer)
         {
-            m_Data.is2DBoundsSizing = false;
-            m_Data.active2DCorner = -1;
-            m_Data.active2DEntity = UUID(0);
-        };
-
-        auto releaseResizeCommand = [this, &clearResizeState]()
-        {
-            if (!m_Data.is2DBoundsSizing)
-                return;
-
-            if (!m_Scene)
-            {
-                clearResizeState();
-                return;
-            }
-
-            Entity resizedEntity = SceneManager::GetEntity(m_Scene, m_Data.active2DEntity);
-            if (resizedEntity.IsValid())
-            {
-                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(
-                    m_Scene, resizedEntity.GetUUID(), m_Data.before2DResize, resizedEntity.GetTransform()));
-            }
-
-            clearResizeState();
-        };
-
-        if (!m_Scene || m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D || m_SelectedEntities.size() != 1 || m_Data.gizmoOp != GizmoOperation::BOUND_SIZING_2D)
-        {
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-            {
-                releaseResizeCommand();
-            }
             return;
         }
 
-        Entity entity = GetSelectedEntity();
-        if (!Is2DResizableEntity(entity))
+        if (!m_Scene || m_Scene->IsPlaying() || m_SelectedEntities.empty() || m_Data.gizmoOp == GizmoOperation::NONE || !camera)
         {
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                releaseResizeCommand();
+            renderer->ClearGizmoDrawList();
             return;
         }
 
-        auto &tr = entity.GetTransform();
-        const glm::mat4 worldMatrix = tr.world.GetMatrix();
-        const glm::mat4 viewProjection = m_EditorCamera.GetProjection() * m_EditorCamera.GetView();
-
-        std::array<glm::vec3, 4> worldCorners{};
-        std::array<ImVec2, 4> screenCorners{};
-        for (size_t i = 0; i < kBoundsCorners.size(); ++i)
+        Rect viewRect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
+        if (viewRect.GetSize().x <= 1.0f || viewRect.GetSize().y <= 1.0f)
         {
-            const glm::vec4 world = worldMatrix * glm::vec4(kBoundsCorners[i].x, kBoundsCorners[i].y, 0.0f, 1.0f);
-            worldCorners[i] = glm::vec3(world);
-            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, {globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max}, screenCorners[i]))
-            {
-                if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                {
-                    releaseResizeCommand();
-                }
-                return;
-            }
+            const glm::uvec2 vpSize = camera->GetViewportSize();
+            viewRect = Rect(glm::vec2(0.0f), glm::vec2(static_cast<float>(std::max(1u, vpSize.x)), static_cast<float>(std::max(1u, vpSize.y))));
         }
 
-        ImDrawList *drawList = ImGui::GetWindowDrawList();
-        constexpr ImU32 boundsColor = IM_COL32(247, 210, 60, 255);
-        drawList->AddPolyline(screenCorners.data(), static_cast<int>(screenCorners.size()), boundsColor, ImDrawFlags_Closed, 2.0f);
-
-        const ImVec2 mousePos = ImGui::GetMousePos();
-        const bool mouseInViewport =
-            mousePos.x >= globals::GEditor::EditorViewport.min.x && mousePos.x <= (globals::GEditor::EditorViewport.min.x + globals::GEditor::EditorViewport.max.x) &&
-            mousePos.y >= globals::GEditor::EditorViewport.min.y && mousePos.y <= (globals::GEditor::EditorViewport.min.y + globals::GEditor::EditorViewport.max.y);
-
-        constexpr float handleRadius = 6.0f;
-        const float handleRadiusSq = handleRadius * handleRadius;
-
-        int hoveredCorner = -1;
-        float bestDistanceSq = FLT_MAX;
-        for (int i = 0; i < static_cast<int>(screenCorners.size()); ++i)
+        GizmoInfo gizmoInfo;
+        gizmoInfo.cameraView = camera->GetView();
+        gizmoInfo.cameraProjection = camera->GetProjection();
+        gizmoInfo.cameraPosition = camera->position;
+        gizmoInfo.cameraForward = camera->GetForwardDirection();
+        gizmoInfo.cameraType = camera->projectionType;
+        gizmoInfo.viewRect = viewRect;
+        if (ImGui::GetCurrentContext() != nullptr)
         {
-            const float dx = mousePos.x - screenCorners[i].x;
-            const float dy = mousePos.y - screenCorners[i].y;
-            const float distanceSq = dx * dx + dy * dy;
-            if (distanceSq <= handleRadiusSq && distanceSq < bestDistanceSq)
-            {
-                bestDistanceSq = distanceSq;
-                hoveredCorner = i;
-            }
+            gizmoInfo.isSnapping = ImGui::GetIO().KeyCtrl;
         }
 
-        m_Data.is2DBoundsHovered = mouseInViewport && hoveredCorner != -1;
-
-        if (m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D)
+        switch (m_Gizmo.GetOperation())
         {
-            for (int i = 0; i < static_cast<int>(screenCorners.size()); ++i)
-            {
-                const bool isActive = m_Data.is2DBoundsSizing && m_Data.active2DCorner == i;
-                const bool isHovered = hoveredCorner == i;
-                const ImU32 fillColor = isActive ? IM_COL32(255, 185, 0, 255) : (isHovered ? IM_COL32(255, 220, 110, 255) : IM_COL32(240, 240, 240, 230));
-
-                const ImVec2 min = { screenCorners[i].x - handleRadius, screenCorners[i].y - handleRadius };
-                const ImVec2 max = { screenCorners[i].x + handleRadius, screenCorners[i].y + handleRadius };
-                drawList->AddRectFilled(min, max, fillColor, 2.0f);
-                drawList->AddRect(min, max, IM_COL32(30, 30, 30, 255), 2.0f, 0, 1.0f);
-            }
+        default:
+        case GizmoOperation::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
+        case GizmoOperation::ROTATE:    gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
+        case GizmoOperation::SCALE:
+        case GizmoOperation::BOUND_SIZING_2D:
+        case GizmoOperation::BOUND_SIZING_3D:
+            gizmoInfo.snapValue = m_ViewportData.snapValues[2];
+            break;
         }
 
-        if (!m_Data.is2DBoundsSizing && m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D && mouseInViewport && hoveredCorner != -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_Gizmo.IsManipulating())
-        {
-            m_Data.is2DBoundsSizing = true;
-            m_Data.active2DCorner = hoveredCorner;
-            m_Data.active2DEntity = entity.GetUUID();
-            m_Data.active2DPlaneZ = worldMatrix[3].z;
-            m_Data.active2DAxisX = glm::normalize(glm::vec3(worldMatrix[0]));
-            m_Data.active2DAxisY = glm::normalize(glm::vec3(worldMatrix[1]));
-            m_Data.before2DResize = tr;
+        m_Gizmo.SetInfo(gizmoInfo);
 
-            const int oppositeCorner = (hoveredCorner + 2) % 4;
-            m_Data.active2DOppositeWorld = worldCorners[oppositeCorner];
+        if (m_SelectedEntities.size() > 1)
+        {
+            glm::vec3 pivot(0.0f);
+            AABB sharedBounds(glm::vec3(0.0f), glm::vec3(1.0f));
+            ComputeSharedGizmoPivotAndBounds(this, m_SelectedEntities, pivot, sharedBounds);
+            m_Gizmo.BuildDrawList(glm::translate(glm::mat4(1.0f), pivot), sharedBounds);
+        }
+        else if (Entity entity = GetSelectedEntity(); entity.IsValid())
+        {
+            m_Gizmo.BuildDrawList(entity.GetTransform().world.GetMatrix(), ComputeEntityLocalBounds(entity));
+        }
+        else
+        {
+            renderer->ClearGizmoDrawList();
+            return;
         }
 
-        if (m_Data.is2DBoundsSizing && m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D)
-        {
-            if (m_Data.active2DEntity != entity.GetUUID())
-            {
-                releaseResizeCommand();
-                return;
-            }
-
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
-            {
-                bool validDragPoint = false;
-                glm::vec3 dragWorld = ScreenToWorldOnPlane(glm::vec2(mousePos.x, mousePos.y), m_Data.active2DPlaneZ, &validDragPoint);
-                if (validDragPoint)
-                {
-                    const glm::vec2 cornerSign = glm::sign(kBoundsCorners[m_Data.active2DCorner]);
-                    const glm::vec3 delta = dragWorld - m_Data.active2DOppositeWorld;
-
-                    float halfX = cornerSign.x * glm::dot(delta, m_Data.active2DAxisX) * 0.5f;
-                    float halfY = cornerSign.y * glm::dot(delta, m_Data.active2DAxisY) * 0.5f;
-
-                    halfX = glm::max(halfX, 0.01f);
-                    halfY = glm::max(halfY, 0.01f);
-
-                    const glm::vec3 centerWorld = m_Data.active2DOppositeWorld
-                        + (m_Data.active2DAxisX * (cornerSign.x * halfX))
-                        + (m_Data.active2DAxisY * (cornerSign.y * halfY));
-
-                    const float targetWorldScaleX = halfX * 2.0f;
-                    const float targetWorldScaleY = halfY * 2.0f;
-
-                    const float currentWorldScaleZ = glm::max(glm::length(glm::vec3(worldMatrix[2])), 0.0001f);
-
-                    glm::mat4 worldRotation = Math::RemoveScale(worldMatrix);
-                    worldRotation[3] = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-
-                    const glm::mat4 targetWorld =
-                        glm::translate(glm::mat4(1.0f), centerWorld)
-                        * worldRotation
-                        * glm::scale(glm::mat4(1.0f), glm::vec3(targetWorldScaleX, targetWorldScaleY, currentWorldScaleZ));
-
-                    if (entity.GetParentUUID() != UUID(0))
-                    {
-                        Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
-                        const glm::mat4 parentWorld = parent.GetTransform().world.GetMatrix();
-                        const glm::mat4 localMatrix = glm::inverse(parentWorld) * targetWorld;
-
-                        glm::vec3 localTranslation, localEuler, localScale;
-                        Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                        tr.local.translation = localTranslation;
-                        tr.local.rotation = glm::quat(localEuler);
-                        tr.local.scale = localScale;
-                    }
-                    else
-                    {
-                        tr.local.translation = centerWorld;
-                        tr.local.scale.x = targetWorldScaleX;
-                        tr.local.scale.y = targetWorldScaleY;
-                    }
-
-                    tr.dirty = true;
-                }
-            }
-            else
-            {
-                releaseResizeCommand();
-            }
-        }
+        renderer->SetGizmoDrawList(m_Gizmo.GetDrawList());
     }
 
     template<typename T, typename UIFunction>
@@ -6215,32 +6166,16 @@ namespace ignite
 
     void ScenePanel::SetGizmoOperation(GizmoOperation op)
     {
-        if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D && op == GizmoOperation::BOUND_SIZING_2D)
-            return;
+        if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D && op == GizmoOperation::BOUND_SIZING_3D)
+        {
+            op = GizmoOperation::BOUND_SIZING_2D;
+        }
 
         m_Data.gizmoOp = op;
-
-        switch (op)
-        {
-        case GizmoOperation::NONE:
-            m_Gizmo.SetOperation(ImGuizmo::NONE);
-            break;
-        case GizmoOperation::TRANSLATE:
-            m_Gizmo.SetOperation(ImGuizmo::TRANSLATE);
-            break;
-        case GizmoOperation::ROTATE:
-            m_Gizmo.SetOperation(ImGuizmo::ROTATE);
-            break;
-        case GizmoOperation::SCALE:
-            m_Gizmo.SetOperation(ImGuizmo::SCALE);
-            break;
-        case GizmoOperation::BOUND_SIZING_2D:
-            m_Gizmo.SetOperation(ImGuizmo::NONE);
-            break;
-        }
+        m_Gizmo.SetOperation(op);
     }
 
-    void ScenePanel::SetGizmoMode(ImGuizmo::MODE mode)
+    void ScenePanel::SetGizmoMode(GizmoMode mode)
     {
         m_Gizmo.SetMode(mode);
     }
@@ -6263,7 +6198,7 @@ namespace ignite
         }
 
         m_EditorCamera.UpdateMouseState();
-        if (m_IsHovered && !m_Gizmo.IsManipulating() && !m_Data.is2DBoundsSizing)
+        if (m_IsHovered && !m_Gizmo.IsManipulating())
         {
             switch (m_EditorCamera.GetNavigationMode())
             {

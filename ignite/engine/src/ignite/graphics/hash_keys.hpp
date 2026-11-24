@@ -95,6 +95,7 @@ namespace ignite
         nri::Descriptor *debugTex = nullptr;
         nri::Descriptor *objectIDTex = nullptr;
         nri::Descriptor *taaHistoryTex = nullptr;
+        nri::Descriptor *gizmoTex = nullptr;
         nri::Descriptor *postProcessBuffer = nullptr;
         nri::Descriptor *sampler = nullptr;
 
@@ -104,6 +105,7 @@ namespace ignite
                 && uiTex == other.uiTex && edgeTex == other.edgeTex && bloomTex == other.bloomTex
                 && ssaoTex == other.ssaoTex && depthTex == other.depthTex && debugTex == other.debugTex
                 && objectIDTex == other.objectIDTex && taaHistoryTex == other.taaHistoryTex
+                && gizmoTex == other.gizmoTex
                 && postProcessBuffer == other.postProcessBuffer && sampler == other.sampler;
         }
     };
@@ -114,7 +116,7 @@ namespace ignite
         {
             return Hashing::HashCombineAll(k.layout, k.sceneTex, k.uiTex,
                 k.edgeTex, k.bloomTex, k.ssaoTex, k.depthTex, k.debugTex,
-                k.objectIDTex, k.taaHistoryTex, k.postProcessBuffer, k.sampler);
+                k.objectIDTex, k.taaHistoryTex, k.gizmoTex, k.postProcessBuffer, k.sampler);
         }
     };
 

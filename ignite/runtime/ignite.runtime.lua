@@ -59,7 +59,6 @@ project "Ignite.Runtime"
         "%{IncludeDir.GLM}",
         "%{IncludeDir.FMOD}",
         "%{IncludeDir.IMGUI}",
-        "%{IncludeDir.IMGUIZMO}",
         "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.MONO}",
         "%{IncludeDir.SPDLOG}",

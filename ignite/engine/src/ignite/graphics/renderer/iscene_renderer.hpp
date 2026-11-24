@@ -10,6 +10,8 @@
 #include "ignite/graphics/bloom.hpp"
 #include "ignite/graphics/ssao.hpp"
 #include "ignite/graphics/outline_jfa.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo_renderer.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/binding_set.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
@@ -166,6 +168,10 @@ namespace ignite
         SampleMethod GetSampleMethod() const { return sceneRenderSettings.sampleMethod; }
         void SetSampleMethod(SampleMethod method);
 
+        void SetGizmoDrawList(const GizmoDrawList &drawList) { m_GizmoDrawList = drawList; }
+        void ClearGizmoDrawList() { m_GizmoDrawList.Clear(); }
+        const GizmoDrawList &GetGizmoDrawList() const { return m_GizmoDrawList; }
+
         virtual Ref<Texture> GetEnvironmentMapColorTexture();
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture();
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap();
@@ -255,6 +261,8 @@ namespace ignite
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<OutlineJFA> m_OutlineJFA;
+        Ref<GizmoRenderer> m_GizmoRenderer;
+        GizmoDrawList m_GizmoDrawList;
 
         ConstantBuffer m_CompositePostProcessBuffer;
         ConstantBuffer m_FXAABuffer;

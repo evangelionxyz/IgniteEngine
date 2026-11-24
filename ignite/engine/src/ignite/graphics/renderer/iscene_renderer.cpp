@@ -61,6 +61,7 @@ namespace ignite
 
         m_CompositeVertexBuffer->SetData(screenVertices.data(), sizeof(screenVertices));
         m_CompositeVertexBufferUploadPending = false;
+        m_GizmoRenderer = CreateRef<GizmoRenderer>();
 
         m_AssetChangeSignalToken = SignalBus::Subscribe<AssetChangeSignal>(
             [this](const AssetChangeSignal &signal)
@@ -406,6 +407,7 @@ namespace ignite
         m_CompositeVertexBuffer.reset();
         m_Renderer2D.reset();
         m_OutlineJFA.reset();
+        m_GizmoRenderer.reset();
     }
 
     void ISceneRenderer::ResizeFramebuffer([[maybe_unused]] ICamera *camera, uint32_t width, uint32_t height)

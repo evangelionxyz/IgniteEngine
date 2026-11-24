@@ -105,6 +105,8 @@ namespace ignite
                 target->sceneResolvedRT->Resize(renderWidth, renderHeight, false);
             if (target->widgetRT)
                 target->widgetRT->Resize(width, height, false);
+            if (target->gizmoRT)
+                target->gizmoRT->Resize(width, height, false);
             if (target->compositeRT)
                 target->compositeRT->Resize(width, height, false);
             if (target->postProcessRT)
@@ -144,6 +146,28 @@ namespace ignite
         else if (target->widgetRT->GetWidth() != width || target->widgetRT->GetHeight() != height)
         {
             target->widgetRT->Resize(width, height);
+        }
+    }
+
+    void SceneRenderer::EnsureGizmoRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
+    {
+        const uint32_t safeW = std::max(width, 1u);
+        const uint32_t safeH = std::max(height, 1u);
+        if (!target->gizmoRT)
+        {
+            RenderTargetCreateInfo createInfo = {};
+            createInfo.width = safeW;
+            createInfo.height = safeH;
+            createInfo.attachments =
+            {
+                FramebufferAttachments{ "[Gizmo DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
+                FramebufferAttachments{ "[Gizmo ColorAttachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT },
+            };
+            target->gizmoRT = RenderTarget::Create(createInfo, "[Scene Renderer] Gizmo RT");
+        }
+        else if (target->gizmoRT->GetWidth() != safeW || target->gizmoRT->GetHeight() != safeH)
+        {
+            target->gizmoRT->Resize(safeW, safeH);
         }
     }
 

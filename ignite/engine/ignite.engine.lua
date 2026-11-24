@@ -36,7 +36,6 @@ project "Ignite.Engine"
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.IMGUI}",
-        "%{IncludeDir.IMGUIZMO}",
         "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.SPDLOG}",
         "%{IncludeDir.IGNITE_SERVER}",

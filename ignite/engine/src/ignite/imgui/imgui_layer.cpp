@@ -13,7 +13,7 @@
 
 #include <backends/imgui_impl_sdl3.h>
 #include <imgui_internal.h>
-#include <ImGuizmo.h>
+#include "ignite/graphics/gizmo/gizmo.hpp"
 
 #ifdef PLATFORM_WINDOWS
     #include <backends/imgui_impl_dx12.h>
@@ -305,8 +305,8 @@ namespace ignite
                 return true;
         }
 
-        // 4. On the gizmo dockspace window, pass input through to editor camera unless ImGuizmo is actively being manipulated
-        if (ImGuizmo::IsUsing())
+        // 4. On the gizmo dockspace window, pass input through to editor camera unless native Gizmo is actively being manipulated
+        if (Gizmo::IsAnyManipulating())
             return true;
 
         return false;
@@ -459,7 +459,6 @@ namespace ignite
 
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-        ImGuizmo::BeginFrame();
 
         m_BeginFrameCalled = true;
     }

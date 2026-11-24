@@ -34,7 +34,6 @@ project "Ignite.Core"
         "%{IncludeDir.FMOD}",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.IMGUI}",
-        "%{IncludeDir.IMGUIZMO}",
         "%{IncludeDir.STB}",
         "%{IncludeDir.ZLIB}",
         "%{IncludeDir.JSON}",

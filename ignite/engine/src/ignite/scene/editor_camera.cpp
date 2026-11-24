@@ -20,6 +20,152 @@ namespace ignite
 		m_View = view;
 	}
 
+	void EditorCamera::SetOrientationFromView(const glm::mat4 &view)
+	{
+		const glm::vec3 forward(view[0][2], view[1][2], view[2][2]);
+		const glm::vec3 right(view[0][0], view[1][0], view[2][0]);
+		const bool isTopBottom = std::abs(forward.y) > 0.999f;
+
+		if (isTopBottom)
+		{
+			pitch = (forward.y < 0.0f) ? glm::half_pi<float>() : -glm::half_pi<float>();
+			yaw = std::atan2(right.x, -right.z);
+			if (projectionType == ProjectionType::Orthographic && m_NavigationMode != NavigationMode::Mode2D)
+			{
+				m_ViewPreset = (forward.y < 0.0f) ? EditorViewPreset::Top : EditorViewPreset::Bottom;
+			}
+			else
+			{
+				pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
+			}
+		}
+		else
+		{
+			const float maxPitchLimit = (projectionType == ProjectionType::Orthographic) ? glm::half_pi<float>() : controls.maxPitch;
+			const float minPitchLimit = (projectionType == ProjectionType::Orthographic) ? -glm::half_pi<float>() : controls.minPitch;
+			pitch = glm::clamp(std::asin(glm::clamp(-forward.y, -1.0f, 1.0f)), minPitchLimit, maxPitchLimit);
+			yaw = std::atan2(-forward.z, -forward.x);
+			if (projectionType == ProjectionType::Orthographic && m_NavigationMode != NavigationMode::Mode2D)
+			{
+				m_ViewPreset = EditorViewPreset::Orthographic2_5D;
+			}
+		}
+
+		UpdateSphericalPosition();
+		UpdateView();
+	}
+
+	bool EditorCamera::IsCardinalView() const
+	{
+		return m_ViewPreset == EditorViewPreset::Top
+			|| m_ViewPreset == EditorViewPreset::Bottom
+			|| m_ViewPreset == EditorViewPreset::Front
+			|| m_ViewPreset == EditorViewPreset::Back
+			|| m_ViewPreset == EditorViewPreset::Left
+			|| m_ViewPreset == EditorViewPreset::Right;
+	}
+
+	void EditorCamera::SetViewPreset(EditorViewPreset preset)
+	{
+		const bool wasPerspective = (projectionType == ProjectionType::Perspective);
+		const bool wasOrtho = (projectionType == ProjectionType::Orthographic);
+
+		m_FocusActive = false;
+		m_AngularVelocity = glm::vec2(0.0f);
+		m_PanVelocity = glm::vec2(0.0f);
+		m_ZoomVelocity = 0.0f;
+
+		if (preset == EditorViewPreset::Mode2D)
+		{
+			SetNavigationMode(NavigationMode::Mode2D);
+			return;
+		}
+
+		const EditorViewPreset previousPreset = m_ViewPreset;
+		m_ViewPreset = preset;
+
+		if (preset == EditorViewPreset::Perspective)
+		{
+			if (m_NavigationMode == NavigationMode::Mode2D)
+			{
+				m_NavigationMode = NavigationMode::Orbit;
+			}
+			projectionType = ProjectionType::Perspective;
+			if (wasOrtho)
+			{
+				const float tanHalfFov = std::max(std::tan(glm::radians(fov) * 0.5f), 1e-4f);
+				m_Distance = glm::clamp(orthoSize / (2.0f * tanHalfFov), controls.minDistance, controls.maxDistance);
+			}
+			pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
+		}
+		else
+		{
+			if (m_NavigationMode == NavigationMode::Mode2D || m_NavigationMode == NavigationMode::Fly)
+			{
+				m_NavigationMode = NavigationMode::Orbit;
+			}
+			projectionType = ProjectionType::Orthographic;
+			if (wasPerspective)
+			{
+				const float tanHalfFov = std::max(std::tan(glm::radians(fov) * 0.5f), 1e-4f);
+				orthoSize = glm::clamp(2.0f * m_Distance * tanHalfFov, 0.1f, controls.maxOrthoSize);
+			}
+
+			constexpr float kHalfPi = glm::half_pi<float>();
+			constexpr float kPi = glm::pi<float>();
+			switch (preset)
+			{
+				case EditorViewPreset::Front:
+					yaw = kHalfPi;
+					pitch = 0.0f;
+					break;
+				case EditorViewPreset::Back:
+					yaw = -kHalfPi;
+					pitch = 0.0f;
+					break;
+				case EditorViewPreset::Right:
+					yaw = 0.0f;
+					pitch = 0.0f;
+					break;
+				case EditorViewPreset::Left:
+					yaw = kPi;
+					pitch = 0.0f;
+					break;
+				case EditorViewPreset::Top:
+					yaw = kHalfPi;
+					pitch = kHalfPi;
+					break;
+				case EditorViewPreset::Bottom:
+					yaw = kHalfPi;
+					pitch = -kHalfPi;
+					break;
+				case EditorViewPreset::Orthographic2_5D:
+					if (previousPreset == EditorViewPreset::Mode2D || previousPreset == EditorViewPreset::Top
+						|| previousPreset == EditorViewPreset::Bottom || previousPreset == EditorViewPreset::Front
+						|| previousPreset == EditorViewPreset::Back || previousPreset == EditorViewPreset::Left
+						|| previousPreset == EditorViewPreset::Right)
+					{
+						yaw = glm::radians(45.0f);
+						pitch = glm::radians(35.2643897f);
+					}
+					else
+					{
+						pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
+					}
+					break;
+				default:
+					break;
+			}
+		}
+
+		UpdateSphericalPosition();
+		UpdateView();
+		if (m_ViewportSize.x > 0 && m_ViewportSize.y > 0)
+		{
+			UpdateProjection(m_ViewportSize.x, m_ViewportSize.y);
+		}
+	}
+
 	void EditorCamera::FocusTarget(const glm::vec3 &target, float distance)
 	{
 		m_FocusTarget = target;
@@ -47,6 +193,7 @@ namespace ignite
 
 		if (m_NavigationMode == NavigationMode::Mode2D)
 		{
+			m_ViewPreset = EditorViewPreset::Mode2D;
 			projectionType = ProjectionType::Orthographic;
 			m_Target.z = 0.0f;
 			m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
@@ -60,6 +207,7 @@ namespace ignite
 			{
 				projectionType = ProjectionType::Perspective;
 			}
+			m_ViewPreset = EditorViewPreset::Perspective;
 
 			if (previousMode == NavigationMode::Fly && m_NavigationMode == NavigationMode::Orbit)
 			{
@@ -80,6 +228,12 @@ namespace ignite
 				m_Distance = glm::clamp(glm::distance(position, m_Target), controls.minDistance, controls.maxDistance);
 			}
 		}
+
+		UpdateView();
+		if (m_ViewportSize.x > 0 && m_ViewportSize.y > 0)
+		{
+			UpdateProjection(m_ViewportSize.x, m_ViewportSize.y);
+		}
 	}
 
 	void EditorCamera::UpdateMouseState()
@@ -98,9 +252,22 @@ namespace ignite
 
 	void EditorCamera::UpdateSphericalPosition()
 	{
-		position.x = m_Target.x + m_Distance * cos(pitch) * cos(yaw);
-		position.y = m_Target.y + m_Distance * sin(pitch);
-		position.z = m_Target.z + m_Distance * cos(pitch) * sin(yaw);
+		if (projectionType == ProjectionType::Orthographic && m_NavigationMode != NavigationMode::Mode2D)
+		{
+			const float cp = std::cos(pitch);
+			const float sp = std::sin(pitch);
+			const float cy = std::cos(yaw);
+			const float sy = std::sin(yaw);
+			const glm::vec3 forward(-cp * cy, -sp, -cp * sy);
+			const float safeMaxDist = glm::max(farPlane * 0.45f, 50.0f);
+			const float effDist = glm::min(glm::max(m_Distance, glm::max(orthoSize * 2.5f, 50.0f)), safeMaxDist);
+			position = m_Target - forward * effDist;
+			return;
+		}
+
+		position.x = m_Target.x + m_Distance * std::cos(pitch) * std::cos(yaw);
+		position.y = m_Target.y + m_Distance * std::sin(pitch);
+		position.z = m_Target.z + m_Distance * std::cos(pitch) * std::sin(yaw);
 	}
 
 	void EditorCamera::HandleOrbit(float deltaTime)
@@ -152,8 +319,13 @@ namespace ignite
 			}
 			else // handle orbit
 			{
+				if (projectionType == ProjectionType::Orthographic && IsCardinalView())
+				{
+					m_ViewPreset = EditorViewPreset::Orthographic2_5D;
+				}
+
 				// apply mouse movement to angular velocity for inertia
-				if (controls.enableInertia)
+				if (controls.enableInertia && projectionType == ProjectionType::Perspective)
 				{
 					m_AngularVelocity.x += delta.x * controls.mouseSensitivity;
 					m_AngularVelocity.y += delta.y * controls.mouseSensitivity;
@@ -534,7 +706,9 @@ namespace ignite
 			return;
 		}
 
-		m_View = glm::lookAt(position, m_Target, { 0.0f, 1.0f, 0.0f });
+		const glm::vec3 forward = GetForwardDirection();
+		const glm::vec3 up = GetUpDirection();
+		m_View = glm::lookAt(position, position + forward, up);
 	}
 
 	glm::vec3 EditorCamera::GetUpDirection() const
@@ -554,7 +728,7 @@ namespace ignite
 			return { 1.0f, 0.0f, 0.0f };
 		}
 
-		return glm::normalize(glm::cross(GetForwardDirection(), { 0.0f, 1.0f, 0.0f }));
+		return glm::normalize(glm::vec3(std::sin(yaw), 0.0f, -std::cos(yaw)));
 	}
 
 	glm::vec3 EditorCamera::GetForwardDirection() const
@@ -564,15 +738,10 @@ namespace ignite
 			return { 0.0f, 0.0f, -1.0f };
 		}
 
-		if (m_NavigationMode == NavigationMode::Fly)
-		{
-			const float cp = std::cos(pitch);
-			const float sp = std::sin(pitch);
-			const float cy = std::cos(yaw);
-			const float sy = std::sin(yaw);
-			return glm::normalize(glm::vec3(-cp * cy, -sp, -cp * sy));
-		}
-
-		return glm::normalize(m_Target - position);
+		const float cp = std::cos(pitch);
+		const float sp = std::sin(pitch);
+		const float cy = std::cos(yaw);
+		const float sy = std::sin(yaw);
+		return glm::normalize(glm::vec3(-cp * cy, -sp, -cp * sy));
 	}
 }

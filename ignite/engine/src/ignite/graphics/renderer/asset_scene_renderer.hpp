@@ -75,7 +75,7 @@ namespace ignite
             std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> &opaqueCache,
             std::unordered_map<const RenderTarget *, Ref<GraphicsPipeline>> &transparentCache);
 
-        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, ConstantBuffer &postProcessBuffer);
+        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *rt, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> gizmoTexture, ConstantBuffer &postProcessBuffer);
 
     private:
         Ref<SkeletalMesh> m_PreviewSkeletalMesh;
@@ -87,6 +87,7 @@ namespace ignite
         Ref<Material>       m_RuntimeMaterial;
 
         Ref<Environment>    m_Environment;
+        Ref<RenderTarget>   m_GizmoRT;
         static Ref<Texture> m_DefaultEnvTexture;
         AssetHandle         m_EnvTexHandle = AssetHandle(0);
 

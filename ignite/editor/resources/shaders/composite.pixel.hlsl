@@ -15,6 +15,7 @@ Texture2D depthTexture : register(t5);
 Texture2D debugTexture : register(t6);
 Texture2D<uint> objectIDTexture : register(t7);
 Texture2D taaHistoryTexture : register(t8);
+Texture2D gizmoTexture : register(t9);
 
 SamplerState linearSampler : register(s0);
 
@@ -235,9 +236,11 @@ float4 main(VSOutput input) : SV_Target
     float4 uiColor = uiTexture.SampleLevel(linearSampler, input.uv, 0.0f);
     float4 edgeColor = edgeDetection.SampleLevel(linearSampler, input.uv, 0.0f);
     float4 debugColor = debugTexture.SampleLevel(linearSampler, input.uv, 0.0f);
+    float4 gizmoColor = gizmoTexture.SampleLevel(linearSampler, input.uv, 0.0f);
     
     float3 finalColor = lerp(tonemappedScene, debugColor.rgb, debugColor.a);
     finalColor = lerp(finalColor, uiColor.rgb, uiColor.a);
     finalColor = lerp(finalColor, edgeColor.rgb, saturate(edgeColor.a));
+    finalColor = finalColor * (1.0f - saturate(gizmoColor.a)) + gizmoColor.rgb;
     return float4(finalColor, 1.0f);
 }

@@ -25,18 +25,6 @@ project "IMGUI"
         "%{THIRDPARTY_DIR}/ImGui/imstb_rectpack.h",
         "%{THIRDPARTY_DIR}/ImGui/imstb_textedit.h",
         "%{THIRDPARTY_DIR}/ImGui/imstb_truetype.h",
-
-        -- include imguizmo src to compile
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.h",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGradient.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGradient.h",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/GraphEditor.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/GraphEditor.h",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImCurveEdit.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImCurveEdit.h",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImSequencer.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImSequencer.h",
     }
 
     includedirs {

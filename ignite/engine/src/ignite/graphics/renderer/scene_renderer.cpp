@@ -220,6 +220,10 @@ namespace ignite
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
         m_FXAABindingSetCache.clear();
+        if (m_GizmoRenderer)
+        {
+            m_GizmoRenderer->ClearPipelineCache();
+        }
         m_RenderTargets.clear();
 
         ImGui_NRI::ClearTextureCache();
@@ -463,7 +467,8 @@ namespace ignite
             }
         }
 
-        // 10. Post processing requirements
+        // 10. Gizmo & Post processing requirements
+        plan.requiresGizmo = !isGameCamera && !m_GizmoDrawList.Empty();
         plan.requiresBloom = postProcessing.enableBloom;
         plan.requiresSSAO = postProcessing.enableSSAO;
         plan.requiresTAA = postProcessing.taaProperties.enable;
@@ -635,11 +640,26 @@ namespace ignite
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
 
+                if (target->previousPlan.requiresGizmo && target->gizmoRT)
+                {
+                    target->gizmoRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->gizmoRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                }
+
                 if (plan.requiresGrid)
                 {
                     RenderTarget *destFb = targetFramebuffer ? targetFramebuffer : target->compositeRT->GetFramebuffer();
-                    const auto is2D = camera->projectionType == ProjectionType::Orthographic;
-                    DrawDebugGrid(cmd, destFb, frameContext, is2D ? sceneRenderSettings.worldGrid2D : sceneRenderSettings.worldGrid3D, is2D);
+                    int gridPlaneMode = 0;
+                    if (camera && camera->projectionType == ProjectionType::Orthographic)
+                    {
+                        const glm::vec3 fwd = camera->GetForwardDirection();
+                        if (std::abs(fwd.z) > 0.995f)
+                            gridPlaneMode = 1;
+                        else if (std::abs(fwd.x) > 0.995f)
+                            gridPlaneMode = 2;
+                    }
+                    const bool use2DGridStyle = (gridPlaneMode == 1);
+                    DrawDebugGrid(cmd, destFb, frameContext, use2DGridStyle ? sceneRenderSettings.worldGrid2D : sceneRenderSettings.worldGrid3D, gridPlaneMode);
                 }
 
                 SubmitCommandBuffer(cmd);
@@ -729,6 +749,18 @@ namespace ignite
                 {
                     target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                }
+
+                if (plan.requiresGizmo)
+                {
+                    EnsureGizmoRT(target, width, height);
+                    target->gizmoRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->gizmoRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                }
+                else if (target->previousPlan.requiresGizmo && target->gizmoRT)
+                {
+                    target->gizmoRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
+                    target->gizmoRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
 
                 target->compositeRT->ClearColorAttachmentFloat(cmd, 0);
@@ -936,6 +968,56 @@ namespace ignite
                 ssaoTexture = ssaoInstance->GetAOTexture();
             }
 
+            Ref<Texture> gizmoTexture = nullptr;
+            if (plan.requiresGizmo && m_GizmoRenderer && target->gizmoRT)
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::GizmoPass");
+                Ref<Texture> gizmoSceneDepth = (target->sceneRT && target->sceneRT->GetDepthAttachment() && target->msaaSampleCount == 1)
+                    ? target->sceneRT->GetDepthAttachment()
+                    : Renderer::GetWhiteTexture();
+
+                if (gizmoSceneDepth && gizmoSceneDepth->GetHandle() && gizmoSceneDepth->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
+                {
+                    const nri::Format fmt = gizmoSceneDepth->GetFormat();
+                    const bool isDepth = (fmt == nri::Format::D16_UNORM || fmt == nri::Format::D32_SFLOAT
+                        || fmt == nri::Format::D24_UNORM_S8_UINT || fmt == nri::Format::D32_SFLOAT_S8_UINT);
+                    const bool hasStencil = (fmt == nri::Format::D24_UNORM_S8_UINT || fmt == nri::Format::D32_SFLOAT_S8_UINT);
+
+                    nri::TextureBarrierDesc b = {};
+                    b.texture = gizmoSceneDepth->GetHandle();
+                    b.before = { gizmoSceneDepth->GetCurrentAccess(), gizmoSceneDepth->GetCurrentLayout(), gizmoSceneDepth->GetCurrentStages() };
+                    if (b.before.layout == nri::Layout::UNDEFINED)
+                        b.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+                    b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    b.mipOffset = 0;
+                    b.mipNum = nri::REMAINING;
+                    b.layerOffset = 0;
+                    b.layerNum = nri::REMAINING;
+                    b.planes = isDepth
+                        ? (hasStencil ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL) : nri::PlaneBits::DEPTH)
+                        : nri::PlaneBits::ALL;
+
+                    nri::BarrierDesc bd = {};
+                    bd.textures = &b;
+                    bd.textureNum = 1;
+                    DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, bd);
+                    gizmoSceneDepth->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
+                }
+
+                m_GizmoRenderer->Render(
+                    cmd,
+                    target->gizmoRT->GetFramebuffer(),
+                    camera,
+                    m_GizmoDrawList,
+                    gizmoSceneDepth,
+                    &m_SceneGPUData,
+                    &m_FramePacket.pointLights,
+                    &m_FramePacket.spotLights,
+                    &m_GIGPUData);
+
+                gizmoTexture = target->gizmoRT->GetColorAttachment(0);
+            }
+
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
                 const uint32_t compositeZone = gpuTimer.BeginZone(cmd, "CompositePass");
@@ -946,7 +1028,7 @@ namespace ignite
 
                 if (sceneRenderSettings.enableFXAA && target->postProcessRT)
                 {
-                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, target->postProcessRT->GetFramebuffer());
+                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, target->postProcessRT->GetFramebuffer());
                     
                     IGN_PROFILE_SCOPE("SceneRenderer::FXAAPass");
                     FXAAPass(cmd, finalCompositeFB, target->postProcessRT->GetColorAttachment(0));
@@ -957,10 +1039,10 @@ namespace ignite
                 }
                 else
                 {
-                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, finalCompositeFB);
+                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, finalCompositeFB);
                     if (mirrorCompositeForAgent)
                     {
-                        CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, msaaActive, target->compositeRT->GetFramebuffer());
+                        CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, target->compositeRT->GetFramebuffer());
                     }
                 }
                 gpuTimer.EndZone(cmd, compositeZone);
@@ -3608,8 +3690,17 @@ namespace ignite
         // Draw debug grid directly into scene framebuffer before transparent meshes
         if (drawDebug)
         {
-            const auto is2D = camera->projectionType == ProjectionType::Orthographic;
-            DrawDebugGrid(cmd, framebuffer, frameContext, is2D ? sceneRenderSettings.worldGrid2D : sceneRenderSettings.worldGrid3D, is2D);
+            int gridPlaneMode = 0;
+            if (camera && camera->projectionType == ProjectionType::Orthographic)
+            {
+                const glm::vec3 fwd = camera->GetForwardDirection();
+                if (std::abs(fwd.z) > 0.995f)
+                    gridPlaneMode = 1;
+                else if (std::abs(fwd.x) > 0.995f)
+                    gridPlaneMode = 2;
+            }
+            const bool use2DGridStyle = (gridPlaneMode == 1);
+            DrawDebugGrid(cmd, framebuffer, frameContext, use2DGridStyle ? sceneRenderSettings.worldGrid2D : sceneRenderSettings.worldGrid3D, gridPlaneMode);
 
             if (sceneRenderSettings.showGIProbes)
             {
@@ -3777,7 +3868,7 @@ namespace ignite
                         std::swap(uv0.x, uv1.x);
                     }
 
-                    // Find material if available (use frame cache â€” avoids repeated AssetManager map lookups)
+                    // Find material if available (use frame cache avoids repeated AssetManager map lookups)
                     Ref<Material2D> mat2d = ResolveAsset<Material2D>(sprite.materialHandle);
 
                     // Render with Material2D
@@ -3926,16 +4017,14 @@ namespace ignite
                 }
                 else
                 {
-                    const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+                    constexpr auto offscreen = std::numeric_limits<uint32_t>::max() / 2u;
                     m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
                 }
             }
             else
             {
-                const glm::ivec2 mousePos = InputSystem::GetMousePosition();
-                m_WidgetRenderer->SetMousePosition(
-                    static_cast<uint32_t>(std::max(mousePos.x, 0)),
-                    static_cast<uint32_t>(std::max(mousePos.y, 0)));
+                const glm::ivec2 mousePos = glm::max(InputSystem::GetMousePosition(), glm::ivec2(0.0));
+                m_WidgetRenderer->SetMousePosition(mousePos.x, mousePos.y);
             }
 
             m_WidgetRenderer->Update(Application::GetDeltaTime());
@@ -4061,7 +4150,7 @@ namespace ignite
         m_UseGameplayWidgetMouseOverride = true;
     }
 
-    void SceneRenderer::DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D)
+    void SceneRenderer::DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, int planeMode)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -4078,7 +4167,7 @@ namespace ignite
         gpuData.yAxisColor = style.yAxisColor;
         gpuData.zAxisColor = style.zAxisColor;
         gpuData.settings0 = glm::vec4(glm::max(style.cellSize, 0.0001f), glm::max(style.minPixelsBetweenCells, 0.1f), glm::max(style.gridSize, 1.0f), glm::max(style.majorLineScale, 1.0f));
-        gpuData.settings1 = glm::vec4(is2D ? 1.0f : 0.0f, style.enableXAxis ? 1.0f : 0.0f, style.enableYAxis ? 1.0f : 0.0f, style.enableZAxis ? 1.0f : 0.0f);
+        gpuData.settings1 = glm::vec4(static_cast<float>(planeMode), style.enableXAxis ? 1.0f : 0.0f, style.enableYAxis ? 1.0f : 0.0f, style.enableZAxis ? 1.0f : 0.0f);
 
         // Set buffer data before bind it
         m_DebugGridBuffer.SetData(&gpuData, sizeof(gpuData));
@@ -4196,31 +4285,31 @@ namespace ignite
         constexpr float kTwoPi = 6.28318530718f;
         constexpr float kPi = 3.14159265359f;
 
-        auto DrawCircleRing = [this, kTwoPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+        auto DrawCircleRing = [ this, kTwoPi ](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+        {
+            for (int i = 0; i < segments; ++i)
             {
-                for (int i = 0; i < segments; ++i)
-                {
-                    const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kTwoPi;
-                    const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kTwoPi;
+                const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kTwoPi;
+                const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kTwoPi;
 
-                    const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
-                    const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                    m_DebugRenderer2D->DrawLine(p0, p1, color);
-                }
-            };
+                const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
+                const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
+                m_DebugRenderer2D->DrawLine(p0, p1, color);
+            }
+        };
 
-        auto DrawArc = [this, kPi](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+        auto DrawArc = [ this, kPi ](const glm::vec3 &center, const glm::vec3 &axisA, const glm::vec3 &axisB, int segments, const glm::vec4 &color)
+        {
+            for (int i = 0; i < segments; ++i)
             {
-                for (int i = 0; i < segments; ++i)
-                {
-                    const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kPi;
-                    const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kPi;
+                const float t0 = (static_cast<float>(i) / static_cast<float>(segments)) * kPi;
+                const float t1 = (static_cast<float>(i + 1) / static_cast<float>(segments)) * kPi;
 
-                    const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
-                    const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
-                    m_DebugRenderer2D->DrawLine(p0, p1, color);
-                }
-            };
+                const glm::vec3 p0 = center + axisA * std::cos(t0) + axisB * std::sin(t0);
+                const glm::vec3 p1 = center + axisA * std::cos(t1) + axisB * std::sin(t1);
+                m_DebugRenderer2D->DrawLine(p0, p1, color);
+            }
+        };
 
         const glm::vec4 colliderColor(0.2f, 0.9f, 0.2f, 1.0f);
         const glm::vec4 boundsColor(0.7f, 0.2f, 0.8f, 1.0f);
@@ -4788,7 +4877,7 @@ namespace ignite
 
     void SceneRenderer::CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext,
         Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing,
-        Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, bool msaaResolved,
+        Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> gizmoTexture, bool msaaResolved,
         RenderTarget *targetFramebuffer)
     {
         IGN_PROFILE_FUNCTION();
@@ -4859,7 +4948,7 @@ namespace ignite
             return;
 
         Ref<BindingSet> bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetPipelineLayout(), target,
-            edgeTexture, bloomTexture, ssaoTexture, taaHistoryTexture, m_CompositePostProcessBuffer, m_CompositeSampler, msaaResolved);
+            edgeTexture, bloomTexture, ssaoTexture, taaHistoryTexture, gizmoTexture, m_CompositePostProcessBuffer, m_CompositeSampler, msaaResolved);
         if (!bindingSet || !bindingSet->GetHandle())
             return;
 
@@ -4916,6 +5005,7 @@ namespace ignite
         transitionToSRV(compositeDebug);
         transitionToSRV(compositeObjectID);
         transitionToSRV(taaHistoryTexture);
+        transitionToSRV(gizmoTexture);
 
         const bool startedRendering = compositeFramebuffer && !compositeFramebuffer->IsRendering();
         if (startedRendering)
@@ -5805,6 +5895,7 @@ namespace ignite
         layoutDesc.AddItem(BindingLayoutItem::TextureSRV(6)); // debug
         layoutDesc.AddItem(BindingLayoutItem::TextureSRV(7)); // objectID
         layoutDesc.AddItem(BindingLayoutItem::TextureSRV(8)); // TAA history
+        layoutDesc.AddItem(BindingLayoutItem::TextureSRV(9)); // gizmo
         layoutDesc.AddItem(BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
         layoutDesc.AddItem(BindingLayoutItem::Sampler(0)); // sampler
 
@@ -5933,12 +6024,13 @@ namespace ignite
     }
 
     Ref<BindingSet> SceneRenderer::GetOrCreateCompositeBindingSet(nri::PipelineLayout *pipelineLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const ConstantBuffer &postProcessBuffer, nri::Descriptor *sampler, bool useResolvedScene)
+            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, Ref<Texture> gizmoTexture, const ConstantBuffer &postProcessBuffer, nri::Descriptor *sampler, bool useResolvedScene)
     {
         Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
         Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
         Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
         Ref<Texture> taaHistory = taaHistoryTexture ? taaHistoryTexture : Renderer::GetBlackTexture();
+        Ref<Texture> gizmo = gizmoTexture ? gizmoTexture : Renderer::GetBlackTexture();
         Ref<Texture> debug = (target->debugRT && target->debugRT->GetColorAttachment(0)) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
         Ref<Texture> widget = (target->widgetRT && target->widgetRT->GetColorAttachment(0)) ? target->widgetRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
 
@@ -5962,6 +6054,7 @@ namespace ignite
             debug->GetShaderResourceView(),
             objectIDTex->GetShaderResourceView(),
             taaHistory->GetShaderResourceView(),
+            gizmo->GetShaderResourceView(),
             postProcessBuffer.GetDescriptor(),
             sampler
         };
@@ -5983,6 +6076,7 @@ namespace ignite
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(6, debug->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(7, objectIDTex->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::TextureSRV(8, taaHistory->GetShaderResourceView()));
+        bindingSetDesc.AddItem(BindingSetItem::TextureSRV(9, gizmo->GetShaderResourceView()));
         bindingSetDesc.AddItem(BindingSetItem::ConstantBuffer(0, postProcessBuffer.GetDescriptor()));
         bindingSetDesc.AddItem(BindingSetItem::Sampler(0, sampler));
 

@@ -4,7 +4,7 @@
 #ifndef STATES_HPP
 #define STATES_HPP
 
-#include "ignite/imgui/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
 
 namespace ignite
 {

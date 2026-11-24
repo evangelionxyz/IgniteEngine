@@ -10,7 +10,7 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/core/types.hpp"
-#include "ignite/imgui/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
 #include "editor_camera.hpp"
 #include <optional>
 #include <string>
@@ -20,6 +20,7 @@
 namespace ignite
 {
     class Scene;
+    class SceneRenderer;
     class Event;
     class MouseScrolledEvent;
     class MouseMovedEvent;
@@ -50,7 +51,8 @@ namespace ignite
         bool OnKeyPressedEvent(KeyPressedEvent &event);
 
         void SetGizmoOperation(GizmoOperation op);
-        void SetGizmoMode(ImGuizmo::MODE mode);
+        void SetGizmoMode(GizmoMode mode);
+        void SubmitGizmoForRender(SceneRenderer *renderer, ICamera *camera);
 
         bool IsGizmoBeingUse() const { return m_Data.isGizmoBeingUse; }
 
@@ -84,9 +86,7 @@ namespace ignite
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
 
-        void Render2DBoundsSizing();
-        bool Is2DResizableEntity(Entity entity) const;
-        glm::vec3 ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid = nullptr);
+        AABB ComputeEntityLocalBounds(Entity entity) const;
 
     private:
         void ApplySelectionInternal(const std::vector<UUID> &entityUUIDs, UUID trackingUUID);
@@ -148,16 +148,7 @@ namespace ignite
             float gamePreviewZoom = 1.0f;
             glm::vec2 gamePreviewPan = glm::vec2(0.0f);
 
-            bool is2DBoundsSizing = false;
-            bool is2DBoundsHovered = false;
-            int active2DCorner = -1;
-            UUID active2DEntity = UUID(0);
-            float active2DPlaneZ = 0.0f;
-            glm::vec3 active2DAxisX = glm::vec3(1.0f, 0.0f, 0.0f);
-            glm::vec3 active2DAxisY = glm::vec3(0.0f, 1.0f, 0.0f);
-            glm::vec3 active2DOppositeWorld = glm::vec3(0.0f);
             GizmoOperation gizmoOp;
-            TransformComponent before2DResize;
 		} m_Data;
 
         bool m_SceneFocused;

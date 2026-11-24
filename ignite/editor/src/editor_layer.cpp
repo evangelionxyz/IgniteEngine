@@ -587,6 +587,14 @@ namespace ignite
                 }
                 break;
             }
+            case Key::B:
+            {
+                if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
+                {
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_3D);
+                }
+                break;
+            }
             case Key::T:
             {
                 if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
@@ -758,6 +766,7 @@ namespace ignite
                             // The projection is already sized to the Editor Viewport, so both viewports are independent.
                             m_EditorPlayCamera.SetView(cc.camera.GetView());
                             m_EditorPlayCamera.position = cc.camera.position;
+                            m_SceneRenderer->ClearGizmoDrawList();
                             {
                                 IGN_PROFILE_SCOPE("SceneRenderer::RenderPlayToEditorViewport");
                                 m_SceneRenderer->Render(&m_EditorPlayCamera, frameContext, false);
@@ -771,6 +780,7 @@ namespace ignite
                 case ESceneState::Stop:
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                    m_ScenePanel->SubmitGizmoForRender(m_SceneRenderer.get(), editCamera);
                     m_SceneRenderer->Render(editCamera, frameContext, true); // enable draw debug
                     break;
                 }
@@ -784,6 +794,7 @@ namespace ignite
             {
                 auto &cc = primaryCam.GetComponent<CameraComponent>();
                 ICamera *gameCamera = &cc.camera;
+                m_SceneRenderer->ClearGizmoDrawList();
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
                     m_SceneRenderer->Render(gameCamera, frameContext, false); // disable draw debug
