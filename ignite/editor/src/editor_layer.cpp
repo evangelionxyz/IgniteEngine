@@ -1175,6 +1175,7 @@ namespace ignite
 
         if (m_GIBaker && m_GIBaker->IsBaking())
             ImGui::OpenPopup("Bake GI");
+
         if (m_State.giBakeModal && ImGui::BeginPopupModal("Bake GI", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
             const uint32_t total = m_GIBaker ? m_GIBaker->GetTotalProbes() : 0u;
@@ -1290,14 +1291,11 @@ namespace ignite
         ImGui::BeginChild("##status_bar", { 0.0f, bottomStatusBarAvail.y }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
 
         ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
-        if (UI::Button("+ Content Browser", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f)))
+        if (UI::Button("Content Browser", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_PLUS))
         {
             ++m_PendingContentBrowserPanelsToAdd;
         }
         ImGui::EndDisabled();
-
-        ImGui::SameLine();
-        UI::ToggleButton("UI Kit", &m_State.uiShowcaseWindow, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_SPARKLES);
 
         if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
         {
@@ -1325,9 +1323,12 @@ namespace ignite
                 if (bakeVolume.IsValid() && m_GIBaker)
                 {
                     const std::string sceneName = m_CurrentSceneFilePath.empty()
-                        ? "Scene" : m_CurrentSceneFilePath.stem().string();
+                        ? "Scene"
+                        : m_CurrentSceneFilePath.stem().string();
+
                     const std::filesystem::path output = m_ActiveProject->GetDirectory()
                         / "Baked" / sceneName / (std::to_string(static_cast<uint64_t>(bakeVolume.GetUUID())) + ".igi");
+
                     m_BakeReflectionProbesAfterGI = false;
                     if (m_GIBaker->StartBake(m_ActiveScene.get(), m_ActiveScene->GetAssetManager(), bakeVolume, output))
                         m_State.giBakeModal = true;

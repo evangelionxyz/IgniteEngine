@@ -6038,35 +6038,32 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        auto drawGizmoBtn = [&](const std::string &iconName, const ImVec2 &buttonSize, bool active)
-        {
-            const auto texID = UI::GetTextureID(m_Icons[iconName]);
-            return UI::DrawSelectImageButton(iconName.c_str(), texID, buttonSize, active);;
-        };
+        if (UI::IconButton("Picking", ICON_LC_MOUSE_POINTER_2, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "Pick Entity", m_Data.gizmoOp == GizmoOperation::NONE))
+            SetGizmoOperation(GizmoOperation::NONE);
 
-        if (drawGizmoBtn("picking", buttonSize, m_Data.gizmoOp == GizmoOperation::NONE)) SetGizmoOperation(GizmoOperation::NONE);
         ImGui::SameLine();
-        if (drawGizmoBtn("translate", buttonSize, m_Data.gizmoOp == GizmoOperation::TRANSLATE)) SetGizmoOperation(GizmoOperation::TRANSLATE);
+        if (UI::IconButton("Translate", ICON_LC_MOVE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "Translate Entity", m_Data.gizmoOp == GizmoOperation::TRANSLATE))
+            SetGizmoOperation(GizmoOperation::TRANSLATE);
+
         ImGui::SameLine();
-        if (drawGizmoBtn("rotate", buttonSize, m_Data.gizmoOp == GizmoOperation::ROTATE)) SetGizmoOperation(GizmoOperation::ROTATE);
+        if (UI::IconButton("Rotate", ICON_LC_ROTATE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "Rotate Entity", m_Data.gizmoOp == GizmoOperation::ROTATE))
+            SetGizmoOperation(GizmoOperation::ROTATE);
+
         ImGui::SameLine();
-        if (drawGizmoBtn("scale", buttonSize, m_Data.gizmoOp == GizmoOperation::SCALE)) SetGizmoOperation(GizmoOperation::SCALE);
+        if (UI::IconButton("Scale", ICON_LC_SCALE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "Scale Entity", m_Data.gizmoOp == GizmoOperation::SCALE))
+            SetGizmoOperation(GizmoOperation::SCALE);
 
         {
             ImGui::SameLine();
-            const bool is2DBounds = m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D;
-            ImGui::PushStyleColor(ImGuiCol_Button, is2DBounds ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-            if (ImGui::Button("2D Bounds", ImVec2(0, 24))) SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
-            ImGui::PopStyleColor();
+            if (UI::IconButton("2D Bounds", ICON_LC_SQUARE, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "2D Bounds", m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D))
+                SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
         }
 
         if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D)
         {
             ImGui::SameLine();
-            const bool is3DBounds = m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_3D;
-            ImGui::PushStyleColor(ImGuiCol_Button, is3DBounds ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-            if (ImGui::Button("3D Bounds", ImVec2(0, 24))) SetGizmoOperation(GizmoOperation::BOUND_SIZING_3D);
-            ImGui::PopStyleColor();
+            if (UI::IconButton("3D Bounds", ICON_LC_CUBOID, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "3D Bounds", m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_3D))
+                SetGizmoOperation(GizmoOperation::BOUND_SIZING_3D);
         }
 
         ImGui::SameLine();
@@ -6074,9 +6071,8 @@ namespace ignite
         ImGui::SameLine();
 
         const bool isLocal = m_Gizmo.GetMode() == GizmoMode::LOCAL;
-        if (drawGizmoBtn("transform_local", buttonSize, isLocal)) SetGizmoMode(GizmoMode::LOCAL);
-        ImGui::SameLine();
-        if (drawGizmoBtn("transform_world", buttonSize, !isLocal)) SetGizmoMode(GizmoMode::WORLD);
+        if (UI::Button(isLocal ? "Local" : "World", isLocal ? UI::ButtonVariant::Ghost : UI::ButtonVariant::Primary, UI::ButtonSize::Medium, ImVec2(0.0f, 0.0f), isLocal ? ICON_LC_MOVE_3D : ICON_LC_GLOBE))
+            SetGizmoMode(isLocal ? GizmoMode::WORLD : GizmoMode::LOCAL);
 
         ImGui::PopStyleVar(2);
 
@@ -6099,26 +6095,21 @@ namespace ignite
         }
         ImGui::SameLine();
 
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
-
         const bool isScenePlaying = m_Scene && m_Scene->IsPlaying();
         const bool isSceneReadyToPlay = m_Scene && m_Scene->IsReadyToPlay();
         const bool canClickPlay = m_Scene && (isScenePlaying || isSceneReadyToPlay);
-        Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-        const auto scenePlayStopID = UI::GetTextureID(scenePlayStopTex);
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!canClickPlay);
-        if (UI::DrawImageButton("##PlayButton", scenePlayStopID, buttonSize))
+        if (UI::IconButton("play_button", isScenePlaying ? ICON_LC_SQUARE : ICON_LC_PLAY, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Play Scene", isSceneReadyToPlay))
         {
             if (isScenePlaying)
             {
                 Application::SubmitToMainThread([this]()
-                    {
-                        m_EditorLayer->OnSceneStop();
-                        m_SceneFocused = false;
-                    });
+                {
+                    m_EditorLayer->OnSceneStop();
+                    m_SceneFocused = false;
+                });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -6128,10 +6119,10 @@ namespace ignite
             else
             {
                 Application::SubmitToMainThread([this]()
-                    {
-                        m_EditorLayer->OnScenePlay();
-                        m_SceneFocused = true;
-                    });
+                {
+                    m_EditorLayer->OnScenePlay();
+                    m_SceneFocused = true;
+                });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -6148,20 +6139,18 @@ namespace ignite
 
         const bool isSceneSimulate = m_Scene && m_Scene->IsSimulating();
         const bool canClickSimulate = m_Scene && (isSceneSimulate || isSceneReadyToPlay);
-        Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-        const auto sceneSimulateID = UI::GetTextureID(sceneSimulateTex);
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!canClickSimulate);
-        if (UI::DrawImageButton("##SimulateButton", sceneSimulateID, buttonSize))
+        if (UI::IconButton("simulate_button", isSceneSimulate ? ICON_LC_SQUARE : ICON_LC_COG, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Simulate Scene", isSceneReadyToPlay))
         {
             if (isSceneSimulate)
             {
                 Application::SubmitToMainThread([this]()
-                    {
-                        m_EditorLayer->OnSceneStop();
-                        m_SceneFocused = false;
-                    });
+                {
+                    m_EditorLayer->OnSceneStop();
+                    m_SceneFocused = false;
+                });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -6188,8 +6177,6 @@ namespace ignite
             const SceneAssetLoadProgress progress = m_Scene->GetAssetLoadProgress();
             ImGui::SetTooltip("Waiting for scene assets to load (%zu/%zu)...", progress.readyAssets, progress.totalAssets);
         }
-
-        ImGui::PopStyleVar(2);
 
         ImGui::EndDisabled();
     }
