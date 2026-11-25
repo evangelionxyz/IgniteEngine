@@ -172,7 +172,13 @@ static PSOutput EvaluateMeshPixel(
         return result;
     }
 
-    // Tangent space normal mapping with safe orthonormal basis fallback
+    // Tangent space normal mapping with safe orthonormal basis fallback.
+    // Under frontCounterClockwise = false + negative viewport height, double-sided backfaces
+    // in the main color pass arrive with isFrontFace == true; flip them toward the viewer.
+    if ((gi.captureMode == 0 && isFrontFace) || (gi.captureMode == 2 && !isFrontFace))
+    {
+        N = -N;
+    }
     float3 finalNormal = N;
     float3 T = input.tangent - N * dot(N, input.tangent);
     float tLenSq = dot(T, T);
@@ -236,6 +242,13 @@ static PSOutput EvaluateMeshPixel(
             skyDiffuseIrradiance = (gi.skySH[0].w > 0.5f)
                 ? EvalSHIrradiance4(gi.skySH, finalNormal)
                 : SampleEnvironmentIrradiance(environmentMapTexture, sampler0, finalNormal, scene.skyType, cameraAltitudeKm);
+        }
+        else if (gi.captureMode == 1 && gi.biasAndFade.w > 0.5f
+            && gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0 && gi.skySH[0].w > 0.5f)
+        {
+            // Bounce >= 1 when SkyVisibilitySplit is enabled: include sky diffuse attenuated by
+            // previous-bounce sky visibility so skylight bounces into enclosed arches and corridors.
+            skyDiffuseIrradiance = EvalSHIrradiance4(gi.skySH, finalNormal);
         }
 
         const bool receiveShadow = (input.receiveShadow != 0u);
@@ -343,10 +356,11 @@ static PSOutput EvaluateMeshPixel(
         float3 ambient = float3(0.0f, 0.0f, 0.0f);
         float3 reflectedSpecular = float3(0.0f, 0.0f, 0.0f);
         float volW = 0.0f;
+        float skyVis = 1.0f;
         float3 volIrradiance = float3(0.0f, 0.0f, 0.0f);
         if (gi.giMode > 0 && gi.biasAndFade.w > 0.5f && gi.viewportInvSizeAndFlags.w > 0.5f)
         {
-            volIrradiance = SampleGIIrradiance(input.worldPos, finalNormal, viewDirection, gi, sampler0, volW) * gi.gridMinAndIntensity.w;
+            volIrradiance = SampleGIIrradianceAndSkyVis(input.worldPos, finalNormal, viewDirection, gi, sampler0, volW, skyVis) * gi.gridMinAndIntensity.w;
         }
 
         float NdotV = saturate(dot(finalNormal, viewDirection));
@@ -361,7 +375,6 @@ static PSOutput EvaluateMeshPixel(
             {
                 if (gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0)
                 {
-                    float skyVis = SampleGISkyVisibility(input.worldPos, finalNormal, gi, sampler0);
                     combinedDiff = volIrradiance * volW + skyDiffuseIrradiance * lerp(1.0f, skyVis, volW);
                 }
                 else
@@ -425,14 +438,29 @@ static PSOutput EvaluateMeshPixel(
         {
             if (gi.biasAndFade.w > 0.5f)
             {
-                ambient = kD * surface.baseWeight * surface.baseColor * volIrradiance * volW * ao;
+                float3 combinedDiff = volIrradiance * volW;
+                if (gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0 && gi.skySH[0].w > 0.5f)
+                {
+                    combinedDiff += skyDiffuseIrradiance * lerp(1.0f, skyVis, volW);
+                }
+                ambient = (1.0f - surface.metalness) * surface.baseWeight * surface.baseColor * combinedDiff * MultiBounceAO(ao, surface.baseColor);
             }
         }
         else if (gi.captureMode == 2)
         {
-            float3 combinedDiff = (gi.giMode > 0 && gi.biasAndFade.w > 0.5f)
-                ? lerp(skyDiffuseIrradiance, volIrradiance, volW)
-                : skyDiffuseIrradiance;
+            const bool hasVol = (gi.giMode > 0 && gi.biasAndFade.w > 0.5f);
+            float3 combinedDiff = skyDiffuseIrradiance;
+            if (hasVol)
+            {
+                if (gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0)
+                {
+                    combinedDiff = volIrradiance * volW + skyDiffuseIrradiance * lerp(1.0f, skyVis, volW);
+                }
+                else
+                {
+                    combinedDiff = lerp(skyDiffuseIrradiance, volIrradiance, volW);
+                }
+            }
             ambient = kD * surface.baseWeight * surface.baseColor * combinedDiff * MultiBounceAO(ao, surface.baseColor);
         }
 

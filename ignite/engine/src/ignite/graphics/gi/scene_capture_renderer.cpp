@@ -617,6 +617,8 @@ namespace ignite
         m_PreparedBatches.clear();
         m_RetainedMaterials.clear();
         m_ActiveEnvironment.reset();
+        m_PreparedEnvTexture.reset();
+        m_HasPreparedSkyIBL = false;
         m_HasDirectionalLight = false;
         m_HasBakeLocalShadows = false;
         m_HasOverrideGIData = (giDataOverride != nullptr);
@@ -799,10 +801,16 @@ namespace ignite
         Ref<Texture> envMapTex = Renderer::GetBlackTexture();
         if (WorldEnvironment *worldEnv = scene->GetActiveWorldEnvironment())
         {
+            if (!worldEnv->environment)
+            {
+                worldEnv->environment = Environment::Create();
+                worldEnv->gpuInitialized = false;
+            }
             if (worldEnv->environment)
             {
                 m_ActiveEnvironment = worldEnv->environment;
                 m_ActiveSkyType = worldEnv->skyType;
+                m_ActiveEnvironment->SetSkyType(worldEnv->skyType);
                 m_BaseSceneData.skyType = static_cast<int32_t>(worldEnv->skyType);
                 m_ActiveEnvironment->WriteBuffer(cmd);
 
@@ -818,9 +826,36 @@ namespace ignite
                         envMapTex = sky->GetSkyViewLUT();
                     }
                 }
-                else if (m_ActiveEnvironment->GetHDRTexture())
+                else
                 {
-                    envMapTex = m_ActiveEnvironment->GetHDRTexture();
+                    if (worldEnv->skyType == SkyType::HDRI && worldEnv->hdrHandle != AssetHandle(0) && assetManager)
+                    {
+                        Ref<Texture> currentHdr = m_ActiveEnvironment->GetHDRTexture();
+                        if (worldEnv->dirtyEnvironment || !currentHdr || currentHdr == Renderer::GetBlackTexture() || !currentHdr->IsReady())
+                        {
+                            Ref<Texture> hdrTex = assetManager->GetAsset<Texture>(worldEnv->hdrHandle);
+                            if (!hdrTex || !hdrTex->IsReady())
+                            {
+                                hdrTex = assetManager->GetAssetImmediate<Texture>(worldEnv->hdrHandle);
+                            }
+                            if (hdrTex && hdrTex->IsReady())
+                            {
+                                m_ActiveEnvironment->SetTexture(hdrTex);
+                                worldEnv->dirtyEnvironment = false;
+                            }
+                        }
+                    }
+
+                    if (m_ActiveEnvironment->GetHDRTexture())
+                    {
+                        envMapTex = m_ActiveEnvironment->GetHDRTexture();
+                    }
+                }
+
+                if (worldEnv->enableIBL && envMapTex && envMapTex != Renderer::GetBlackTexture())
+                {
+                    m_PreparedEnvTexture = envMapTex;
+                    m_HasPreparedSkyIBL = true;
                 }
             }
         }
@@ -858,12 +893,45 @@ namespace ignite
             }
             if (assetManager && matHandle != AssetHandle(0))
             {
-                if (Ref<Material> mat = assetManager->GetAsset<Material>(matHandle))
+                Ref<Material> mat = assetManager->GetAsset<Material>(matHandle);
+                if (!mat)
+                {
+                    mat = assetManager->GetAssetImmediate<Material>(matHandle);
+                }
+                if (mat)
                 {
                     return mat;
                 }
             }
             return defaultMaterial;
+        };
+
+        auto ensureMaterialTexturesLoaded = [&](const Ref<Material> &mat)
+        {
+            if (!assetManager || !mat)
+            {
+                return;
+            }
+            const AssetHandle texHandles[6] = {
+                mat->baseColorTextureHandle,
+                mat->emissiveTextureHandle,
+                mat->metallicTextureHandle,
+                mat->roughnessTextureHandle,
+                mat->normalTextureHandle,
+                mat->occlusionTextureHandle
+            };
+            for (AssetHandle h : texHandles)
+            {
+                if (h == AssetHandle(0))
+                {
+                    continue;
+                }
+                Ref<Texture> tex = assetManager->GetAsset<Texture>(h);
+                if (!tex || !tex->IsReady())
+                {
+                    (void)assetManager->GetAssetImmediate<Texture>(h);
+                }
+            }
         };
 
         if (scene->registry)
@@ -890,6 +958,10 @@ namespace ignite
                 }
 
                 Ref<StaticMesh> mesh = assetManager->GetAsset<StaticMesh>(smc.handle);
+                if (!mesh)
+                {
+                    mesh = assetManager->GetAssetImmediate<StaticMesh>(smc.handle);
+                }
                 if (!mesh)
                 {
                     continue;
@@ -931,6 +1003,7 @@ namespace ignite
 
                     if (material->UpdateBindingSet(envMapTex, bakeShadowTex) && uploadedMaterials.insert(material.get()).second)
                     {
+                        ensureMaterialTexturesLoaded(material);
                         material->UploadToGpu(cmd);
                     }
                     Ref<BindingSet> matSet = material->GetBindingSet();

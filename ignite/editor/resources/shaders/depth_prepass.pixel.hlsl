@@ -30,7 +30,7 @@ float2 main(PixelVertexInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARG
     // Output clean geometric vertex normals (without tangent normal-map bumps) so GTAO
     // evaluates against the same smooth macro geometry represented by the depth buffer.
     float3 finalNormal = normalize(input.normal);
-    if (!isFrontFace)
+    if (isFrontFace)
     {
         finalNormal = -finalNormal;
     }

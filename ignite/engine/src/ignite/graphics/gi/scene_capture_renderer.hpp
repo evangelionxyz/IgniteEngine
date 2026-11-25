@@ -99,6 +99,9 @@ namespace ignite
 
         const AABB &GetPreparedSceneBounds() const { return m_SceneBounds; }
         size_t GetPreparedBatchCount() const { return m_PreparedBatches.size(); }
+        Ref<Texture> GetPreparedEnvironmentTexture() const { return m_PreparedEnvTexture; }
+        SkyType GetPreparedSkyType() const { return m_ActiveSkyType; }
+        bool IsPreparedSkyIBLEnabled() const { return m_HasPreparedSkyIBL; }
 
         // Returns a persistent per-resolution colorCube + depthCube if already allocated.
         CaptureResult GetCachedCaptureTargets() const { return { m_ColorCube, m_DepthCube }; }
@@ -158,7 +161,9 @@ namespace ignite
 
         Ref<CascadedShadowMap> m_BakeShadowMap;
         Ref<Environment> m_ActiveEnvironment;
+        Ref<Texture> m_PreparedEnvTexture;
         SkyType m_ActiveSkyType = SkyType::HDRI;
+        bool m_HasPreparedSkyIBL = false;
         bool m_HasDirectionalLight = false;
         glm::vec3 m_SunDirection = glm::vec3(0.0f, 1.0f, 0.0f);
         Scene_GPUData m_BaseSceneData{};

@@ -242,8 +242,9 @@ namespace ignite::gi
         uint32_t hitCount = 0;
         uint32_t backfaceCount = 0;
         float skyVisibility = 0.0f;
+        glm::vec4 skyDirVisibility = glm::vec4(0.0f);
     };
-    static_assert(sizeof(ProbeVisibilityStatsGPU) == 48, "ProbeVisibilityStatsGPU must match HLSL layout");
+    static_assert(sizeof(ProbeVisibilityStatsGPU) == 64, "ProbeVisibilityStatsGPU must match HLSL layout");
 
     inline glm::vec2 OctSignNotZero(const glm::vec2 &v)
     {

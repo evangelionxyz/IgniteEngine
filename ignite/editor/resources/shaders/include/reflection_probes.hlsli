@@ -33,7 +33,9 @@ static float ComputeBentNormalSpecularOcclusion(float3 N, float3 V, float3 R, fl
     float x = saturate((d - abs(r1 - r2)) / max(r1 + r2 - abs(r1 - r2), 1e-4f));
     float capRatio = (r1 < r2) ? saturate((1.0f - cos(r1)) / max(1.0f - cos(r2), 1e-4f)) : 1.0f;
     float coneSO = saturate((1.0f - x) * capRatio);
-    return saturate(min(lagardeSO, lerp(coneSO, lagardeSO, 0.25f)));
+    float highAOBlend = smoothstep(0.85f, 0.995f, aoC);
+    float blendedCone = lerp(lerp(coneSO, lagardeSO, 0.25f), lagardeSO, highAOBlend);
+    return saturate(min(lagardeSO, blendedCone));
 }
 
 static float ComputeProbeInfluenceWeight(float3 worldPos, ReflectionProbeGPU probe)

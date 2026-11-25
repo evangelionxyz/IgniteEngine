@@ -194,6 +194,7 @@ namespace ignite
     GIBaker::~GIBaker()
     {
         m_PrevBounceVolume.reset();
+        m_SkyBakeCube.reset();
 
         auto *dm = DeviceManager::GetInstance();
         if (!dm)
@@ -402,7 +403,11 @@ namespace ignite
         const int32_t dz6[6] = { 0, 0, 0, 0, -1, 1 };
 
         std::vector<gi::SHL2> nextSH = m_ProbeSH;
+        std::vector<float> nextSkyVis = m_ProbeSkyVis;
+        std::vector<glm::vec3> nextSkyDir = m_ProbeSkyDir;
         std::vector<uint8_t> nextHasSource = hasSource;
+        const bool hasSkyVisData = (m_ProbeSkyVis.size() == m_ProbeCount);
+        const bool hasSkyDirData = (m_ProbeSkyDir.size() == m_ProbeCount);
 
         const int maxIters = m_Dims.x + m_Dims.y + m_Dims.z;
         for (int iter = 0; iter < maxIters; ++iter)
@@ -422,6 +427,8 @@ namespace ignite
                         }
 
                         gi::SHL2 accum{};
+                        float accumSkyVis = 0.0f;
+                        glm::vec3 accumSkyDir(0.0f);
                         int count = 0;
 
                         // Prefer 6-connected axial neighbors first
@@ -440,6 +447,14 @@ namespace ignite
                                 for (int c = 0; c < 9; ++c)
                                 {
                                     accum.c[c] += m_ProbeSH[nIdx].c[c];
+                                }
+                                if (hasSkyVisData)
+                                {
+                                    accumSkyVis += m_ProbeSkyVis[nIdx];
+                                }
+                                if (hasSkyDirData)
+                                {
+                                    accumSkyDir += m_ProbeSkyDir[nIdx];
                                 }
                                 ++count;
                             }
@@ -472,6 +487,14 @@ namespace ignite
                                             {
                                                 accum.c[c] += m_ProbeSH[nIdx].c[c];
                                             }
+                                            if (hasSkyVisData)
+                                            {
+                                                accumSkyVis += m_ProbeSkyVis[nIdx];
+                                            }
+                                            if (hasSkyDirData)
+                                            {
+                                                accumSkyDir += m_ProbeSkyDir[nIdx];
+                                            }
                                             ++count;
                                         }
                                     }
@@ -486,6 +509,14 @@ namespace ignite
                             {
                                 nextSH[idx].c[c] = accum.c[c] * inv;
                             }
+                            if (hasSkyVisData)
+                            {
+                                nextSkyVis[idx] = accumSkyVis * inv;
+                            }
+                            if (hasSkyDirData)
+                            {
+                                nextSkyDir[idx] = accumSkyDir * inv;
+                            }
                             nextHasSource[idx] = 1;
                             changed = true;
                         }
@@ -498,6 +529,14 @@ namespace ignite
                 break;
             }
             m_ProbeSH = nextSH;
+            if (hasSkyVisData)
+            {
+                m_ProbeSkyVis = nextSkyVis;
+            }
+            if (hasSkyDirData)
+            {
+                m_ProbeSkyDir = nextSkyDir;
+            }
             hasSource = nextHasSource;
         }
     }
@@ -589,20 +628,61 @@ namespace ignite
 
             if (m_ProbeSkyVis.size() == m_ProbeCount)
             {
+                const bool hasSkyDir = (m_ProbeSkyDir.size() == m_ProbeCount);
                 outData.skyVisibilityHalfRGBA.resize(totalHalfCount);
                 for (uint32_t probeIdx = 0; probeIdx < m_ProbeCount; ++probeIdx)
                 {
                     const size_t base = static_cast<size_t>(probeIdx) * 4u;
                     const float vis = std::clamp(m_ProbeSkyVis[probeIdx], 0.0f, 1.0f);
-                    const uint16_t h = glm::packHalf1x16(vis);
-                    outData.skyVisibilityHalfRGBA[base + 0u] = h;
-                    outData.skyVisibilityHalfRGBA[base + 1u] = h;
-                    outData.skyVisibilityHalfRGBA[base + 2u] = h;
-                    outData.skyVisibilityHalfRGBA[base + 3u] = glm::packHalf1x16(1.0f);
+                    const glm::vec3 dir = hasSkyDir ? glm::clamp(m_ProbeSkyDir[probeIdx], glm::vec3(-0.5f), glm::vec3(0.5f)) : glm::vec3(0.0f);
+                    outData.skyVisibilityHalfRGBA[base + 0u] = glm::packHalf1x16(vis);
+                    outData.skyVisibilityHalfRGBA[base + 1u] = glm::packHalf1x16(dir.x);
+                    outData.skyVisibilityHalfRGBA[base + 2u] = glm::packHalf1x16(dir.y);
+                    outData.skyVisibilityHalfRGBA[base + 3u] = glm::packHalf1x16(dir.z);
                 }
                 outData.flags |= IrradianceVolumeData::kFlagHasSkyVisibility;
             }
         }
+    }
+
+    bool GIBaker::ComputeSceneSkySH(gi::SHL2 &outSkySH)
+    {
+        Ref<Texture> envTex = m_Capturer.GetPreparedEnvironmentTexture();
+        if (!m_CmdAllocator || !m_CmdBuffer || !envTex || !envTex->GetHandle())
+        {
+            return false;
+        }
+
+        if (!m_SkyBakeCube)
+        {
+            TextureCreateInfo cubeInfo;
+            cubeInfo.width = 128;
+            cubeInfo.height = 128;
+            cubeInfo.depth = 1;
+            cubeInfo.mipLevels = 1;
+            cubeInfo.arraySize = 6;
+            cubeInfo.sampleCount = 1;
+            cubeInfo.dimension = nri::TextureType::TEXTURE_2D;
+            cubeInfo.format = nri::Format::RGBA16_SFLOAT;
+            cubeInfo.isCubeMap = true;
+            cubeInfo.isRenderTarget = false;
+            cubeInfo.isUAV = true;
+            cubeInfo.bindless = false;
+            m_SkyBakeCube = Texture::Create(cubeInfo, "[GIBaker SkyBakeCube]");
+        }
+        if (!m_SkyBakeCube || !m_SkyBakeCube->GetHandle())
+        {
+            return false;
+        }
+
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        nri.ResetCommandAllocator(*m_CmdAllocator);
+        nri.BeginCommandBuffer(*m_CmdBuffer, nullptr);
+        m_Prefilter.ConvertEnv2DToCube(m_CmdBuffer, envTex, m_SkyBakeCube,
+            static_cast<int32_t>(m_Capturer.GetPreparedSkyType()), 0.0f);
+        SubmitAndWaitCommandBuffer();
+
+        return m_Prefilter.ProjectCubeToSHSync(m_SkyBakeCube, outSkySH, nullptr, true, 6.0f);
     }
 
     bool GIBaker::PrepareBounce(uint32_t bounceIndex)
@@ -619,6 +699,9 @@ namespace ignite
             nri.BeginCommandBuffer(*m_CmdBuffer, nullptr);
             m_Capturer.PrepareScene(m_Scene, m_AssetManager, m_CmdBuffer, nullptr);
             SubmitAndWaitCommandBuffer();
+
+            m_BakeSkySH = gi::SHL2{};
+            m_HasBakeSkySH = m_Capturer.IsPreparedSkyIBLEnabled() && ComputeSceneSkySH(m_BakeSkySH);
             return true;
         }
 
@@ -632,12 +715,28 @@ namespace ignite
         {
             return false;
         }
+
+        const IrradianceVolumeComponent *volComp = (m_BakeVolumeEntity.IsValid() && m_BakeVolumeEntity.HasComponent<IrradianceVolumeComponent>())
+            ? &m_BakeVolumeEntity.GetComponent<IrradianceVolumeComponent>()
+            : nullptr;
+
         m_PrevBounceGIData = GI_GPUData{};
-        m_PrevBounceVolume->FillGIGPUData(m_PrevBounceGIData, nullptr);
+        m_PrevBounceVolume->FillGIGPUData(m_PrevBounceGIData, volComp);
         m_PrevBounceGIData.giMode = 2; // Use LeakResistant mode between bounce captures
         m_PrevBounceGIData.gridMinAndIntensity.w = 1.0f;
         m_PrevBounceGIData.biasAndFade.z = std::max(0.1f, m_Spacing * 0.2f);
         m_PrevBounceGIData.viewportInvSizeAndFlags.w = 1.0f;
+        if (m_SkyVisibilitySplit && m_PrevBounceGIData.skyVisibilityTexIndex >= 0)
+        {
+            m_PrevBounceGIData.skyVisibilitySplit = 1;
+        }
+        if (m_HasBakeSkySH)
+        {
+            for (int i = 0; i < 9; ++i)
+            {
+                m_PrevBounceGIData.skySH[i] = glm::vec4(m_BakeSkySH.c[i], i == 0 ? 1.0f : 0.0f);
+            }
+        }
         m_Capturer.SetOverrideGIData(&m_PrevBounceGIData);
         return true;
     }
@@ -689,6 +788,7 @@ namespace ignite
         m_ProbeSH.assign(m_ProbeCount, gi::SHL2{});
         m_ProbeValidity.assign(m_ProbeCount, 1.0f);
         m_ProbeSkyVis.assign(m_ProbeCount, 0.0f);
+        m_ProbeSkyDir.assign(m_ProbeCount, glm::vec3(0.0f));
         m_ProbeOffsets.assign(m_ProbeCount, glm::vec3(0.0f));
         m_ProbeState.assign(m_ProbeCount, 1.0f);
         m_ProbeVisTiles.assign(m_ProbeCount, {});
@@ -899,7 +999,7 @@ namespace ignite
                         }
                         if (m_CurrentBounce == 0u)
                         {
-                            const bool valid = results[localIdx].backfaceFraction <= 0.25f;
+                            const bool valid = results[localIdx].backfaceFraction <= 0.15f;
                             m_ProbeValidity[probeIdx] = valid ? 1.0f : 0.0f;
                             m_ProbeState[probeIdx] = valid ? 1.0f : 0.0f;
                         }
@@ -928,12 +1028,16 @@ namespace ignite
                         {
                             const uint32_t probeIdx = m_NextProbeIndex + localIdx;
                             const auto &st = statsArr[localIdx];
-                            const bool valid = (st.backfaceFraction <= 0.25f);
+                            const bool valid = (st.backfaceFraction <= 0.15f);
                             m_ProbeValidity[probeIdx] = valid ? 1.0f : 0.0f;
                             m_ProbeState[probeIdx] = valid ? 1.0f : 0.0f;
                             if (probeIdx < m_ProbeSkyVis.size())
                             {
                                 m_ProbeSkyVis[probeIdx] = std::clamp(st.skyVisibility, 0.0f, 1.0f);
+                            }
+                            if (probeIdx < m_ProbeSkyDir.size())
+                            {
+                                m_ProbeSkyDir[probeIdx] = glm::vec3(st.skyDirVisibility);
                             }
 
                             if (!valid && st.closestBackfaceDirAndDist.w >= 0.0f)
@@ -1099,7 +1203,7 @@ namespace ignite
                     {
                         const uint32_t qIdx = m_RelocationCursor + localIdx;
                         const uint32_t probeIdx = m_RelocationQueue[qIdx];
-                        const bool relocValid = (statsArr[localIdx].backfaceFraction <= 0.25f);
+                        const bool relocValid = (statsArr[localIdx].backfaceFraction <= 0.15f);
                         if (relocValid)
                         {
                             accepted[localIdx] = 1;
@@ -1108,6 +1212,10 @@ namespace ignite
                             if (probeIdx < m_ProbeSkyVis.size())
                             {
                                 m_ProbeSkyVis[probeIdx] = std::clamp(statsArr[localIdx].skyVisibility, 0.0f, 1.0f);
+                            }
+                            if (probeIdx < m_ProbeSkyDir.size())
+                            {
+                                m_ProbeSkyDir[probeIdx] = glm::vec3(statsArr[localIdx].skyDirVisibility);
                             }
                         }
                         else
@@ -1209,6 +1317,8 @@ namespace ignite
         m_RelocationQueue.clear();
         m_CandidateFromInvalid.clear();
         m_PrevBounceVolume.reset();
+        m_HasBakeSkySH = false;
+        m_BakeSkySH = gi::SHL2{};
     }
 
     float GIBaker::GetProgress() const
@@ -1277,9 +1387,27 @@ namespace ignite
             capSettings.enablePreviousGI = (activeVolume && activeVolume->IsValid());
             if (capSettings.enablePreviousGI)
             {
-                activeVolume->FillGIGPUData(capSettings.previousGIData, nullptr);
+                const IrradianceVolumeComponent *activeVolComp = nullptr;
+                int bestPriority = std::numeric_limits<int>::min();
+                for (entt::entity ve : scene->registry->view<IrradianceVolumeComponent>())
+                {
+                    const auto &vc = scene->registry->get<IrradianceVolumeComponent>(ve);
+                    if (!activeVolComp || vc.priority > bestPriority)
+                    {
+                        activeVolComp = &vc;
+                        bestPriority = vc.priority;
+                    }
+                }
+                activeVolume->FillGIGPUData(capSettings.previousGIData, activeVolComp);
                 capSettings.previousGIData.giMode = 2;
                 capSettings.previousGIData.viewportInvSizeAndFlags.w = 1.0f;
+                if (m_HasBakeSkySH)
+                {
+                    for (int i = 0; i < 9; ++i)
+                    {
+                        capSettings.previousGIData.skySH[i] = glm::vec4(m_BakeSkySH.c[i], i == 0 ? 1.0f : 0.0f);
+                    }
+                }
             }
 
             CaptureResult cap = m_Capturer.CaptureCubemapSync(scene, assetManager, capturePos, capSettings);

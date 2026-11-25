@@ -5263,8 +5263,9 @@ namespace ignite
         GraphicsPipelineParams params;
         params.enableDepthWrite = true;
         params.enableDepthTest = true;
+        params.enableDepthClip = false;
         params.depthFunc = nri::CompareOp::LESS;
-        params.cullMode = nri::CullMode::FRONT;
+        params.cullMode = nri::CullMode::NONE;
         params.fillMode = nri::FillMode::SOLID;
 
         Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);

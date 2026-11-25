@@ -86,20 +86,21 @@ static float InterleavedGradientNoise(float2 screenPos)
     return frac(magic.z * frac(dot(screenPos, magic.xy)));
 }
 
-static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, SamplerState shadowSampler,
-    float4x4 cameraView, float3 worldPos, float3 normal, float3 lightDirection, float2 screenPos)
+static float SampleCascadePCF(CascadesShadows csm, Texture2DArray shadowMap, SamplerState shadowSampler,
+    int cascadeIdx, float3 worldPos, float3 normal, float3 lightDirection, float2 screenPos)
 {
-    if (csm.shadowStrength <= 0.001f)
-    {
-        return 1.0f;
-    }
+    float4x4 lightVP = csm.lightViewProjection[cascadeIdx];
+    float invHalfExtentX = max(length(lightVP[0].xyz), 1e-6f);
+    float ndcPerMeter = max(length(lightVP[2].xyz), 1e-6f);
+    float ts = csm.shadowTexelSize > 0.0f ? csm.shadowTexelSize : (1.0f / 2048.0f);
+    float worldTexelSize = (2.0f / invHalfExtentX) * ts;
 
-    float3 viewPos = mul(cameraView, float4(worldPos, 1.0f)).xyz;
-    float viewDepth = -viewPos.z;
-    int cascadeIdx = GetCascadeIndex(csm.cascadeSplits, viewDepth);
-    cascadeIdx = clamp(cascadeIdx, 0, NUM_CASCADES - 1);
+    // Slope-scaled normal offset + physical meter depth bias (capped per cascade texel)
+    // eliminates shadow acne with double-sided CSM casters without 25m+ Peter-Panning cutouts.
+    float cosTheta = saturate(dot(normal, lightDirection));
+    float3 shadowWorldPos = worldPos + normal * (worldTexelSize * (1.25f * (1.0f - cosTheta)));
 
-    float4 lightSpace = mul(csm.lightViewProjection[cascadeIdx], float4(worldPos, 1.0f));
+    float4 lightSpace = mul(lightVP, float4(shadowWorldPos, 1.0f));
     float3 ndc = lightSpace.xyz / lightSpace.w;
     float2 shadowUV = ndc.xy * 0.5f + 0.5f;
     float shadowDepth = ndc.z; // orthoZO outputs z in [0,1] for both D3D12 and Vulkan
@@ -114,14 +115,11 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
         return 1.0f;
     }
 
-    // Slope-scaled bias: steep surfaces get more bias to avoid acne.
-    // lightDirection points toward the light source (L), so dot(normal, lightDirection) > 0 on lit surfaces.
-    float cosTheta = saturate(dot(normal, lightDirection));
     float loBias = min(csm.minBias, csm.maxBias);
     float hiBias = max(csm.minBias, csm.maxBias);
     float baseBias = lerp(hiBias, loBias, cosTheta);
-    float cascadeBiasScale = 1.0f + float(cascadeIdx) * 0.5f;
-    float bias = baseBias * cascadeBiasScale;
+    float biasMeters = clamp(baseBias * 20.0f, worldTexelSize * 0.5f, worldTexelSize * 4.0f);
+    float bias = biasMeters * ndcPerMeter;
     float compareDepth = shadowDepth - bias;
 
     if (csm.softShadows == 0)
@@ -134,31 +132,15 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
         return saturate(lerp(1.0f, visibility, csm.shadowStrength));
     }
 
-    // Texel size in UV space.
-    float ts = csm.shadowTexelSize > 0.0f ? csm.shadowTexelSize : (1.0f / 2048.0f);
     float2 texelSize = float2(ts, ts);
-
-    // ---------------------------------------------------------------------------
-    // PCF radius scales with cascade: keep cascade 0 sharp, relax for far ones.
-    // csm.pcfRadius acts as the base radius in texels for cascade 0.
-    // ---------------------------------------------------------------------------
     float cascadeScale = 1.0f + float(cascadeIdx) * 0.5f;
     float filterRadius = max(csm.pcfRadius, 0.5f) * cascadeScale;
 
-    // ---------------------------------------------------------------------------
-    // Per-pixel rotation of the Poisson disk using interleaved-gradient noise.
-    // This breaks the structured pattern and eliminates banding without TAA.
-    // ---------------------------------------------------------------------------
     float angle = InterleavedGradientNoise(screenPos) * 6.28318530718f; // 2*PI
     float sinA = sin(angle);
     float cosA = cos(angle);
     float2x2 rot = float2x2(cosA, -sinA, sinA, cosA);
 
-    // ---------------------------------------------------------------------------
-    // 16-tap Poisson-disk PCF with hardware comparison sampler.
-    // SampleCmpLevelZero performs a bilinear 2x2 gather and returns the
-    // average of the four per-texel comparisons — 4x quality for free.
-    // ---------------------------------------------------------------------------
     float visibility = 0.0f;
     [unroll]
     for (int i = 0; i < 16; ++i)
@@ -169,12 +151,40 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
             shadowSampler,
             float3(sampleUV, float(cascadeIdx)),
             0.0f).r;
-        // Lit when fragment depth (with bias) is less than the stored occluder depth.
-        visibility += (compareDepth < storedDepth) ? 1.0f : 0.0f;
+        visibility += (compareDepth <= storedDepth) ? 1.0f : 0.0f;
     }
     visibility /= 16.0f;
 
     return saturate(lerp(1.0f, visibility, csm.shadowStrength));
+}
+
+static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, SamplerState shadowSampler,
+    float4x4 cameraView, float3 worldPos, float3 normal, float3 lightDirection, float2 screenPos)
+{
+    if (csm.shadowStrength <= 0.001f)
+    {
+        return 1.0f;
+    }
+
+    float3 viewPos = mul(cameraView, float4(worldPos, 1.0f)).xyz;
+    float viewDepth = -viewPos.z;
+    int cascadeIdx = clamp(GetCascadeIndex(csm.cascadeSplits, viewDepth), 0, NUM_CASCADES - 1);
+
+    float shadowVis = SampleCascadePCF(csm, shadowMap, shadowSampler, cascadeIdx, worldPos, normal, lightDirection, screenPos);
+    if (cascadeIdx < NUM_CASCADES - 1)
+    {
+        float splitFar = (cascadeIdx == 0) ? csm.cascadeSplits.x : ((cascadeIdx == 1) ? csm.cascadeSplits.y : csm.cascadeSplits.z);
+        float splitNear = (cascadeIdx == 0) ? 0.0f : ((cascadeIdx == 1) ? csm.cascadeSplits.x : csm.cascadeSplits.y);
+        float blendZone = max((splitFar - splitNear) * 0.1f, 0.5f);
+        float blendStart = splitFar - blendZone;
+        if (viewDepth > blendStart)
+        {
+            float nextVis = SampleCascadePCF(csm, shadowMap, shadowSampler, cascadeIdx + 1, worldPos, normal, lightDirection, screenPos);
+            float t = saturate((viewDepth - blendStart) / max(blendZone, 1e-4f));
+            shadowVis = lerp(shadowVis, nextVis, t);
+        }
+    }
+    return shadowVis;
 }
 
 static float SampleLocalCubeArrayTap(int cubeArrayIdx, SamplerState samp, float3 dir, int sliceIndex, float normDist, float bias)
