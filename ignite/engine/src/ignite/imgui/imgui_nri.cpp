@@ -96,6 +96,10 @@ namespace ignite
         createInfo.initialStages = nri::StageBits::ALL;
 
         std::vector<uint8_t> data(pixels, pixels + static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
+        if (m_FontTexture && m_FontTexture->GetShaderResourceView())
+        {
+            InvalidateTextureCache(m_FontTexture->GetShaderResourceView());
+        }
         m_FontTexture = Texture::Create(data, createInfo, nullptr, "ImGui font texture");
         LOG_ASSERT(m_FontTexture && m_FontTexture->GetHandle(), "[ImGui NRI] Failed to create font texture");
 
@@ -332,6 +336,10 @@ namespace ignite
         pushConstants.invDisplaySize[1] = 1.0f / drawData->DisplaySize.y;
         pushConstants.displayPos[0] = drawData->DisplayPos.x;
         pushConstants.displayPos[1] = drawData->DisplayPos.y;
+        pushConstants.time = ImGui::GetCurrentContext() ? static_cast<float>(ImGui::GetTime()) : 0.0f;
+        pushConstants.shaderFlags = 0;
+        pushConstants.param0 = 1.0f;
+        pushConstants.param1 = 16.0f;
         ImVec2 clipOff = drawData->DisplayPos;
         ImVec2 clipScale = drawData->FramebufferScale;
 
@@ -383,9 +391,31 @@ namespace ignite
 
                 if (pCmd->UserCallback)
                 {
-                    pCmd->UserCallback(cmdList, pCmd);
-                    lastTexture = nullptr;
-                    lastBindingSet = nullptr;
+                    if (pCmd->UserCallback == &ImGui_NRI::SetShaderParamsCallback)
+                    {
+                        const uintptr_t packed = reinterpret_cast<uintptr_t>(pCmd->UserCallbackData);
+                        pushConstants.shaderFlags = static_cast<uint32_t>(packed & 0xFFu);
+                        const uint8_t p0 = static_cast<uint8_t>((packed >> 8) & 0xFFu);
+                        const uint8_t p1 = static_cast<uint8_t>((packed >> 16) & 0xFFu);
+                        pushConstants.param0 = static_cast<float>(p0) / 16.0f;
+                        pushConstants.param1 = static_cast<float>(p1);
+                        nri.CmdSetRootConstants(*cmd, rootConstDesc);
+                    }
+                    else if (pCmd->UserCallback == ImDrawCallback_ResetRenderState)
+                    {
+                        pushConstants.shaderFlags = 0;
+                        pushConstants.param0 = 1.0f;
+                        pushConstants.param1 = 16.0f;
+                        nri.CmdSetRootConstants(*cmd, rootConstDesc);
+                        lastTexture = nullptr;
+                        lastBindingSet = nullptr;
+                    }
+                    else
+                    {
+                        pCmd->UserCallback(cmdList, pCmd);
+                        lastTexture = nullptr;
+                        lastBindingSet = nullptr;
+                    }
                 }
                 else
                 {
@@ -565,6 +595,19 @@ namespace ignite
 
         std::scoped_lock lock(s_Instance->m_BindingsCacheMutex);
         s_Instance->m_BindingsCache.clear();
+    }
+
+    void ImGui_NRI::SetShaderParamsCallback(const ImDrawList *, const ImDrawCmd *)
+    {
+        // Sentinel callback handled inline inside ImGui_NRI::Render.
+    }
+
+    void *ImGui_NRI::PackShaderCallbackData(uint32_t flags, uint8_t normParam0, uint8_t normParam1)
+    {
+        const uintptr_t packed = static_cast<uintptr_t>(flags & 0xFFu)
+            | (static_cast<uintptr_t>(normParam0) << 8)
+            | (static_cast<uintptr_t>(normParam1) << 16);
+        return reinterpret_cast<void *>(packed);
     }
 
     bool ImGui_NRI::UpdateGeometry(ImDrawData *drawData, uint32_t slotIndex)

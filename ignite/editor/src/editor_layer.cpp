@@ -1077,9 +1077,13 @@ namespace ignite
                     ++m_PendingContentBrowserPanelsToAdd;
                 }
 
-                if (ImGui::MenuItem("ImGui Demo", nullptr, false, m_ActiveProject != nullptr))
+                if (ImGui::MenuItem("ImGui Demo"))
                 {
                     m_State.imguiDemoWindow = true;
+                }
+
+                if (ImGui::MenuItem(ICON_LC_SPARKLES " UI Showcase", nullptr, &m_State.uiShowcaseWindow))
+                {
                 }
 
                 if (ImGui::MenuItem("Game View", nullptr, false, m_ActiveProject != nullptr))
@@ -1158,7 +1162,7 @@ namespace ignite
         }
 
         // Reserve space for status bar
-        constexpr float statusBarHeight = 32.0f;
+        constexpr float statusBarHeight = 36.0f;
 
         {
             // RENDER TOOL BAR
@@ -1286,27 +1290,26 @@ namespace ignite
         ImGui::BeginChild("##status_bar", { 0.0f, bottomStatusBarAvail.y }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
 
         ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
-        if (ImGui::Button("+ Content Browser"))
+        if (UI::Button("+ Content Browser", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f)))
         {
             ++m_PendingContentBrowserPanelsToAdd;
         }
         ImGui::EndDisabled();
 
+        ImGui::SameLine();
+        UI::ToggleButton("UI Kit", &m_State.uiShowcaseWindow, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_SPARKLES);
+
         if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
         {
             ImGui::SameLine();
-            ImGui::ProgressBar(m_LoadingProgress, ImVec2(140.0f, 0.0f));
+            UI::ProgressBar(m_LoadingProgress, ImVec2(140.0f, 16.0f));
         }
 
         if (m_ActiveScene && m_ActiveProject && !m_State.isLoading && IsSceneGIOutOfDate(m_ActiveScene.get()))
         {
             ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.45f, 0.10f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.55f, 0.15f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.75f, 0.35f, 0.05f, 1.0f));
             const bool isBaking = m_GIBaker && m_GIBaker->IsBaking();
-            ImGui::BeginDisabled(isBaking);
-            if (ImGui::Button("GI Out of Date - Rebake"))
+            if (UI::Button("GI Out of Date - Rebake", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_SPARKLES, isBaking, isBaking))
             {
                 Entity bakeVolume;
                 if (m_ScenePanel)
@@ -1330,8 +1333,6 @@ namespace ignite
                         m_State.giBakeModal = true;
                 }
             }
-            ImGui::EndDisabled();
-            ImGui::PopStyleColor(3);
         }
 
         ImGui::SameLine();
@@ -1352,6 +1353,12 @@ namespace ignite
             ImGui::ShowDemoWindow(&m_State.imguiDemoWindow);
         }
 
+        // Modern UI Showcase
+        if (m_State.uiShowcaseWindow)
+        {
+            UI::ShowShowcaseWindow(&m_State.uiShowcaseWindow);
+        }
+
         // Console window
         if (m_State.consoleWindow)
         {
@@ -1367,18 +1374,17 @@ namespace ignite
                 std::set<std::pair<std::string, size_t>> filteredConsoleLog;
 
                 // Clear Logs and Search Query
-                if (UI::DrawButton("Clear", { 48.0f, 24.0f }))
+                if (UI::Button("Clear", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 26.0f), ICON_LC_TRASH_2))
                 {
                     consoleLogSearchResultStr.clear();
-                    std::memset(buffer, NULL, sizeof(buffer));
+                    std::memset(buffer, 0, sizeof(buffer));
 
                     Logger::ClearLogs();
                 }
 
                 // Query search string
                 ImGui::SameLine();
-                ImGui::InputTextEx("##console_search", "Search", buffer, sizeof(buffer) + 1, {256.0f, 24.0f},
-                    ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll, nullptr, nullptr);
+                UI::SearchField("##console_search", buffer, sizeof(buffer), "Filter logs...", 280.0f);
 
                 consoleLogSearchResultStr = std::string(buffer);
                 if (!consoleLogSearchResultStr.empty())
@@ -1391,14 +1397,6 @@ namespace ignite
                         {
                             filteredConsoleLog.insert({ messageLower, i});
                         }
-                    }
-
-                    // Clear Search Query
-                    ImGui::SameLine();
-                    if (UI::DrawButton("X", {24.0f, 24.0f}))
-                    {
-                        consoleLogSearchResultStr.clear();
-                        std::memset(buffer, NULL, sizeof(buffer));
                     }
                 }
 

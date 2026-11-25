@@ -43,9 +43,14 @@ namespace ignite
 
     struct ImGuiPushConstants
     {
-        std::array<float, 2> invDisplaySize;
-        std::array<float, 2> displayPos;
+        std::array<float, 2> invDisplaySize{ 0.0f, 0.0f };
+        std::array<float, 2> displayPos{ 0.0f, 0.0f };
+        float time = 0.0f;
+        uint32_t shaderFlags = 0;
+        float param0 = 1.0f;
+        float param1 = 16.0f;
     };
+    static_assert(sizeof(ImGuiPushConstants) == 32);
 
     class IGN_API ImGui_NRI
     {
@@ -66,6 +71,9 @@ namespace ignite
         static void InvalidateTextureCache(void *textureHandle);
         static void InvalidateTextureCache(nri::Descriptor *textureSRV);
         static void ClearTextureCache();
+
+        static void SetShaderParamsCallback(const ImDrawList *parentList, const ImDrawCmd *cmd);
+        static void *PackShaderCallbackData(uint32_t flags, uint8_t normParam0, uint8_t normParam1);
 
         static ImGui_NRI *s_Instance;
 

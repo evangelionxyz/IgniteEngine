@@ -51,6 +51,7 @@ namespace ignite
             bool multiSelect = false;
             bool settingsWindow = false;
             bool imguiDemoWindow = false;
+            bool uiShowcaseWindow = false;
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;

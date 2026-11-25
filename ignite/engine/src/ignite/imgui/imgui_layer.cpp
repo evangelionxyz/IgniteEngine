@@ -27,6 +27,7 @@
 #endif
 
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/imgui/ui/ui_theme.hpp"
 
 namespace ignite
 {
@@ -94,124 +95,10 @@ namespace ignite
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
-        auto rfs = Application::GeRelativeFileSystem();
-        std::filesystem::path fontPath = "resources/fonts/segoeui.ttf";
-        LOG_ASSERT(rfs->FileExists(fontPath), "[ImGui Layer] font does not found");
+        UI::FontRegistry::Get().InitFromVFS();
 
-        Buffer fileBuffer = rfs->ReadFile(fontPath);
-        if (fileBuffer)
-        {
-			constexpr float fontSize = 16.0f;
-			m_Font = CreateRef<GuiFont>(fileBuffer, false, fontSize);
-        }
-
-		ImGuiStyle &style = ImGui::GetStyle();
-		ImVec4 *colors = ImGui::GetStyle().Colors;
-
-		colors[ImGuiCol_Text] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f);
-		colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
-		colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.06f, 1.00f);
-		colors[ImGuiCol_ChildBg] = ImVec4(0.08f, 0.08f, 0.08f, 1.00f);
-		colors[ImGuiCol_PopupBg] = ImVec4(0.07f, 0.07f, 0.07f, 0.98f);
-		colors[ImGuiCol_Border] = ImVec4(0.20f, 0.20f, 0.20f, 0.80f);
-		colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-		colors[ImGuiCol_FrameBg] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
-		colors[ImGuiCol_FrameBgHovered] = ImVec4(0.32f, 0.25f, 0.10f, 1.00f);
-		colors[ImGuiCol_FrameBgActive] = ImVec4(0.45f, 0.25f, 0.05f, 1.00f);
-		colors[ImGuiCol_TitleBg] = ImVec4(0.08f, 0.08f, 0.08f, 1.00f);
-		colors[ImGuiCol_TitleBgActive] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
-		colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.04f, 0.04f, 0.04f, 1.00f);
-		colors[ImGuiCol_MenuBarBg] = ImVec4(0.08f, 0.08f, 0.08f, 1.00f);
-		colors[ImGuiCol_ScrollbarBg] = ImVec4(0.05f, 0.05f, 0.05f, 1.00f);
-		colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.25f, 0.25f, 0.25f, 1.00f);
-		colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.30f, 0.20f, 0.10f, 0.85f);
-		colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.62f, 0.38f, 0.14f, 0.85f);
-		colors[ImGuiCol_CheckMark] = ImVec4(1.00f, 0.50f, 0.00f, 1.00f);
-		colors[ImGuiCol_CheckboxSelectedBg] = ImVec4(0.80f, 0.23f, 0.23f, 0.45f);
-		colors[ImGuiCol_SliderGrab] = ImVec4(0.75f, 0.37f, 0.00f, 0.90f);
-		colors[ImGuiCol_SliderGrabActive] = ImVec4(1.00f, 0.78f, 0.50f, 1.00f);
-		colors[ImGuiCol_Button] = ImVec4(0.50f, 0.31f, 0.11f, 1.00f);
-		colors[ImGuiCol_ButtonHovered] = ImVec4(0.88f, 0.49f, 0.08f, 1.00f);
-		colors[ImGuiCol_ButtonActive] = ImVec4(0.90f, 0.40f, 0.00f, 1.00f);
-		colors[ImGuiCol_Header] = ImVec4(0.38f, 0.38f, 0.38f, 0.29f);
-		colors[ImGuiCol_HeaderHovered] = ImVec4(0.76f, 0.43f, 0.08f, 1.00f);
-		colors[ImGuiCol_HeaderActive] = ImVec4(0.90f, 0.40f, 0.00f, 1.00f);
-		colors[ImGuiCol_Separator] = ImVec4(0.30f, 0.26f, 0.20f, 0.52f);
-		colors[ImGuiCol_SeparatorHovered] = ImVec4(0.30f, 0.26f, 0.20f, 0.52f);
-		colors[ImGuiCol_SeparatorActive] = ImVec4(0.30f, 0.26f, 0.20f, 0.52f);
-		colors[ImGuiCol_ResizeGrip] = ImVec4(1.00f, 0.60f, 0.00f, 0.50f);
-		colors[ImGuiCol_ResizeGripHovered] = ImVec4(1.00f, 0.60f, 0.00f, 0.50f);
-		colors[ImGuiCol_ResizeGripActive] = ImVec4(1.00f, 0.60f, 0.00f, 0.50f);
-		colors[ImGuiCol_InputTextCursor] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-		colors[ImGuiCol_TabHovered] = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-		colors[ImGuiCol_Tab] = ImVec4(0.30f, 0.30f, 0.30f, 1.00f);
-		colors[ImGuiCol_TabSelected] = ImVec4(0.10f, 0.10f, 0.10f, 1.00f);
-		colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.98f, 0.69f, 0.26f, 1.00f);
-		colors[ImGuiCol_TabDimmed] = ImVec4(0.06f, 0.06f, 0.06f, 1.00f);
-		colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-		colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.50f, 0.50f, 0.50f, 0.00f);
-		colors[ImGuiCol_DockingPreview] = ImVec4(1.00f, 0.50f, 0.00f, 0.40f);
-		colors[ImGuiCol_DockingEmptyBg] = ImVec4(0.06f, 0.06f, 0.06f, 1.00f);
-		colors[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
-		colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
-		colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
-		colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
-		colors[ImGuiCol_TableHeaderBg] = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-		colors[ImGuiCol_TableBorderStrong] = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
-		colors[ImGuiCol_TableBorderLight] = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
-		colors[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-		colors[ImGuiCol_TableRowBgAlt] = ImVec4(1.00f, 1.00f, 1.00f, 0.02f);
-		colors[ImGuiCol_TextLink] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
-		colors[ImGuiCol_TextSelectedBg] = ImVec4(1.00f, 0.50f, 0.00f, 0.35f);
-		colors[ImGuiCol_TreeLines] = ImVec4(0.43f, 0.43f, 0.50f, 0.50f);
-		colors[ImGuiCol_DragDropTarget] = ImVec4(1.00f, 0.65f, 0.00f, 0.95f);
-		colors[ImGuiCol_DragDropTargetBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-		colors[ImGuiCol_UnsavedMarker] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-		colors[ImGuiCol_NavCursor] = ImVec4(1.00f, 0.50f, 0.00f, 1.00f);
-		colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
-		colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
-		colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
-
-        style.WindowPadding = ImVec2{ 2.0f, 2.0f };
-        style.FramePadding = ImVec2{ 5.0f, 3.0f };
-        style.ItemSpacing = ImVec2{ 3.0f, 3.0f };
-        style.ItemInnerSpacing = ImVec2{ 5.0f, 5.0f };
-        style.CellPadding = ImVec2{ 2.0f, 0.0f };
-        style.TouchExtraPadding = ImVec2{ 0.0f, 0.0f };
-        style.WindowTitleAlign = ImVec2 { 0.5f, 0.5f };
-        style.WindowBorderHoverPadding = 10.0f;
-        style.WindowBorderSize = 0;
-        style.ChildBorderSize = 0;
-        style.PopupBorderSize = 0;
-
-        style.IndentSpacing = 8;
-        style.ScrollbarSize = 12.0f;
-        style.GrabMinSize = 14.0f;
-        style.FrameBorderSize = 0.0f;
-        style.WindowRounding = 2.0f;
-        style.TabRounding = 2.0f;
-        style.ChildRounding = 2.0f;
-        style.FrameRounding = 2.0f;
-        style.PopupRounding = 2.0f;
-        style.GrabRounding = 2.0f;
-        style.ScrollbarRounding = 2.0f;
-        style.TabBorderSize = 1.0f;
-        style.TabBarBorderSize = 1.0f;
-        style.TabBarOverlineSize = 2.0f;
-        style.TabCloseButtonMinWidthSelected = 1.0f;
-        style.TabCloseButtonMinWidthUnselected = 1.0f;
-        style.DockingSeparatorSize = 1.0f;
-        style.SeparatorSize = 1.0f;
-        style.SeparatorTextBorderSize = 1.0f;
-        style.SeparatorTextPadding = ImVec2{ 0.0f, 1.0f };
-        style.SeparatorTextAlign = ImVec2{ 0.5f, 0.5f };
-        style.ImageRounding = 0.0f;
-        style.ImageBorderSize = 0.0f;
-        style.WindowMenuButtonPosition = ImGuiDir_Right;
-        style.ColorButtonPosition = ImGuiDir_Right;
-        style.AntiAliasedFill = true;
-        style.AntiAliasedLines = true;
-        style.AntiAliasedLinesUseTex = true;
+        ImGuiStyle &style = ImGui::GetStyle();
+        UI::ApplyShadcnDarkTheme(style);
 
         // Store the original style for proper scaling
         m_OriginalStyle = style;
@@ -356,7 +243,9 @@ namespace ignite
         io.Fonts->Clear();
         io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
 
-        m_Font->ReleaseScaledFont();
+        UI::FontRegistry::Get().ReleaseScaledFonts();
+        if (m_Font)
+            m_Font->ReleaseScaledFont();
 
         return false;
     }
@@ -366,18 +255,13 @@ namespace ignite
         if (!m_SupportExplicitDisplayScaling)
             return false;
 
-        // Force immediate font and style update
-        ImGuiIO &io = ImGui::GetIO();
-        io.Fonts->Clear();
-        io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
-
-        m_Font->ReleaseScaledFont();
-        m_Font->CreateScaledFont(event.GetScaleX());
+        UI::FontRegistry::Get().RebuildAtlas(event.GetScaleX());
 
         // Reset style to original and apply new scaling
         ImGui::GetStyle() = m_OriginalStyle;
         ImGui::GetStyle().ScaleAllSizes(event.GetScaleX());
         m_CurrentDPIScale = event.GetScaleX();
+        m_FontsBuilt = true;
 
         LOG_INFO("ImGui DPI scaling updated to: {}", event.GetScaleX());
 
@@ -394,38 +278,20 @@ namespace ignite
         float scaleX, scaleY;
         m_DeviceManager->GetDPIScaleInfo(scaleX, scaleY);
 
-        // Check if DPI has changed and recreate font if necessary
-        if (m_DeviceManager->IsUpdateDPIScaleFactor() || m_CurrentDPIScale != scaleX)
+        const float targetScale = m_SupportExplicitDisplayScaling ? scaleX : 1.0f;
+
+        // Check if DPI has changed or font atlas needs rebuilding
+        if (!m_FontsBuilt || m_DeviceManager->IsUpdateDPIScaleFactor() || m_CurrentDPIScale != scaleX || UI::FontRegistry::Get().GetFont(UI::FontVariant::Regular) == nullptr)
         {
-            if (m_Font->GetScaledFont())
-            {
-                // Clear existing font and recreate with new scale
-                ImGuiIO &io = ImGui::GetIO();
-                io.Fonts->Clear();
-                io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
+            UI::FontRegistry::Get().RebuildAtlas(targetScale);
 
-                m_Font->ReleaseScaledFont();
-            }
-
-            // Always recreate font with new scale
-            m_Font->CreateScaledFont(m_SupportExplicitDisplayScaling ? scaleX : 1.0f);
-
-            // Reset style to original and apply new scaling
             if (m_SupportExplicitDisplayScaling)
             {
                 ImGui::GetStyle() = m_OriginalStyle;
                 ImGui::GetStyle().ScaleAllSizes(scaleX);
                 m_CurrentDPIScale = scaleX;
             }
-        }
-
-        if (!m_Font->GetScaledFont())
-        {
-            m_Font->CreateScaledFont(m_SupportExplicitDisplayScaling ? scaleX : 1.0f);
-            if (m_SupportExplicitDisplayScaling)
-            {
-                m_CurrentDPIScale = scaleX;
-            }
+            m_FontsBuilt = true;
         }
 
         imguiNRI->UpdateFontTexture();
@@ -551,6 +417,9 @@ namespace ignite
 
     void ImGuiLayer::OnDetach()
     {
+        UI::ClearAnimationState();
+        UI::FontRegistry::Get().Shutdown();
+
         imguiNRI->Shutdown();
 
         ImGui_ImplSDL3_Shutdown();

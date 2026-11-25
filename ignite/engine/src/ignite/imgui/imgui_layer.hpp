@@ -11,11 +11,9 @@
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/layer.hpp"
 #include "ignite/core/input/app_event.hpp"
-
 #include "ignite/core/buffer.hpp"
 
 #include <SDL3/SDL.h>
-#include <optional>
 
 namespace ignite
 {
@@ -56,7 +54,7 @@ namespace ignite
         void OnDetach() override;
 
         void BeginFrame();
-        void EndFrame(RenderTarget* framebuffer);
+        void EndFrame(RenderTarget *framebuffer);
         void RenderPlatformWindows();
 
         void PollEvent(const SDL_Event &event);
@@ -65,7 +63,6 @@ namespace ignite
         {
             if (block && !m_BlockEvents)
             {
-                // Clear any stuck ImGui mouse button state when entering block mode
                 ImGuiIO &io = ImGui::GetIO();
                 for (int i = 0; i < 5; ++i)
                     io.AddMouseButtonEvent(i, false);
@@ -87,10 +84,10 @@ namespace ignite
         bool m_SupportExplicitDisplayScaling;
         bool m_BeginFrameCalled = false;
         bool m_BlockEvents = false;
+        bool m_FontsBuilt = false;
 
         DeviceManager *m_DeviceManager = nullptr;
 
-        // Store original style for proper scaling
         ImGuiStyle m_OriginalStyle;
         float m_CurrentDPIScale = 1.0f;
     };

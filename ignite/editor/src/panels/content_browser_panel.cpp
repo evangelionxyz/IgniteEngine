@@ -26,7 +26,9 @@
 #include <algorithm>
 #include <ranges>
 #include <cstring>
+#include <cmath>
 #include <mutex>
+#include <string_view>
 #include <SDL3/SDL_dialog.h>
 
 #include <stb_image.h>
@@ -50,6 +52,62 @@ namespace ignite
         {
             char path[1024] = {};
         };
+
+        struct FileVisual
+        {
+            const char *icon = ICON_LC_FILE;
+            glm::vec4 color = UI::GetTheme().mutedForeground;
+            const char *typeBadge = "Asset";
+        };
+
+        static FileVisual GetFileVisual(bool isDirectory, bool isOpen, AssetType type, const std::filesystem::path &filepath)
+        {
+            const auto &t = UI::GetTheme();
+            if (isDirectory)
+            {
+                return { isOpen ? ICON_LC_FOLDER_OPEN : ICON_LC_FOLDER, UI::Accent::Folder, "Folder" };
+            }
+
+            const std::string ext = stringutils::ToLower(filepath.extension().string());
+            if (ext == ".cs")
+            {
+                return { ICON_LC_FILE_CODE_2, UI::Accent::ScriptCS, "C# Script" };
+            }
+            if (ext == ".md" || ext == ".txt" || ext == ".json")
+            {
+                return { ICON_LC_FILE_TEXT, t.mutedForeground, "Document" };
+            }
+
+            switch (type)
+            {
+                case AssetType::Scene:                return { ICON_LC_LAYERS, UI::Accent::Environment, "Scene" };
+                case AssetType::Prefab:               return { ICON_LC_PACKAGE, UI::Accent::Mesh, "Prefab" };
+                case AssetType::StaticMesh:
+                case AssetType::Mesh:                 return { ICON_LC_BOX, UI::Accent::Mesh, "Static Mesh" };
+                case AssetType::SkeletalMesh:         return { ICON_LC_BONE, UI::Accent::Animation, "Skeletal Mesh" };
+                case AssetType::Skeleton:             return { ICON_LC_GIT_FORK, UI::Accent::Animation, "Skeleton" };
+                case AssetType::Material:             return { ICON_LC_PALETTE, UI::Accent::Material, "Material" };
+                case AssetType::Material2D:           return { ICON_LC_PAINTBRUSH, UI::Accent::Material, "Material 2D" };
+                case AssetType::Texture:              return { ICON_LC_IMAGE, UI::Accent::Camera, "Texture" };
+                case AssetType::Audio:                return { ICON_LC_VOLUME_2, UI::Accent::Audio, "Audio" };
+                case AssetType::LuaScript:            return { ICON_LC_FILE_CODE, UI::Accent::ScriptLua, "Lua Script" };
+                case AssetType::Shader:               return { ICON_LC_SPARKLES, UI::Accent::Environment, "Shader" };
+                case AssetType::SpriteSheet:          return { ICON_LC_GRID_2X2, UI::Accent::Material, "Sprite Sheet" };
+                case AssetType::Widget:               return { ICON_LC_LAYOUT_TEMPLATE, UI::Accent::Widget, "Widget" };
+                case AssetType::SkeletalAnimation:
+                case AssetType::Animation2D:          return { ICON_LC_FILM, UI::Accent::Animation, "Animation" };
+                case AssetType::AnimatorController:
+                case AssetType::AnimatorController2D: return { ICON_LC_CLAPPERBOARD, UI::Accent::Animation, "Animator" };
+                case AssetType::BlendSpace:           return { ICON_LC_SLIDERS_HORIZONTAL, UI::Accent::Animation, "Blend Space" };
+                case AssetType::AnimationMontage:     return { ICON_LC_LAYERS_2, UI::Accent::Animation, "Montage" };
+                case AssetType::Terrain:              return { ICON_LC_MOUNTAIN, UI::Accent::Environment, "Terrain" };
+                case AssetType::Font:                 return { ICON_LC_TYPE, t.foreground, "Font" };
+                case AssetType::ScriptableObject:     return { ICON_LC_BRACES, UI::Accent::ScriptCS, "ScriptableObj" };
+                default: break;
+            }
+
+            return { ICON_LC_FILE, t.mutedForeground, "File" };
+        }
 
         static bool DispatchOpenAssetEditorEvent(AssetHandle handle, const AssetMetaData &metadata)
         {
@@ -323,14 +381,40 @@ namespace ignite
             isDirectory = std::filesystem::is_directory(fullPath);
         }
 
-        ImGuiTreeNodeFlags flags = (m_SelectedFileTree == fullPath ? ImGuiTreeNodeFlags_Selected : 0) | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_SpanFullWidth;
+        ImGuiTreeNodeFlags flags = (m_SelectedFileTree == fullPath ? ImGuiTreeNodeFlags_Selected : 0)
+            | ImGuiTreeNodeFlags_OpenOnArrow
+            | ImGuiTreeNodeFlags_SpanAvailWidth
+            | ImGuiTreeNodeFlags_SpanFullWidth;
 
         if (!isDirectory)
         {
             flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
         }
 
-        const bool opened = ImGui::TreeNodeEx(filename.c_str(), flags, "%s", filename.c_str());
+        const bool isCurrentDir = (fullPath == m_CurrentDirectory);
+        const std::string displayLabel = "     " + filename;
+        const bool opened = ImGui::TreeNodeEx(fullPath.generic_string().c_str(), flags, "%s", displayLabel.c_str());
+        const ImVec2 itemMin = ImGui::GetItemRectMin();
+        const ImVec2 itemMax = ImGui::GetItemRectMax();
+
+        // Draw colored Lucide icon & subtle active directory bar
+        {
+            const AssetType treeAssetType = isDirectory ? AssetType::Invalid : GetAssetTypeFromExtension(fullPath.extension().string());
+            const FileVisual vis = GetFileVisual(isDirectory, opened, treeAssetType, fullPath);
+            const float rowH = (std::max)(1.0f, itemMax.y - itemMin.y);
+            const float iconX = itemMin.x + ImGui::GetTreeNodeToLabelSpacing();
+            ImDrawList *dl = ImGui::GetWindowDrawList();
+            if (isCurrentDir || m_SelectedFileTree == fullPath)
+            {
+                dl->AddRectFilled(ImVec2(itemMin.x, itemMin.y + 2.0f), ImVec2(itemMin.x + 2.0f, itemMax.y - 2.0f), UI::ToU32(UI::GetTheme().primary));
+            }
+            {
+                UI::ScopedFont smallFont(UI::FontVariant::Small);
+                const ImVec2 icSz = ImGui::CalcTextSize(vis.icon);
+                const float iconY = itemMin.y + std::round((rowH - icSz.y) * 0.5f);
+                dl->AddText(ImVec2(iconX, iconY), UI::ToU32(vis.color), vis.icon);
+            }
+        }
 
         DragDropSource(fullPath);
 
@@ -426,6 +510,11 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
+        const auto &theme = UI::GetTheme();
+        const float scale = std::max(UI::GetDpiScale(), 1.0f);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * scale, 6.0f * scale));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f * scale, 6.0f * scale));
         const bool windowOpen = ImGui::Begin(m_WindowTitle.c_str(), &m_IsOpen);
         m_IsFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         m_IsHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
@@ -434,25 +523,28 @@ namespace ignite
             if (!m_EditorLayer->GetActiveProject())
             {
                 ImGui::End();
+                ImGui::PopStyleVar(2);
                 return;
             }
 
             // Searching variables
-            // Allocate enough memory content searching
             static bool recursiveSearch = true;
             static char buffer[256] = { 0 };
             static std::string contentNameSearchResultStr;
-            // Non static to re-create empty set
             std::vector<std::filesystem::path> filteredContentNames;
 
-            // Navigation bar
-            const ImGuiStyle &style = ImGui::GetStyle();
-            constexpr auto navbarBtSize = ImVec2(24.0f, 24.0f);
-            // const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
-            if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarBtSize.y), ImGuiChildFlags_Borders))
+            const auto projectDir = m_EditorLayer->GetActiveProject()->GetDirectory();
+
+            // Navigation bar (38px crisp shadcn bar with Lucide icons, breadcrumbs, search & recursive toggle)
+            const float navBarH = std::round(36.0f * scale);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, UI::ToImVec4(theme.card));
+            ImGui::PushStyleColor(ImGuiCol_Border, UI::ToImVec4(theme.border));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * scale, 5.0f * scale));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5.0f * scale, 0.0f));
+            if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0.0f, navBarH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
             {
-                ImTextureID arrow = UI::GetTextureID(s_SharedIcons["arrow"]);
-                if (UI::DrawImageButton("##bw_arrow", arrow, navbarBtSize))
+                if (UI::IconButton("##bw_arrow", ICON_LC_ARROW_LEFT, UI::ButtonVariant::Ghost, UI::ButtonSize::IconSm, "Back", false, m_BackwardPathStack.empty()))
                 {
                     if (!m_BackwardPathStack.empty())
                     {
@@ -470,8 +562,8 @@ namespace ignite
                     }
                 }
 
-                ImGui::SameLine(0.0f, 4.0f);
-                if (UI::DrawImageButton("##fw_arrow", arrow, navbarBtSize, { 1.0f, 0.0f }, { 0.0f, 1.0f }))
+                ImGui::SameLine(0.0f, 3.0f * scale);
+                if (UI::IconButton("##fw_arrow", ICON_LC_ARROW_RIGHT, UI::ButtonVariant::Ghost, UI::ButtonSize::IconSm, "Forward", false, m_ForwardPathStack.empty()))
                 {
                     if (!m_ForwardPathStack.empty())
                     {
@@ -489,139 +581,269 @@ namespace ignite
                     }
                 }
 
-                ImGui::SameLine(0.0f, 4.0f);
-                ImTextureID refreshBt = UI::GetTextureID(s_SharedIcons["roll"]);
-                if (UI::DrawImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
+                std::error_code eqEc;
+                const bool isAtProjectRoot = std::filesystem::equivalent(m_CurrentDirectory, projectDir, eqEc);
+                const bool canGoUp = !isAtProjectRoot && m_CurrentDirectory.has_parent_path();
+
+                ImGui::SameLine(0.0f, 3.0f * scale);
+                if (UI::IconButton("##up_dir", ICON_LC_ARROW_UP, UI::ButtonVariant::Ghost, UI::ButtonSize::IconSm, "Parent Folder", false, !canGoUp))
+                {
+                    const std::filesystem::path parentPath = m_CurrentDirectory.parent_path();
+                    if (!parentPath.empty() && parentPath != m_CurrentDirectory)
+                    {
+                        m_BackwardPathStack.push(m_CurrentDirectory);
+                        while (!m_ForwardPathStack.empty())
+                        {
+                            m_ForwardPathStack.pop();
+                        }
+                        m_CurrentDirectory = parentPath;
+                        m_SelectedFileTree = parentPath;
+                    }
+                }
+
+                ImGui::SameLine(0.0f, 3.0f * scale);
+                if (UI::IconButton("##refresh_bt", ICON_LC_REFRESH_CW, UI::ButtonVariant::Ghost, UI::ButtonSize::IconSm, "Refresh Assets"))
                 {
                     m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
-                    PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
+                    PruneMissingNodes(0, projectDir);
                     RefreshAssetTree();
                     CompactTree();
                 }
 
-                ImGui::SameLine(0.0f, 4.0f);
-
-                // Query search string
-                ImGui::SameLine();
-                ImGui::InputTextEx("##content_search", "Search", buffer, sizeof(buffer) + 1, { 256.0f, 24.0f },
-                    ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll, nullptr, nullptr);
-
-                ImGui::SameLine();
-                ImGui::Checkbox("Recursive", &recursiveSearch);
-
-                contentNameSearchResultStr = std::string(buffer);
-                if (!contentNameSearchResultStr.empty())
+                // Vertical divider
+                ImGui::SameLine(0.0f, 6.0f * scale);
                 {
-                    // Clear Search Query
-                    ImGui::SameLine();
-                    if (UI::DrawButton("X", { navbarBtSize.y, navbarBtSize.y }))
+                    const ImVec2 sp = ImGui::GetCursorScreenPos();
+                    const float lineH = std::round(18.0f * scale);
+                    const float lineY = sp.y + std::round((std::round(24.0f * scale) - lineH) * 0.5f);
+                    ImGui::GetWindowDrawList()->AddLine(ImVec2(sp.x, lineY), ImVec2(sp.x, lineY + lineH), UI::ToU32(theme.border), 1.0f);
+                    ImGui::Dummy(ImVec2(1.0f, std::round(24.0f * scale)));
+                }
+
+                // Breadcrumbs on the left, Search + Recursive on the right
+                const float searchW = std::round(210.0f * scale);
+                const float recursiveW = std::round(96.0f * scale);
+                const float rightGroupW = searchW + recursiveW + std::round(14.0f * scale);
+
+                std::vector<std::pair<std::string, std::filesystem::path>> crumbs;
+                const std::string rootName = projectDir.filename().string().empty()
+                    ? projectDir.generic_string()
+                    : projectDir.filename().string();
+                crumbs.emplace_back(rootName, projectDir);
+
+                std::error_code relEc;
+                const std::filesystem::path relCwd = std::filesystem::relative(m_CurrentDirectory, projectDir, relEc);
+                if (!relEc && !relCwd.empty() && relCwd != ".")
+                {
+                    std::filesystem::path accum = projectDir;
+                    for (const auto &seg : relCwd)
                     {
-                        contentNameSearchResultStr.clear();
-                        std::memset(buffer, NULL, sizeof(buffer));
+                        const std::string segStr = seg.string();
+                        if (segStr == "." || segStr.empty())
+                            continue;
+                        accum /= seg;
+                        crumbs.emplace_back(segStr, accum);
                     }
                 }
-            }
-            ImGui::EndChild();
 
-            // File tree
-            {
-                // Left side directory tree
-                ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
-                if (!m_TreeNodes.empty())
+                const float btnH = std::round(24.0f * scale);
+                for (size_t cIdx = 0; cIdx < crumbs.size(); ++cIdx)
                 {
-                    const auto assetDirectory = m_EditorLayer->GetActiveProject()->GetDirectory();
-                    const std::string rootLabel =
-                        assetDirectory.filename().string().empty()
-                        ? assetDirectory.generic_string()
-                        : assetDirectory.filename().string();
+                    const float availBeforeRight = ImGui::GetContentRegionAvail().x - rightGroupW;
+                    if (cIdx > 0 && availBeforeRight < std::round(56.0f * scale))
+                        break;
 
-                    ImGuiTreeNodeFlags rootFlags = (m_SelectedFileTree == assetDirectory ? ImGuiTreeNodeFlags_Selected : 0)
-                        | ImGuiTreeNodeFlags_OpenOnArrow
-                        | ImGuiTreeNodeFlags_SpanAvailWidth
-                        | ImGuiTreeNodeFlags_SpanFullWidth
-                        | ImGuiTreeNodeFlags_DefaultOpen;
-
-                    const bool rootOpened = ImGui::TreeNodeEx("##content_browser_root", rootFlags, "%s", rootLabel.c_str());
-
-                    DragDropSource(assetDirectory);
-
-                    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && ImGui::IsItemHovered())
+                    if (cIdx > 0)
                     {
-                        UpdateSelection(assetDirectory);
-                        m_SelectedFileTree = assetDirectory;
+                        ImGui::SameLine(0.0f, 2.0f * scale);
+                        {
+                            UI::ScopedFont tinyFont(UI::FontVariant::Tiny);
+                            ImGui::AlignTextToFramePadding();
+                            ImGui::TextColored(UI::ToImVec4(theme.disabledForeground), "%s", ICON_LC_CHEVRON_RIGHT);
+                        }
                     }
 
-                    if (ImGui::BeginDragDropTarget())
+                    ImGui::SameLine(0.0f, 2.0f * scale);
+                    ImGui::PushID(static_cast<int>(cIdx));
+                    const bool isLast = (cIdx + 1 == crumbs.size());
+                    const auto variant = isLast ? UI::ButtonVariant::Secondary : UI::ButtonVariant::Ghost;
+                    if (UI::Button(crumbs[cIdx].first.c_str(), variant, UI::ButtonSize::Small, ImVec2(0.0f, btnH), cIdx == 0 ? ICON_LC_FOLDER : nullptr))
                     {
-                        bool queuedPopup = false;
-
-                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                        {
-                            if (payload->DataSize == sizeof(AssetHandle))
-                            {
-                                const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                const AssetMetaData droppedMetadata = m_AssetManager->GetMetaData(droppedHandle);
-                                Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
-                                if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
-                                {
-                                    QueueMoveCopyPopup(project->GetProjectFilepath(droppedMetadata.filepath), assetDirectory);
-                                    queuedPopup = true;
-                                }
-                            }
-                        }
-
-                        if (!queuedPopup)
-                        {
-                            if (const ImGuiPayload *pathPayload = ImGui::AcceptDragDropPayload(kContentBrowserPathPayload))
-                            {
-                                if (pathPayload->DataSize == sizeof(ContentBrowserPathPayload))
-                                {
-                                    const auto *dropData = static_cast<const ContentBrowserPathPayload *>(pathPayload->Data);
-                                    QueueMoveCopyPopup(std::filesystem::path(dropData->path), assetDirectory);
-                                }
-                            }
-                        }
-
-                        ImGui::EndDragDropTarget();
-                    }
-
-                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-                    {
-                        if (assetDirectory != m_CurrentDirectory)
+                        if (crumbs[cIdx].second != m_CurrentDirectory)
                         {
                             m_BackwardPathStack.push(m_CurrentDirectory);
                             while (!m_ForwardPathStack.empty())
                             {
                                 m_ForwardPathStack.pop();
                             }
-
-                            m_CurrentDirectory = assetDirectory;
+                            m_CurrentDirectory = crumbs[cIdx].second;
+                            m_SelectedFileTree = crumbs[cIdx].second;
                         }
                     }
+                    ImGui::PopID();
+                }
 
-                    if (rootOpened)
+                const float rightStartX = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - rightGroupW - std::round(8.0f * scale);
+                if (rightStartX > ImGui::GetItemRectMax().x + std::round(8.0f * scale))
+                {
+                    ImGui::SameLine();
+                    ImGui::SetCursorScreenPos(ImVec2(rightStartX, ImGui::GetWindowPos().y + std::round(5.0f * scale)));
+                }
+                else
+                {
+                    ImGui::SameLine(0.0f, 8.0f * scale);
+                }
+
+                UI::TextField(
+                    "##content_search",
+                    buffer,
+                    sizeof(buffer),
+                    "Search assets...",
+                    ImVec2(searchW, btnH),
+                    ICON_LC_SEARCH,
+                    true,
+                    ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
+
+                ImGui::SameLine(0.0f, 6.0f * scale);
+                UI::ToggleButton("Recursive", &recursiveSearch, UI::ButtonSize::Small, ImVec2(recursiveW, btnH), ICON_LC_FOLDER_SEARCH);
+
+                contentNameSearchResultStr = std::string(buffer);
+            }
+            ImGui::EndChild();
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(2);
+
+            // File tree
+            {
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, UI::ToImVec4(theme.card));
+                ImGui::PushStyleColor(ImGuiCol_Border, UI::ToImVec4(theme.border));
+                ImGui::PushStyleColor(ImGuiCol_Header, UI::ToImVec4(theme.secondaryHover));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered, UI::ToImVec4(theme.secondary));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive, UI::ToImVec4(theme.secondaryActive));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * scale, 6.0f * scale));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f * scale, 1.0f * scale));
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * scale, 3.0f * scale));
+
+                if (ImGui::BeginChild("left_item_browser", { std::round(240.0f * scale), 0.0f }, ImGuiChildFlags_ResizeX | ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding))
+                {
+                    if (!m_TreeNodes.empty())
                     {
-                        for (const uint32_t rootNodeIndex : m_SortedRootNodeIndices)
+                        const auto &assetDirectory = projectDir;
+                        const std::string rootLabel =
+                            assetDirectory.filename().string().empty()
+                            ? assetDirectory.generic_string()
+                            : assetDirectory.filename().string();
+
+                        const ImGuiTreeNodeFlags rootFlags = (m_SelectedFileTree == assetDirectory ? ImGuiTreeNodeFlags_Selected : 0)
+                            | ImGuiTreeNodeFlags_OpenOnArrow
+                            | ImGuiTreeNodeFlags_SpanAvailWidth
+                            | ImGuiTreeNodeFlags_SpanFullWidth
+                            | ImGuiTreeNodeFlags_DefaultOpen;
+
+                        const std::string rootDisplay = "     " + rootLabel;
+                        const bool rootOpened = ImGui::TreeNodeEx("##content_browser_root", rootFlags, "%s", rootDisplay.c_str());
+                        const ImVec2 rootMin = ImGui::GetItemRectMin();
+                        const ImVec2 rootMax = ImGui::GetItemRectMax();
                         {
-                            UIRenderFileTree(&m_TreeNodes[rootNodeIndex]);
+                            const float rowH = (std::max)(1.0f, rootMax.y - rootMin.y);
+                            const float iconX = rootMin.x + ImGui::GetTreeNodeToLabelSpacing();
+                            const char *rootIcon = rootOpened ? ICON_LC_FOLDER_OPEN : ICON_LC_FOLDER;
+                            ImDrawList *dl = ImGui::GetWindowDrawList();
+                            if (m_CurrentDirectory == assetDirectory || m_SelectedFileTree == assetDirectory)
+                            {
+                                dl->AddRectFilled(ImVec2(rootMin.x, rootMin.y + 2.0f), ImVec2(rootMin.x + 2.0f, rootMax.y - 2.0f), UI::ToU32(theme.primary));
+                            }
+                            {
+                                UI::ScopedFont smallFont(UI::FontVariant::Small);
+                                const ImVec2 icSz = ImGui::CalcTextSize(rootIcon);
+                                dl->AddText(ImVec2(iconX, rootMin.y + std::round((rowH - icSz.y) * 0.5f)), UI::ToU32(UI::Accent::Folder), rootIcon);
+                            }
                         }
-                        ImGui::TreePop();
+
+                        DragDropSource(assetDirectory);
+
+                        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && ImGui::IsItemHovered())
+                        {
+                            UpdateSelection(assetDirectory);
+                            m_SelectedFileTree = assetDirectory;
+                        }
+
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            bool queuedPopup = false;
+
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            {
+                                if (payload->DataSize == sizeof(AssetHandle))
+                                {
+                                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                    const AssetMetaData droppedMetadata = m_AssetManager->GetMetaData(droppedHandle);
+                                    Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+                                    if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
+                                    {
+                                        QueueMoveCopyPopup(project->GetProjectFilepath(droppedMetadata.filepath), assetDirectory);
+                                        queuedPopup = true;
+                                    }
+                                }
+                            }
+
+                            if (!queuedPopup)
+                            {
+                                if (const ImGuiPayload *pathPayload = ImGui::AcceptDragDropPayload(kContentBrowserPathPayload))
+                                {
+                                    if (pathPayload->DataSize == sizeof(ContentBrowserPathPayload))
+                                    {
+                                        const auto *dropData = static_cast<const ContentBrowserPathPayload *>(pathPayload->Data);
+                                        QueueMoveCopyPopup(std::filesystem::path(dropData->path), assetDirectory);
+                                    }
+                                }
+                            }
+
+                            ImGui::EndDragDropTarget();
+                        }
+
+                        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                        {
+                            if (assetDirectory != m_CurrentDirectory)
+                            {
+                                m_BackwardPathStack.push(m_CurrentDirectory);
+                                while (!m_ForwardPathStack.empty())
+                                {
+                                    m_ForwardPathStack.pop();
+                                }
+
+                                m_CurrentDirectory = assetDirectory;
+                            }
+                        }
+
+                        if (rootOpened)
+                        {
+                            for (const uint32_t rootNodeIndex : m_SortedRootNodeIndices)
+                            {
+                                UIRenderFileTree(&m_TreeNodes[rootNodeIndex]);
+                            }
+                            ImGui::TreePop();
+                        }
                     }
                 }
                 ImGui::EndChild();
+                ImGui::PopStyleVar(3);
+                ImGui::PopStyleColor(5);
             }
 
-            ImGui::SameLine();
+            ImGui::SameLine(0.0f, 6.0f * scale);
 
-            // File list
+            // File list (asset grid cards)
             {
-                if (ImGui::BeginChild("##file_lists", { 0.0f, 0.0f }))
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, UI::ToImVec4(theme.background));
+                ImGui::PushStyleColor(ImGuiCol_Border, UI::ToImVec4(theme.border));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * scale, 10.0f * scale));
+                if (ImGui::BeginChild("##file_lists", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding))
                 {
-                    // Insert path nodes
                     FileTreeNode *node = m_TreeNodes.data();
                     if (node)
                     {
-                        auto &assetDirectory = m_EditorLayer->GetActiveProject()->GetDirectory();
+                        auto &assetDirectory = projectDir;
                         const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, assetDirectory);
                         for (const auto &path : relativePath)
                         {
@@ -633,17 +855,16 @@ namespace ignite
 
                         const bool searchActive = !contentNameSearchResultStr.empty();
                         if (!searchActive && node->children.empty())
-                            UI::DrawCenteredText("Empty folder", 0xFFAAAAAA);
+                            UI::DrawCenteredText("Empty folder", UI::ToU32(theme.mutedForeground));
 
                         if (searchActive)
                         {
                             std::string search = stringutils::ToLower(contentNameSearchResultStr);
                             if (recursiveSearch)
                             {
-                                // Recursive search
-                                for (auto &node : m_TreeNodes)
+                                for (auto &treeNode : m_TreeNodes)
                                 {
-                                    for (const uint32_t childNodeIndex : node.sortedChildren)
+                                    for (const uint32_t childNodeIndex : treeNode.sortedChildren)
                                     {
                                         const auto path = std::filesystem::relative(
                                             assetDirectory / GetNodeFullpath(childNodeIndex), m_CurrentDirectory);
@@ -655,7 +876,6 @@ namespace ignite
                             }
                             else
                             {
-                                // Child search
                                 for (const uint32_t childNodeIndex : node->sortedChildren)
                                 {
                                     const auto path = std::filesystem::relative(
@@ -665,12 +885,15 @@ namespace ignite
                                         filteredContentNames.push_back(path);
                                 }
                             }
-
                         }
 
-                        const float spacing = 12.0f;
+                        const float spacing = std::round(10.0f * scale);
+                        const float cardPad = std::round(6.0f * scale);
+                        const float thumbSize = static_cast<float>(m_ThumbnailSize);
+                        const float itemWidth = thumbSize + cardPad * 2.0f;
+                        const float labelH = std::round(32.0f * scale);
+                        const float cardHeight = cardPad + thumbSize + std::round(6.0f * scale) + labelH + std::round(4.0f * scale);
                         const float contentWidth = ImGui::GetContentRegionAvail().x;
-                        const auto itemWidth = static_cast<float>(m_ThumbnailSize);
 
                         const int itemPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (itemWidth + spacing)));
                         const auto itemCount = searchActive
@@ -678,10 +901,10 @@ namespace ignite
                             : static_cast<int>(node->sortedChildren.size());
 
                         if (searchActive && itemCount == 0)
-                            UI::DrawCenteredText("No matching items", 0xFFAAAAAA);
+                            UI::DrawCenteredText("No matching items", UI::ToU32(theme.mutedForeground));
 
                         const int rowCount = (itemCount + itemPerRow - 1) / itemPerRow;
-                        const float rowHeight = static_cast<float>(m_ThumbnailSize) + ImGui::GetTextLineHeightWithSpacing() * 2.0f + spacing;
+                        const float rowHeight = cardHeight + spacing;
                         const float cursorStartY = ImGui::GetCursorPosY();
 
                         ImGuiListClipper clipper;
@@ -711,8 +934,9 @@ namespace ignite
                         }
 
                         ImGui::SetCursorPosY(cursorStartY);
-                        const ImVec2 remainingSize = ImGui::GetContentRegionMax();
-                        ImGui::Dummy(ImVec2(remainingSize.x, std::max(remainingSize.y, 50.0f)));
+                        const ImVec2 availDrop = ImGui::GetContentRegionAvail();
+                        const float minGridHeight = static_cast<float>(rowCount) * rowHeight;
+                        ImGui::Dummy(ImVec2(std::max(availDrop.x, 50.0f), std::max({ availDrop.y, minGridHeight, 50.0f })));
 
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -757,6 +981,8 @@ namespace ignite
                 }
 
                 ImGui::EndChild();
+                ImGui::PopStyleVar();
+                ImGui::PopStyleColor(2);
             }
 
             // ==== Popup modals ====
@@ -764,6 +990,7 @@ namespace ignite
         }
 
         ImGui::End();
+        ImGui::PopStyleVar(2);
     }
 
     void ContentBrowserPanel::OnUpdate(float deltaTime)
@@ -813,82 +1040,83 @@ namespace ignite
 
     void ContentBrowserPanel::UIRenderContextMenu()
     {
-        if (ImGui::BeginPopupContextWindow("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
+        if (UI::BeginWindowContextMenu("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
         {
-            if (ImGui::BeginMenu("Create"))
+            if (UI::ContextMenuBeginSubMenu("Create", ICON_LC_CIRCLE_PLUS, true, UI::Accent::Mesh))
             {
-                if (ImGui::MenuItem("New Folder"))
+                if (UI::ContextMenuItem("New Folder", nullptr, ICON_LC_FOLDER_PLUS, false, true, UI::Accent::Folder))
                 {
-                    // show create folder modal
                     m_ShowCreateFolderModal = true;
                 }
 
-                if (ImGui::MenuItem("C# Script"))
+                UI::ContextMenuSeparator();
+
+                if (UI::ContextMenuItem("C# Script", nullptr, ICON_LC_FILE_CODE_2, false, true, UI::Accent::ScriptCS))
                 {
                     m_ShowCreateScriptModal = true;
                 }
 
-                if (ImGui::MenuItem("Lua Script"))
+                if (UI::ContextMenuItem("Lua Script", nullptr, ICON_LC_FILE_CODE, false, true, UI::Accent::ScriptLua))
                 {
                     m_ShowCreateLuaScriptModal = true;
                 }
 
-                if (ImGui::MenuItem("Prefab"))
+                if (UI::ContextMenuItem("Prefab", nullptr, ICON_LC_PACKAGE, false, true, UI::Accent::Mesh))
                 {
                     CreateNewPrefab();
                 }
 
-                if (ImGui::MenuItem("Sprite Sheet"))
+                if (UI::ContextMenuItem("Sprite Sheet", nullptr, ICON_LC_GRID_2X2, false, true, UI::Accent::Material))
                 {
                     DispatchCreateAssetEditorEvent(AssetType::SpriteSheet, m_CurrentDirectory);
                 }
 
-                if (ImGui::MenuItem("Widget"))
+                if (UI::ContextMenuItem("Widget", nullptr, ICON_LC_LAYOUT_TEMPLATE, false, true, UI::Accent::Widget))
                 {
                     DispatchCreateAssetEditorEvent(AssetType::Widget, m_CurrentDirectory);
                 }
 
-                if (ImGui::BeginMenu("Animation"))
+                if (UI::ContextMenuBeginSubMenu("Animation", ICON_LC_FILM, true, UI::Accent::Animation))
                 {
-                    if (ImGui::MenuItem("Blend Space 2D"))
+                    if (UI::ContextMenuItem("Blend Space 2D", nullptr, ICON_LC_SLIDERS_HORIZONTAL, false, true, UI::Accent::Animation))
                     {
                         DispatchCreateAssetEditorEvent(AssetType::BlendSpace, m_CurrentDirectory);
                     }
 
-                    if (ImGui::MenuItem("Animator Controller"))
+                    if (UI::ContextMenuItem("Animator Controller", nullptr, ICON_LC_CLAPPERBOARD, false, true, UI::Accent::Animation))
                     {
                         DispatchCreateAssetEditorEvent(AssetType::AnimatorController, m_CurrentDirectory);
                     }
 
-                    if (ImGui::MenuItem("Animation 2D"))
+                    if (UI::ContextMenuItem("Animation 2D", nullptr, ICON_LC_FILM, false, true, UI::Accent::Animation))
                     {
                         DispatchCreateAssetEditorEvent(AssetType::Animation2D, m_CurrentDirectory);
                     }
 
-                    if (ImGui::MenuItem("Animator Controller 2D"))
+                    if (UI::ContextMenuItem("Animator Controller 2D", nullptr, ICON_LC_CLAPPERBOARD, false, true, UI::Accent::Animation))
                     {
                         DispatchCreateAssetEditorEvent(AssetType::AnimatorController2D, m_CurrentDirectory);
                     }
 
-                    ImGui::EndMenu();
+                    UI::ContextMenuEndSubMenu();
                 }
 
-                if (ImGui::BeginMenu("Material"))
+                if (UI::ContextMenuBeginSubMenu("Material", ICON_LC_PALETTE, true, UI::Accent::Material))
                 {
-                    if (ImGui::MenuItem("Material2D"))
+                    if (UI::ContextMenuItem("Material2D", nullptr, ICON_LC_PAINTBRUSH, false, true, UI::Accent::Material))
                     {
                         DispatchCreateAssetEditorEvent(AssetType::Material2D, m_CurrentDirectory);
                     }
 
-                    if (ImGui::MenuItem("Material"))
+                    if (UI::ContextMenuItem("Material", nullptr, ICON_LC_PALETTE, false, true, UI::Accent::Material))
                     {
                         DispatchCreateAssetEditorEvent(AssetType::Material, m_CurrentDirectory);
                     }
 
-                    ImGui::EndMenu();
+                    UI::ContextMenuEndSubMenu();
                 }
 
-                if (ImGui::MenuItem("Terrain"))
+                if (UI::ContextMenuItem("Terrain", nullptr, ICON_LC_MOUNTAIN, false, true, UI::Accent::Environment))
                 {
                     DispatchCreateAssetEditorEvent(AssetType::Terrain, m_CurrentDirectory);
                 }
@@ -902,33 +1130,31 @@ namespace ignite
 
                     if (menuEntries && !menuEntries->empty())
                     {
-                        ImGui::Separator();
-                        if (ImGui::BeginMenu("Scriptable Object"))
+                        UI::ContextMenuSeparator();
+                        if (UI::ContextMenuBeginSubMenu("Scriptable Object", ICON_LC_BRACES, true, UI::Accent::ScriptCS))
                         {
                             for (const auto &entry : *menuEntries)
                             {
                                 const std::string &label = entry.menuName.empty() ? entry.className : entry.menuName;
-                                if (ImGui::MenuItem(label.c_str()))
+                                if (UI::ContextMenuItem(label.c_str(), nullptr, ICON_LC_BRACES, false, true, UI::Accent::ScriptCS))
                                 {
                                     m_PendingScriptableObjectClassName = entry.className;
                                     m_PendingScriptableObjectFileName = entry.fileName;
-                                    strncpy(m_PopupInputBuffer, entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
-                                    // strncpy_s(m_PopupInputBuffer, sizeof(m_PopupInputBuffer), entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                    std::strncpy(m_PopupInputBuffer, entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
                                     m_ShowCreateScriptableObjectModal = true;
                                 }
                             }
-                            ImGui::EndMenu();
+                            UI::ContextMenuEndSubMenu();
                         }
                     }
                 }
 
-                ImGui::EndMenu();
+                UI::ContextMenuEndSubMenu();
             }
 
-            // Open file dialog to import assets into the current directory
-            if (ImGui::BeginMenu("Import"))
+            if (UI::ContextMenuBeginSubMenu("Import", ICON_LC_IMPORT, true, UI::Accent::Camera))
             {
-                if (ImGui::MenuItem("Import to this current directory"))
+                if (UI::ContextMenuItem("Import to this directory", nullptr, ICON_LC_DOWNLOAD, false, true, UI::Accent::Camera))
                 {
                     SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
                         Application::GetInstance()->GetWindow()->GetWindowHandle(),
@@ -936,31 +1162,48 @@ namespace ignite
                         nullptr, true
                     );
                 }
-                ImGui::EndMenu();
+                UI::ContextMenuEndSubMenu();
             }
 
-            if (ImGui::BeginMenu("Thumbnail Size"))
+            if (UI::ContextMenuBeginSubMenu("Thumbnail Size", ICON_LC_LAYOUT_GRID, true, UI::Accent::Widget))
             {
-                if (ImGui::MenuItem("Small")) m_ThumbnailSize = 64;
-                if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 72;
-                if (ImGui::MenuItem("Large")) m_ThumbnailSize = 96;
-                if (ImGui::MenuItem("Huge")) m_ThumbnailSize = 120;
-                ImGui::EndMenu();
+                if (UI::ContextMenuItem("Small (64px)", nullptr, m_ThumbnailSize == 64 ? ICON_LC_CHECK : " ")) m_ThumbnailSize = 64;
+                if (UI::ContextMenuItem("Medium (72px)", nullptr, m_ThumbnailSize == 72 ? ICON_LC_CHECK : " ")) m_ThumbnailSize = 72;
+                if (UI::ContextMenuItem("Large (96px)", nullptr, m_ThumbnailSize == 96 ? ICON_LC_CHECK : " ")) m_ThumbnailSize = 96;
+                if (UI::ContextMenuItem("Huge (120px)", nullptr, m_ThumbnailSize == 120 ? ICON_LC_CHECK : " ")) m_ThumbnailSize = 120;
+                UI::ContextMenuEndSubMenu();
+            }
+
+            UI::ContextMenuSeparator();
+
+            if (UI::ContextMenuItem("Refresh", nullptr, ICON_LC_REFRESH_CW, false, true, UI::Accent::Environment))
+            {
+                m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
+                PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
+                RefreshAssetTree();
+                CompactTree();
             }
 
 #ifdef PLATFORM_WINDOWS
-            if (ImGui::MenuItem("Open in File Explorer"))
+            if (UI::ContextMenuItem("Open in File Explorer", nullptr, ICON_LC_EXTERNAL_LINK, false, true, UI::Accent::Folder))
             {
                 std::string command = std::format("explorer {}", m_CurrentDirectory.string());
                 std::system(command.c_str());
             }
 #endif
-            ImGui::EndPopup();
+            UI::EndContextMenu();
         }
     }
 
     void ContentBrowserPanel::UIRenderPopupModals()
     {
+        const auto &theme = UI::GetTheme();
+        const float scale = std::max(UI::GetDpiScale(), 1.0f);
+
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, UI::ToImVec4(theme.popover));
+        ImGui::PushStyleColor(ImGuiCol_Border, UI::ToImVec4(theme.border));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f * scale, 14.0f * scale));
+
         // Create Folder Modal
         if (m_ShowCreateFolderModal)
         {
@@ -971,17 +1214,20 @@ namespace ignite
         static bool focusCreateFolder = true;
         if (ImGui::BeginPopupModal("Create Folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::Text("Create folder in: %s", m_CurrentDirectory.generic_string().c_str());
+            {
+                UI::ScopedFont smallFont(UI::FontVariant::Small);
+                ImGui::TextColored(UI::ToImVec4(theme.mutedForeground), "Location: %s", m_CurrentDirectory.generic_string().c_str());
+            }
             ImGui::Spacing();
             if (focusCreateFolder)
             {
                 ImGui::SetKeyboardFocusHere();
                 focusCreateFolder = false;
             }
-            const bool submitByEnter = ImGui::InputText("Folder Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+            const bool submitByEnter = UI::TextField("##folder_name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), "Folder name...", ImVec2(320.0f * scale, 28.0f * scale), ICON_LC_FOLDER_PLUS, true, ImGuiInputTextFlags_EnterReturnsTrue);
 
-            ImGui::Separator();
-            if (submitByEnter || ImGui::Button("Create"))
+            ImGui::Spacing();
+            if (submitByEnter || UI::Button("Create", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0, 0), ICON_LC_CHECK))
             {
                 std::string name = m_PopupInputBuffer;
                 if (!name.empty())
@@ -997,12 +1243,11 @@ namespace ignite
                         }
                     }
                 }
-                // clear
                 m_PopupInputBuffer[0] = '\0';
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Cancel"))
+            if (UI::Button("Cancel", UI::ButtonVariant::Outline, UI::ButtonSize::Small))
             {
                 m_PopupInputBuffer[0] = '\0';
                 ImGui::CloseCurrentPopup();
@@ -1024,17 +1269,20 @@ namespace ignite
         static bool focusCreateScript = true;
         if (ImGui::BeginPopupModal("Create C# Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::Text("Create script in: %s", m_CurrentDirectory.generic_string().c_str());
+            {
+                UI::ScopedFont smallFont(UI::FontVariant::Small);
+                ImGui::TextColored(UI::ToImVec4(theme.mutedForeground), "Location: %s", m_CurrentDirectory.generic_string().c_str());
+            }
             ImGui::Spacing();
             if (focusCreateScript)
             {
                 ImGui::SetKeyboardFocusHere();
                 focusCreateScript = false;
             }
-            const bool submitByEnter = ImGui::InputText("Script Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+            const bool submitByEnter = UI::TextField("##cs_name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), "ScriptName.cs", ImVec2(320.0f * scale, 28.0f * scale), ICON_LC_FILE_CODE_2, true, ImGuiInputTextFlags_EnterReturnsTrue);
 
-            ImGui::Separator();
-            if (submitByEnter || ImGui::Button("Create"))
+            ImGui::Spacing();
+            if (submitByEnter || UI::Button("Create", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0, 0), ICON_LC_CHECK))
             {
                 std::string name = m_PopupInputBuffer;
                 if (!name.empty())
@@ -1051,7 +1299,7 @@ namespace ignite
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Cancel"))
+            if (UI::Button("Cancel", UI::ButtonVariant::Outline, UI::ButtonSize::Small))
             {
                 m_PopupInputBuffer[0] = '\0';
                 ImGui::CloseCurrentPopup();
@@ -1073,17 +1321,20 @@ namespace ignite
         static bool focusCreateLuaScript = true;
         if (ImGui::BeginPopupModal("Create Lua Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::Text("Create Lua script in: %s", m_CurrentDirectory.generic_string().c_str());
+            {
+                UI::ScopedFont smallFont(UI::FontVariant::Small);
+                ImGui::TextColored(UI::ToImVec4(theme.mutedForeground), "Location: %s", m_CurrentDirectory.generic_string().c_str());
+            }
             ImGui::Spacing();
             if (focusCreateLuaScript)
             {
                 ImGui::SetKeyboardFocusHere();
                 focusCreateLuaScript = false;
             }
-            const bool submitByEnter = ImGui::InputText("Script Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+            const bool submitByEnter = UI::TextField("##lua_name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), "script_name.lua", ImVec2(320.0f * scale, 28.0f * scale), ICON_LC_FILE_CODE, true, ImGuiInputTextFlags_EnterReturnsTrue);
 
-            ImGui::Separator();
-            if (submitByEnter || ImGui::Button("Create"))
+            ImGui::Spacing();
+            if (submitByEnter || UI::Button("Create", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0, 0), ICON_LC_CHECK))
             {
                 std::string name = m_PopupInputBuffer;
                 if (!name.empty())
@@ -1100,7 +1351,7 @@ namespace ignite
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Cancel"))
+            if (UI::Button("Cancel", UI::ButtonVariant::Outline, UI::ButtonSize::Small))
             {
                 m_PopupInputBuffer[0] = '\0';
                 ImGui::CloseCurrentPopup();
@@ -1123,17 +1374,20 @@ namespace ignite
         if (ImGui::BeginPopupModal("Create Scriptable Object", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::Text("Class: %s", m_PendingScriptableObjectClassName.c_str());
-            ImGui::Text("Location: %s", m_CurrentDirectory.generic_string().c_str());
+            {
+                UI::ScopedFont smallFont(UI::FontVariant::Small);
+                ImGui::TextColored(UI::ToImVec4(theme.mutedForeground), "Location: %s", m_CurrentDirectory.generic_string().c_str());
+            }
             ImGui::Spacing();
             if (focusCreateSO)
             {
                 ImGui::SetKeyboardFocusHere();
                 focusCreateSO = false;
             }
-            const bool submitByEnter = ImGui::InputText("Asset Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+            const bool submitByEnter = UI::TextField("##so_name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), "Asset name...", ImVec2(320.0f * scale, 28.0f * scale), ICON_LC_BRACES, true, ImGuiInputTextFlags_EnterReturnsTrue);
 
-            ImGui::Separator();
-            if (submitByEnter || ImGui::Button("Create"))
+            ImGui::Spacing();
+            if (submitByEnter || UI::Button("Create", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0, 0), ICON_LC_CHECK))
             {
                 const std::string assetName = m_PopupInputBuffer;
                 if (!assetName.empty() && !m_PendingScriptableObjectClassName.empty())
@@ -1151,7 +1405,7 @@ namespace ignite
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Cancel"))
+            if (UI::Button("Cancel", UI::ButtonVariant::Outline, UI::ButtonSize::Small))
             {
                 m_PopupInputBuffer[0] = '\0';
                 m_PendingScriptableObjectClassName.clear();
@@ -1177,21 +1431,22 @@ namespace ignite
         {
             if (!m_SelectedItems.empty())
             {
-                // ONLY Support renaming a single item for now
-                // TODO: Support renaming multiple items at once (e.g., "NewName (1)", "NewName (2)", etc.)
                 auto &itemPath = m_SelectedItems.front();
 
-                ImGui::Text("Rename: %s", itemPath.filename().generic_string().c_str());
+                {
+                    UI::ScopedFont smallFont(UI::FontVariant::Small);
+                    ImGui::TextColored(UI::ToImVec4(theme.mutedForeground), "Rename: %s", itemPath.filename().generic_string().c_str());
+                }
                 ImGui::Spacing();
                 if (focusRename)
                 {
                     ImGui::SetKeyboardFocusHere();
                     focusRename = false;
                 }
-                const bool submitByEnter = ImGui::InputText("New Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+                const bool submitByEnter = UI::TextField("##rename_name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), "New name...", ImVec2(320.0f * scale, 28.0f * scale), ICON_LC_PENCIL, true, ImGuiInputTextFlags_EnterReturnsTrue);
 
-                ImGui::Separator();
-                const bool submitByButton = ImGui::Button("Rename");
+                ImGui::Spacing();
+                const bool submitByButton = UI::Button("Rename", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0, 0), ICON_LC_CHECK);
                 if (submitByEnter || submitByButton)
                 {
                     std::string newName = m_PopupInputBuffer;
@@ -1215,7 +1470,6 @@ namespace ignite
                         std::filesystem::rename(target.string(), dest.string(), ec);
                         if (!ec)
                         {
-                            // Keep metadata/settings pair in sync.
                             const std::filesystem::path targetMeta = target.string() + ".meta";
                             const std::filesystem::path destMeta = dest.string() + ".meta";
                             if (std::filesystem::exists(targetMeta))
@@ -1265,7 +1519,7 @@ namespace ignite
                 }
 
                 ImGui::SameLine();
-                if (ImGui::Button("Cancel"))
+                if (UI::Button("Cancel", UI::ButtonVariant::Outline, UI::ButtonSize::Small))
                 {
                     m_PopupInputBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
@@ -1290,22 +1544,18 @@ namespace ignite
         {
             const size_t itemCount = m_SelectedItems.size();
 
-            ImGui::Text("Are you sure you want to delete: %zu item(s) ?", itemCount);
+            ImGui::Text("Are you sure you want to delete %zu item(s)?", itemCount);
             ImGui::Spacing();
-            ImGui::Separator();
 
             for (const auto &item : m_SelectedItems)
             {
-                const auto filename = item.filename().generic_string();
-                ImGui::Text("%s", filename.c_str());
+                UI::ScopedFont monoFont(UI::FontVariant::Mono);
+                ImGui::TextColored(UI::ToImVec4(theme.mutedForeground), "  %s", item.filename().generic_string().c_str());
             }
 
             ImGui::Spacing();
-            ImGui::Separator();
-
-            if (ImGui::Button("Delete"))
+            if (UI::Button("Delete", UI::ButtonVariant::Destructive, UI::ButtonSize::Small, ImVec2(0, 0), ICON_LC_TRASH_2))
             {
-
                 AssetWorker::SubmitJob([this]()
                 {
                     bool genCSProjectRequested = false;
@@ -1341,7 +1591,6 @@ namespace ignite
                                         filesToRemove.emplace_back(FileToRemove{ handle, filepath });
                                     }
 
-                                    // Also remove .meta from asset system if needed
                                     if (filepath.extension() != ".meta")
                                     {
                                         std::filesystem::path metaPath = filepath.string() + ".meta";
@@ -1363,19 +1612,14 @@ namespace ignite
                         else
                         {
                             Project *project = m_EditorLayer->GetActiveProject().get();
-
-                            // Remove the item from the OS File System
                             std::filesystem::remove(itemPath.string(), ec);
 
-
-                            // Remove the side-car file (.meta file)
                             const std::filesystem::path metaPath = itemPath.string() + ".meta";
                             if (std::filesystem::exists(metaPath))
                             {
                                 std::error_code metaEc;
                                 std::filesystem::remove(metaPath.string(), metaEc);
 
-                                // Push to the queue
                                 const std::filesystem::path metaRelative = project->GetProjectFilepath(metaPath);
                                 const AssetHandle metaHandle = m_AssetManager->GetAssetHandle(metaRelative);
                                 if (metaHandle != AssetHandle(0))
@@ -1384,8 +1628,6 @@ namespace ignite
                                 }
                             }
 
-
-                            // Push to the queue
                             const std::filesystem::path relativePath = project->GetProjectFilepath(itemPath);
                             const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
                             if (handle != AssetHandle(0))
@@ -1418,7 +1660,7 @@ namespace ignite
                         counter++;
                     }
 
-                    Application::SubmitToMainThread([this, &genCSProjectRequested]()
+                    Application::SubmitToMainThread([this, genCSProjectRequested]()
                     {
                         if (genCSProjectRequested)
                         {
@@ -1428,41 +1670,38 @@ namespace ignite
                         RefreshFiles();
                     });
                 });
-                
 
                 ImGui::CloseCurrentPopup();
             }
 
             ImGui::SameLine();
-            if (ImGui::Button("Cancel"))
+            if (UI::Button("Cancel", UI::ButtonVariant::Outline, UI::ButtonSize::Small))
             {
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
         }
 
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+
         if (m_ShowMoveCopyPopup)
         {
-            ImGui::OpenPopup("Move/Copy Item");
+            UI::OpenPopupMenu("Move/Copy Item");
             m_ShowMoveCopyPopup = false;
         }
 
-        if (ImGui::BeginPopup("Move/Copy Item"))
+        if (UI::BeginPopupMenu("Move/Copy Item"))
         {
             const size_t sourceCount = m_PendingDragDropSources.size();
-            if (sourceCount == 1)
-            {
-                ImGui::Text("%s", m_PendingDragDropSources.front().filename().generic_string().c_str());
-            }
-            else
-            {
-                ImGui::Text("%zu items", sourceCount);
-            }
+            const std::string srcDesc = (sourceCount == 1)
+                ? m_PendingDragDropSources.front().filename().generic_string()
+                : std::format("{} items", sourceCount);
+            const std::string headerDesc = std::format("{} -> {}", srcDesc, m_PendingDragDropTargetDirectory.filename().generic_string());
+            UI::ContextMenuLabel(headerDesc.c_str());
+            UI::ContextMenuSeparator();
 
-            ImGui::TextDisabled("to %s", m_PendingDragDropTargetDirectory.filename().generic_string().c_str());
-            ImGui::Separator();
-
-            if (ImGui::MenuItem("Move"))
+            if (UI::ContextMenuItem("Move Here", nullptr, ICON_LC_FOLDER_INPUT, false, true, UI::Accent::Folder))
             {
                 AssetWorker::SubmitJob([this]
                 {
@@ -1470,11 +1709,9 @@ namespace ignite
                     m_PendingDragDropSources.clear();
                     m_PendingDragDropTargetDirectory.clear();
                 });
-                
-                ImGui::CloseCurrentPopup();
             }
 
-            if (ImGui::MenuItem("Copy"))
+            if (UI::ContextMenuItem("Copy Here", nullptr, ICON_LC_COPY, false, true, UI::Accent::Camera))
             {
                 AssetWorker::SubmitJob([this]
                 {
@@ -1482,10 +1719,9 @@ namespace ignite
                     m_PendingDragDropSources.clear();
                     m_PendingDragDropTargetDirectory.clear();
                 });
-                ImGui::CloseCurrentPopup();
             }
 
-            ImGui::EndPopup();
+            UI::EndContextMenu();
         }
         else if (!m_PendingDragDropSources.empty())
         {
@@ -1672,29 +1908,44 @@ namespace ignite
 
         const bool isDirectory = std::filesystem::is_directory(fileStatus);
         const AssetType itemAssetType = GetAssetTypeFromExtension(item.extension().string());
+        const FileVisual visual = GetFileVisual(isDirectory, false, itemAssetType, path);
 
+        // Request/touch thumbnail cache (actual GPU texture used if available)
         Ref<Texture> icon = GetOrCreateThumbnail(path, isDirectory);
-        if (!icon)
+        Ref<Texture> loadedThumbnail = nullptr;
+        if (!isDirectory)
         {
-            // fallback, because it is generated asynchronously
-            icon = s_SharedIcons["unknown"];
+            if (auto thumbIt = s_SharedThumbnails.find(path); thumbIt != s_SharedThumbnails.end() && thumbIt->second.thumbnail)
+            {
+                loadedThumbnail = thumbIt->second.thumbnail;
+            }
         }
+
+        const auto &theme = UI::GetTheme();
+        const float scale = std::max(UI::GetDpiScale(), 1.0f);
+        const float cardPad = std::round(6.0f * scale);
+        const float thumbSize = static_cast<float>(m_ThumbnailSize);
+        const float cardW = thumbSize + cardPad * 2.0f;
+        const float labelH = std::round(32.0f * scale);
+        const float cardH = cardPad + thumbSize + std::round(6.0f * scale) + labelH + std::round(4.0f * scale);
 
         ImGui::BeginGroup();
 
-        // Keep a fixed clickable area and draw the image separately with preserved aspect ratio
-        const auto maxSize = static_cast<float>(m_ThumbnailSize);
-        const ImVec2 buttonSize(maxSize, maxSize);
-        const ImVec2 buttonMin = ImGui::GetCursorScreenPos();
-        const ImVec2 buttonMax(buttonMin.x + buttonSize.x, buttonMin.y + buttonSize.y);
+        const ImVec2 cardMin = ImGui::GetCursorScreenPos();
+        const ImVec2 cardMax(cardMin.x + cardW, cardMin.y + cardH);
+        const ImVec2 wellMin(cardMin.x + cardPad, cardMin.y + cardPad);
+        const ImVec2 wellMax(wellMin.x + thumbSize, wellMin.y + thumbSize);
 
         ImDrawList *drawList = ImGui::GetWindowDrawList();
 
-        ImGui::InvisibleButton(item.string().c_str(), buttonSize);
+        ImGui::InvisibleButton(item.string().c_str(), ImVec2(cardW, cardH));
 
         const bool isActive = ImGui::IsItemActive();
         const bool isHovered = ImGui::IsItemHovered();
         const bool isSelected = std::ranges::find(m_SelectedItems, path) != m_SelectedItems.end();
+
+        if (isHovered)
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
         if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && ImGui::IsItemHovered())
         {
@@ -1702,30 +1953,60 @@ namespace ignite
             m_SelectedFileTree = path;
         }
 
-        const ImU32 buttonColor = (isActive
-            ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
-            : (isHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : 0x0));
+        // Card container
+        const glm::vec4 cardBg = isSelected ? theme.secondaryHover : (isActive ? theme.secondaryActive : (isHovered ? theme.secondary : theme.card));
+        const glm::vec4 cardBorder = isSelected ? theme.primary : (isHovered ? theme.borderStrong : theme.borderSubtle);
+        drawList->AddRectFilled(cardMin, cardMax, UI::ToU32(cardBg), 0.0f);
+        drawList->AddRect(cardMin, cardMax, UI::ToU32(cardBorder), 0.0f, 0, isSelected ? 1.5f : 1.0f);
 
-        drawList->AddRectFilled(buttonMin, buttonMax, buttonColor, ImGui::GetStyle().FrameRounding);
+        // Thumbnail / Icon well
+        drawList->AddRectFilled(wellMin, wellMax, UI::ToU32(theme.inputBg), 0.0f);
+        drawList->AddRect(wellMin, wellMax, UI::ToU32(theme.border), 0.0f, 0, 1.0f);
 
-        const ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
-        const ImVec2 imageMin =
+        if (loadedThumbnail && loadedThumbnail->GetShaderResourceView())
         {
-            buttonMin.x + (maxSize - displaySize.x) * 0.5f,
-            buttonMin.y + (maxSize - displaySize.y) * 0.5f
-        };
-
-        const ImVec2 imageMax(imageMin.x + displaySize.x, imageMin.y + displaySize.y);
-
-        ImTextureID iconId = UI::GetTextureID(icon);
-        drawList->AddImage(iconId, imageMin, imageMax);
-
-        if (isSelected)
+            const ImVec2 displaySize = CalculateThumbnailDisplaySize(loadedThumbnail, thumbSize - 4.0f);
+            const ImVec2 imageMin(
+                wellMin.x + (thumbSize - displaySize.x) * 0.5f,
+                wellMin.y + (thumbSize - displaySize.y) * 0.5f);
+            const ImVec2 imageMax(imageMin.x + displaySize.x, imageMin.y + displaySize.y);
+            drawList->AddImage(UI::GetTextureID(loadedThumbnail), imageMin, imageMax);
+        }
+        else
         {
-            const ImU32 overlayFill = ImGui::GetColorU32(ImVec4(0.20f, 0.45f, 0.85f, 0.22f));
-            const ImU32 overlayBorder = ImGui::GetColorU32(ImGuiCol_HeaderActive);
-            drawList->AddRectFilled(buttonMin, buttonMax, overlayFill, ImGui::GetStyle().FrameRounding);
-            drawList->AddRect(buttonMin, buttonMax, overlayBorder, ImGui::GetStyle().FrameRounding, 0, 2.0f);
+            // Clean vector Lucide emblem inside well (for folders, code scripts, audio, or pending thumbnails)
+            const float badgeSize = std::round(std::clamp(thumbSize * 0.50f, 28.0f, 44.0f));
+            const ImVec2 bMin(wellMin.x + std::round((thumbSize - badgeSize) * 0.5f), wellMin.y + std::round((thumbSize - badgeSize) * 0.5f));
+            const ImVec2 bMax(bMin.x + badgeSize, bMin.y + badgeSize);
+            drawList->AddRectFilled(bMin, bMax, UI::ToU32(theme.secondary), 0.0f);
+            drawList->AddRect(bMin, bMax, UI::ToU32(UI::WithAlpha(visual.color, 0.45f)), 0.0f, 0, 1.0f);
+
+            {
+                UI::ScopedFont largeFont(UI::FontVariant::Bold);
+                const ImVec2 icSz = ImGui::CalcTextSize(visual.icon);
+                drawList->AddText(
+                    ImVec2(bMin.x + std::round((badgeSize - icSz.x) * 0.5f), bMin.y + std::round((badgeSize - icSz.y) * 0.5f)),
+                    UI::ToU32(visual.color),
+                    visual.icon);
+            }
+        }
+
+        // Subtle 2px semantic bottom accent bar on preview well
+        drawList->AddRectFilled(ImVec2(wellMin.x, wellMax.y - 2.0f), wellMax, UI::ToU32(visual.color, isSelected ? 0.95f : 0.70f));
+
+        // Filename (clipped cleanly) & asset type subtitle
+        const std::string displayName = isDirectory ? item.filename().generic_string() : item.stem().generic_string();
+        const float textX = cardMin.x + cardPad;
+        const float textY = wellMax.y + std::round(5.0f * scale);
+        const ImVec4 nameClip(textX, textY, cardMax.x - cardPad, cardMax.y);
+        {
+            UI::ScopedFont smallFont(UI::FontVariant::Small);
+            drawList->AddText(nullptr, 0.0f, ImVec2(textX, textY), UI::ToU32(isSelected ? theme.primary : theme.foreground), displayName.c_str(), nullptr, 0.0f, &nameClip);
+        }
+        {
+            UI::ScopedFont tinyFont(UI::FontVariant::Tiny);
+            const float subY = textY + std::round(15.0f * scale);
+            drawList->AddText(nullptr, 0.0f, ImVec2(textX, subY), UI::ToU32(theme.mutedForeground), visual.typeBadge, nullptr, 0.0f, &nameClip);
         }
 
         if (ImGui::IsItemHovered())
@@ -1768,9 +2049,12 @@ namespace ignite
         }
 
         // Item Popup context
-        if (ImGui::BeginPopupContextItem())
+        if (UI::BeginContextMenu())
         {
-            if (ImGui::MenuItem("Open"))
+            UI::ContextMenuLabel(item.filename().generic_string().c_str());
+            UI::ContextMenuSeparator();
+
+            if (UI::ContextMenuItem("Open", nullptr, isDirectory ? ICON_LC_FOLDER_OPEN : ICON_LC_EXTERNAL_LINK, false, true, visual.color))
             {
                 if (isDirectory)
                 {
@@ -1795,8 +2079,6 @@ namespace ignite
                     const bool isScript = metadata.type == AssetType::LuaScript || metadata.filepath.extension() == ".cs";
                     if (isScript || !DispatchOpenAssetEditorEvent(handle, metadata))
                     {
-                        // If not handled
-                        // Windows
                         std::string command = std::format("\"{}\"", path.generic_string());
                         std::system(command.c_str());
                     }
@@ -1805,45 +2087,32 @@ namespace ignite
 
             if (!isDirectory)
             {
-                if (ImGui::MenuItem("Import"))
+                if (UI::ContextMenuItem("Reimport Asset", nullptr, ICON_LC_DOWNLOAD, false, true, UI::Accent::Camera))
                 {
                     m_AssetManager->ImportAsset(path);
                 }
             }
 
-            // Actions
+            if (UI::ContextMenuItem("Rename", "F2", ICON_LC_PENCIL))
             {
-                // Rename
-                if (ImGui::MenuItem("Rename"))
-                {
-                    // prefill buffer with filename
-                    std::string fname = std::filesystem::is_directory(path) ? path.filename().generic_string() : path.stem().generic_string();
-                    std::strncpy(m_PopupInputBuffer, fname.c_str(), sizeof(m_PopupInputBuffer) - 1);
-                    m_ShowRenameModal = true;
-                }
-
-                if (!isDirectory && ImGui::MenuItem("Duplicate"))
-                {
-                    // TODO: Implement duplicate for multiple items
-                    DuplicateItem(path);
-                }
-
-                // Delete
-                if (ImGui::MenuItem("Delete"))
-                {
-                    m_ShowDeleteModal = true;
-                }
+                std::string fname = std::filesystem::is_directory(path) ? path.filename().generic_string() : path.stem().generic_string();
+                std::strncpy(m_PopupInputBuffer, fname.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                m_ShowRenameModal = true;
             }
 
+            if (!isDirectory && UI::ContextMenuItem("Duplicate", "Ctrl+D", ICON_LC_COPY, false, true, UI::Accent::Camera))
+            {
+                DuplicateItem(path);
+            }
 
-            // Special actions for certain asset types
             if (!isDirectory)
             {
                 switch (itemAssetType)
                 {
                     case AssetType::Scene:
                     {
-                        if (ImGui::MenuItem("Set As Default Scene"))
+                        UI::ContextMenuSeparator();
+                        if (UI::ContextMenuItem("Set As Default Scene", nullptr, ICON_LC_STAR, false, true, UI::Accent::Folder))
                         {
                             auto project = m_EditorLayer->GetActiveProject();
                             if (project)
@@ -1851,15 +2120,15 @@ namespace ignite
                                 m_AssetManager->ImportAsset(path);
                                 AssetHandle handle = m_AssetManager->GetAssetHandle(path);
                                 project->SetDefaultScene(handle);
-
                                 project->Serialize(project->GetFilepath());
                             }
                         }
-                        break; // !Scene
+                        break;
                     }
                     case AssetType::SkeletalAnimation:
                     {
-                        if (ImGui::MenuItem("Create Animation Montage"))
+                        UI::ContextMenuSeparator();
+                        if (UI::ContextMenuItem("Create Animation Montage", nullptr, ICON_LC_FILM, false, true, UI::Accent::Animation))
                         {
                             Project *project = m_EditorLayer->GetActiveProject().get();
                             if (project && m_AssetManager)
@@ -1911,15 +2180,23 @@ namespace ignite
                                 }
                             }
                         }
-                        break; // !SkeletalAnimation
+                        break;
                     }
+                    default: break;
                 }
             }
 
-            ImGui::Separator();
-            ImGui::Text("%s", item.generic_string().c_str());
+            UI::ContextMenuSeparator();
+            if (UI::ContextMenuItem("Delete", "Del", ICON_LC_TRASH_2, true))
+            {
+                if (std::ranges::find(m_SelectedItems, path) == m_SelectedItems.end())
+                {
+                    UpdateSelection(path);
+                }
+                m_ShowDeleteModal = true;
+            }
 
-            ImGui::EndPopup();
+            UI::EndContextMenu();
         }
 
         // Move/Copy to directory
@@ -1957,27 +2234,21 @@ namespace ignite
                 }
                 ImGui::EndDragDropTarget();
             }
-
         }
 
         DragDropSource(m_CurrentDirectory / item);
 
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + maxSize);
-        ImGui::Text("%s", item.generic_string().c_str());
-        ImGui::PopTextWrapPos();
-
-        // Render sprite sheet contents
+        // Render sprite sheet overlay trigger + popup without shifting grid geometry
         if (!isDirectory && itemAssetType == AssetType::SpriteSheet)
         {
-            Project *project = m_EditorLayer->GetActiveProject().get();
-
             AssetHandle handle = m_AssetManager->GetAssetHandle(path);
             AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
 
             if (metadata.type == AssetType::SpriteSheet && handle != AssetHandle(0))
             {
                 const std::string popupId = std::format("##sprites_popup_{}", item.generic_string());
-                if (ImGui::SmallButton(std::format("Sprites##{}", item.generic_string()).c_str()))
+                ImGui::SetCursorScreenPos(ImVec2(wellMax.x - std::round(24.0f * scale), wellMin.y + std::round(2.0f * scale)));
+                if (UI::IconButton("##sprites_btn", ICON_LC_GRID_2X2, UI::ButtonVariant::Secondary, UI::ButtonSize::IconSm, "Browse Sprites"))
                 {
                     ImGui::OpenPopup(popupId.c_str());
                 }
@@ -2013,7 +2284,7 @@ namespace ignite
                                 }
                                 else
                                 {
-                                    ImGui::Button("N/A", ImVec2(spritePreviewSize, spritePreviewSize));
+                                    UI::Button("N/A", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(spritePreviewSize, spritePreviewSize));
                                 }
 
                                 if (ImGui::BeginDragDropSource())

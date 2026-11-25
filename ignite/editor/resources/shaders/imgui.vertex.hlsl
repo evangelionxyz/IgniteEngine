@@ -4,6 +4,10 @@ struct Constants
 {
     float2 invDisplaySize;
     float2 displayPos;
+    float  time;
+    uint   shaderFlags;
+    float  param0;
+    float  param1;
 };
 
 DECLARE_PUSH_CONSTANTS(Constants, g_Const, 0, 0);
@@ -17,9 +21,10 @@ struct VS_INPUT
 
 struct PS_INPUT
 {
-    float4 out_pos : SV_POSITION;
-    float4 out_col : COLOR0;
-    float2 out_uv  : TEXCOORD0;
+    float4 out_pos   : SV_POSITION;
+    float4 out_col   : COLOR0;
+    float2 out_uv    : TEXCOORD0;
+    float2 screenPos : TEXCOORD1;
 };
 
 PS_INPUT main(VS_INPUT input)
@@ -27,9 +32,9 @@ PS_INPUT main(VS_INPUT input)
     PS_INPUT output;
     float2 pos = input.pos.xy - g_Const.displayPos;
     output.out_pos.xy = pos * g_Const.invDisplaySize * float2(2.0, -2.0) + float2(-1.0, 1.0);
-    output.out_pos.zw = float2(0, 1);
+    output.out_pos.zw = float2(0.0, 1.0);
     output.out_col = input.col;
     output.out_uv = input.uv;
+    output.screenPos = pos;
     return output;
 }
-

@@ -4,6 +4,7 @@
 #include "widget_editor.hpp"
 #include "states.hpp"
 #include "ext/editor_ui.hpp"
+#include <imgui_internal.h>
 #include "ignite/asset/asset_manager.hpp"
 #include "panels/asset_editor_data.hpp"
 
