@@ -6140,31 +6140,31 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        if (UI::IconButton("Picking", ICON_LC_MOUSE_POINTER_2, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "Pick Entity", m_Data.gizmoOp == GizmoOperation::NONE))
+        if (UI::IconButton("Picking", ICON_LC_MOUSE_POINTER_2, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Pick Entity", m_Data.gizmoOp == GizmoOperation::NONE))
             SetGizmoOperation(GizmoOperation::NONE);
 
         ImGui::SameLine();
-        if (UI::IconButton("Translate", ICON_LC_MOVE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "Translate Entity", m_Data.gizmoOp == GizmoOperation::TRANSLATE))
+        if (UI::IconButton("Translate", ICON_LC_MOVE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Translate Entity", m_Data.gizmoOp == GizmoOperation::TRANSLATE))
             SetGizmoOperation(GizmoOperation::TRANSLATE);
 
         ImGui::SameLine();
-        if (UI::IconButton("Rotate", ICON_LC_ROTATE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "Rotate Entity", m_Data.gizmoOp == GizmoOperation::ROTATE))
+        if (UI::IconButton("Rotate", ICON_LC_ROTATE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Rotate Entity", m_Data.gizmoOp == GizmoOperation::ROTATE))
             SetGizmoOperation(GizmoOperation::ROTATE);
 
         ImGui::SameLine();
-        if (UI::IconButton("Scale", ICON_LC_SCALE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "Scale Entity", m_Data.gizmoOp == GizmoOperation::SCALE))
+        if (UI::IconButton("Scale", ICON_LC_SCALE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Scale Entity", m_Data.gizmoOp == GizmoOperation::SCALE))
             SetGizmoOperation(GizmoOperation::SCALE);
 
         {
             ImGui::SameLine();
-            if (UI::IconButton("2D Bounds", ICON_LC_SQUARE, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "2D Bounds", m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D))
+            if (UI::IconButton("2D Bounds", ICON_LC_SQUARE, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "2D Bounds", m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D))
                 SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
         }
 
         if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D)
         {
             ImGui::SameLine();
-            if (UI::IconButton("3D Bounds", ICON_LC_CUBOID, UI::ButtonVariant::Ghost, UI::ButtonSize::Medium, "3D Bounds", m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_3D))
+            if (UI::IconButton("3D Bounds", ICON_LC_CUBOID, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "3D Bounds", m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_3D))
                 SetGizmoOperation(GizmoOperation::BOUND_SIZING_3D);
         }
 
@@ -6173,7 +6173,7 @@ namespace ignite
         ImGui::SameLine();
 
         const bool isLocal = m_Gizmo.GetMode() == GizmoMode::LOCAL;
-        if (UI::Button(isLocal ? "Local" : "World", isLocal ? UI::ButtonVariant::Ghost : UI::ButtonVariant::Primary, UI::ButtonSize::Medium, ImVec2(0.0f, 0.0f), isLocal ? ICON_LC_MOVE_3D : ICON_LC_GLOBE))
+        if (UI::Button(isLocal ? "Local" : "World", isLocal ? UI::ButtonVariant::Ghost : UI::ButtonVariant::Primary, UI::ButtonSize::IconMd, ImVec2(0.0f, 0.0f), isLocal ? ICON_LC_MOVE_3D : ICON_LC_GLOBE))
             SetGizmoMode(isLocal ? GizmoMode::WORLD : GizmoMode::LOCAL);
 
         ImGui::PopStyleVar(2);
@@ -6203,7 +6203,7 @@ namespace ignite
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!canClickPlay);
-        if (UI::IconButton("play_button", isScenePlaying ? ICON_LC_SQUARE : ICON_LC_PLAY, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Play Scene", isSceneReadyToPlay))
+        if (UI::IconButton("##play_button", isScenePlaying ? ICON_LC_SQUARE : ICON_LC_PLAY, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Play Scene", isSceneReadyToPlay))
         {
             if (isScenePlaying)
             {
@@ -6244,7 +6244,7 @@ namespace ignite
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!canClickSimulate);
-        if (UI::IconButton("simulate_button", isSceneSimulate ? ICON_LC_SQUARE : ICON_LC_COG, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Simulate Scene", isSceneReadyToPlay))
+        if (UI::IconButton("##simulate_button", isSceneSimulate ? ICON_LC_SQUARE : ICON_LC_COG, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Simulate Scene", isSceneReadyToPlay))
         {
             if (isSceneSimulate)
             {

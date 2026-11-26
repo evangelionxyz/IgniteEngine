@@ -1074,40 +1074,20 @@ namespace ignite
             // VIEW MENU
             if (ImGui::BeginMenu("View", !m_State.isLoading))
             {
+                ImGui::MenuItem("Game", nullptr, &m_State.gameplayViewportWindow, m_ActiveProject != nullptr);
+                ImGui::MenuItem("Scene Renderer", nullptr, &m_State.sceneRendererWindow, m_ActiveProject &&m_SceneRenderer != nullptr);
+                ImGui::MenuItem("Network", nullptr, &m_State.networkWindow, m_ActiveProject != nullptr);
+                ImGui::MenuItem("Settings", nullptr, &m_State.settingsWindow, m_ActiveProject != nullptr);
+                ImGui::MenuItem("Asset Registry", nullptr, &m_State.assetRegistryWindow, m_ActiveProject != nullptr);
+
                 const bool canAddContentBrowser = (GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) < 4;
                 if (ImGui::MenuItem("Add Content Browser", nullptr, false, canAddContentBrowser))
                 {
                     ++m_PendingContentBrowserPanelsToAdd;
                 }
 
-                if (ImGui::MenuItem("ImGui Demo"))
-                {
-                    m_State.imguiDemoWindow = true;
-                }
-
-                if (ImGui::MenuItem(ICON_LC_SPARKLES " UI Showcase", nullptr, &m_State.uiShowcaseWindow))
-                {
-                }
-
-                if (ImGui::MenuItem("Game View", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.gameplayViewportWindow = true;
-                }
-
-                if (ImGui::MenuItem("Network Diagnostics", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.networkWindow = true;
-                }
-
-                if (ImGui::MenuItem("Settings", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.settingsWindow = true;
-                }
-
-                if (ImGui::MenuItem("Asset Registry", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.assetRegistryWindow = true;
-                }
+                ImGui::MenuItem("UI Showcase", nullptr, &m_State.uiShowcaseWindow);
+                ImGui::MenuItem("ImGui Demo", nullptr, &m_State.imguiDemoWindow);
 
                 ImGui::EndMenu();
             }
@@ -1165,17 +1145,36 @@ namespace ignite
         }
 
         // Reserve space for status bar
-        constexpr float statusBarHeight = 36.0f;
+        const float scale = std::max(UI::GetDpiScale(), 1.0f);
+        const float barHeight = glm::round(36.0f * scale);
+        const float buttonHeight = glm::round(24.0f * scale);
 
-        {
-            // RENDER TOOL BAR
-            ImGui::BeginChild("##toolbar_child", {0.0f, statusBarHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
-            m_ScenePanel->RenderToolbar();
-            ImGui::EndChild();
-        }
+        // RENDER TOOL BAR
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 8.0f * scale, 5.0f * scale });
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 5.0f * scale, 0.0f });
+        ImGui::BeginChild("##toolbar_child", { 0.0f, barHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
+        m_ScenePanel->RenderToolbar();
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
 
+        // Render Project Creation Pop Up
         UIProjectCreation();
 
+        // Draw Loading Popup Modal
+        if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
+            ImGui::OpenPopup("Please Wait...");
+
+        if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
+        {
+            if (ImGui::BeginPopupModal("Please Wait...", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::TextUnformatted(m_StatusText.c_str());
+                UI::ProgressBar(m_LoadingProgress, ImVec2(320.0f, 24.0f));
+                ImGui::EndPopup();
+            }
+        }
+
+        // Draw Baking Popup Modal
         if (m_GIBaker && m_GIBaker->IsBaking())
             ImGui::OpenPopup("Bake GI");
 
@@ -1184,9 +1183,11 @@ namespace ignite
             const uint32_t total = m_GIBaker ? m_GIBaker->GetTotalProbes() : 0u;
             const uint32_t completed = m_GIBaker ? m_GIBaker->GetCompletedProbes() : 0u;
             const float progress = m_GIBaker ? m_GIBaker->GetProgress() : 0.0f;
-            ImGui::Text("Time-sliced irradiance bake");
-            ImGui::ProgressBar(progress, ImVec2(320.0f, 0.0f));
+
+            ImGui::TextUnformatted("Time-sliced irradiance bake");
+            UI::ProgressBar(progress, ImVec2(320.0f, 24.0f));
             ImGui::Text("Probes: %u / %u", completed, total);
+
             if (m_GIBaker && m_GIBaker->IsBaking())
             {
                 if (ImGui::Button("Cancel"))
@@ -1197,13 +1198,12 @@ namespace ignite
                 m_State.giBakeModal = false;
                 ImGui::CloseCurrentPopup();
             }
+
             ImGui::EndPopup();
         }
 
-        ImVec2 avail = ImGui::GetContentRegionAvail();
-
-        // Dockspace tabs area gets everything except status bar
-        ImVec2 dockSize = { avail.x, std::max(0.0f, avail.y - statusBarHeight) };
+        const ImVec2 avail = ImGui::GetContentRegionAvail();
+        const ImVec2 dockSize = { avail.x, glm::max(0.0f, avail.y - barHeight) };
         ImGui::BeginChild("##dockspace_tabs_child", dockSize, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
         {
             struct DockWorkspace
@@ -1289,65 +1289,57 @@ namespace ignite
         }
         ImGui::EndChild();
 
-        const auto bottomStatusBarAvail = ImGui::GetContentRegionMax();
-        // Status bar at bottom
-        ImGui::BeginChild("##status_bar", { 0.0f, bottomStatusBarAvail.y }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
-
-        ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
-        if (UI::Button("Content Browser", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_PLUS))
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 8.0f * scale, 5.0f * scale });
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 5.0f * scale, 0.0f });
+        if (ImGui::BeginChild("##status_bar", { 0.0f, barHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar))
         {
-            ++m_PendingContentBrowserPanelsToAdd;
-        }
-        ImGui::EndDisabled();
-
-        if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
-        {
-            ImGui::SameLine();
-            UI::ProgressBar(m_LoadingProgress, ImVec2(140.0f, 16.0f));
-        }
-
-        if (m_ActiveScene && m_ActiveProject && !m_State.isLoading && IsSceneGIOutOfDate(m_ActiveScene.get()))
-        {
-            ImGui::SameLine();
-            const bool isBaking = m_GIBaker && m_GIBaker->IsBaking();
-            if (UI::Button("GI Out of Date - Rebake", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_SPARKLES, isBaking, isBaking))
+            ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
+            if (UI::Button("Content Browser", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_PLUS))
             {
-                Entity bakeVolume;
-                if (m_ScenePanel)
-                    bakeVolume = m_ScenePanel->GetSelectedEntity();
-                if (!bakeVolume || !bakeVolume.HasComponent<IrradianceVolumeComponent>())
+                ++m_PendingContentBrowserPanelsToAdd;
+            }
+            ImGui::EndDisabled();
+
+            if (m_ActiveScene && m_ActiveProject && !m_State.isLoading && IsSceneGIOutOfDate(m_ActiveScene.get()))
+            {
+                ImGui::SameLine();
+                const bool isBaking = m_GIBaker && m_GIBaker->IsBaking();
+                if (UI::Button("GI Out of Date - Rebake", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_SPARKLES, isBaking, isBaking))
                 {
-                    for (entt::entity e : m_ActiveScene->registry->view<IrradianceVolumeComponent>())
+                    Entity bakeVolume;
+                    if (m_ScenePanel)
+                        bakeVolume = m_ScenePanel->GetSelectedEntity();
+                    if (!bakeVolume || !bakeVolume.HasComponent<IrradianceVolumeComponent>())
                     {
-                        bakeVolume = Entity(e, m_ActiveScene.get());
-                        break;
+                        for (entt::entity e : m_ActiveScene->registry->view<IrradianceVolumeComponent>())
+                        {
+                            bakeVolume = Entity(e, m_ActiveScene.get());
+                            break;
+                        }
+                    }
+                    if (bakeVolume.IsValid() && m_GIBaker)
+                    {
+                        const std::string sceneName = m_CurrentSceneFilePath.empty()
+                            ? "Scene"
+                            : m_CurrentSceneFilePath.stem().string();
+
+                        const std::filesystem::path output = m_ActiveProject->GetDirectory()
+                            / "Baked" / sceneName / (std::to_string(static_cast<uint64_t>(bakeVolume.GetUUID())) + ".igi");
+
+                        m_BakeReflectionProbesAfterGI = false;
+                        if (m_GIBaker->StartBake(m_ActiveScene.get(), m_ActiveScene->GetAssetManager(), bakeVolume, output))
+                            m_State.giBakeModal = true;
                     }
                 }
-                if (bakeVolume.IsValid() && m_GIBaker)
-                {
-                    const std::string sceneName = m_CurrentSceneFilePath.empty()
-                        ? "Scene"
-                        : m_CurrentSceneFilePath.stem().string();
-
-                    const std::filesystem::path output = m_ActiveProject->GetDirectory()
-                        / "Baked" / sceneName / (std::to_string(static_cast<uint64_t>(bakeVolume.GetUUID())) + ".igi");
-
-                    m_BakeReflectionProbesAfterGI = false;
-                    if (m_GIBaker->StartBake(m_ActiveScene.get(), m_ActiveScene->GetAssetManager(), bakeVolume, output))
-                        m_State.giBakeModal = true;
-                }
             }
+
+            const std::string versionStr = std::format("FPS: {:.7} | Version: {}", ImGui::GetIO().Framerate, Application::GetVersionString());
+            float versionWidth = ImGui::CalcTextSize(versionStr.c_str()).x;
+            ImGui::SameLine(ImGui::GetWindowWidth() - versionWidth - 10.0f);
+            ImGui::TextUnformatted(versionStr.c_str());
         }
-
-        ImGui::SameLine();
-        ImGui::TextUnformatted(m_StatusText.c_str());
-
-        const std::string versionStr = std::format("FPS: {:.7} | Version: {}", ImGui::GetIO().Framerate, Application::GetVersionString());
-        float versionWidth = ImGui::CalcTextSize(versionStr.c_str()).x;
-        ImGui::SameLine(ImGui::GetWindowWidth() - versionWidth - 10.0f);
-        ImGui::TextUnformatted(versionStr.c_str());
-
         ImGui::EndChild();
+        ImGui::PopStyleVar(2);
 
         ImGui::End();
 
@@ -1366,6 +1358,8 @@ namespace ignite
         // Console window
         if (m_State.consoleWindow)
         {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 6.0f * scale, 6.0f * scale });
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 6.0f * scale, 6.0f * scale });
             if (ImGui::Begin("Console", &m_State.consoleWindow))
             {
                 const auto &logs = Logger::GetLogs();
@@ -1377,32 +1371,50 @@ namespace ignite
                 // Non static to re-create empty set
                 std::set<std::pair<std::string, size_t>> filteredConsoleLog;
 
-                // Clear Logs and Search Query
-                if (UI::Button("Clear", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 26.0f), ICON_LC_TRASH_2))
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 8.0f * scale, 5.0f * scale });
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 5.0f * scale, 0.0f });
+                if (ImGui::BeginChild("##console_control_bar", { 0.0f, barHeight }, ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
                 {
-                    consoleLogSearchResultStr.clear();
-                    std::memset(buffer, 0, sizeof(buffer));
-
-                    Logger::ClearLogs();
-                }
-
-                // Query search string
-                ImGui::SameLine();
-                UI::SearchField("##console_search", buffer, sizeof(buffer), "Filter logs...", 280.0f);
-
-                consoleLogSearchResultStr = std::string(buffer);
-                if (!consoleLogSearchResultStr.empty())
-                {
-                    std::string search = stringutils::ToLower(consoleLogSearchResultStr);
-                    for (size_t i = 0; i < logs.size(); ++i)
+                    // Clear Logs and Search Query
+                    if (UI::Button("Clear", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, buttonHeight), ICON_LC_TRASH_2))
                     {
-                        std::string messageLower = stringutils::ToLower(logs[i].message);
-                        if (messageLower.find(search) != std::string::npos)
+                        consoleLogSearchResultStr.clear();
+                        std::memset(buffer, 0, sizeof(buffer));
+
+                        Logger::ClearLogs();
+                    }
+
+                    // Query search string
+                    ImGui::SameLine();
+
+                    UI::TextField(
+                        "##console_search",
+                        buffer,
+                        sizeof(buffer),
+                        "Filter logs...",
+                        ImVec2(glm::round(280.0f * scale), buttonHeight),
+                        ICON_LC_SEARCH,
+                        true,
+                        ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
+
+                    consoleLogSearchResultStr = std::string(buffer);
+                    if (!consoleLogSearchResultStr.empty())
+                    {
+                        std::string search = stringutils::ToLower(consoleLogSearchResultStr);
+                        for (size_t i = 0; i < logs.size(); ++i)
                         {
-                            filteredConsoleLog.insert({ messageLower, i});
+                            std::string messageLower = stringutils::ToLower(logs[i].message);
+                            if (messageLower.find(search) != std::string::npos)
+                            {
+                                filteredConsoleLog.insert({ messageLower, i });
+                            }
                         }
                     }
                 }
+                ImGui::EndChild();
+                ImGui::PopStyleVar(2);
+                
 
                 ImGui::Separator();
                 if (ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar))
@@ -1455,6 +1467,7 @@ namespace ignite
                 ImGui::EndChild();
             }
             ImGui::End();
+            ImGui::PopStyleVar(2);
         }
 
         // Draw UI
@@ -2251,6 +2264,7 @@ namespace ignite
                 {
                     sr.AddKeyValue("Console", m_State.consoleWindow);
                     sr.AddKeyValue("Network", m_State.networkWindow);
+                    sr.AddKeyValue("SceneRenderer", m_State.sceneRendererWindow);
                     sr.AddKeyValue("GameplayViewport", m_State.gameplayViewportWindow);
                 }
                 sr.EndMap();
@@ -2269,6 +2283,7 @@ namespace ignite
                         sr.AddKeyValue("NearPlane", camera.nearPlane);
                         sr.AddKeyValue("OrthoSize", camera.orthoSize);
                         sr.AddKeyValue("Distance", camera.GetDistance());
+                        sr.AddKeyValue("FocusTarget", camera.GetTarget());
                         sr.AddKeyValue("ProjectionType", static_cast<int>(camera.projectionType));
                     }
                     sr.EndMap();
@@ -2300,6 +2315,7 @@ namespace ignite
         {
             if (windowsNode["Console"]) m_State.consoleWindow = windowsNode["Console"].as<bool>();
             if (windowsNode["Network"]) m_State.networkWindow = windowsNode["Network"].as<bool>();
+            if (windowsNode["SceneRenderer"]) m_State.sceneRendererWindow = windowsNode["SceneRenderer"].as<bool>();
             if (windowsNode["GameplayViewport"]) m_State.gameplayViewportWindow = windowsNode["GameplayViewport"].as<bool>();
         }
 
@@ -2316,7 +2332,10 @@ namespace ignite
                 if (cameraNode["NearPlane"]) camera.nearPlane = cameraNode["NearPlane"].as<float>();
                 if (cameraNode["OrthoSize"]) camera.orthoSize = cameraNode["OrthoSize"].as<float>();
                 if (cameraNode["Distance"]) camera.SetDistance(cameraNode["Distance"].as<float>());
+                if (cameraNode["FocusTarget"]) camera.SetTarget(cameraNode["FocusTarget"].as<glm::vec3>());
                 if (cameraNode["ProjectionType"]) camera.projectionType = static_cast<ProjectionType>(cameraNode["ProjectionType"].as<int>());
+                camera.UpdateCameraPosition(0.0f);
+                camera.UpdateView();
             }
         }
     }
@@ -3197,130 +3216,10 @@ namespace ignite
 
     void EditorLayer::UISceneRenderer()
     {
-        ImGui::Begin("Scene Renderer");
+        if (!m_State.sceneRendererWindow)
+            return;
 
-        // Shaders
-        if (ImGui::TreeNodeEx("Shaders", ImGuiTreeNodeFlags_Framed))
-        {
-            for (auto &[key, shader] : Shader::GetShaderCache())
-            {
-                ImGui::PushID(key.filename.c_str());
-                ImGui::Text(shader->GetName().c_str());
-                ImGui::SameLine();
-                if (ImGui::Button("Reload"))
-                {
-                    shader->Recompile();
-                }
-
-                ImGui::PopID();
-
-            }
-            ImGui::TreePop();
-        }
-
-        // Render Stats
-        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed))
-        {
-            const auto &stats = Renderer::Stats;
-
-            // Helper lambda to format bytes as KB or MB
-            auto fmtBytes = [](size_t bytes, char *buf, size_t bufLen)
-            {
-                if (bytes >= 1024u * 1024u)
-                    snprintf(buf, bufLen, "%.1f MB", bytes / (1024.0f * 1024.0f));
-                else
-                    snprintf(buf, bufLen, "%zu KB", bytes / 1024u);
-            };
-            char memBuf[32];
-
-            ImGui::SeparatorText("3D Renderer");
-            ImGui::Text("Draw Calls (opaque+transparent): %zu", stats.drawCallCount);
-            ImGui::Text("Shadow Draw Calls (CSM) %zu", stats.shadowDrawCallCount);
-            ImGui::Text("Static Meshes Drawn: %zu", stats.staticMeshCount);
-            ImGui::Text("Skeletal Meshes Drawn: %zu", stats.skeletalMeshCount);
-            ImGui::Text("Indices Submitted: %zu", stats.indexCount3D);
-
-            ImGui::Spacing();
-            ImGui::SeparatorText("2D Renderer");
-            ImGui::Text("Quads: %zu", stats.quadCount);
-            ImGui::Text("Lines: %zu", stats.lineCount);
-            ImGui::Text("Circles: %zu", stats.circleCount);
-            ImGui::Text("Text Glyphs: %zu", stats.textCount);
-            ImGui::Text("Point Lights 2D: %zu", stats.pointLight2dCount);
-
-            ImGui::Spacing();
-            ImGui::SeparatorText("GPU Buffer Memory");
-            fmtBytes(stats.gpuVertexBufferBytes, memBuf, sizeof(memBuf));
-            ImGui::Text("Vertex Buffers: %s", memBuf);
-            fmtBytes(stats.gpuIndexBufferBytes, memBuf, sizeof(memBuf));
-            ImGui::Text("Index Buffers: %s", memBuf);
-            fmtBytes(stats.gpuConstantBufferBytes, memBuf, sizeof(memBuf));
-            ImGui::Text("Constant Buffers: %s", memBuf);
-            const size_t totalGpu = stats.gpuVertexBufferBytes + stats.gpuIndexBufferBytes + stats.gpuConstantBufferBytes;
-            fmtBytes(totalGpu, memBuf, sizeof(memBuf));
-            ImGui::Separator();
-            ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Total GPU Buffers: %s", memBuf);
-
-            ImGui::Spacing();
-            ImGui::SeparatorText("2D Batch Buffer Sizes");
-            fmtBytes(stats.quadVerticesSize + stats.quadIndicesSize, memBuf, sizeof(memBuf));
-            ImGui::Text("Quad VB+IB: %s", memBuf);
-            fmtBytes(stats.lineVerticesSize, memBuf, sizeof(memBuf));
-            ImGui::Text("Line VB: %s", memBuf);
-            fmtBytes(stats.circleVerticesSize + stats.circleIndicesSize, memBuf, sizeof(memBuf));
-            ImGui::Text("Circle VB+IB:%s", memBuf);
-            fmtBytes(stats.textVerticesSize + stats.textIndicesSize, memBuf, sizeof(memBuf));
-            ImGui::Text("Text VB+IB: %s", memBuf);
-
-            ImGui::Spacing();
-            ImGui::SeparatorText("Active Graphics Pipelines");
-            if (stats.pipelineCounts.empty())
-            {
-                ImGui::Text("None");
-            }
-            else
-            {
-                for (const auto& [name, count] : stats.pipelineCounts)
-                {
-                    ImGui::Text("%s: %zu", name.c_str(), count);
-                }
-            }
-
-            ImGui::Spacing();
-            ImGui::SeparatorText("Active Binding Sets");
-            if (stats.bindingSetCounts.empty())
-            {
-                ImGui::Text("None");
-            }
-            else
-            {
-                for (const auto& [name, count] : stats.bindingSetCounts)
-                {
-                    ImGui::Text("%s: %zu", name.c_str(), count);
-                }
-            }
-
-            ImGui::Spacing();
-            ImGui::SeparatorText("GPU Pass Timings (ms)");
-            const auto &timings = m_SceneRenderer->GetLastGPUTimingsMs();
-            if (timings.empty())
-            {
-                ImGui::Text("No GPU timestamps available");
-            }
-            else
-            {
-                double totalMs = 0.0;
-                for (const auto &[zoneName, ms] : timings)
-                {
-                    totalMs += ms;
-                    ImGui::Text("%s: %.3f ms", zoneName.c_str(), ms);
-                }
-                ImGui::Separator();
-                ImGui::Text("Total Timed: %.3f ms", totalMs);
-            }
-
-            ImGui::TreePop();
-        }
+        ImGui::Begin("Scene Renderer", &m_State.sceneRendererWindow);
 
         // Scene Render
         if (ImGui::TreeNodeEx("Render Settings", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
@@ -3436,6 +3335,134 @@ namespace ignite
                 }
 
                 ImGui::TreePop();
+            }
+
+            ImGui::TreePop();
+        }
+
+        // Shaders
+        if (ImGui::TreeNodeEx("Shaders", ImGuiTreeNodeFlags_Framed))
+        {
+            for (auto &[key, shader] : Shader::GetShaderCache())
+            {
+                constexpr float buttonW = 24.0f;
+                const float w = ImGui::GetContentRegionAvail().x - buttonW;
+
+                ImGui::PushID(key.filename.c_str());
+                ImGui::SetNextItemWidth(w);
+                ImGui::Text(shader->GetName().c_str());
+                ImGui::SameLine();
+
+                if (UI::Button("##recompile_shader", UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, ImVec2(buttonW, 0.0f), ICON_LC_ROTATE_CW))
+                {
+                    shader->Recompile();
+                }
+
+                ImGui::PopID();
+
+            }
+            ImGui::TreePop();
+        }
+
+        // Render Stats
+        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed))
+        {
+            const auto &stats = Renderer::Stats;
+
+            // Helper lambda to format bytes as KB or MB
+            auto fmtBytes = [ ](size_t bytes, char *buf, size_t bufLen)
+            {
+                if (bytes >= 1024u * 1024u)
+                    snprintf(buf, bufLen, "%.1f MB", bytes / (1024.0f * 1024.0f));
+                else
+                    snprintf(buf, bufLen, "%zu KB", bytes / 1024u);
+            };
+            char memBuf[32];
+
+            ImGui::SeparatorText("3D Renderer");
+            ImGui::Text("Draw Calls (opaque+transparent): %zu", stats.drawCallCount);
+            ImGui::Text("Shadow Draw Calls (CSM) %zu", stats.shadowDrawCallCount);
+            ImGui::Text("Static Meshes Drawn: %zu", stats.staticMeshCount);
+            ImGui::Text("Skeletal Meshes Drawn: %zu", stats.skeletalMeshCount);
+            ImGui::Text("Indices Submitted: %zu", stats.indexCount3D);
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("2D Renderer");
+            ImGui::Text("Quads: %zu", stats.quadCount);
+            ImGui::Text("Lines: %zu", stats.lineCount);
+            ImGui::Text("Circles: %zu", stats.circleCount);
+            ImGui::Text("Text Glyphs: %zu", stats.textCount);
+            ImGui::Text("Point Lights 2D: %zu", stats.pointLight2dCount);
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("GPU Buffer Memory");
+            fmtBytes(stats.gpuVertexBufferBytes, memBuf, sizeof(memBuf));
+            ImGui::Text("Vertex Buffers: %s", memBuf);
+            fmtBytes(stats.gpuIndexBufferBytes, memBuf, sizeof(memBuf));
+            ImGui::Text("Index Buffers: %s", memBuf);
+            fmtBytes(stats.gpuConstantBufferBytes, memBuf, sizeof(memBuf));
+            ImGui::Text("Constant Buffers: %s", memBuf);
+            const size_t totalGpu = stats.gpuVertexBufferBytes + stats.gpuIndexBufferBytes + stats.gpuConstantBufferBytes;
+            fmtBytes(totalGpu, memBuf, sizeof(memBuf));
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Total GPU Buffers: %s", memBuf);
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("2D Batch Buffer Sizes");
+            fmtBytes(stats.quadVerticesSize + stats.quadIndicesSize, memBuf, sizeof(memBuf));
+            ImGui::Text("Quad VB+IB: %s", memBuf);
+            fmtBytes(stats.lineVerticesSize, memBuf, sizeof(memBuf));
+            ImGui::Text("Line VB: %s", memBuf);
+            fmtBytes(stats.circleVerticesSize + stats.circleIndicesSize, memBuf, sizeof(memBuf));
+            ImGui::Text("Circle VB+IB:%s", memBuf);
+            fmtBytes(stats.textVerticesSize + stats.textIndicesSize, memBuf, sizeof(memBuf));
+            ImGui::Text("Text VB+IB: %s", memBuf);
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("Active Graphics Pipelines");
+            if (stats.pipelineCounts.empty())
+            {
+                ImGui::Text("None");
+            }
+            else
+            {
+                for (const auto &[name, count] : stats.pipelineCounts)
+                {
+                    ImGui::Text("%s: %zu", name.c_str(), count);
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("Active Binding Sets");
+            if (stats.bindingSetCounts.empty())
+            {
+                ImGui::Text("None");
+            }
+            else
+            {
+                for (const auto &[name, count] : stats.bindingSetCounts)
+                {
+                    ImGui::Text("%s: %zu", name.c_str(), count);
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::SeparatorText("GPU Pass Timings (ms)");
+            const auto &timings = m_SceneRenderer->GetLastGPUTimingsMs();
+            if (timings.empty())
+            {
+                ImGui::Text("No GPU timestamps available");
+            }
+            else
+            {
+                double totalMs = 0.0;
+                for (const auto &[zoneName, ms] : timings)
+                {
+                    totalMs += ms;
+                    ImGui::Text("%s: %.3f ms", zoneName.c_str(), ms);
+                }
+                ImGui::Separator();
+                ImGui::Text("Total Timed: %.3f ms", totalMs);
             }
 
             ImGui::TreePop();

@@ -56,6 +56,7 @@ namespace ignite
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;
             bool gameplayViewportWindow = false;
+            bool sceneRendererWindow = false;
             bool consoleWindow = true;
             bool networkWindow = true;
             bool giBakeModal = false;

@@ -411,7 +411,7 @@ namespace ignite
             {
                 UI::ScopedFont smallFont(UI::FontVariant::Small);
                 const ImVec2 icSz = ImGui::CalcTextSize(vis.icon);
-                const float iconY = itemMin.y + std::round((rowH - icSz.y) * 0.5f);
+                const float iconY = itemMin.y + glm::round((rowH - icSz.y) * 0.5f);
                 dl->AddText(ImVec2(iconX, iconY), UI::ToU32(vis.color), vis.icon);
             }
         }
@@ -536,7 +536,7 @@ namespace ignite
             const auto projectDir = m_EditorLayer->GetActiveProject()->GetDirectory();
 
             // Navigation bar (38px crisp shadcn bar with Lucide icons, breadcrumbs, search & recursive toggle)
-            const float navBarH = std::round(36.0f * scale);
+            const float navBarH = glm::round(36.0f * scale);
             ImGui::PushStyleColor(ImGuiCol_ChildBg, UI::ToImVec4(theme.card));
             ImGui::PushStyleColor(ImGuiCol_Border, UI::ToImVec4(theme.border));
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * scale, 5.0f * scale));
@@ -614,16 +614,16 @@ namespace ignite
                 ImGui::SameLine(0.0f, 6.0f * scale);
                 {
                     const ImVec2 sp = ImGui::GetCursorScreenPos();
-                    const float lineH = std::round(18.0f * scale);
-                    const float lineY = sp.y + std::round((std::round(24.0f * scale) - lineH) * 0.5f);
+                    const float lineH = glm::round(18.0f * scale);
+                    const float lineY = sp.y + glm::round((glm::round(24.0f * scale) - lineH) * 0.5f);
                     ImGui::GetWindowDrawList()->AddLine(ImVec2(sp.x, lineY), ImVec2(sp.x, lineY + lineH), UI::ToU32(theme.border), 1.0f);
-                    ImGui::Dummy(ImVec2(1.0f, std::round(24.0f * scale)));
+                    ImGui::Dummy(ImVec2(1.0f, glm::round(24.0f * scale)));
                 }
 
                 // Breadcrumbs on the left, Search + Recursive on the right
-                const float searchW = std::round(210.0f * scale);
-                const float recursiveW = std::round(96.0f * scale);
-                const float rightGroupW = searchW + recursiveW + std::round(14.0f * scale);
+                const float searchW = glm::round(210.0f * scale);
+                const float recursiveW = glm::round(96.0f * scale);
+                const float rightGroupW = searchW + recursiveW + glm::round(14.0f * scale);
 
                 std::vector<std::pair<std::string, std::filesystem::path>> crumbs;
                 const std::string rootName = projectDir.filename().string().empty()
@@ -646,11 +646,11 @@ namespace ignite
                     }
                 }
 
-                const float btnH = std::round(24.0f * scale);
+                const float btnH = glm::round(24.0f * scale);
                 for (size_t cIdx = 0; cIdx < crumbs.size(); ++cIdx)
                 {
                     const float availBeforeRight = ImGui::GetContentRegionAvail().x - rightGroupW;
-                    if (cIdx > 0 && availBeforeRight < std::round(56.0f * scale))
+                    if (cIdx > 0 && availBeforeRight < glm::round(56.0f * scale))
                         break;
 
                     if (cIdx > 0)
@@ -683,11 +683,11 @@ namespace ignite
                     ImGui::PopID();
                 }
 
-                const float rightStartX = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - rightGroupW - std::round(8.0f * scale);
-                if (rightStartX > ImGui::GetItemRectMax().x + std::round(8.0f * scale))
+                const float rightStartX = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - rightGroupW - glm::round(8.0f * scale);
+                if (rightStartX > ImGui::GetItemRectMax().x + glm::round(8.0f * scale))
                 {
                     ImGui::SameLine();
-                    ImGui::SetCursorScreenPos(ImVec2(rightStartX, ImGui::GetWindowPos().y + std::round(5.0f * scale)));
+                    ImGui::SetCursorScreenPos(ImVec2(rightStartX, ImGui::GetWindowPos().y + glm::round(5.0f * scale)));
                 }
                 else
                 {
@@ -724,7 +724,7 @@ namespace ignite
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f * scale, 1.0f * scale));
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * scale, 3.0f * scale));
 
-                if (ImGui::BeginChild("left_item_browser", { std::round(240.0f * scale), 0.0f }, ImGuiChildFlags_ResizeX | ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding))
+                if (ImGui::BeginChild("left_item_browser", { glm::round(240.0f * scale), 0.0f }, ImGuiChildFlags_ResizeX | ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding))
                 {
                     if (!m_TreeNodes.empty())
                     {
@@ -756,7 +756,7 @@ namespace ignite
                             {
                                 UI::ScopedFont smallFont(UI::FontVariant::Small);
                                 const ImVec2 icSz = ImGui::CalcTextSize(rootIcon);
-                                dl->AddText(ImVec2(iconX, rootMin.y + std::round((rowH - icSz.y) * 0.5f)), UI::ToU32(UI::Accent::Folder), rootIcon);
+                                dl->AddText(ImVec2(iconX, rootMin.y + glm::round((rowH - icSz.y) * 0.5f)), UI::ToU32(UI::Accent::Folder), rootIcon);
                             }
                         }
 
@@ -831,7 +831,7 @@ namespace ignite
                 ImGui::PopStyleColor(5);
             }
 
-            ImGui::SameLine(0.0f, 6.0f * scale);
+            ImGui::SameLine(0.0f, 4.0f * scale);
 
             // File list (asset grid cards)
             {
@@ -887,12 +887,12 @@ namespace ignite
                             }
                         }
 
-                        const float spacing = std::round(10.0f * scale);
-                        const float cardPad = std::round(6.0f * scale);
+                        const float spacing = glm::round(10.0f * scale);
+                        const float cardPad = glm::round(6.0f * scale);
                         const float thumbSize = static_cast<float>(m_ThumbnailSize);
                         const float itemWidth = thumbSize + cardPad * 2.0f;
-                        const float labelH = std::round(32.0f * scale);
-                        const float cardHeight = cardPad + thumbSize + std::round(6.0f * scale) + labelH + std::round(4.0f * scale);
+                        const float labelH = glm::round(32.0f * scale);
+                        const float cardHeight = cardPad + thumbSize + glm::round(6.0f * scale) + labelH + glm::round(4.0f * scale);
                         const float contentWidth = ImGui::GetContentRegionAvail().x;
 
                         const int itemPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (itemWidth + spacing)));
@@ -1923,11 +1923,11 @@ namespace ignite
 
         const auto &theme = UI::GetTheme();
         const float scale = std::max(UI::GetDpiScale(), 1.0f);
-        const float cardPad = std::round(6.0f * scale);
+        const float cardPad = glm::round(6.0f * scale);
         const float thumbSize = static_cast<float>(m_ThumbnailSize);
         const float cardW = thumbSize + cardPad * 2.0f;
-        const float labelH = std::round(32.0f * scale);
-        const float cardH = cardPad + thumbSize + std::round(6.0f * scale) + labelH + std::round(4.0f * scale);
+        const float labelH = glm::round(32.0f * scale);
+        const float cardH = cardPad + thumbSize + glm::round(6.0f * scale) + labelH + glm::round(4.0f * scale);
 
         ImGui::BeginGroup();
 
@@ -1975,8 +1975,8 @@ namespace ignite
         else
         {
             // Clean vector Lucide emblem inside well (for folders, code scripts, audio, or pending thumbnails)
-            const float badgeSize = std::round(std::clamp(thumbSize * 0.50f, 28.0f, 44.0f));
-            const ImVec2 bMin(wellMin.x + std::round((thumbSize - badgeSize) * 0.5f), wellMin.y + std::round((thumbSize - badgeSize) * 0.5f));
+            const float badgeSize = glm::round(glm::clamp(thumbSize * 0.50f, 28.0f, 44.0f));
+            const ImVec2 bMin(wellMin.x + glm::round((thumbSize - badgeSize) * 0.5f), wellMin.y + glm::round((thumbSize - badgeSize) * 0.5f));
             const ImVec2 bMax(bMin.x + badgeSize, bMin.y + badgeSize);
             drawList->AddRectFilled(bMin, bMax, UI::ToU32(theme.secondary), 0.0f);
             drawList->AddRect(bMin, bMax, UI::ToU32(UI::WithAlpha(visual.color, 0.45f)), 0.0f, 0, 1.0f);
@@ -1985,7 +1985,7 @@ namespace ignite
                 UI::ScopedFont largeFont(UI::FontVariant::Bold);
                 const ImVec2 icSz = ImGui::CalcTextSize(visual.icon);
                 drawList->AddText(
-                    ImVec2(bMin.x + std::round((badgeSize - icSz.x) * 0.5f), bMin.y + std::round((badgeSize - icSz.y) * 0.5f)),
+                    ImVec2(bMin.x + glm::round((badgeSize - icSz.x) * 0.5f), bMin.y + glm::round((badgeSize - icSz.y) * 0.5f)),
                     UI::ToU32(visual.color),
                     visual.icon);
             }
@@ -1997,7 +1997,7 @@ namespace ignite
         // Filename (clipped cleanly) & asset type subtitle
         const std::string displayName = isDirectory ? item.filename().generic_string() : item.stem().generic_string();
         const float textX = cardMin.x + cardPad;
-        const float textY = wellMax.y + std::round(5.0f * scale);
+        const float textY = wellMax.y + glm::round(5.0f * scale);
         const ImVec4 nameClip(textX, textY, cardMax.x - cardPad, cardMax.y);
         {
             UI::ScopedFont smallFont(UI::FontVariant::Small);
@@ -2005,7 +2005,7 @@ namespace ignite
         }
         {
             UI::ScopedFont tinyFont(UI::FontVariant::Tiny);
-            const float subY = textY + std::round(15.0f * scale);
+            const float subY = textY + glm::round(15.0f * scale);
             drawList->AddText(nullptr, 0.0f, ImVec2(textX, subY), UI::ToU32(theme.mutedForeground), visual.typeBadge, nullptr, 0.0f, &nameClip);
         }
 
@@ -2247,7 +2247,7 @@ namespace ignite
             if (metadata.type == AssetType::SpriteSheet && handle != AssetHandle(0))
             {
                 const std::string popupId = std::format("##sprites_popup_{}", item.generic_string());
-                ImGui::SetCursorScreenPos(ImVec2(wellMax.x - std::round(24.0f * scale), wellMin.y + std::round(2.0f * scale)));
+                ImGui::SetCursorScreenPos(ImVec2(wellMax.x - glm::round(24.0f * scale), wellMin.y + glm::round(2.0f * scale)));
                 if (UI::IconButton("##sprites_btn", ICON_LC_GRID_2X2, UI::ButtonVariant::Secondary, UI::ButtonSize::IconSm, "Browse Sprites"))
                 {
                     ImGui::OpenPopup(popupId.c_str());
@@ -3193,7 +3193,7 @@ namespace ignite
 
         const uint64_t panelGeneration = s_SharedThumbnailLoadGeneration;
         const std::filesystem::path capturedPath = filepath;
-        const uint32_t thumbnailSize = static_cast<uint32_t>(std::max(16, m_ThumbnailSize));
+        const auto thumbnailSize = static_cast<uint32_t>(std::max(16, m_ThumbnailSize));
 
         ThumbnailRequest req{};
         req.handle = handle;
@@ -3415,16 +3415,6 @@ namespace ignite
                     return;
                 }
 
-                // -----------------------------------------------------------------------
-                // KEY FIX: Downsample to thumbnail size on the CPU *before* uploading.
-                //
-                // The original code called Texture::Create(filepath, createInfo, nullptr)
-                // which ignores createInfo.width/height and loads the full resolution image
-                // (e.g. an 8K x 4K HDR = 128MB GPU allocation just for a 96px thumbnail).
-                // With many HDR files, this easily causes ~300-600 MB growth per reload cycle
-                // and the unload only freed the Ref but deferred deletion kept them
-                // alive long enough for the next reload to stack on top.
-                // -----------------------------------------------------------------------
                 const uint64_t resizedSize = static_cast<uint64_t>(destWidth) * destHeight * kChannels;
                 destPixels.resize(resizedSize);
                 texture_utils::DownSample(srcPixels.data(), destPixels.data(), srcWidth, srcHeight, destWidth, destHeight, kChannels);
@@ -3434,7 +3424,7 @@ namespace ignite
 
             // -----------------------------------------------------------------------
             // RENDER THREAD: Create GPU texture from the tiny downsampled buffer.
-            // GPU object creation happens here — never on a worker thread.
+            // GPU object creation happens here - never on a worker thread.
             // -----------------------------------------------------------------------
             Application::SubmitToRenderThread([this, capturedPath, destPixels = destPixels, destWidth, destHeight, requestGeneration]() mutable
             {
@@ -3472,7 +3462,6 @@ namespace ignite
                 createInfo.samplerLinearFiltering = true;
 
                 Ref<Texture> loadedTexture = Texture::Create(destPixels, createInfo, nullptr);
-
                 if (!loadedTexture)
                 {
                     s_SharedThumbnails.erase(capturedPath);
@@ -3517,25 +3506,15 @@ namespace ignite
         for (const auto& [path, thumbnail] : s_SharedThumbnails)
         {
             const bool isStale = (s_SharedCurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold;
-
-            // Unload stale GPU thumbnails and also stale placeholders to prevent map growth.
-            // Keep placeholders that are currently loading to avoid duplicate in-flight reloads.
             if (isStale && (thumbnail.thumbnail || !s_SharedThumbnailLoadsInFlight.contains(path)))
             {
                 toUnload.push_back(path);
             }
         }
 
-        // Unload the thumbnails — erase from the map FIRST so that any in-flight
-        // SubmitWorkerCommandList callbacks that fire after this point will find no
-        // entry in s_SharedThumbnails and will safely drop their loadedTexture Ref
-        // instead of re-inserting a freshly uploaded texture into an evicted slot.
         for (const auto& path : toUnload)
         {
-            // Cancel in-flight loads for this path so the callback knows to drop the texture.
             s_SharedThumbnailLoadsInFlight.erase(path);
-            // Erase the map entry. Dropping the Ref<Texture> here releases the CPU buffer
-            // and allows the GPU resource ref-count to fall to zero once the GPU is done.
             s_SharedThumbnails.erase(path);
         }
     }
@@ -3547,7 +3526,6 @@ namespace ignite
         s_SharedThumbnails.clear();
         s_SharedThumbnailLoadsInFlight.clear();
 
-        // Clear the pending load queue
         while (!s_SharedPendingThumbnailLoads.empty())
         {
             s_SharedPendingThumbnailLoads.pop();
