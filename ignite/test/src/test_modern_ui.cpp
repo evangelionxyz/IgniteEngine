@@ -38,7 +38,7 @@ namespace ignite::tests
                 unsigned char *pixels = nullptr;
                 int w = 0, h = 0;
                 io.Fonts->GetTexDataAsRGBA32(&pixels, &w, &h);
-                io.Fonts->TexID = reinterpret_cast<ImTextureID>(static_cast<uintptr_t>(1));
+                io.Fonts->TexID = ImTextureID(static_cast<ImU64>(1));
             }
 
             ~ScopedHeadlessUIContext()

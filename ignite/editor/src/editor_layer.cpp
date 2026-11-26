@@ -410,6 +410,8 @@ namespace ignite
                     m_ActiveScene->OnUpdateEdit(deltaTime);
                     break;
                 }
+                case ESceneState::None:
+                default: break;
             }
 
             m_ScenePanel->OnUpdate(deltaTime);
