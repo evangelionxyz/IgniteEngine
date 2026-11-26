@@ -1767,6 +1767,7 @@ namespace ignite
 
         if (m_DebugProbePipelineLayout)
         {
+            BindingSet::OnPipelineLayoutDestroyed(m_DebugProbePipelineLayout);
             nri.DestroyPipelineLayout(m_DebugProbePipelineLayout);
             m_DebugProbePipelineLayout = nullptr;
         }

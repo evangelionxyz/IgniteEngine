@@ -152,6 +152,7 @@ namespace ignite
         m_BindingLayouts.clear();
 
         BindingCache::Shutdown();
+        BindingSet::ShutdownPool();
         BindlessSystem::Shutdown();
     }
 
@@ -185,6 +186,7 @@ namespace ignite
 
         m_FrameCounter = frameCounter;
 
+        BindingSet::AdvanceFrame(frameCounter);
         BindlessSystem::FlushPendingWrites();
         Renderer2D::ClearRetiredBuffers(frameCounter);
 

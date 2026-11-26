@@ -394,11 +394,13 @@ namespace ignite
             const auto &nri = dm->GetCoreInterface();
             if (staticPipelineLayout)
             {
+                BindingSet::OnPipelineLayoutDestroyed(staticPipelineLayout);
                 nri.DestroyPipelineLayout(staticPipelineLayout);
                 staticPipelineLayout = nullptr;
             }
             if (animPipelineLayout)
             {
+                BindingSet::OnPipelineLayoutDestroyed(animPipelineLayout);
                 nri.DestroyPipelineLayout(animPipelineLayout);
                 animPipelineLayout = nullptr;
             }

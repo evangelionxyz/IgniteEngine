@@ -247,9 +247,9 @@ namespace ignite
         if (m_MainPipeline) { nri.DestroyPipeline(m_MainPipeline); m_MainPipeline = nullptr; }
         if (m_DenoisePipeline) { nri.DestroyPipeline(m_DenoisePipeline); m_DenoisePipeline = nullptr; }
 
-        if (m_PrefilterPipelineLayout) { nri.DestroyPipelineLayout(m_PrefilterPipelineLayout); m_PrefilterPipelineLayout = nullptr; }
-        if (m_MainPipelineLayout) { nri.DestroyPipelineLayout(m_MainPipelineLayout); m_MainPipelineLayout = nullptr; }
-        if (m_DenoisePipelineLayout) { nri.DestroyPipelineLayout(m_DenoisePipelineLayout); m_DenoisePipelineLayout = nullptr; }
+        if (m_PrefilterPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_PrefilterPipelineLayout); nri.DestroyPipelineLayout(m_PrefilterPipelineLayout); m_PrefilterPipelineLayout = nullptr; }
+        if (m_MainPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_MainPipelineLayout); nri.DestroyPipelineLayout(m_MainPipelineLayout); m_MainPipelineLayout = nullptr; }
+        if (m_DenoisePipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_DenoisePipelineLayout); nri.DestroyPipelineLayout(m_DenoisePipelineLayout); m_DenoisePipelineLayout = nullptr; }
     }
 
     void GTAO::EnsurePipelines()

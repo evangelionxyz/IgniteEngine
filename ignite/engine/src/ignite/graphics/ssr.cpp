@@ -217,9 +217,9 @@ namespace ignite
         if (m_TracePipeline) { nri.DestroyPipeline(m_TracePipeline); m_TracePipeline = nullptr; }
         if (m_DenoisePipeline) { nri.DestroyPipeline(m_DenoisePipeline); m_DenoisePipeline = nullptr; }
 
-        if (m_HiZPipelineLayout) { nri.DestroyPipelineLayout(m_HiZPipelineLayout); m_HiZPipelineLayout = nullptr; }
-        if (m_TracePipelineLayout) { nri.DestroyPipelineLayout(m_TracePipelineLayout); m_TracePipelineLayout = nullptr; }
-        if (m_DenoisePipelineLayout) { nri.DestroyPipelineLayout(m_DenoisePipelineLayout); m_DenoisePipelineLayout = nullptr; }
+        if (m_HiZPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_HiZPipelineLayout); nri.DestroyPipelineLayout(m_HiZPipelineLayout); m_HiZPipelineLayout = nullptr; }
+        if (m_TracePipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_TracePipelineLayout); nri.DestroyPipelineLayout(m_TracePipelineLayout); m_TracePipelineLayout = nullptr; }
+        if (m_DenoisePipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_DenoisePipelineLayout); nri.DestroyPipelineLayout(m_DenoisePipelineLayout); m_DenoisePipelineLayout = nullptr; }
     }
 
     void SSR::EnsurePipelines()

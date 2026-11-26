@@ -5,6 +5,7 @@
 #include "gpu_upload_sync.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/graphics/binding_set.hpp"
 
 #include <condition_variable>
 
@@ -53,13 +54,16 @@ namespace ignite
     {
         auto doWaitIdle = [&]()
         {
-            std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
-            auto *deviceManager = DeviceManager::GetInstance();
-            nri::Device *dev = device ? device : (deviceManager ? deviceManager->GetDevice() : nullptr);
-            if (dev && deviceManager)
             {
-                deviceManager->GetCoreInterface().DeviceWaitIdle(dev);
+                std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
+                auto *deviceManager = DeviceManager::GetInstance();
+                nri::Device *dev = device ? device : (deviceManager ? deviceManager->GetDevice() : nullptr);
+                if (dev && deviceManager)
+                {
+                    deviceManager->GetCoreInterface().DeviceWaitIdle(dev);
+                }
             }
+            BindingSet::ReclaimRetiredBeforeCurrentFrame();
         };
 
         auto *app = Application::GetInstance();

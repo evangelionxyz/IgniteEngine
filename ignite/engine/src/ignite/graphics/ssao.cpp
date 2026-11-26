@@ -251,11 +251,13 @@ namespace ignite
             }
             if (m_AOPipelineLayout)
             {
+                BindingSet::OnPipelineLayoutDestroyed(m_AOPipelineLayout);
                 nri.DestroyPipelineLayout(m_AOPipelineLayout);
                 m_AOPipelineLayout = nullptr;
             }
             if (m_BlurPipelineLayout)
             {
+                BindingSet::OnPipelineLayoutDestroyed(m_BlurPipelineLayout);
                 nri.DestroyPipelineLayout(m_BlurPipelineLayout);
                 m_BlurPipelineLayout = nullptr;
             }

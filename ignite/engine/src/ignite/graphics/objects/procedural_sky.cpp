@@ -21,9 +21,9 @@ namespace ignite
             if (m_MultiScatteringPipeline) nri.DestroyPipeline(m_MultiScatteringPipeline);
             if (m_SkyViewPipeline) nri.DestroyPipeline(m_SkyViewPipeline);
 
-            if (m_TransmittancePipelineLayout) nri.DestroyPipelineLayout(m_TransmittancePipelineLayout);
-            if (m_MultiScatteringPipelineLayout) nri.DestroyPipelineLayout(m_MultiScatteringPipelineLayout);
-            if (m_SkyViewPipelineLayout) nri.DestroyPipelineLayout(m_SkyViewPipelineLayout);
+            if (m_TransmittancePipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_TransmittancePipelineLayout); nri.DestroyPipelineLayout(m_TransmittancePipelineLayout); }
+            if (m_MultiScatteringPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_MultiScatteringPipelineLayout); nri.DestroyPipelineLayout(m_MultiScatteringPipelineLayout); }
+            if (m_SkyViewPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_SkyViewPipelineLayout); nri.DestroyPipelineLayout(m_SkyViewPipelineLayout); }
 
             if (m_LinearSampler) nri.DestroyDescriptor(m_LinearSampler);
         }

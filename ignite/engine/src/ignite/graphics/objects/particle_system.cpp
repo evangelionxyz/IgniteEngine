@@ -61,7 +61,12 @@ namespace ignite
         {
             auto &nri = dm->GetNRI();
             if (m_ComputePipeline) { nri.DestroyPipeline(m_ComputePipeline); m_ComputePipeline = nullptr; }
-            if (m_ComputePipelineLayout) { nri.DestroyPipelineLayout(m_ComputePipelineLayout); m_ComputePipelineLayout = nullptr; }
+            if (m_ComputePipelineLayout)
+            {
+                BindingSet::OnPipelineLayoutDestroyed(m_ComputePipelineLayout);
+                nri.DestroyPipelineLayout(m_ComputePipelineLayout);
+                m_ComputePipelineLayout = nullptr;
+            }
         }
         m_ComputeBindingSet = nullptr;
         m_RenderBindingSet = nullptr;

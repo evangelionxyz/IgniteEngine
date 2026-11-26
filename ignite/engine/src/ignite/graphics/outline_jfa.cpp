@@ -112,9 +112,9 @@ namespace ignite
         if (m_SeedPipeline) nri.DestroyPipeline(m_SeedPipeline);
         if (m_FloodPipeline) nri.DestroyPipeline(m_FloodPipeline);
         if (m_OutlinePipeline) nri.DestroyPipeline(m_OutlinePipeline);
-        if (m_SeedPipelineLayout) nri.DestroyPipelineLayout(m_SeedPipelineLayout);
-        if (m_FloodPipelineLayout) nri.DestroyPipelineLayout(m_FloodPipelineLayout);
-        if (m_OutlinePipelineLayout) nri.DestroyPipelineLayout(m_OutlinePipelineLayout);
+        if (m_SeedPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_SeedPipelineLayout); nri.DestroyPipelineLayout(m_SeedPipelineLayout); }
+        if (m_FloodPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_FloodPipelineLayout); nri.DestroyPipelineLayout(m_FloodPipelineLayout); }
+        if (m_OutlinePipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_OutlinePipelineLayout); nri.DestroyPipelineLayout(m_OutlinePipelineLayout); }
         if (m_SelectedIDDescriptor) nri.DestroyDescriptor(m_SelectedIDDescriptor);
         if (m_SelectedIDBuffer) nri.DestroyBuffer(m_SelectedIDBuffer);
         if (m_SelectedIDMemory) nri.FreeMemory(m_SelectedIDMemory);
