@@ -588,15 +588,8 @@ namespace ignite
         }
 
         ImGui::SameLine(0.0f, 6.0f * scale);
-        UI::TextField(
-            "##hierarchy_search",
-            m_HierarchySearchBuffer,
-            sizeof(m_HierarchySearchBuffer),
-            "Search hierarchy...",
-            ImVec2(-1.0f, barH),
-            ICON_LC_SEARCH,
-            true,
-            ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
+        UI::TextField( "##hierarchy_search", m_HierarchySearchBuffer, sizeof(m_HierarchySearchBuffer), "Search hierarchy...",
+            ImVec2(-1.0f, barH), ICON_LC_SEARCH, true, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
 
         // Keyboard shortcuts when Hierarchy is focused
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && !m_Scene->IsRunning())
@@ -1152,9 +1145,7 @@ namespace ignite
             return false;
         };
 
-        if (m_TrackingSelectedEntity != UUID(0)
-            && m_LastAutoExpandedSelection != m_TrackingSelectedEntity
-            && hasSelectedDescendant(entity))
+        if (m_TrackingSelectedEntity != UUID(0) && m_LastAutoExpandedSelection != m_TrackingSelectedEntity && hasSelectedDescendant(entity))
         {
             ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         }
@@ -1164,10 +1155,8 @@ namespace ignite
 
         const ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0)
             | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
-            | ImGuiTreeNodeFlags_OpenOnDoubleClick
-            | ImGuiTreeNodeFlags_SpanAvailWidth
-            | ImGuiTreeNodeFlags_OpenOnArrow
-            | ImGuiTreeNodeFlags_LabelSpanAllColumns;
+            | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen
+            | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns;
 
         const auto imguiPushId = static_cast<intptr_t>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, UI::ToImVec4(theme.secondary));

@@ -90,7 +90,7 @@ namespace ignite
         virtual void OnEvent(Event &e) override;
 
         bool OnKeyPressedEvent(KeyPressedEvent &event);
-	    bool OnMouseMovedEvent(MouseMovedEvent &event);
+        bool OnWindowCloseEvent(WindowCloseEvent &event);
 
         virtual void OnRender(RenderTarget *framebuffer) override;
         virtual void OnGuiRender() override;
@@ -107,7 +107,7 @@ namespace ignite
 
         void SaveProject();
         void OpenProject();
-        void CloseCurrentProject();
+        void CloseProject();
         void OpenProject(const std::filesystem::path &filepath);
 
         void SetActiveScene(const Ref<Scene> &scene);
@@ -146,6 +146,9 @@ namespace ignite
         static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
         static void OnPackageFolderSelected(void *userData, const char *const *filelist, int filter);
+
+        void SerializeEditorState();
+        void DeserializeEditorState();
 
         void OnOpenProject();
 

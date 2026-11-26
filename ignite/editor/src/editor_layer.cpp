@@ -177,7 +177,7 @@ namespace ignite
         }
 
         // Close project
-        CloseCurrentProject();
+        CloseProject();
 
         // Unsubscribe signals
         SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
@@ -479,6 +479,7 @@ namespace ignite
 
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
+        dispatcher.Dispatch<WindowCloseEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnWindowCloseEvent));
     }
 
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)
@@ -887,6 +888,7 @@ namespace ignite
 
                 else if (ImGui::MenuItem("Save Project", nullptr, false, m_ActiveProject != nullptr))
                 {
+                    SerializeEditorState();
                     SaveProject();
                 }
 
@@ -897,7 +899,8 @@ namespace ignite
 
                 else if (ImGui::MenuItem("Close Project", nullptr, false, m_ActiveProject != nullptr))
                 {
-                    CloseCurrentProject();
+                    SerializeEditorState();
+                    CloseProject();
                 }
 
                 ImGui::Separator();
@@ -1844,7 +1847,7 @@ namespace ignite
             nullptr, false);
     }
 
-    void EditorLayer::CloseCurrentProject()
+    void EditorLayer::CloseProject()
     {
         if (!m_ActiveProject)
             return;
@@ -1908,7 +1911,7 @@ namespace ignite
         // Clear old project's loaded assets before opening new project
         if (m_ActiveProject)
         {
-            CloseCurrentProject();
+            CloseProject();
         }
 
         AssetWorker::SubmitJob([this, filepath]()
@@ -1933,8 +1936,9 @@ namespace ignite
         });
     }
 
-    bool EditorLayer::OnMouseMovedEvent(MouseMovedEvent &event)
+    bool EditorLayer::OnWindowCloseEvent(WindowCloseEvent &event)
     {
+        SerializeEditorState();
         return false;
     }
 
@@ -2231,6 +2235,92 @@ namespace ignite
         });
     }
 
+    void EditorLayer::SerializeEditorState()
+    {
+        if (m_ActiveProject)
+        {
+            const auto filepath = m_ActiveProject->GetDirectory() / "EditorStates.ign";
+            Serializer sr(filepath);
+
+            sr.BeginMap(); // START
+
+            sr.BeginMap("EditorStates");
+            {
+                // Windows
+                sr.BeginMap("Windows");
+                {
+                    sr.AddKeyValue("Console", m_State.consoleWindow);
+                    sr.AddKeyValue("Network", m_State.networkWindow);
+                    sr.AddKeyValue("GameplayViewport", m_State.gameplayViewportWindow);
+                }
+                sr.EndMap();
+
+                // Camera
+                if (m_ScenePanel)
+                {
+                    sr.BeginMap("Camera");
+                    {
+                        const auto &camera = m_ScenePanel->GetViewportCamera();
+                        sr.AddKeyValue("Translation", camera.position);
+                        sr.AddKeyValue("Yaw", camera.yaw);
+                        sr.AddKeyValue("Pitch", camera.pitch);
+                        sr.AddKeyValue("Fov", camera.fov);
+                        sr.AddKeyValue("FarPlane", camera.farPlane);
+                        sr.AddKeyValue("NearPlane", camera.nearPlane);
+                        sr.AddKeyValue("OrthoSize", camera.orthoSize);
+                        sr.AddKeyValue("Distance", camera.GetDistance());
+                        sr.AddKeyValue("ProjectionType", static_cast<int>(camera.projectionType));
+                    }
+                    sr.EndMap();
+                }
+
+                // TODO: Settings/Render scalability
+            }
+            sr.EndMap();
+
+            sr.EndMap(); // END
+
+            sr.Serialize();
+        }
+
+    }
+
+    void EditorLayer::DeserializeEditorState()
+    {
+        const auto filepath = m_ActiveProject->GetDirectory() / "EditorStates.ign";
+        if (!std::filesystem::exists(filepath))
+            return;
+
+        JsonNode stateFileNode = Serializer::Deserialize(filepath);
+        JsonNode stateNode = stateFileNode["EditorStates"];
+        if (!stateNode)
+            return;
+
+        if (JsonNode windowsNode = stateNode["Windows"])
+        {
+            if (windowsNode["Console"]) m_State.consoleWindow = windowsNode["Console"].as<bool>();
+            if (windowsNode["Network"]) m_State.networkWindow = windowsNode["Network"].as<bool>();
+            if (windowsNode["GameplayViewport"]) m_State.gameplayViewportWindow = windowsNode["GameplayViewport"].as<bool>();
+        }
+
+        if (m_ScenePanel)
+        {
+            if (JsonNode cameraNode = stateNode["Camera"])
+            {
+                auto &camera = m_ScenePanel->GetViewportCamera();
+                if (cameraNode["Translation"]) camera.position = cameraNode["Translation"].as<glm::vec3>();
+                if (cameraNode["Yaw"]) camera.yaw = cameraNode["Yaw"].as<float>();
+                if (cameraNode["Pitch"]) camera.pitch = cameraNode["Pitch"].as<float>();
+                if (cameraNode["Fov"]) camera.fov = cameraNode["Fov"].as<float>();
+                if (cameraNode["FarPlane"]) camera.farPlane = cameraNode["FarPlane"].as<float>();
+                if (cameraNode["NearPlane"]) camera.nearPlane = cameraNode["NearPlane"].as<float>();
+                if (cameraNode["OrthoSize"]) camera.orthoSize = cameraNode["OrthoSize"].as<float>();
+                if (cameraNode["Distance"]) camera.SetDistance(cameraNode["Distance"].as<float>());
+                if (cameraNode["ProjectionType"]) camera.projectionType = static_cast<ProjectionType>(cameraNode["ProjectionType"].as<int>());
+            }
+        }
+    }
+
     void EditorLayer::OnOpenProject()
     {
         // Apply project undo limit setting
@@ -2273,6 +2363,7 @@ namespace ignite
             NewScene();
         }
 
+        DeserializeEditorState();
         m_State.isLoading = false;
     }
 
@@ -2397,7 +2488,7 @@ namespace ignite
             // Close current project before creating new one
             if (m_ActiveProject)
             {
-                CloseCurrentProject();
+                CloseProject();
             }
 
             const std::string projName = m_State.projectCreateInfo.name;

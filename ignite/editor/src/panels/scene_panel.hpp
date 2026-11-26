@@ -131,19 +131,14 @@ namespace ignite
             std::array<float,3> snapValues = { 0.5f, 1.0f, 0.25f };
             float panSnapValue = 0.0025f;
 			bool wantMouseDragging = false;
-		};
-
-        ViewportData m_ViewportData;
+		} m_ViewportData;
 
 		struct Data
 		{
-			bool settingsWindow = true;
 			bool isGizmoManipulating = false;
 			bool isGizmoBeingUse = false;
-
             bool sceneViewportGameplayVisible = false;
             bool sceneViewportEditorVisible = false;
-
             float gamePreviewZoom = 1.0f;
             glm::vec2 gamePreviewPan = glm::vec2(0.0f);
 
