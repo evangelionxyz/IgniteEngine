@@ -218,8 +218,26 @@ namespace ignite
         }
 
         const float altitudeKm = std::max(0.001f, cameraPos.y / 1000.0f);
-        m_Params.sunDirectionAndIntensity  = glm::vec4(sunDir, sunIntensity);
-        m_Params.sunColorAndRadius         = glm::vec4(sunColor, sunAngularRadius);
+        const glm::vec4 newSunDirAndIntensity = glm::vec4(sunDir, sunIntensity);
+        const glm::vec4 newSunColorAndRadius = glm::vec4(sunColor, sunAngularRadius);
+
+        if (m_DirtyAtmosphere
+            || m_DirtySkyView
+            || m_PreviousSunDirAndIntensity != newSunDirAndIntensity
+            || m_PreviousSunColorAndRadius != newSunColorAndRadius
+            || std::abs(altitudeKm - m_PreviousAltitudeKm) > 1e-4f)
+        {
+            m_DirtySkyView = true;
+            m_PreviousSunDirAndIntensity = newSunDirAndIntensity;
+            m_PreviousSunColorAndRadius = newSunColorAndRadius;
+            m_PreviousAltitudeKm = altitudeKm;
+        }
+
+        if (!m_DirtyAtmosphere && !m_DirtySkyView)
+            return;
+
+        m_Params.sunDirectionAndIntensity  = newSunDirAndIntensity;
+        m_Params.sunColorAndRadius         = newSunColorAndRadius;
         m_Params.cameraPositionAndAltitude = glm::vec4(cameraPos, altitudeKm);
 
         m_AtmosphereBuffer->SetData(&m_Params, sizeof(AtmosphereParams));
@@ -262,20 +280,24 @@ namespace ignite
             m_DirtyAtmosphere = false;
         }
 
-        // Sky-View LUT Pass (Recomputed per frame)
-        transitionTexture(m_SkyViewLUTTexture, nri::Layout::SHADER_RESOURCE_STORAGE, nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER);
-
-        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_SkyViewPipelineLayout);
-        nri.CmdSetPipeline(*cmd, *m_SkyViewPipeline);
+        // Sky-View LUT Pass (Recomputed only when atmosphere, sun, or camera altitude changes)
+        if (m_DirtySkyView)
         {
-            nri::SetDescriptorSetDesc setDesc = {};
-            setDesc.setIndex = 0;
-            setDesc.descriptorSet = m_SkyViewBindingSet->GetHandle();
-            setDesc.bindPoint = nri::BindPoint::COMPUTE;
-            nri.CmdSetDescriptorSet(*cmd, setDesc);
-        }
-        nri.CmdDispatch(*cmd, { 24, 14, 1 });
+            transitionTexture(m_SkyViewLUTTexture, nri::Layout::SHADER_RESOURCE_STORAGE, nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER);
 
-        transitionTexture(m_SkyViewLUTTexture, nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER);
+            nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_SkyViewPipelineLayout);
+            nri.CmdSetPipeline(*cmd, *m_SkyViewPipeline);
+            {
+                nri::SetDescriptorSetDesc setDesc = {};
+                setDesc.setIndex = 0;
+                setDesc.descriptorSet = m_SkyViewBindingSet->GetHandle();
+                setDesc.bindPoint = nri::BindPoint::COMPUTE;
+                nri.CmdSetDescriptorSet(*cmd, setDesc);
+            }
+            nri.CmdDispatch(*cmd, { 24, 14, 1 });
+
+            transitionTexture(m_SkyViewLUTTexture, nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER);
+            m_DirtySkyView = false;
+        }
     }
 }

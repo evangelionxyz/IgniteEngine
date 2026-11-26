@@ -4,6 +4,10 @@ SamplerState sampler0  : register(s0);
 cbuffer FXAABuffer : register(b0)
 {
     float2 inverseScreenSize;
+    float subpixCap;
+    float edgeThreshold;
+    float edgeThresholdMin;
+    float bypass;
     float2 padding;
 };
 
@@ -13,11 +17,6 @@ struct PixelInput
     float2 uv : TEXCOORD;
 };
 
-#define FXAA_EDGE_THRESHOLD      (1.0/8.0)
-#define FXAA_EDGE_THRESHOLD_MIN  (1.0/24.0)
-#define FXAA_SUBPIX_TRIM         (1.0/4.0)
-#define FXAA_SUBPIX_CAP          (3.0/4.0)
-
 float FxaaLuma(float3 rgb) {
     return dot(rgb, float3(0.299, 0.587, 0.114));
 }
@@ -26,6 +25,12 @@ float4 main(PixelInput input) : SV_TARGET
 {
     float2 uv = input.uv;
     float3 rgbM = inputTexture.SampleLevel(sampler0, uv, 0).rgb;
+    if (bypass > 0.5)
+        return float4(rgbM, 1.0);
+
+    float activeEdgeThreshold = max(edgeThreshold, 0.01);
+    float activeEdgeThresholdMin = max(edgeThresholdMin, 0.005);
+    float activeSubpixCap = clamp(subpixCap, 0.0, 1.0);
     
     float lumaM  = FxaaLuma(rgbM);
     float lumaS  = FxaaLuma(inputTexture.SampleLevel(sampler0, uv + float2( 0.0,  1.0) * inverseScreenSize, 0).rgb);
@@ -38,7 +43,7 @@ float4 main(PixelInput input) : SV_TARGET
     
     float lumaRange = maxLuma - minLuma;
     
-    if (lumaRange < max(FXAA_EDGE_THRESHOLD_MIN, maxLuma * FXAA_EDGE_THRESHOLD)) {
+    if (lumaRange < max(activeEdgeThresholdMin, maxLuma * activeEdgeThreshold)) {
         return float4(rgbM, 1.0);
     }
     
@@ -140,7 +145,7 @@ float4 main(PixelInput input) : SV_TARGET
     float lumaAverage = (1.0/12.0) * (2.0 * (lumaDownUp + lumaLeftRight) + lumaLeftCorners + lumaRightCorners);
     float subPixelOffset1 = clamp(abs(lumaAverage - lumaM)/lumaRange, 0.0, 1.0);
     float subPixelOffset2 = (-2.0 * subPixelOffset1 + 3.0) * subPixelOffset1 * subPixelOffset1;
-    float subPixelOffsetFinal = subPixelOffset2 * subPixelOffset2 * FXAA_SUBPIX_CAP;
+    float subPixelOffsetFinal = subPixelOffset2 * subPixelOffset2 * activeSubpixCap;
     
     finalOffset = max(finalOffset, subPixelOffsetFinal);
     

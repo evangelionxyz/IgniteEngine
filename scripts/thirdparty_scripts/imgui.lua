@@ -43,3 +43,20 @@ project "IMGUI"
             "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_dx12.cpp",
             "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_dx12.hpp",
         }
+
+    filter { "configurations:Debug or Debug-Profiling" }
+        runtime "Debug"
+        optimize "off"
+        symbols "on"
+
+    filter { "configurations:Release or Release-Profiling" }
+        runtime "Release"
+        optimize "speed"
+        symbols "on"
+        defines { "NDEBUG" }
+
+    filter { "configurations:Shipping or Shipping-Profiling" }
+        runtime "Release"
+        optimize "speed"
+        symbols "off"
+        defines { "NDEBUG" }

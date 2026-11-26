@@ -85,6 +85,8 @@ namespace ignite
         uint32_t totalTerrains = 0;
         uint32_t pointLightCount = 0;
         uint32_t spotLightCount = 0;
+        uint32_t shadowDrawCalls = 0;
+        uint32_t colorDrawCalls = 0;
         bool hasDirectionalShadow = false;
     };
 
@@ -114,6 +116,7 @@ namespace ignite
         std::vector<StaticMeshPacketItem> staticMeshes;
         std::vector<AABB> staticMeshAABBs;
         std::vector<uint32_t> staticMeshObjectIndices;
+        std::vector<AABB> staticSubmeshAABBs;
 
         std::vector<SkeletalMeshPacketItem> skeletalMeshes;
         std::vector<AABB> skeletalMeshAABBs;
@@ -130,6 +133,7 @@ namespace ignite
             staticMeshes.clear();
             staticMeshAABBs.clear();
             staticMeshObjectIndices.clear();
+            staticSubmeshAABBs.clear();
             skeletalMeshes.clear();
             skeletalMeshAABBs.clear();
             terrains.clear();
@@ -144,6 +148,7 @@ namespace ignite
                 staticMeshes.reserve(staticCount);
                 staticMeshAABBs.reserve(staticCount);
                 staticMeshObjectIndices.reserve(staticCount * 2);
+                staticSubmeshAABBs.reserve(staticCount * 2);
             }
             if (skeletalMeshes.capacity() < skelCount)
             {

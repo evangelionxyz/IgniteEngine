@@ -205,6 +205,7 @@ namespace ignite
         nri::Descriptor *GetMipShaderResourceView(uint32_t mipLevel);
         nri::Descriptor *GetStorageView(uint32_t mipLevel = 0);
         nri::Descriptor *GetSampler() const { return m_Sampler; }
+        nri::Buffer *DetachStagingBuffer() { nri::Buffer *buf = m_StagingBuffer; m_StagingBuffer = nullptr; return buf; }
         uint32_t GetBindlessIndex() const;
 
         static uint32_t CalculateMaxMipLevels(uint32_t width, uint32_t height, uint32_t depth = 1);

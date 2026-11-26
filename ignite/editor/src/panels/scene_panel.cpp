@@ -407,24 +407,8 @@ namespace ignite
         createInfo.keepInitialState = true;
         createInfo.bindless = false;
 
-        m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo, nullptr);
-
-        m_Icons["transform_world"] = Texture::Create("resources/ui/editor/ic_editor_world_transform.png", createInfo, nullptr);
-        m_Icons["transform_local"] = Texture::Create("resources/ui/editor/ic_editor_local_transform.png", createInfo, nullptr);
-        m_Icons["picking"] = Texture::Create("resources/ui/editor/ic_editor_picking.png", createInfo, nullptr);
-        m_Icons["translate"] = Texture::Create("resources/ui/editor/ic_editor_translate.png", createInfo, nullptr);
-        m_Icons["scale"] = Texture::Create("resources/ui/editor/ic_editor_scale.png", createInfo, nullptr);
-        m_Icons["rotate"] = Texture::Create("resources/ui/editor/ic_editor_rotate.png", createInfo, nullptr);
-
-        m_Icons["play"] = Texture::Create("resources/ui/editor/ic_editor_play.png", createInfo, nullptr);
-        m_Icons["stop"] = Texture::Create("resources/ui/editor/ic_editor_stop.png", createInfo, nullptr);
-        m_Icons["pause"] = Texture::Create("resources/ui/editor/ic_editor_pause.png", createInfo, nullptr);
-        m_Icons["simulate"] = Texture::Create("resources/ui/editor/ic_editor_simulate.png", createInfo, nullptr);
-        m_Icons["stepping"] = Texture::Create("resources/ui/editor/ic_editor_stepping.png", createInfo, nullptr);
-
         m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, nullptr);
         m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, nullptr);
-        m_Icons["folder"] = Texture::Create("resources/ui/editor/ic_editor_folder.png", createInfo, nullptr);
     }
 
     ScenePanel::~ScenePanel()
@@ -556,7 +540,15 @@ namespace ignite
         }
 
         auto assetManager = AssetManager::GetInstance();
-        SceneManager::SyncHierarchyOrder(m_Scene);
+        const size_t currentEntityCount = m_Scene->registry->storage<entt::entity>().size();
+        if (m_HierarchyDirty || currentEntityCount != m_LastEntityCount || m_Scene != m_LastSyncedScene || (++m_HierarchySyncFrameCounter >= 60u))
+        {
+            SceneManager::SyncHierarchyOrder(m_Scene);
+            m_HierarchyDirty = false;
+            m_LastEntityCount = currentEntityCount;
+            m_LastSyncedScene = m_Scene;
+            m_HierarchySyncFrameCounter = 0;
+        }
 
         // Matched-height toolbar: + Folder, + Entity popup, and Search filter
         const float barH = std::round(26.0f * scale);
@@ -703,13 +695,13 @@ namespace ignite
 
                 const std::string filterLower = stringutils::ToLower(std::string(m_HierarchySearchBuffer));
 
-                const std::vector<UUID> rootOrderCopy = m_Scene->rootEntityOrder;
-                for (UUID rootUUID : rootOrderCopy)
+                const auto &rootOrder = m_Scene->rootEntityOrder;
+                for (size_t i = 0; i < rootOrder.size(); ++i)
                 {
-                    Entity entity = SceneManager::GetEntity(m_Scene, rootUUID);
+                    Entity entity = SceneManager::GetEntity(m_Scene, rootOrder[i]);
                     if (entity.IsValid() && MatchesHierarchyFilter(entity, filterLower))
                     {
-                        RenderEntityNode(entity);
+                        RenderEntityNode(entity, filterLower);
                     }
                 }
 
@@ -1103,7 +1095,27 @@ namespace ignite
         return entity;
     }
 
-    void ScenePanel::RenderEntityNode(Entity entity)
+    bool ScenePanel::HasSelectedDescendant(Entity current) const
+    {
+        if (!current.IsValid())
+            return false;
+
+        const IDComponent &currentID = current.GetComponent<IDComponent>();
+        for (size_t i = 0; i < currentID.children.size(); ++i)
+        {
+            const UUID childUuid = currentID.children[i];
+            if (m_SelectedEntities.contains(childUuid))
+                return true;
+
+            Entity child = SceneManager::GetEntity(m_Scene, childUuid);
+            if (child.IsValid() && HasSelectedDescendant(child))
+                return true;
+        }
+
+        return false;
+    }
+
+    void ScenePanel::RenderEntityNode(Entity entity, const std::string &filterLower)
     {
         IGN_PROFILE_FUNCTION();
         if (!entity.IsValid())
@@ -1126,26 +1138,7 @@ namespace ignite
         const bool isRenaming = (m_RenamingEntityUUID == idComp.uuid);
         const bool isEntityVisible = !entity.HasComponent<RenderingComponent>() || entity.GetComponent<RenderingComponent>().visible;
 
-        const std::function<bool(Entity)> hasSelectedDescendant = [&](Entity current) -> bool
-        {
-            if (!current.IsValid())
-                return false;
-
-            const IDComponent &currentID = current.GetComponent<IDComponent>();
-            for (const UUID childUuid : currentID.children)
-            {
-                if (m_SelectedEntities.contains(childUuid))
-                    return true;
-
-                Entity child = SceneManager::GetEntity(m_Scene, childUuid);
-                if (child.IsValid() && hasSelectedDescendant(child))
-                    return true;
-            }
-
-            return false;
-        };
-
-        if (m_TrackingSelectedEntity != UUID(0) && m_LastAutoExpandedSelection != m_TrackingSelectedEntity && hasSelectedDescendant(entity))
+        if (m_TrackingSelectedEntity != UUID(0) && m_LastAutoExpandedSelection != m_TrackingSelectedEntity && HasSelectedDescendant(entity))
         {
             ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         }
@@ -1460,14 +1453,13 @@ namespace ignite
         {
             if (!isDeleting)
             {
-                const std::vector<UUID> childrenCopy = entity.GetComponent<IDComponent>().children;
-                const std::string filterLower = stringutils::ToLower(std::string(m_HierarchySearchBuffer));
-                for (UUID uuid : childrenCopy)
+                const auto &children = entity.GetComponent<IDComponent>().children;
+                for (size_t i = 0; i < children.size(); ++i)
                 {
-                    Entity childEntity = SceneManager::GetEntity(m_Scene, uuid);
+                    Entity childEntity = SceneManager::GetEntity(m_Scene, children[i]);
                     if (childEntity.IsValid() && MatchesHierarchyFilter(childEntity, filterLower))
                     {
-                        RenderEntityNode(childEntity);
+                        RenderEntityNode(childEntity, filterLower);
                     }
                 }
             }
@@ -5474,7 +5466,6 @@ namespace ignite
 
                                     const uint32_t pickedObjectId = objectIdTexture->ReadPixel(pixelX, pixelY);
                                     {
-
                                         Entity pickedEntity = {};
                                         if (pickedObjectId != 0xFFFFFFFFu)
                                         {
@@ -5665,7 +5656,7 @@ namespace ignite
 
                     if (m_Data.blockGizmoUntilMouseRelease)
                     {
-                        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
                         {
                             m_Data.blockGizmoUntilMouseRelease = false;
                         }
@@ -6348,13 +6339,73 @@ namespace ignite
 
                 drawLevelRow("Overall Scalability", sc.overall, true);
                 ImGui::Separator();
-                drawLevelRow("Anti-Aliasing", sc.antiAliasing, false);
                 drawLevelRow("Shadows", sc.shadows, false);
                 drawLevelRow("Global Illumination", sc.globalIllumination, false);
                 drawLevelRow("Ambient Occlusion", sc.ambientOcclusion, false);
                 drawLevelRow("Reflections", sc.reflections, false);
                 drawLevelRow("Resolution Scale", sc.resolutionScale, false);
                 drawLevelRow("Post Processing", sc.postProcessing, false);
+
+                ImGui::Separator();
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Anti-Aliasing");
+                ImGui::SameLine(155.0f);
+                {
+                    struct AAOption { const char *label; SampleMethod method; };
+                    static constexpr AAOption kAAOptions[] = {
+                        { "NONE", SampleMethod::NONE },
+                        { "MSAA", SampleMethod::MSAA },
+                        { "FXAA", SampleMethod::FXAA },
+                        { "TAA",  SampleMethod::TAA  },
+                    };
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+                        const bool active = (rs.sampleMethod == kAAOptions[i].method);
+                        if (UI::Button(kAAOptions[i].label, active ? UI::ButtonVariant::Primary : UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+                        {
+                            sr->SetSampleMethod(kAAOptions[i].method);
+                            changed = true;
+                        }
+                    }
+                }
+
+                if (rs.sampleMethod == SampleMethod::MSAA)
+                {
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted("MSAA Samples");
+                    ImGui::SameLine(155.0f);
+                    static constexpr int kMSAASamples[] = { 2, 4, 8 };
+                    static constexpr const char *kMSAALabels[] = { "2x", "4x", "8x" };
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+                        const bool active = (rs.msaaProperties.sampleCount == kMSAASamples[i]);
+                        if (UI::Button(kMSAALabels[i], active ? UI::ButtonVariant::Primary : UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+                        {
+                            rs.msaaProperties.sampleCount = kMSAASamples[i];
+                            changed = true;
+                        }
+                    }
+                }
+                else if (rs.sampleMethod == SampleMethod::FXAA)
+                {
+                    ImGui::SetNextItemWidth(220.0f);
+                    if (ImGui::SliderFloat("Subpixel Quality", &rs.fxaaProperties.subpixQuality, 0.0f, 1.0f, "%.2f"))
+                        changed = true;
+                    ImGui::SetNextItemWidth(220.0f);
+                    if (ImGui::SliderFloat("Edge Threshold", &rs.fxaaProperties.edgeThreshold, 0.063f, 0.333f, "%.3f"))
+                        changed = true;
+                    ImGui::SetNextItemWidth(220.0f);
+                    if (ImGui::SliderFloat("Min Threshold", &rs.fxaaProperties.edgeThresholdMin, 0.015f, 0.0833f, "%.4f"))
+                        changed = true;
+                }
+                else if (rs.sampleMethod == SampleMethod::TAA)
+                {
+                    ImGui::SetNextItemWidth(220.0f);
+                    if (ImGui::SliderFloat("TAA Blend Factor", &rs.taaProperties.blendFactor, 0.02f, 1.0f, "%.2f"))
+                        changed = true;
+                }
 
                 if (changed)
                 {

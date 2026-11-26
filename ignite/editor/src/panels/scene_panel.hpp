@@ -62,7 +62,7 @@ namespace ignite
 
         void RenderHierarchy();
         Entity ShowEntityContextMenu();
-        void RenderEntityNode(Entity entity);
+        void RenderEntityNode(Entity entity, const std::string &filterLower = std::string());
 
         void SetHierarchyDirty() { m_HierarchyDirty = true; }
         void SortHierarchy(std::vector<Entity>& entities);
@@ -92,6 +92,7 @@ namespace ignite
         void ApplySelectionInternal(const std::vector<UUID> &entityUUIDs, UUID trackingUUID);
         std::vector<UUID> GetOrderedSelectedUUIDs() const;
         bool MatchesHierarchyFilter(Entity entity, const std::string &filterLower) const;
+        bool HasSelectedDescendant(Entity current) const;
 
         struct PendingHierarchyDrop
         {
@@ -150,6 +151,8 @@ namespace ignite
 
         bool m_HierarchyDirty = true;
         size_t m_LastEntityCount = 0;
+        Scene *m_LastSyncedScene = nullptr;
+        uint32_t m_HierarchySyncFrameCounter = 0;
         std::vector<Entity> m_RootEntities;
 
         friend class EditorLayer;

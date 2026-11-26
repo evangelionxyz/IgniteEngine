@@ -63,10 +63,12 @@ namespace ignite
 
         if (auto it = m_Blooms.find(camera); it != m_Blooms.end())
         {
+            const uint32_t bloomWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(renderWidth) * sceneRenderSettings.bloomResolutionScale)));
+            const uint32_t bloomHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(renderHeight) * sceneRenderSettings.bloomResolutionScale)));
             for (auto &bloom : it->second)
             {
                 if (bloom)
-                    bloom->Resize(renderWidth, renderHeight);
+                    bloom->Resize(bloomWidth, bloomHeight);
             }
         }
 
@@ -84,7 +86,7 @@ namespace ignite
             for (auto &gtao : it->second)
             {
                 if (gtao)
-                    gtao->Resize(renderWidth, renderHeight);
+                    gtao->Resize(renderWidth, renderHeight, sceneRenderSettings.gtaoResolutionScale);
             }
         }
 
@@ -93,7 +95,7 @@ namespace ignite
             for (auto &ssr : it->second)
             {
                 if (ssr)
-                    ssr->Resize(renderWidth, renderHeight);
+                    ssr->Resize(renderWidth, renderHeight, sceneRenderSettings.ssrResolutionScale);
             }
         }
 
@@ -135,6 +137,8 @@ namespace ignite
             target->taaHistoryValid = false;
             target->prevSceneColor.reset();
             target->prevSceneColorValid = false;
+            target->ssrHistoryValid = false;
+            target->taaHistoryValid = false;
 
             if (target->debugRT)
             {
@@ -221,10 +225,11 @@ namespace ignite
             createInfo.height = height;
             createInfo.attachments =
             {
-                FramebufferAttachments{ "[TAA History Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::SHADER_RESOURCE }
+                FramebufferAttachments{ "[TAA History Color Attachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT }
             };
             for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
                 historyRT = RenderTarget::Create(createInfo, "[Scene Renderer] TAA History RT");
+            target->taaHistoryValid = false;
         }
         else if (target->taaHistoryRT[0]->GetWidth() != width || target->taaHistoryRT[0]->GetHeight() != height)
         {
@@ -233,6 +238,7 @@ namespace ignite
                 if (historyRT)
                     historyRT->Resize(width, height);
             }
+            target->taaHistoryValid = false;
         }
     }
 
@@ -460,7 +466,7 @@ namespace ignite
         return SSAOs;
     }
 
-    std::vector<Ref<GTAO>> SceneRenderer::GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight)
+    std::vector<Ref<GTAO>> SceneRenderer::GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight, float resolutionScale)
     {
         const uint32_t safeW = std::max(renderWidth, 1u);
         const uint32_t safeH = std::max(renderHeight, 1u);
@@ -470,7 +476,7 @@ namespace ignite
             for (auto &gtao : it->second)
             {
                 if (gtao)
-                    gtao->Resize(safeW, safeH);
+                    gtao->Resize(safeW, safeH, resolutionScale);
             }
             return it->second;
         }
@@ -480,13 +486,13 @@ namespace ignite
             static_cast<uint32_t>(m_CommandBufferSlots.size()));
         std::vector<Ref<GTAO>> gtaos(slotCount);
         for (uint32_t i = 0; i < slotCount; ++i)
-            gtaos[i] = CreateRef<GTAO>(safeW, safeH);
+            gtaos[i] = CreateRef<GTAO>(safeW, safeH, resolutionScale);
 
         m_GTAOs.emplace(camera, gtaos);
         return gtaos;
     }
 
-    std::vector<Ref<SSR>> SceneRenderer::GetOrCreateSSRs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight)
+    std::vector<Ref<SSR>> SceneRenderer::GetOrCreateSSRs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight, float resolutionScale)
     {
         const uint32_t safeW = std::max(renderWidth, 1u);
         const uint32_t safeH = std::max(renderHeight, 1u);
@@ -496,7 +502,7 @@ namespace ignite
             for (auto &ssr : it->second)
             {
                 if (ssr)
-                    ssr->Resize(safeW, safeH);
+                    ssr->Resize(safeW, safeH, resolutionScale);
             }
             return it->second;
         }
@@ -506,7 +512,7 @@ namespace ignite
             static_cast<uint32_t>(m_CommandBufferSlots.size()));
         std::vector<Ref<SSR>> ssrs(slotCount);
         for (uint32_t i = 0; i < slotCount; ++i)
-            ssrs[i] = CreateRef<SSR>(safeW, safeH);
+            ssrs[i] = CreateRef<SSR>(safeW, safeH, resolutionScale);
 
         m_SSRs.emplace(camera, ssrs);
         return ssrs;

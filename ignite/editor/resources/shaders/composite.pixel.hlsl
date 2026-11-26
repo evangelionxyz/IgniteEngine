@@ -45,9 +45,11 @@ cbuffer CompositePostProcess : register(b0)
     float fogEnd;
     float padding_fog;
 
-    float4 taaParams; // x=enableTAA, y=currentFrameWeight, z=historyValid
+    float4 taaParams; // x=enableTAA, y=currentFrameWeight, z=historyValid, w=enableOutline
+    float4 taaJitter; // xy=currJitterUV, zw=prevJitterUV
 
     float4x4 projectionInv;
+    float4x4 taaReprojection;
 }
 
 float3 SampleSceneWithChromAb(float2 uv)
@@ -109,17 +111,78 @@ float CalculateViewDistance(float depth, float2 uv)
     return abs(viewSpace.z);
 }
 
+float3 RGBToYCoCg(float3 rgb)
+{
+    float Y  = dot(rgb, float3( 0.25f, 0.50f,  0.25f));
+    float Co = dot(rgb, float3( 0.50f, 0.00f, -0.50f));
+    float Cg = dot(rgb, float3(-0.25f, 0.50f, -0.25f));
+    return float3(Y, Co, Cg);
+}
+
+float3 YCoCgToRGB(float3 ycocg)
+{
+    float t = ycocg.x - ycocg.z;
+    return float3(t + ycocg.y, ycocg.x + ycocg.z, t - ycocg.y);
+}
+
+// Ray-box clip in YCoCg space toward neighborhood mean to prevent oil-painting posterization
+float3 ClipAABB(float3 aabbMin, float3 aabbMax, float3 history, float3 avg)
+{
+    float3 pClip = 0.5f * (aabbMax + aabbMin);
+    float3 eClip = max(0.5f * (aabbMax - aabbMin), float3(1e-5f, 1e-5f, 1e-5f));
+    float3 vClip = history - pClip;
+    float3 vUnit = vClip / eClip;
+    float3 aUnit = abs(vUnit);
+    float maUnit = max(aUnit.x, max(aUnit.y, aUnit.z));
+    if (maUnit > 1.0f)
+        return pClip + vClip / maUnit;
+    return history;
+}
+
+// 5-tap Catmull-Rom bicubic history lookup (eliminates bilinear feedback blur)
+float3 SampleHistoryCatmullRom(float2 uv, float2 texSize)
+{
+    float2 samplePos = uv * texSize;
+    float2 texPos1 = floor(samplePos - 0.5f) + 0.5f;
+    float2 f = samplePos - texPos1;
+
+    float2 w0 = f * (-0.5f + f * (1.0f - 0.5f * f));
+    float2 w1 = 1.0f + f * f * (-2.5f + 1.5f * f);
+    float2 w2 = f * (0.5f + f * (2.0f - 1.5f * f));
+    float2 w3 = f * f * (-0.5f + 0.5f * f);
+
+    float2 w12 = w1 + w2;
+    float2 offset12 = w2 / max(w12, float2(1e-5f, 1e-5f));
+
+    float2 invTexSize = 1.0f / max(texSize, float2(1.0f, 1.0f));
+    float2 texPos0  = (texPos1 - 1.0f) * invTexSize;
+    float2 texPos3  = (texPos1 + 2.0f) * invTexSize;
+    float2 texPos12 = (texPos1 + offset12) * invTexSize;
+
+    float3 result = 0.0f;
+    result += taaHistoryTexture.SampleLevel(linearSampler, clamp(float2(texPos12.x, texPos0.y),  0.0f, 1.0f), 0.0f).rgb * (w12.x * w0.y);
+    result += taaHistoryTexture.SampleLevel(linearSampler, clamp(float2(texPos0.x,  texPos12.y), 0.0f, 1.0f), 0.0f).rgb * (w0.x  * w12.y);
+    result += taaHistoryTexture.SampleLevel(linearSampler, clamp(float2(texPos12.x, texPos12.y), 0.0f, 1.0f), 0.0f).rgb * (w12.x * w12.y);
+    result += taaHistoryTexture.SampleLevel(linearSampler, clamp(float2(texPos3.x,  texPos12.y), 0.0f, 1.0f), 0.0f).rgb * (w3.x  * w12.y);
+    result += taaHistoryTexture.SampleLevel(linearSampler, clamp(float2(texPos12.x, texPos3.y),  0.0f, 1.0f), 0.0f).rgb * (w12.x * w3.y);
+    return max(result, 0.0f);
+}
+
 float4 main(VSOutput input) : SV_Target
 {
+    const bool taaActive = (taaParams.x > 0.5f);
     float3 sceneColor = SampleSceneWithChromAb(input.uv);
 
     const bool hasFog = (fogDensity > 0.0f);
     const bool hasDOF = (enableDOF > 0);
+    float centerDepth = 1.0f;
+    bool depthSampled = false;
 
     if (hasDOF)
     {
-        float depth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-        float dist = CalculateViewDistance(depth, input.uv);
+        centerDepth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
+        depthSampled = true;
+        float dist = CalculateViewDistance(centerDepth, input.uv);
 
         // Calculate circle of confusion (CoC)
         float distanceFromFocus = abs(dist - focalDistance);
@@ -175,16 +238,18 @@ float4 main(VSOutput input) : SV_Target
     {
         if (hasFog)
         {
-            float depth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
-            float dist = CalculateViewDistance(depth, input.uv);
+            centerDepth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
+            depthSampled = true;
+            float dist = CalculateViewDistance(centerDepth, input.uv);
             sceneColor = ApplyFogWithDistance(sceneColor, dist, input.uv);
         }
     }
 
+    float3 bloomContribution = 0.0f;
     if (flags.x > 0.5f)
     {
-        float3 bloom = bloomTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb;
-        sceneColor += bloom * flags.y;
+        bloomContribution = bloomTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb * flags.y;
+        sceneColor += bloomContribution;
     }
 
     if (flags.z > 0.5f)
@@ -200,47 +265,126 @@ float4 main(VSOutput input) : SV_Target
     // Apply tonemapping
     float3 tonemappedScene = ApplyTonemap(sceneColor, tonemapMode, exposure, gamma);
 
-    if (taaParams.x > 0.5f && taaParams.z > 0.5f)
+    if (taaActive && taaParams.z > 0.5f)
     {
-        float3 historyColor = taaHistoryTexture.SampleLevel(linearSampler, input.uv, 0.0f).rgb;
+        float2 sceneTexSize;
+        sceneTexture.GetDimensions(sceneTexSize.x, sceneTexSize.y);
+        float2 sceneTexelSize = 1.0f / max(sceneTexSize, float2(1.0f, 1.0f));
 
-        // Neighborhood color clamping: build a 3x3 AABB in tonemapped space and clamp
-        // the history into it. This kills ghosting when the camera moves without needing
-        // motion vectors.
-        float2 sceneTexelSize;
-        sceneTexture.GetDimensions(sceneTexelSize.x, sceneTexelSize.y);
-        sceneTexelSize = 1.0f / sceneTexelSize;
+        if (!depthSampled)
+            centerDepth = depthTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
 
-        float3 neighborMin = tonemappedScene;
-        float3 neighborMax = tonemappedScene;
-
+        // Dilated closest-depth lookup across 3x3 cross to stabilize silhouette edges
+        float closestDepth = centerDepth;
+        float2 closestUV = input.uv;
+        static const int2 kCross[4] = { int2(-1, -1), int2(1, -1), int2(-1, 1), int2(1, 1) };
         [unroll]
-        for (int ny = -1; ny <= 1; ++ny)
+        for (int c = 0; c < 4; ++c)
         {
-            [unroll]
-            for (int nx = -1; nx <= 1; ++nx)
+            float2 cUV = saturate(input.uv + float2(kCross[c]) * sceneTexelSize);
+            float d = depthTexture.SampleLevel(linearSampler, cUV, 0.0f).r;
+            if (d < closestDepth)
             {
-                if (nx == 0 && ny == 0) continue;
-                float2 nUV = saturate(input.uv + float2(nx, ny) * sceneTexelSize);
-                float3 nColor = ApplyTonemap(SampleSceneWithChromAb(nUV), tonemapMode, exposure, gamma);
-                neighborMin = min(neighborMin, nColor);
-                neighborMax = max(neighborMax, nColor);
+                closestDepth = d;
+                closestUV = cUV;
             }
         }
 
-        // Clamp history into the current-frame neighborhood before blending
-        float3 clampedHistory = clamp(historyColor, neighborMin, neighborMax);
-        tonemappedScene = lerp(clampedHistory, tonemappedScene, saturate(taaParams.y));
+        // Camera depth reprojection using dilated closest-depth velocity vector
+        float4 currClip = float4(closestUV.x * 2.0f - 1.0f, 1.0f - closestUV.y * 2.0f, closestDepth, 1.0f);
+        float4 prevClip = mul(taaReprojection, currClip);
+        float2 historyUV = input.uv;
+        bool validHistoryUV = (prevClip.w > 1e-5f);
+        if (validHistoryUV)
+        {
+            float2 prevNdc = prevClip.xy / prevClip.w;
+            float2 prevClosestUV = float2(prevNdc.x * 0.5f + 0.5f, 0.5f - prevNdc.y * 0.5f);
+            float2 velocityUV = prevClosestUV - closestUV;
+            historyUV = input.uv + velocityUV;
+            validHistoryUV = all(historyUV >= 0.0f) && all(historyUV <= 1.0f);
+        }
+
+        if (validHistoryUV)
+        {
+            float2 historyTexSize;
+            taaHistoryTexture.GetDimensions(historyTexSize.x, historyTexSize.y);
+            float3 historyColor = SampleHistoryCatmullRom(historyUV, historyTexSize);
+
+            // Compute 3x3 YCoCg variance and min/max bounds around the exact current texel
+            // without pre-blurring the current frame (pre-blurring + 8-bit history causes oil-painting softness).
+            float3 centerRGB = saturate(tonemappedScene);
+            float3 centerYCoCg = RGBToYCoCg(centerRGB);
+            float3 m1 = centerYCoCg;
+            float3 m2 = centerYCoCg * centerYCoCg;
+            float3 minYCoCg = centerYCoCg;
+            float3 maxYCoCg = centerYCoCg;
+            float3 minRGB = centerRGB;
+            float3 maxRGB = centerRGB;
+            float3 crossSumRGB = 0.0f;
+
+            [unroll]
+            for (int ny = -1; ny <= 1; ++ny)
+            {
+                [unroll]
+                for (int nx = -1; nx <= 1; ++nx)
+                {
+                    if (nx == 0 && ny == 0)
+                        continue;
+
+                    float2 nUV = saturate(input.uv + float2(nx, ny) * sceneTexelSize);
+                    float3 nLinear = SampleSceneWithChromAb(nUV) + bloomContribution;
+                    float3 nTonemapped = saturate(ApplyTonemap(nLinear, tonemapMode, exposure, gamma));
+                    float3 sYCoCg = RGBToYCoCg(nTonemapped);
+
+                    m1 += sYCoCg;
+                    m2 += sYCoCg * sYCoCg;
+                    minYCoCg = min(minYCoCg, sYCoCg);
+                    maxYCoCg = max(maxYCoCg, sYCoCg);
+                    minRGB = min(minRGB, nTonemapped);
+                    maxRGB = max(maxRGB, nTonemapped);
+                    if (abs(nx) + abs(ny) == 1)
+                        crossSumRGB += nTonemapped;
+                }
+            }
+
+            float3 mu = m1 * (1.0f / 9.0f);
+            float3 sigma = sqrt(max(m2 * (1.0f / 9.0f) - mu * mu, float3(0.0f, 0.0f, 0.0f)));
+            sigma = max(sigma, float3(0.001f, 0.0005f, 0.0005f));
+
+            float motionPixels = length((historyUV - input.uv) * historyTexSize);
+            float varianceGamma = lerp(1.25f, 0.75f, saturate(motionPixels * 0.5f));
+            float3 clipMin = max(minYCoCg, mu - varianceGamma * sigma);
+            float3 clipMax = min(maxYCoCg, mu + varianceGamma * sigma);
+
+            float3 historyYCoCg = RGBToYCoCg(historyColor);
+            float3 clippedYCoCg = ClipAABB(clipMin, clipMax, historyYCoCg, mu);
+            float3 clampedHistory = saturate(YCoCgToRGB(clippedYCoCg));
+
+            // Boost current-frame weight under motion while honoring low user blendFactor at rest,
+            // using Karis luma weighting to suppress specular flicker without blurring fine detail.
+            float baseWeight = saturate(taaParams.y);
+            float motionResponse = saturate(motionPixels * 0.05f);
+            float alpha = max(baseWeight, lerp(baseWeight, max(baseWeight, 0.30f), motionResponse));
+
+            float currLuma = dot(centerRGB, float3(0.2126f, 0.7152f, 0.0722f));
+            float histLuma = dot(clampedHistory, float3(0.2126f, 0.7152f, 0.0722f));
+            float wCurr = alpha / (1.0f + currLuma);
+            float wHist = (1.0f - alpha) / (1.0f + histLuma);
+            tonemappedScene = saturate((centerRGB * wCurr + clampedHistory * wHist) / max(wCurr + wHist, 1e-5f));
+        }
     }
 
     float4 uiColor = uiTexture.SampleLevel(linearSampler, input.uv, 0.0f);
-    float4 edgeColor = edgeDetection.SampleLevel(linearSampler, input.uv, 0.0f);
     float4 debugColor = debugTexture.SampleLevel(linearSampler, input.uv, 0.0f);
     float4 gizmoColor = gizmoTexture.SampleLevel(linearSampler, input.uv, 0.0f);
     
     float3 finalColor = lerp(tonemappedScene, debugColor.rgb, debugColor.a);
     finalColor = lerp(finalColor, uiColor.rgb, uiColor.a);
-    finalColor = lerp(finalColor, edgeColor.rgb, saturate(edgeColor.a));
+    if (taaParams.w > 0.5f)
+    {
+        float4 edgeColor = edgeDetection.SampleLevel(linearSampler, input.uv, 0.0f);
+        finalColor = lerp(finalColor, edgeColor.rgb, saturate(edgeColor.a));
+    }
     finalColor = finalColor * (1.0f - saturate(gizmoColor.a)) + gizmoColor.rgb;
     return float4(finalColor, 1.0f);
 }

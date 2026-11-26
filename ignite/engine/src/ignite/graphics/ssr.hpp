@@ -29,21 +29,26 @@ namespace ignite
     public:
         static constexpr uint32_t kMaxDepthMips = 6;
 
-        SSR(uint32_t fullWidth, uint32_t fullHeight);
+        SSR(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale = 0.5f);
         ~SSR();
 
         SSR(const SSR &) = delete;
         SSR &operator=(const SSR &) = delete;
 
-        void Resize(uint32_t fullWidth, uint32_t fullHeight);
+        void Resize(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale = 0.5f);
         void Build(nri::CommandBuffer *cmd,
             const Ref<Texture> &depthTexture,
             const Ref<Texture> &normalTexture,
             const Ref<Texture> &prevSceneColor,
+            const Ref<Texture> &prevSSRTexture,
+            bool historyValid,
             ICamera *camera,
+            const glm::mat4 &projection,
             const glm::mat4 &prevViewProj,
             float maxRoughness,
-            uint64_t frameIndex);
+            uint64_t frameIndex,
+            uint32_t maxSteps = 32,
+            uint32_t binarySearchSteps = 4);
 
         Ref<Texture> GetSSRTexture() const { return m_SSRFinal; }
         uint32_t GetHalfWidth() const { return m_HalfWidth; }
@@ -72,20 +77,24 @@ namespace ignite
             float nearPlane = 0.1f;
             float farPlane = 500.0f;
             float maxRoughness = 0.6f;
-            float _pad = 0.0f;
+            uint32_t maxSteps = 32;
+            uint32_t binarySearchSteps = 4;
+            glm::uvec3 _pad = glm::uvec3(0u);
         };
 
         struct DenoiseCB
         {
             glm::mat4 projectionInv = glm::mat4(1.0f);
+            glm::mat4 viewInv = glm::mat4(1.0f);
+            glm::mat4 prevViewProj = glm::mat4(1.0f);
             glm::uvec2 halfRes = glm::uvec2(1u);
             glm::uvec2 fullRes = glm::uvec2(1u);
             glm::vec2 invHalfRes = glm::vec2(1.0f);
             float depthSigma = 0.04f;
-            float _pad = 0.0f;
+            uint32_t historyValid = 0u;
         };
 
-        void CreateTextures(uint32_t fullWidth, uint32_t fullHeight);
+        void CreateTextures(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale);
         void EnsurePipelines();
         void InvalidatePipelines();
 
@@ -94,6 +103,7 @@ namespace ignite
         uint32_t m_HalfWidth = 0;
         uint32_t m_HalfHeight = 0;
         uint32_t m_DepthMipCount = 1;
+        float m_ResolutionScale = 0.5f;
 
         Ref<Texture> m_HiZDepth;
         Ref<Texture> m_SSRRaw;

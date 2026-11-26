@@ -54,7 +54,7 @@ namespace ignite
         void OnDetach() override;
 
         void BeginFrame();
-        void EndFrame(RenderTarget *framebuffer);
+        void EndFrame(RenderTarget *framebuffer, bool clearTarget = false);
         void RenderPlatformWindows();
 
         void PollEvent(const SDL_Event &event);

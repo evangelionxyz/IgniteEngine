@@ -415,201 +415,27 @@ namespace ignite
             nri::Descriptor *backBufferRTV = deviceManager ? deviceManager->GetCurrentBackBufferRTV() : nullptr;
             RenderTarget *backBufferRenderTarget = deviceManager ? deviceManager->GetCurrentBackBufferRenderTarget() : nullptr;
 
-            // ------------------------------
-            // Clear Back Buffer Framebuffer
-            // ------------------------------
-            auto &slot = renderCommandSlots[currentFrame % renderCommandSlots.size()];
-            if (renderCommandFence && slot.fenceValue > 0 && nri.GetFenceValue(*renderCommandFence) < slot.fenceValue)
-            {
-                nri.Wait(*renderCommandFence, slot.fenceValue);
-            }
-
-            nri::CommandAllocator *renderCmdAllocator = slot.allocator;
-            nri::CommandBuffer *renderCommandBuffer = slot.commandBuffer;
-
-            if (backBufferRenderTarget && renderCmdAllocator && renderCommandBuffer && graphicsQueue)
-            {
-                IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
-                nri.ResetCommandAllocator(*renderCmdAllocator);
-                nri.BeginCommandBuffer(*renderCommandBuffer, nullptr);
-
-                backBufferRenderTarget->SetClearColorAttachmentFloat(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 0);
-                backBufferRenderTarget->BeginRendering(renderCommandBuffer, true, true);
-                backBufferRenderTarget->EndRendering(renderCommandBuffer);
-                nri.EndCommandBuffer(*renderCommandBuffer);
-
-                const uint64_t signalValue = nextRenderFenceValue++;
-                if (renderCommandFence)
-                {
-                    const uint64_t currentFenceValue = nri.GetFenceValue(*renderCommandFence);
-                    if (currentFenceValue == std::numeric_limits<uint64_t>::max())
-                    {
-                        LOG_ERROR("[RenderThread] Command fence returned UINT64_MAX; stopping render thread");
-                        m_RenderThreadRunning = false;
-                    }
-                    else if (signalValue <= currentFenceValue)
-                    {
-                        nextRenderFenceValue = currentFenceValue + 1;
-                        LOG_ERROR("[RenderThread] Corrected non-increasing fence signal value {} to {}; stopping render thread", signalValue, nextRenderFenceValue);
-                        m_RenderThreadRunning = false;
-                    }
-                }
-                if (!m_RenderThreadRunning)
-                    continue;
-
-                nri::FenceSubmitDesc signalFence = {};
-                signalFence.fence = renderCommandFence;
-                signalFence.value = signalValue;
-                signalFence.stages = nri::StageBits::ALL;
-
-                nri::QueueSubmitDesc submitDesc = {};
-                submitDesc.commandBuffers = &renderCommandBuffer;
-                submitDesc.commandBufferNum = 1;
-                if (renderCommandFence)
-                {
-                    submitDesc.signalFences = &signalFence;
-                    submitDesc.signalFenceNum = 1;
-                }
-
-                {
-                    auto &queueMutex = GPUUploadSync::GetQueueMutex();
-                    std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
-                    {
-                        IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexWait");
-                        queueLock.lock();
-                    }
-                    {
-                        IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexHold");
-                        const nri::Result result = nri.QueueSubmit(*graphicsQueue, submitDesc);
-                        if (result != nri::Result::SUCCESS)
-                        {
-                            LOG_ERROR("[RenderThread] Clear framebuffer QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
-                            m_RenderThreadRunning = false;
-                        }
-                    }
-                }
-                if (m_RenderThreadRunning)
-                {
-                    slot.fenceValue = signalValue;
-                }
-            }
-            else if (backBuffer && backBufferRTV && renderCmdAllocator && renderCommandBuffer && graphicsQueue)
-            {
-                IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
-                nri.ResetCommandAllocator(*renderCmdAllocator);
-                nri.BeginCommandBuffer(*renderCommandBuffer, nullptr);
-
-                nri::TextureBarrierDesc barrier = {};
-                barrier.texture = backBuffer;
-                barrier.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
-                barrier.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT, nri::StageBits::COLOR_ATTACHMENT };
-                barrier.mipOffset = 0;
-                barrier.mipNum = nri::REMAINING;
-                barrier.layerOffset = 0;
-                barrier.layerNum = nri::REMAINING;
-                barrier.planes = nri::PlaneBits::ALL;
-
-                nri::BarrierDesc barrierDesc = {};
-                barrierDesc.textures = &barrier;
-                barrierDesc.textureNum = 1;
-                nri.CmdBarrier(*renderCommandBuffer, barrierDesc);
-
-                nri::AttachmentDesc colorAtt = {};
-                colorAtt.descriptor = backBufferRTV;
-                colorAtt.clearValue.color.f = { 0.0f, 0.0f, 0.0f, 1.0f };
-                colorAtt.loadOp = nri::LoadOp::CLEAR;
-                colorAtt.storeOp = nri::StoreOp::STORE;
-
-                nri::RenderingDesc renderingDesc = {};
-                renderingDesc.colors = &colorAtt;
-                renderingDesc.colorNum = 1;
-
-                nri.CmdBeginRendering(*renderCommandBuffer, renderingDesc);
-                nri.CmdEndRendering(*renderCommandBuffer);
-
-                barrier.before = barrier.after;
-                barrier.after = { nri::AccessBits::NONE, nri::Layout::PRESENT, nri::StageBits::NONE };
-                nri.CmdBarrier(*renderCommandBuffer, barrierDesc);
-
-                nri.EndCommandBuffer(*renderCommandBuffer);
-
-                const uint64_t signalValue = nextRenderFenceValue++;
-                if (renderCommandFence)
-                {
-                    const uint64_t currentFenceValue = nri.GetFenceValue(*renderCommandFence);
-                    if (currentFenceValue == std::numeric_limits<uint64_t>::max())
-                    {
-                        LOG_ERROR("[RenderThread] Command fence returned UINT64_MAX; stopping render thread");
-                        m_RenderThreadRunning = false;
-                    }
-                    else if (signalValue <= currentFenceValue)
-                    {
-                        nextRenderFenceValue = currentFenceValue + 1;
-                        LOG_ERROR("[RenderThread] Corrected non-increasing fence signal value {} to {}; stopping render thread", signalValue, nextRenderFenceValue);
-                        m_RenderThreadRunning = false;
-                    }
-                }
-                if (!m_RenderThreadRunning)
-                    continue;
-
-                nri::FenceSubmitDesc signalFence = {};
-                signalFence.fence = renderCommandFence;
-                signalFence.value = signalValue;
-                signalFence.stages = nri::StageBits::ALL;
-
-                nri::QueueSubmitDesc submitDesc = {};
-                submitDesc.commandBuffers = &renderCommandBuffer;
-                submitDesc.commandBufferNum = 1;
-                if (renderCommandFence)
-                {
-                    submitDesc.signalFences = &signalFence;
-                    submitDesc.signalFenceNum = 1;
-                }
-
-                {
-                    auto &queueMutex = GPUUploadSync::GetQueueMutex();
-                    std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
-                    {
-                        IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexWait");
-                        queueLock.lock();
-                    }
-                    {
-                        IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer::QueueMutexHold");
-                        const nri::Result result = nri.QueueSubmit(*graphicsQueue, submitDesc);
-                        if (result != nri::Result::SUCCESS)
-                        {
-                            LOG_ERROR("[RenderThread] Clear framebuffer QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
-                            m_RenderThreadRunning = false;
-                        }
-                    }
-                }
-                if (m_RenderThreadRunning)
-                {
-                    slot.fenceValue = signalValue;
-                }
-            }
-
-            if (!m_RenderThreadRunning)
-            {
-                break;
-            }
-
             if (Texture::HasPendingUploads())
             {
                 IGN_PROFILE_SCOPE("RenderThread::TextureAsyncUploads");
                 Texture::ProcessAsyncUploads();
             }
 
-            // Begin frame (must be done after framebuffer clear to avoid GPU sync issues)
+            // Begin frame
             m_Renderer->BeginFrame(m_FrameCounter);
 
             // Render layers
+            bool anyLayerWroteBackBuffer = false;
             {
                 IGN_PROFILE_SCOPE("RenderThread::LayerRender");
                 for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
                 {
                     Layer *layer = *it;
                     layer->OnRender(backBufferRenderTarget);
+                    if (layer->DidRenderToBackBuffer())
+                    {
+                        anyLayerWroteBackBuffer = true;
+                    }
                 }
             }
 
@@ -634,8 +460,127 @@ namespace ignite
 
             if (m_CreateInfo.useGui && m_ImGuiLayer)
             {
-                m_ImGuiLayer->EndFrame(backBufferRenderTarget);
+                // Fold swapchain backbuffer clear into ImGui's render pass unless a layer already rendered to it
+                m_ImGuiLayer->EndFrame(backBufferRenderTarget, !anyLayerWroteBackBuffer);
                 m_ImGuiLayer->RenderPlatformWindows();
+            }
+            else if (!anyLayerWroteBackBuffer)
+            {
+                // Standalone clear only when neither a layer nor ImGui rendered to the backbuffer
+                auto &slot = renderCommandSlots[currentFrame % renderCommandSlots.size()];
+                if (renderCommandFence && slot.fenceValue > 0 && nri.GetFenceValue(*renderCommandFence) < slot.fenceValue)
+                {
+                    IGN_PROFILE_SCOPE("RenderThread::WaitSlotFence");
+                    nri.Wait(*renderCommandFence, slot.fenceValue);
+                }
+
+                nri::CommandAllocator *renderCmdAllocator = slot.allocator;
+                nri::CommandBuffer *renderCommandBuffer = slot.commandBuffer;
+
+                if (backBufferRenderTarget && renderCmdAllocator && renderCommandBuffer && graphicsQueue)
+                {
+                    IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
+                    nri.ResetCommandAllocator(*renderCmdAllocator);
+                    nri.BeginCommandBuffer(*renderCommandBuffer, nullptr);
+
+                    backBufferRenderTarget->SetClearColorAttachmentFloat(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 0);
+                    backBufferRenderTarget->BeginRendering(renderCommandBuffer, true, true);
+                    backBufferRenderTarget->EndRendering(renderCommandBuffer);
+                    nri.EndCommandBuffer(*renderCommandBuffer);
+
+                    const uint64_t signalValue = nextRenderFenceValue++;
+                    nri::FenceSubmitDesc signalFence = {};
+                    signalFence.fence = renderCommandFence;
+                    signalFence.value = signalValue;
+                    signalFence.stages = nri::StageBits::ALL;
+
+                    nri::QueueSubmitDesc submitDesc = {};
+                    submitDesc.commandBuffers = &renderCommandBuffer;
+                    submitDesc.commandBufferNum = 1;
+                    if (renderCommandFence)
+                    {
+                        submitDesc.signalFences = &signalFence;
+                        submitDesc.signalFenceNum = 1;
+                    }
+
+                    {
+                        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                        const nri::Result result = nri.QueueSubmit(*graphicsQueue, submitDesc);
+                        if (result != nri::Result::SUCCESS)
+                        {
+                            LOG_ERROR("[RenderThread] Clear framebuffer QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
+                            m_RenderThreadRunning = false;
+                        }
+                    }
+                    if (m_RenderThreadRunning)
+                        slot.fenceValue = signalValue;
+                }
+                else if (backBuffer && backBufferRTV && renderCmdAllocator && renderCommandBuffer && graphicsQueue)
+                {
+                    IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
+                    nri.ResetCommandAllocator(*renderCmdAllocator);
+                    nri.BeginCommandBuffer(*renderCommandBuffer, nullptr);
+
+                    nri::TextureBarrierDesc barrier = {};
+                    barrier.texture = backBuffer;
+                    barrier.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+                    barrier.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT, nri::StageBits::COLOR_ATTACHMENT };
+                    barrier.mipNum = nri::REMAINING;
+                    barrier.layerNum = nri::REMAINING;
+                    barrier.planes = nri::PlaneBits::ALL;
+
+                    nri::BarrierDesc barrierDesc = {};
+                    barrierDesc.textures = &barrier;
+                    barrierDesc.textureNum = 1;
+                    nri.CmdBarrier(*renderCommandBuffer, barrierDesc);
+
+                    nri::AttachmentDesc colorAtt = {};
+                    colorAtt.descriptor = backBufferRTV;
+                    colorAtt.clearValue.color.f = { 0.0f, 0.0f, 0.0f, 1.0f };
+                    colorAtt.loadOp = nri::LoadOp::CLEAR;
+                    colorAtt.storeOp = nri::StoreOp::STORE;
+
+                    nri::RenderingDesc renderingDesc = {};
+                    renderingDesc.colors = &colorAtt;
+                    renderingDesc.colorNum = 1;
+                    nri.CmdBeginRendering(*renderCommandBuffer, renderingDesc);
+                    nri.CmdEndRendering(*renderCommandBuffer);
+
+                    barrier.before = barrier.after;
+                    barrier.after = { nri::AccessBits::NONE, nri::Layout::PRESENT, nri::StageBits::NONE };
+                    nri.CmdBarrier(*renderCommandBuffer, barrierDesc);
+                    nri.EndCommandBuffer(*renderCommandBuffer);
+
+                    const uint64_t signalValue = nextRenderFenceValue++;
+                    nri::FenceSubmitDesc signalFence = {};
+                    signalFence.fence = renderCommandFence;
+                    signalFence.value = signalValue;
+                    signalFence.stages = nri::StageBits::ALL;
+
+                    nri::QueueSubmitDesc submitDesc = {};
+                    submitDesc.commandBuffers = &renderCommandBuffer;
+                    submitDesc.commandBufferNum = 1;
+                    if (renderCommandFence)
+                    {
+                        submitDesc.signalFences = &signalFence;
+                        submitDesc.signalFenceNum = 1;
+                    }
+
+                    {
+                        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                        const nri::Result result = nri.QueueSubmit(*graphicsQueue, submitDesc);
+                        if (result != nri::Result::SUCCESS)
+                        {
+                            LOG_ERROR("[RenderThread] Clear framebuffer QueueSubmit failed with NRI result {}", static_cast<uint32_t>(result));
+                            m_RenderThreadRunning = false;
+                        }
+                    }
+                    if (m_RenderThreadRunning)
+                        slot.fenceValue = signalValue;
+                }
+
+                if (!m_RenderThreadRunning)
+                    break;
             }
 
             if (Texture::HasPendingUploads())
@@ -1067,6 +1012,14 @@ namespace ignite
     float Application::GetDeltaTime()
     {
         return GetInstance()->m_DeltaTime;
+    }
+
+    float Application::GetAverageFrameTime()
+    {
+        Application *app = GetInstance();
+        if (!app)
+            return 0.0f;
+        return (app->m_AverageFrameTime > 1e-6f) ? app->m_AverageFrameTime : app->m_DeltaTime;
     }
 
     int32_t Application::GetFrameIndex()

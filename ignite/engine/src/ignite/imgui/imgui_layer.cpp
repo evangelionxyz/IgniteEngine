@@ -329,7 +329,7 @@ namespace ignite
         m_BeginFrameCalled = true;
     }
 
-    void ImGuiLayer::EndFrame(RenderTarget* framebuffer)
+    void ImGuiLayer::EndFrame(RenderTarget* framebuffer, bool clearTarget)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -340,7 +340,7 @@ namespace ignite
 
         {
             IGN_PROFILE_SCOPE("ImGuiLayer::NRIRender");
-            imguiNRI->Render(framebuffer);
+            imguiNRI->Render(framebuffer, clearTarget);
         }
 
         m_BeginFrameCalled = false;

@@ -12,8 +12,8 @@ cbuffer GTAODenoiseParams : register(b0)
     float farPlane;
     float nearPlane;
     uint hasNormals;
-    uint passMode; // 0 = H half-res denoise, 1 = V half-res denoise, 2 = full-res bilateral upsample
-    uint _pad;
+    uint passMode; // 0 = H half-res denoise, 1 = V half-res denoise, 2 = full-res 3x3 bilateral upsample, 3 = full-res 2x2 bilateral upsample
+    uint denoiseRadius;
 };
 
 Texture2D<float> t_SrcAO : register(t0);
@@ -52,7 +52,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     int2 maxFull = int2(max(int(fullRes.x) - 1, 0), max(int(fullRes.y) - 1, 0));
     float maxValidZ = min(farPlane, 65000.0f) * 0.998f;
 
-    if (passMode == 2u)
+    if (passMode == 2u || passMode == 3u)
     {
         if (DTid.x >= fullRes.x || DTid.y >= fullRes.y)
         {
@@ -69,38 +69,74 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         float3 centerN = (hasNormals != 0u) ? OctDecode(t_Normal.Load(int3(fullPx, 0)).rg) : float3(0.0f, 0.0f, 1.0f);
         float2 halfPos = ((float2(fullPx) + 0.5f) / float2(fullRes)) * float2(halfRes) - 0.5f;
-        int2 baseHalf = int2(round(halfPos));
         float invDepthDenom = 1.0f / max(centerZ * max(depthSigma, 0.01f), 0.02f);
 
         float accumAO = 0.0f;
         float accumW = 0.0f;
 
-        [unroll]
-        for (int dy = -1; dy <= 1; ++dy)
+        if (passMode == 3u)
         {
+            int2 baseHalf = int2(floor(halfPos));
             [unroll]
-            for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = 0; dy <= 1; ++dy)
             {
-                int2 shPx = clamp(baseHalf + int2(dx, dy), int2(0, 0), maxHalf);
-                float sampleZ = t_Depth.Load(int3(shPx, 0)).r;
-                if (sampleZ >= maxValidZ || sampleZ <= 1e-4f)
+                [unroll]
+                for (int dx = 0; dx <= 1; ++dx)
                 {
-                    continue;
-                }
+                    int2 shPx = clamp(baseHalf + int2(dx, dy), int2(0, 0), maxHalf);
+                    float sampleZ = t_Depth.Load(int3(shPx, 0)).r;
+                    if (sampleZ >= maxValidZ || sampleZ <= 1e-4f)
+                    {
+                        continue;
+                    }
 
-                float2 delta = float2(shPx) - halfPos;
-                float w = exp(-dot(delta, delta) * 0.85f);
-                w *= exp(-abs(sampleZ - centerZ) * invDepthDenom);
-                if (hasNormals != 0u)
-                {
-                    float3 sampleN = LoadViewNormalAtHalf(shPx, maxFull);
-                    w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
-                }
+                    float2 delta = float2(shPx) - halfPos;
+                    float w = exp(-dot(delta, delta) * 0.85f);
+                    w *= exp(-abs(sampleZ - centerZ) * invDepthDenom);
+                    if (hasNormals != 0u)
+                    {
+                        float3 sampleN = LoadViewNormalAtHalf(shPx, maxFull);
+                        w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
+                    }
 
-                if (w > 1e-5f)
+                    if (w > 1e-5f)
+                    {
+                        accumAO += t_SrcAO.Load(int3(shPx, 0)).r * w;
+                        accumW += w;
+                    }
+                }
+            }
+        }
+        else
+        {
+            int2 baseHalf = int2(round(halfPos));
+            [unroll]
+            for (int dy = -1; dy <= 1; ++dy)
+            {
+                [unroll]
+                for (int dx = -1; dx <= 1; ++dx)
                 {
-                    accumAO += t_SrcAO.Load(int3(shPx, 0)).r * w;
-                    accumW += w;
+                    int2 shPx = clamp(baseHalf + int2(dx, dy), int2(0, 0), maxHalf);
+                    float sampleZ = t_Depth.Load(int3(shPx, 0)).r;
+                    if (sampleZ >= maxValidZ || sampleZ <= 1e-4f)
+                    {
+                        continue;
+                    }
+
+                    float2 delta = float2(shPx) - halfPos;
+                    float w = exp(-dot(delta, delta) * 0.85f);
+                    w *= exp(-abs(sampleZ - centerZ) * invDepthDenom);
+                    if (hasNormals != 0u)
+                    {
+                        float3 sampleN = LoadViewNormalAtHalf(shPx, maxFull);
+                        w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
+                    }
+
+                    if (w > 1e-5f)
+                    {
+                        accumAO += t_SrcAO.Load(int3(shPx, 0)).r * w;
+                        accumW += w;
+                    }
                 }
             }
         }
@@ -111,7 +147,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
         else
         {
-            int2 fallbackPx = clamp(baseHalf, int2(0, 0), maxHalf);
+            int2 fallbackPx = clamp(int2(round(halfPos)), int2(0, 0), maxHalf);
             u_DstAO[DTid.xy] = t_SrcAO.Load(int3(fallbackPx, 0)).r;
         }
         return;
@@ -144,12 +180,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     static const float kSpatialWeights[5] = { 1.0f, 0.8825f, 0.6065f, 0.3247f, 0.1353f };
     float invDepthDenom = 1.0f / max(centerZ * max(depthSigma, 0.01f), 0.02f);
+    int radius = clamp(int(denoiseRadius), 1, 4);
 
     float accumAO = centerAO;
     float accumW = 1.0f;
 
-    [unroll]
-    for (int offset = -4; offset <= 4; ++offset)
+    [loop]
+    for (int offset = -radius; offset <= radius; ++offset)
     {
         if (offset == 0)
         {

@@ -179,17 +179,16 @@ namespace ignite
         // Close project
         CloseProject();
 
-        // Unsubscribe signals
-        SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
-        m_FileImportSignalToken = kInvalidSignalToken;
-
-        ContentBrowserPanel::ReleaseSharedResources();
         m_ContentBrowserPanels.clear();
         m_ContentBrowserPanelsPendingRemoval.clear();
         m_ContentBrowserPanel = nullptr;
 
         m_SceneRenderer.reset();
         m_GIBaker.reset();
+
+        // Unsubscribe signals
+        SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
+        m_FileImportSignalToken = kInvalidSignalToken;
     }
 
     void EditorLayer::AddContentBrowserPanel()
@@ -324,28 +323,44 @@ namespace ignite
             }
             else if (m_ActiveScene)
             {
-                const SceneAssetLoadProgress assetProgress = m_ActiveScene->GetAssetLoadProgress();
-                if (!assetProgress.allReady)
+                if (m_LastAssetProgressScene != m_ActiveScene.get())
                 {
-                    const float clampedProgress = std::clamp(assetProgress.progress, 0.02f, 0.99f);
-                    SetLoadingProgress(clampedProgress);
-                    SetStatusText(std::format("Loading scene assets ({}/{})...", assetProgress.readyAssets, assetProgress.totalAssets));
-                    m_LoadingSceneAssets = true;
+                    m_LastAssetProgressScene = m_ActiveScene.get();
+                    m_CachedAllSceneAssetsReady = false;
+                    m_AssetProgressCheckCounter = 0;
                 }
-                else if (AssetWorker::IsBusy())
+
+                const bool shouldPollProgress = !m_CachedAllSceneAssetsReady
+                    || m_LoadingSceneAssets
+                    || AssetWorker::IsBusy()
+                    || ((++m_AssetProgressCheckCounter % 30u) == 0u);
+
+                if (shouldPollProgress)
                 {
-                    const float workerProgress = AssetWorker::GetProgress();
-                    if (m_LoadingProgress <= 0.0f || m_LoadingProgress >= 1.0f || m_LoadingSceneAssets)
+                    const SceneAssetLoadProgress assetProgress = m_ActiveScene->GetAssetLoadProgress();
+                    m_CachedAllSceneAssetsReady = assetProgress.allReady;
+                    if (!assetProgress.allReady)
                     {
-                        SetLoadingProgress(workerProgress > 0.0f ? workerProgress : 0.1f);
+                        const float clampedProgress = std::clamp(assetProgress.progress, 0.02f, 0.99f);
+                        SetLoadingProgress(clampedProgress);
+                        SetStatusText(std::format("Loading scene assets ({}/{})...", assetProgress.readyAssets, assetProgress.totalAssets));
+                        m_LoadingSceneAssets = true;
                     }
-                    m_LoadingSceneAssets = false;
-                }
-                else if (m_LoadingSceneAssets || (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f))
-                {
-                    SetLoadingProgress(0.0f);
-                    SetStatusText("Ready");
-                    m_LoadingSceneAssets = false;
+                    else if (AssetWorker::IsBusy())
+                    {
+                        const float workerProgress = AssetWorker::GetProgress();
+                        if (m_LoadingProgress <= 0.0f || m_LoadingProgress >= 1.0f || m_LoadingSceneAssets)
+                        {
+                            SetLoadingProgress(workerProgress > 0.0f ? workerProgress : 0.1f);
+                        }
+                        m_LoadingSceneAssets = false;
+                    }
+                    else if (m_LoadingSceneAssets || (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f))
+                    {
+                        SetLoadingProgress(0.0f);
+                        SetStatusText("Ready");
+                        m_LoadingSceneAssets = false;
+                    }
                 }
             }
             else if (AssetWorker::IsBusy())
@@ -1366,10 +1381,11 @@ namespace ignite
 
                 // Allocate enough memory for log searching
                 static char buffer[256] = { 0 };
-                static std::string consoleLogSearchResultStr;
-
-                // Non static to re-create empty set
-                std::set<std::pair<std::string, size_t>> filteredConsoleLog;
+                static std::vector<size_t> s_FilteredLogIndices;
+                static std::string s_LastConsoleSearch;
+                static size_t s_LastConsoleLogCount = 0;
+                static std::string s_LastConsoleBackMsg;
+                static bool s_ConsoleFilterDirty = true;
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 8.0f * scale, 5.0f * scale });
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 5.0f * scale, 0.0f });
@@ -1379,8 +1395,12 @@ namespace ignite
                     // Clear Logs and Search Query
                     if (UI::Button("Clear", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, buttonHeight), ICON_LC_TRASH_2))
                     {
-                        consoleLogSearchResultStr.clear();
                         std::memset(buffer, 0, sizeof(buffer));
+                        s_LastConsoleSearch.clear();
+                        s_FilteredLogIndices.clear();
+                        s_LastConsoleLogCount = 0;
+                        s_LastConsoleBackMsg.clear();
+                        s_ConsoleFilterDirty = true;
 
                         Logger::ClearLogs();
                     }
@@ -1388,7 +1408,7 @@ namespace ignite
                     // Query search string
                     ImGui::SameLine();
 
-                    UI::TextField(
+                    if (UI::TextField(
                         "##console_search",
                         buffer,
                         sizeof(buffer),
@@ -1396,18 +1416,33 @@ namespace ignite
                         ImVec2(glm::round(280.0f * scale), buttonHeight),
                         ICON_LC_SEARCH,
                         true,
-                        ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
-
-                    consoleLogSearchResultStr = std::string(buffer);
-                    if (!consoleLogSearchResultStr.empty())
+                        ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll))
                     {
-                        std::string search = stringutils::ToLower(consoleLogSearchResultStr);
-                        for (size_t i = 0; i < logs.size(); ++i)
+                        s_ConsoleFilterDirty = true;
+                    }
+
+                    const std::string_view currentSearchView(buffer);
+                    const bool logsChanged = (logs.size() != s_LastConsoleLogCount)
+                        || (!logs.empty() && logs.back().message != s_LastConsoleBackMsg);
+                    if (s_ConsoleFilterDirty || logsChanged || currentSearchView != s_LastConsoleSearch)
+                    {
+                        s_LastConsoleSearch.assign(currentSearchView);
+                        s_LastConsoleLogCount = logs.size();
+                        s_LastConsoleBackMsg = logs.empty() ? std::string() : logs.back().message;
+                        s_ConsoleFilterDirty = false;
+                        s_FilteredLogIndices.clear();
+
+                        if (!s_LastConsoleSearch.empty())
                         {
-                            std::string messageLower = stringutils::ToLower(logs[i].message);
-                            if (messageLower.find(search) != std::string::npos)
+                            const std::string searchLower = stringutils::ToLower(s_LastConsoleSearch);
+                            s_FilteredLogIndices.reserve(logs.size());
+                            for (size_t i = 0; i < logs.size(); ++i)
                             {
-                                filteredConsoleLog.insert({ messageLower, i });
+                                const std::string messageLower = stringutils::ToLower(logs[i].message);
+                                if (messageLower.find(searchLower) != std::string::npos)
+                                {
+                                    s_FilteredLogIndices.push_back(i);
+                                }
                             }
                         }
                     }
@@ -1419,7 +1454,7 @@ namespace ignite
                 ImGui::Separator();
                 if (ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar))
                 {
-                    static std::function<void(const LogMessage &)> printLogFn = [&](const LogMessage &log)
+                    const auto printLogFn = [](const LogMessage &log)
                     {
                         ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
                         switch (log.level)
@@ -1442,7 +1477,7 @@ namespace ignite
                     };
 
                     // Print with search or default
-                    if (consoleLogSearchResultStr.empty())
+                    if (s_LastConsoleSearch.empty())
                     {
                         for (const auto &log : logs)
                         {
@@ -1451,9 +1486,12 @@ namespace ignite
                     }
                     else
                     {
-                        for (const auto &[_, logIndex] : filteredConsoleLog)
+                        for (const size_t logIndex : s_FilteredLogIndices)
                         {
-                            printLogFn(logs[logIndex]);
+                            if (logIndex < logs.size())
+                            {
+                                printLogFn(logs[logIndex]);
+                            }
                         }
                     }
                 }
@@ -1894,6 +1932,8 @@ namespace ignite
             cmdMgr->ClearAll();
         }
 
+        ContentBrowserPanel::ReleaseSharedResources();
+
         ThumbnailGenerator::Get().ClearPending();
         AssetManager::GetInstance()->Reset();
 
@@ -2289,7 +2329,17 @@ namespace ignite
                     sr.EndMap();
                 }
 
-                // TODO: Settings/Render scalability
+                if (m_SceneRenderer)
+                {
+                    sr.BeginMap("SceneRenderer");
+                    {
+                        const auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
+                        sr.AddKeyValue("ShowBoundingBox", renderSettings.showBoundingBox);
+                        sr.AddKeyValue("ShowPhysicsCollider", renderSettings.showPhysicsCollider);
+                        sr.AddKeyValue("ShowEntityNames", renderSettings.showEntityNames);
+                    }
+                    sr.EndMap();
+                }
             }
             sr.EndMap();
 
@@ -2313,10 +2363,10 @@ namespace ignite
 
         if (JsonNode windowsNode = stateNode["Windows"])
         {
-            if (windowsNode["Console"]) m_State.consoleWindow = windowsNode["Console"].as<bool>();
-            if (windowsNode["Network"]) m_State.networkWindow = windowsNode["Network"].as<bool>();
-            if (windowsNode["SceneRenderer"]) m_State.sceneRendererWindow = windowsNode["SceneRenderer"].as<bool>();
-            if (windowsNode["GameplayViewport"]) m_State.gameplayViewportWindow = windowsNode["GameplayViewport"].as<bool>();
+            if (auto n = windowsNode["Console"]) m_State.consoleWindow = n.as<bool>();
+            if (auto n = windowsNode["Network"]) m_State.networkWindow = n.as<bool>();
+            if (auto n = windowsNode["SceneRenderer"]) m_State.sceneRendererWindow = n.as<bool>();
+            if (auto n = windowsNode["GameplayViewport"]) m_State.gameplayViewportWindow = n.as<bool>();
         }
 
         if (m_ScenePanel)
@@ -2324,18 +2374,29 @@ namespace ignite
             if (JsonNode cameraNode = stateNode["Camera"])
             {
                 auto &camera = m_ScenePanel->GetViewportCamera();
-                if (cameraNode["Translation"]) camera.position = cameraNode["Translation"].as<glm::vec3>();
-                if (cameraNode["Yaw"]) camera.yaw = cameraNode["Yaw"].as<float>();
-                if (cameraNode["Pitch"]) camera.pitch = cameraNode["Pitch"].as<float>();
-                if (cameraNode["Fov"]) camera.fov = cameraNode["Fov"].as<float>();
-                if (cameraNode["FarPlane"]) camera.farPlane = cameraNode["FarPlane"].as<float>();
-                if (cameraNode["NearPlane"]) camera.nearPlane = cameraNode["NearPlane"].as<float>();
-                if (cameraNode["OrthoSize"]) camera.orthoSize = cameraNode["OrthoSize"].as<float>();
-                if (cameraNode["Distance"]) camera.SetDistance(cameraNode["Distance"].as<float>());
-                if (cameraNode["FocusTarget"]) camera.SetTarget(cameraNode["FocusTarget"].as<glm::vec3>());
-                if (cameraNode["ProjectionType"]) camera.projectionType = static_cast<ProjectionType>(cameraNode["ProjectionType"].as<int>());
+                if (auto n = cameraNode["Translation"]) camera.position = n.as<glm::vec3>();
+                if (auto n = cameraNode["Yaw"]) camera.yaw = n.as<float>();
+                if (auto n = cameraNode["Pitch"]) camera.pitch = n.as<float>();
+                if (auto n = cameraNode["Fov"]) camera.fov = n.as<float>();
+                if (auto n = cameraNode["FarPlane"]) camera.farPlane = n.as<float>();
+                if (auto n = cameraNode["NearPlane"]) camera.nearPlane = n.as<float>();
+                if (auto n = cameraNode["OrthoSize"]) camera.orthoSize = n.as<float>();
+                if (auto n = cameraNode["Distance"]) camera.SetDistance(n.as<float>());
+                if (auto n = cameraNode["FocusTarget"]) camera.SetTarget(n.as<glm::vec3>());
+                if (auto n = cameraNode["ProjectionType"]) camera.projectionType = static_cast<ProjectionType>(n.as<int>());
                 camera.UpdateCameraPosition(0.0f);
                 camera.UpdateView();
+            }
+        }
+
+        if (m_SceneRenderer)
+        {
+            if (JsonNode sceneRendererNode = stateNode["SceneRenderer"])
+            {
+                auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
+                if (auto n = sceneRendererNode["ShowBoundingBox"]) renderSettings.showBoundingBox = n.as<bool>();
+                if (auto n = sceneRendererNode["ShowPhysicsCollider"]) renderSettings.showPhysicsCollider = n.as<bool>();
+                if (auto n = sceneRendererNode["ShowEntityNames"]) renderSettings.showEntityNames = n.as<bool>();
             }
         }
     }
@@ -3258,7 +3319,7 @@ namespace ignite
 
                     if (renderSettings.sampleMethod == SampleMethod::TAA)
                     {
-                        if (UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f))
+                        if (UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.01f, 0.02f, 1.0f, 0.10f))
                             settingsChanged = true;
                     }
                     else if (renderSettings.sampleMethod == SampleMethod::MSAA)
@@ -3270,6 +3331,23 @@ namespace ignite
                             else renderSettings.msaaProperties.sampleCount = 8;
                             settingsChanged = true;
                         }
+                    }
+                    else if (renderSettings.sampleMethod == SampleMethod::FXAA)
+                    {
+                        if (UI::DrawFloatControl("Subpixel Quality", &renderSettings.fxaaProperties.subpixQuality, 0.02f, 0.0f, 1.0f, 0.75f))
+                            settingsChanged = true;
+                        if (UI::DrawFloatControl("Edge Threshold", &renderSettings.fxaaProperties.edgeThreshold, 0.01f, 0.063f, 0.333f, 0.125f))
+                            settingsChanged = true;
+                        if (UI::DrawFloatControl("Min Threshold", &renderSettings.fxaaProperties.edgeThresholdMin, 0.005f, 0.015f, 0.0833f, 0.0417f))
+                            settingsChanged = true;
+                    }
+
+                    if (settingsChanged)
+                    {
+                        m_State.editorRequestToResize = true;
+                        m_State.gameplayRequestToResize = true;
+                        if (m_ActiveProject)
+                            renderSettings.SerializeToFile(m_ActiveProject->GetDirectory() / "GameSettings.ign");
                     }
 
                     ImGui::TreePop();
@@ -3526,7 +3604,7 @@ namespace ignite
         postProcessing.renderScale = glm::clamp(postProcessing.renderScale * globalScale, 0.25f, 1.0f);
 
         const uint32_t expectedRenderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.x) * postProcessing.renderScale)));
-        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(static_cast<float>(desiredSize.y) * postProcessing.renderScale));
+        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.y) * postProcessing.renderScale)));
 
         const glm::uvec2 sceneRTSize = target ? target->sceneRT->GetSize() : glm::uvec2(0);
 

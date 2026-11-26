@@ -32,6 +32,7 @@ namespace ignite
         virtual void OnRender(RenderTarget *framebuffer) { }
         virtual void OnEvent(Event &e) { }
         virtual void OnGuiRender() { }
+        virtual bool DidRenderToBackBuffer() const { return false; }
         std::string GetName() { return m_Name; }
 
     protected:

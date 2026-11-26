@@ -362,24 +362,12 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        if (node->path.empty())
+        if (!node || node->path.empty() || node->fullPath.empty())
             return;
 
-        // Get the node's index in the tree
-        const auto nodeIndex = static_cast<uint32_t>(node - m_TreeNodes.data());
-
-        // Build full path using helper function
-        const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetDirectory();
-        const std::filesystem::path relativePath = GetNodeFullpath(nodeIndex);
-        const std::filesystem::path fullPath = assetDir / relativePath;
-        const std::string filename = node->path.filename().string();
-
-        // Check if path exists and is a directory
-        bool isDirectory = false;
-        if (std::filesystem::exists(fullPath))
-        {
-            isDirectory = std::filesystem::is_directory(fullPath);
-        }
+        const std::filesystem::path &fullPath = node->fullPath;
+        const std::string &filename = node->filename;
+        const bool isDirectory = node->isDirectory;
 
         ImGuiTreeNodeFlags flags = (m_SelectedFileTree == fullPath ? ImGuiTreeNodeFlags_Selected : 0)
             | ImGuiTreeNodeFlags_OpenOnArrow
@@ -394,14 +382,13 @@ namespace ignite
         const bool isCurrentDir = (fullPath == m_CurrentDirectory);
         const float rowCursorX = ImGui::GetCursorScreenPos().x;
         const std::string displayLabel = "     " + filename;
-        const bool opened = ImGui::TreeNodeEx(fullPath.generic_string().c_str(), flags, "%s", displayLabel.c_str());
+        const bool opened = ImGui::TreeNodeEx(node->genericId.c_str(), flags, "%s", displayLabel.c_str());
         const ImVec2 itemMin = ImGui::GetItemRectMin();
         const ImVec2 itemMax = ImGui::GetItemRectMax();
 
         // Draw colored Lucide icon & subtle active directory bar
         {
-            const AssetType treeAssetType = isDirectory ? AssetType::Invalid : GetAssetTypeFromExtension(fullPath.extension().string());
-            const FileVisual vis = GetFileVisual(isDirectory, opened, treeAssetType, fullPath);
+            const FileVisual vis = GetFileVisual(isDirectory, opened, node->assetType, fullPath);
             const float rowH = (std::max)(1.0f, itemMax.y - itemMin.y);
             const float iconX = rowCursorX + ImGui::GetTreeNodeToLabelSpacing();
             ImDrawList *dl = ImGui::GetWindowDrawList();
@@ -531,10 +518,49 @@ namespace ignite
             // Searching variables
             static bool recursiveSearch = true;
             static char buffer[256] = { 0 };
-            static std::string contentNameSearchResultStr;
-            std::vector<std::filesystem::path> filteredContentNames;
 
-            const auto projectDir = m_EditorLayer->GetActiveProject()->GetDirectory();
+            const auto &projectDir = m_EditorLayer->GetActiveProject()->GetDirectory();
+
+            // Rebuild cached navigation metadata only when directory, project root, or tree changes
+            if (m_CachedNavTreeVersion != m_TreeCacheVersion
+                || m_CachedNavDir != m_CurrentDirectory
+                || m_CachedNavProjectDir != projectDir)
+            {
+                std::error_code eqEc;
+                m_CachedIsAtProjectRoot = (m_CurrentDirectory == projectDir)
+                    || std::filesystem::equivalent(m_CurrentDirectory, projectDir, eqEc);
+
+                m_CachedCrumbs.clear();
+                const std::string rootName = projectDir.filename().string().empty()
+                    ? projectDir.generic_string()
+                    : projectDir.filename().string();
+                m_CachedCrumbs.emplace_back(rootName, projectDir);
+
+                std::error_code relEc;
+                const std::filesystem::path relCwd = std::filesystem::relative(m_CurrentDirectory, projectDir, relEc);
+                uint32_t currentNodeIdx = 0;
+                if (!relEc && !relCwd.empty() && relCwd != "." && !m_TreeNodes.empty())
+                {
+                    std::filesystem::path accum = projectDir;
+                    for (const auto &seg : relCwd)
+                    {
+                        const std::string segStr = seg.string();
+                        if (segStr == "." || segStr.empty())
+                            continue;
+                        accum /= seg;
+                        m_CachedCrumbs.emplace_back(segStr, accum);
+
+                        auto childIt = m_TreeNodes[currentNodeIdx].children.find(seg);
+                        if (childIt != m_TreeNodes[currentNodeIdx].children.end())
+                            currentNodeIdx = childIt->second;
+                    }
+                }
+
+                m_CachedCurrentNodeIndex = currentNodeIdx;
+                m_CachedNavDir = m_CurrentDirectory;
+                m_CachedNavProjectDir = projectDir;
+                m_CachedNavTreeVersion = m_TreeCacheVersion;
+            }
 
             // Navigation bar (38px crisp shadcn bar with Lucide icons, breadcrumbs, search & recursive toggle)
             const float navBarH = glm::round(36.0f * scale);
@@ -582,9 +608,7 @@ namespace ignite
                     }
                 }
 
-                std::error_code eqEc;
-                const bool isAtProjectRoot = std::filesystem::equivalent(m_CurrentDirectory, projectDir, eqEc);
-                const bool canGoUp = !isAtProjectRoot && m_CurrentDirectory.has_parent_path();
+                const bool canGoUp = !m_CachedIsAtProjectRoot && m_CurrentDirectory.has_parent_path();
 
                 ImGui::SameLine(0.0f, 3.0f * scale);
                 if (UI::IconButton("##up_dir", ICON_LC_ARROW_UP, UI::ButtonVariant::Ghost, UI::ButtonSize::IconSm, "Parent Folder", false, !canGoUp))
@@ -626,29 +650,8 @@ namespace ignite
                 const float recursiveW = glm::round(96.0f * scale);
                 const float rightGroupW = searchW + recursiveW + glm::round(14.0f * scale);
 
-                std::vector<std::pair<std::string, std::filesystem::path>> crumbs;
-                const std::string rootName = projectDir.filename().string().empty()
-                    ? projectDir.generic_string()
-                    : projectDir.filename().string();
-                crumbs.emplace_back(rootName, projectDir);
-
-                std::error_code relEc;
-                const std::filesystem::path relCwd = std::filesystem::relative(m_CurrentDirectory, projectDir, relEc);
-                if (!relEc && !relCwd.empty() && relCwd != ".")
-                {
-                    std::filesystem::path accum = projectDir;
-                    for (const auto &seg : relCwd)
-                    {
-                        const std::string segStr = seg.string();
-                        if (segStr == "." || segStr.empty())
-                            continue;
-                        accum /= seg;
-                        crumbs.emplace_back(segStr, accum);
-                    }
-                }
-
                 const float btnH = glm::round(24.0f * scale);
-                for (size_t cIdx = 0; cIdx < crumbs.size(); ++cIdx)
+                for (size_t cIdx = 0; cIdx < m_CachedCrumbs.size(); ++cIdx)
                 {
                     const float availBeforeRight = ImGui::GetContentRegionAvail().x - rightGroupW;
                     if (cIdx > 0 && availBeforeRight < glm::round(56.0f * scale))
@@ -666,19 +669,19 @@ namespace ignite
 
                     ImGui::SameLine(0.0f, 2.0f * scale);
                     ImGui::PushID(static_cast<int>(cIdx));
-                    const bool isLast = (cIdx + 1 == crumbs.size());
+                    const bool isLast = (cIdx + 1 == m_CachedCrumbs.size());
                     const auto variant = isLast ? UI::ButtonVariant::Secondary : UI::ButtonVariant::Ghost;
-                    if (UI::Button(crumbs[cIdx].first.c_str(), variant, UI::ButtonSize::Small, ImVec2(0.0f, btnH), cIdx == 0 ? ICON_LC_FOLDER : nullptr))
+                    if (UI::Button(m_CachedCrumbs[cIdx].first.c_str(), variant, UI::ButtonSize::Small, ImVec2(0.0f, btnH), cIdx == 0 ? ICON_LC_FOLDER : nullptr))
                     {
-                        if (crumbs[cIdx].second != m_CurrentDirectory)
+                        if (m_CachedCrumbs[cIdx].second != m_CurrentDirectory)
                         {
                             m_BackwardPathStack.push(m_CurrentDirectory);
                             while (!m_ForwardPathStack.empty())
                             {
                                 m_ForwardPathStack.pop();
                             }
-                            m_CurrentDirectory = crumbs[cIdx].second;
-                            m_SelectedFileTree = crumbs[cIdx].second;
+                            m_CurrentDirectory = m_CachedCrumbs[cIdx].second;
+                            m_SelectedFileTree = m_CachedCrumbs[cIdx].second;
                         }
                     }
                     ImGui::PopID();
@@ -707,8 +710,6 @@ namespace ignite
 
                 ImGui::SameLine(0.0f, 6.0f * scale);
                 UI::ToggleButton("Recursive", &recursiveSearch, UI::ButtonSize::Small, ImVec2(recursiveW, btnH), ICON_LC_FOLDER_SEARCH);
-
-                contentNameSearchResultStr = std::string(buffer);
             }
             ImGui::EndChild();
             ImGui::PopStyleVar(2);
@@ -841,49 +842,61 @@ namespace ignite
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * scale, 10.0f * scale));
                 if (ImGui::BeginChild("##file_lists", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding))
                 {
-                    FileTreeNode *node = m_TreeNodes.data();
+                    FileTreeNode *node = (!m_TreeNodes.empty() && m_CachedCurrentNodeIndex < m_TreeNodes.size())
+                        ? &m_TreeNodes[m_CachedCurrentNodeIndex]
+                        : m_TreeNodes.data();
                     if (node)
                     {
-                        auto &assetDirectory = projectDir;
-                        const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, assetDirectory);
-                        for (const auto &path : relativePath)
-                        {
-                            if (node->path == relativePath)
-                                break;
-                            if (node->children.contains(path))
-                                node = &m_TreeNodes[node->children[path]];
-                        }
-
-                        const bool searchActive = !contentNameSearchResultStr.empty();
+                        const std::string_view searchView(buffer);
+                        const bool searchActive = !searchView.empty();
                         if (!searchActive && node->children.empty())
                             UI::DrawCenteredText("Empty folder", UI::ToU32(theme.mutedForeground));
 
                         if (searchActive)
                         {
-                            std::string search = stringutils::ToLower(contentNameSearchResultStr);
-                            if (recursiveSearch)
+                            if (m_CachedSearchTreeVersion != m_TreeCacheVersion
+                                || m_CachedSearchDir != m_CurrentDirectory
+                                || m_CachedSearchRecursive != recursiveSearch
+                                || m_CachedSearchQuery != searchView)
                             {
-                                for (auto &treeNode : m_TreeNodes)
+                                m_CachedSearchQuery.assign(searchView);
+                                m_CachedSearchRecursive = recursiveSearch;
+                                m_CachedSearchDir = m_CurrentDirectory;
+                                m_CachedSearchTreeVersion = m_TreeCacheVersion;
+                                m_CachedSearchNodeIndices.clear();
+                                m_CachedSearchRelPaths.clear();
+
+                                const std::string searchLower = stringutils::ToLower(m_CachedSearchQuery);
+                                if (recursiveSearch)
                                 {
-                                    for (const uint32_t childNodeIndex : treeNode.sortedChildren)
+                                    for (const auto &treeNode : m_TreeNodes)
                                     {
-                                        const auto path = std::filesystem::relative(
-                                            assetDirectory / GetNodeFullpath(childNodeIndex), m_CurrentDirectory);
-                                        std::string pathLower = stringutils::ToLower(path.generic_string());
-                                        if (pathLower.find(search) != std::string::npos)
-                                            filteredContentNames.push_back(path);
+                                        for (const uint32_t childNodeIndex : treeNode.sortedChildren)
+                                        {
+                                            const FileTreeNode &child = m_TreeNodes[childNodeIndex];
+                                            std::error_code relEc;
+                                            const std::filesystem::path rel = std::filesystem::relative(child.fullPath, m_CurrentDirectory, relEc);
+                                            const std::string pathLower = stringutils::ToLower(rel.generic_string());
+                                            if (pathLower.find(searchLower) != std::string::npos)
+                                            {
+                                                m_CachedSearchNodeIndices.push_back(childNodeIndex);
+                                                m_CachedSearchRelPaths.push_back(rel);
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                            else
-                            {
-                                for (const uint32_t childNodeIndex : node->sortedChildren)
+                                else
                                 {
-                                    const auto path = std::filesystem::relative(
-                                        assetDirectory / GetNodeFullpath(childNodeIndex), m_CurrentDirectory);
-                                    std::string pathLower = stringutils::ToLower(path.generic_string());
-                                    if (pathLower.find(search) != std::string::npos)
-                                        filteredContentNames.push_back(path);
+                                    for (const uint32_t childNodeIndex : node->sortedChildren)
+                                    {
+                                        const FileTreeNode &child = m_TreeNodes[childNodeIndex];
+                                        const std::string pathLower = stringutils::ToLower(child.path.generic_string());
+                                        if (pathLower.find(searchLower) != std::string::npos)
+                                        {
+                                            m_CachedSearchNodeIndices.push_back(childNodeIndex);
+                                            m_CachedSearchRelPaths.push_back(child.path);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -898,7 +911,7 @@ namespace ignite
 
                         const int itemPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (itemWidth + spacing)));
                         const auto itemCount = searchActive
-                            ? static_cast<int>(filteredContentNames.size())
+                            ? static_cast<int>(m_CachedSearchNodeIndices.size())
                             : static_cast<int>(node->sortedChildren.size());
 
                         if (searchActive && itemCount == 0)
@@ -923,12 +936,16 @@ namespace ignite
                                     if (i > rowStart)
                                         ImGui::SameLine(0.0f, spacing);
 
+                                    const size_t idx = static_cast<size_t>(i);
+                                    const FileTreeNode *cachedNode = searchActive
+                                        ? &m_TreeNodes[m_CachedSearchNodeIndices[idx]]
+                                        : &m_TreeNodes[node->sortedChildren[idx]];
                                     const std::filesystem::path &item = searchActive
-                                        ? filteredContentNames[static_cast<size_t>(i)]
-                                        : m_TreeNodes[node->sortedChildren[static_cast<size_t>(i)]].path;
+                                        ? m_CachedSearchRelPaths[idx]
+                                        : cachedNode->path;
 
-                                    ImGui::PushID(item.generic_string().c_str());
-                                    UIRenderFileButton(item);
+                                    ImGui::PushID(cachedNode->genericId.c_str());
+                                    UIRenderFileButton(item, cachedNode);
                                     ImGui::PopID();
                                 }
                             }
@@ -1772,6 +1789,30 @@ namespace ignite
 
         for (uint32_t i = 0; i < m_TreeNodes.size(); ++i)
         {
+            FileTreeNode &node = m_TreeNodes[i];
+            if (!node.isDeleted && !node.path.empty())
+            {
+                node.relativePath = GetNodeFullpath(i);
+                node.fullPath = assetDir / node.relativePath;
+                node.filename = node.path.filename().string();
+                node.genericId = node.fullPath.generic_string();
+                std::error_code ec;
+                node.isDirectory = std::filesystem::is_directory(node.fullPath, ec);
+                node.assetType = node.isDirectory ? AssetType::Invalid : GetAssetTypeFromExtension(node.path.extension().string());
+            }
+            else
+            {
+                node.relativePath.clear();
+                node.fullPath.clear();
+                node.filename.clear();
+                node.genericId.clear();
+                node.isDirectory = false;
+                node.assetType = AssetType::Invalid;
+            }
+        }
+
+        for (uint32_t i = 0; i < m_TreeNodes.size(); ++i)
+        {
             m_TreeNodes[i].sortedChildren.clear();
             m_TreeNodes[i].sortedChildren.reserve(m_TreeNodes[i].children.size());
 
@@ -1783,20 +1824,16 @@ namespace ignite
                 }
             }
 
-            std::ranges::sort(m_TreeNodes[i].sortedChildren, [this, &assetDir](uint32_t leftIndex, uint32_t rightIndex)
+            std::ranges::sort(m_TreeNodes[i].sortedChildren, [this](uint32_t leftIndex, uint32_t rightIndex)
             {
-                const std::filesystem::path leftPath = assetDir / GetNodeFullpath(leftIndex);
-                const std::filesystem::path rightPath = assetDir / GetNodeFullpath(rightIndex);
-
-                const bool leftIsDirectory = std::filesystem::exists(leftPath) && std::filesystem::is_directory(leftPath);
-                const bool rightIsDirectory = std::filesystem::exists(rightPath) && std::filesystem::is_directory(rightPath);
-
-                if (leftIsDirectory != rightIsDirectory)
+                const FileTreeNode &leftNode = m_TreeNodes[leftIndex];
+                const FileTreeNode &rightNode = m_TreeNodes[rightIndex];
+                if (leftNode.isDirectory != rightNode.isDirectory)
                 {
-                    return leftIsDirectory;
+                    return leftNode.isDirectory;
                 }
 
-                return m_TreeNodes[leftIndex].path.generic_string() < m_TreeNodes[rightIndex].path.generic_string();
+                return leftNode.path.generic_string() < rightNode.path.generic_string();
             });
         }
 
@@ -1808,21 +1845,21 @@ namespace ignite
             }
         }
 
-        std::ranges::sort(m_SortedRootNodeIndices, [this, &assetDir](uint32_t leftIndex, uint32_t rightIndex)
+        std::ranges::sort(m_SortedRootNodeIndices, [this](uint32_t leftIndex, uint32_t rightIndex)
         {
-            const std::filesystem::path leftPath = assetDir / GetNodeFullpath(leftIndex);
-            const std::filesystem::path rightPath = assetDir / GetNodeFullpath(rightIndex);
-
-            const bool leftIsDirectory = std::filesystem::exists(leftPath) && std::filesystem::is_directory(leftPath);
-            const bool rightIsDirectory = std::filesystem::exists(rightPath) && std::filesystem::is_directory(rightPath);
-
-            if (leftIsDirectory != rightIsDirectory)
+            const FileTreeNode &leftNode = m_TreeNodes[leftIndex];
+            const FileTreeNode &rightNode = m_TreeNodes[rightIndex];
+            if (leftNode.isDirectory != rightNode.isDirectory)
             {
-                return leftIsDirectory;
+                return leftNode.isDirectory;
             }
 
-            return m_TreeNodes[leftIndex].path.generic_string() < m_TreeNodes[rightIndex].path.generic_string();
+            return leftNode.path.generic_string() < rightNode.path.generic_string();
         });
+
+        ++m_TreeCacheVersion;
+        m_CachedNavTreeVersion = 0;
+        m_CachedSearchTreeVersion = 0;
     }
 
     void ContentBrowserPanel::LoadAssetTree(const std::filesystem::path &directory)
@@ -1897,18 +1934,28 @@ namespace ignite
         }
     }
 
-    void ContentBrowserPanel::UIRenderFileButton(const std::filesystem::path &item)
+    void ContentBrowserPanel::UIRenderFileButton(const std::filesystem::path &item, const FileTreeNode *cachedNode)
     {
         IGN_PROFILE_SCOPE_COLOR("ContentBrowser::UIRenderFileButton", 0xCD5C5C);
 
-        const std::filesystem::path path = m_CurrentDirectory / item;
-        std::error_code statusError;
-        const std::filesystem::file_status fileStatus = std::filesystem::status(path.string(), statusError);
-        if (statusError || !std::filesystem::exists(fileStatus))
-            return;
-
-        const bool isDirectory = std::filesystem::is_directory(fileStatus);
-        const AssetType itemAssetType = GetAssetTypeFromExtension(item.extension().string());
+        std::filesystem::path fallbackPath;
+        const std::filesystem::path &path = cachedNode ? cachedNode->fullPath : (fallbackPath = m_CurrentDirectory / item);
+        bool isDirectory = false;
+        AssetType itemAssetType = AssetType::Invalid;
+        if (cachedNode)
+        {
+            isDirectory = cachedNode->isDirectory;
+            itemAssetType = cachedNode->assetType;
+        }
+        else
+        {
+            std::error_code statusError;
+            const std::filesystem::file_status fileStatus = std::filesystem::status(path.string(), statusError);
+            if (statusError || !std::filesystem::exists(fileStatus))
+                return;
+            isDirectory = std::filesystem::is_directory(fileStatus);
+            itemAssetType = GetAssetTypeFromExtension(item.extension().string());
+        }
         const FileVisual visual = GetFileVisual(isDirectory, false, itemAssetType, path);
 
         // Request/touch thumbnail cache (actual GPU texture used if available)
@@ -3424,59 +3471,56 @@ namespace ignite
             }
 
             // -----------------------------------------------------------------------
-            // RENDER THREAD: Create GPU texture from the tiny downsampled buffer.
-            // GPU object creation happens here - never on a worker thread.
+            // WORKER THREAD: Prepare deferred Texture + CPU mip chain, then queue
+            // non-blocking batched GPU upload on the render thread.
             // -----------------------------------------------------------------------
-            Application::SubmitToRenderThread([this, capturedPath, destPixels = destPixels, destWidth, destHeight, requestGeneration]() mutable
+            if (requestGeneration != s_SharedThumbnailLoadGeneration || destPixels.empty())
             {
-                // Drop early if canceled
+                Application::SubmitToRenderThread([capturedPath]()
+                {
+                    s_SharedThumbnails.erase(capturedPath);
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                }, "ContentBrowserPanel::StartThumbnailLoad - Drop stale thumbnail");
+                return;
+            }
+
+            TextureCreateInfo createInfo;
+            createInfo.format = nri::Format::RGBA8_UNORM;
+            createInfo.keepInitialState = true;
+            createInfo.keepCpuData = false;
+            createInfo.deferGpuCreate = true;
+            createInfo.bindless = false;
+            createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
+            createInfo.initialAccess = nri::AccessBits::SHADER_RESOURCE;
+            createInfo.width = static_cast<uint32_t>(destWidth);
+            createInfo.height = static_cast<uint32_t>(destHeight);
+            createInfo.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
+            createInfo.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
+            createInfo.samplerAddressW = nri::AddressMode::CLAMP_TO_EDGE;
+            createInfo.samplerLinearFiltering = true;
+
+            Ref<Texture> loadedTexture = Texture::Create(destPixels, createInfo, nullptr);
+            if (!loadedTexture)
+            {
+                Application::SubmitToRenderThread([capturedPath]()
+                {
+                    s_SharedThumbnails.erase(capturedPath);
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                }, "ContentBrowserPanel::StartThumbnailLoad - Cleanup failed thumbnail");
+                return;
+            }
+
+            loadedTexture->PrepareUploadData(4);
+
+            Texture::SubmitAsyncUpload(loadedTexture, [capturedPath, requestGeneration, loadedTexture]()
+            {
                 if (requestGeneration != s_SharedThumbnailLoadGeneration)
                 {
-                    destPixels.clear();
                     s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                    s_SharedThumbnails.erase(capturedPath);
                     return;
                 }
 
                 auto thumbnailIt = s_SharedThumbnails.find(capturedPath);
-                if (thumbnailIt == s_SharedThumbnails.end() || !destPixels.data())
-                {
-                    destPixels.clear();
-                    s_SharedThumbnails.erase(capturedPath);
-                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                    return;
-                }
-
-                TextureCreateInfo createInfo;
-                createInfo.format = nri::Format::RGBA8_UNORM;
-                createInfo.keepInitialState = true;
-                createInfo.keepCpuData = false;
-                createInfo.deferGpuCreate = false;
-                createInfo.bindless = false;
-                createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
-                createInfo.initialAccess = nri::AccessBits::SHADER_RESOURCE;
-                createInfo.width = static_cast<uint32_t>(destWidth);
-                createInfo.height = static_cast<uint32_t>(destHeight);
-                createInfo.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
-                createInfo.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
-                createInfo.samplerAddressW = nri::AddressMode::CLAMP_TO_EDGE;
-                createInfo.samplerLinearFiltering = true;
-
-                Ref<Texture> loadedTexture = Texture::Create(destPixels, createInfo, nullptr);
-                if (!loadedTexture)
-                {
-                    s_SharedThumbnails.erase(capturedPath);
-                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                    return;
-                }
-
-                if (requestGeneration != s_SharedThumbnailLoadGeneration)
-                {
-                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                    return;
-                }
-
-                thumbnailIt = s_SharedThumbnails.find(capturedPath);
                 if (thumbnailIt == s_SharedThumbnails.end())
                 {
                     s_SharedThumbnailLoadsInFlight.erase(capturedPath);
@@ -3494,7 +3538,7 @@ namespace ignite
 
                 thumbnailIt->second = ft;
                 s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-            }, "ContentBrowserPanel::StartThumbnailLoad - Create texture");
+            });
         });
     }
 

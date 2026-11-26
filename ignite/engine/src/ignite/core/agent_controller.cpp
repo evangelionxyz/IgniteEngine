@@ -1350,6 +1350,28 @@ namespace ignite
                 data["camera_position"] = Vec3ToJson(ctx.camera->position);
                 data["camera_fov"] = ctx.camera->fov;
             }
+            if (auto *dm = DeviceManager::GetInstance())
+            {
+                double avgDt = dm->GetAverageFrameTimeSeconds();
+                if (avgDt <= 1e-6 && Application::GetInstance())
+                {
+                    avgDt = static_cast<double>(Application::GetAverageFrameTime());
+                }
+                data["avg_frame_time_ms"] = avgDt * 1000.0;
+                data["fps"] = (avgDt > 1e-6) ? (1.0 / avgDt) : 0.0;
+            }
+            if (ctx.sceneRenderer)
+            {
+                const auto &rs = ctx.sceneRenderer->sceneRenderSettings;
+                const auto &pktStats = ctx.sceneRenderer->GetLastFramePacket().stats;
+                data["scalability_overall"] = static_cast<int>(rs.scalability.overall);
+                data["aa_mode"] = static_cast<int>(rs.sampleMethod);
+                data["render_scale"] = rs.renderScale;
+                data["shadow_draw_calls"] = Renderer::Stats.shadowDrawCallCount;
+                data["draw_calls"] = Renderer::Stats.drawCallCount;
+                data["static_meshes_total"] = pktStats.totalStaticMeshes;
+                data["static_meshes_visible"] = pktStats.visibleStaticMeshes;
+            }
             if (auto *nm = NetworkManager::GetInstance())
             {
                 NetStats stats = nm->GetStats();
@@ -1872,6 +1894,63 @@ namespace ignite
                 if (cmd.contains("fxaa"))
                 {
                     ctx.sceneRenderer->SetSampleMethod(cmd["fxaa"].get<bool>() ? SampleMethod::FXAA : SampleMethod::None);
+                }
+                auto parseScalability = [](const nlohmann::ordered_json &val, ScalabilityLevel &out) -> bool
+                {
+                    if (val.is_string())
+                    {
+                        const std::string s = val.get<std::string>();
+                        if (s == "low" || s == "LOW") { out = ScalabilityLevel::Low; return true; }
+                        if (s == "medium" || s == "MEDIUM" || s == "med") { out = ScalabilityLevel::Medium; return true; }
+                        if (s == "high" || s == "HIGH") { out = ScalabilityLevel::High; return true; }
+                        if (s == "ultra" || s == "ULTRA") { out = ScalabilityLevel::Ultra; return true; }
+                    }
+                    else if (val.is_number_integer())
+                    {
+                        out = static_cast<ScalabilityLevel>(std::clamp(val.get<int>(), 0, 3));
+                        return true;
+                    }
+                    return false;
+                };
+                if (cmd.contains("scalability"))
+                {
+                    ScalabilityLevel lvl = ScalabilityLevel::High;
+                    if (parseScalability(cmd["scalability"], lvl))
+                        ctx.sceneRenderer->sceneRenderSettings.ApplyOverallScalability(lvl);
+                }
+                auto applyAAKey = [&](const nlohmann::ordered_json &val)
+                {
+                    if (val.is_string())
+                    {
+                        const std::string s = val.get<std::string>();
+                        if (s == "none" || s == "NONE" || s == "off") ctx.sceneRenderer->SetSampleMethod(SampleMethod::NONE);
+                        else if (s == "taa" || s == "TAA") ctx.sceneRenderer->SetSampleMethod(SampleMethod::TAA);
+                        else if (s == "msaa" || s == "MSAA") ctx.sceneRenderer->SetSampleMethod(SampleMethod::MSAA);
+                        else if (s == "fxaa" || s == "FXAA") ctx.sceneRenderer->SetSampleMethod(SampleMethod::FXAA);
+                    }
+                    else if (val.is_number_integer())
+                    {
+                        ctx.sceneRenderer->SetSampleMethod(static_cast<SampleMethod>(std::clamp(val.get<int>(), 0, 3)));
+                    }
+                };
+                if (cmd.contains("aa_mode")) applyAAKey(cmd["aa_mode"]);
+                else if (cmd.contains("anti_aliasing")) applyAAKey(cmd["anti_aliasing"]);
+                if (cmd.contains("msaa_samples"))
+                {
+                    const int s = cmd["msaa_samples"].get<int>();
+                    ctx.sceneRenderer->sceneRenderSettings.msaaProperties.sampleCount = (s <= 2) ? 2 : (s <= 4 ? 4 : 8);
+                }
+                if (cmd.contains("taa_blend_factor"))
+                    ctx.sceneRenderer->sceneRenderSettings.taaProperties.blendFactor = std::clamp(cmd["taa_blend_factor"].get<float>(), 0.01f, 1.0f);
+                if (cmd.contains("fxaa_subpix"))
+                    ctx.sceneRenderer->sceneRenderSettings.fxaaProperties.subpixQuality = std::clamp(cmd["fxaa_subpix"].get<float>(), 0.0f, 1.0f);
+                if (cmd.contains("fxaa_edge_threshold"))
+                    ctx.sceneRenderer->sceneRenderSettings.fxaaProperties.edgeThreshold = std::clamp(cmd["fxaa_edge_threshold"].get<float>(), 0.05f, 0.5f);
+                if (cmd.contains("fxaa_edge_threshold_min"))
+                    ctx.sceneRenderer->sceneRenderSettings.fxaaProperties.edgeThresholdMin = std::clamp(cmd["fxaa_edge_threshold_min"].get<float>(), 0.01f, 0.2f);
+                if (cmd.contains("save_game_settings") && cmd["save_game_settings"].get<bool>() && ctx.project)
+                {
+                    ctx.sceneRenderer->sceneRenderSettings.SerializeToFile(ctx.project->GetDirectory() / "GameSettings.ign");
                 }
             }
             if (ctx.camera)

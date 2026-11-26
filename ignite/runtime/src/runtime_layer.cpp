@@ -298,6 +298,7 @@ namespace ignite
 
     void RuntimeLayer::OnRender(RenderTarget *framebuffer)
     {
+        m_RenderedToBackBuffer = false;
         SyncActiveSceneFromProject();
         if (!m_ActiveScene || !m_ActiveProject)
             return;
@@ -316,6 +317,7 @@ namespace ignite
 
         FrameContext *frameContext = Renderer::GetCurrentFrameContext();
         m_SceneRenderer->Render((ICamera *)&cc.camera, frameContext, false, framebuffer);
+        m_RenderedToBackBuffer = (framebuffer != nullptr);
     }
 
     bool RuntimeLayer::OnFramebufferResize(const FramebufferResizeEvent &event)
@@ -354,7 +356,7 @@ namespace ignite
         postProcessing.renderScale = glm::clamp(postProcessing.renderScale * globalScale, 0.25f, 1.0f);
 
         const uint32_t expectedRenderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.x) * postProcessing.renderScale)));
-        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(static_cast<float>(desiredSize.y) * postProcessing.renderScale));
+        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.y) * postProcessing.renderScale)));
 
         const glm::uvec2 sceneRTSize = target ? target->sceneRT->GetSize() : glm::uvec2(0);
 

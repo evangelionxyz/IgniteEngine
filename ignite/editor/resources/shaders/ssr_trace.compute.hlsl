@@ -16,7 +16,9 @@ cbuffer SSRTraceParams : register(b0)
     float nearPlane;
     float farPlane;
     float maxRoughness;
-    float _pad;
+    uint maxSteps;
+    uint binarySearchSteps;
+    uint3 _pad;
 };
 
 Texture2D<float> t_HiZDepth : register(t0);
@@ -84,7 +86,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float startLinearZ = max(-posVS.z, nearPlane);
 
     int2 maxFull = int2(max(int(fullRes.x) - 1, 0), max(int(fullRes.y) - 1, 0));
-    int2 fullPx = clamp(px * 2, int2(0, 0), maxFull);
+    int2 fullPx = clamp(int2(uv * fullRes), int2(0, 0), maxFull);
     float3 normalVS = OctDecode(t_Normal.Load(int3(fullPx, 0)).rg);
     float nLenSq = dot(normalVS, normalVS);
     normalVS = (nLenSq > 1e-6f) ? (normalVS * rsqrt(nLenSq)) : float3(0.0f, 0.0f, 1.0f);
@@ -132,19 +134,26 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     float3 stepSS = rayDirSS / pixelLen;
-    float jitter = 0.25f + 0.5f * Bayer4x4(DTid.xy);
+    // Temporally animated dither breaks up static 4x4 Bayer patterns once temporally denoised.
+    float temporalOffset = frac(float(frameIndex & 255u) * 0.61803399f);
+    float jitter = 0.25f + 0.5f * frac(Bayer4x4(DTid.xy) + temporalOffset);
 
     int mip = 0;
+    int maxTraceMip = min(int(maxDepthMip), 3);
     float t = 2.0f + jitter;
     float tPrev = t;
     float maxT = min(pixelLen, 256.0f);
 
     bool hit = false;
+    float hitT = 0.0f;
     float3 hitSS = float3(0.0f, 0.0f, 0.0f);
     int2 maxHalf = int2(halfRes) - 1;
 
+    int maxRaySteps = clamp(int(maxSteps), 8, 64);
+    int binSteps = clamp(int(binarySearchSteps), 1, 6);
+
     [loop]
-    for (int iter = 0; iter < 48; ++iter)
+    for (int iter = 0; iter < maxRaySteps; ++iter)
     {
         if (t > maxT)
         {
@@ -167,15 +176,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
             {
                 float rayLinearZ = DeviceDepthToLinearZ(currSS.z);
                 float surfLinearZ = DeviceDepthToLinearZ(hizDepth);
-                float thickness = max(0.06f, surfLinearZ * 0.03f);
+                float thickness = max(0.12f, surfLinearZ * 0.05f);
                 float diff = rayLinearZ - surfLinearZ;
                 if (diff >= 0.0f && diff <= thickness && hizDepth < 0.99999f)
                 {
-                    // 5-iteration binary search refinement between tPrev and t for crisp hit precision.
+                    // Binary search refinement between tPrev and t for crisp hit precision.
                     float lo = tPrev;
                     float hi = t;
-                    [unroll]
-                    for (int b = 0; b < 5; ++b)
+                    [loop]
+                    for (int b = 0; b < binSteps; ++b)
                     {
                         float mid = 0.5f * (lo + hi);
                         float3 midSS = startSS + stepSS * mid;
@@ -186,6 +195,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                         else
                             lo = mid;
                     }
+                    hitT = hi;
                     hitSS = startSS + stepSS * hi;
 
                     // Reject self/backface hits where hit surface faces the same direction as the ray.
@@ -212,7 +222,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
             }
             else
             {
+                // Rewind back to tPrev before descending to a finer Hi-Z mip so coarse jumps
+                // never overshoot thin surfaces and fail the thickness check.
+                t = tPrev;
                 mip = max(mip - 1, 0);
+                t += float(1 << mip);
             }
         }
         else
@@ -220,7 +234,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
             tPrev = t;
             float stride = float(1 << mip);
             t += stride;
-            mip = min(mip + 1, int(maxDepthMip));
+            mip = min(mip + 1, maxTraceMip);
         }
     }
 
@@ -249,12 +263,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     float3 radiance = t_PrevColor.SampleLevel(s_LinearClamp, prevUV, 0.0f).rgb;
-    radiance = min(max(radiance, float3(0.0f, 0.0f, 0.0f)), float3(16.0f, 16.0f, 16.0f));
+    radiance = min(max(radiance, float3(0.0f, 0.0f, 0.0f)), float3(8.0f, 8.0f, 8.0f));
 
-    // Smooth edge fade near screen borders.
+    // Smooth edge & distance fade near screen borders and max ray length.
     float2 edgeDist = min(hitSS.xy, 1.0f - hitSS.xy);
-    float edgeFade = saturate(min(edgeDist.x, edgeDist.y) / 0.08f);
-    float confidence = saturate(edgeFade * backwardFade);
+    float edgeFade = saturate(min(edgeDist.x, edgeDist.y) / 0.10f);
+    float distFade = 1.0f - smoothstep(maxT * 0.75f, maxT, hitT);
+    float confidence = saturate(edgeFade * distFade * backwardFade);
 
     u_OutSSR[DTid.xy] = float4(radiance, confidence);
 }

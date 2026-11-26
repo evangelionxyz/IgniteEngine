@@ -206,6 +206,24 @@ namespace ignite
         }
         if (m_Handle)
         {
+            if (m_PipelineLayout && BindlessSystem::GetDescriptorPool())
+            {
+                {
+                    std::lock_guard<std::mutex> lock(g_DescriptorSetPool.mutex);
+                    if (g_DescriptorSetPool.inUseSets.erase(m_Handle) > 0)
+                    {
+                        auto it = g_DescriptorSetPool.allocatedMeta.find(m_Handle);
+                        if (it != g_DescriptorSetPool.allocatedMeta.end())
+                        {
+                            g_DescriptorSetPool.retiredSets.push_back({ m_Handle, it->second, g_DescriptorSetPool.currentFrame });
+                        }
+                    }
+                }
+                m_Handle = nullptr;
+                m_Handle = AllocateAndUpdate(m_PipelineLayout, m_SetIndex, desc);
+                return;
+            }
+
             if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
             {
                 GPUUploadSync::DeviceWaitIdle(dm->GetDevice());

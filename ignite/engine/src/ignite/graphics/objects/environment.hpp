@@ -30,10 +30,12 @@ namespace ignite
         Environment();
         virtual ~Environment() override;
 
-        void Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &gp,
-            const ConstantBuffer &cameraBuffer, const ConstantBuffer &sceneBuffer);
-        void Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &gp,
-            const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer);
+        bool Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &gp,
+            const ConstantBuffer &cameraBuffer, const ConstantBuffer &sceneBuffer,
+            bool clearColor = false, bool clearDepth = false);
+        bool Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &gp,
+            const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer,
+            bool clearColor = false, bool clearDepth = false);
 
         void LoadTexture(const std::string &filepath);
         void SetTexture(const Ref<Texture> &texture);

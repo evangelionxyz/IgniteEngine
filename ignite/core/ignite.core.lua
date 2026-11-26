@@ -64,9 +64,6 @@ project "Ignite.Core"
         "IGN_CORE_DLL_EXPORTS",
         "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
         "JPH_SHARED_LIBRARY",
-        "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
-        "JPH_DEBUG_RENDERER",
-        "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
         "_WIN32_WINNT=0x0A00",
     }
@@ -237,7 +234,10 @@ project "Ignite.Core"
             defines {
                 "IGN_DEBUG_BUILD",
                 "DEBUG",
-                "_DEBUG"
+                "_DEBUG",
+                "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+                "JPH_DEBUG_RENDERER",
+                "JPH_PROFILE_ENABLED",
             }
 
         filter "configurations:Debug-Profiling"
@@ -247,7 +247,10 @@ project "Ignite.Core"
                 "IGN_ENABLE_TRACY",
                 "IGN_DEBUG_BUILD",
                 "DEBUG",
-                "_DEBUG"
+                "_DEBUG",
+                "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+                "JPH_DEBUG_RENDERER",
+                "JPH_PROFILE_ENABLED",
             }
 
         filter { "system:windows", "configurations:Debug or Debug-Profiling" }
@@ -295,7 +298,7 @@ project "Ignite.Core"
 
         filter "configurations:Release"
             runtime "release"
-            optimize "on"
+            optimize "speed"
             symbols "on" -- with debug info
             defines {
                 "IGN_RELEASE_BUILD",
@@ -304,12 +307,13 @@ project "Ignite.Core"
 
         filter "configurations:Release-Profiling"
             runtime "release"
-            optimize "on"
+            optimize "speed"
             symbols "on" -- with debug info
             defines {
                 "IGN_ENABLE_TRACY",
                 "IGN_RELEASE_BUILD",
-                "NDEBUG"
+                "NDEBUG",
+                "JPH_PROFILE_ENABLED",
             }
 
         filter { "system:windows", "configurations:Release or Release-Profiling" }
@@ -364,7 +368,8 @@ project "Ignite.Core"
             defines {
                 "IGN_ENABLE_TRACY",
                 "IGN_SHIPPING_BUILD",
-                "NDEBUG"
+                "NDEBUG",
+                "JPH_PROFILE_ENABLED",
             }
 
         filter { "system:windows", "configurations:Shipping or Shipping-Profiling" }

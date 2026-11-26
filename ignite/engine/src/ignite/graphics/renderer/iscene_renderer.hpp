@@ -58,7 +58,6 @@ namespace ignite
     struct GraphicsScalability
     {
         ScalabilityLevel overall = ScalabilityLevel::High;
-        ScalabilityLevel antiAliasing = ScalabilityLevel::High;
         ScalabilityLevel shadows = ScalabilityLevel::High;
         ScalabilityLevel globalIllumination = ScalabilityLevel::High;
         ScalabilityLevel ambientOcclusion = ScalabilityLevel::High;
@@ -105,9 +104,23 @@ namespace ignite
         float ssrIntensity = 1.0f;
         float ssrMaxRoughness = 0.6f;
 
+        float gtaoResolutionScale = 0.5f;
+        uint32_t gtaoSliceCount = 3;
+        uint32_t gtaoStepsPerSlice = 3;
+        uint32_t gtaoDenoiseRadius = 3;
+        uint32_t gtaoUpsampleMode = 1; // 0 = half-res bilinear, 1 = fast 2x2 bilateral, 2 = full 3x3 bilateral
+
+        float ssrResolutionScale = 0.5f;
+        uint32_t ssrMaxSteps = 32;
+        uint32_t ssrBinarySearchSteps = 4;
+
+        float bloomResolutionScale = 0.75f;
+        int bloomMaxIterations = 5;
+
         SampleMethod sampleMethod = SampleMethod::FXAA;
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
         MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
+        FXAAProperties fxaaProperties; // Tunable FXAA quality/threshold parameters
         bool enableFXAA = true;
         float renderScale = 1.0f;
 
@@ -132,6 +145,7 @@ namespace ignite
         {
             sampleMethod = method;
             enableFXAA = (method == SampleMethod::FXAA);
+            fxaaProperties.enable = enableFXAA;
             msaaProperties.enable = (method == SampleMethod::MSAA);
             taaProperties.enable = (method == SampleMethod::TAA);
         }
@@ -174,9 +188,21 @@ namespace ignite
         float fogEnd = 100.0f;
         float padding_fog = 0.0f;
 
-        glm::vec4 taaParams = glm::vec4(0.0f); // x=enableTAA, y=currentFrameWeight, z=historyValid
+        glm::vec4 taaParams = glm::vec4(0.0f); // x=enableTAA, y=currentFrameWeight, z=historyValid, w=enableOutline
+        glm::vec4 taaJitter = glm::vec4(0.0f); // xy=currJitterUV, zw=prevJitterUV
 
         glm::mat4 projectionInv = glm::mat4(1.0f);
+        glm::mat4 taaReprojection = glm::mat4(1.0f); // prevUnjitteredViewProj * inv(currUnjitteredViewProj)
+    };
+
+    struct FXAA_GPUData
+    {
+        glm::vec2 inverseScreenSize = glm::vec2(1.0f / 1920.0f, 1.0f / 1080.0f);
+        float subpixCap = 0.75f;
+        float edgeThreshold = 0.125f;
+        float edgeThresholdMin = 0.0417f;
+        float bypass = 0.0f;
+        float padding[2] = { 0.0f, 0.0f };
     };
 
     class IGN_API ISceneRenderer

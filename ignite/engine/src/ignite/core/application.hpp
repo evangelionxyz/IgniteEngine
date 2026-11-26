@@ -113,6 +113,7 @@ namespace ignite
         }
 
         static float GetDeltaTime();
+        static float GetAverageFrameTime();
         static int32_t GetFrameIndex();
 
         static void SetWindowTitle(const std::string &title);

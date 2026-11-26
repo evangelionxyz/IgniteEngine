@@ -26,26 +26,35 @@ namespace ignite
         IGN_API glm::vec3 MultiBounceAO(float ao, const glm::vec3 &albedo);
     }
 
+    struct GTAOQualitySettings
+    {
+        uint32_t sliceCount = 3;
+        uint32_t stepsPerSlice = 3;
+        uint32_t denoiseRadius = 3;
+        uint32_t upsampleMode = 1; // 0 = half-res bilinear, 1 = fast 2x2 bilateral, 2 = full 3x3 bilateral
+    };
+
     // Half-resolution XeGTAO compute pipeline:
-    //   1. Depth prefilter (full-res HW depth -> half-res linear viewZ, 5-mip depth-weighted chain)
-    //   2. GTAO main pass (2 slices x 3 steps per side, optional prepass view-space normals)
-    //   3. Separable bilateral edge-aware denoise (H + V)
+    //   1. Depth prefilter (full-res HW depth -> scaled linear viewZ)
+    //   2. GTAO main pass (scalable slices x steps per side, optional prepass view-space normals)
+    //   3. Separable bilateral edge-aware denoise (H + V) + optional bilateral upsample
     class IGN_API GTAO
     {
     public:
         static constexpr uint32_t kMaxDepthMips = 5;
 
-        GTAO(uint32_t fullWidth, uint32_t fullHeight);
+        GTAO(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale = 0.5f);
         ~GTAO();
 
         GTAO(const GTAO &) = delete;
         GTAO &operator=(const GTAO &) = delete;
 
-        void Resize(uint32_t fullWidth, uint32_t fullHeight);
+        void Resize(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale = 0.5f);
         void Build(nri::CommandBuffer *cmd, const Ref<Texture> &depthTexture, const Ref<Texture> &normalTexture,
-            ICamera *camera, const PostProcessing &settings, uint64_t taaFrameIndex);
+            ICamera *camera, const PostProcessing &settings, uint64_t taaFrameIndex,
+            const GTAOQualitySettings &quality = {});
 
-        Ref<Texture> GetAOTexture() const { return m_AOTexB; }
+        Ref<Texture> GetAOTexture() const { return m_LastOutputTexture ? m_LastOutputTexture : m_AOTexB; }
         uint32_t GetHalfWidth() const { return m_HalfWidth; }
         uint32_t GetHalfHeight() const { return m_HalfHeight; }
         uint32_t GetDepthMipCount() const { return m_DepthMipCount; }
@@ -78,6 +87,9 @@ namespace ignite
             float projScaleY = 1.0f;
             float farPlane = 500.0f;
             uint32_t flags = 0;
+            uint32_t sliceCount = 3;
+            uint32_t stepsPerSlice = 3;
+            glm::uvec2 _pad = glm::uvec2(0u);
         };
 
         struct DenoiseCB
@@ -91,10 +103,10 @@ namespace ignite
             float nearPlane = 0.1f;
             uint32_t hasNormals = 0;
             uint32_t passMode = 0;
-            uint32_t _pad = 0;
+            uint32_t denoiseRadius = 3;
         };
 
-        void CreateTextures(uint32_t fullWidth, uint32_t fullHeight);
+        void CreateTextures(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale);
         void EnsurePipelines();
         void InvalidatePipelines();
 
@@ -103,11 +115,13 @@ namespace ignite
         uint32_t m_HalfWidth = 0;
         uint32_t m_HalfHeight = 0;
         uint32_t m_DepthMipCount = 1;
+        float m_ResolutionScale = 0.5f;
 
         Ref<Texture> m_PrefilteredDepth;
         Ref<Texture> m_AOTexA;
         Ref<Texture> m_AOTexHalfB;
         Ref<Texture> m_AOTexB;
+        Ref<Texture> m_LastOutputTexture;
 
         BindingLayoutDesc m_PrefilterLayout;
         BindingLayoutDesc m_MainLayout;

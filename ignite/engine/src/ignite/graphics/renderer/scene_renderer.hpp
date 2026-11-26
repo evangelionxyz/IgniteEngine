@@ -78,7 +78,12 @@ namespace ignite
         Ref<RenderTarget> depthPrepassRT;  // RG16F octahedral view-normal + shared scene depth (prepass)
         Ref<Texture> prevSceneColor;       // Single-sample previous frame HDR scene color for SSR
         glm::mat4 prevViewProj = glm::mat4(1.0f);
+        glm::mat4 currUnjitteredViewProj = glm::mat4(1.0f);
+        glm::mat4 taaPrevUnjitteredViewProj = glm::mat4(1.0f);
+        glm::vec2 taaCurrJitterUV = glm::vec2(0.0f);
+        glm::vec2 taaPrevJitterUV = glm::vec2(0.0f);
         bool prevSceneColorValid = false;
+        bool ssrHistoryValid = false;
 
         bool taaHistoryValid = false;
         int msaaSampleCount = 1;           // Tracks the current MSAA sample count (1 = no MSAA)
@@ -156,29 +161,29 @@ namespace ignite
         void ShutdownLocalShadowResources();
         void UpdateSkyIBL(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext);
         void RenderDebugProbes(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
-        void ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug);
+        void ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug, bool has2D, bool &sceneColorCleared, bool &sceneDepthCleared);
         void UIPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
         void DebugPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
-        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, Ref<Texture> gizmoTexture = nullptr, bool msaaResolved = false, RenderTarget *targetFramebuffer = nullptr);
-        void FXAAPass(nri::CommandBuffer *cmd, RenderTarget *framebuffer, Ref<Texture> inputTexture);
+        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, Ref<Texture> gizmoTexture = nullptr, bool msaaResolved = false, RenderTarget *targetFramebuffer = nullptr, bool enableOutline = true);
+        void FXAAPass(nri::CommandBuffer *cmd, RenderTarget *framebuffer, Ref<Texture> inputTexture, bool bypass = false);
 
         void DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, int planeMode);
         void DrawDebug2D(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
         void DrawDebug3D(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
 
         /// Flush all accumulated opaque static-mesh batches to the command list.
-        void FlushOpaqueBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer);
+        bool FlushOpaqueBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, bool clearColor = false, bool clearDepth = false);
 
         /// Flush all accumulated shadow (CSM) static-mesh batches to the command list.
-        void FlushShadowBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, uint32_t cascadeIndex);
+        bool FlushShadowBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, uint32_t cascadeIndex, bool clearDepth = false);
 
-        void FlushBatches(BatchBuilder &builder, nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer);
+        bool FlushBatches(BatchBuilder &builder, nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, bool clearColor = false, bool clearDepth = false);
 
         // Depth + normal prepass / GTAO / SSR
         void EnsureDepthPrepassRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
         void EnsurePrevSceneColor(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
-        std::vector<Ref<GTAO>> GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight);
-        std::vector<Ref<SSR>> GetOrCreateSSRs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight);
+        std::vector<Ref<GTAO>> GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight, float resolutionScale = 0.5f);
+        std::vector<Ref<SSR>> GetOrCreateSSRs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight, float resolutionScale = 0.5f);
         void DepthPrepass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *depthPrepassFB);
         Ref<GraphicsPipeline> GetOrCreateDepthPrepassPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
             RenderTarget *framebuffer, nri::CullMode cullMode, const char *vertexShaderPath, EBindingLayout meshLayout);
@@ -388,7 +393,8 @@ namespace ignite
         Ref<Texture> m_DynamicLocalShadowCubeArray;
         Ref<Texture> m_DynamicLocalShadowDepthTex;
         std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> m_DynamicLocalShadowFaceRTs;
-        std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6> m_DynamicLocalShadowFaceCameraBuffers;
+        std::array<std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6>, 3> m_DynamicLocalShadowFaceCameraBuffers;
+        std::array<uint8_t, kMaxLocalShadowLights * 6> m_DynamicLocalShadowDirtySlices{};
         bool m_HasDynamicLocalShadows = false;
         bool m_DynamicLocalShadowInitialized = false;
 

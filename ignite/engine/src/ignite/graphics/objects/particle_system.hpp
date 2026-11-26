@@ -308,9 +308,17 @@ namespace ignite
         void DestroyBuffers();
         void DestroyPipelines();
         Ref<GraphicsPipeline> GetOrCreateRenderPipeline(RenderTarget *framebuffer, ParticleBlendMode blendMode);
-        void UpdateRenderBindingSet(nri::Descriptor *cameraBufferDescriptor, Ref<Texture> texture, nri::PipelineLayout *pipelineLayout);
+        Ref<BindingSet> GetOrCreateRenderBindingSet(uint32_t slot, nri::Descriptor *cameraBufferDescriptor, Ref<Texture> texture, nri::PipelineLayout *pipelineLayout);
 
     private:
+        struct RenderBindingSlot
+        {
+            Ref<BindingSet> bindingSet;
+            nri::PipelineLayout *pipelineLayout = nullptr;
+            nri::Descriptor *cameraDesc = nullptr;
+            nri::Descriptor *textureSRV = nullptr;
+        };
+
         uint32_t m_MaxParticles = 5000;
         uint32_t m_CurrentSpawnIndex = 0;
         uint32_t m_PendingBurstCount = 0;
@@ -327,29 +335,26 @@ namespace ignite
         nri::Buffer *m_ResetStagingBuffer = nullptr;
         nri::Memory *m_ResetStagingMemory = nullptr;
 
-        Ref<ConstantBuffer> m_SimulateCB;
-        Ref<ConstantBuffer> m_RenderCB;
+        std::vector<Ref<ConstantBuffer>> m_SimulateCBs;
+        std::vector<Ref<ConstantBuffer>> m_RenderCBs;
 
         // Compute Pipeline for Simulation
         Ref<Shader> m_ComputeShader;
         BindingLayoutDesc m_ComputeBindingLayout;
         nri::PipelineLayout *m_ComputePipelineLayout = nullptr;
-        Ref<BindingSet> m_ComputeBindingSet;
+        std::vector<Ref<BindingSet>> m_ComputeBindingSets;
         nri::Pipeline *m_ComputePipeline = nullptr;
 
         // Render Pipelines (Alpha and Additive caches keyed by Framebuffer format)
         Ref<Shader> m_VertexShader;
         Ref<Shader> m_PixelShader;
         BindingLayoutDesc m_RenderBindingLayout;
-        Ref<BindingSet> m_RenderBindingSet;
+        std::vector<RenderBindingSlot> m_RenderBindingSlots;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_RenderPipelineAlphaCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_RenderPipelineAdditiveCache;
         Ref<GraphicsPipeline> m_RenderPipelineAlpha;
         Ref<GraphicsPipeline> m_RenderPipelineAdditive;
         nri::Descriptor *m_LinearSampler = nullptr;
-
-        nri::Descriptor *m_LastCameraBufferDescriptor = nullptr;
-        nri::Texture *m_LastBoundTexture = nullptr;
     };
 }
 

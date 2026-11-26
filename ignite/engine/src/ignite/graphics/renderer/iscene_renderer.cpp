@@ -11,6 +11,7 @@
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/project/project.hpp"
 
@@ -23,7 +24,7 @@ namespace ignite
     ISceneRenderer::ISceneRenderer()
         : m_CascadedShadowMapBuffer(sizeof(CSM_GPUData), false, 1, "[SceneRenderer] CSM Buffer")
         , m_CompositePostProcessBuffer(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer")
-        , m_FXAABuffer(sizeof(glm::vec4), true, 16, "FXAA Buffer")
+        , m_FXAABuffer(sizeof(FXAA_GPUData), true, 16, "FXAA Buffer")
         , m_DebugGridBuffer(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer")
     {
         for (int i = 0; i < NUM_CASCADES; ++i)
@@ -114,6 +115,7 @@ namespace ignite
             }
             if (currentFenceValue < slot.fenceValue)
             {
+                IGN_PROFILE_SCOPE("ISceneRenderer::WaitSlotFence");
                 nri.Wait(*m_CommandFence, slot.fenceValue);
             }
         }
@@ -194,6 +196,7 @@ namespace ignite
 
     void ISceneRenderer::WaitForPreviousCommandBuffer()
     {
+        IGN_PROFILE_SCOPE("ISceneRenderer::WaitForPreviousCommandBuffer");
         if (!m_CommandFence || m_NextFenceValue <= 1)
             return;
 
@@ -441,7 +444,6 @@ namespace ignite
     void SceneRenderSettings::ApplyOverallScalability(ScalabilityLevel level)
     {
         scalability.overall = level;
-        scalability.antiAliasing = level;
         scalability.shadows = level;
         scalability.globalIllumination = level;
         scalability.ambientOcclusion = level;
@@ -453,23 +455,6 @@ namespace ignite
 
     void SceneRenderSettings::ApplyIndividualScalability()
     {
-        switch (scalability.antiAliasing)
-        {
-        case ScalabilityLevel::Low:
-            SetSampleMethod(SampleMethod::NONE);
-            break;
-        case ScalabilityLevel::Medium:
-            SetSampleMethod(SampleMethod::FXAA);
-            break;
-        case ScalabilityLevel::High:
-            SetSampleMethod(SampleMethod::TAA);
-            break;
-        case ScalabilityLevel::Ultra:
-            msaaProperties.sampleCount = 4;
-            SetSampleMethod(SampleMethod::MSAA);
-            break;
-        }
-
         switch (scalability.shadows)
         {
         case ScalabilityLevel::Low: shadowQuality = ShadowMapQuality::LOW; break;
@@ -488,10 +473,33 @@ namespace ignite
 
         switch (scalability.ambientOcclusion)
         {
-        case ScalabilityLevel::Low: aoModeOverride = 0; break;    // Off
-        case ScalabilityLevel::Medium: aoModeOverride = 1; break; // LegacySSAO
-        case ScalabilityLevel::High: aoModeOverride = 2; break;   // GTAO
-        case ScalabilityLevel::Ultra: aoModeOverride = 2; break;  // GTAO
+        case ScalabilityLevel::Low:
+            aoModeOverride = 0; // Off
+            break;
+        case ScalabilityLevel::Medium:
+            aoModeOverride = 2; // GTAO (scaled, fast)
+            gtaoResolutionScale = 0.35f;
+            gtaoSliceCount = 2;
+            gtaoStepsPerSlice = 2;
+            gtaoDenoiseRadius = 2;
+            gtaoUpsampleMode = 0;
+            break;
+        case ScalabilityLevel::High:
+            aoModeOverride = 2; // GTAO (half-res, fast 2x2 bilateral upsample)
+            gtaoResolutionScale = 0.5f;
+            gtaoSliceCount = 3;
+            gtaoStepsPerSlice = 3;
+            gtaoDenoiseRadius = 3;
+            gtaoUpsampleMode = 1;
+            break;
+        case ScalabilityLevel::Ultra:
+            aoModeOverride = 2; // GTAO (full quality)
+            gtaoResolutionScale = 0.5f;
+            gtaoSliceCount = 4;
+            gtaoStepsPerSlice = 4;
+            gtaoDenoiseRadius = 4;
+            gtaoUpsampleMode = 2;
+            break;
         }
 
         switch (scalability.reflections)
@@ -503,16 +511,25 @@ namespace ignite
             enableSSR = true;
             ssrIntensity = 0.7f;
             ssrMaxRoughness = 0.45f;
+            ssrResolutionScale = 0.25f;
+            ssrMaxSteps = 20;
+            ssrBinarySearchSteps = 3;
             break;
         case ScalabilityLevel::High:
             enableSSR = true;
             ssrIntensity = 1.0f;
             ssrMaxRoughness = 0.6f;
+            ssrResolutionScale = 0.5f;
+            ssrMaxSteps = 32;
+            ssrBinarySearchSteps = 4;
             break;
         case ScalabilityLevel::Ultra:
             enableSSR = true;
             ssrIntensity = 1.0f;
             ssrMaxRoughness = 0.75f;
+            ssrResolutionScale = 0.5f;
+            ssrMaxSteps = 48;
+            ssrBinarySearchSteps = 5;
             break;
         }
 
@@ -524,7 +541,29 @@ namespace ignite
         case ScalabilityLevel::Ultra: renderScale = 1.0f; break;
         }
 
-        enableSpecularAA = (scalability.postProcessing != ScalabilityLevel::Low);
+        switch (scalability.postProcessing)
+        {
+        case ScalabilityLevel::Low:
+            enableSpecularAA = false;
+            bloomResolutionScale = 0.5f;
+            bloomMaxIterations = 3;
+            break;
+        case ScalabilityLevel::Medium:
+            enableSpecularAA = true;
+            bloomResolutionScale = 0.5f;
+            bloomMaxIterations = 4;
+            break;
+        case ScalabilityLevel::High:
+            enableSpecularAA = true;
+            bloomResolutionScale = 0.75f;
+            bloomMaxIterations = 5;
+            break;
+        case ScalabilityLevel::Ultra:
+            enableSpecularAA = true;
+            bloomResolutionScale = 1.0f;
+            bloomMaxIterations = 6;
+            break;
+        }
     }
 
     bool SceneRenderSettings::SerializeToFile(const std::filesystem::path &filepath) const
@@ -538,7 +577,6 @@ namespace ignite
         {
             sr.BeginMap("Scalability");
             sr.AddKeyValue("Overall", static_cast<int>(scalability.overall));
-            sr.AddKeyValue("AntiAliasing", static_cast<int>(scalability.antiAliasing));
             sr.AddKeyValue("Shadows", static_cast<int>(scalability.shadows));
             sr.AddKeyValue("GlobalIllumination", static_cast<int>(scalability.globalIllumination));
             sr.AddKeyValue("AmbientOcclusion", static_cast<int>(scalability.ambientOcclusion));
@@ -547,10 +585,16 @@ namespace ignite
             sr.AddKeyValue("PostProcessing", static_cast<int>(scalability.postProcessing));
             sr.EndMap();
 
-            sr.BeginMap("SceneRenderer");
-            sr.AddKeyValue("SampleMethod", static_cast<int>(sampleMethod));
+            sr.BeginMap("AntiAliasing");
+            sr.AddKeyValue("Method", static_cast<int>(sampleMethod));
             sr.AddKeyValue("MSAASampleCount", msaaProperties.sampleCount);
             sr.AddKeyValue("TAABlendFactor", taaProperties.blendFactor);
+            sr.AddKeyValue("FXAASubpixQuality", fxaaProperties.subpixQuality);
+            sr.AddKeyValue("FXAAEdgeThreshold", fxaaProperties.edgeThreshold);
+            sr.AddKeyValue("FXAAEdgeThresholdMin", fxaaProperties.edgeThresholdMin);
+            sr.EndMap();
+
+            sr.BeginMap("SceneRenderer");
             sr.AddKeyValue("RenderScale", renderScale);
             sr.AddKeyValue("ShadowQuality", static_cast<int>(shadowQuality));
             sr.AddKeyValue("GIModeOverride", giModeOverride);
@@ -587,7 +631,6 @@ namespace ignite
         if (JsonNode sc = gs["Scalability"])
         {
             readLevel(sc, "Overall", scalability.overall);
-            readLevel(sc, "AntiAliasing", scalability.antiAliasing);
             readLevel(sc, "Shadows", scalability.shadows);
             readLevel(sc, "GlobalIllumination", scalability.globalIllumination);
             readLevel(sc, "AmbientOcclusion", scalability.ambientOcclusion);
@@ -599,8 +642,12 @@ namespace ignite
 
         if (JsonNode sr = gs["SceneRenderer"])
         {
-            if (sr["TAABlendFactor"]) taaProperties.blendFactor = sr["TAABlendFactor"].as<float>();
-            if (sr["MSAASampleCount"]) msaaProperties.sampleCount = sr["MSAASampleCount"].as<int>();
+            if (sr["TAABlendFactor"]) taaProperties.blendFactor = std::clamp(sr["TAABlendFactor"].as<float>(), 0.01f, 1.0f);
+            if (sr["MSAASampleCount"])
+            {
+                const int scVal = sr["MSAASampleCount"].as<int>();
+                msaaProperties.sampleCount = (scVal <= 2) ? 2 : (scVal <= 4 ? 4 : 8);
+            }
             if (sr["SampleMethod"]) SetSampleMethod(static_cast<SampleMethod>(std::clamp(sr["SampleMethod"].as<int>(), 0, 3)));
             if (sr["RenderScale"]) renderScale = std::clamp(sr["RenderScale"].as<float>(), 0.25f, 1.0f);
             if (sr["ShadowQuality"]) shadowQuality = static_cast<ShadowMapQuality>(std::clamp(sr["ShadowQuality"].as<int>(), 0, 3));
@@ -611,6 +658,25 @@ namespace ignite
             if (sr["EnableSSR"]) enableSSR = sr["EnableSSR"].as<bool>();
             if (sr["SSRIntensity"]) ssrIntensity = std::clamp(sr["SSRIntensity"].as<float>(), 0.0f, 2.0f);
             if (sr["SSRMaxRoughness"]) ssrMaxRoughness = std::clamp(sr["SSRMaxRoughness"].as<float>(), 0.05f, 1.0f);
+        }
+
+        if (JsonNode aa = gs["AntiAliasing"])
+        {
+            if (aa["MSAASampleCount"])
+            {
+                const int scVal = aa["MSAASampleCount"].as<int>();
+                msaaProperties.sampleCount = (scVal <= 2) ? 2 : (scVal <= 4 ? 4 : 8);
+            }
+            if (aa["TAABlendFactor"])
+                taaProperties.blendFactor = std::clamp(aa["TAABlendFactor"].as<float>(), 0.01f, 1.0f);
+            if (aa["FXAASubpixQuality"])
+                fxaaProperties.subpixQuality = std::clamp(aa["FXAASubpixQuality"].as<float>(), 0.0f, 1.0f);
+            if (aa["FXAAEdgeThreshold"])
+                fxaaProperties.edgeThreshold = std::clamp(aa["FXAAEdgeThreshold"].as<float>(), 0.05f, 0.5f);
+            if (aa["FXAAEdgeThresholdMin"])
+                fxaaProperties.edgeThresholdMin = std::clamp(aa["FXAAEdgeThresholdMin"].as<float>(), 0.01f, 0.2f);
+            if (aa["Method"])
+                SetSampleMethod(static_cast<SampleMethod>(std::clamp(aa["Method"].as<int>(), 0, 3)));
         }
         return true;
     }

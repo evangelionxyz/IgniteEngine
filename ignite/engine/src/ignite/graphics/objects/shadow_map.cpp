@@ -157,9 +157,11 @@ namespace ignite
         return nullptr;
     }
 
-    void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance)
+    void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance, int activeCascades)
     {
         IGN_PROFILE_FUNCTION();
+
+        activeCascades = std::clamp(activeCascades, 1, NUM_CASCADES);
 
         glm::vec3 lightDir = lightPosition;
         if (glm::dot(lightDir, lightDir) < 1e-6f)
@@ -195,14 +197,20 @@ namespace ignite
         const float ratio = csmFar / csmNear;
 
         std::array<float, NUM_CASCADES> cascadeSplits{};
-        for (int i = 0; i < NUM_CASCADES; ++i)
+        for (int i = 0; i < activeCascades; ++i)
         {
-            const float p            = (i + 1) / static_cast<float>(NUM_CASCADES);
+            const float p            = (i + 1) / static_cast<float>(activeCascades);
             const float logSplit     = csmNear * std::pow(ratio, p);
             const float uniformSplit = csmNear + range * p;
             const float dist         = splitLambda * (logSplit - uniformSplit) + uniformSplit;
             cascadeSplits[i]           = dist;
             m_GPUData.cascadeSplits[i] = dist;
+        }
+        for (int i = activeCascades; i < NUM_CASCADES; ++i)
+        {
+            cascadeSplits[i]           = 1e9f;
+            m_GPUData.cascadeSplits[i] = 1e9f;
+            m_CascadeTexelSizes[i]     = 0.0f;
         }
 
         glm::mat4 invView = glm::inverse(camera->GetView());
@@ -224,7 +232,7 @@ namespace ignite
 
         float lastSplitDist = csmNear;
 
-        for (int cascadeIdx = 0; cascadeIdx < NUM_CASCADES; ++cascadeIdx)
+        for (int cascadeIdx = 0; cascadeIdx < activeCascades; ++cascadeIdx)
         {
             const float splitDist = cascadeSplits[cascadeIdx];
             const float nearDist = lastSplitDist;
@@ -273,6 +281,7 @@ namespace ignite
             const float texelBase = (extent * 2.0f) / static_cast<float>(m_Resolution);
             const float safeExtent = extent + texelBase;
             const float texelSize = (safeExtent * 2.0f) / static_cast<float>(m_Resolution);
+            m_CascadeTexelSizes[cascadeIdx] = texelSize;
 
             glm::vec3 centerLS = glm::vec3(lightRot * glm::vec4(frustumCenter, 1.0f));
             if (texelSize > 0.0f)
@@ -299,6 +308,10 @@ namespace ignite
             m_GPUData.lightViewProj[cascadeIdx] = lightProj * lightView;
 
             lastSplitDist = splitDist;
+        }
+        for (int cascadeIdx = activeCascades; cascadeIdx < NUM_CASCADES; ++cascadeIdx)
+        {
+            m_GPUData.lightViewProj[cascadeIdx] = m_GPUData.lightViewProj[activeCascades - 1];
         }
     }
 

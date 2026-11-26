@@ -17,10 +17,6 @@ project "JOLT"
     defines {
         "JPH_SHARED_LIBRARY",
         "JPH_BUILD_SHARED_LIBRARY",
-        
-        "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
-        "JPH_DEBUG_RENDERER",
-        "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
     }
 
@@ -36,6 +32,9 @@ project "JOLT"
         symbols "on"
         defines {
             "_DEBUG",
+            "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+            "JPH_DEBUG_RENDERER",
+            "JPH_PROFILE_ENABLED",
         }
     filter { "system:windows", "configurations:Debug" }
         defines {
@@ -47,11 +46,18 @@ project "JOLT"
             "msvcrtd",
         }
 
-    filter { "configurations:Release or Release-Profiling" }
-        optimize "on"
+    filter { "configurations:Release" }
+        optimize "speed"
         symbols "on"
         defines {
             "NDEBUG"
+        }
+    filter { "configurations:Release-Profiling" }
+        optimize "speed"
+        symbols "on"
+        defines {
+            "NDEBUG",
+            "JPH_PROFILE_ENABLED",
         }
     filter { "system:windows", "configurations:Release or Release-Profiling" }
         defines {
@@ -63,11 +69,18 @@ project "JOLT"
             "msvcrt",
         }
 
-    filter { "configurations:Shipping or Shipping-Profiling" }
-        optimize "on"
+    filter { "configurations:Shipping" }
+        optimize "speed"
         symbols "off"
         defines {
             "NDEBUG"
+        }
+    filter { "configurations:Shipping-Profiling" }
+        optimize "speed"
+        symbols "off"
+        defines {
+            "NDEBUG",
+            "JPH_PROFILE_ENABLED",
         }
     filter { "system:windows", "configurations:Shipping or Shipping-Profiling" }
         defines {

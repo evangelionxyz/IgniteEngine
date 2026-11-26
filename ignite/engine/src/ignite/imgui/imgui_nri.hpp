@@ -62,9 +62,9 @@ namespace ignite
         void Shutdown();
         bool UpdateFontTexture();
 
-        bool Render(RenderTarget *renderTarget);
-        bool Render(ImDrawData *drawData, RenderTarget *renderTarget);
-        bool Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget, uint32_t slotIndex = 0);
+        bool Render(RenderTarget *renderTarget, bool clearTarget = false);
+        bool Render(ImDrawData *drawData, RenderTarget *renderTarget, bool clearTarget = false);
+        bool Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget, uint32_t slotIndex = 0, bool clearTarget = false);
 
         void BackBufferResizing();
 

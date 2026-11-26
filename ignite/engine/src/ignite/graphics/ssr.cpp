@@ -63,7 +63,7 @@ namespace ignite
         }
     }
 
-    SSR::SSR(uint32_t fullWidth, uint32_t fullHeight)
+    SSR::SSR(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale)
     {
         auto *dm = DeviceManager::GetInstance();
         nri::Device *device = dm ? dm->GetDevice() : nullptr;
@@ -95,7 +95,9 @@ namespace ignite
             .AddItem(BindingLayoutItem::TextureSRV(0))
             .AddItem(BindingLayoutItem::TextureSRV(1))
             .AddItem(BindingLayoutItem::TextureSRV(2))
-            .AddItem(BindingLayoutItem::TextureUAV(0));
+            .AddItem(BindingLayoutItem::TextureSRV(3))
+            .AddItem(BindingLayoutItem::TextureUAV(0))
+            .AddItem(BindingLayoutItem::Sampler(0));
 
         for (uint32_t m = 0; m < kMaxDepthMips; ++m)
         {
@@ -104,11 +106,11 @@ namespace ignite
         m_TraceCB = ConstantBuffer::Create(sizeof(TraceCB), true, 1, "SSR Trace CB");
         m_DenoiseCB = ConstantBuffer::Create(sizeof(DenoiseCB), true, 1, "SSR Denoise CB");
 
-        m_HiZShader = Shader::Create("resources/shaders/ssr_hiz.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
-        m_TraceShader = Shader::Create("resources/shaders/ssr_trace.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
-        m_DenoiseShader = Shader::Create("resources/shaders/ssr_denoise.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
+        m_HiZShader = Shader::Create("resources/shaders/ssr_hiz.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
+        m_TraceShader = Shader::Create("resources/shaders/ssr_trace.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
+        m_DenoiseShader = Shader::Create("resources/shaders/ssr_denoise.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
 
-        CreateTextures(fullWidth, fullHeight);
+        CreateTextures(fullWidth, fullHeight, resolutionScale);
     }
 
     SSR::~SSR()
@@ -131,7 +133,7 @@ namespace ignite
         }
     }
 
-    void SSR::CreateTextures(uint32_t fullWidth, uint32_t fullHeight)
+    void SSR::CreateTextures(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale)
     {
         if (m_HiZDepth || m_SSRRaw || m_SSRFinal)
         {
@@ -147,8 +149,17 @@ namespace ignite
 
         m_FullWidth = std::max(1u, fullWidth);
         m_FullHeight = std::max(1u, fullHeight);
-        m_HalfWidth = std::max(1u, (m_FullWidth + 1u) / 2u);
-        m_HalfHeight = std::max(1u, (m_FullHeight + 1u) / 2u);
+        m_ResolutionScale = std::clamp(resolutionScale, 0.25f, 1.0f);
+        if (std::abs(m_ResolutionScale - 0.5f) < 1e-4f)
+        {
+            m_HalfWidth = std::max(1u, (m_FullWidth + 1u) / 2u);
+            m_HalfHeight = std::max(1u, (m_FullHeight + 1u) / 2u);
+        }
+        else
+        {
+            m_HalfWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(m_FullWidth) * m_ResolutionScale)));
+            m_HalfHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(m_FullHeight) * m_ResolutionScale)));
+        }
         m_DepthMipCount = std::min(kMaxDepthMips, std::max(1u, Texture::CalculateMaxMipLevels(m_HalfWidth, m_HalfHeight, 1)));
 
         TextureCreateInfo hizInfo;
@@ -195,15 +206,17 @@ namespace ignite
         }
     }
 
-    void SSR::Resize(uint32_t fullWidth, uint32_t fullHeight)
+    void SSR::Resize(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale)
     {
         const uint32_t safeW = std::max(1u, fullWidth);
         const uint32_t safeH = std::max(1u, fullHeight);
-        if (m_FullWidth == safeW && m_FullHeight == safeH && m_HiZDepth && m_SSRRaw && m_SSRFinal)
+        const float safeScale = std::clamp(resolutionScale, 0.25f, 1.0f);
+        if (m_FullWidth == safeW && m_FullHeight == safeH && std::abs(m_ResolutionScale - safeScale) < 1e-4f
+            && m_HiZDepth && m_SSRRaw && m_SSRFinal)
         {
             return;
         }
-        CreateTextures(safeW, safeH);
+        CreateTextures(safeW, safeH, safeScale);
     }
 
     void SSR::InvalidatePipelines()
@@ -268,10 +281,15 @@ namespace ignite
         const Ref<Texture> &depthTexture,
         const Ref<Texture> &normalTexture,
         const Ref<Texture> &prevSceneColor,
+        const Ref<Texture> &prevSSRTexture,
+        bool historyValid,
         ICamera *camera,
+        const glm::mat4 &projection,
         const glm::mat4 &prevViewProj,
         float maxRoughness,
-        uint64_t frameIndex)
+        uint64_t frameIndex,
+        uint32_t maxSteps,
+        uint32_t binarySearchSteps)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -286,10 +304,18 @@ namespace ignite
         if (!m_HiZPipeline || !m_TracePipeline || !m_DenoisePipeline)
             return;
 
+        const bool useHistory = historyValid && prevSSRTexture && prevSSRTexture->GetHandle()
+            && prevSSRTexture != m_SSRFinal
+            && prevSSRTexture->GetCurrentLayout() != nri::Layout::UNDEFINED;
+
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
         TransitionSSRInputToSRV(cmd, depthTexture);
         TransitionSSRInputToSRV(cmd, normalTexture);
         TransitionSSRInputToSRV(cmd, prevSceneColor);
+        if (useHistory)
+        {
+            TransitionSSRInputToSRV(cmd, prevSSRTexture);
+        }
 
         // Transition HiZ, Raw, Final into UAV
         {
@@ -387,8 +413,9 @@ namespace ignite
             }
         }
 
-        const glm::mat4 proj = camera->GetProjection();
+        const glm::mat4 proj = projection;
         const glm::mat4 projInv = glm::inverse(proj);
+        const glm::mat4 viewInv = glm::inverse(camera->GetView());
 
         // Pass 2: Half-res Hi-Z SSR Trace
         {
@@ -396,7 +423,7 @@ namespace ignite
             TraceCB tcb{};
             tcb.projection = proj;
             tcb.projectionInv = projInv;
-            tcb.viewInv = glm::inverse(camera->GetView());
+            tcb.viewInv = viewInv;
             tcb.prevViewProj = prevViewProj;
             tcb.invHalfRes = glm::vec2(1.0f / static_cast<float>(m_HalfWidth), 1.0f / static_cast<float>(m_HalfHeight));
             tcb.fullRes = glm::vec2(static_cast<float>(m_FullWidth), static_cast<float>(m_FullHeight));
@@ -406,6 +433,8 @@ namespace ignite
             tcb.nearPlane = std::max(camera->nearPlane, 1e-3f);
             tcb.farPlane = std::max(camera->farPlane, tcb.nearPlane + 1.0f);
             tcb.maxRoughness = std::clamp(maxRoughness, 0.05f, 1.0f);
+            tcb.maxSteps = std::clamp(maxSteps, 8u, 64u);
+            tcb.binarySearchSteps = std::clamp(binarySearchSteps, 1u, 6u);
             m_TraceCB->SetData(&tcb, sizeof(tcb));
 
             BindingSetDesc bsDesc;
@@ -439,23 +468,32 @@ namespace ignite
             nri.CmdBarrier(*cmd, bd);
         }
 
-        // Pass 3: Bilateral Denoise -> m_SSRFinal
+        // Pass 3: Bilateral + Temporal Denoise -> m_SSRFinal
         {
             IGN_PROFILE_SCOPE("SSR::Denoise");
             DenoiseCB dcb{};
             dcb.projectionInv = projInv;
+            dcb.viewInv = viewInv;
+            dcb.prevViewProj = prevViewProj;
             dcb.halfRes = glm::uvec2(m_HalfWidth, m_HalfHeight);
             dcb.fullRes = glm::uvec2(m_FullWidth, m_FullHeight);
             dcb.invHalfRes = glm::vec2(1.0f / static_cast<float>(m_HalfWidth), 1.0f / static_cast<float>(m_HalfHeight));
             dcb.depthSigma = 0.04f;
+            dcb.historyValid = useHistory ? 1u : 0u;
             m_DenoiseCB->SetData(&dcb, sizeof(dcb));
+
+            nri::Descriptor *prevSSRSrv = useHistory
+                ? prevSSRTexture->GetShaderResourceView()
+                : m_SSRRaw->GetShaderResourceView();
 
             BindingSetDesc bsDesc;
             bsDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_DenoiseCB->GetDescriptor()));
             bsDesc.AddItem(BindingSetItem::TextureSRV(0, m_SSRRaw->GetShaderResourceView()));
             bsDesc.AddItem(BindingSetItem::TextureSRV(1, m_HiZDepth->GetShaderResourceView()));
             bsDesc.AddItem(BindingSetItem::TextureSRV(2, normalTexture->GetShaderResourceView()));
+            bsDesc.AddItem(BindingSetItem::TextureSRV(3, prevSSRSrv));
             bsDesc.AddItem(BindingSetItem::TextureUAV(0, m_SSRFinal->GetStorageView(0)));
+            bsDesc.AddItem(BindingSetItem::Sampler(0, m_LinearClampSampler));
             Ref<BindingSet> bs = BindingCache::GetOrCreateBindingSet(bsDesc, m_DenoisePipelineLayout, 0, "SSR Denoise");
             if (!bs || !bs->GetHandle())
                 return;

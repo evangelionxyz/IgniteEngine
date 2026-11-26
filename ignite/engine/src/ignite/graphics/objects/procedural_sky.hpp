@@ -79,7 +79,11 @@ namespace ignite
 
         AtmosphereParams m_Params;
         AtmosphereParams m_PreviousAtmosphereParams;
+        glm::vec4 m_PreviousSunDirAndIntensity = glm::vec4(0.0f);
+        glm::vec4 m_PreviousSunColorAndRadius = glm::vec4(0.0f);
+        float m_PreviousAltitudeKm = -1.0f;
         bool m_DirtyAtmosphere = true;
+        bool m_DirtySkyView = true;
         bool m_Initialized = false;
 
         Ref<Texture> m_TransmittanceLUTTexture;
