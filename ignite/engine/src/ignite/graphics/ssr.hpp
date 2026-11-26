@@ -77,10 +77,11 @@ namespace ignite
 
         struct DenoiseCB
         {
+            glm::mat4 projectionInv = glm::mat4(1.0f);
             glm::uvec2 halfRes = glm::uvec2(1u);
             glm::uvec2 fullRes = glm::uvec2(1u);
             glm::vec2 invHalfRes = glm::vec2(1.0f);
-            float depthSigma = 0.02f;
+            float depthSigma = 0.04f;
             float _pad = 0.0f;
         };
 

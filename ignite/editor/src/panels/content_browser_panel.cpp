@@ -392,6 +392,7 @@ namespace ignite
         }
 
         const bool isCurrentDir = (fullPath == m_CurrentDirectory);
+        const float rowCursorX = ImGui::GetCursorScreenPos().x;
         const std::string displayLabel = "     " + filename;
         const bool opened = ImGui::TreeNodeEx(fullPath.generic_string().c_str(), flags, "%s", displayLabel.c_str());
         const ImVec2 itemMin = ImGui::GetItemRectMin();
@@ -402,7 +403,7 @@ namespace ignite
             const AssetType treeAssetType = isDirectory ? AssetType::Invalid : GetAssetTypeFromExtension(fullPath.extension().string());
             const FileVisual vis = GetFileVisual(isDirectory, opened, treeAssetType, fullPath);
             const float rowH = (std::max)(1.0f, itemMax.y - itemMin.y);
-            const float iconX = itemMin.x + ImGui::GetTreeNodeToLabelSpacing();
+            const float iconX = rowCursorX + ImGui::GetTreeNodeToLabelSpacing();
             ImDrawList *dl = ImGui::GetWindowDrawList();
             if (isCurrentDir || m_SelectedFileTree == fullPath)
             {

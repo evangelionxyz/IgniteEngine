@@ -329,67 +329,73 @@ namespace ignite
         }
 
         // Pass 1: Build Hi-Z depth pyramid
-        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_HiZPipelineLayout);
-        nri.CmdSetPipeline(*cmd, *m_HiZPipeline);
-
-        uint32_t srcW = static_cast<uint32_t>(std::max(depthTexture->GetWidth(), 1));
-        uint32_t srcH = static_cast<uint32_t>(std::max(depthTexture->GetHeight(), 1));
-        uint32_t dstW = m_HalfWidth;
-        uint32_t dstH = m_HalfHeight;
-
-        for (uint32_t mip = 0; mip < m_DepthMipCount; ++mip)
         {
-            HiZCB cb{};
-            cb.srcSize = glm::uvec2(srcW, srcH);
-            cb.dstSize = glm::uvec2(dstW, dstH);
-            cb.passMode = (mip == 0u) ? 0u : 1u;
-            m_HiZCBs[mip]->SetData(&cb, sizeof(cb));
+            IGN_PROFILE_SCOPE("SSR::HiZ");
+            nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::COMPUTE, *m_HiZPipelineLayout);
+            nri.CmdSetPipeline(*cmd, *m_HiZPipeline);
 
-            nri::Descriptor *srcSRV = (mip == 0u)
-                ? depthTexture->GetShaderResourceView()
-                : m_HiZDepth->GetMipShaderResourceView(mip - 1u);
-            nri::Descriptor *dstUAV = m_HiZDepth->GetStorageView(mip);
-            if (!srcSRV || !dstUAV)
-                break;
+            uint32_t srcW = static_cast<uint32_t>(std::max(depthTexture->GetWidth(), 1));
+            uint32_t srcH = static_cast<uint32_t>(std::max(depthTexture->GetHeight(), 1));
+            uint32_t dstW = m_HalfWidth;
+            uint32_t dstH = m_HalfHeight;
 
-            BindingSetDesc bsDesc;
-            bsDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_HiZCBs[mip]->GetDescriptor()));
-            bsDesc.AddItem(BindingSetItem::TextureSRV(0, srcSRV));
-            bsDesc.AddItem(BindingSetItem::TextureUAV(0, dstUAV));
-            Ref<BindingSet> bs = BindingCache::GetOrCreateBindingSet(bsDesc, m_HiZPipelineLayout, 0, "SSR HiZ");
-            if (!bs || !bs->GetHandle())
-                return;
+            for (uint32_t mip = 0; mip < m_DepthMipCount; ++mip)
+            {
+                HiZCB cb{};
+                cb.srcSize = glm::uvec2(srcW, srcH);
+                cb.dstSize = glm::uvec2(dstW, dstH);
+                cb.passMode = (mip == 0u) ? 0u : 1u;
+                m_HiZCBs[mip]->SetData(&cb, sizeof(cb));
 
-            nri::SetDescriptorSetDesc setDesc = { 0, bs->GetHandle(), nri::BindPoint::COMPUTE };
-            nri.CmdSetDescriptorSet(*cmd, setDesc);
-            nri.CmdDispatch(*cmd, { (dstW + 7u) / 8u, (dstH + 7u) / 8u, 1u });
+                nri::Descriptor *srcSRV = (mip == 0u)
+                    ? depthTexture->GetShaderResourceView()
+                    : m_HiZDepth->GetMipShaderResourceView(mip - 1u);
+                nri::Descriptor *dstUAV = m_HiZDepth->GetStorageView(mip);
+                if (!srcSRV || !dstUAV)
+                    break;
 
-            nri::TextureBarrierDesc mipDone = {};
-            mipDone.texture = m_HiZDepth->GetHandle();
-            mipDone.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
-            mipDone.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER };
-            mipDone.mipOffset = static_cast<nri::Dim_t>(mip);
-            mipDone.mipNum = 1;
-            mipDone.layerNum = 1;
-            mipDone.planes = nri::PlaneBits::ALL;
+                BindingSetDesc bsDesc;
+                bsDesc.AddItem(BindingSetItem::ConstantBuffer(0, m_HiZCBs[mip]->GetDescriptor()));
+                bsDesc.AddItem(BindingSetItem::TextureSRV(0, srcSRV));
+                bsDesc.AddItem(BindingSetItem::TextureUAV(0, dstUAV));
+                Ref<BindingSet> bs = BindingCache::GetOrCreateBindingSet(bsDesc, m_HiZPipelineLayout, 0, "SSR HiZ");
+                if (!bs || !bs->GetHandle())
+                    return;
 
-            nri::BarrierDesc bd = {};
-            bd.textures = &mipDone;
-            bd.textureNum = 1;
-            nri.CmdBarrier(*cmd, bd);
+                nri::SetDescriptorSetDesc setDesc = { 0, bs->GetHandle(), nri::BindPoint::COMPUTE };
+                nri.CmdSetDescriptorSet(*cmd, setDesc);
+                nri.CmdDispatch(*cmd, { (dstW + 7u) / 8u, (dstH + 7u) / 8u, 1u });
 
-            srcW = dstW;
-            srcH = dstH;
-            dstW = std::max(1u, dstW / 2u);
-            dstH = std::max(1u, dstH / 2u);
+                nri::TextureBarrierDesc mipDone = {};
+                mipDone.texture = m_HiZDepth->GetHandle();
+                mipDone.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
+                mipDone.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER };
+                mipDone.mipOffset = static_cast<nri::Dim_t>(mip);
+                mipDone.mipNum = 1;
+                mipDone.layerNum = 1;
+                mipDone.planes = nri::PlaneBits::ALL;
+
+                nri::BarrierDesc bd = {};
+                bd.textures = &mipDone;
+                bd.textureNum = 1;
+                nri.CmdBarrier(*cmd, bd);
+
+                srcW = dstW;
+                srcH = dstH;
+                dstW = std::max(1u, dstW / 2u);
+                dstH = std::max(1u, dstH / 2u);
+            }
         }
+
+        const glm::mat4 proj = camera->GetProjection();
+        const glm::mat4 projInv = glm::inverse(proj);
 
         // Pass 2: Half-res Hi-Z SSR Trace
         {
-            const glm::mat4 proj = camera->GetProjection();
+            IGN_PROFILE_SCOPE("SSR::Trace");
             TraceCB tcb{};
             tcb.projection = proj;
-            tcb.projectionInv = glm::inverse(proj);
+            tcb.projectionInv = projInv;
             tcb.viewInv = glm::inverse(camera->GetView());
             tcb.prevViewProj = prevViewProj;
             tcb.invHalfRes = glm::vec2(1.0f / static_cast<float>(m_HalfWidth), 1.0f / static_cast<float>(m_HalfHeight));
@@ -435,11 +441,13 @@ namespace ignite
 
         // Pass 3: Bilateral Denoise -> m_SSRFinal
         {
+            IGN_PROFILE_SCOPE("SSR::Denoise");
             DenoiseCB dcb{};
+            dcb.projectionInv = projInv;
             dcb.halfRes = glm::uvec2(m_HalfWidth, m_HalfHeight);
             dcb.fullRes = glm::uvec2(m_FullWidth, m_FullHeight);
             dcb.invHalfRes = glm::vec2(1.0f / static_cast<float>(m_HalfWidth), 1.0f / static_cast<float>(m_HalfHeight));
-            dcb.depthSigma = 0.02f;
+            dcb.depthSigma = 0.04f;
             m_DenoiseCB->SetData(&dcb, sizeof(dcb));
 
             BindingSetDesc bsDesc;

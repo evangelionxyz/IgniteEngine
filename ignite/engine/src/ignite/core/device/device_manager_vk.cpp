@@ -694,6 +694,7 @@ namespace ignite
             // internal flag behind "gpuav_validate_ray_query" and "gpuav_mesh_shading" exist.
             { "gpuav_validate_ray_query", gpuAssisted && cfg.gpuAssistedRayQuery },
             { "gpuav_mesh_shading", gpuAssisted && cfg.gpuAssistedMeshShading },
+            { "gpuav_force_on_robustness", gpuAssisted },
         };
 
         // The layer dereferences "pValues" lazily during "vkCreateInstance", so the backing storage must

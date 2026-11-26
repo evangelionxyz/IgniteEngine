@@ -2349,6 +2349,15 @@ namespace ignite
             {
                 cmdMgr->SetMaxHistory(m_ActiveProject->GetInfo().editorSettings.undoHistoryLimit);
             }
+            if (m_SceneRenderer)
+            {
+                const std::filesystem::path gameSettingsPath = m_ActiveProject->GetDirectory() / "GameSettings.ign";
+                if (m_SceneRenderer->sceneRenderSettings.DeserializeFromFile(gameSettingsPath))
+                {
+                    m_State.editorRequestToResize = true;
+                    m_State.gameplayRequestToResize = true;
+                }
+            }
         }
 
         // Reload project files
@@ -3225,6 +3234,7 @@ namespace ignite
         if (ImGui::TreeNodeEx("Render Settings", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
             auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
+            bool settingsChanged = false;
 
             if (ImGui::TreeNodeEx("Visibility"))
             {
@@ -3243,11 +3253,13 @@ namespace ignite
                     if (UI::DrawComboBox("Method", sampleMethodLabels, IM_ARRAYSIZE(sampleMethodLabels), &currentMethod))
                     {
                         m_SceneRenderer->SetSampleMethod(static_cast<SampleMethod>(currentMethod));
+                        settingsChanged = true;
                     }
 
                     if (renderSettings.sampleMethod == SampleMethod::TAA)
                     {
-                        UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
+                        if (UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f))
+                            settingsChanged = true;
                     }
                     else if (renderSettings.sampleMethod == SampleMethod::MSAA)
                     {
@@ -3256,6 +3268,7 @@ namespace ignite
                             if (renderSettings.msaaProperties.sampleCount <= 2) renderSettings.msaaProperties.sampleCount = 2;
                             else if (renderSettings.msaaProperties.sampleCount <= 4) renderSettings.msaaProperties.sampleCount = 4;
                             else renderSettings.msaaProperties.sampleCount = 8;
+                            settingsChanged = true;
                         }
                     }
 
@@ -3264,11 +3277,13 @@ namespace ignite
 
                 if (ImGui::TreeNodeEx("Render scale"))
                 {
-                    UI::DrawFloatControl("Factor", &renderSettings.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
+                    if (UI::DrawFloatControl("Factor", &renderSettings.renderScale, 0.025f, 0.25f, 1.0f, 1.0f))
+                        settingsChanged = true;
                     if (UI::DrawButtonWithColumn("", "Apply"))
                     {
                         m_State.gameplayRequestToResize = true;
                         m_State.editorRequestToResize = true;
+                        settingsChanged = true;
                     }
                     ImGui::TreePop();
                 }
@@ -3312,6 +3327,7 @@ namespace ignite
                     if (UI::DrawComboBox("GI Mode", giModeLabels, IM_ARRAYSIZE(giModeLabels), &giIdx))
                     {
                         renderSettings.giModeOverride = giIdx - 1;
+                        settingsChanged = true;
                     }
 
                     static const char *aoModeLabels[] = { "Camera Default", "Off", "Legacy SSAO", "GTAO" };
@@ -3319,22 +3335,34 @@ namespace ignite
                     if (UI::DrawComboBox("AO Mode", aoModeLabels, IM_ARRAYSIZE(aoModeLabels), &aoIdx))
                     {
                         renderSettings.aoModeOverride = aoIdx - 1;
+                        settingsChanged = true;
                     }
 
-                    UI::DrawCheckbox("Depth+Normal Prepass", &renderSettings.enableDepthPrepass);
-                    UI::DrawCheckbox("Specular AA", &renderSettings.enableSpecularAA);
-                    UI::DrawCheckbox("Screen-Space Reflections (SSR)", &renderSettings.enableSSR);
+                    if (UI::DrawCheckbox("Depth+Normal Prepass", &renderSettings.enableDepthPrepass))
+                        settingsChanged = true;
+                    if (UI::DrawCheckbox("Specular AA", &renderSettings.enableSpecularAA))
+                        settingsChanged = true;
+                    if (UI::DrawCheckbox("Screen-Space Reflections (SSR)", &renderSettings.enableSSR))
+                        settingsChanged = true;
                     if (renderSettings.enableSSR)
                     {
-                        UI::DrawFloatControl("SSR Intensity", &renderSettings.ssrIntensity, 0.025f, 0.0f, 2.0f, 1.0f);
-                        UI::DrawFloatControl("SSR Max Roughness", &renderSettings.ssrMaxRoughness, 0.025f, 0.05f, 1.0f, 0.6f);
+                        if (UI::DrawFloatControl("SSR Intensity", &renderSettings.ssrIntensity, 0.025f, 0.0f, 2.0f, 1.0f))
+                            settingsChanged = true;
+                        if (UI::DrawFloatControl("SSR Max Roughness", &renderSettings.ssrMaxRoughness, 0.025f, 0.05f, 1.0f, 0.6f))
+                            settingsChanged = true;
                     }
-                    UI::DrawCheckbox("Show GI Probes", &renderSettings.showGIProbes);
+                    if (UI::DrawCheckbox("Show GI Probes", &renderSettings.showGIProbes))
+                        settingsChanged = true;
 
                     ImGui::TreePop();
                 }
 
                 ImGui::TreePop();
+            }
+
+            if (settingsChanged && m_ActiveProject)
+            {
+                renderSettings.SerializeToFile(m_ActiveProject->GetDirectory() / "GameSettings.ign");
             }
 
             ImGui::TreePop();
@@ -3507,6 +3535,7 @@ namespace ignite
         const bool sceneRTNeedsResize = (!target || expectedRenderWidth != sceneRTSize.x || expectedRenderHeight != sceneRTSize.y);
 
         const bool needsResize = cameraNeedsResize || compositeNeedsResize || sceneRTNeedsResize || requestToResize;
+        const bool immediateRequest = requestToResize;
 
         if (needsResize)
         {
@@ -3524,7 +3553,7 @@ namespace ignite
 
         if (isResizing && m_SceneRenderer)
         {
-            if (!target || targetSize.x == 0 || targetSize.y == 0 || sceneRTSize.x == 0 || sceneRTSize.y == 0)
+            if (immediateRequest || !target || targetSize.x == 0 || targetSize.y == 0 || sceneRTSize.x == 0 || sceneRTSize.y == 0)
             {
                 m_SceneRenderer->ResizeFramebuffer(camera, desiredSize.x, desiredSize.y);
                 isResizing = false;

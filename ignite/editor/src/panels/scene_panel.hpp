@@ -137,6 +137,7 @@ namespace ignite
 		{
 			bool isGizmoManipulating = false;
 			bool isGizmoBeingUse = false;
+			bool blockGizmoUntilMouseRelease = false;
             bool sceneViewportGameplayVisible = false;
             bool sceneViewportEditorVisible = false;
             float gamePreviewZoom = 1.0f;

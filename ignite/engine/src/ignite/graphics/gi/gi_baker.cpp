@@ -380,6 +380,7 @@ namespace ignite
 
     void GIBaker::DilateInvalidProbes()
     {
+        IGN_PROFILE_FUNCTION();
         if (m_ProbeCount == 0 || m_Dims.x <= 0 || m_Dims.y <= 0 || m_Dims.z <= 0)
         {
             return;
@@ -655,6 +656,7 @@ namespace ignite
 
     bool GIBaker::ComputeSceneSkySH(gi::SHL2 &outSkySH)
     {
+        IGN_PROFILE_FUNCTION();
         Ref<Texture> envTex = m_Capturer.GetPreparedEnvironmentTexture();
         if (!m_CmdAllocator || !m_CmdBuffer || !envTex || !envTex->GetHandle())
         {

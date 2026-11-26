@@ -391,6 +391,12 @@ namespace ignite
 
     void RuntimeLayer::OnOpenProject()
     {
+        if (m_ActiveProject && m_SceneRenderer)
+        {
+            const std::filesystem::path gameSettingsPath = m_ActiveProject->GetDirectory() / "GameSettings.ign";
+            m_SceneRenderer->sceneRenderSettings.DeserializeFromFile(gameSettingsPath);
+        }
+
         // Get Project default scene (use immediate load for synchronous path)
         AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
         if (defSceneAssetHandle != AssetHandle(0))

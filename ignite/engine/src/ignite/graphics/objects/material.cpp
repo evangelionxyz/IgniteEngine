@@ -17,6 +17,13 @@
 
 namespace ignite
 {
+    std::atomic<uint64_t> Material::s_GlobalBindingGeneration{ 0 };
+
+    void Material::InvalidateAllBindingSets()
+    {
+        s_GlobalBindingGeneration.fetch_add(1, std::memory_order_relaxed);
+    }
+
     Material::Material()
     {
     }
@@ -43,6 +50,15 @@ namespace ignite
 
     bool Material::UpdateBindingSet(Ref<Texture> envMap, Ref<Texture> shadowMap)
     {
+        const uint64_t globalGen = s_GlobalBindingGeneration.load(std::memory_order_relaxed);
+        if (m_CachedGlobalGeneration != globalGen)
+        {
+            m_BindingSetDirty = true;
+            m_BindingSets.clear();
+            m_BindingSet = nullptr;
+            m_CachedGlobalGeneration = globalGen;
+        }
+
         Texture* envPtr = envMap ? envMap.get() : nullptr;
         Texture* shadowPtr = shadowMap ? shadowMap.get() : nullptr;
         auto key = std::make_pair(envPtr, shadowPtr);

@@ -16,6 +16,7 @@
 
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/scene/component.hpp"
+#include "ignite/serializer/serializer.hpp"
 
 namespace ignite
 {
@@ -435,5 +436,182 @@ namespace ignite
     void ISceneRenderer::SetSampleMethod(SampleMethod method)
     {
         sceneRenderSettings.SetSampleMethod(method);
+    }
+
+    void SceneRenderSettings::ApplyOverallScalability(ScalabilityLevel level)
+    {
+        scalability.overall = level;
+        scalability.antiAliasing = level;
+        scalability.shadows = level;
+        scalability.globalIllumination = level;
+        scalability.ambientOcclusion = level;
+        scalability.reflections = level;
+        scalability.resolutionScale = level;
+        scalability.postProcessing = level;
+        ApplyIndividualScalability();
+    }
+
+    void SceneRenderSettings::ApplyIndividualScalability()
+    {
+        switch (scalability.antiAliasing)
+        {
+        case ScalabilityLevel::Low:
+            SetSampleMethod(SampleMethod::NONE);
+            break;
+        case ScalabilityLevel::Medium:
+            SetSampleMethod(SampleMethod::FXAA);
+            break;
+        case ScalabilityLevel::High:
+            SetSampleMethod(SampleMethod::TAA);
+            break;
+        case ScalabilityLevel::Ultra:
+            msaaProperties.sampleCount = 4;
+            SetSampleMethod(SampleMethod::MSAA);
+            break;
+        }
+
+        switch (scalability.shadows)
+        {
+        case ScalabilityLevel::Low: shadowQuality = ShadowMapQuality::LOW; break;
+        case ScalabilityLevel::Medium: shadowQuality = ShadowMapQuality::MEDIUM; break;
+        case ScalabilityLevel::High: shadowQuality = ShadowMapQuality::HIGH; break;
+        case ScalabilityLevel::Ultra: shadowQuality = ShadowMapQuality::ULTRA; break;
+        }
+
+        switch (scalability.globalIllumination)
+        {
+        case ScalabilityLevel::Low: giModeOverride = 0; break;    // Off
+        case ScalabilityLevel::Medium: giModeOverride = 1; break; // Fast
+        case ScalabilityLevel::High: giModeOverride = 1; break;   // Fast
+        case ScalabilityLevel::Ultra: giModeOverride = 2; break;  // LeakResistant
+        }
+
+        switch (scalability.ambientOcclusion)
+        {
+        case ScalabilityLevel::Low: aoModeOverride = 0; break;    // Off
+        case ScalabilityLevel::Medium: aoModeOverride = 1; break; // LegacySSAO
+        case ScalabilityLevel::High: aoModeOverride = 2; break;   // GTAO
+        case ScalabilityLevel::Ultra: aoModeOverride = 2; break;  // GTAO
+        }
+
+        switch (scalability.reflections)
+        {
+        case ScalabilityLevel::Low:
+            enableSSR = false;
+            break;
+        case ScalabilityLevel::Medium:
+            enableSSR = true;
+            ssrIntensity = 0.7f;
+            ssrMaxRoughness = 0.45f;
+            break;
+        case ScalabilityLevel::High:
+            enableSSR = true;
+            ssrIntensity = 1.0f;
+            ssrMaxRoughness = 0.6f;
+            break;
+        case ScalabilityLevel::Ultra:
+            enableSSR = true;
+            ssrIntensity = 1.0f;
+            ssrMaxRoughness = 0.75f;
+            break;
+        }
+
+        switch (scalability.resolutionScale)
+        {
+        case ScalabilityLevel::Low: renderScale = 0.65f; break;
+        case ScalabilityLevel::Medium: renderScale = 0.80f; break;
+        case ScalabilityLevel::High: renderScale = 1.0f; break;
+        case ScalabilityLevel::Ultra: renderScale = 1.0f; break;
+        }
+
+        enableSpecularAA = (scalability.postProcessing != ScalabilityLevel::Low);
+    }
+
+    bool SceneRenderSettings::SerializeToFile(const std::filesystem::path &filepath) const
+    {
+        if (filepath.empty())
+            return false;
+
+        Serializer sr(filepath);
+        sr.BeginMap();
+        sr.BeginMap("GameSettings");
+        {
+            sr.BeginMap("Scalability");
+            sr.AddKeyValue("Overall", static_cast<int>(scalability.overall));
+            sr.AddKeyValue("AntiAliasing", static_cast<int>(scalability.antiAliasing));
+            sr.AddKeyValue("Shadows", static_cast<int>(scalability.shadows));
+            sr.AddKeyValue("GlobalIllumination", static_cast<int>(scalability.globalIllumination));
+            sr.AddKeyValue("AmbientOcclusion", static_cast<int>(scalability.ambientOcclusion));
+            sr.AddKeyValue("Reflections", static_cast<int>(scalability.reflections));
+            sr.AddKeyValue("ResolutionScale", static_cast<int>(scalability.resolutionScale));
+            sr.AddKeyValue("PostProcessing", static_cast<int>(scalability.postProcessing));
+            sr.EndMap();
+
+            sr.BeginMap("SceneRenderer");
+            sr.AddKeyValue("SampleMethod", static_cast<int>(sampleMethod));
+            sr.AddKeyValue("MSAASampleCount", msaaProperties.sampleCount);
+            sr.AddKeyValue("TAABlendFactor", taaProperties.blendFactor);
+            sr.AddKeyValue("RenderScale", renderScale);
+            sr.AddKeyValue("ShadowQuality", static_cast<int>(shadowQuality));
+            sr.AddKeyValue("GIModeOverride", giModeOverride);
+            sr.AddKeyValue("AOModeOverride", aoModeOverride);
+            sr.AddKeyValue("EnableDepthPrepass", enableDepthPrepass);
+            sr.AddKeyValue("EnableSpecularAA", enableSpecularAA);
+            sr.AddKeyValue("EnableSSR", enableSSR);
+            sr.AddKeyValue("SSRIntensity", ssrIntensity);
+            sr.AddKeyValue("SSRMaxRoughness", ssrMaxRoughness);
+            sr.EndMap();
+        }
+        sr.EndMap();
+        sr.EndMap();
+        sr.Serialize(filepath);
+        return true;
+    }
+
+    bool SceneRenderSettings::DeserializeFromFile(const std::filesystem::path &filepath)
+    {
+        if (filepath.empty() || !std::filesystem::exists(filepath))
+            return false;
+
+        JsonNode root = Serializer::Deserialize(filepath);
+        JsonNode gs = root["GameSettings"];
+        if (!gs)
+            return false;
+
+        auto readLevel = [](JsonNode node, const char *key, ScalabilityLevel &out)
+        {
+            if (node[key])
+                out = static_cast<ScalabilityLevel>(std::clamp(node[key].as<int>(), 0, 3));
+        };
+
+        if (JsonNode sc = gs["Scalability"])
+        {
+            readLevel(sc, "Overall", scalability.overall);
+            readLevel(sc, "AntiAliasing", scalability.antiAliasing);
+            readLevel(sc, "Shadows", scalability.shadows);
+            readLevel(sc, "GlobalIllumination", scalability.globalIllumination);
+            readLevel(sc, "AmbientOcclusion", scalability.ambientOcclusion);
+            readLevel(sc, "Reflections", scalability.reflections);
+            readLevel(sc, "ResolutionScale", scalability.resolutionScale);
+            readLevel(sc, "PostProcessing", scalability.postProcessing);
+            ApplyIndividualScalability();
+        }
+
+        if (JsonNode sr = gs["SceneRenderer"])
+        {
+            if (sr["TAABlendFactor"]) taaProperties.blendFactor = sr["TAABlendFactor"].as<float>();
+            if (sr["MSAASampleCount"]) msaaProperties.sampleCount = sr["MSAASampleCount"].as<int>();
+            if (sr["SampleMethod"]) SetSampleMethod(static_cast<SampleMethod>(std::clamp(sr["SampleMethod"].as<int>(), 0, 3)));
+            if (sr["RenderScale"]) renderScale = std::clamp(sr["RenderScale"].as<float>(), 0.25f, 1.0f);
+            if (sr["ShadowQuality"]) shadowQuality = static_cast<ShadowMapQuality>(std::clamp(sr["ShadowQuality"].as<int>(), 0, 3));
+            if (sr["GIModeOverride"]) giModeOverride = std::clamp(sr["GIModeOverride"].as<int>(), -1, 2);
+            if (sr["AOModeOverride"]) aoModeOverride = std::clamp(sr["AOModeOverride"].as<int>(), -1, 2);
+            if (sr["EnableDepthPrepass"]) enableDepthPrepass = sr["EnableDepthPrepass"].as<bool>();
+            if (sr["EnableSpecularAA"]) enableSpecularAA = sr["EnableSpecularAA"].as<bool>();
+            if (sr["EnableSSR"]) enableSSR = sr["EnableSSR"].as<bool>();
+            if (sr["SSRIntensity"]) ssrIntensity = std::clamp(sr["SSRIntensity"].as<float>(), 0.0f, 2.0f);
+            if (sr["SSRMaxRoughness"]) ssrMaxRoughness = std::clamp(sr["SSRMaxRoughness"].as<float>(), 0.05f, 1.0f);
+        }
+        return true;
     }
 }

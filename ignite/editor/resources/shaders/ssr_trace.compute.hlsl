@@ -51,11 +51,16 @@ float DeviceDepthToLinearZ(float deviceDepth)
     return abs(view.z / max(abs(view.w), 1e-5f));
 }
 
-float Hash12(float2 p)
+float Bayer4x4(uint2 px)
 {
-    float3 p3 = frac(float3(p.xyx) * 0.1031f);
-    p3 += dot(p3, p3.yzx + 33.33f);
-    return frac((p3.x + p3.y) * p3.z);
+    static const uint kBayer[16] = {
+         0u,  8u,  2u, 10u,
+        12u,  4u, 14u,  6u,
+         3u, 11u,  1u,  9u,
+        15u,  7u, 13u,  5u
+    };
+    uint2 p = px & 3u;
+    return (float(kBayer[p.y * 4u + p.x]) + 0.5f) / 16.0f;
 }
 
 [numthreads(8, 8, 1)]
@@ -76,6 +81,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     float2 uv = (float2(px) + 0.5f) * invHalfRes;
     float3 posVS = ReconstructViewPos(uv, centerDepth);
+    float startLinearZ = max(-posVS.z, nearPlane);
 
     int2 maxFull = int2(max(int(fullRes.x) - 1, 0), max(int(fullRes.y) - 1, 0));
     int2 fullPx = clamp(px * 2, int2(0, 0), maxFull);
@@ -99,7 +105,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (R.z > 1e-4f)
     {
         float distToNear = (-nearPlane * 1.05f - posVS.z) / R.z;
-        if (distToNear <= 0.01f)
+        if (distToNear <= 0.02f)
         {
             u_OutSSR[DTid.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
             return;
@@ -107,14 +113,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
         maxDist = min(maxDist, distToNear);
     }
 
-    float3 startVS = posVS + normalVS * max(0.015f, -posVS.z * 0.002f);
+    // Push start slightly off the surface along normal + reflection direction to prevent
+    // immediate self-intersection on curved geometry (e.g., spheres).
+    float startBias = max(0.05f, startLinearZ * 0.012f);
+    float3 startVS = posVS + normalVS * startBias + R * startBias;
     float3 endVS = startVS + R * maxDist;
 
     float3 startSS = ProjectViewToScreen(startVS);
     float3 endSS = ProjectViewToScreen(endVS);
     float3 rayDirSS = endSS - startSS;
 
-    // Normalize screen-space step so we advance in predictable pixel increments.
     float2 pixelDelta = rayDirSS.xy * float2(halfRes);
     float pixelLen = length(pixelDelta);
     if (pixelLen < 1.0f)
@@ -124,14 +132,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     float3 stepSS = rayDirSS / pixelLen;
-    float jitter = Hash12(float2(px) + float2(frameIndex % 64u, (frameIndex * 7u) % 64u));
+    float jitter = 0.25f + 0.5f * Bayer4x4(DTid.xy);
 
     int mip = 0;
-    float t = 1.5f + jitter * 1.5f;
+    float t = 2.0f + jitter;
+    float tPrev = t;
     float maxT = min(pixelLen, 256.0f);
 
     bool hit = false;
     float3 hitSS = float3(0.0f, 0.0f, 0.0f);
+    int2 maxHalf = int2(halfRes) - 1;
 
     [loop]
     for (int iter = 0; iter < 48; ++iter)
@@ -157,14 +167,47 @@ void main(uint3 DTid : SV_DispatchThreadID)
             {
                 float rayLinearZ = DeviceDepthToLinearZ(currSS.z);
                 float surfLinearZ = DeviceDepthToLinearZ(hizDepth);
-                float thickness = max(0.08f, surfLinearZ * 0.035f);
+                float thickness = max(0.06f, surfLinearZ * 0.03f);
                 float diff = rayLinearZ - surfLinearZ;
                 if (diff >= 0.0f && diff <= thickness && hizDepth < 0.99999f)
                 {
-                    hit = true;
-                    hitSS = currSS;
-                    break;
+                    // 5-iteration binary search refinement between tPrev and t for crisp hit precision.
+                    float lo = tPrev;
+                    float hi = t;
+                    [unroll]
+                    for (int b = 0; b < 5; ++b)
+                    {
+                        float mid = 0.5f * (lo + hi);
+                        float3 midSS = startSS + stepSS * mid;
+                        int2 midCell = clamp(int2(midSS.xy * float2(halfRes)), int2(0, 0), maxHalf);
+                        float midDepth = t_HiZDepth.Load(int3(midCell, 0)).r;
+                        if (midSS.z >= midDepth)
+                            hi = mid;
+                        else
+                            lo = mid;
+                    }
+                    hitSS = startSS + stepSS * hi;
+
+                    // Reject self/backface hits where hit surface faces the same direction as the ray.
+                    int2 hitFullPx = clamp(int2(hitSS.xy * fullRes), int2(0, 0), maxFull);
+                    float3 hitNormalVS = OctDecode(t_Normal.Load(int3(hitFullPx, 0)).rg);
+                    float hnLenSq = dot(hitNormalVS, hitNormalVS);
+                    if (hnLenSq > 1e-6f)
+                    {
+                        hitNormalVS *= rsqrt(hnLenSq);
+                        if (dot(hitNormalVS, R) <= 0.25f)
+                        {
+                            hit = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        hit = true;
+                        break;
+                    }
                 }
+                tPrev = t;
                 t += 1.0f;
             }
             else
@@ -174,6 +217,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
         else
         {
+            tPrev = t;
             float stride = float(1 << mip);
             t += stride;
             mip = min(mip + 1, int(maxDepthMip));
@@ -187,7 +231,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     // Reproject hit point into previous frame HDR color buffer.
-    float hitDepth = t_HiZDepth.Load(int3(clamp(int2(hitSS.xy * float2(halfRes)), int2(0, 0), int2(halfRes) - 1), 0)).r;
+    float hitDepth = t_HiZDepth.Load(int3(clamp(int2(hitSS.xy * float2(halfRes)), int2(0, 0), maxHalf), 0)).r;
     float3 hitVS = ReconstructViewPos(hitSS.xy, hitDepth);
     float3 hitWS = mul(viewInv, float4(hitVS, 1.0f)).xyz;
     float4 prevClip = mul(prevViewProj, float4(hitWS, 1.0f));

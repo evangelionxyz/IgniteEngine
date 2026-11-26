@@ -4,6 +4,7 @@
 #include "gpu_timer.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
@@ -144,7 +145,9 @@ namespace ignite
                 const uint64_t t1 = m_MappedReadback[i * 2u + 1u];
                 if (t1 >= t0)
                 {
-                    m_LastResultsMs[m_PreviousZoneNames[i]] = static_cast<double>(t1 - t0) * ticksToMs;
+                    const double ms = static_cast<double>(t1 - t0) * ticksToMs;
+                    m_LastResultsMs[m_PreviousZoneNames[i]] = ms;
+                    IGN_PROFILE_PLOT(m_PreviousZoneNames[i].c_str(), ms);
                 }
             }
             m_HasPendingResults = false;

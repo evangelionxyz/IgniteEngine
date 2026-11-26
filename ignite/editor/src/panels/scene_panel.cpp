@@ -5450,12 +5450,19 @@ namespace ignite
                             else
                             {
                                 SetSelectedEntity(targetSelection);
+                                if (m_Gizmo.GetOperation() != GizmoOperation::NONE)
+                                {
+                                    m_Data.blockGizmoUntilMouseRelease = true;
+                                    m_Gizmo.ResetInteraction();
+                                }
                             }
                         }
                         else // invalid entity
                         {
-                            Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
-                            if (objectIdTexture && objectIdTexture->GetHandle())
+                            Ref<Texture> objectIdTexture = (target->msaaSampleCount > 1 && target->sceneResolvedRT)
+                                ? target->sceneResolvedRT->GetColorAttachment(1)
+                                : target->sceneRT->GetColorAttachment(1);
+                            if (objectIdTexture && objectIdTexture->GetHandle() && objectIdTexture->GetCreateInfo().sampleCount <= 1)
                             {
                                 const int texWidth = objectIdTexture->GetWidth();
                                 const int texHeight = objectIdTexture->GetHeight();
@@ -5515,6 +5522,11 @@ namespace ignite
                                             else
                                             {
                                                 SetSelectedEntity(targetSelection);
+                                                if (m_Gizmo.GetOperation() != GizmoOperation::NONE)
+                                                {
+                                                    m_Data.blockGizmoUntilMouseRelease = true;
+                                                    m_Gizmo.ResetInteraction();
+                                                }
                                             }
                                         }
                                         else if (!m_EditorLayer->GetState().multiSelect)
@@ -5651,7 +5663,16 @@ namespace ignite
 
                     bool isManipulatingNow = false;
 
-                    if (m_SelectedEntities.size() > 1)
+                    if (m_Data.blockGizmoUntilMouseRelease)
+                    {
+                        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                        {
+                            m_Data.blockGizmoUntilMouseRelease = false;
+                        }
+                        m_Data.isGizmoManipulating = false;
+                        m_Data.isGizmoBeingUse = false;
+                    }
+                    else if (m_SelectedEntities.size() > 1)
                     {
                         glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), initialPivot);
                         glm::mat4 manipulatedTransform = gizmoTransform;
@@ -6278,6 +6299,74 @@ namespace ignite
         {
             const SceneAssetLoadProgress progress = m_Scene->GetAssetLoadProgress();
             ImGui::SetTooltip("Waiting for scene assets to load (%zu/%zu)...", progress.readyAssets, progress.totalAssets);
+        }
+
+        ImGui::SameLine();
+        ImGui::Spacing();
+        ImGui::SameLine();
+        if (UI::Button("Scalability", UI::ButtonVariant::Outline, UI::ButtonSize::IconMd, ImVec2(0.0f, 0.0f), ICON_LC_SLIDERS_HORIZONTAL))
+        {
+            ImGui::OpenPopup("##ScalabilityPopup");
+        }
+
+        if (ImGui::BeginPopup("##ScalabilityPopup"))
+        {
+            if (auto sr = m_EditorLayer ? m_EditorLayer->GetSceneRenderer() : nullptr)
+            {
+                auto &rs = sr->sceneRenderSettings;
+                auto &sc = rs.scalability;
+                bool changed = false;
+
+                static constexpr const char *kLevelLabels[] = { "LOW", "MEDIUM", "HIGH", "ULTRA" };
+                auto drawLevelRow = [&](const char *label, ScalabilityLevel &level, bool isOverall)
+                {
+                    ImGui::PushID(label);
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(label);
+                    ImGui::SameLine(155.0f);
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+                        const bool active = (static_cast<int>(level) == i);
+                        if (UI::Button(kLevelLabels[i], active ? UI::ButtonVariant::Primary : UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+                        {
+                            const auto newLevel = static_cast<ScalabilityLevel>(i);
+                            if (isOverall)
+                            {
+                                rs.ApplyOverallScalability(newLevel);
+                            }
+                            else
+                            {
+                                level = newLevel;
+                                rs.ApplyIndividualScalability();
+                            }
+                            changed = true;
+                        }
+                    }
+                    ImGui::PopID();
+                };
+
+                drawLevelRow("Overall Scalability", sc.overall, true);
+                ImGui::Separator();
+                drawLevelRow("Anti-Aliasing", sc.antiAliasing, false);
+                drawLevelRow("Shadows", sc.shadows, false);
+                drawLevelRow("Global Illumination", sc.globalIllumination, false);
+                drawLevelRow("Ambient Occlusion", sc.ambientOcclusion, false);
+                drawLevelRow("Reflections", sc.reflections, false);
+                drawLevelRow("Resolution Scale", sc.resolutionScale, false);
+                drawLevelRow("Post Processing", sc.postProcessing, false);
+
+                if (changed)
+                {
+                    m_EditorLayer->m_State.editorRequestToResize = true;
+                    m_EditorLayer->m_State.gameplayRequestToResize = true;
+                    if (auto proj = m_EditorLayer->GetActiveProject())
+                    {
+                        rs.SerializeToFile(proj->GetDirectory() / "GameSettings.ign");
+                    }
+                }
+            }
+            ImGui::EndPopup();
         }
 
         ImGui::EndDisabled();

@@ -512,6 +512,12 @@ namespace ignite
             CopySingleFile(regSrc, outDir / info.assetRegistryFilepath, result, ec);
         }
 
+        const std::filesystem::path gameSettingsSrc = project->GetDirectory() / "GameSettings.ign";
+        if (std::filesystem::exists(gameSettingsSrc, ec))
+        {
+            CopySingleFile(gameSettingsSrc, outDir / "GameSettings.ign", result, ec);
+        }
+
         CopyDirectoryFiltered(project->GetAssetDirectory(), outDir / info.assetDirectory, outDir, result, ec);
 
         if (std::filesystem::exists(project->GetScriptsDirectory(), ec))

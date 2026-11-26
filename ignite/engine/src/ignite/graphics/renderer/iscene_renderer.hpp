@@ -47,6 +47,26 @@ namespace ignite
         None = NONE
     };
 
+    enum class ScalabilityLevel : uint8_t
+    {
+        Low = 0,
+        Medium = 1,
+        High = 2,
+        Ultra = 3
+    };
+
+    struct GraphicsScalability
+    {
+        ScalabilityLevel overall = ScalabilityLevel::High;
+        ScalabilityLevel antiAliasing = ScalabilityLevel::High;
+        ScalabilityLevel shadows = ScalabilityLevel::High;
+        ScalabilityLevel globalIllumination = ScalabilityLevel::High;
+        ScalabilityLevel ambientOcclusion = ScalabilityLevel::High;
+        ScalabilityLevel reflections = ScalabilityLevel::High;
+        ScalabilityLevel resolutionScale = ScalabilityLevel::High;
+        ScalabilityLevel postProcessing = ScalabilityLevel::High;
+    };
+
     struct DebugGridStyle
     {
         bool enabled = true;
@@ -66,7 +86,7 @@ namespace ignite
         glm::vec4 zAxisColor = glm::vec4(0.29f, 0.52f, 0.96f, 1.0f);
     };
 
-    struct SceneRenderSettings
+    struct IGN_API SceneRenderSettings
     {
         DebugGridStyle worldGrid3D;
         DebugGridStyle worldGrid2D;
@@ -91,6 +111,9 @@ namespace ignite
         bool enableFXAA = true;
         float renderScale = 1.0f;
 
+        GraphicsScalability scalability;
+        ShadowMapQuality shadowQuality = ShadowMapQuality::HIGH;
+
         nri::FillMode fillMode = nri::FillMode::SOLID;
 
         SceneRenderSettings()
@@ -99,6 +122,11 @@ namespace ignite
             worldGrid2D.gridSize = 100.0f;
             SetSampleMethod(SampleMethod::FXAA);
         }
+
+        void ApplyOverallScalability(ScalabilityLevel level);
+        void ApplyIndividualScalability();
+        bool SerializeToFile(const std::filesystem::path &filepath) const;
+        bool DeserializeFromFile(const std::filesystem::path &filepath);
 
         void SetSampleMethod(SampleMethod method)
         {

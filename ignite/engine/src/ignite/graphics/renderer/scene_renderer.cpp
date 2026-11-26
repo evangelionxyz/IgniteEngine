@@ -561,6 +561,24 @@ namespace ignite
         RenderPlan plan = BuildRenderPlan(camera, drawDebug, postProcessing, isGameCamera);
 
         {
+            if (m_CascadedShadowMap && m_Scene && m_Scene->registry)
+            {
+                auto dirLightView = m_Scene->registry->view<DirectionalLightComponent>();
+                for (entt::entity e : dirLightView)
+                {
+                    const auto &light = dirLightView.get<DirectionalLightComponent>(e);
+                    const auto quality = (sceneRenderSettings.shadowQuality < static_cast<ShadowMapQuality>(light.shadowResolution))
+                        ? sceneRenderSettings.shadowQuality
+                        : static_cast<ShadowMapQuality>(light.shadowResolution);
+                    if (m_CascadedShadowMap->GetQuality() != quality)
+                    {
+                        m_CascadedShadowMap->Resize(quality);
+                        m_ResizeWaitedThisFrame = true;
+                    }
+                    break;
+                }
+            }
+
             const bool msaaEnabled = postProcessing.msaaProperties.enable;
             int desiredSampleCount = msaaEnabled ? postProcessing.msaaProperties.sampleCount : 1;
             if (desiredSampleCount <= 1) desiredSampleCount = 1;
@@ -574,6 +592,26 @@ namespace ignite
             const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(baseHeight) * postProcessing.renderScale)));
 
             EnsureMSAARenderTargets(target, desiredSampleCount, renderWidth, renderHeight);
+            if (target->sceneRT && (target->sceneRT->GetWidth() != renderWidth || target->sceneRT->GetHeight() != renderHeight))
+            {
+                if (!m_ResizeWaitedThisFrame)
+                {
+                    GPUUploadSync::DeviceWaitIdle(m_Device);
+                    BindingCache::Clear();
+                    ImGui_NRI::ClearTextureCache();
+                    m_ResizeWaitedThisFrame = true;
+                }
+                target->sceneRT->Resize(renderWidth, renderHeight, false);
+                if (target->selectionRT)
+                    target->selectionRT->Resize(renderWidth, renderHeight, false);
+                if (target->sceneResolvedRT)
+                    target->sceneResolvedRT->Resize(renderWidth, renderHeight, false);
+                target->debugRT = nullptr;
+                target->depthPrepassRT = nullptr;
+                target->prevSceneColor.reset();
+                target->prevSceneColorValid = false;
+                m_CompositeBindingSetCache.clear();
+            }
             const bool depthPrepassWillRun = sceneRenderSettings.enableDepthPrepass && target->msaaSampleCount == 1;
             if (depthPrepassWillRun)
             {
@@ -836,7 +874,12 @@ namespace ignite
                 m_WorldEnvironment->environment->GetProceduralSky()->RenderLUTs(cmd, sunDir, sunCol, sunIntensity, sunRadius, camera->position);
             }
 
-            UpdateSkyIBL(cmd, camera, frameContext);
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::UpdateSkyIBL");
+                const uint32_t skyZone = gpuTimer.BeginZone(cmd, "SkyIBL");
+                UpdateSkyIBL(cmd, camera, frameContext);
+                gpuTimer.EndZone(cmd, skyZone);
+            }
 
             if (BindlessSystem::HasPendingWrites())
             {
@@ -849,9 +892,12 @@ namespace ignite
             int32_t ssrBindlessIdx = -1;
             if (depthPrepassEnabled && target->depthPrepassRT)
             {
-                const uint32_t prepassZone = gpuTimer.BeginZone(cmd, "DepthNormalPrepass");
-                DepthPrepass(cmd, camera, frameContext, target->depthPrepassRT->GetFramebuffer());
-                gpuTimer.EndZone(cmd, prepassZone);
+                {
+                    IGN_PROFILE_SCOPE("SceneRenderer::DepthNormalPrepass");
+                    const uint32_t prepassZone = gpuTimer.BeginZone(cmd, "DepthNormalPrepass");
+                    DepthPrepass(cmd, camera, frameContext, target->depthPrepassRT->GetFramebuffer());
+                    gpuTimer.EndZone(cmd, prepassZone);
+                }
 
                 if (effectiveAOMode == AOMode::GTAO)
                 {
@@ -861,6 +907,7 @@ namespace ignite
                         ? gtaoIt->second[slotIdx % gtaoIt->second.size()] : nullptr;
                     if (gtao && gtao->GetAOTexture())
                     {
+                        IGN_PROFILE_SCOPE("SceneRenderer::GTAOPass");
                         const uint32_t gtaoZone = gpuTimer.BeginZone(cmd, "GTAO");
                         gtao->Build(cmd, target->sceneRT->GetDepthAttachment(), target->depthPrepassRT->GetColorAttachment(0),
                             camera, postProcessing, m_TAAFrameIndex);
@@ -878,8 +925,11 @@ namespace ignite
                         ? ssrIt->second[slotIdx % ssrIt->second.size()] : nullptr;
                     if (ssr && ssr->GetSSRTexture())
                     {
+                        IGN_PROFILE_SCOPE("SceneRenderer::SSRPass");
+                        const uint32_t ssrZone = gpuTimer.BeginZone(cmd, "SSR");
                         ssr->Build(cmd, target->sceneRT->GetDepthAttachment(), target->depthPrepassRT->GetColorAttachment(0),
                             target->prevSceneColor, camera, target->prevViewProj, sceneRenderSettings.ssrMaxRoughness, m_TAAFrameIndex);
+                        gpuTimer.EndZone(cmd, ssrZone);
                         ssrBindlessIdx = static_cast<int32_t>(ssr->GetSSRTexture()->GetBindlessIndex());
                         ssrActive = (ssrBindlessIdx > 0);
                     }
@@ -986,6 +1036,7 @@ namespace ignite
             // Copy single-sample HDR scene color into prevSceneColor for next frame's SSR.
             if (sceneRenderSettings.enableSSR && target->prevSceneColor)
             {
+                IGN_PROFILE_SCOPE("SceneRenderer::SSRCopyPrevColor");
                 Ref<Texture> srcColor = (msaaActive && target->sceneResolvedRT)
                     ? target->sceneResolvedRT->GetColorAttachment(0)
                     : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : nullptr);
@@ -1396,13 +1447,6 @@ namespace ignite
             m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
             m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
             m_SceneGPUData.sunDirection = glm::vec4(sunDirection, 0.0f);
-
-            const auto quality = static_cast<ShadowMapQuality>(light.shadowResolution);
-            if (m_CascadedShadowMap->GetQuality() != quality)
-            {
-                m_CascadedShadowMap->Resize(quality);
-                Application::SubmitToMainThread([]() { SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment }); });
-            }
 
             break;
         }
@@ -5060,9 +5104,17 @@ namespace ignite
 
         m_CompositePostProcessBuffer.SetData(&m_PostProcessingData, sizeof(m_PostProcessingData));
 
+        auto isTextureReady = [](const Ref<Texture> &tex) -> bool
+        {
+            return tex && tex->GetHandle() && tex->GetShaderResourceView() && tex->GetCurrentLayout() != nri::Layout::UNDEFINED;
+        };
+
         const uint32_t previousHistoryIndex = (frameContext->frameIndexInFlight + 2u) % 3u;
-        Ref<Texture> taaHistoryTexture = target->taaHistoryRT[previousHistoryIndex]
+        Ref<Texture> rawTaaHistory = target->taaHistoryRT[previousHistoryIndex]
             ? target->taaHistoryRT[previousHistoryIndex]->GetColorAttachment(0)
+            : nullptr;
+        Ref<Texture> taaHistoryTexture = (target->taaHistoryValid && isTextureReady(rawTaaHistory))
+            ? rawTaaHistory
             : Renderer::GetBlackTexture();
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePSO(compositeFramebuffer, nri::FillMode::SOLID);
@@ -5087,7 +5139,9 @@ namespace ignite
 
         auto transitionToSRV = [&](Ref<Texture> &tex)
         {
-            if (tex && tex->GetHandle() && tex->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
+            if (tex && tex->GetHandle()
+                && tex->GetCurrentLayout() != nri::Layout::UNDEFINED
+                && tex->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
             {
                 nri::TextureBarrierDesc b = {};
                 b.texture = tex->GetHandle();
@@ -6149,21 +6203,33 @@ namespace ignite
     Ref<BindingSet> SceneRenderer::GetOrCreateCompositeBindingSet(nri::PipelineLayout *pipelineLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
             Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, Ref<Texture> gizmoTexture, const ConstantBuffer &postProcessBuffer, nri::Descriptor *sampler, bool useResolvedScene)
     {
-        Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
-        Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
-        Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
-        Ref<Texture> taaHistory = taaHistoryTexture ? taaHistoryTexture : Renderer::GetBlackTexture();
-        Ref<Texture> gizmo = gizmoTexture ? gizmoTexture : Renderer::GetBlackTexture();
-        Ref<Texture> debug = (target->debugRT && target->debugRT->GetColorAttachment(0)) ? target->debugRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
-        Ref<Texture> widget = (target->widgetRT && target->widgetRT->GetColorAttachment(0)) ? target->widgetRT->GetColorAttachment(0) : Renderer::GetBlackTexture();
+        auto isTextureReady = [](const Ref<Texture> &tex) -> bool
+        {
+            return tex && tex->GetHandle() && tex->GetShaderResourceView() && tex->GetCurrentLayout() != nri::Layout::UNDEFINED;
+        };
+
+        Ref<Texture> edge = isTextureReady(edgeTexture) ? edgeTexture : Renderer::GetBlackTexture();
+        Ref<Texture> bloom = isTextureReady(bloomTexture) ? bloomTexture : Renderer::GetBlackTexture();
+        Ref<Texture> ssao = isTextureReady(ssaoTexture) ? ssaoTexture : Renderer::GetWhiteTexture();
+        Ref<Texture> taaHistory = isTextureReady(taaHistoryTexture) ? taaHistoryTexture : Renderer::GetBlackTexture();
+        Ref<Texture> gizmo = isTextureReady(gizmoTexture) ? gizmoTexture : Renderer::GetBlackTexture();
+        Ref<Texture> rawDebug = target->debugRT ? target->debugRT->GetColorAttachment(0) : nullptr;
+        Ref<Texture> debug = isTextureReady(rawDebug) ? rawDebug : Renderer::GetBlackTexture();
+        Ref<Texture> rawWidget = target->widgetRT ? target->widgetRT->GetColorAttachment(0) : nullptr;
+        Ref<Texture> widget = isTextureReady(rawWidget) ? rawWidget : Renderer::GetBlackTexture();
 
         // When MSAA is active use the resolved single-sample textures for the composite pass
         const bool hasResolved = useResolvedScene && target->sceneResolvedRT;
-        Ref<Texture> depth = (target->sceneRT && target->sceneRT->GetDepthAttachment() && !hasResolved) ? target->sceneRT->GetDepthAttachment() : Renderer::GetBlackTexture();
-        Ref<Texture> sceneColor = (hasResolved ? target->sceneResolvedRT->GetColorAttachment(0) : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : Renderer::GetBlackTexture()));
-        Ref<Texture> objectIDTex = hasResolved
-            ? (target->sceneResolvedRT->GetColorAttachment(1) ? target->sceneResolvedRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture())
-            : ((target->sceneRT && target->sceneRT->GetColorAttachment(1)) ? target->sceneRT->GetColorAttachment(1) : Renderer::GetBlackUIntTexture());
+        Ref<Texture> rawDepth = (target->sceneRT && !hasResolved) ? target->sceneRT->GetDepthAttachment() : nullptr;
+        Ref<Texture> depth = isTextureReady(rawDepth) ? rawDepth : Renderer::GetBlackTexture();
+        Ref<Texture> rawSceneColor = hasResolved
+            ? target->sceneResolvedRT->GetColorAttachment(0)
+            : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : nullptr);
+        Ref<Texture> sceneColor = isTextureReady(rawSceneColor) ? rawSceneColor : Renderer::GetBlackTexture();
+        Ref<Texture> rawObjectIDTex = hasResolved
+            ? target->sceneResolvedRT->GetColorAttachment(1)
+            : (target->sceneRT ? target->sceneRT->GetColorAttachment(1) : nullptr);
+        Ref<Texture> objectIDTex = isTextureReady(rawObjectIDTex) ? rawObjectIDTex : Renderer::GetBlackUIntTexture();
 
         CompositeBindingKey key
         {

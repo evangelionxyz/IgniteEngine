@@ -7,6 +7,9 @@
 
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/binding_cache.hpp"
 
 #include "shadow_map.hpp"
 #include "ignite/scene/icamera.hpp"
@@ -76,7 +79,14 @@ namespace ignite
             LOG_ASSERT(m_DepthSampler, "Failed to create depth comparison sampler");
         }
 
+        if (!m_DepthTextures.empty())
+        {
+            GPUUploadSync::DeviceWaitIdle(device);
+        }
+
         CreateCascadeFramebuffers();
+        Material::InvalidateAllBindingSets();
+        BindingCache::Clear();
     }
 
     void CascadedShadowMap::BeginCascade(nri::CommandBuffer *cmd, int cascadeIndex, uint32_t frameIndex)
