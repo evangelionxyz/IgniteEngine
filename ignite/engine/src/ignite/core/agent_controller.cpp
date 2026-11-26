@@ -459,8 +459,17 @@ namespace ignite
                 }
                 else if (props.contains("asset_handle"))
                     smc.handle = AssetHandle(props["asset_handle"].get<uint64_t>());
-                if (props.contains("material_handle"))
-                    smc.overrideMaterials[0] = AssetHandle(props["material_handle"].get<uint64_t>());
+                if (props.contains("material_handle") && smc.handle != AssetHandle(0))
+                {
+                    if (auto *am = AssetManager::GetInstance())
+                    {
+                        if (auto mesh = am->GetAsset<StaticMesh>(smc.handle))
+                        {
+                            if (!mesh->GetMeshInstances().empty() && mesh->GetMeshInstances()[0])
+                                mesh->GetMeshInstances()[0]->SetMaterial(AssetHandle(props["material_handle"].get<uint64_t>()));
+                        }
+                    }
+                }
                 return true;
             }
 

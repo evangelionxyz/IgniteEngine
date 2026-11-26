@@ -124,6 +124,33 @@ static float GGXDirectionalAlbedo(float cosTheta, float roughness)
     return saturate(AB.x + AB.y);
 }
 
+// Geometric Specular AA (Kaplanyan / Tokuyoshi): widens roughness where screen-space normal varies rapidly.
+static float ComputeGeometricSpecularAA(float3 N, float roughness, float sigma2 = 0.25f, float kappa = 0.18f)
+{
+    float3 dndu = ddx(N);
+    float3 dndv = ddy(N);
+    float variance = sigma2 * (dot(dndu, dndu) + dot(dndv, dndv));
+    float kernelRoughness2 = min(2.0f * variance, kappa);
+    float r = saturate(roughness);
+    float r2 = r * r;
+    float a2 = r2 * r2;
+    float newA2 = clamp(a2 + kernelRoughness2, 0.0f, 1.0f);
+    return clamp(sqrt(sqrt(newA2)), 0.05f, 1.0f);
+}
+
+// Toksvig normal-map filtering AA: accounts for averaged normal shortening across mip levels.
+static float ComputeToksvigSpecularAA(float roughness, float normalLen)
+{
+    if (normalLen >= 0.999f || normalLen <= 1e-4f)
+    {
+        return roughness;
+    }
+    float a = roughness * roughness;
+    float s = max((1.0f - normalLen) / normalLen, 0.0f);
+    float aNew = a / sqrt(max(1.0f + s * a * a * 4.0f, 1.0f));
+    return clamp(sqrt(max(aNew, a * a)), 0.05f, 1.0f);
+}
+
 static float OpenPBRCoatRoughenedRoughness(float baseRoughness, float coatRoughness, float coatWeight)
 {
     float rb = saturate(baseRoughness);

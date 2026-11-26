@@ -218,6 +218,11 @@ struct GIData
     int skyVisibilitySplit;
     int skyVisibilityTexIndex;
     int _giPad0;
+
+    int ssrTextureIndex;
+    float ssrIntensity;
+    float ssrMaxRoughness;
+    uint renderFeatureFlags; // bit 0 = Specular AA, bit 1 = SSR
 };
 
 struct ReflectionProbeGPU

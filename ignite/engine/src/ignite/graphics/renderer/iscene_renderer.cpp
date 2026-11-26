@@ -306,24 +306,17 @@ namespace ignite
         }
     }
 
-    Ref<Material> ISceneRenderer::ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle)
+    Ref<Material> ISceneRenderer::ResolveMeshMaterial(AssetHandle materialHandle)
     {
         Ref<Material> material = nullptr;
 
-        // Retrieve the Override Materials if available
-        auto overrideIt = overrideMaterials.find(instanceIndex);
-        if (overrideIt != overrideMaterials.end() && overrideIt->second != AssetHandle(0))
+        // Retrieve the attached material
+        if (materialHandle != AssetHandle(0))
         {
-            material = ResolveAsset<Material>(overrideIt->second);
+            material = ResolveAsset<Material>(materialHandle);
         }
 
-        // Retrive the attached material
-        if (!material && defaultMaterialHandle != AssetHandle(0))
-        {
-            material = ResolveAsset<Material>(defaultMaterialHandle);
-        }
-
-        // Fallback
+        // Fallback to default material
         if (!material)
         {
             material = Renderer::GetDefaultMaterial();

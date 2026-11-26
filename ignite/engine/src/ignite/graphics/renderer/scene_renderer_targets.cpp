@@ -6,6 +6,7 @@
 #include "ignite/graphics/binding_cache.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
+#include "ignite/imgui/imgui_nri.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -25,6 +26,7 @@ namespace ignite
         {
             GPUUploadSync::DeviceWaitIdle(m_Device);
             BindingCache::Clear();
+            ImGui_NRI::ClearTextureCache();
             m_ResizeWaitedThisFrame = true;
         }
 
@@ -86,6 +88,20 @@ namespace ignite
             }
         }
 
+        if (auto it = m_SSRs.find(camera); it != m_SSRs.end())
+        {
+            for (auto &ssr : it->second)
+            {
+                if (ssr)
+                    ssr->Resize(renderWidth, renderHeight);
+            }
+        }
+
+        if (m_OutlineJFA && m_OutlineJFA->GetOutputTexture())
+        {
+            m_OutlineJFA->CreateOutputTexture(renderWidth, renderHeight);
+        }
+
         auto it = m_RenderTargets.find(camera);
         if (it == m_RenderTargets.end())
         {
@@ -117,6 +133,8 @@ namespace ignite
                     historyRT->Resize(width, height, false);
             }
             target->taaHistoryValid = false;
+            target->prevSceneColor.reset();
+            target->prevSceneColorValid = false;
 
             if (target->debugRT)
             {
@@ -257,6 +275,14 @@ namespace ignite
         if (!sampleCountChanged && !resolveRTMissing)
             return;
 
+        if (!m_ResizeWaitedThisFrame)
+        {
+            GPUUploadSync::DeviceWaitIdle(m_Device);
+            BindingCache::Clear();
+            ImGui_NRI::ClearTextureCache();
+            m_ResizeWaitedThisFrame = true;
+        }
+
         target->msaaSampleCount = desiredSampleCount;
 
         RenderTargetCreateInfo sceneRTCreateInfo = {};
@@ -291,7 +317,44 @@ namespace ignite
 
         target->debugRT = nullptr;
         target->depthPrepassRT = nullptr;
+        target->prevSceneColor.reset();
+        target->prevSceneColorValid = false;
         m_CompositeBindingSetCache.clear();
+    }
+
+    void SceneRenderer::EnsurePrevSceneColor(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight)
+    {
+        if (!target)
+            return;
+        const uint32_t safeW = std::max(renderWidth, 1u);
+        const uint32_t safeH = std::max(renderHeight, 1u);
+        if (target->prevSceneColor
+            && target->prevSceneColor->GetWidth() == static_cast<int>(safeW)
+            && target->prevSceneColor->GetHeight() == static_cast<int>(safeH))
+        {
+            return;
+        }
+
+        TextureCreateInfo info;
+        info.width = safeW;
+        info.height = safeH;
+        info.depth = 1;
+        info.mipLevels = 1;
+        info.arraySize = 1;
+        info.sampleCount = 1;
+        info.dimension = nri::TextureType::TEXTURE_2D;
+        info.format = nri::Format::RGBA16_SFLOAT;
+        info.isRenderTarget = false;
+        info.isUAV = false;
+        info.bindless = false;
+        info.samplerLinearFiltering = true;
+        info.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
+        info.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
+        info.initialLayout = nri::Layout::SHADER_RESOURCE;
+        info.initialAccess = nri::AccessBits::SHADER_RESOURCE;
+        info.initialStages = nri::StageBits::COMPUTE_SHADER | nri::StageBits::FRAGMENT_SHADER;
+        target->prevSceneColor = Texture::Create(info, "[SSR Prev Scene Color]");
+        target->prevSceneColorValid = false;
     }
 
     Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
@@ -421,5 +484,31 @@ namespace ignite
 
         m_GTAOs.emplace(camera, gtaos);
         return gtaos;
+    }
+
+    std::vector<Ref<SSR>> SceneRenderer::GetOrCreateSSRs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight)
+    {
+        const uint32_t safeW = std::max(renderWidth, 1u);
+        const uint32_t safeH = std::max(renderHeight, 1u);
+        auto it = m_SSRs.find(camera);
+        if (it != m_SSRs.end())
+        {
+            for (auto &ssr : it->second)
+            {
+                if (ssr)
+                    ssr->Resize(safeW, safeH);
+            }
+            return it->second;
+        }
+
+        const uint32_t slotCount = std::max<uint32_t>(
+            DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight,
+            static_cast<uint32_t>(m_CommandBufferSlots.size()));
+        std::vector<Ref<SSR>> ssrs(slotCount);
+        for (uint32_t i = 0; i < slotCount; ++i)
+            ssrs[i] = CreateRef<SSR>(safeW, safeH);
+
+        m_SSRs.emplace(camera, ssrs);
+        return ssrs;
     }
 }

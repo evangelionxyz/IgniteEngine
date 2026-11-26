@@ -235,6 +235,7 @@ namespace ignite
         m_Blooms.clear();
         m_SSAOs.clear();
         m_GTAOs.clear();
+        m_SSRs.clear();
 
         m_StaticDepthPrepassPSOCache.clear();
         m_AnimatedDepthPrepassPSOCache.clear();
@@ -555,7 +556,10 @@ namespace ignite
             : (postProcessing.enableSSAO ? postProcessing.aoMode : AOMode::Off);
 
 
-        // Ensure MSAA and GI/GTAO render targets match current settings before opening the command buffer
+        // 1. Build render plan before opening the command buffer so all render target /
+        // post-process allocations & resizes happen while the GPU is synchronized.
+        RenderPlan plan = BuildRenderPlan(camera, drawDebug, postProcessing, isGameCamera);
+
         {
             const bool msaaEnabled = postProcessing.msaaProperties.enable;
             int desiredSampleCount = msaaEnabled ? postProcessing.msaaProperties.sampleCount : 1;
@@ -570,12 +574,65 @@ namespace ignite
             const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(baseHeight) * postProcessing.renderScale)));
 
             EnsureMSAARenderTargets(target, desiredSampleCount, renderWidth, renderHeight);
-            if (sceneRenderSettings.enableDepthPrepass && target->msaaSampleCount == 1)
+            const bool depthPrepassWillRun = sceneRenderSettings.enableDepthPrepass && target->msaaSampleCount == 1;
+            if (depthPrepassWillRun)
             {
                 EnsureDepthPrepassRT(target, renderWidth, renderHeight);
                 if (effectiveAOMode == AOMode::GTAO)
                 {
                     GetOrCreateGTAOs(camera, renderWidth, renderHeight);
+                }
+                if (sceneRenderSettings.enableSSR)
+                {
+                    GetOrCreateSSRs(camera, renderWidth, renderHeight);
+                    EnsurePrevSceneColor(target, renderWidth, renderHeight);
+                }
+            }
+
+            if (plan.hasWidgets || plan.hasScreenText)
+            {
+                EnsureWidgetRT(target, baseWidth, baseHeight);
+            }
+            if (plan.requiresDebugOverlay)
+            {
+                EnsureDebugRT(target, renderWidth, renderHeight);
+            }
+            if (plan.requiresGizmo)
+            {
+                EnsureGizmoRT(target, baseWidth, baseHeight);
+            }
+            if (postProcessing.taaProperties.enable && !targetFramebuffer)
+            {
+                EnsureTAAHistoryRT(target, baseWidth, baseHeight);
+            }
+            if (!isGameCamera && m_OutlineJFA && !m_SelectedEntities.empty())
+            {
+                if (!m_OutlineJFA->GetOutputTexture()
+                    || m_OutlineJFA->GetOutputTexture()->GetWidth() != static_cast<int>(renderWidth)
+                    || m_OutlineJFA->GetOutputTexture()->GetHeight() != static_cast<int>(renderHeight))
+                {
+                    m_OutlineJFA->CreateOutputTexture(renderWidth, renderHeight);
+                }
+            }
+            if (postProcessing.enableBloom)
+            {
+                const auto &blooms = GetOrCreateBlooms(camera);
+                for (const auto &b : blooms)
+                {
+                    if (b)
+                        b->Resize(renderWidth, renderHeight);
+                }
+            }
+            if (effectiveAOMode == AOMode::LegacySSAO && target->msaaSampleCount == 1)
+            {
+                // Ensure SSAOs are resized before recording if already created
+                if (auto it = m_SSAOs.find(camera); it != m_SSAOs.end())
+                {
+                    for (const auto &s : it->second)
+                    {
+                        if (s)
+                            s->Resize(renderWidth, renderHeight);
+                    }
                 }
             }
         }
@@ -601,9 +658,6 @@ namespace ignite
                 projection[2][0] += jitter.x;
                 projection[2][1] += jitter.y;
             }
-
-            // 1. Build render plan for this camera / frame
-            RenderPlan plan = BuildRenderPlan(camera, drawDebug, postProcessing, isGameCamera);
 
             // 2. Empty-Scene Fast Path
             if (plan.IsEmptyScene())
@@ -727,9 +781,8 @@ namespace ignite
                     target->selectionRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
 
-                if (plan.hasWidgets || plan.hasScreenText)
+                if ((plan.hasWidgets || plan.hasScreenText) && target->widgetRT)
                 {
-                    EnsureWidgetRT(target, width, height);
                     target->widgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
@@ -739,9 +792,8 @@ namespace ignite
                     target->widgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
 
-                if (plan.requiresDebugOverlay)
+                if (plan.requiresDebugOverlay && target->debugRT)
                 {
-                    EnsureDebugRT(target, renderWidth, renderHeight);
                     target->debugRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
@@ -751,9 +803,8 @@ namespace ignite
                     target->debugRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 }
 
-                if (plan.requiresGizmo)
+                if (plan.requiresGizmo && target->gizmoRT)
                 {
-                    EnsureGizmoRT(target, width, height);
                     target->gizmoRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                     target->gizmoRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
@@ -794,6 +845,8 @@ namespace ignite
 
             bool gtaoActive = false;
             int32_t gtaoBindlessIdx = -1;
+            bool ssrActive = false;
+            int32_t ssrBindlessIdx = -1;
             if (depthPrepassEnabled && target->depthPrepassRT)
             {
                 const uint32_t prepassZone = gpuTimer.BeginZone(cmd, "DepthNormalPrepass");
@@ -802,9 +855,10 @@ namespace ignite
 
                 if (effectiveAOMode == AOMode::GTAO)
                 {
-                    const auto &gtaos = GetOrCreateGTAOs(camera, renderWidth, renderHeight);
+                    auto gtaoIt = m_GTAOs.find(camera);
                     const uint32_t slotIdx = GetActiveCommandBufferSlotIndex();
-                    Ref<GTAO> gtao = gtaos.empty() ? nullptr : gtaos[slotIdx % gtaos.size()];
+                    Ref<GTAO> gtao = (gtaoIt != m_GTAOs.end() && !gtaoIt->second.empty())
+                        ? gtaoIt->second[slotIdx % gtaoIt->second.size()] : nullptr;
                     if (gtao && gtao->GetAOTexture())
                     {
                         const uint32_t gtaoZone = gpuTimer.BeginZone(cmd, "GTAO");
@@ -815,12 +869,33 @@ namespace ignite
                         gtaoActive = (gtaoBindlessIdx > 0);
                     }
                 }
+
+                if (sceneRenderSettings.enableSSR && target->prevSceneColorValid && target->prevSceneColor)
+                {
+                    auto ssrIt = m_SSRs.find(camera);
+                    const uint32_t slotIdx = GetActiveCommandBufferSlotIndex();
+                    Ref<SSR> ssr = (ssrIt != m_SSRs.end() && !ssrIt->second.empty())
+                        ? ssrIt->second[slotIdx % ssrIt->second.size()] : nullptr;
+                    if (ssr && ssr->GetSSRTexture())
+                    {
+                        ssr->Build(cmd, target->sceneRT->GetDepthAttachment(), target->depthPrepassRT->GetColorAttachment(0),
+                            target->prevSceneColor, camera, target->prevViewProj, sceneRenderSettings.ssrMaxRoughness, m_TAAFrameIndex);
+                        ssrBindlessIdx = static_cast<int32_t>(ssr->GetSSRTexture()->GetBindlessIndex());
+                        ssrActive = (ssrBindlessIdx > 0);
+                    }
+                }
             }
 
             m_GIGPUData.aoMode = gtaoActive ? static_cast<int32_t>(AOMode::GTAO) : static_cast<int32_t>(AOMode::Off);
             m_GIGPUData.aoIntensity = postProcessing.aoIntensity;
             m_GIGPUData.aoPower = postProcessing.aoPower;
             m_GIGPUData.gtaoTextureIndex = gtaoActive ? gtaoBindlessIdx : -1;
+            m_GIGPUData.ssrTextureIndex = ssrActive ? ssrBindlessIdx : -1;
+            m_GIGPUData.ssrIntensity = sceneRenderSettings.ssrIntensity;
+            m_GIGPUData.ssrMaxRoughness = sceneRenderSettings.ssrMaxRoughness;
+            m_GIGPUData.renderFeatureFlags =
+                (sceneRenderSettings.enableSpecularAA ? 1u : 0u) |
+                (sceneRenderSettings.enableSSR ? 2u : 0u);
             m_GIGPUData.viewportInvSizeAndFlags = glm::vec4(
                 1.0f / static_cast<float>(std::max(renderWidth, 1u)),
                 1.0f / static_cast<float>(std::max(renderHeight, 1u)),
@@ -908,15 +983,66 @@ namespace ignite
                 }
             }
 
+            // Copy single-sample HDR scene color into prevSceneColor for next frame's SSR.
+            if (sceneRenderSettings.enableSSR && target->prevSceneColor)
+            {
+                Ref<Texture> srcColor = (msaaActive && target->sceneResolvedRT)
+                    ? target->sceneResolvedRT->GetColorAttachment(0)
+                    : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : nullptr);
+                if (srcColor && srcColor->GetHandle() && target->prevSceneColor->GetHandle()
+                    && srcColor->GetWidth() == target->prevSceneColor->GetWidth()
+                    && srcColor->GetHeight() == target->prevSceneColor->GetHeight())
+                {
+                    const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+                    nri::TextureBarrierDesc barriers[2] = {};
+                    barriers[0].texture = srcColor->GetHandle();
+                    barriers[0].before = { srcColor->GetCurrentAccess(), srcColor->GetCurrentLayout(), srcColor->GetCurrentStages() };
+                    if (barriers[0].before.layout == nri::Layout::UNDEFINED)
+                        barriers[0].before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    barriers[0].after = { nri::AccessBits::COPY_SOURCE, nri::Layout::COPY_SOURCE, nri::StageBits::COPY };
+                    barriers[0].mipNum = nri::REMAINING;
+                    barriers[0].layerNum = nri::REMAINING;
+                    barriers[0].planes = nri::PlaneBits::ALL;
+
+                    barriers[1].texture = target->prevSceneColor->GetHandle();
+                    barriers[1].before = { target->prevSceneColor->GetCurrentAccess(), target->prevSceneColor->GetCurrentLayout(), target->prevSceneColor->GetCurrentStages() };
+                    if (barriers[1].before.layout == nri::Layout::UNDEFINED)
+                        barriers[1].before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+                    barriers[1].after = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION, nri::StageBits::COPY };
+                    barriers[1].mipNum = nri::REMAINING;
+                    barriers[1].layerNum = nri::REMAINING;
+                    barriers[1].planes = nri::PlaneBits::ALL;
+
+                    nri::BarrierDesc barrierDesc = {};
+                    barrierDesc.textures = barriers;
+                    barrierDesc.textureNum = 2;
+                    nri.CmdBarrier(*cmd, barrierDesc);
+
+                    nri.CmdCopyTexture(*cmd, *target->prevSceneColor->GetHandle(), nullptr, *srcColor->GetHandle(), nullptr);
+
+                    barriers[0].before = barriers[0].after;
+                    barriers[0].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    barriers[1].before = barriers[1].after;
+                    barriers[1].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE,
+                        nri::StageBits::COMPUTE_SHADER | nri::StageBits::FRAGMENT_SHADER };
+                    nri.CmdBarrier(*cmd, barrierDesc);
+
+                    srcColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
+                    target->prevSceneColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE,
+                        nri::StageBits::COMPUTE_SHADER | nri::StageBits::FRAGMENT_SHADER);
+                    target->prevViewProj = camera->GetProjection() * camera->GetView();
+                    target->prevSceneColorValid = true;
+                }
+            }
+
             // Skip selection highlights/outlines for the game camera (gameplay viewport).
             // This avoids running OutlineJFA compute shaders and recreating the outline texture for the game's resolution.
             Ref<Texture> edgeTexture = nullptr;
-            if (!isGameCamera && m_OutlineJFA && !m_SelectedEntities.empty())
+            if (!isGameCamera && m_OutlineJFA && !m_SelectedEntities.empty()
+                && m_OutlineJFA->GetOutputTexture()
+                && m_OutlineJFA->GetOutputTexture()->GetWidth() == static_cast<int>(renderWidth)
+                && m_OutlineJFA->GetOutputTexture()->GetHeight() == static_cast<int>(renderHeight))
             {
-                if (!m_OutlineJFA->GetOutputTexture() || m_OutlineJFA->GetOutputTexture()->GetWidth() != static_cast<int>(renderWidth) || m_OutlineJFA->GetOutputTexture()->GetHeight() != static_cast<int>(renderHeight))
-                {
-                    m_OutlineJFA->CreateOutputTexture(renderWidth, renderHeight);
-                }
 
                 // Read the selected-object mask, not the scene object-ID buffer used by picking.
                 Ref<Texture> edgeObjIDSrc = target->selectionRT ? target->selectionRT->GetColorAttachment(1) : nullptr;
@@ -949,7 +1075,6 @@ namespace ignite
                 bloomInstance->settings.radius = postProcessing.bloomRadius;
                 bloomInstance->settings.threshold = postProcessing.bloomThreshold;
                 bloomInstance->settings.iterations = postProcessing.bloomIterations;
-                bloomInstance->Resize(renderWidth, renderHeight);
 
                 // Bloom reads from the resolved (single-sample) texture
                 Ref<Texture> bloomSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
@@ -963,7 +1088,6 @@ namespace ignite
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::HBAOPass", 0x404040FF);
                 const auto &SSAOs = GetOrCreateSSAOs(cmd, camera);
                 Ref<SSAO> ssaoInstance = SSAOs[frameContext->frameIndexInFlight];
-                ssaoInstance->Resize(renderWidth, renderHeight);
                 ssaoInstance->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
                 ssaoTexture = ssaoInstance->GetAOTexture();
             }
@@ -1048,9 +1172,8 @@ namespace ignite
                 gpuTimer.EndZone(cmd, compositeZone);
             }
 
-            if (postProcessing.taaProperties.enable && !targetFramebuffer)
+            if (postProcessing.taaProperties.enable && !targetFramebuffer && target->taaHistoryRT[frameContext->frameIndexInFlight])
             {
-                EnsureTAAHistoryRT(target, width, height);
                 if (target->taaHistoryRT[frameContext->frameIndexInFlight])
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::TAAHistoryCopy");
@@ -1110,6 +1233,7 @@ namespace ignite
 
         gpuTimer.Resolve(cmd);
         SubmitCommandBuffer(cmd);
+        m_ResizeWaitedThisFrame = false;
     }
 
     void SceneRenderer::CollectSceneLighting(FrameContext *frameContext)
@@ -3220,8 +3344,7 @@ namespace ignite
                     if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                         continue;
 
-                    Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), item.component->overrideMaterials,
-                        meshInstance->GetMaterialAssetHandle());
+                    Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
                     if (material && material->GetType() == MaterialType::Transparent)
                         continue;
                     if (material)
@@ -3352,8 +3475,7 @@ namespace ignite
                 if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                     continue;
 
-                Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), item.component->overrideMaterials,
-                    instances[idx]->GetMaterialAssetHandle());
+                Ref<Material> material = ResolveMeshMaterial(instances[idx]->GetMaterialAssetHandle());
                 if (material && material->GetType() == MaterialType::Transparent)
                     continue;
                 if (material)
@@ -3487,7 +3609,7 @@ namespace ignite
 
                         const uint32_t objectIndex = m_FramePacket.staticMeshObjectIndices[item.firstObjectIndexOffset + idx];
 
-                        Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), item.component->overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                        Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
                         if (material)
                         {
                             if (uploadedMaterialsThisPass.insert(material.get()).second)
@@ -3641,7 +3763,7 @@ namespace ignite
                     m_FramePacket.stats.visibleSkeletalMeshes++;
 
                     DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, item.worldMatrix, item.normalMatrix, item.objectID,
-                        item.component->overrideMaterials, item.component->finalBoneTransforms, item.component->cachedInstanceTransforms,
+                        item.component->finalBoneTransforms, item.component->cachedInstanceTransforms,
                         camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity);
                     Renderer::Stats.skeletalMeshCount++;
 
@@ -3667,14 +3789,14 @@ namespace ignite
                                 {
                                     auto attachedMesh = attachedMeshAsset->As<SkeletalMesh>();
                                     DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
-                                        std::unordered_map<int, AssetHandle>(), item.component->finalBoneTransforms, std::vector<Mesh_GPUData>(),
+                                        item.component->finalBoneTransforms, std::vector<Mesh_GPUData>(),
                                         camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity, socketName);
                                 }
                                 else if (attachedMeshAsset->GetAssetType() == AssetType::StaticMesh)
                                 {
                                     auto attachedMesh = attachedMeshAsset->As<StaticMesh>();
                                     DrawMesh(cmd, frameContext, framebuffer, attachedMesh, socketWorld, normalMatrix, item.objectID,
-                                        std::unordered_map<int, AssetHandle>(), std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(),
+                                        std::vector<glm::mat4>(), std::vector<Mesh_GPUData>(),
                                         camera, staticPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity, socketName);
                                 }
                             }
@@ -5420,7 +5542,7 @@ namespace ignite
                 // Pre-allocate instance index BEFORE setting graphics state to avoid buffer write inside render pass
                 uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &objectIndex, 1);
 
-                Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
                 if (material && uploadedMaterialsThisPass.insert(material.get()).second)
                 {
                     material->UploadToGpu(cmd);
@@ -5498,7 +5620,7 @@ namespace ignite
 
                 const uint32_t objectIndex = cacheIt->second[idx];
 
-                Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
                 if (material && uploadedMaterialsThisPass.insert(material.get()).second)
                 {
                     material->UploadToGpu(cmd);
@@ -5578,7 +5700,7 @@ namespace ignite
                                 const uint32_t objectIndex = socketCacheIt->second[attIdx];
                                 uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &objectIndex, 1);
 
-                                Ref<Material> material = ResolveMeshMaterial(static_cast<int>(attIdx), smc.overrideMaterials, meshInstance->GetMaterialAssetHandle());
+                                Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
                                 if (material && uploadedMaterialsThisPass.insert(material.get()).second)
                                 {
                                     material->UploadToGpu(cmd);
@@ -6321,7 +6443,7 @@ namespace ignite
     template<typename MeshT>
     void SceneRenderer::DrawMesh(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer,
         const Ref<MeshT> &mesh, const glm::mat4 &parentTransform, const glm::mat4 &normalMatrix, uint32_t objectID,
-        const std::unordered_map<int, AssetHandle> &overrideMaterials, const std::vector<glm::mat4> &boneTransforms,
+        const std::vector<glm::mat4> &boneTransforms,
         const std::vector<Mesh_GPUData> &cachedInstanceTransforms, ICamera *camera, Ref<GraphicsPipeline> opaquePSO,
         std::vector<TransparentDrawCall> &transparentDrawCalls, std::unordered_set<Material *> &uploadedMaterialsThisPass,
         entt::entity entity, const std::string &socketName)
@@ -6430,7 +6552,7 @@ namespace ignite
 
             auto &primitive = meshInstance->GetPrimitive();
 
-            Ref<Material> material = ResolveMeshMaterial(static_cast<int>(idx), overrideMaterials, meshInstance->GetMaterialAssetHandle());
+            Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
 
             const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
                 ? material->GetBindingSet()
@@ -6687,12 +6809,12 @@ namespace ignite
     // Explicit template instantiations
     template void SceneRenderer::DrawMesh<StaticMesh>(
         nri::CommandBuffer *, FrameContext *, RenderTarget *, const Ref<StaticMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
-        const std::unordered_map<int, AssetHandle> &, const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
+        const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
         ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &, entt::entity, const std::string &);
 
     template void SceneRenderer::DrawMesh<SkeletalMesh>(
         nri::CommandBuffer *, FrameContext *, RenderTarget *, const Ref<SkeletalMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
-        const std::unordered_map<int, AssetHandle> &, const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
+        const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
         ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &, entt::entity, const std::string &);
 
     template void SceneRenderer::DrawMeshShadow<StaticMesh>(

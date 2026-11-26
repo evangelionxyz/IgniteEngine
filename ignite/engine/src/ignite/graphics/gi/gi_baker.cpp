@@ -102,15 +102,23 @@ namespace ignite
             {
                 AppendTag(record.bytes, 3u);
                 AppendBytes(record.bytes, static_cast<uint64_t>(mesh->handle));
-                std::vector<std::pair<int, uint64_t>> overrides;
-                overrides.reserve(mesh->overrideMaterials.size());
-                for (const auto &[slot, handle] : mesh->overrideMaterials)
-                    overrides.emplace_back(slot, static_cast<uint64_t>(handle));
-                std::ranges::sort(overrides);
-                for (const auto &[slot, handle] : overrides)
+                if (mesh->handle != AssetHandle(0))
                 {
-                    AppendBytes(record.bytes, slot);
-                    AppendBytes(record.bytes, handle);
+                    if (auto *am = AssetManager::GetInstance())
+                    {
+                        if (auto staticMesh = am->GetAsset<StaticMesh>(mesh->handle))
+                        {
+                            const auto &instances = staticMesh->GetMeshInstances();
+                            for (size_t i = 0; i < instances.size(); ++i)
+                            {
+                                if (instances[i])
+                                {
+                                    AppendBytes(record.bytes, static_cast<int>(i));
+                                    AppendBytes(record.bytes, static_cast<uint64_t>(instances[i]->GetMaterialAssetHandle()));
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

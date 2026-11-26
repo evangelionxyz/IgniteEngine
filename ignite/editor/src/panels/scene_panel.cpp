@@ -2,6 +2,8 @@
 
 #include "pch.hpp"
 #include "scene_panel.hpp"
+#include "content_browser_panel.hpp"
+#include "ignite/core/signal_bus.hpp"
 #include "ignite/graphics/gi/gi_baker.hpp"
 #include "editor_layer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
@@ -1613,6 +1615,10 @@ namespace ignite
             {
                 auto &comp = selectedEntity.GetComponent<RenderingComponent>();
                 UI::DrawSwitch("Visible", &comp.visible);
+                UI::DrawSwitch("Cast Shadow", &comp.castShadow);
+                UI::DrawSwitch("Receive Shadow", &comp.receiveShadow);
+                UI::DrawSwitch("Contribute GI", &comp.contributeGI);
+                UI::DrawSwitch("Receive GI", &comp.receiveGI);
 
                 const char *mobilityLabels[] = { "Static", "Movable" };
                 int mobilityIdx = static_cast<int>(comp.mobility);
@@ -1621,12 +1627,6 @@ namespace ignite
                     comp.mobility = static_cast<EntityMobility>(std::clamp(mobilityIdx, 0, 1));
                     if (m_Scene) m_Scene->SetDirtyFlag(true);
                 }
-
-                UI::DrawSwitch("Cast Shadow", &comp.castShadow);
-                UI::DrawSwitch("Receive Shadow", &comp.receiveShadow);
-                UI::DrawSwitch("Contribute GI", &comp.contributeGI);
-                UI::DrawSwitch("Receive GI", &comp.receiveGI);
-
             }, false); // false: not allowed to remove the component
 
             // Network Identity component
@@ -2307,44 +2307,117 @@ namespace ignite
             RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
+                Ref<Project> project = assetManager->LockActiveProject();
 
-                bool isMeshLoaded = c.handle != AssetHandle(0);
-
-                std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [ &c, this, assetManager, &isMeshLoaded, &selectedEntity ]()
+                auto drawAssetSlotWithThumbnail = [&](const char *label, AssetHandle handle, const char *emptyLabel,
+                    const char *fallbackIcon, const glm::vec4 &accentColor,
+                    const std::function<void(AssetHandle)> &onDrop, const std::function<void()> &onClear,
+                    const char *clearTooltip, const char *uniqueSuffix)
                 {
+                    const auto &theme = UI::GetTheme();
+                    const float scale = std::max(UI::GetDpiScale(), 1.0f);
+                    const float thumbSize = std::round(36.0f * scale);
+
+                    ImGui::PushID(uniqueSuffix);
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(label);
+                    ImGui::SameLine(UI::defColWidth);
+
+                    const ImVec2 wellMin = ImGui::GetCursorScreenPos();
+                    const ImVec2 wellMax(wellMin.x + thumbSize, wellMin.y + thumbSize);
+                    ImDrawList *drawList = ImGui::GetWindowDrawList();
+
+                    ImGui::InvisibleButton("##thumb_btn", ImVec2(thumbSize, thumbSize));
+                    const bool thumbHovered = ImGui::IsItemHovered();
+                    if (thumbHovered && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        AssetMetaData meta = assetManager->GetMetaData(handle);
+                        if (meta.type != AssetType::Invalid)
+                        {
+                            Application::SubmitToMainThread([handle, meta]()
+                            {
+                                SignalBus::Emit(AssetEditorOpenSignal{ handle, meta });
+                            });
+                        }
+                    }
+
+                    drawList->AddRectFilled(wellMin, wellMax, UI::ToU32(theme.inputBg), 2.0f);
+                    drawList->AddRect(wellMin, wellMax, UI::ToU32(thumbHovered ? theme.primary : theme.border), 2.0f, 0, 1.0f);
+
+                    Ref<Texture> thumb = ContentBrowserPanel::GetAssetThumbnail(handle, assetManager, project.get());
+                    if (thumb && thumb->GetShaderResourceView())
+                    {
+                        const float pad = 2.0f;
+                        drawList->AddImage(UI::GetTextureID(thumb),
+                            ImVec2(wellMin.x + pad, wellMin.y + pad),
+                            ImVec2(wellMax.x - pad, wellMax.y - pad));
+                    }
+                    else
+                    {
+                        const ImVec2 icSz = ImGui::CalcTextSize(fallbackIcon);
+                        drawList->AddText(
+                            ImVec2(wellMin.x + (thumbSize - icSz.x) * 0.5f, wellMin.y + (thumbSize - icSz.y) * 0.5f),
+                            UI::ToU32(accentColor), fallbackIcon);
+                    }
+                    drawList->AddRectFilled(ImVec2(wellMin.x, wellMax.y - 2.0f), wellMax, UI::ToU32(accentColor, 0.85f));
+
                     if (ImGui::BeginDragDropTarget())
                     {
                         if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
                             LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-
-                            if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
-                            {
-                                metadata.type = AssetType::StaticMesh;
-                                assetManager->AssignMetaData(handle, metadata);
-                                assetManager->UnloadAsset(handle);
-                                c.handle = handle;
-                                if (selectedEntity.HasComponent<MeshColliderComponent>())
-                                {
-                                    auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
-                                    mc.vertices.clear();
-                                    mc.indices.clear();
-                                    mc.dirty = true;
-                                }
-                            }
+                            onDrop(*static_cast<AssetHandle *>(payload->Data));
                         }
                         ImGui::EndDragDropTarget();
                     }
 
-                    if (isMeshLoaded)
+                    ImGui::SameLine(0.0f, 8.0f);
+                    ImGui::BeginGroup();
+                    const std::string displayName = (handle != AssetHandle(0)) ? assetManager->GetAssetDisplayName(handle) : emptyLabel;
+                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 30.0f : 4.0f)), thumbSize));
+                    if (ImGui::IsItemHovered() && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        AssetMetaData meta = assetManager->GetMetaData(handle);
+                        if (meta.type != AssetType::Invalid)
+                        {
+                            Application::SubmitToMainThread([handle, meta]()
+                            {
+                                SignalBus::Emit(AssetEditorOpenSignal{ handle, meta });
+                            });
+                        }
+                    }
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            onDrop(*static_cast<AssetHandle *>(payload->Data));
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                    if (handle != AssetHandle(0))
                     {
                         ImGui::SameLine(0.0f, 4.0f);
-                        if (UI::IconButton("##ClearStaticMesh", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Static Mesh"))
+                        if (UI::IconButton("##ClearSlot", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, clearTooltip))
                         {
-                            c.handle = AssetHandle(0); // reset the mesh
+                            onClear();
+                        }
+                    }
+                    ImGui::EndGroup();
+                    ImGui::PopID();
+                };
+
+                drawAssetSlotWithThumbnail("Static Mesh Asset", c.handle, "Drag Mesh Here",
+                    ICON_LC_BOX, UI::Accent::Mesh,
+                    [&](AssetHandle handle)
+                    {
+                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                        if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
+                        {
+                            metadata.type = AssetType::StaticMesh;
+                            assetManager->AssignMetaData(handle, metadata);
+                            assetManager->UnloadAsset(handle);
+                            c.handle = handle;
                             if (selectedEntity.HasComponent<MeshColliderComponent>())
                             {
                                 auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2353,16 +2426,26 @@ namespace ignite
                                 mc.dirty = true;
                             }
                         }
-                    }
-                });
+                    },
+                    [&]()
+                    {
+                        c.handle = AssetHandle(0);
+                        if (selectedEntity.HasComponent<MeshColliderComponent>())
+                        {
+                            auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
+                            mc.vertices.clear();
+                            mc.indices.clear();
+                            mc.dirty = true;
+                        }
+                    },
+                    "Clear Static Mesh", "StaticMeshSlot");
 
-                if (isMeshLoaded)
+                if (c.handle != AssetHandle(0))
                 {
                     Ref<StaticMesh> sm = assetManager->GetAsset<StaticMesh>(c.handle);
                     if (sm)
                     {
-                        // Override Materials
-                        if (ImGui::CollapsingHeader("Override Materials"))
+                        if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen))
                         {
                             const auto &instances = sm->GetMeshInstances();
                             for (size_t i = 0; i < instances.size(); ++i)
@@ -2370,55 +2453,29 @@ namespace ignite
                                 const auto &instance = instances[i];
                                 std::string submeshName = instance->GetName();
                                 if (submeshName.empty())
-                                {
                                     submeshName = "Submesh " + std::to_string(i);
-                                }
                                 else
-                                {
-                                    submeshName = std::format("{} (Submesh {})", submeshName, i);
-                                }
+                                    submeshName = std::format("{} ({})", submeshName, i);
 
-                                AssetHandle overrideMaterialHandle = AssetHandle(0);
-                                auto it = c.overrideMaterials.find(static_cast<int>(i));
-                                if (it != c.overrideMaterials.end())
-                                {
-                                    overrideMaterialHandle = it->second;
-                                }
-
-                                bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
-                                std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
-
-                                UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [ this, &c, i, isOverrideLoaded, assetManager, &selectedEntity ]()
-                                {
-                                    if (ImGui::BeginDragDropTarget())
+                                const AssetHandle matHandle = instance->GetMaterialAssetHandle();
+                                const std::string slotId = std::format("StaticMat_{}", i);
+                                drawAssetSlotWithThumbnail(submeshName.c_str(), matHandle, "Default Material",
+                                    ICON_LC_PALETTE, UI::Accent::Material,
+                                    [&](AssetHandle handle)
                                     {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                        if (metadata.type == AssetType::Material)
                                         {
-                                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                            if (metadata.type == AssetType::Material)
-                                            {
-                                                StaticMeshComponent before = c;
-                                                c.overrideMaterials[static_cast<int>(i)] = handle;
-                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                            }
+                                            instance->SetMaterial(handle);
+                                            sm->SetDirtyFlag(true);
                                         }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (isOverrideLoaded)
+                                    },
+                                    [&]()
                                     {
-                                        ImGui::SameLine(0.0f, 4.0f);
-                                        const std::string clearId = std::format("##ClearMat_{}", i);
-                                        if (UI::IconButton(clearId.c_str(), ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Override Material"))
-                                        {
-                                            StaticMeshComponent before = c;
-                                            c.overrideMaterials.erase(static_cast<int>(i));
-                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                        }
-                                    }
-                                });
+                                        instance->SetMaterial(AssetHandle(0));
+                                        sm->SetDirtyFlag(true);
+                                    },
+                                    "Reset to Default Material", slotId.c_str());
                             }
                         }
                     }
@@ -2428,44 +2485,117 @@ namespace ignite
             RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
+                Ref<Project> project = assetManager->LockActiveProject();
 
-                bool isMeshLoaded = c.handle != AssetHandle(0);
-
-                std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Skeletal Mesh Asset", buttonLabel.c_str(), nullptr, [ &c, this, assetManager, &isMeshLoaded, &selectedEntity ]()
+                auto drawSkelSlotWithThumbnail = [&](const char *label, AssetHandle handle, const char *emptyLabel,
+                    const char *fallbackIcon, const glm::vec4 &accentColor,
+                    const std::function<void(AssetHandle)> &onDrop, const std::function<void()> &onClear,
+                    const char *clearTooltip, const char *uniqueSuffix)
                 {
+                    const auto &theme = UI::GetTheme();
+                    const float scale = std::max(UI::GetDpiScale(), 1.0f);
+                    const float thumbSize = std::round(36.0f * scale);
+
+                    ImGui::PushID(uniqueSuffix);
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(label);
+                    ImGui::SameLine(UI::defColWidth);
+
+                    const ImVec2 wellMin = ImGui::GetCursorScreenPos();
+                    const ImVec2 wellMax(wellMin.x + thumbSize, wellMin.y + thumbSize);
+                    ImDrawList *drawList = ImGui::GetWindowDrawList();
+
+                    ImGui::InvisibleButton("##thumb_btn", ImVec2(thumbSize, thumbSize));
+                    const bool thumbHovered = ImGui::IsItemHovered();
+                    if (thumbHovered && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        AssetMetaData meta = assetManager->GetMetaData(handle);
+                        if (meta.type != AssetType::Invalid)
+                        {
+                            Application::SubmitToMainThread([handle, meta]()
+                            {
+                                SignalBus::Emit(AssetEditorOpenSignal{ handle, meta });
+                            });
+                        }
+                    }
+
+                    drawList->AddRectFilled(wellMin, wellMax, UI::ToU32(theme.inputBg), 2.0f);
+                    drawList->AddRect(wellMin, wellMax, UI::ToU32(thumbHovered ? theme.primary : theme.border), 2.0f, 0, 1.0f);
+
+                    Ref<Texture> thumb = ContentBrowserPanel::GetAssetThumbnail(handle, assetManager, project.get());
+                    if (thumb && thumb->GetShaderResourceView())
+                    {
+                        const float pad = 2.0f;
+                        drawList->AddImage(UI::GetTextureID(thumb),
+                            ImVec2(wellMin.x + pad, wellMin.y + pad),
+                            ImVec2(wellMax.x - pad, wellMax.y - pad));
+                    }
+                    else
+                    {
+                        const ImVec2 icSz = ImGui::CalcTextSize(fallbackIcon);
+                        drawList->AddText(
+                            ImVec2(wellMin.x + (thumbSize - icSz.x) * 0.5f, wellMin.y + (thumbSize - icSz.y) * 0.5f),
+                            UI::ToU32(accentColor), fallbackIcon);
+                    }
+                    drawList->AddRectFilled(ImVec2(wellMin.x, wellMax.y - 2.0f), wellMax, UI::ToU32(accentColor, 0.85f));
+
                     if (ImGui::BeginDragDropTarget())
                     {
                         if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
                             LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-
-                            if (metadata.type == AssetType::Mesh || metadata.type == AssetType::SkeletalMesh)
-                            {
-                                metadata.type = AssetType::SkeletalMesh;
-                                assetManager->AssignMetaData(handle, metadata);
-                                assetManager->UnloadAsset(handle);
-                                c.handle = handle;
-                                if (selectedEntity.HasComponent<MeshColliderComponent>())
-                                {
-                                    auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
-                                    mc.vertices.clear();
-                                    mc.indices.clear();
-                                    mc.dirty = true;
-                                }
-                            }
+                            onDrop(*static_cast<AssetHandle *>(payload->Data));
                         }
                         ImGui::EndDragDropTarget();
                     }
 
-                    if (isMeshLoaded)
+                    ImGui::SameLine(0.0f, 8.0f);
+                    ImGui::BeginGroup();
+                    const std::string displayName = (handle != AssetHandle(0)) ? assetManager->GetAssetDisplayName(handle) : emptyLabel;
+                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 30.0f : 4.0f)), thumbSize));
+                    if (ImGui::IsItemHovered() && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        AssetMetaData meta = assetManager->GetMetaData(handle);
+                        if (meta.type != AssetType::Invalid)
+                        {
+                            Application::SubmitToMainThread([handle, meta]()
+                            {
+                                SignalBus::Emit(AssetEditorOpenSignal{ handle, meta });
+                            });
+                        }
+                    }
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            onDrop(*static_cast<AssetHandle *>(payload->Data));
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                    if (handle != AssetHandle(0))
                     {
                         ImGui::SameLine(0.0f, 4.0f);
-                        if (UI::IconButton("##ClearStaticMesh", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Static Mesh"))
+                        if (UI::IconButton("##ClearSlot", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, clearTooltip))
                         {
-                            c.handle = AssetHandle(0); // reset the mesh
+                            onClear();
+                        }
+                    }
+                    ImGui::EndGroup();
+                    ImGui::PopID();
+                };
+
+                drawSkelSlotWithThumbnail("Skeletal Mesh Asset", c.handle, "Drag Mesh Here",
+                    ICON_LC_BOX, UI::Accent::Mesh,
+                    [&](AssetHandle handle)
+                    {
+                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                        if (metadata.type == AssetType::Mesh || metadata.type == AssetType::SkeletalMesh)
+                        {
+                            metadata.type = AssetType::SkeletalMesh;
+                            assetManager->AssignMetaData(handle, metadata);
+                            assetManager->UnloadAsset(handle);
+                            c.handle = handle;
                             if (selectedEntity.HasComponent<MeshColliderComponent>())
                             {
                                 auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2474,16 +2604,26 @@ namespace ignite
                                 mc.dirty = true;
                             }
                         }
-                    }
-                });
+                    },
+                    [&]()
+                    {
+                        c.handle = AssetHandle(0);
+                        if (selectedEntity.HasComponent<MeshColliderComponent>())
+                        {
+                            auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
+                            mc.vertices.clear();
+                            mc.indices.clear();
+                            mc.dirty = true;
+                        }
+                    },
+                    "Clear Skeletal Mesh", "SkelMeshSlot");
 
-                if (isMeshLoaded)
+                if (c.handle != AssetHandle(0))
                 {
                     Ref<SkeletalMesh> sm = assetManager->GetAsset<SkeletalMesh>(c.handle);
                     if (sm)
                     {
-                        // Override Materials
-                        if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
+                        if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen))
                         {
                             const auto &instances = sm->GetMeshInstances();
                             for (size_t i = 0; i < instances.size(); ++i)
@@ -2491,56 +2631,29 @@ namespace ignite
                                 const auto &instance = instances[i];
                                 std::string submeshName = instance->GetName();
                                 if (submeshName.empty())
-                                {
                                     submeshName = "Submesh " + std::to_string(i);
-                                }
                                 else
-                                {
-                                    submeshName = std::format("{} (Submesh {})", submeshName, i);
-                                }
+                                    submeshName = std::format("{} ({})", submeshName, i);
 
-                                AssetHandle overrideMaterialHandle = AssetHandle(0);
-                                auto it = c.overrideMaterials.find(static_cast<int>(i));
-                                if (it != c.overrideMaterials.end())
-                                {
-                                    overrideMaterialHandle = it->second;
-                                }
-
-                                bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
-                                std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
-
-                                UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [ this, &c, i, isOverrideLoaded, assetManager, &selectedEntity ]()
-                                {
-                                    if (ImGui::BeginDragDropTarget())
+                                const AssetHandle matHandle = instance->GetMaterialAssetHandle();
+                                const std::string slotId = std::format("SkelMat_{}", i);
+                                drawSkelSlotWithThumbnail(submeshName.c_str(), matHandle, "Default Material",
+                                    ICON_LC_PALETTE, UI::Accent::Material,
+                                    [&](AssetHandle handle)
                                     {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                        if (metadata.type == AssetType::Material)
                                         {
-                                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-
-                                            if (metadata.type == AssetType::Material)
-                                            {
-                                                SkeletalMeshComponent before = c;
-                                                c.overrideMaterials[static_cast<int>(i)] = handle;
-                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                            }
+                                            instance->SetMaterial(handle);
+                                            sm->SetDirtyFlag(true);
                                         }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (isOverrideLoaded)
+                                    },
+                                    [&]()
                                     {
-                                        ImGui::SameLine(0.0f, 4.0f);
-                                        const std::string clearId = std::format("##ClearSkelMat_{}", i);
-                                        if (UI::IconButton(clearId.c_str(), ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Override Material"))
-                                        {
-                                            SkeletalMeshComponent before = c;
-                                            c.overrideMaterials.erase(static_cast<int>(i));
-                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                        }
-                                    }
-                                });
+                                        instance->SetMaterial(AssetHandle(0));
+                                        sm->SetDirtyFlag(true);
+                                    },
+                                    "Reset to Default Material", slotId.c_str());
                             }
                         }
 

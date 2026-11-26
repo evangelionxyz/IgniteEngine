@@ -193,12 +193,24 @@ static PSOutput EvaluateMeshPixel(
     }
     float3 bitangent = cross(N, T);
     float3 B = dot(bitangent, input.bitangent) < 0.0f ? -bitangent : bitangent;
+    float normalMapLength = 1.0f;
     if (material.normalTextureIndex >= 0)
     {
         Texture2D normalMapTex = ResourceDescriptorHeap[SafeBindlessIndex(material.normalTextureIndex)];
         float3 tangentNormal = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
+        normalMapLength = length(tangentNormal);
         tangentNormal.xy *= material.normalScale;
         finalNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
+    }
+
+    if (gi.captureMode == 0 && (gi.renderFeatureFlags & 1u) != 0u)
+    {
+        roughness = ComputeGeometricSpecularAA(N, roughness, 0.25f, 0.18f);
+        if (material.normalTextureIndex >= 0)
+        {
+            roughness = ComputeGeometricSpecularAA(finalNormal, roughness, 0.12f, 0.12f);
+            roughness = ComputeToksvigSpecularAA(roughness, normalMapLength);
+        }
     }
 
     if (scene.renderMode == RENDER_MODE_COLOR
@@ -217,7 +229,12 @@ static PSOutput EvaluateMeshPixel(
         surface.specularIOR = max(material.specularIOR, 1.0f);
         surface.coatWeight = saturate(material.coatWeight);
         surface.coatColor = material.coatColor.rgb;
-        surface.coatRoughness = max(saturate(material.coatRoughness), 0.05f);
+        float coatRough = max(saturate(material.coatRoughness), 0.05f);
+        if (gi.captureMode == 0 && (gi.renderFeatureFlags & 1u) != 0u && surface.coatWeight > 0.001f)
+        {
+            coatRough = ComputeGeometricSpecularAA(N, coatRough, 0.25f, 0.18f);
+        }
+        surface.coatRoughness = coatRough;
         surface.coatIOR = max(material.coatIOR, 1.0f);
         surface.coatDarkening = saturate(material.coatDarkening);
         surface.specularAnisotropy = saturate(material.specularAnisotropy);
@@ -395,6 +412,18 @@ static PSOutput EvaluateMeshPixel(
             SampleEnvAndProbesAtDir(input.worldPos, finalNormal, baseR, baseEffRough, coatR, surface.coatRoughness,
                 combinedDiff, cameraAltitudeKm, scene, gi, reflectionProbes, environmentMapTexture, sampler0,
                 finalBaseRad, finalCoatRad);
+
+            if ((gi.renderFeatureFlags & 2u) != 0u && gi.ssrTextureIndex >= 0 && material.blendMode != 1)
+            {
+                float2 halfTexelSSR = gi.viewportInvSizeAndFlags.xy;
+                float2 ssrUV = clamp(input.position.xy * gi.viewportInvSizeAndFlags.xy, halfTexelSSR, 1.0f - halfTexelSSR);
+                Texture2D ssrTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.ssrTextureIndex)];
+                float4 ssrSample = ssrTex.SampleLevel(sampler0, ssrUV, 0.0f);
+                float maxR = max(gi.ssrMaxRoughness, 0.05f);
+                float roughFade = 1.0f - smoothstep(maxR * 0.6f, maxR, baseEffRough);
+                float ssrWeight = saturate(ssrSample.a * roughFade * gi.ssrIntensity);
+                finalBaseRad = lerp(finalBaseRad, ssrSample.rgb, ssrWeight);
+            }
 
             // Indirect OpenPBR transmission along refracted vector when transmissionWeight > 0
             if (surface.transmissionWeight > 0.001f && (scene.enableIBL != 0 || (gi.reflectionProbeCount > 0 && gi.reflectionCubeArrayIndex >= 0)))

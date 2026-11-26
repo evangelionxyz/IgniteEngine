@@ -831,6 +831,8 @@ namespace ignite
 
             material->gpuData.metallicFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.metallicFactor);
             material->gpuData.roughnessFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
+            material->gpuData.metallicChannel = 2; // glTF 2.0 metallicRoughnessTexture: B = metallic
+            material->gpuData.roughnessChannel = 1; // glTF 2.0 metallicRoughnessTexture: G = roughness
             material->gpuData.occlusionStrength = static_cast<float>(gltfMaterial.occlusionTexture.strength);
             material->gpuData.alphaCutoff = static_cast<float>(gltfMaterial.alphaCutoff);
             material->gpuData.normalScale = static_cast<float>(gltfMaterial.normalTexture.scale);

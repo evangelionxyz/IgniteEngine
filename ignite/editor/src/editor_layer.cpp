@@ -3332,6 +3332,13 @@ namespace ignite
                     }
 
                     UI::DrawCheckbox("Depth+Normal Prepass", &renderSettings.enableDepthPrepass);
+                    UI::DrawCheckbox("Specular AA", &renderSettings.enableSpecularAA);
+                    UI::DrawCheckbox("Screen-Space Reflections (SSR)", &renderSettings.enableSSR);
+                    if (renderSettings.enableSSR)
+                    {
+                        UI::DrawFloatControl("SSR Intensity", &renderSettings.ssrIntensity, 0.025f, 0.0f, 2.0f, 1.0f);
+                        UI::DrawFloatControl("SSR Max Roughness", &renderSettings.ssrMaxRoughness, 0.025f, 0.05f, 1.0f, 0.6f);
+                    }
                     UI::DrawCheckbox("Show GI Probes", &renderSettings.showGIProbes);
 
                     ImGui::TreePop();

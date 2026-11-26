@@ -5,6 +5,8 @@
 #include "ignite/core/profiler/profiler.hpp"
 
 #include "outline_jfa.hpp"
+#include "binding_cache.hpp"
+#include "gpu_upload_sync.hpp"
 #include "texture.hpp"
 #include "shader.hpp"
 #include "renderer.hpp"
@@ -151,6 +153,18 @@ namespace ignite
 
     void OutlineJFA::CreateOutputTexture(uint32_t width, uint32_t height)
     {
+        if (m_JFAPing || m_JFAPong || m_OutputTexture)
+        {
+            if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+            }
+            BindingCache::Clear();
+            m_JFAPing.reset();
+            m_JFAPong.reset();
+            m_OutputTexture.reset();
+        }
+
         TextureCreateInfo createInfoRG;
         createInfoRG.width = width;
         createInfoRG.height = height;

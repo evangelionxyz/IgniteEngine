@@ -3125,6 +3125,47 @@ namespace ignite
         return GetFallbackIcon(type, filepath);
     }
 
+    Ref<Texture> ContentBrowserPanel::GetAssetThumbnail(AssetHandle handle, AssetManager *assetManager, Project *project)
+    {
+        if (handle == AssetHandle(0) || !assetManager || !project)
+            return nullptr;
+
+        const AssetMetaData meta = assetManager->GetMetaData(handle);
+        if (meta.filepath.empty())
+            return nullptr;
+
+        const std::filesystem::path fullPath = project->GetProjectFilepath(meta.filepath).lexically_normal();
+        auto it = s_SharedThumbnails.find(fullPath);
+        if (it != s_SharedThumbnails.end())
+        {
+            it->second.lastFrameUsed = s_SharedCurrentFrame;
+            if (it->second.thumbnail && it->second.thumbnail->GetShaderResourceView())
+                return it->second.thumbnail;
+        }
+
+        const bool isSceneThumbnailAsset = ThumbnailGenerator::IsSupportedAssetType(meta.type);
+        const bool isImageAsset = (!isSceneThumbnailAsset && meta.type == AssetType::Texture);
+        if (!isSceneThumbnailAsset && !isImageAsset)
+            return nullptr;
+
+        if (it == s_SharedThumbnails.end())
+        {
+            FileThumbnail placeholder;
+            placeholder.thumbnail = nullptr;
+            placeholder.timestamp = 0;
+            placeholder.lastFrameUsed = s_SharedCurrentFrame;
+            s_SharedThumbnails[fullPath] = placeholder;
+        }
+
+        if (!s_SharedThumbnailLoadsInFlight.contains(fullPath))
+        {
+            s_SharedPendingThumbnailLoads.push(fullPath);
+            s_SharedThumbnailLoadsInFlight.insert(fullPath);
+        }
+
+        return nullptr;
+    }
+
     void ContentBrowserPanel::StartSceneThumbnailLoad(const std::filesystem::path &filepath, AssetType type)
     {
         IGN_PROFILE_FUNCTION();

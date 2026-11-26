@@ -74,7 +74,7 @@ namespace ignite
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
 		glm::vec4 emissiveFactor = glm::vec4(0.0f);
 		float metallicFactor = 0.0f;
-		float roughnessFactor = 0.0f;
+		float roughnessFactor = 0.5f;
 		float occlusionStrength = 0.0f;
 		int metallicChannel = 2;
 		int roughnessChannel = 1;
@@ -190,6 +190,11 @@ namespace ignite
 		int32_t skyVisibilitySplit = 1;
 		int32_t skyVisibilityTexIndex = -1;
 		int32_t _giPad0 = 0;
+
+		int32_t ssrTextureIndex = -1;
+		float ssrIntensity = 1.0f;
+		float ssrMaxRoughness = 0.6f;
+		uint32_t renderFeatureFlags = 3u; // bit 0 = Specular AA, bit 1 = SSR
 	};
 
 	struct ReflectionProbe_GPUData

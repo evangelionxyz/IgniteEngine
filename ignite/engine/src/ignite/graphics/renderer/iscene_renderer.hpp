@@ -80,6 +80,10 @@ namespace ignite
         int giModeOverride = -1;     // -1 = Volume default, 0 = Off, 1 = Fast, 2 = LeakResistant
         int aoModeOverride = -1;     // -1 = Camera PostProcessing, 0 = Off, 1 = LegacySSAO, 2 = GTAO
         bool enableDepthPrepass = true;
+        bool enableSpecularAA = true;
+        bool enableSSR = true;
+        float ssrIntensity = 1.0f;
+        float ssrMaxRoughness = 0.6f;
 
         SampleMethod sampleMethod = SampleMethod::FXAA;
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
@@ -249,7 +253,7 @@ namespace ignite
         void ClearRetainedCommandBufferAssets();
 
         static void FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms);
-        Ref<Material> ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle);
+        Ref<Material> ResolveMeshMaterial(AssetHandle materialHandle);
 
         void EnsureSceneEnvironmentMap();
         void DrainDirtyResolvedAssets();

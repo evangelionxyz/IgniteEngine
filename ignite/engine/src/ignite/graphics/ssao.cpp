@@ -4,6 +4,7 @@
 
 #include "ssao.hpp"
 #include "binding_cache.hpp"
+#include "gpu_upload_sync.hpp"
 
 #include "ignite/graphics/buffers/vertex_buffer.hpp"
 #include "ignite/graphics/shader.hpp"
@@ -204,6 +205,16 @@ namespace ignite
     void SSAO::CreateTextures(uint32_t width, uint32_t height)
     {
         IGN_PROFILE_SCOPE_COLOR("HBAO::CreateTextures", 0x404040FF);
+        if (m_AOTex || m_BlurTex)
+        {
+            if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+            }
+            BindingCache::Clear();
+            m_AOTex.reset();
+            m_BlurTex.reset();
+        }
         m_Width = std::max(width / 2, 1u); // Half resolution optimization
         m_Height = std::max(height / 2, 1u);
 

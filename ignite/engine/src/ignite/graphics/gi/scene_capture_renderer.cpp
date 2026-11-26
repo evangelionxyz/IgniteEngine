@@ -884,13 +884,8 @@ namespace ignite
         Ref<Material> defaultMaterial = Renderer::GetDefaultMaterial();
         std::unordered_set<Material *> uploadedMaterials;
 
-        auto resolveMaterial = [&](int submeshIdx, const std::unordered_map<int, AssetHandle> &overrides, AssetHandle instanceHandle) -> Ref<Material>
+        auto resolveMaterial = [&](AssetHandle matHandle) -> Ref<Material>
         {
-            AssetHandle matHandle = instanceHandle;
-            if (auto it = overrides.find(submeshIdx); it != overrides.end() && it->second != AssetHandle(0))
-            {
-                matHandle = it->second;
-            }
             if (assetManager && matHandle != AssetHandle(0))
             {
                 Ref<Material> mat = assetManager->GetAsset<Material>(matHandle);
@@ -990,7 +985,7 @@ namespace ignite
                         continue;
                     }
 
-                    Ref<Material> material = resolveMaterial(static_cast<int>(idx), smc.overrideMaterials, inst->GetMaterialAssetHandle());
+                    Ref<Material> material = resolveMaterial(inst->GetMaterialAssetHandle());
                     if (!material)
                     {
                         continue;

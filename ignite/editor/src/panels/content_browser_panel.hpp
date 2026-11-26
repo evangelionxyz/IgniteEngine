@@ -53,6 +53,7 @@ namespace ignite
         virtual ~ContentBrowserPanel() override;
 
         static void ReleaseSharedResources();
+        static Ref<Texture> GetAssetThumbnail(AssetHandle handle, AssetManager *assetManager, Project *project);
 
         virtual void OnGuiRender() override;
         virtual void OnUpdate(float deltaTime) override;

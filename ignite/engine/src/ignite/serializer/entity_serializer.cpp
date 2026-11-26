@@ -654,16 +654,6 @@ namespace ignite
                 sr.BeginMap("StaticMesh");
                 {
                     sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
-
-                    sr.BeginSequence("OverrideMaterials");
-                    for (const auto &[meshIndex, materialHandle] : comp.overrideMaterials)
-                    {
-                        sr.BeginMap();
-                        sr.AddKeyValue("Mesh", meshIndex);
-                        sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(materialHandle));
-                        sr.EndMap();
-                    }
-                    sr.EndSequence();
                 }
                 sr.EndMap();
             }
@@ -677,16 +667,6 @@ namespace ignite
                     sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
                     sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.runtimeAnimatorHandle));
                     sr.AddKeyValue("UniqueAnimator", comp.uniqueAnimator);
-
-                    sr.BeginSequence("OverrideMaterials");
-                    for (const auto &[meshIndex, materialHandle] : comp.overrideMaterials)
-                    {
-                        sr.BeginMap();
-                        sr.AddKeyValue("Mesh", meshIndex);
-                        sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(materialHandle));
-                        sr.EndMap();
-                    }
-                    sr.EndSequence();
 
                     sr.BeginSequence("SocketAttachments");
                     for (const auto &[socketName, attachedMeshHandle] : comp.socketAttachments)
@@ -1460,16 +1440,6 @@ namespace ignite
         {
             auto &comp = desEntity.AddComponent<StaticMeshComponent>();
             if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
-
-            if (JsonNode matsNode = node["OverrideMaterials"])
-            {
-                for (JsonNode matNode : matsNode)
-                {
-                    const auto meshIndex = matNode["Mesh"].as<uint32_t>();
-                    AssetHandle materialHandle = AssetHandle(matNode["MaterialHandle"].as<uint64_t>());
-                    comp.overrideMaterials[meshIndex] = materialHandle;
-                }
-            }
         }
 
         // Skeletal Mesh Component
@@ -1479,16 +1449,6 @@ namespace ignite
             if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["AnimatorHandle"]) comp.runtimeAnimatorHandle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["UniqueAnimator"]) comp.uniqueAnimator = n.as<bool>();
-
-            if (JsonNode matsNode = node["OverrideMaterials"])
-            {
-                for (JsonNode matNode : matsNode)
-                {
-                    uint32_t meshIndex = matNode["Mesh"].as<uint32_t>();
-                    AssetHandle materialHandle = AssetHandle(matNode["MaterialHandle"].as<uint64_t>());
-                    comp.overrideMaterials[meshIndex] = materialHandle;
-                }
-            }
 
             if (JsonNode socketsNode = node["SocketAttachments"])
             {

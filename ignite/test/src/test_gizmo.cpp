@@ -179,8 +179,26 @@ namespace ignite::tests
             tr.dirty = true;
 
             auto &smc = e.AddComponent<StaticMeshComponent>();
-            smc.handle = Renderer::GetDefaultMeshHandle(EMeshType::CUBE);
-            smc.overrideMaterials[0] = matHandle;
+            const AssetHandle baseCubeHandle = Renderer::GetDefaultMeshHandle(EMeshType::CUBE);
+            auto baseCube = AssetManager::GetInstance()->GetAsset<StaticMesh>(baseCubeHandle);
+            Ref<StaticMesh> uniqueCube = StaticMesh::Create();
+            if (baseCube)
+            {
+                for (const auto &inst : baseCube->GetMeshInstances())
+                {
+                    auto copyInst = StaticMeshInstance::Create(inst->GetName(), inst->GetPrimitive());
+                    copyInst->local = inst->local;
+                    copyInst->global = inst->global;
+                    copyInst->localAABB = inst->localAABB;
+                    copyInst->SetMaterial(matHandle);
+                    uniqueCube->AddMeshInstance(copyInst);
+                }
+                uniqueCube->CalculateLocalAABB();
+            }
+            static uint64_t s_TestMeshId = 900700000ULL;
+            const AssetHandle meshHandle(++s_TestMeshId);
+            AssetManager::GetInstance()->AssignAsset(meshHandle, uniqueCube);
+            smc.handle = meshHandle;
             return e;
         }
 
