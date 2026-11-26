@@ -141,8 +141,7 @@ namespace ignite
             bool sceneViewportEditorVisible = false;
             float gamePreviewZoom = 1.0f;
             glm::vec2 gamePreviewPan = glm::vec2(0.0f);
-
-            GizmoOperation gizmoOp;
+            GizmoOperation gizmoOp = GizmoOperation::NONE;
 		} m_Data;
 
         bool m_SceneFocused;
